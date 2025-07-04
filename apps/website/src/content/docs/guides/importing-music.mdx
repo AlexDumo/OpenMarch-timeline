@@ -1,99 +1,157 @@
 ---
-title: "Music Troubleshooting"
-description: "Solutions to OpenMarch music importing bugs"
+title: "Working with Music"
+description: "How to set up and work with music in OpenMarch"
 ---
 
 import { Steps } from "@astrojs/starlight/components";
 import { YouTube } from "astro-embed";
 
-The music integration in OpenMarch is currently extremely minimal.
-The best think we can ask for right now is your patience as we work through it. 😊
+OpenMarch's music system is built around **Tempo Groups** - collections of measures that share the same time signature and tempo. This system gives you precise control over your show's timing and supports everything from simple 4/4 marches to complex mixed meters like 7/8 or 5/8.
 
-We have many plans to fix and improve the experience so that it can work for many different types of projects.
-It's not a trivial issue.
-There's lots of different tempo combinations and syncing methods to think about.
-We want to make sure our next crack at it is done right.
-In the meantime, here is a list of tips and tricks to get music to work for you.
+## Getting Started: The Complete Workflow
 
-This video walks through the steps if you prefer not to read.
-
-<YouTube
-  id="https://youtu.be/2HjLimsxUxQ?si=tPmBEZMKTE6O-IY_"
-  params="start=972"
-/>
-
-> If OpenMarch ever seems broken, refreshing the page `Ctrl + R` will often fix it.
-
-## Current limitations
-
-Since the music integration is so bare bones, keep in mind the following limitations:
-
-- Accelerandos, ritardandos and other gradual tempo changes are not supported
-  - If you must change the tempo gradually, only change the tempo at the **start of the measure**
-- The less information the MusicXML has, the better (with one exception)
-  - The parser OpenMarch uses to extract the tempo information from MusicXML files is not perfect
-  - Remove all notes from the staff and only have one part. Then, add a single note to the first beat.
-  - If it's still not working, try removing all staff notes and other markings
-- If you have a count-in, the MusicXML must also include that
-
-## Creating your MusicXML
-
-### If you have the sheet music file
-
-Follow these steps if you have the sheet music to open in Musescore, Dorico, etc.
+Here's the recommended order of operations for setting up music in your show:
 
 <Steps>
 
-1. Open your score in your notation software
-   - If you don't have any notation software, [Musescore](https://musescore.com) is free and is what this project is tested on
-1. Save a copy of the file
-1. Create a **new part** that has no notes in it
-1. Delete all of the other parts
-1. Add a single note to the first beat of the first measure of the new part
-   - This is important, as if there are no notes at all, the parser will ignore it
-1. Ensure that you have a tempo defined on at least on the first note
-1. Click `File` → `Export`
-1. Ensure you have **Main Score** checked
-1. Import this file into OpenMarch by clicking `Music` → `Import MusicXML`
-1. If nothing seems to have happened try refreshing the page with `Ctrl + R`
-   - If it's still not working, reach out on the [community Discord](https://github.com/OpenMarch/OpenMarch) or [dev@openmarch.com](mailto:dev@openmarch.com) for troubleshooting
+1. **Import your audio file** (optional but recommended)
+   - Click the Music button in the toolbar
+   - In the Audio section, click "Import audio file"
+   - Select your audio file (.mp3, .wav, etc.)
+   - Give it a nickname for easy identification
+
+2. **Create your first tempo group**
+   - In the Tempo Groups section, click "Add New Group"
+   - Fill out the form with your music's details:
+     - **Name**: Rehearsal letter or section name (optional)
+     - **Start Tempo**: The BPM for this section
+     - **Beats per measure**: Time signature (4 for 4/4, 3 for 3/4, etc.)
+     - **Number of measures**: How many measures this tempo/feel lasts
+
+3. **Add additional tempo groups**
+   - Continue adding groups for each section of your show
+   - Each time the tempo, time signature, or feel changes, create a new group
+   - Use the "+" button between existing groups to insert new sections
+
+4. **Refine your timing**
+   - Edit any tempo group by clicking the pencil icon
+   - Add tempo changes (accelerando/ritardando) using the "End Tempo" field
+   - For complex timing, you can set individual beat tempos
 
 </Steps>
 
-### If you don't have the sheet music file
+## Understanding Tempo Groups
 
-If you only have an audio file and no sheet music file, this is a lot trickier, but possible!
-I have done this personally.
-It's annoying and not clean, but it works.
+### What is a Tempo Group?
 
-The TLDR is that you need to find some way to convert the tempo information in your audio file (`.mp3` or `.wav`) into a `.midi` file.
-Once you have a `.midi` file, you can import it into a music notation software (like [Musescore](https://musescore.com)) and create your MusicXML.
+A tempo group is a collection of consecutive measures that share:
+- The same time signature
+- The same basic tempo
+- The same rhythmic feel
 
-> I've only done this in MacOS. Try to find a Windows/Linux alternative of GarageBand or Logic Pro that is free
->
-> It needs to be able to import audio files and also support midi instruments.
-> [Audacity](https://www.audacityteam.org/) comes to mind, but I've never used it for this.
+### When to Create a New Group
+
+Create a new tempo group when:
+- The tempo changes (even slightly)
+- The time signature changes (4/4 to 3/4, etc.)
+- You want to mark a new section with a rehearsal letter
+- You need different rhythmic feels (regular vs. mixed meter)
+
+### Group Names and Organization
+
+- **Names are optional** but helpful for organization
+- Use rehearsal letters ("A", "B", "Closer") or descriptive names
+- Groups with the same tempo and time signature will be combined automatically unless the second group has a name
+
+## Advanced Features
+
+### Mixed Meter Support
+
+OpenMarch supports complex time signatures like 7/8, 5/8, 10/8, etc.
 
 <Steps>
 
-1. Open a [DAW](https://en.wikipedia.org/wiki/Digital_audio_workstation) of some kind that can support audio files and software MIDI instruments.
-1. Get the project's tempo to align with the audio file's.
-1. **Make sure that if there are tempo changes, they only happen once at the start of a measure**
-   - Gradual tempo changes will not work
-1. Add a MIDI software instrument track
-1. Add a single note at the start of each measure
-   - This is to make sure the MIDI that we export uses the whole project
-1. Validate that the tempo lines up as intended
-1. Export the project as a `.midi` file
-1. Import the `.midi` file into Musescore
-1. Follow [the steps above](#if-you-have-the-sheet-music-file)
+1. When creating a tempo group, set your beats per measure to the total number of eighth notes
+2. Click "Make mixed meter" to enable pattern selection
+3. Choose your beat pattern (e.g., 3+2+2 for 7/8)
+4. The system will automatically handle the long and short beats
 
 </Steps>
 
-## Disclaimer
+**Common mixed meter patterns:**
+- 7/8: 3+2+2, 2+3+2, or 2+2+3
+- 5/8: 3+2 or 2+3
+- 10/8: 3+2+3+2 or 2+3+2+3
 
-Please know that we are aware of the shortcomings of the current system and are working hard to fix them.
-I invite you to use OpenMarch's many shortcomings as opportunities to hack your way through and figure out how you can make it work 🙂.
+### Tempo Changes (Accelerando/Ritardando)
 
-As always, this project is made up entirely of volunteers doing the best they can with the free time they can spare.
-Please consider donating to the [Patreon](https://www.patreon.com/c/openmarch) to show your support for our team.
+For gradual tempo changes within a section:
+
+<Steps>
+
+1. Set your **Start Tempo** to the beginning tempo
+2. Set your **End Tempo** to where you want the tempo to be heading
+3. The system will create a smooth transition that approaches (but doesn't reach) the end tempo
+4. This prepares for a smooth transition to your next tempo group
+
+</Steps>
+
+### Individual Beat Editing
+
+For sections with irregular tempo fluctuations:
+
+<Steps>
+
+1. Create your tempo group normally
+2. Click the pencil icon to edit the group
+3. If the system detects tempo variations, you'll see individual beat tempo controls
+4. Adjust each beat's tempo as needed
+
+</Steps>
+
+## Tips for Success
+
+### Starting Your Show
+
+1. **Begin with the audio file** - This gives you a reference for tempo and timing
+2. **Work section by section** - Don't try to map your entire show at once
+3. **Start simple** - Use basic tempo groups first, then add complexity
+4. **Test and refine** - Use the timeline to check your timing against the audio
+
+### Common Workflows
+
+**For simple shows:**
+- One tempo group per major section
+- Use rehearsal letters for names
+- Keep time signatures consistent
+
+**For complex shows:**
+- Multiple tempo groups per section
+- Use end tempos for smooth transitions
+- Take advantage of mixed meter support
+
+### Troubleshooting
+
+If you're having issues:
+- **Refresh the page** (`Ctrl/Cmd + R`) - This often fixes display issues
+- **Check your math** - Make sure your measures add up to your music
+- **Start over** - Sometimes it's easier to delete and recreate a problematic group
+
+## What's Different from Before
+
+If you used OpenMarch's old music system:
+- **No more MusicXML imports** - Everything is done with tempo groups
+- **Much more control** - You can specify exactly what you want
+- **Better mixed meter support** - Complex time signatures are now easy
+- **Smoother workflow** - No more workarounds or limitations
+
+The new system is designed to handle any type of music, from simple marches to complex contemporary pieces with changing meters and tempos.
+
+## Getting Help
+
+If you need assistance:
+- Join our [community Discord](https://discord.gg/openmarch) for quick help
+- Email us at [dev@openmarch.com](mailto:dev@openmarch.com)
+- Check out our other guides for more advanced techniques
+
+Remember: The music system is designed to be flexible and powerful. Start simple and add complexity as you become more comfortable with the workflow!
