@@ -185,3 +185,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** unit, hook and real-DB tests.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p5-playback`; write tests in `apps/desktop/src/timeline/__test__/` (timelineCanvas, useAnimation flag on and off, static render on a real DB), then run the focused tests.
+
+### 2026-09-30 · timeline-worker (timeline/p5-playback) · P5.4, P5.5
+
+- **Done:** code and tests squashed into e329b9bd on `timeline/p5-playback` (rebased on `timeline-try-2` at b7d7da00). New tests: `src/timeline/__test__/timelineCanvas.test.ts` (pure) and `timelineRender.test.tsx` (real DB).
+- **Checks:** `tsc --noEmit`: pass. `test:focused src/timeline/__test__/ src/components/canvas/__test__/Canvas.test.tsx`: 51 passed. eslint, prettier, cspell on the changed files: pass. The regular desktop suite is running.
+- **Next:** read the suite result, open the PR, set in-review.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p5-playback`; run `pnpm --dir apps/desktop run test` in the background, then open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
