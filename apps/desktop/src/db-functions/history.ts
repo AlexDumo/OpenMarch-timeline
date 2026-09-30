@@ -387,7 +387,10 @@ export async function dropAllUndoTriggers(db: DbConnection | DB) {
  * @param type "undo" or "redo"
  * @returns The new group number for the respective history table
  */
-async function incrementGroup(db: DbConnection, type: HistoryType) {
+async function incrementGroup(
+    db: DbConnection | DbTransaction,
+    type: HistoryType,
+) {
     const historyTable =
         type === "undo" ? schema.history_undo : schema.history_redo;
 
@@ -441,7 +444,7 @@ async function incrementGroup(db: DbConnection, type: HistoryType) {
  * @param db database connection
  * @param type "undo" or "redo"
  */
-async function refreshCurrentGroups(db: DbConnection) {
+async function refreshCurrentGroups(db: DbConnection | DbTransaction) {
     const refreshCurrentGroup = async (type: HistoryType) => {
         const tableName =
             type === "undo" ? schema.history_undo : schema.history_redo;
@@ -760,6 +763,15 @@ const switchTriggerMode = async (
     );
 };
 
+/** An error's message followed by the messages of its causes (SQLite's reason is often a cause). */
+const messageWithCauses = (err: unknown): string => {
+    const messages: string[] = [];
+    for (let e: unknown = err; e instanceof Error; e = e.cause)
+        if (e.message) messages.push(e.message);
+    if (messages.length === 0 && err != null) messages.push(String(err));
+    return messages.join("\nCaused by: ");
+};
+
 /**
  * Performs an undo or redo action on the database.
  *
@@ -851,14 +863,12 @@ async function executeHistoryActionUnlocked(
             }
         }
 
-        if (type === "undo") {
-            // Switch the triggers to redo mode so that the redo history is updated
-            await incrementGroup(db, "redo");
+        // Switch the triggers so that the replay's inverses go to the other stack. In undo mode,
+        // don't clear the redo table while redoing. Trigger DDL stays outside the transaction; the
+        // finally block below always switches back.
+        if (type === "undo")
             await switchTriggerMode(db, "redo", false, tableNames);
-        } else {
-            // Switch the triggers so that the redo table does not have its rows deleted
-            await switchTriggerMode(db, "undo", false, tableNames);
-        }
+        else await switchTriggerMode(db, "undo", false, tableNames);
 
         let error: Error | undefined;
         let committedBatch: ChangeBatch | undefined;
@@ -866,10 +876,26 @@ async function executeHistoryActionUnlocked(
             // Temporarily disable foreign key checks
             await db.run(sql.raw("PRAGMA foreign_keys = OFF;"));
 
-            /// Execute all of the SQL statements in the current history group
+            // Every write of the action is in one transaction, so a rejected undo or redo rolls
+            // back and leaves the data and both stacks unchanged (spec §6.1): the new redo group
+            // and its pruning, the replay, the removal of the replayed group and the group refresh
             const drained = await db.transaction(async (tx) => {
+                // The redo triggers log the undo's inverses under this new group
+                if (type === "undo") await incrementGroup(tx, "redo");
+
+                // Execute all of the SQL statements in the current history group
                 for (const sqlStatement of sqlStatements)
                     await tx.run(sqlStatement);
+
+                // Delete all of the SQL statements in the current history group
+                await tx.run(
+                    sql.raw(
+                        `DELETE FROM ${tableName} WHERE "history_group"=${currentGroup};`,
+                    ),
+                );
+                // Refresh the current group number in the history stats table
+                await refreshCurrentGroups(tx);
+
                 // Undo and redo are edits (spec §6.1, C-6): the same commit-time check and
                 // change-log drain as `transactionWithHistory`
                 return checkAndDrainTimelineChangesInTransaction(tx);
@@ -885,20 +911,10 @@ async function executeHistoryActionUnlocked(
             await switchTriggerMode(db, "undo", true, tableNames);
         }
 
-        // The replay has committed, so its changes reach the listeners even if the bookkeeping
-        // below fails
-        notifyTimelineBatch(committedBatch);
-
         if (error) throw error;
 
-        // Delete all of the SQL statements in the current history group
-        await db.run(
-            sql.raw(`
-        DELETE FROM ${tableName} WHERE "history_group"=${currentGroup};
-    `),
-        );
-        // Refresh the current group number in the history stats table
-        await refreshCurrentGroups(db);
+        // The action has committed; deliver its batch
+        notifyTimelineBatch(committedBatch);
 
         response = {
             success: true,
@@ -913,7 +929,7 @@ async function executeHistoryActionUnlocked(
             tableNames: new Set(),
             sqlStatements: [],
             error: {
-                message: err?.message || "failed to get error",
+                message: messageWithCauses(err) || "failed to get error",
                 stack: err?.stack || "Failed to get stack",
             },
         };
