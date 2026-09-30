@@ -80,8 +80,8 @@ Static render: in timeline mode, draw positions at the selected page's end beat 
 
 ### P5.6: Idle warming
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p5-warm-fixtures)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P5.4
@@ -90,8 +90,8 @@ Idle warming outward from the playback position.
 
 ### P5.7: Fixture loader
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p5-warm-fixtures)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P5.3
@@ -100,8 +100,8 @@ Dev fixture loader that builds G1 to G13 and the QA-SC scenarios into a show.
 
 ### P5.8: Tests and performance numbers
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p5-warm-fixtures)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P5.5, P5.7
