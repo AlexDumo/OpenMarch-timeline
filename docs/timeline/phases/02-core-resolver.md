@@ -70,8 +70,8 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 ### P2.5: Golden, regression, invalidation and complexity tests
 
 - Owner: timeline-worker (timeline/p2-resolver-tests)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/8
 - Parallel: yes
 - Depends on: P2.4
 
@@ -100,8 +100,8 @@ QA-REG-6: a deep-chain script run with `node --stack-size=300` (20,000 direct, t
 ### P2.8: P-8 and P-10 assertions
 
 - Owner: timeline-worker (timeline/p2-resolver-tests)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/8
 - Parallel: yes
 - Depends on: P2.4
 
@@ -212,3 +212,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** 1,000-seed fuzz and deep-chain script on the rebased tree, then the PR.
 - **Blockers:** none.
 - **Resume from:** branch `timeline/p2-resolver-tests` at `04535910`; run `pnpm --dir packages/core run test:fuzz` and `run test:deep`, then open the PR (`gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`).
+
+### 2026-09-30 · timeline-worker (timeline/p2-resolver-tests) · P2.5, P2.8
+
+- **Done:** opened [PR #8](https://github.com/AlexDumo/OpenMarch-timeline/pull/8) from `timeline/p2-resolver-tests` (`13fd3066` resolver guard and test hooks, `04535910` tests), rebased on `timeline-try-2` after PR #7. Covers QA-REG-1 to -4, QA-INV-02 to -07, QA-CX-01 to -05 (CX-04 run for the first time: counters grow linearly with the number of chain copies, and doubling gives at most 2.1×), P-8, P-10 and review follow-ups (a) to (f) plus the optional unchanged-home skip. Two behavior changes in `resolver.ts`, for the reviewer: the compute guard (throws on a cache miss during a compute); and a transition update now recomputes local caches only when `dest`, `slots`, `style` or `params` change (spec 9.4 table: range and `order_mode` recompute nothing local).
+- **Checks:** `pnpm --dir packages/core run build` pass; `run test` pass (21 files, 455 passed, 2 skipped); `run test:fuzz` 1,000 seeds × 80 steps: 72,349 batches, 0 divergent, 0 closure violations, 0 exceptions; `run test:deep` all three checks pass; `tsc --noEmit -p packages/core` no errors under `src/timeline`; eslint (0 errors), prettier and cspell clean on the changed files. Desktop `test:history`, e2e and the desktop build were not run (policy; no desktop code changed).
+- **Next:** review and merge PR #8. Exit-gate items 1 (P2.5 to P2.8 pass) and 3 (core build and test pass on the base) become true only when it merges, so they are not ticked.
+- **Blockers:** none.
