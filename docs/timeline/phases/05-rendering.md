@@ -61,8 +61,8 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 ### P5.4: Playback
 
 - Owner: timeline-worker (timeline/p5-playback)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/14
 - Parallel: no
 - Depends on: P5.2, P5.3
 
@@ -71,8 +71,8 @@ Playback: in timeline mode, `useAnimation` converts the playback time to a beat 
 ### P5.5: Static render
 
 - Owner: timeline-worker (timeline/p5-playback)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/14
 - Parallel: no
 - Depends on: P5.3
 
@@ -193,3 +193,26 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the suite result, open the PR, set in-review.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p5-playback`; run `pnpm --dir apps/desktop run test` in the background, then open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+
+### 2026-09-30 · timeline-worker (timeline/p5-playback) · P5.4, P5.5
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/14 (commit e329b9bd). New `src/timeline/timelineCanvas.ts`, which holds `TimelinePositionBuffer` (reused, resized when the marcher count changes, applied by id), `playbackBeat` and `pageEndBeat`. New `src/timeline/useTimelineStaticRender.ts` and `OpenMarchCanvas.renderMarcherPositions`. `useAnimation` and `Canvas.tsx` gained timeline branches.
+- **Clock decision:** P5.4 uses the existing `getLivePlaybackPosition` clock, which is the smallest change and leaves page mode untouched. The 0.2 frame clock is still not imported anywhere. P8.1 should wire it in and set `currentBeatIndex` with `beatIndexAtTime(beats, currentTime / 1000)`.
+- **Page semantics (confirmed in `Page.ts` `fromDatabasePages`):**
+  - Page N covers the sorted beats from its start beat up to the next page's start beat. Its marcher_pages row is the position at the page's end (the keyframe at `(timestamp + duration) * 1000`).
+  - The end beat is therefore `lastBeat.index + 1`: the next page's start beat, or `beats.length` for the last page.
+  - Page 0 holds only beat 0, so its end beat is 1, which is time 0.
+  - A test checks that this equals `beatAtTime(beats, page.timestamp + page.duration)`.
+- **Drags:** disabled in timeline mode. A drag doesn't write marcher_pages and snaps back to the resolver position. Other page-era writers (alignment, line tools, shapes, keyboard moves) and the pathway and shape visuals are left for Phase 7.
+- **Before the resolver is ready:** canvas marchers keep their construction position, (0, 0) from `MarcherVisualGroup`, until the first cold build finishes. Consider drawing marcher_pages until then.
+- **Checks:**
+  - `turbo build --filter=@openmarch/desktop^...`: pass.
+  - `tsc --noEmit`: pass.
+  - `test:focused src/timeline/__test__/ src/components/canvas/__test__/Canvas.test.tsx`: 51 passed.
+  - Mutation check: forcing the page path or shifting `pageEndBeat` fails 8 tests.
+  - `pnpm --dir apps/desktop run test`: 92 files passed, 7 skipped; 1,458 tests passed.
+  - eslint: 0 errors. prettier and cspell: pass.
+  - Full `test:history`, e2e and `build:electron`: not run (policy).
+- **Exit gate:** nothing ticked. The desktop suite passes with the flag off on this branch, but that becomes true on the base only once the PR merges.
+- **Next:** review and merge by the lead.
+- **Blockers:** none.
