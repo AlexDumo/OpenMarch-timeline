@@ -82,7 +82,7 @@ Tests: QA-FL-01 to -06, G1 to G13 and G8b, QA-DG-1 to -7 and QA-REG-5 against th
 ### P1.6: Property tests with independent geometry
 
 - Owner: timeline-worker (timeline/p1-properties)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P1.3
@@ -201,4 +201,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** re-checked PR #1042 at 60499128 (one new file, `__test__/degenerate.test.ts`).
 - **Checks:** `pnpm --dir packages/core exec vitest run src/timeline/__test__/degenerate.test.ts` (9 passed). Spot-checked QA-DG-4 against spec §12.4: beat 6 M1 (2,3), M2 (2,1); beat 8 M1 (4,6), M2 (4,0); one `D-FTL-EMPTY` on transition 1; no members. These are the spec's literal values, not oracle snapshots. Commit carries no attribution lines.
 - **Next:** a person merges #1042. P1.6 (properties) is still running.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker · P1.6
+
+- **Done:** on `timeline/p1-properties` (b6d23db9, pushed): `packages/core/src/timeline/__test__/properties.test.ts` ports `ref/props.mjs` to fast-check against `createTimelineOracleForTesting`: P-1, P-2, P-5, P-6, P-7 (approximate against independent geometry and bit-exact against `destinationsOf`), P-9, P-11, P-12 and P-13 on ordinary, boundary-valued and adversarial arc-chain shows, with D-16 individual destinations mixed in; plus the R-8 cross-check against the centre-and-radius form (moderate inputs, fast-check arbitraries) and the R-8 endpoint and extreme-input cases. Independent geometry is in `__test__/independentGeometry.ts` (imports nothing from `geom.ts`); the generators in `__test__/showGenerators.ts` reproduce props.mjs's draws, so a failing seed builds the same show there. Seeded and deterministic; `TIMELINE_PROPS_SHOWS` and `TIMELINE_PROPS_SEED` opt into larger or different runs (documented in the file header). A final test asserts every property was exercised, including at least one D-16 arrival.
+- **Checks:** `pnpm install` (pass); `pnpm --dir packages/core run build` (pass); `pnpm --dir packages/core run test` (16 files, 295 passed, 2 skipped, 3.3 s); `pnpm --dir packages/core exec vitest run src/timeline/__test__/properties.test.ts` (6 passed, about 0.6 s; default run 300 ordinary + 300 boundary + 30 chain shows = 196,544 checks, against props.mjs's 253,917 at 300 seeds, whose extra ~57,000 are its resolver-vs-oracle checks, deferred to Phase 2); opt-in `TIMELINE_PROPS_SHOWS=5000 TIMELINE_PROPS_SEED=7` (3,083,896 checks, 0 failures, 5.2 s); `pnpm --dir packages/core exec tsc --noEmit -p .` (no errors under `src/timeline`); prettier, eslint and cspell on the three files (pass; the pre-commit hook also passed). Mutation smoke check, not committed: changing the R-5 denominator in `oracle.ts` to `sp.end - sp.start` (breaking D-7) made the ordinary and boundary suites fail with `P-12 causality`; reverted with `git checkout`. Full `test:history` and Playwright e2e not run (policy; core-only change).
+- **Next:** no PR on OpenMarch/OpenMarch, per the lead: timeline work is moving to a fork. The lead opens the PR there.
+- **Resume from:** open the PR on the fork once the lead sets it up (branch `timeline/p1-properties`, base the fork's coordination branch); then set P1.6 to `in-review` with the PR link. Nothing else outstanding.
 - **Blockers:** none.
