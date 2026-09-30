@@ -49,6 +49,22 @@ export function refuse(message: string): never {
 }
 
 /**
+ * Refuses (`E-ARGS`) a batch that names the same row twice. Update functions plan every change
+ * from rows read before the first write, so a second entry for one id would be planned against
+ * stale data.
+ */
+export function refuseDuplicateIds(
+    items: readonly { id: number }[],
+    what: string,
+): void {
+    const seen = new Set<number>();
+    for (const { id } of items) {
+        if (seen.has(id)) refuse(`${what} ${id} appears more than once`);
+        seen.add(id);
+    }
+}
+
+/**
  * A spec error code at the start of a trigger's message, e.g. "E-A1: ..." or the combined
  * "E-T3/E-T4: ...". Anchored, so text inside a failed query's parameters (a name such as "E-T1")
  * can't be mistaken for a code.

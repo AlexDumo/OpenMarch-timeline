@@ -13,6 +13,7 @@ import {
     assertValid,
     mapDbErrors,
     refuse,
+    refuseDuplicateIds,
     TimelineWriteError,
 } from "./timelineErrors";
 
@@ -55,8 +56,9 @@ export interface ModifiedTimelineTransitionArgs {
     slotCount?: number;
     points?: XY[];
     /**
-     * A plain range update. It is rejected (E-A1) when it would strand an assignment; the R-E1
-     * range procedure (P4.5) is what moves anchored assignments.
+     * A plain range update: the transition moves and its assignments don't. It is refused (E-A1)
+     * when it would strand an assignment (QA-DB-13b). To move the anchored assignments with it,
+     * use `setTimelineTransitionRangeInTransaction` (R-E1) instead.
      */
     startBeat?: number;
     endBeat?: number;
@@ -185,7 +187,9 @@ export const createTimelineTransitionsInTransaction = async ({
 
 /**
  * Updates transitions' style, params, order mode, slot count and plain range. Everything is
- * validated before the first write. Ranges that would strand an assignment are refused (E-A1).
+ * validated before the first write. Ranges that would strand an assignment are refused (E-A1); a
+ * range edit that moves anchored assignments is `setTimelineTransitionRangeInTransaction`. Each id
+ * may appear once (E-ARGS), because every change is planned from the rows read before writing.
  */
 // eslint-disable-next-line max-lines-per-function
 export const updateTimelineTransitionsInTransaction = async ({
@@ -200,6 +204,7 @@ export const updateTimelineTransitionsInTransaction = async ({
         set: Partial<typeof schema.timeline_transitions.$inferInsert>;
         replaceDestinations: boolean;
     }[] = [];
+    refuseDuplicateIds(modifiedTransitions, "transition");
     for (const m of modifiedTransitions) {
         const existing = await requireTransition(tx, m.id);
         const set: Partial<typeof schema.timeline_transitions.$inferInsert> =
@@ -299,6 +304,81 @@ export const updateTimelineTransitionsInTransaction = async ({
         updated.push(row);
     }
     return updated;
+};
+
+/**
+ * Changes a transition's range with the R-E1 procedure (spec section 6), moving every anchored
+ * assignment with it: a row that started at the old start moves to the new start, and a row that
+ * ended at the old end moves to the new end. Unanchored rows stay where they are. The statements:
+ *
+ * 1. the transition becomes the union of the old and new ranges (skipped if that is the old range);
+ * 2. one UPDATE per anchored assignment, to its new bounds;
+ * 3. the transition becomes the new range (skipped if the union already is).
+ *
+ * Each row moves inside the union, which contains its old and new range, so every intermediate
+ * state is valid in both directions and undo can replay the edit backwards (U-3, spec 6.1). The
+ * database rejects the rest, and the caller's edit rolls back as a whole: an unanchored row left
+ * outside the new range fails step 3 (E-A1), a moved row that becomes empty fails I-A6 (a CHECK,
+ * so `E-DB`), a moved row that overlaps the same marcher's row at the same layer fails E-A3, and a
+ * range outside the timeline fails E-T1.
+ *
+ * Run it inside `transactionWithHistory`, so the edit is one undo group and one change batch. A
+ * target equal to the current range writes nothing, so don't make it the only write of an edit.
+ */
+export const setTimelineTransitionRangeInTransaction = async ({
+    tx,
+    transitionId,
+    start,
+    end,
+}: {
+    tx: DbTransaction;
+    transitionId: number;
+    start: number;
+    end: number;
+}): Promise<DatabaseTimelineTransition> => {
+    const existing = await requireTransition(tx, transitionId);
+    const s0 = existing.start_beat;
+    const e0 = existing.end_beat;
+    const unionStart = Math.min(s0, start);
+    const unionEnd = Math.max(e0, end);
+    const transitions = schema.timeline_transitions;
+    const assignments = schema.timeline_assignments;
+    const setRange = (startBeat: number, endBeat: number) =>
+        tx
+            .update(transitions)
+            .set({ start_beat: startBeat, end_beat: endBeat })
+            .where(eq(transitions.id, transitionId))
+            .returning()
+            .get();
+
+    return await mapDbErrors(async () => {
+        // 1. Grow to the union, so every anchored row can move inside it
+        let row = existing;
+        if (unionStart !== s0 || unionEnd !== e0)
+            row = await setRange(unionStart, unionEnd);
+
+        // 2. Move each anchored row, one statement per row
+        const rows = await tx
+            .select()
+            .from(assignments)
+            .where(eq(assignments.transition_id, transitionId))
+            .orderBy(asc(assignments.id))
+            .all();
+        for (const a of rows) {
+            const newStart = a.start_beat === s0 ? start : a.start_beat;
+            const newEnd = a.end_beat === e0 ? end : a.end_beat;
+            if (newStart === a.start_beat && newEnd === a.end_beat) continue;
+            await tx
+                .update(assignments)
+                .set({ start_beat: newStart, end_beat: newEnd })
+                .where(eq(assignments.id, a.id));
+        }
+
+        // 3. Settle on the target; tr_range_check rejects a stranded row here
+        if (unionStart !== start || unionEnd !== end)
+            row = await setRange(start, end);
+        return row;
+    });
 };
 
 /**
