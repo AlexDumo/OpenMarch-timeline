@@ -60,8 +60,8 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 
 ### P5.4: Playback
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p5-playback)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P5.2, P5.3
@@ -70,8 +70,8 @@ Playback: in timeline mode, `useAnimation` converts the playback time to a beat 
 
 ### P5.5: Static render
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p5-playback)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P5.3
