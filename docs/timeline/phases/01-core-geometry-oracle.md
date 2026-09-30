@@ -81,8 +81,8 @@ Tests: QA-FL-01 to -06, G1 to G13 and G8b, QA-DG-1 to -7 and QA-REG-5 against th
 
 ### P1.6: Property tests with independent geometry
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p1-properties)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P1.3
