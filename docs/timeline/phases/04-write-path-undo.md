@@ -61,8 +61,8 @@ Listener API (subscribe/unsubscribe), and on file open: clear the log and signal
 
 ### P4.4: db-functions
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker agent (timeline/p4-db-functions)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P4.1
@@ -81,8 +81,8 @@ db-functions (`{action}InTransaction` plus public wrappers) for timelines, shape
 
 ### P4.6: Child-first deletes
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker agent (timeline/p4-db-functions)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P4.4
