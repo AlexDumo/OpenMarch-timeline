@@ -4,7 +4,9 @@ import type { ValidationError, ValidationResult } from "@openmarch/core";
  * A rejected timeline write (spec section 6). `code` is the spec's error code: `E-S1`, `E-P1`,
  * `E-D2` and `E-N2` come from the core validators and are thrown before the database is touched;
  * `E-A1`, `E-A2`, `E-A3`, `E-T1`, `E-T3`, `E-T4`, `E-T5` and `E-T6` are the invariants the
- * database enforces. `E-ARGS` marks a call the write path refuses before writing (a missing row,
+ * database enforces. Where one trigger checks two invariants and the spec's message names both
+ * (`E-A1/E-A2`, `E-T3/E-T4`), `code` is that combined code: the database doesn't say which half
+ * failed, so the write path doesn't guess. `E-ARGS` marks a call the write path refuses before writing (a missing row,
  * a slot count that needs destinations, and so on), and `E-DB` any other database rejection.
  */
 export class TimelineWriteError extends Error {
@@ -46,8 +48,12 @@ export function refuse(message: string): never {
     throw new TimelineWriteError("E-ARGS", message);
 }
 
-/** A spec error code in a database error message, e.g. "E-T3/E-T4: ..." or "E-A1: ...". */
-const DB_CODE = /\bE-[A-Z]\d\b/;
+/**
+ * A spec error code at the start of a trigger's message, e.g. "E-A1: ..." or the combined
+ * "E-T3/E-T4: ...". Anchored, so text inside a failed query's parameters (a name such as "E-T1")
+ * can't be mistaken for a code.
+ */
+const DB_CODE = /^(E-[A-Z]\d(?:\/E-[A-Z]\d)?):/;
 
 /**
  * Runs a database write, and turns the invariant triggers' rejections (whose messages start with
@@ -62,11 +68,12 @@ export async function mapDbErrors<T>(write: () => Promise<T>): Promise<T> {
         const messages: string[] = [];
         for (let e: unknown = error; e instanceof Error; e = e.cause)
             messages.push(e.message);
-        const code = DB_CODE.exec(messages.join("\n"))?.[0];
+        // The innermost cause is SQLite's own message; check it first.
         const detail =
-            messages.find((m) => DB_CODE.test(m)) ??
+            [...messages].reverse().find((m) => DB_CODE.test(m.trim())) ??
             messages[messages.length - 1] ??
             "database error";
+        const code = DB_CODE.exec(detail.trim())?.[1];
         throw new TimelineWriteError(code ?? "E-DB", detail, [], {
             cause: error,
         });

@@ -715,8 +715,9 @@ describeDbTests("timeline db-functions", (it) => {
             "rejections leave the database unchanged",
             async ({ db }) => {
                 const { t1, assignmentIds } = await seed(db);
-                // A slot outside the transition (the trigger message is "E-A1/E-A2")
-                await expectRejected(db, "E-A1", () =>
+                // A slot outside the transition: the trigger's message is "E-A1/E-A2", and the
+                // write path reports that combined code rather than guessing one half
+                await expectRejected(db, "E-A1/E-A2", () =>
                     transactionWithHistory(db, "c", (tx) =>
                         createTimelineAssignmentsInTransaction({
                             newAssignments: [
