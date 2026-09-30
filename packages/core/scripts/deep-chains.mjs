@@ -147,7 +147,9 @@ export function runDeepChains(createResolver, N = 20000) {
         `cold query at the end of ${N} half-completed direct transitions ${err ? "-> " + err : "matches an independent loop"}`,
     );
 
-    // edit the FIRST shape: the whole chain must be dirtied
+    // edit the FIRST shape: the whole chain must be dirtied. Log the before-image the app's
+    // change-log trigger would (id, kind, geometry), taken before the edit.
+    const shapeBefore = { id: 1, ...structuredClone(db.shapes[1]) };
     db.shapes[1].geometry.points = [
         [40, 40],
         [41, 40],
@@ -159,7 +161,7 @@ export function runDeepChains(createResolver, N = 20000) {
                 {
                     table: "shapes",
                     rowId: 1,
-                    before: { id: 1 },
+                    before: shapeBefore,
                     after: { id: 1, ...db.shapes[1] },
                 },
             ],
