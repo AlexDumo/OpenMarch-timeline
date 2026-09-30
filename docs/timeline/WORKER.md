@@ -25,10 +25,13 @@ Set by the project owner on 2026-09-30, until they lift it here:
 
 ## 1. Orient
 
-1. Fetch: `git fetch <remote>`. The remote is `origin` unless
-   `TIMELINE_REMOTE` says otherwise. The coordination branch is named in
-   [README.md](README.md) and defaults to `timeline-try-2` in
-   `scripts/timeline/coord.sh`.
+1. Fetch: `git fetch <remote>`. All timeline branches and PRs live on the fork
+   `AlexDumo/OpenMarch-timeline`, never on `OpenMarch/OpenMarch`. `<remote>` is
+   the git remote that points at the fork; the scripts find it. If it's
+   missing, add it:
+   `git remote add timeline https://github.com/AlexDumo/OpenMarch-timeline.git`.
+   The coordination branch is named in [README.md](README.md) and defaults to
+   `timeline-try-2` in `scripts/timeline/coord.sh`.
 2. Read [README.md](README.md) (the protocol), then, if you haven't in this
    session, [implementation-plan.md](implementation-plan.md).
 3. Read the **coordination branch's** copy of the phase file, not a possibly
@@ -121,8 +124,11 @@ Throughout:
 2. Squash or tidy `wip:` commits. Confirm
    `git log <base>..HEAD --format=%B` has no AI attribution or co-author lines
    (root `AGENTS.md`).
-3. Push, and open a PR against the base branch with `gh pr create`. Its body
-   names the work package IDs and the checks you ran, with results.
+3. Push to the fork's remote, and open the PR on the fork:
+   `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+   Always pass `--repo AlexDumo/OpenMarch-timeline` to `gh`; without it, `gh`
+   can pick the public repo. The PR body names the work package IDs and the
+   checks you ran, with results.
 4. Through `coord.sh`: set `- Status: in-review` and `- PR: <url>`, tick only
    the exit-gate items you actually ran and whose outcome is already true on
    the base branch. An item that only becomes true when your PR merges (such
