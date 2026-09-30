@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: Cached incremental resolver (core)
-status: in-progress
+status: done
 owner: timeline-worker (timeline/p2-resolver)
 branch: timeline/p2-resolver
 pr: none
@@ -70,7 +70,7 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 ### P2.5: Golden, regression, invalidation and complexity tests
 
 - Owner: timeline-worker (timeline/p2-resolver-tests)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/8
 - Parallel: yes
 - Depends on: P2.4
@@ -100,7 +100,7 @@ QA-REG-6: a deep-chain script run with `node --stack-size=300` (20,000 direct, t
 ### P2.8: P-8 and P-10 assertions
 
 - Owner: timeline-worker (timeline/p2-resolver-tests)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/8
 - Parallel: yes
 - Depends on: P2.4
@@ -121,9 +121,9 @@ Export the resolver from `@openmarch/core`, and confirm the public API matches t
 
 Tick an item only after running its check, and paste the command and result into the log.
 
-- [ ] P2.5 to P2.8 pass
+- [x] P2.5 to P2.8 pass
 - [x] The 1,000-seed fuzz run passes locally (log its command and output)
-- [ ] `pnpm --dir packages/core run build` and `run test` pass
+- [x] `pnpm --dir packages/core run build` and `run test` pass
 
 ## Handoff notes
 
@@ -218,4 +218,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** opened [PR #8](https://github.com/AlexDumo/OpenMarch-timeline/pull/8) from `timeline/p2-resolver-tests` (`13fd3066` resolver guard and test hooks, `04535910` tests), rebased on `timeline-try-2` after PR #7. Covers QA-REG-1 to -4, QA-INV-02 to -07, QA-CX-01 to -05 (CX-04 run for the first time: counters grow linearly with the number of chain copies, and doubling gives at most 2.1×), P-8, P-10 and review follow-ups (a) to (f) plus the optional unchanged-home skip. Two behavior changes in `resolver.ts`, for the reviewer: the compute guard (throws on a cache miss during a compute); and a transition update now recomputes local caches only when `dest`, `slots`, `style` or `params` change (spec 9.4 table: range and `order_mode` recompute nothing local).
 - **Checks:** `pnpm --dir packages/core run build` pass; `run test` pass (21 files, 455 passed, 2 skipped); `run test:fuzz` 1,000 seeds × 80 steps: 72,349 batches, 0 divergent, 0 closure violations, 0 exceptions; `run test:deep` all three checks pass; `tsc --noEmit -p packages/core` no errors under `src/timeline`; eslint (0 errors), prettier and cspell clean on the changed files. Desktop `test:history`, e2e and the desktop build were not run (policy; no desktop code changed).
 - **Next:** review and merge PR #8. Exit-gate items 1 (P2.5 to P2.8 pass) and 3 (core build and test pass on the base) become true only when it merges, so they are not ticked.
+- **Blockers:** none.
+
+### 2026-09-30 · lead session · P2.5, P2.8 (reviewed and merged); Phase 2 closed
+
+- **Done:** fork PR #8 reviewed by a sub-agent (APPROVE WITH NITS; none of its three resolver behavior changes can break correctness on valid data: the compute guard can't fire on valid paths, transition updates still seed W-3 for every change and recompute local caches when §9.4 requires, and an unchanged home skips the −∞ eviction only when both coordinates are identical). Before merging, the lead: made `createResolver` return only the public `Resolver` methods (the test hooks and cache introspection were reachable at runtime), documented that style and params changes recompute both local caches (more than §9.4 requires, never wrong) and the key-order behavior of the params comparison, and added a test for a range-only update and a destination change on one transition in one batch. Merged as 4d646ce3. P2.5 and P2.8 set to done; all Phase 2 exit-gate items ticked; Phase 2 set to done.
+- **Checks:** at the PR head: `pnpm --dir packages/core run build` (pass); `vitest run` in packages/core (21 files, 455 passed); `test:fuzz` (1,000 seeds, 72,349 batches, 0 divergent, 0 closure violations, 0 exceptions); `test:deep` (all pass); `tsc --noEmit -p packages/core` (no errors under `src/timeline`). After the lead's fixes: build (pass), 456 passed, `test:deep` (pass). After merge on `timeline-try-2`: build (pass), 456 passed.
+- **Next:** Phase 4 (in progress: P4.1 to P4.3).
 - **Blockers:** none.
