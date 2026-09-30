@@ -31,8 +31,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P5.1: Dev flag
 
 - Owner: timeline-worker (timeline/p5-resolver-store)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/11
 - Parallel: yes
 - Depends on: —
 
@@ -51,8 +51,8 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 ### P5.3: Resolver store and hooks
 
 - Owner: timeline-worker (timeline/p5-resolver-store)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/11
 - Parallel: yes
 - Depends on: —
 
@@ -160,3 +160,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** P5.1 flag in `src/settings/workspaceSettings.ts`, then the resolver host in `src/timeline/`.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p5-resolver-store` from the fork; if it has no code commits, start with P5.1.
+
+### 2026-09-30 · timeline-worker (timeline/p5-resolver-store) · P5.1, P5.3
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/11. P5.1: optional `timelineMode` in `workspaceSettingsSchema` (off when absent, not shown in the settings UI), with `isTimelineModeEnabled` and `useTimelineMode`. P5.3: `apps/desktop/src/timeline/`. `timelineRows.ts` is the one place that maps DB rows and change-log images to core types, and holds the cold-build read. `timelineHost.ts` updates the mirror in place (marchers, shapes, transitions, slot-destination index behind `points`) from batch images, then calls `resolver.notify`. `timelineStore.ts` holds the zustand store, the session lifecycle, the hooks `usePositionAt`, `useExplain` and `useDiagnostics`, and the imperative `positionsAt(beat, out)` and `timelineMarcherIds()`. `TimelineResolverHost.tsx` is mounted in `App.tsx` and runs only while the flag is on. The cold build reads under the new `withTimelineWriteLock` export in `history.ts`, so its read contains exactly the batches delivered before it.
+- **Checks:** `tsc --noEmit`: pass. `test:focused` on `timelineStore.test.tsx`, `timeMap.test.ts`, `timelineChanges.test.ts` and `parseFromWorkspaceSettings.test.ts`: 47 passed. `test:history` on `timelineStore.test.tsx`, `timelineChanges.test.ts` and `timelineHistory.test.ts`: 30 passed. eslint: 0 errors (2 unused-import warnings that were already in `useWorkspaceSettings.ts`). prettier and cspell: pass. Full `test:history`, e2e and `build:electron` not run (policy). No exit-gate items ticked: none are fully covered by these packages.
+- **Notes for P5.4 and P5.5:** read positions with `positionsAt(beat, out)`, where `out` has length `2 * timelineMarcherIds().length` in ascending id order. It returns false while no resolver is ready. Subscribe to `useTimelineResolverStore` `version` to know when to redraw a static frame. `snapshot.assignments` is only the cold build's input. P4.4 merged while this was in progress. The store still reads tables with drizzle and doesn't use the db-functions.
+- **Next:** review and merge by the lead.
+- **Blockers:** none.
