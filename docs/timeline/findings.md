@@ -82,3 +82,7 @@ Exit code 0. `run_all.sh` itself truncates each line to 90 characters. Environme
 ### 2026-09-30 · lead session · jest-dom failures are environment-dependent
 
 - The 21 `MarcherForm`/`RevisionsList` failures recorded above did not occur in a full `pnpm --dir apps/desktop run test` run on a scratch work tree (PR #9 review: 87 files, 1,387 passed). They reproduce in the main checkout and on `origin/main`, so they depend on the environment (likely which `vitest`/jest-dom copy resolves), not on the code.
+
+### 2026-09-30 · lead session · `Canvas.test.tsx` is load-sensitive
+
+- `src/components/canvas/__test__/Canvas.test.tsx` ("renders") can time out waiting for `fieldCanvas` while the canvas still shows its loading spinner, when another test run shares the machine. It passed alone twice on the same code. Treat a lone failure there as load, and re-run it alone before blaming a PR.

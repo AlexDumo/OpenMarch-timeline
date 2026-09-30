@@ -102,7 +102,7 @@ Tests through the real write path: QA-DB-11, -12, -13, -24, -25, -26 (26b inform
 ### P4.8: Undo round-trip tests
 
 - Owner: timeline-worker agent (timeline/p4-undo)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/13
 - Parallel: yes
 - Depends on: P4.6
@@ -134,11 +134,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 
 - Undo replays with foreign keys OFF and BEFORE triggers ON, and records deletes with a BEFORE DELETE trigger. That's why C-1 exists; don't "simplify" back to CASCADE.
 - The wrapper (P4.1-P4.3, PR #9) lives in `transactionWithHistory` and `executeHistoryAction`; the listener API and E-T6 check are in `src/db-functions/timelineChanges.ts`. Every committed edit must leave each shapeless transition with all its destinations, so tests that seed timeline rows must insert a shapeless transition and its destinations in one edit. Undo and redo now share the write lock with `transactionWithHistory`.
-- Undo edge cases that predate P4.2 (from the PR #9 review; fix in P4.8 or a follow-up): (1) `executeHistoryAction` calls `incrementGroup(db, "redo")` before and outside the replay transaction, so a rejected undo leaves `cur_redo_group` bumped and, at the group limit, can prune the oldest redo group, which breaks §6.1's "a rejected undo leaves both stacks unchanged" in that edge case. Move the increment after a successful commit, or document it. (2) The history-row DELETE and group refresh run after the replay commits, outside it; if they fail, the replay was applied and delivered but the group remains, so a retry would replay it again.
+- RESOLVED in P4.8 (PR #13): undo edge cases that predated P4.2 (from the PR #9 review): (1) `executeHistoryAction` calls `incrementGroup(db, "redo")` before and outside the replay transaction, so a rejected undo leaves `cur_redo_group` bumped and, at the group limit, can prune the oldest redo group, which breaks §6.1's "a rejected undo leaves both stacks unchanged" in that edge case. Move the increment after a successful commit, or document it. (2) The history-row DELETE and group refresh run after the replay commits, outside it; if they fail, the replay was applied and delivered but the group remains, so a retry would replay it again.
 - Optional: a `WHEN OLD.home_x IS NOT NEW.home_x OR OLD.home_y IS NOT NEW.home_y` guard on `timeline_log_marchers_upd` would stop undo/redo of a marcher rename from logging a no-op home change. Safe under U-2 (a logging trigger never rejects); harmless without it.
 - From the PR #10 review, for P4.7 (tests) and the write path: add tests for E-T3/E-T4 (a block shape used for FTL, or with too few slots, on create, switch and shape update), E-A2 (shrinking `slot_count` below an occupied slot), an E-T6 row-trigger rejection, and a duplicate-id update. `updateTimelineTransitionsInTransaction` plans every edit from rows read before writing, so a call with the same id twice uses stale data: refuse duplicate ids or document it.
 - Error codes: combined trigger messages map to combined codes (`E-A1/E-A2`, `E-T3/E-T4`), because the database doesn't say which half failed. Commit-time E-T6 arrives as `TimelineCommitViolationError` (history.ts), row-trigger E-T6 as `TimelineWriteError`; P8.6 must handle both. CHECK failures (I-N2, I-T5) and a RESTRICT-blocked shape delete come out as `E-DB` (original error kept as `cause`); a pre-check refusing "shape in use" with `E-ARGS` would be friendlier.
 - R-E1 no-op: `setTimelineTransitionRangeInTransaction` writes nothing when the target equals the current range, and `transactionWithHistory` then fails its "no changes" assertion with a plain Error. Callers (P8.9: dragging a clip back where it started) must skip a no-op edit. An emptied row (I-A6) surfaces as `E-DB`, since the spec gives that CHECK no code.
+- Follow-up (pre-existing, from the PR #13 review): if switching the history triggers back to undo mode in `executeHistoryAction`'s finally block throws after a successful commit, the drained batch is never delivered and the response reports failure.
 
 ## Progress log
 
@@ -255,3 +256,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - `timeline_assignments` is unique on (transition_id, marcher_id).
   - SQLite fires the newest trigger first, so the QA-UNDO-1 control recreates the history triggers after adding the v0.6 trigger.
   - Redo on an empty stack resets `cur_redo_group`; it changes nothing else.
+
+### 2026-09-30 · lead session · P4.8 (reviewed and merged)
+
+- **Done:** fork PR #13 reviewed by a sub-agent (APPROVE WITH NITS, no regressions for ordinary undo/redo: the success path is identical; the history triggers read `cur_redo_group` when they fire, so incrementing inside the replay transaction can't misnumber redo rows; `PRAGMA foreign_keys` is still set outside the transaction; `refreshCurrentGroups` is safe inside it; no trigger reads `marchers`, so the marcher-before-assignments order still undoes exactly). Merged. Both undo edge cases are resolved: a rejected or failed undo/redo now leaves data and every history table unchanged, including at the group limit. The C-1 exception for marchers is recorded in `implementation-plan.md`. P4.8 set to done.
+- **Checks:** at the PR head: tsc (pass); `test:history src/db-functions/__test__/ electron/database/__test__/repair.test.ts` (18 files, 560 passed); `pnpm --dir apps/desktop run test` (90 files passed, 1 failed: `Canvas.test.tsx` "renders" timed out on the loading spinner while another test run was going; re-run alone twice, it passed both times, so it's load-dependent, not caused by this PR, which doesn't touch the canvas).
+- **Next:** P4.9 (end-to-end fuzz with the real undo).
+- **Blockers:** none.
