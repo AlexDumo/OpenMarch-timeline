@@ -62,12 +62,12 @@ Listener API (subscribe/unsubscribe), and on file open: clear the log and signal
 ### P4.4: db-functions
 
 - Owner: timeline-worker agent (timeline/p4-db-functions)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/10
 - Parallel: yes
 - Depends on: P4.1
 
-db-functions (`{action}InTransaction` plus public wrappers) for timelines, shapes, transitions, assignments and destinations. Shape↔individual switches happen in one edit. Every write runs the core validators (P1.4) first.
+db-functions (`{action}InTransaction` functions (no public wrappers by default, per `docs/conventions/database-interactions.md`)) for timelines, shapes, transitions, assignments and destinations. Shape↔individual switches happen in one edit. Every write runs the core validators (P1.4) first.
 
 ### P4.5: R-E1 range procedure
 
@@ -82,7 +82,7 @@ db-functions (`{action}InTransaction` plus public wrappers) for timelines, shape
 ### P4.6: Child-first deletes
 
 - Owner: timeline-worker agent (timeline/p4-db-functions)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/10
 - Parallel: yes
 - Depends on: P4.4
@@ -136,6 +136,8 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - The wrapper (P4.1-P4.3, PR #9) lives in `transactionWithHistory` and `executeHistoryAction`; the listener API and E-T6 check are in `src/db-functions/timelineChanges.ts`. Every committed edit must leave each shapeless transition with all its destinations, so tests that seed timeline rows must insert a shapeless transition and its destinations in one edit. Undo and redo now share the write lock with `transactionWithHistory`.
 - Undo edge cases that predate P4.2 (from the PR #9 review; fix in P4.8 or a follow-up): (1) `executeHistoryAction` calls `incrementGroup(db, "redo")` before and outside the replay transaction, so a rejected undo leaves `cur_redo_group` bumped and, at the group limit, can prune the oldest redo group, which breaks §6.1's "a rejected undo leaves both stacks unchanged" in that edge case. Move the increment after a successful commit, or document it. (2) The history-row DELETE and group refresh run after the replay commits, outside it; if they fail, the replay was applied and delivered but the group remains, so a retry would replay it again.
 - Optional: a `WHEN OLD.home_x IS NOT NEW.home_x OR OLD.home_y IS NOT NEW.home_y` guard on `timeline_log_marchers_upd` would stop undo/redo of a marcher rename from logging a no-op home change. Safe under U-2 (a logging trigger never rejects); harmless without it.
+- From the PR #10 review, for P4.7 (tests) and the write path: add tests for E-T3/E-T4 (a block shape used for FTL, or with too few slots, on create, switch and shape update), E-A2 (shrinking `slot_count` below an occupied slot), an E-T6 row-trigger rejection, and a duplicate-id update. `updateTimelineTransitionsInTransaction` plans every edit from rows read before writing, so a call with the same id twice uses stale data: refuse duplicate ids or document it.
+- Error codes: combined trigger messages map to combined codes (`E-A1/E-A2`, `E-T3/E-T4`), because the database doesn't say which half failed. Commit-time E-T6 arrives as `TimelineCommitViolationError` (history.ts), row-trigger E-T6 as `TimelineWriteError`; P8.6 must handle both. CHECK failures (I-N2, I-T5) and a RESTRICT-blocked shape delete come out as `E-DB` (original error kept as `cause`); a pre-check refusing "shape in use" with `E-ARGS` would be friendlier.
 
 ## Progress log
 
@@ -176,3 +178,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** `tsc --noEmit` pass; `test:history timelineWrites.test.ts` 18 passed; `test:focused timelineWrites.test.ts` 18 passed; prettier, eslint and cspell clean. Full `test:history` and e2e skipped per policy.
 - **Next:** review; P4.5 builds on `updateTimelineTransitionsInTransaction`'s plain range path.
 - **Blockers:** none. Note: the combined trigger message "E-A1/E-A2" maps to code `E-A1`.
+
+### 2026-09-30 · lead session · P4.4, P4.6 (reviewed and merged)
+
+- **Done:** fork PR #10's branch predated PR #9, so the lead merged the base into it (conflict in `db-functions/index.ts`: kept both export sets). A sub-agent reviewed it (APPROVE WITH NITS: every multi-statement function's order keeps each intermediate state valid, so edits and their undo can't be rejected; no function can leave a shapeless transition incomplete at commit; partial updates are validated against the resulting values). Before merging, the lead fixed the one spec mismatch: combined trigger messages now map to combined codes instead of the first half (a block with too few slots reported E-T3 where QA-DB-15/-21 expect E-T4), and the code must start the innermost SQLite message. Merged. P4.4 and P4.6 set to done; P4.4's description corrected (no public wrappers). Remaining nits are in the handoff notes.
+- **Checks:** on the PR merged with the base: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on `timelineWrites.test.ts`, `timelineChanges.test.ts` and `timelineHistory.test.ts` (3 files, 38 passed). After the fix: tsc (pass), `test:history .../timelineWrites.test.ts` (18 passed). Full `test:history` and e2e skipped per policy.
+- **Next:** P4.5 (R-E1 range procedure); then P4.7 to P4.9.
+- **Blockers:** none.
