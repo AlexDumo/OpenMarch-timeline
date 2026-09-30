@@ -84,8 +84,8 @@ Add the data tables (not the change log) to `tablesWithHistory` and the query-ke
 
 ### P3.6: Storage tests
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p3-qa-db)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P3.4
