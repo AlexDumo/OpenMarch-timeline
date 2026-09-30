@@ -32,7 +32,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P4.1: Wrapper drain in transactionWithHistory
 
 - Owner: timeline-worker agent (timeline/p4-write-wrapper)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: —
@@ -42,7 +42,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P4.2: Wrapper drain in undo and redo
 
 - Owner: timeline-worker agent (timeline/p4-write-wrapper)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P4.1
@@ -52,7 +52,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P4.3: Listener API and drain on open
 
 - Owner: timeline-worker agent (timeline/p4-write-wrapper)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P4.1
@@ -144,3 +144,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** n/a
 - **Next:** the drain-on-open should also cover `repair.ts`, which writes to `timeline_change_log` through the triggers, and repair must copy the timeline tables in dependency order (timelines, shapes, transitions, then destinations and assignments), or `timeline_asn_bounds_ins` rejects the copy.
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-write-wrapper) · P4.1, P4.2, P4.3
+
+- **Done:** checkpoint `1655f448` on `timeline/p4-write-wrapper`: `apps/desktop/src/db-functions/timelineChanges.ts` (listener API, E-T6 check, drain), the drain in `transactionWithHistory` and in `executeHistoryAction` (now queued on the write lock), `resetTimelineChangeLog` on file open in `App.tsx`, and the `repair.ts` copy order (parents first, `timeline_change_log` excluded and cleared) with a repair test.
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` pass; `pnpm --dir apps/desktop run test:focused electron/database/__test__/repair.test.ts -t "timeline|orders dependent"` pass (and fails with E-A1 without the order fix).
+- **Next:** fix `timelineHistory.test.ts` seeds that commit a shapeless transition without destinations (now E-T6), then add the listener tests.
+- **Blockers:** none.
+- **Resume from:** `git checkout timeline/p4-write-wrapper`; update `apps/desktop/src/db-functions/__test__/timelineHistory.test.ts` so every committed edit satisfies I-T6, then write `apps/desktop/src/db-functions/__test__/timelineChanges.test.ts`; run `pnpm --dir apps/desktop run test:history <file>`.
