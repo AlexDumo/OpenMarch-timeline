@@ -61,7 +61,7 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 ### P5.4: Playback
 
 - Owner: timeline-worker (timeline/p5-playback)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/14
 - Parallel: no
 - Depends on: P5.2, P5.3
@@ -71,7 +71,7 @@ Playback: in timeline mode, `useAnimation` converts the playback time to a beat 
 ### P5.5: Static render
 
 - Owner: timeline-worker (timeline/p5-playback)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/14
 - Parallel: no
 - Depends on: P5.3
@@ -132,8 +132,9 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 
 - Missing a QA-PF budget is a finding, not a blocker. Move the resolver to a worker only if the budgets are badly missed.
 - Every show starts with a fixed, zero-length beat at position 0 (migration 0000). In the tempo map (`src/timeline/timeMap.ts`), beat 1 owns show time 0 and beat positions in [0, 1) are never reached during playback. P5.4 and P5.5 draw the show from beat 1; a resolver span over [0, 1) has no visible time.
-- The frame clock (`src/services/clock/frame-clock.ts`, copied unchanged from 0.2) isn't wired in yet. P5.4 must call `init` from a user gesture, register `setOnPause` if pause should land on a page end, and set the beat index with `beatIndexAtTime(beats, currentTime / 1000)`: the clock's `currentTime` is in milliseconds, `timeMap` takes seconds, and `beatIndexAtTime` returns -1 when there are no beats.
+- The frame clock (`src/services/clock/frame-clock.ts`, copied unchanged from 0.2) isn't wired in yet. P5.4 kept the existing `getLivePlaybackPosition` clock, so wiring the frame clock is deferred to P8.1, which must call `init` from a user gesture, register `setOnPause` if pause should land on a page end, and set the beat index with `beatIndexAtTime(beats, currentTime / 1000)`: the clock's `currentTime` is in milliseconds, `timeMap` takes seconds, and `beatIndexAtTime` returns -1 when there are no beats.
 - Resolver store (P5.3, `src/timeline/timelineStore.ts`): `positionsAt(beat, out)` returns false when no resolver is ready or when `out` isn't `2 * timelineMarcherIds().length` long (resize from that every frame after marcher adds/deletes). While a rebuild is pending, the old resolver stays "ready", so the render loop may draw one stale frame. After a failed cold build, batches are ignored until a reset or a flag toggle; consider retrying. Test gaps to fill in P5.8: a batch that switches a transition between shape and individual destinations, an edit committed while a cold build is pending, and a destination update that changes `slot_index`.
+- Playback and static render (P5.4, P5.5): the canvas draws from `marcher_pages` until the resolver store reports ready (and after a failed build), then from the resolver. Page N's end beat is `lastBeat.index + 1` (the next page's start beat; page 0 → 1), which agrees with the page-mode keyframe time. Canvas drag is disabled in timeline mode (marchers snap back); every other `marcher_pages` writer is still reachable (see Phase 7's handoff notes). Pathways, midpoints, endpoints, collision markers and shapes are still drawn from `marcher_pages` in timeline mode and can disagree with the drawn marchers. `renderMarcherPositions` keeps a stale `coordinate.page_id` from the last page render, which Phase 7 must replace before re-enabling drag. While the resolver isn't ready, playback runs with frozen marchers.
 
 ## Progress log
 
@@ -215,4 +216,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Full `test:history`, e2e and `build:electron`: not run (policy).
 - **Exit gate:** nothing ticked. The desktop suite passes with the flag off on this branch, but that becomes true on the base only once the PR merges.
 - **Next:** review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-09-30 · lead session · P5.4, P5.5 (reviewed and merged)
+
+- **Done:** fork PR #14 reviewed by a sub-agent (APPROVE WITH NITS: page mode is unchanged, with hooks called unconditionally and no extra renders; playback converts ms to seconds to beats correctly, resizes the buffer before `positionsAt`, and applies positions by marcher id; the page → end-beat mapping agrees with `fromDatabasePages` and with the page-mode keyframes). Before merging, the lead made the canvas keep drawing from `marcher_pages` until the resolver is ready, instead of leaving marchers at (0, 0) until the first build, or for the whole session if it failed. Merged. P5.4 and P5.5 set to done; the remaining gaps are in the handoff notes here and in Phase 7.
+- **Checks:** at the PR head: tsc (pass); `test:focused src/timeline/__test__/ src/components/canvas/__test__/` (5 files, 51 passed); the worker's regular desktop suite (92 files, 1,458 passed). After the fix: tsc, eslint and the same focused tests (51 passed).
+- **Next:** P5.6 (idle warming), P5.7 (fixture loader), P5.8 (tests and performance numbers).
 - **Blockers:** none.
