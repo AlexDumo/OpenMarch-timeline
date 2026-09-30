@@ -61,7 +61,7 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 ### P5.4: Playback
 
 - Owner: timeline-worker (timeline/p5-playback)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P5.2, P5.3
@@ -71,7 +71,7 @@ Playback: in timeline mode, `useAnimation` converts the playback time to a beat 
 ### P5.5: Static render
 
 - Owner: timeline-worker (timeline/p5-playback)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P5.3
@@ -177,3 +177,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks (merged base):** on `timeline-try-2` at 99419e1c: `pnpm exec turbo run build --filter=@openmarch/desktop^...` (pass); `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on `timelineRangeEdit`, `timelineWrites`, `timelineChanges`, `timelineHistory` and `src/timeline/__test__/` (6 files, 92 passed).
 - **Next:** P5.4 (playback) and P5.5 (static render).
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p5-playback) · P5.4, P5.5
+
+- **Done:** wip commit on `timeline/p5-playback`: `src/timeline/timelineCanvas.ts` (reused `TimelinePositionBuffer`, `playbackBeat`, `pageEndBeat`), a timeline branch in `useAnimation`, `useTimelineStaticRender` and `OpenMarchCanvas.renderMarcherPositions`, with `Canvas.tsx` skipping the marcher_pages renders in timeline mode. Clock decision: keep the existing `getLivePlaybackPosition` clock; the 0.2 frame clock is not wired in.
+- **Checks:** `tsc --noEmit`: pass. Tests not written yet.
+- **Next:** unit, hook and real-DB tests.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p5-playback`; write tests in `apps/desktop/src/timeline/__test__/` (timelineCanvas, useAnimation flag on and off, static render on a real DB), then run the focused tests.
