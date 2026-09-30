@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: Geometry, oracle, validators (core)
-status: in-progress
+status: done
 owner: timeline-worker (timeline/p1-geometry)
 branch: timeline/p1-geometry
 pr: none
@@ -72,7 +72,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P1.5: Golden, flattening and degenerate tests
 
 - Owner: timeline-worker (timeline/p1-golden-tests)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/2
 - Parallel: yes
 - Depends on: P1.3
@@ -82,7 +82,7 @@ Tests: QA-FL-01 to -06, G1 to G13 and G8b, QA-DG-1 to -7 and QA-REG-5 against th
 ### P1.6: Property tests with independent geometry
 
 - Owner: timeline-worker (timeline/p1-properties)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/3
 - Parallel: yes
 - Depends on: P1.3
@@ -92,7 +92,7 @@ Property tests: port `props.mjs` to `fast-check`, with its **own independent geo
 ### P1.7: Mutation script (optional)
 
 - Owner: unassigned
-- Status: open
+- Status: deferred
 - PR: none
 - Parallel: yes
 - Depends on: P1.6
@@ -101,8 +101,8 @@ Optional: port `mutate.py` as a script that applies the nine seeded bugs to a co
 
 ### P1.8: Export from core
 
-- Owner: unassigned
-- Status: open
+- Owner: lead session
+- Status: done
 - PR: none
 - Parallel: no
 - Depends on: P1.3
@@ -113,7 +113,7 @@ Export the module from `packages/core/src/index.ts` (the oracle behind a clearly
 
 Tick an item only after running its check, and paste the command and result into the log.
 
-- [ ] Every test in P1.5 and P1.6 passes
+- [x] Every test in P1.5 and P1.6 passes
 - [x] `pnpm --dir packages/core run build` passes
 - [x] `pnpm --dir packages/core run test` passes
 - [x] Desktop still builds against the new core (`pnpm --dir apps/desktop exec tsc --noEmit`)
@@ -216,4 +216,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** timeline work moved to the fork `AlexDumo/OpenMarch-timeline` (see README "Coordination branch"). P1.5's PR moved from OpenMarch/OpenMarch#1042 (closed with a pointer) to AlexDumo/OpenMarch-timeline#2. P1.6's PR opened on the fork as #3 (branch `timeline/p1-properties`, b6d23db9); P1.6 set to in-review.
 - **Checks:** from the P1.6 worker at b6d23db9: `pnpm --dir packages/core run build` (pass); `pnpm --dir packages/core run test` (16 files, 295 passed, 2 skipped); default property run 196,544 checks, opt-in 5,000-show run 3,083,896 checks, 0 failures; a local D-7 mutation made P-12 fail. Full history and e2e skipped per policy.
 - **Next:** a person reviews and merges fork PRs #2 and #3.
+- **Blockers:** none.
+
+### 2026-09-30 · lead session · Phase 1 closed
+
+- **Done:** fork PRs #2 (P1.5) and #3 (P1.6) merged; P1.5 and P1.6 set to done. P1.8: `packages/core/src/timeline/index.ts` exports the §10.1 types, `TimelineSnapshot`, the validators and `createTimelineOracleForTesting`, matching ADR 0001 §4; `createResolver` arrives with P2.9. P1.7 (mutation script) deferred as optional: P1.6's mutation smoke check showed a D-7 break is caught by P-12. Phase 1 set to done.
+- **Checks:** on the fork's `timeline-try-2` at a42286d4: `pnpm --dir packages/core run build` (pass); `pnpm --dir packages/core run test` (17 files, 304 passed, 2 skipped); `pnpm --dir apps/desktop exec tsc --noEmit` (pass).
+- **Next:** Phase 2.
 - **Blockers:** none.

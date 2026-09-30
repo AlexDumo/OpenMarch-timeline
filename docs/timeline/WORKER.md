@@ -23,6 +23,13 @@ Set by the project owner on 2026-09-30, until they lift it here:
 - **CI doesn't run on PRs into `timeline-try-2`**, so a reviewer re-runs your
   checks by hand. List every command you ran, with its result.
 
+- **Reviews and merges:** workers never merge their own PRs. The lead session
+  has a reviewer sub-agent review each PR against the spec, ADR 0001, `ui.md`
+  and the phase file, re-runs the PR's checks itself, and then merges it on the
+  fork. The lead stops for the project owner only when a question can't be
+  answered from the spec, the ADR, `ui.md` or the plan; otherwise it decides,
+  and records the decision in the phase log.
+
 ## 1. Orient
 
 1. Fetch: `git fetch <remote>`. All timeline branches and PRs live on the fork

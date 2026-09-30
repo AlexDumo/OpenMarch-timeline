@@ -94,8 +94,8 @@ Add the data tables (not the change log) to `tablesWithHistory` and the query-ke
 
 ### P3.7: Migration test
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p3-storage)
+- Status: done
 - PR: none
 - Parallel: yes
 - Depends on: P3.3
@@ -257,4 +257,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** the Vitest `@om-electron` alias fix moved from OpenMarch/OpenMarch#1041 (closed with a pointer) to AlexDumo/OpenMarch-timeline#1. The public repo's four timeline branches were deleted after the fork had them.
 - **Checks:** unchanged from the earlier entry (6 files, 126 passed with the fix).
 - **Next:** a person merges fork PR #1.
+- **Blockers:** none.
+
+### 2026-09-30 · lead session · P3.7
+
+- **Done:** P3.7 set to done. `electron/database/migrations/__test__/0017_powerful_edwin_jarvis.test.ts` (merged in #1037's rework) is the migration test: a pre-0017 file with marchers and `marcher_pages` rows, row counts and ids unchanged, no rebuild of `marchers`, empty `foreign_key_check`, and home bounds enforced.
+- **Checks:** passed in the earlier `test:focused electron/database/migrations/__test__/` runs (51, then 126 with the file-version tests).
+- **Next:** P3.6 (full QA-DB suite) is being started. P3.8 is still a human step.
 - **Blockers:** none.
