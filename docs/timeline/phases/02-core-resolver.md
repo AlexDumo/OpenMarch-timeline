@@ -80,7 +80,7 @@ Tests: G1 to G13 on the resolver; QA-REG-1 to -4; QA-INV-02 to -07; QA-CX-01 to 
 ### P2.6: Differential fuzz
 
 - Owner: timeline-worker (timeline/p2-fuzz-deep)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/7
 - Parallel: yes
 - Depends on: P2.4
@@ -90,7 +90,7 @@ QA-INV-08: port `fuzz.mjs` as a seeded Vitest suite (a small seed count in CI) p
 ### P2.7: Deep chains on a small stack
 
 - Owner: timeline-worker (timeline/p2-fuzz-deep)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/7
 - Parallel: yes
 - Depends on: P2.4
@@ -122,7 +122,7 @@ Export the resolver from `@openmarch/core`, and confirm the public API matches t
 Tick an item only after running its check, and paste the command and result into the log.
 
 - [ ] P2.5 to P2.8 pass
-- [ ] The 1,000-seed fuzz run passes locally (log its command and output)
+- [x] The 1,000-seed fuzz run passes locally (log its command and output)
 - [ ] `pnpm --dir packages/core run build` and `run test` pass
 
 ## Handoff notes
@@ -131,6 +131,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 
 - None yet.
 - Review follow-ups for P2.5 to P2.8 (from the PR #6 review): add a guard that throws if a cache miss happens during a compute (so the no-recursion guarantee can't drift if `depsOfOrigin`/`depsOfEntry` stop matching what the compute functions read); negative closure tests (an injected stale origin key, an entry cached without its founders); a `slot_destinations` change whose rowId differs from its image's `transition`; `warmAll`/`notify` on an FTL with no founding spans; delete-then-reinsert of one id in a batch and a marcher inserted and deleted in a batch; a range change that turns a founding span into a join. Optional: a marcher change that leaves `home` unchanged needn't evict from −∞.
+- Fuzz follow-ups (optional, from the PR #7 review): the harness never inserts or deletes shapes (only updates); its oracle comparison uses the reference's 1e-6 absolute tolerance, which is looser than the property tolerance `1e-9·S + 1e-12`; it has 18 edit kinds, a superset of the spec's 15.
 
 ## Progress log
 
@@ -196,3 +197,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** write `__test__/resolverInvalidation.test.ts` (QA-REG-1..4, QA-INV-02..07, QA-CX-01..05, P-8, P-10, follow-ups b to f).
 - **Blockers:** none.
 - **Resume from:** branch `timeline/p2-resolver-tests` at `7bf1aaeb`; run `pnpm install`, then add `packages/core/src/timeline/__test__/resolverInvalidation.test.ts`.
+
+### 2026-09-30 · lead session · P2.6, P2.7 (reviewed and merged)
+
+- **Done:** fork PR #7 reviewed by a sub-agent (APPROVE WITH NITS, no correctness defect) and merged (5d2300a1). The reviewer checked the fuzz harness's change-log images field by field against the app's triggers (`triggers.ts`) and found them identical, and confirmed every edit keeps the show valid under §6. Before merging, the lead raised the CI deep-chain test to the full 20,000 direct / 5,000 FTL (at 3,000 on the default stack it wouldn't catch recursion returning; it now runs in about 1.4 s) and made the script's shape edit log the full before-image. P2.6 and P2.7 set to done; the 1,000-seed exit-gate item ticked.
+- **Checks:** at the PR head: core build (pass); `vitest run` in packages/core (20 files, 372 passed, 2 skipped); `pnpm --dir packages/core run test:fuzz` (1,000 seeds, 72,349 batches, 0 divergent, 0 closure violations, 0 exceptions); `pnpm --dir packages/core run test:deep` on `node --stack-size=300` (all three pass; the dirty walk visited 39,999 nodes). After the nits: the CI deep-chain test (pass, 1.4 s) and `test:deep` (pass).
+- **Next:** P2.5 and P2.8 are in progress; Phase 2 closes when they merge.
+- **Blockers:** none.
