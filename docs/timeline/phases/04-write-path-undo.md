@@ -62,8 +62,8 @@ Listener API (subscribe/unsubscribe), and on file open: clear the log and signal
 ### P4.4: db-functions
 
 - Owner: timeline-worker agent (timeline/p4-db-functions)
-- Status: claimed
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/10
 - Parallel: yes
 - Depends on: P4.1
 
@@ -82,8 +82,8 @@ db-functions (`{action}InTransaction` plus public wrappers) for timelines, shape
 ### P4.6: Child-first deletes
 
 - Owner: timeline-worker agent (timeline/p4-db-functions)
-- Status: claimed
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/10
 - Parallel: yes
 - Depends on: P4.4
 
@@ -169,3 +169,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at the PR head: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `pnpm --dir apps/desktop run test` (the regular suite: 87 files, 1,387 passed, 7 skipped; the pre-existing jest-dom failures didn't occur in this run); `pnpm --dir apps/desktop run test:history src/db-functions/__test__/ electron/database/__test__/repair.test.ts` (15 files, 503 passed). After the fix: tsc (pass) and `test:history .../timelineChanges.test.ts` (11 passed). The full `test:history` suite and e2e were skipped per policy.
 - **Next:** P4.4 and P4.6 are in progress; P4.5 (R-E1), P4.7 to P4.9 follow.
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-db-functions) · P4.4, P4.6
+
+- **Done:** PR 10 on `timeline/p4-db-functions`: `{create,update,delete}...InTransaction` for timelines, shapes, transitions, assignments, slot destinations, marcher homes; one-edit shape/individual switch; child-first deletes of timelines and transitions (C-1); typed `TimelineWriteError`. `history.ts` untouched.
+- **Checks:** `tsc --noEmit` pass; `test:history timelineWrites.test.ts` 18 passed; `test:focused timelineWrites.test.ts` 18 passed; prettier, eslint and cspell clean. Full `test:history` and e2e skipped per policy.
+- **Next:** review; P4.5 builds on `updateTimelineTransitionsInTransaction`'s plain range path.
+- **Blockers:** none. Note: the combined trigger message "E-A1/E-A2" maps to code `E-A1`.
