@@ -466,6 +466,40 @@ describeDbTests("timeline range edit (R-E1) and write-path storage", (it) => {
             });
         }
 
+        it("QA-UNDO-2 (disjoint): a target that doesn't overlap the old range round-trips", async ({
+            db,
+        }) => {
+            // Only the row anchored at both ends stays: the union [8, 40) contains both ranges,
+            // and the row moves whole from [8, 24) to [30, 40).
+            const { t } = await seed(db);
+            await transactionWithHistory(db, "keepOneRow", async (tx) => {
+                for (const marcher of [2, 3, 4])
+                    await tx
+                        .delete(schema.timeline_assignments)
+                        .where(
+                            eq(schema.timeline_assignments.marcher_id, marcher),
+                        );
+            });
+            const original = await dataOf(db);
+
+            await rangeEdit(db, t, 30, 40);
+            const edited = await dataOf(db);
+            expect(await transitionRange(db, t)).toEqual([30, 40]);
+            expect(Object.values(await ranges(db))).toEqual([[30, 40]]);
+
+            const undo1 = await performUndo(db);
+            expect(undo1.success, undo1.error?.message).toBe(true);
+            expect(await dataOf(db)).toEqual(original);
+
+            const redo = await performRedo(db);
+            expect(redo.success, redo.error?.message).toBe(true);
+            expect(await dataOf(db)).toEqual(edited);
+
+            const undo2 = await performUndo(db);
+            expect(undo2.success, undo2.error?.message).toBe(true);
+            expect(await dataOf(db)).toEqual(original);
+        });
+
         it("QA-UNDO-2g: a target that strands the unanchored row is rejected; data and history are unchanged", async ({
             db,
         }) => {
