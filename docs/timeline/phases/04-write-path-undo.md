@@ -102,8 +102,8 @@ Tests through the real write path: QA-DB-11, -12, -13, -24, -25, -26 (26b inform
 ### P4.8: Undo round-trip tests
 
 - Owner: timeline-worker agent (timeline/p4-undo)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/13
 - Parallel: yes
 - Depends on: P4.6
 
@@ -231,3 +231,27 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** tsc, eslint, the db-function history tests, repair test; then the PR.
 - **Blockers:** none.
 - **Resume from:** `git checkout timeline/p4-undo`; run `pnpm --dir apps/desktop exec tsc --noEmit` and `pnpm --dir apps/desktop run test:history src/db-functions/__test__/`, then open the PR.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-undo) · P4.8
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/13 (commit `13ec4932`).
+  - Both undo edge cases in the handoff notes are fixed. `executeHistoryAction` now runs the redo-group increment and its pruning, the replay, the DELETE of the replayed group and the group refresh in one transaction. A rejected or failed undo/redo leaves the data and all three history tables unchanged, and delivers no batch.
+  - Trigger-mode switching (DDL) and the FK pragma stay outside the transaction, as before.
+  - The history response's error message now includes the `cause` chain, where the SQLite reason lives.
+  - New `timelineUndo.test.ts` covers QA-UNDO-1/1b (negative controls), -3, -4, -6 and -8, rejected undo and redo (including at the group limit), and a failure after the replay.
+  - QA-UNDO-2, -5 and -7, C-1 and C-2 are already covered in `timelineRangeEdit`, `timelineChanges` and `timelineHistory`, and aren't repeated.
+- **Checks:**
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: pass.
+  - `pnpm --dir apps/desktop run test:history src/db-functions/__test__/`: 17 files, 519 passed, 1 todo.
+  - `test:history .../timelineUndo.test.ts`: 16 passed.
+  - `test:focused electron/database/__test__/repair.test.ts`: 41 passed.
+  - eslint, prettier and cspell: clean.
+  - Skipped per policy: the full `test:history` suite, the full desktop suite and e2e.
+- **Exit gate:** nothing ticked. The P4.8 half of the first item passes on the PR branch, but that item only becomes true on the base when the PR merges.
+- **Next:** review and merge PR #13, then P4.9.
+- **Blockers:** none.
+- **Notes:**
+  - `timeline_assignments.marcher_id` still cascades. With the BEFORE DELETE history trigger, a marcher's inverse is logged before its assignments', which is the reverse of U-4's order. Undo is still exact, because the replay runs with FKs off and no assignment trigger reads `marchers`. QA-UNDO-3 pins this order.
+  - `timeline_assignments` is unique on (transition_id, marcher_id).
+  - SQLite fires the newest trigger first, so the QA-UNDO-1 control recreates the history triggers after adding the v0.6 trigger.
+  - Redo on an empty stack resets `cur_redo_group`; it changes nothing else.
