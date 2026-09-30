@@ -47,6 +47,11 @@ export function subscribeTimelineChanges(
     };
 }
 
+/** How many listeners are registered, for tests and debug checks. */
+export function timelineChangeListenerCount(): number {
+    return listeners.size;
+}
+
 /**
  * Delivers an event to every listener. A listener that throws is logged and skipped; the others
  * still run, and the commit that produced the event stands.
