@@ -85,7 +85,7 @@ Add the data tables (not the change log) to `tablesWithHistory` and the query-ke
 ### P3.6: Storage tests
 
 - Owner: timeline-worker (timeline/p3-qa-db)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/4
 - Parallel: yes
 - Depends on: P3.4
@@ -126,7 +126,7 @@ On open, read `user_version` **before** touching the file; refuse a version high
 
 Tick an item only after running its check, and paste the command and result into the log.
 
-- [ ] P3.6 and P3.7 pass: `pnpm --dir apps/desktop run test:focused <file>`
+- [x] P3.6 and P3.7 pass: `pnpm --dir apps/desktop run test:focused <file>`
 - [x] `pnpm --dir apps/desktop exec tsc --noEmit` passes
 - [ ] Existing history tests still pass: `pnpm --dir apps/desktop run test:history`
 - [ ] P3.8 done by a person
@@ -272,3 +272,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** `pnpm --dir apps/desktop run test:focused electron/database/migrations/__test__/` (4 files, 87 passed); `pnpm --dir apps/desktop exec tsc --noEmit` (pass); eslint, prettier --check and cspell on the new file (pass). Full `test:history` and e2e skipped per policy. The P3.6 exit-gate item also names P3.7, which was already done; it is not ticked until the PR merges.
 - **Next:** review and merge PR #4, then set P3.6 to done.
 - **Blockers:** none.
+
+### 2026-09-30 · lead session · P3.6 (reviewed and merged)
+
+- **Done:** fork PR #4 reviewed by a sub-agent (APPROVE WITH NITS) and merged (678b8549). The lead applied the nits before merging: the QA-DB-27 `slot_count = 'many'` case now matches the named `timeline_transitions_slot_count_type_check` (text also fails the range CHECK), QA-DB-39's first two cases match the row triggers' messages (the commit-time view would otherwise mask a broken trigger), and a comment explains the shared E-A1/E-A2 message. P3.6 set to done; the P3.6/P3.7 exit-gate item ticked.
+- **Checks:** at the PR head before the nits: `test:focused electron/database/migrations/__test__/` (4 files, 87 passed) and `tsc --noEmit` (pass). After the nits: `test:focused .../timelineStorageQa.test.ts` (36 passed).
+- **Next:** Phase 3's remaining items: P3.8 (a person opens an older and a new `.dots` file) and the full `test:history` gate item, which is skipped under the current policy.
+- **Blockers:** P3.8 is human.
