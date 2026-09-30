@@ -102,7 +102,7 @@ Tests through the real write path: QA-DB-11, -12, -13, -24, -25, -26 (26b inform
 ### P4.8: Undo round-trip tests
 
 - Owner: timeline-worker agent (timeline/p4-undo)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P4.6
@@ -223,3 +223,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks (merged base):** on `timeline-try-2` at 99419e1c: `pnpm exec turbo run build --filter=@openmarch/desktop^...` (pass); `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on `timelineRangeEdit`, `timelineWrites`, `timelineChanges`, `timelineHistory` and `src/timeline/__test__/` (6 files, 92 passed).
 - **Next:** P4.8 (the remaining QA-UNDO cases and the two undo edge cases in the handoff notes) and P4.9 (end-to-end fuzz with the real undo).
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-undo) · P4.8
+
+- **Done:** checkpoint `13ec4932` on `timeline/p4-undo`. `executeHistoryAction` now runs the redo-group increment (and its pruning), the replay, the removal of the replayed group and the group refresh in one transaction, so a rejected or failed undo/redo changes nothing (handoff edge cases 1 and 2). The history response's error message now includes the error's causes. New `apps/desktop/src/db-functions/__test__/timelineUndo.test.ts`: QA-UNDO-1/1b, -3, -4, -6, -8, rejected undo/redo (including at the group limit) and a failure after the replay.
+- **Checks:** `test:history src/db-functions/__test__/timelineUndo.test.ts`: 16 passed (7 fail against the old `history.ts`).
+- **Next:** tsc, eslint, the db-function history tests, repair test; then the PR.
+- **Blockers:** none.
+- **Resume from:** `git checkout timeline/p4-undo`; run `pnpm --dir apps/desktop exec tsc --noEmit` and `pnpm --dir apps/desktop run test:history src/db-functions/__test__/`, then open the PR.
