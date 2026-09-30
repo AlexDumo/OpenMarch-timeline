@@ -251,3 +251,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** on `timeline-try-2` at 84ea6191: `pnpm --dir packages/core run build` (pass); `pnpm --dir packages/core run test` (289 passed, 2 skipped); `pnpm --dir apps/desktop exec tsc --noEmit` (pass). `test:focused` on the migration, file-version and repair tests: `timelineTriggers.test.ts` failed to load, because P3.9's renderer hook imports `@om-electron/database/fileVersion` and `vitest.config.ts` lacked that alias. Fix: branch `timeline/fix-vitest-alias` (eb81e8a5); with it, 6 files and 126 tests pass.
 - **Next:** merge the Vitest alias fix. P3.6 (full QA-DB suite), P3.7 (migration test) and P3.8 (a person opens an older and a new `.dots` file) remain.
 - **Blockers:** none.
+
+### 2026-09-30 · lead session · Vitest alias fix (moved to the fork)
+
+- **Done:** the Vitest `@om-electron` alias fix moved from OpenMarch/OpenMarch#1041 (closed with a pointer) to AlexDumo/OpenMarch-timeline#1. The public repo's four timeline branches were deleted after the fork had them.
+- **Checks:** unchanged from the earlier entry (6 files, 126 passed with the fix).
+- **Next:** a person merges fork PR #1.
+- **Blockers:** none.

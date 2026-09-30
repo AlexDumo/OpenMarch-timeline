@@ -73,7 +73,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 - Owner: timeline-worker (timeline/p1-golden-tests)
 - Status: in-review
-- PR: https://github.com/OpenMarch/OpenMarch/pull/1042
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/2
 - Parallel: yes
 - Depends on: P1.3
 
@@ -82,8 +82,8 @@ Tests: QA-FL-01 to -06, G1 to G13 and G8b, QA-DG-1 to -7 and QA-REG-5 against th
 ### P1.6: Property tests with independent geometry
 
 - Owner: timeline-worker (timeline/p1-properties)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/3
 - Parallel: yes
 - Depends on: P1.3
 
@@ -209,4 +209,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** `pnpm install` (pass); `pnpm --dir packages/core run build` (pass); `pnpm --dir packages/core run test` (16 files, 295 passed, 2 skipped, 3.3 s); `pnpm --dir packages/core exec vitest run src/timeline/__test__/properties.test.ts` (6 passed, about 0.6 s; default run 300 ordinary + 300 boundary + 30 chain shows = 196,544 checks, against props.mjs's 253,917 at 300 seeds, whose extra ~57,000 are its resolver-vs-oracle checks, deferred to Phase 2); opt-in `TIMELINE_PROPS_SHOWS=5000 TIMELINE_PROPS_SEED=7` (3,083,896 checks, 0 failures, 5.2 s); `pnpm --dir packages/core exec tsc --noEmit -p .` (no errors under `src/timeline`); prettier, eslint and cspell on the three files (pass; the pre-commit hook also passed). Mutation smoke check, not committed: changing the R-5 denominator in `oracle.ts` to `sp.end - sp.start` (breaking D-7) made the ordinary and boundary suites fail with `P-12 causality`; reverted with `git checkout`. Full `test:history` and Playwright e2e not run (policy; core-only change).
 - **Next:** no PR on OpenMarch/OpenMarch, per the lead: timeline work is moving to a fork. The lead opens the PR there.
 - **Resume from:** open the PR on the fork once the lead sets it up (branch `timeline/p1-properties`, base the fork's coordination branch); then set P1.6 to `in-review` with the PR link. Nothing else outstanding.
+- **Blockers:** none.
+
+### 2026-09-30 · lead session · P1.5, P1.6 (moved to the fork)
+
+- **Done:** timeline work moved to the fork `AlexDumo/OpenMarch-timeline` (see README "Coordination branch"). P1.5's PR moved from OpenMarch/OpenMarch#1042 (closed with a pointer) to AlexDumo/OpenMarch-timeline#2. P1.6's PR opened on the fork as #3 (branch `timeline/p1-properties`, b6d23db9); P1.6 set to in-review.
+- **Checks:** from the P1.6 worker at b6d23db9: `pnpm --dir packages/core run build` (pass); `pnpm --dir packages/core run test` (16 files, 295 passed, 2 skipped); default property run 196,544 checks, opt-in 5,000-show run 3,083,896 checks, 0 failures; a local D-7 mutation made P-12 fail. Full history and e2e skipped per policy.
+- **Next:** a person reviews and merges fork PRs #2 and #3.
 - **Blockers:** none.
