@@ -71,8 +71,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### P1.5: Golden, flattening and degenerate tests
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p1-golden-tests)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P1.3
