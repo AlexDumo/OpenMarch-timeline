@@ -7,7 +7,12 @@ import {
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { DbTransaction } from "./types";
-import { assertValid, mapDbErrors, refuse } from "./timelineErrors";
+import {
+    assertValid,
+    mapDbErrors,
+    refuse,
+    refuseDuplicateIds,
+} from "./timelineErrors";
 
 /** A row of `timeline_shapes`; `geometry` is the JSON text (spec 5.2). */
 export type DatabaseTimelineShape = typeof schema.timeline_shapes.$inferSelect;
@@ -97,6 +102,7 @@ export const updateTimelineShapesInTransaction = async ({
         id: number;
         set: Partial<typeof schema.timeline_shapes.$inferInsert>;
     }[] = [];
+    refuseDuplicateIds(modifiedShapes, "shape");
     for (const modified of modifiedShapes) {
         const existing = await getTimelineShapeById({ tx, id: modified.id });
         if (!existing) refuse(`shape ${modified.id} does not exist`);
