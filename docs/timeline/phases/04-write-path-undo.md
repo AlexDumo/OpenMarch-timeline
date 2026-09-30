@@ -72,7 +72,7 @@ db-functions (`{action}InTransaction` functions (no public wrappers by default, 
 ### P4.5: R-E1 range procedure
 
 - Owner: timeline-worker agent (timeline/p4-range-edit)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P4.4
@@ -92,7 +92,7 @@ Child-first deletes for timelines and transitions (C-1).
 ### P4.7: Write-path storage tests
 
 - Owner: timeline-worker agent (timeline/p4-range-edit)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P4.5
@@ -185,3 +185,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** on the PR merged with the base: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on `timelineWrites.test.ts`, `timelineChanges.test.ts` and `timelineHistory.test.ts` (3 files, 38 passed). After the fix: tsc (pass), `test:history .../timelineWrites.test.ts` (18 passed). Full `test:history` and e2e skipped per policy.
 - **Next:** P4.5 (R-E1 range procedure); then P4.7 to P4.9.
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-range-edit) · P4.5, P4.7
+
+- **Done:** checkpoint `78e3bd9c` on `timeline/p4-range-edit`: `setTimelineTransitionRangeInTransaction` (R-E1: union, anchored rows, target) in `apps/desktop/src/db-functions/timelineTransitions.ts`; the plain range update now points to it; `refuseDuplicateIds` (E-ARGS) in `timelineErrors.ts`, applied to the transition and shape update functions (the PR #10 follow-up).
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` pass.
+- **Next:** the P4.7 tests and the PR #10 follow-up tests in `apps/desktop/src/db-functions/__test__/timelineRangeEdit.test.ts`.
+- **Blockers:** none.
+- **Resume from:** `git checkout timeline/p4-range-edit`; `pnpm install` and `pnpm exec turbo run build --filter=@openmarch/desktop^... --force` in a fresh tree; write `apps/desktop/src/db-functions/__test__/timelineRangeEdit.test.ts` (QA-DB-11/-12/-13/-24/-25/-29, QA-UNDO-2a-g, E-T3/E-T4, E-A2, E-T6 row trigger, duplicate ids); run `pnpm --dir apps/desktop run test:history <that file>`.
