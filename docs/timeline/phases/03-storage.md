@@ -85,8 +85,8 @@ Add the data tables (not the change log) to `tablesWithHistory` and the query-ke
 ### P3.6: Storage tests
 
 - Owner: timeline-worker (timeline/p3-qa-db)
-- Status: claimed
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/4
 - Parallel: yes
 - Depends on: P3.4
 
@@ -264,4 +264,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** P3.7 set to done. `electron/database/migrations/__test__/0017_powerful_edwin_jarvis.test.ts` (merged in #1037's rework) is the migration test: a pre-0017 file with marchers and `marcher_pages` rows, row counts and ids unchanged, no rebuild of `marchers`, empty `foreign_key_check`, and home bounds enforced.
 - **Checks:** passed in the earlier `test:focused electron/database/migrations/__test__/` runs (51, then 126 with the file-version tests).
 - **Next:** P3.6 (full QA-DB suite) is being started. P3.8 is still a human step.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p3-qa-db) · P3.6
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/4 adds `apps/desktop/electron/database/migrations/__test__/timelineStorageQa.test.ts`: QA-DB-01 to -10, -13b, -14 to -23, -27, -28 and -30 to -41 (36 tests, each named by id). QA-DB-11 to -13, -24 to -26 and -29 are left for Phase 4 (R-E1 procedure and write wrapper). QA-DB-18 and -41 use RESTRICT (parent delete rejected, child-first succeeds); QA-DB-27 notes that integer affinity coerces the text '5' to 5; QA-DB-23 widens its second transition so E-A3 is the failure under test; QA-DB-30 and -36 run the commit view and change log inside a transaction and ROLLBACK.
+- **Checks:** `pnpm --dir apps/desktop run test:focused electron/database/migrations/__test__/` (4 files, 87 passed); `pnpm --dir apps/desktop exec tsc --noEmit` (pass); eslint, prettier --check and cspell on the new file (pass). Full `test:history` and e2e skipped per policy. The P3.6 exit-gate item also names P3.7, which was already done; it is not ticked until the PR merges.
+- **Next:** review and merge PR #4, then set P3.6 to done.
 - **Blockers:** none.
