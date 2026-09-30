@@ -195,3 +195,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** a person reviews and merges #1042. The exit-gate box "Every test in P1.5 and P1.6 passes" stays unticked until P1.6 lands.
 - **Resume from:** none; address review comments on PR 1042.
 - **Blockers:** none.
+
+### 2026-09-30 · lead session · P1.5 (review check)
+
+- **Done:** re-checked PR #1042 at 60499128 (one new file, `__test__/degenerate.test.ts`).
+- **Checks:** `pnpm --dir packages/core exec vitest run src/timeline/__test__/degenerate.test.ts` (9 passed). Spot-checked QA-DG-4 against spec §12.4: beat 6 M1 (2,3), M2 (2,1); beat 8 M1 (4,6), M2 (4,0); one `D-FTL-EMPTY` on transition 1; no members. These are the spec's literal values, not oracle snapshots. Commit carries no attribution lines.
+- **Next:** a person merges #1042. P1.6 (properties) is still running.
+- **Blockers:** none.
