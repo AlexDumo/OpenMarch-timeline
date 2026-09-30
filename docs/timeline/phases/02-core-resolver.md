@@ -69,8 +69,8 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 
 ### P2.5: Golden, regression, invalidation and complexity tests
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p2-resolver-tests)
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P2.4
@@ -99,8 +99,8 @@ QA-REG-6: a deep-chain script run with `node --stack-size=300` (20,000 direct, t
 
 ### P2.8: P-8 and P-10 assertions
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p2-resolver-tests)
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P2.4
@@ -173,3 +173,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at the PR head: `pnpm --dir packages/core run build` (pass); `vitest run` in packages/core (18 files, 369 passed, 2 skipped); `tsc --noEmit -p packages/core` (no errors under `src/timeline`). After merge on `timeline-try-2`: build and tests pass again.
 - **Next:** P2.5 to P2.8.
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p2-resolver-tests) · P2.5, P2.8
+
+- **Done:** claimed P2.5 and P2.8 (plus the PR #6 review follow-ups in the handoff notes). Branch `timeline/p2-resolver-tests` from `timeline-try-2` (dd51b8af).
+- **Checks:** none yet.
+- **Next:** read spec §9, §12.5 to §12.7, `ref/cx.mjs`, `ref/regress.mjs` and the resolver tests; add the QA-REG, QA-INV, QA-CX, P-8 and P-10 tests.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p2-resolver-tests` on the fork (or create it from `timeline/timeline-try-2`), run `pnpm install`, then start on `packages/core/src/timeline/__test__/`.
