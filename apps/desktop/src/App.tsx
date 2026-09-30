@@ -6,6 +6,7 @@ import { SelectedPageProvider } from "@/context/SelectedPageContext";
 import { SelectedMarchersProvider } from "@/context/SelectedMarchersContext";
 import { IsPlayingProvider } from "@/context/IsPlayingContext";
 import StateInitializer from "@/components/singletons/StateInitializer";
+import TimelineResolverHost from "@/timeline/TimelineResolverHost";
 import LaunchPage from "@/components/launchpage/LaunchPage";
 import { useEffect, useRef, useState } from "react";
 import RegisteredActionsHandler from "@/utilities/RegisteredActionsHandler";
@@ -274,6 +275,7 @@ function App() {
                                     <SelectedMarchersProvider>
                                         <SelectedAudioFileProvider>
                                             <StateInitializer />
+                                            <TimelineResolverHost />
                                             <RegisteredActionsHandler />
                                             <SvgPreviewHandler />
                                             <TitleBar showControls />

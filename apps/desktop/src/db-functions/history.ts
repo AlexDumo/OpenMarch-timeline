@@ -54,6 +54,17 @@ const withTransactionWithHistoryLock = async <T>(
 };
 
 /**
+ * Runs `operation` while no wrapped write (an edit, undo, redo or change-log reset) is running.
+ * Wrapped writes deliver their timeline batches before releasing this lock, so a read made under
+ * it sees exactly the state after every batch delivered so far, and no later one. The timeline
+ * resolver host reads its cold build this way. Never call it from inside a wrapped write: it
+ * would wait for itself.
+ */
+export const withTimelineWriteLock = <T>(
+    operation: () => Promise<T>,
+): Promise<T> => withTransactionWithHistoryLock(operation);
+
+/**
  * Runs a function in a transaction with undo/redo history tracking.
  *
  * This function will group all of the database actions performed inside of it into a single undo/redo group.
