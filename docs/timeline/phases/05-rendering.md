@@ -31,7 +31,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P5.1: Dev flag
 
 - Owner: timeline-worker (timeline/p5-resolver-store)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: —
@@ -51,7 +51,7 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 ### P5.3: Resolver store and hooks
 
 - Owner: timeline-worker (timeline/p5-resolver-store)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: —
@@ -152,3 +152,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at the PR head before the fixes: `test:focused src/timeline/__test__/timeMap.test.ts src/services/clock/__test__/frame-clock.test.ts` (30 passed) and `tsc --noEmit` (pass). After the fixes: the same tests (33 passed).
 - **Next:** P5.1, P5.3 and later wait for Phase 4.
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p5-resolver-store) · P5.1, P5.3
+
+- **Done:** restarted under the existing claim (the previous session stopped on a usage limit before writing code). Status set to in-progress; code branch `timeline/p5-resolver-store` starts from `timeline-try-2` (9753fdbb).
+- **Checks:** none yet.
+- **Next:** P5.1 flag in `src/settings/workspaceSettings.ts`, then the resolver host in `src/timeline/`.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p5-resolver-store` from the fork; if it has no code commits, start with P5.1.
