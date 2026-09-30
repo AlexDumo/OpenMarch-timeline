@@ -32,7 +32,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P4.1: Wrapper drain in transactionWithHistory
 
 - Owner: timeline-worker agent (timeline/p4-write-wrapper)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/9
 - Parallel: no
 - Depends on: —
@@ -42,7 +42,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P4.2: Wrapper drain in undo and redo
 
 - Owner: timeline-worker agent (timeline/p4-write-wrapper)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/9
 - Parallel: no
 - Depends on: P4.1
@@ -52,7 +52,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P4.3: Listener API and drain on open
 
 - Owner: timeline-worker agent (timeline/p4-write-wrapper)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/9
 - Parallel: no
 - Depends on: P4.1
@@ -134,6 +134,8 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 
 - Undo replays with foreign keys OFF and BEFORE triggers ON, and records deletes with a BEFORE DELETE trigger. That's why C-1 exists; don't "simplify" back to CASCADE.
 - The wrapper (P4.1-P4.3, PR #9) lives in `transactionWithHistory` and `executeHistoryAction`; the listener API and E-T6 check are in `src/db-functions/timelineChanges.ts`. Every committed edit must leave each shapeless transition with all its destinations, so tests that seed timeline rows must insert a shapeless transition and its destinations in one edit. Undo and redo now share the write lock with `transactionWithHistory`.
+- Undo edge cases that predate P4.2 (from the PR #9 review; fix in P4.8 or a follow-up): (1) `executeHistoryAction` calls `incrementGroup(db, "redo")` before and outside the replay transaction, so a rejected undo leaves `cur_redo_group` bumped and, at the group limit, can prune the oldest redo group, which breaks §6.1's "a rejected undo leaves both stacks unchanged" in that edge case. Move the increment after a successful commit, or document it. (2) The history-row DELETE and group refresh run after the replay commits, outside it; if they fail, the replay was applied and delivered but the group remains, so a retry would replay it again.
+- Optional: a `WHEN OLD.home_x IS NOT NEW.home_x OR OLD.home_y IS NOT NEW.home_y` guard on `timeline_log_marchers_upd` would stop undo/redo of a marcher rename from logging a no-op home change. Safe under U-2 (a logging trigger never rejects); harmless without it.
 
 ## Progress log
 
@@ -160,3 +162,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` pass. `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineChanges.test.ts src/db-functions/__test__/timelineHistory.test.ts src/db-functions/__test__/history.test.ts --silent`: 70/70 pass. `pnpm --dir apps/desktop run test:focused electron/database/__test__/repair.test.ts electron/database/migrations/__test__/`: 128/128 pass. `pnpm --dir apps/desktop run test:focused src/db-functions/`: 462 pass, 1 todo. eslint, prettier and cspell on the changed files: clean. Not run, per the current policy: the full `test:history`, the full desktop suite, and e2e. No exit-gate item ticked: none is covered by P4.1-P4.3 alone.
 - **Next:** review and merge PR #9. P4.4+ build on `transactionWithHistory` as is.
 - **Blockers:** none. Finding: undoing or redoing a marcher rename delivers a no-op `marchers` change (before equals after), because the history inverse rewrites every column and so fires `timeline_log_marchers_upd`. It's harmless after coalescing, and a test pins it. A cross-phase note in the Phase 3 file suggests an optional `WHEN` guard.
+
+### 2026-09-30 · lead session · P4.1 to P4.3 (reviewed and merged)
+
+- **Done:** fork PR #9 reviewed by a sub-agent (APPROVE WITH NITS; no regressions for non-timeline tables: the drain is after the group asserts and before commit, delivery happens once after commit and never on rollback, the change-log triggers can't be caught by the history trigger-mode switching, undo/redo sharing the write lock has no deadlock path, and the repair copy order is safe for files without timeline data). Before merging, the lead made `TimelineCommitViolationError` safe for an empty list. Merged as 54750956. The two undo edge cases that predate this PR, and an optional trigger guard, are in the handoff notes. P4.1 to P4.3 set to done.
+- **Checks:** at the PR head: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `pnpm --dir apps/desktop run test` (the regular suite: 87 files, 1,387 passed, 7 skipped; the pre-existing jest-dom failures didn't occur in this run); `pnpm --dir apps/desktop run test:history src/db-functions/__test__/ electron/database/__test__/repair.test.ts` (15 files, 503 passed). After the fix: tsc (pass) and `test:history .../timelineChanges.test.ts` (11 passed). The full `test:history` suite and e2e were skipped per policy.
+- **Next:** P4.4 and P4.6 are in progress; P4.5 (R-E1), P4.7 to P4.9 follow.
+- **Blockers:** none.
