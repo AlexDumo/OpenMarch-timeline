@@ -101,8 +101,8 @@ Tests through the real write path: QA-DB-11, -12, -13, -24, -25, -26 (26b inform
 
 ### P4.8: Undo round-trip tests
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker agent (timeline/p4-undo)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P4.6
