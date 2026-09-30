@@ -79,8 +79,8 @@ Tests: G1 to G13 on the resolver; QA-REG-1 to -4; QA-INV-02 to -07; QA-CX-01 to 
 
 ### P2.6: Differential fuzz
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p2-fuzz-deep)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P2.4
@@ -89,8 +89,8 @@ QA-INV-08: port `fuzz.mjs` as a seeded Vitest suite (a small seed count in CI) p
 
 ### P2.7: Deep chains on a small stack
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p2-fuzz-deep)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P2.4
