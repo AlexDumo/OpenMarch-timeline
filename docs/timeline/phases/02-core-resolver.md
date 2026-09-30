@@ -80,8 +80,8 @@ Tests: G1 to G13 on the resolver; QA-REG-1 to -4; QA-INV-02 to -07; QA-CX-01 to 
 ### P2.6: Differential fuzz
 
 - Owner: timeline-worker (timeline/p2-fuzz-deep)
-- Status: claimed
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/7
 - Parallel: yes
 - Depends on: P2.4
 
@@ -90,8 +90,8 @@ QA-INV-08: port `fuzz.mjs` as a seeded Vitest suite (a small seed count in CI) p
 ### P2.7: Deep chains on a small stack
 
 - Owner: timeline-worker (timeline/p2-fuzz-deep)
-- Status: claimed
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/7
 - Parallel: yes
 - Depends on: P2.4
 
@@ -181,3 +181,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read spec §9, §12.5 to §12.7, `ref/cx.mjs`, `ref/regress.mjs` and the resolver tests; add the QA-REG, QA-INV, QA-CX, P-8 and P-10 tests.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p2-resolver-tests` on the fork (or create it from `timeline/timeline-try-2`), run `pnpm install`, then start on `packages/core/src/timeline/__test__/`.
+
+### 2026-09-30 · timeline-worker (timeline/p2-fuzz-deep) · P2.6, P2.7
+
+- **Done:** opened [PR #7](https://github.com/AlexDumo/OpenMarch-timeline/pull/7). P2.6: `__test__/fuzzHarness.ts` + `fuzz.test.ts` (seeded port of `ref/fuzz.mjs`; 18 edit kinds incl. individual destinations, shape/individual switches, slot_destinations-only edits, range rewrites, marcher insert/delete; after every batch: closure, bit-equal to a fresh build, oracle within 1e-6); default 60 seeds x 40 steps (~1 s); `test:fuzz` runs 1,000 x 80. P2.7: `scripts/deep-chains.mjs` (`test:deep`, `node --stack-size=300` against the built dist) plus a CI-sized `deepChains.test.ts`. `resolver.ts` untouched; no resolver bug found.
+- **Checks:** `pnpm --dir packages/core run test:fuzz`: 1,000 seeds, 72,349 batches, 0 divergent, 0 closure violations, 0 exceptions (26 s). `test:deep -- --oracle-overflow`: 20,000 direct cold, same after editing the first shape (39,999 nodes walked), 5,000 FTL all pass at `--stack-size=300`; the recursive oracle overflows there (RangeError), as designed, and is not used by the checks. Mutation check: dropping slot_destinations handling in `notify` gave 62 divergences in 100 x 40 (reverted). `run build` pass; `run test` 20 files, 372 passed, 2 skipped; tsc clean for the new files and outside `src/path-utility`; prettier, eslint (TS) and cspell clean. `test:history` and e2e not run (policy).
+- **Next:** review and merge PR #7. The exit-gate fuzz item is true once it merges (the command is in this entry).
+- **Blockers:** none.
