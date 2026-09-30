@@ -1,8 +1,8 @@
 ---
 phase: 5
 title: Resolver host, time mapping, rendering
-status: not-started
-owner: unassigned
+status: in-progress
+owner: timeline-worker (timeline/p5-frame-clock)
 branch: none
 pr: none
 depends_on: [4]
@@ -40,8 +40,8 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 
 ### P5.2: Time and beat mapping
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p5-frame-clock)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: —
@@ -110,8 +110,8 @@ Tests: store and hook tests on a real DB; a QA-SC-11 scale fixture with QA-PF-01
 
 ### P5.9: Frame clock from 0.2
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p5-frame-clock)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: —
