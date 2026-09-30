@@ -78,12 +78,43 @@ interface NetChange {
     after: RowImage | null;
 }
 
+/**
+ * TEST ONLY. Hooks that read internal caches or corrupt them on purpose, so
+ * tests can check P-8, I-C1 and the pull-compile guard. Production code must
+ * never call them; they are not exported from the package.
+ */
+export interface ResolverTestHooks {
+    /**
+     * The cached local values of transition `tid` (spec 9.2 #3, #4), as the
+     * same objects the resolver holds: a value that was not recomputed keeps
+     * its identity.
+     */
+    localCaches(tid: number): {
+        destinations: readonly XY[] | undefined;
+        ftlGeometry: DestPath | undefined;
+    };
+    /** The number of cached cascading nodes (origins plus FTL entries). */
+    cachedNodeCount(): number;
+    /** Stores an origin under `(marcherId, start)` without pull-compile, so a test can plant a stale key. */
+    putOrigin(marcherId: number, start: Beat, xy: XY): void;
+    /** Drops one cached origin without the dirty walk, breaking I-C1 on purpose. */
+    dropOrigin(marcherId: number, start: Beat): boolean;
+    /**
+     * Hides dependencies (by node key, such as `ftlEntry 2` or `origin 1|4`)
+     * from pull-compile, to fake `depsOfOrigin`/`depsOfEntry` drifting from
+     * what the compute functions read. `null` restores normal behavior.
+     */
+    hideDependencies(hide: ((nodeKey: string) => boolean) | null): void;
+}
+
 /** The resolver plus test and debug hooks that are not part of the public API. */
 export interface CachedResolver extends Resolver {
     /** The marcher's spans in the public shape (tests only). */
     spanInfos(marcherId: number): SpanInfo[];
     /** I-C1: the first violation found, described, or null when the caches are closed. */
     cacheClosureViolation(): string | null;
+    /** TEST ONLY: see {@link ResolverTestHooks}. */
+    testOnly: ResolverTestHooks;
 }
 
 const FTL = "follow_the_leader";
@@ -154,6 +185,30 @@ function coalesce(batch: ChangeBatch) {
         assignments: live(byTable.assignments),
         destinations,
     };
+}
+
+const sameXY = (a: unknown, b: unknown): boolean =>
+    Array.isArray(a) && Array.isArray(b) && a[0] === b[0] && a[1] === b[1];
+
+/**
+ * Whether a transition update changes an input of its local caches (spec 9.4
+ * table): `dest_shape_id`, `slot_count`, `path_style` or `path_params`. A
+ * range or `order_mode` change recomputes nothing local. Individual
+ * destinations arrive as `slot_destinations` changes instead.
+ *
+ * A `path_style` or `path_params` change recomputes both local caches, which is
+ * more than the table requires (it names `ftlGeometry` only) but never wrong.
+ * The params comparison is by `JSON.stringify`, so a key-order difference can
+ * only cause an extra recompute, never a missed one.
+ */
+function localInputsChanged(before: RowImage, after: RowImage): boolean {
+    return (
+        before["dest"] !== after["dest"] ||
+        before["slots"] !== after["slots"] ||
+        before["style"] !== after["style"] ||
+        JSON.stringify(before["params"] ?? null) !==
+            JSON.stringify(after["params"] ?? null)
+    );
 }
 
 /** Cold build of the cached resolver (ADR 0001 section 4). */
@@ -348,12 +403,23 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         }
         return d;
     }
+    /** TEST ONLY: dependencies hidden from pull-compile (see ResolverTestHooks). */
+    let hiddenDeps: ((nodeKey: string) => boolean) | null = null;
+    /** The node being computed, while computeOrigin or computeEntry runs. */
+    let computing: Node | null = null;
     /**
      * Pull-compile (9.5) with an explicit work stack. Dependencies are pushed
      * above the node that needs them and computed first, so a node is computed
      * only once all its dependencies are cached (I-C1).
      */
     function ensure(node: Node) {
+        if (computing)
+            // A compute read a node its dependency list didn't name. Compiling
+            // it here would recurse, with depth growing with the chain (9.3),
+            // so fail loudly instead.
+            throw new Error(
+                `timeline resolver internal error: cache miss on ${nodeKey(node)} while computing ${nodeKey(computing)}; its dependency list is out of step with what it reads (spec 9.3)`,
+            );
         const work: Node[] = [node];
         const expanding = new Set<string>();
         while (work.length) {
@@ -362,8 +428,12 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                 work.pop();
                 continue;
             }
-            const deps =
+            let deps =
                 top[0] === "o" ? depsOfOrigin(top[1]) : depsOfEntry(top[1]);
+            if (hiddenDeps) {
+                const hide = hiddenDeps;
+                deps = deps.filter((d) => !hide(nodeKey(d)));
+            }
             const missing = deps.filter((d) => !isCached(d));
             if (missing.length) {
                 // Back on top with dependencies still missing: one of them is
@@ -380,8 +450,13 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                 continue;
             }
             work.pop();
-            if (top[0] === "o") computeOrigin(top[1]);
-            else computeEntry(top[1]);
+            computing = top;
+            try {
+                if (top[0] === "o") computeOrigin(top[1]);
+                else computeEntry(top[1]);
+            } finally {
+                computing = null;
+            }
         }
     }
     function computeOrigin(s: RSpan) {
@@ -607,7 +682,17 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                 for (const r of rowsOfTransition(tid))
                     touch(r.marcher, Math.min(b0, b1));
         }
-        for (const m of net.marchers.keys()) touch(m, -Infinity);
+        for (const [m, mc] of net.marchers)
+            // A net change that leaves `home` as it was (a move and its
+            // inverse in one batch) changes no span and no origin.
+            if (
+                !(
+                    mc.before &&
+                    mc.after &&
+                    sameXY(mc.before["home"], mc.after["home"])
+                )
+            )
+                touch(m, -Infinity);
 
         // 3. per affected marcher
         for (const [m, b0] of affected) {
@@ -643,18 +728,22 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                 continue;
             }
             setDest(tid, T(tid).dest);
-            computeLocal(tid, localRecomputed);
+            if (!tc.before || localInputsChanged(tc.before, tc.after))
+                computeLocal(tid, localRecomputed);
             seedTs.add(tid);
         }
+        const recomputed = new Set(localRecomputed.destinations);
         for (const tid of net.destinations)
-            if (!seedTs.has(tid) && host.transitions[tid]) {
+            if (!recomputed.has(tid) && host.transitions[tid]) {
                 computeLocal(tid, localRecomputed); // individual points edited
+                recomputed.add(tid);
                 seedTs.add(tid);
             }
         for (const sid of net.shapes.keys())
             for (const tid of byDest.get(sid) ?? [])
-                if (!seedTs.has(tid)) {
+                if (!recomputed.has(tid)) {
                     computeLocal(tid, localRecomputed);
+                    recomputed.add(tid);
                     seedTs.add(tid);
                 }
         for (const tid of seedTs) seed(tid);
@@ -872,10 +961,39 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             const ks = kindsOf(m);
             return spansOf(m).map((s, i) => spanInfo(s, ks[i]!));
         },
+        testOnly: {
+            localCaches: (tid) => ({
+                destinations: dests.get(tid),
+                ftlGeometry: paths.get(tid),
+            }),
+            cachedNodeCount: () => origins.size + entries.size,
+            putOrigin(m, start, xy) {
+                origins.set(`${m}|${start}`, xy);
+            },
+            dropOrigin: (m, start) => origins.delete(`${m}|${start}`),
+            hideDependencies(hide) {
+                hiddenDeps = hide;
+            },
+        },
     };
 }
 
 /** Cold build of the resolver (ADR 0001 section 4, spec 10.1). */
 export function createResolver(host: TimelineSnapshot): Resolver {
-    return createCachedResolver(host);
+    const r = createCachedResolver(host);
+    // Only the public interface: the internal caches, introspection and test
+    // hooks on the cached resolver stay unreachable at runtime too.
+    return {
+        positionAt: r.positionAt,
+        positionsAt: r.positionsAt,
+        marcherIds: r.marcherIds,
+        explain: r.explain,
+        ftlEntry: r.ftlEntry,
+        notify: r.notify,
+        warmAll: r.warmAll,
+        counters: r.counters,
+        resetCounters: r.resetCounters,
+        diagnostics: r.diagnostics,
+        checkCacheClosure: r.checkCacheClosure,
+    };
 }
