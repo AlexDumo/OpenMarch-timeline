@@ -141,6 +141,8 @@ const POINTS = [
     `INSERT INTO timeline_slot_destinations (transition_id, slot_index, x, y) VALUES (5, 1, 7, 4)`,
 ];
 
+// The bounds triggers raise one shared "E-A1/E-A2: …" message, so these two patterns match the
+// same error; each test's setup decides which half of the invariant it exercises.
 const E_A1 = /E-A1/;
 const E_A2 = /E-A2/;
 const E_A3 = /E-A3/;
@@ -420,7 +422,8 @@ describeDbTests("QA-DB storage suite", (it) => {
                     db,
                     `UPDATE timeline_transitions SET slot_count = 'many' WHERE id = 1`,
                 ),
-                CHECK,
+                // Text also fails the BETWEEN range check, so name the typeof CHECK to pin I-N1
+                /CHECK constraint failed: timeline_transitions_slot_count_type_check/,
             );
             // Text that looks like a fractional number is converted to REAL by the column's integer
             // affinity, so the typeof CHECK rejects it too
@@ -699,14 +702,15 @@ describeDbTests("QA-DB storage suite", (it) => {
                     ...POINTS,
                     `INSERT INTO timeline_slot_destinations (transition_id, slot_index, x, y) VALUES (5, 2, 0, 0)`,
                 ]),
-            ).toMatch(E_T6);
+                // The commit-time view would also report E-T6 here, so match the row trigger's message
+            ).toMatch(/E-T6: .*outside slot_count/);
             expect(
                 await attempt(db, [
                     SHAPELESS,
                     ...POINTS,
                     `UPDATE timeline_transitions SET slot_count = 1 WHERE id = 5`,
                 ]),
-            ).toMatch(E_T6);
+            ).toMatch(/E-T6: slot_count below a placed destination/);
             expect(
                 await attempt(db, [
                     SHAPELESS,
