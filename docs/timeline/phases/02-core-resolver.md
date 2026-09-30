@@ -30,7 +30,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P2.1: Row index and batch coalescing
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: —
@@ -40,7 +40,7 @@ Row index built only from batch after-images (by id, marcher and transition), pl
 ### P2.2: Caches and iterative pull-compile
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: P2.1
@@ -50,7 +50,7 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 ### P2.3: Invalidation (notify)
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: P2.2
@@ -60,7 +60,7 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 ### P2.4: Query and introspection API
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: P2.2
@@ -110,7 +110,7 @@ New dedicated assertions for P-8 (a shape edit leaves other transitions' caches 
 ### P2.9: Export the resolver
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: P2.4
@@ -130,6 +130,7 @@ Tick an item only after running its check, and paste the command and result into
 Kept current by the phase lead: where things stand, surprises, and what not to redo.
 
 - None yet.
+- Review follow-ups for P2.5 to P2.8 (from the PR #6 review): add a guard that throws if a cache miss happens during a compute (so the no-recursion guarantee can't drift if `depsOfOrigin`/`depsOfEntry` stop matching what the compute functions read); negative closure tests (an injected stale origin key, an entry cached without its founders); a `slot_destinations` change whose rowId differs from its image's `transition`; `warmAll`/`notify` on an FTL with no founding spans; delete-then-reinsert of one id in a batch and a marcher inserted and deleted in a batch; a range change that turns a founding span into a join. Optional: a marcher change that leaves `home` unchanged needn't evict from −∞.
 
 ## Progress log
 
@@ -164,4 +165,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** opened [PR #6](https://github.com/AlexDumo/OpenMarch-timeline/pull/6) (commits `51bedf4e` resolver + export, `5e4d98b2` tests; the wip commits were squashed and the branch rebased on `timeline-try-2`). `createResolver` is exported from `@openmarch/core` and matches ADR 0001 §4 with no renames. The golden/QA-FL/diagnostics fixtures are now shared (`__test__/fixtures.ts`, `__test__/goldenSuite.ts`) between the oracle and the resolver. `resolver.test.ts` holds 33 notify() cases, an inverse-edit case, a 27-batch sequence, W-4 early stop, counters and the cycle error.
 - **Checks:** `pnpm --dir packages/core run build` pass; `pnpm --dir packages/core run test` pass (18 files, 369 passed, 2 skipped); `pnpm --dir packages/core exec tsc --noEmit -p .` has no errors under `src/timeline` (the 54 errors it reports are all in `src/path-utility`); `pnpm exec turbo run build --filter=@openmarch/desktop^...` pass; `pnpm --dir apps/desktop exec tsc --noEmit` pass; prettier, eslint and cspell on `packages/core/src/timeline` are clean. Full `test:history` and e2e were not run (policy; no desktop code changed).
 - **Next:** review and merge PR #6. P2.5 to P2.8 are open and can reuse `__test__/fixtures.ts`, the `Editor` helper and `richShow()` in `resolver.test.ts`. Exit-gate item 3 (core build and test pass) becomes true on the base only when the PR merges, so it is not ticked yet.
+- **Blockers:** none.
+
+### 2026-09-30 · lead session · P2.1 to P2.4, P2.9 (reviewed and merged)
+
+- **Done:** fork PR #6 reviewed by a sub-agent against spec §9.2 to §9.5 and §10.2 (APPROVE WITH NITS, no correctness bug) and merged (2ce8c3fe). The reviewer confirmed: notify() handles every row of the §9.4 table; pull-compile and the dirty walk use explicit stacks with a sound cycle check; W-4 is correct under I-C1; the three deliberate changes (shape map from the host mirror, slot_destinations image transition, warmAll compiling empty FTL entries) are correct; golden expectations are the spec's literals. The lead confirmed the change-log image field is `transition` (triggers.ts), matching the resolver. Nits folded into P2.5 to P2.8 (handoff notes). Packages set to done.
+- **Checks:** at the PR head: `pnpm --dir packages/core run build` (pass); `vitest run` in packages/core (18 files, 369 passed, 2 skipped); `tsc --noEmit -p packages/core` (no errors under `src/timeline`). After merge on `timeline-try-2`: build and tests pass again.
+- **Next:** P2.5 to P2.8.
 - **Blockers:** none.
