@@ -30,7 +30,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P2.1: Row index and batch coalescing
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: —
@@ -40,7 +40,7 @@ Row index built only from batch after-images (by id, marcher and transition), pl
 ### P2.2: Caches and iterative pull-compile
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P2.1
@@ -50,7 +50,7 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 ### P2.3: Invalidation (notify)
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P2.2
@@ -60,7 +60,7 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 ### P2.4: Query and introspection API
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P2.2
@@ -110,7 +110,7 @@ New dedicated assertions for P-8 (a shape edit leaves other transitions' caches 
 ### P2.9: Export the resolver
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P2.4
@@ -142,3 +142,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** the resumed worker reviews the draft against spec §9 and `ref/resolver.mjs`, completes it, and adds the tests.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p2-resolver` (eae47f91); run `pnpm --dir packages/core run build` and `exec tsc --noEmit -p .` to see the draft's state; then finish P2.1 to P2.4 and P2.9 as the phase file describes.
+
+### 2026-09-30 · timeline-worker (timeline/p2-resolver) · P2.1, P2.2, P2.3, P2.4, P2.9
+
+- **Done:** resumed from wip commit `eae47f91` on `timeline/p2-resolver` (a previous worker stopped on a usage limit before logging). Reviewing `packages/core/src/timeline/resolver.ts` against spec §9, §10.1, §10.2 and `ref/resolver.mjs`.
+- **Checks:** none yet.
+- **Next:** fix review findings, then add resolver golden/QA-FL tests (fixtures shared with `oracle.test.ts`) and notify() cases.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p2-resolver`, review `packages/core/src/timeline/resolver.ts`, then write `packages/core/src/timeline/__test__/resolver.test.ts`.
