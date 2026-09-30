@@ -31,6 +31,8 @@ import { useMovementListeners } from "./hooks/canvasListeners.movement";
 import { useRenderMarcherShapes } from "./hooks/shapes";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { ShapePath } from "@/global/classes/canvasObjects/ShapePath";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 
 /**
  * The field/stage UI of OpenMarch
@@ -80,6 +82,7 @@ export default function Canvas({
     );
     const { setSelectedShapePageIds } = useSelectionStore()!;
     const databaseReady = useDatabaseReady();
+    const timelineMode = useTimelineMode();
 
     const { data: fieldProperties } = useQuery(
         fieldPropertiesQueryOptions(databaseReady),
@@ -225,9 +228,13 @@ export default function Canvas({
     // Update section appearances
     useEffect(() => {
         if (canvas) {
-            canvas.updateMarcherPagesFunction = updateMarcherPages.mutate;
+            // Timeline mode (P5.5): dragging marchers doesn't write marcher_pages; a drag snaps
+            // back to the resolver's position. Timeline editing on the canvas is Phase 7.
+            canvas.updateMarcherPagesFunction = timelineMode
+                ? () => canvas.refreshMarchers()
+                : updateMarcherPages.mutate;
         }
-    }, [canvas, updateMarcherPages.mutate]);
+    }, [canvas, updateMarcherPages.mutate, timelineMode]);
 
     // Sync canvas with marcher visuals
     useEffect(() => {
@@ -364,6 +371,8 @@ export default function Canvas({
             return;
 
         canvas.currentPage = selectedPage;
+        // Timeline mode draws from the resolver (useTimelineStaticRender below)
+        if (timelineMode) return;
 
         canvas
             .renderMarchers({
@@ -380,6 +389,7 @@ export default function Canvas({
         marcherVisuals,
         marchers,
         selectedPage,
+        timelineMode,
     ]);
 
     // Renders pathways when selected page or settings change
@@ -550,6 +560,7 @@ export default function Canvas({
     // rendered at their final positions for the selected page.
     useEffect(() => {
         if (
+            !timelineMode &&
             canvas &&
             !isPlaying &&
             selectedPage &&
@@ -573,7 +584,18 @@ export default function Canvas({
         marchers,
         marcherVisuals,
         marcherPagesLoaded,
+        timelineMode,
     ]);
+
+    // Timeline mode (P5.5): the static render reads the resolver at the selected page's end beat
+    // instead of marcher_pages. Runs after the marcher visuals are synced above.
+    useTimelineStaticRender({
+        canvas,
+        selectedPage,
+        isPlaying,
+        enabled: timelineMode,
+        redrawKey: marcherVisuals,
+    });
 
     // Render collision markers when paused
     useEffect(() => {
