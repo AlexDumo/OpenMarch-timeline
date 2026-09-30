@@ -93,7 +93,7 @@ export class TimelineCommitViolationError extends Error {
                 .join("; "),
         );
         this.name = "TimelineCommitViolationError";
-        this.code = first.code;
+        this.code = first?.code ?? "E-T6";
         this.violations = violations;
     }
 }
