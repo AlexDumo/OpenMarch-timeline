@@ -204,3 +204,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at the PR head: core build (pass); `vitest run` in packages/core (20 files, 372 passed, 2 skipped); `pnpm --dir packages/core run test:fuzz` (1,000 seeds, 72,349 batches, 0 divergent, 0 closure violations, 0 exceptions); `pnpm --dir packages/core run test:deep` on `node --stack-size=300` (all three pass; the dirty walk visited 39,999 nodes). After the nits: the CI deep-chain test (pass, 1.4 s) and `test:deep` (pass).
 - **Next:** P2.5 and P2.8 are in progress; Phase 2 closes when they merge.
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p2-resolver-tests) · P2.5, P2.8
+
+- **Done:** squashed and rebased on `timeline-try-2` after PR #7 merged: `13fd3066` (resolver guard, local-input check, unchanged-home skip, test-only hooks) and `04535910` (new `__test__/resolverInvalidation.test.ts`, 83 tests; helpers moved to `__test__/resolverHarness.ts`). Pushed to `timeline/p2-resolver-tests`.
+- **Checks:** `pnpm --dir packages/core run build` pass; `pnpm --dir packages/core run test` pass (21 files, 455 passed, 2 skipped); `tsc --noEmit -p packages/core` no errors under `src/timeline` (54 pre-existing in `src/path-utility`). Mutation spot checks each fail the new suite: ignoring the slot_destinations image transition, dropping step 3.4 row-image transitions, always recomputing locals, no unchanged-home skip, no compute guard, dropping W-2, dropping W-1's FTL entry.
+- **Next:** 1,000-seed fuzz and deep-chain script on the rebased tree, then the PR.
+- **Blockers:** none.
+- **Resume from:** branch `timeline/p2-resolver-tests` at `04535910`; run `pnpm --dir packages/core run test:fuzz` and `run test:deep`, then open the PR (`gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`).
