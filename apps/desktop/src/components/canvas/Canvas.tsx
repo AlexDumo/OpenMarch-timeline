@@ -33,6 +33,7 @@ import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { ShapePath } from "@/global/classes/canvasObjects/ShapePath";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
 
 /**
  * The field/stage UI of OpenMarch
@@ -83,6 +84,12 @@ export default function Canvas({
     const { setSelectedShapePageIds } = useSelectionStore()!;
     const databaseReady = useDatabaseReady();
     const timelineMode = useTimelineMode();
+    // Draw from the resolver only once it's ready. Until the first cold build finishes (or if it
+    // fails), keep drawing from marcher_pages instead of leaving every marcher at (0, 0).
+    const timelineResolverReady = useTimelineResolverStore(
+        (s) => s.status === "ready",
+    );
+    const drawFromResolver = timelineMode && timelineResolverReady;
 
     const { data: fieldProperties } = useQuery(
         fieldPropertiesQueryOptions(databaseReady),
@@ -371,8 +378,8 @@ export default function Canvas({
             return;
 
         canvas.currentPage = selectedPage;
-        // Timeline mode draws from the resolver (useTimelineStaticRender below)
-        if (timelineMode) return;
+        // Timeline mode draws from the resolver (useTimelineStaticRender below) once it's ready
+        if (drawFromResolver) return;
 
         canvas
             .renderMarchers({
@@ -389,7 +396,7 @@ export default function Canvas({
         marcherVisuals,
         marchers,
         selectedPage,
-        timelineMode,
+        drawFromResolver,
     ]);
 
     // Renders pathways when selected page or settings change
@@ -560,7 +567,7 @@ export default function Canvas({
     // rendered at their final positions for the selected page.
     useEffect(() => {
         if (
-            !timelineMode &&
+            !drawFromResolver &&
             canvas &&
             !isPlaying &&
             selectedPage &&
@@ -584,7 +591,7 @@ export default function Canvas({
         marchers,
         marcherVisuals,
         marcherPagesLoaded,
-        timelineMode,
+        drawFromResolver,
     ]);
 
     // Timeline mode (P5.5): the static render reads the resolver at the selected page's end beat
