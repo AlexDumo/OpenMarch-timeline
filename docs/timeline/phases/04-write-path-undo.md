@@ -1,9 +1,9 @@
 ---
 phase: 4
 title: Write wrapper, db-functions, undo, e2e fuzz
-status: not-started
-owner: unassigned
-branch: none
+status: in-progress
+owner: timeline-worker agent (timeline/p4-write-wrapper)
+branch: timeline/p4-write-wrapper
 pr: none
 depends_on: [2, 3]
 updated: 2026-09-29
@@ -31,8 +31,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### P4.1: Wrapper drain in transactionWithHistory
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker agent (timeline/p4-write-wrapper)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: —
@@ -41,8 +41,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### P4.2: Wrapper drain in undo and redo
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker agent (timeline/p4-write-wrapper)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P4.1
@@ -51,8 +51,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### P4.3: Listener API and drain on open
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker agent (timeline/p4-write-wrapper)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P4.1
