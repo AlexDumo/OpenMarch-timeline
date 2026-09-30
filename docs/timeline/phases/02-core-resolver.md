@@ -134,3 +134,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 ## Progress log
 
 <!-- Append entries below, newest last, using the format in ../README.md. Never edit earlier entries. -->
+
+### 2026-09-30 · lead session · P2.1 to P2.4 (checkpoint after a usage-limit stop)
+
+- **Done:** the worker hit the account usage limit after drafting `packages/core/src/timeline/resolver.ts` (878 lines: row index, coalescing, `createCachedResolver`, `createResolver`) and an `index.ts` export change, without committing. The lead committed the draft as-is as eae47f91 (`wip:`, untested; plus one word added to its cspell ignore line) and pushed it to `timeline/p2-resolver` on the fork.
+- **Checks:** pre-commit hook (cspell, eslint, prettier) passed on the draft. Build and tests not yet run.
+- **Next:** the resumed worker reviews the draft against spec §9 and `ref/resolver.mjs`, completes it, and adds the tests.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p2-resolver` (eae47f91); run `pnpm --dir packages/core run build` and `exec tsc --noEmit -p .` to see the draft's state; then finish P2.1 to P2.4 and P2.9 as the phase file describes.
