@@ -41,8 +41,8 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 ### P5.2: Time and beat mapping
 
 - Owner: timeline-worker (timeline/p5-frame-clock)
-- Status: claimed
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/5
 - Parallel: yes
 - Depends on: —
 
@@ -111,8 +111,8 @@ Tests: store and hook tests on a real DB; a QA-SC-11 scale fixture with QA-PF-01
 ### P5.9: Frame clock from 0.2
 
 - Owner: timeline-worker (timeline/p5-frame-clock)
-- Status: claimed
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/5
 - Parallel: yes
 - Depends on: —
 
@@ -135,3 +135,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 ## Progress log
 
 <!-- Append entries below, newest last, using the format in ../README.md. Never edit earlier entries. -->
+
+### 2026-09-30 · timeline-worker (timeline/p5-frame-clock) · P5.9, P5.2
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/5 (commit a4b1d41b). P5.9: `apps/desktop/src/services/clock/frame-clock.ts` and `apps/desktop/src/utilities/zustand.ts` (`createSelectors`) ported unchanged from `origin/0.2`, with new tests (0.2 had none) using a stand-in `AudioContext` and faked `requestAnimationFrame`. P5.2: `apps/desktop/src/timeline/timeMap.ts` with `beatAtTime`, `timeAtBeat`, `beatIndexAtTime` and `showEndTime`, binary search over cumulative beat timestamps, half-open beat ranges (later beat owns a boundary), clamped to `[0, beats.length]`, and tested at boundaries, fractions, uneven tempo, zero-duration beats, before 0, past the end and float drift.
+- **Seam:** nothing imports the clock, so behavior is unchanged. Not ported from 0.2: the `useAnimation` rewrite, the `AudioPlayer`/`Clock.tsx` wiring that calls `init`, `IsPlayingContext` removal, the canvas `setCoords` change, and `SelectedPageContext`'s `setOnPause` page-end snap. In 0.2 the clock does not compute `currentBeatIndex`; `Timeline.tsx` sets it. P5.4 and P8.1 should set it with `beatIndexAtTime(beats, currentTime / 1000)` so there is one mapping.
+- **Checks:** `pnpm --dir apps/desktop run test:focused src/timeline/__test__/timeMap.test.ts src/services/clock/__test__/frame-clock.test.ts`: pass (30 tests). `pnpm --dir apps/desktop exec tsc --noEmit`: pass. eslint, prettier and cspell on the changed files: pass. Full `test:history` and e2e not run (policy); no history tests apply.
+- **Next:** review and merge by the lead. No exit-gate items are covered by these packages.
+- **Blockers:** none.
