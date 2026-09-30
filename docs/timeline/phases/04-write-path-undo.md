@@ -71,8 +71,8 @@ db-functions (`{action}InTransaction` functions (no public wrappers by default, 
 
 ### P4.5: R-E1 range procedure
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker agent (timeline/p4-range-edit)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P4.4
@@ -91,8 +91,8 @@ Child-first deletes for timelines and transitions (C-1).
 
 ### P4.7: Write-path storage tests
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker agent (timeline/p4-range-edit)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P4.5
