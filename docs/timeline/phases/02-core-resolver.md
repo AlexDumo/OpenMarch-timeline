@@ -1,12 +1,12 @@
 ---
 phase: 2
 title: Cached incremental resolver (core)
-status: not-started
-owner: unassigned
-branch: none
+status: in-progress
+owner: timeline-worker (timeline/p2-resolver)
+branch: timeline/p2-resolver
 pr: none
 depends_on: [1]
-updated: 2026-09-29
+updated: 2026-09-30
 ---
 
 # Phase 2: Cached incremental resolver (core)
@@ -29,8 +29,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### P2.1: Row index and batch coalescing
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p2-resolver)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: —
@@ -39,8 +39,8 @@ Row index built only from batch after-images (by id, marcher and transition), pl
 
 ### P2.2: Caches and iterative pull-compile
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p2-resolver)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P2.1
@@ -49,8 +49,8 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 
 ### P2.3: Invalidation (notify)
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p2-resolver)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P2.2
@@ -59,8 +59,8 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 
 ### P2.4: Query and introspection API
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p2-resolver)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P2.2
@@ -109,8 +109,8 @@ New dedicated assertions for P-8 (a shape edit leaves other transitions' caches 
 
 ### P2.9: Export the resolver
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p2-resolver)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P2.4
