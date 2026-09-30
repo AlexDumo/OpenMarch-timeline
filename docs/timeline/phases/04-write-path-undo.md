@@ -72,8 +72,8 @@ db-functions (`{action}InTransaction` functions (no public wrappers by default, 
 ### P4.5: R-E1 range procedure
 
 - Owner: timeline-worker agent (timeline/p4-range-edit)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/12
 - Parallel: yes
 - Depends on: P4.4
 
@@ -92,8 +92,8 @@ Child-first deletes for timelines and transitions (C-1).
 ### P4.7: Write-path storage tests
 
 - Owner: timeline-worker agent (timeline/p4-range-edit)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/12
 - Parallel: yes
 - Depends on: P4.5
 
@@ -193,3 +193,24 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** the P4.7 tests and the PR #10 follow-up tests in `apps/desktop/src/db-functions/__test__/timelineRangeEdit.test.ts`.
 - **Blockers:** none.
 - **Resume from:** `git checkout timeline/p4-range-edit`; `pnpm install` and `pnpm exec turbo run build --filter=@openmarch/desktop^... --force` in a fresh tree; write `apps/desktop/src/db-functions/__test__/timelineRangeEdit.test.ts` (QA-DB-11/-12/-13/-24/-25/-29, QA-UNDO-2a-g, E-T3/E-T4, E-A2, E-T6 row trigger, duplicate ids); run `pnpm --dir apps/desktop run test:history <that file>`.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-range-edit) · P4.5, P4.7
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/12 (commit `fc72068d`).
+  - `setTimelineTransitionRangeInTransaction` implements R-E1 in three steps: the union, then one UPDATE per anchored row, then the target. The plain range update behaves as before and points to the procedure.
+  - `refuseDuplicateIds` makes the transition and shape updates refuse a repeated id with `E-ARGS`.
+  - New `timelineRangeEdit.test.ts` covers QA-DB-11, -12, -13, -24, -25 and -29, plus QA-UNDO-2a to -2g on the real `performUndo`/`performRedo`. It also covers these PR #10 follow-ups: `E-T3/E-T4` on create, switch and update, `E-A2`, a row-trigger `E-T6`, and duplicate ids.
+  - QA-DB-26 stays in `timelineChanges.test.ts`, and QA-DB-13b in `timelineWrites.test.ts`.
+  - The PR #10 handoff bullets on tests and duplicate ids are addressed.
+- **Checks:**
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: pass.
+  - `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineRangeEdit.test.ts src/db-functions/__test__/timelineWrites.test.ts src/db-functions/__test__/timelineChanges.test.ts src/db-functions/__test__/timelineHistory.test.ts --silent`: 4 files, 60 passed.
+  - `test:focused` on the new file and `timelineWrites.test.ts`: 40 passed.
+  - eslint, prettier and cspell on the changed files: clean.
+  - Skipped per policy: the full `test:history` suite, the full desktop suite and e2e.
+- **Exit gate:** nothing ticked. The P4.7 half of the first item passes (the command above), but that item also needs P4.8.
+- **Next:** review and merge PR #12. P4.8 can build on the new test file's seed and round-trip helpers.
+- **Blockers:** none.
+- **Notes:**
+  - An emptied row (QA-DB-13) fails the I-A6 CHECK, which surfaces as `E-DB`, the same as other CHECK failures.
+  - A range edit to the current range writes nothing, so `transactionWithHistory` would reject it as an edit with no changes. Callers should skip it.
