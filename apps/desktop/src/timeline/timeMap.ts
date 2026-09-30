@@ -3,8 +3,13 @@
  *
  * The resolver works on real-valued beat positions. Beat `n` is the start of the `n`th row of
  * `beats` ordered by `position`, counting from 0. Ranges are half-open: beat `b` covers show time
- * `[timestamp_b, timestamp_b + duration_b)`, and a fractional beat `b + f` (0 <= f < 1) is the time
- * `timestamp_b + f * duration_b`. Where two beats meet, the later one owns the boundary.
+ * from `timestamp_b` up to the next beat's timestamp (the last beat uses its own duration), and a
+ * fractional beat `b + f` (0 <= f < 1) is that fraction of the way across. Where two beats meet,
+ * the later one owns the boundary.
+ *
+ * Every show starts with a fixed, zero-length beat at position 0 (migration 0000; its triggers
+ * block changing it). Beat 1 therefore owns show time 0, beat positions in [0, 1) are never
+ * reached during playback, and round trips through a zero-length beat don't hold.
  *
  * The input is the show's beats, ascending by `position`, with the cumulative `timestamp` the
  * `timing_objects` view (or `calculateTimestamps`) produces. Times are in seconds.
@@ -103,7 +108,9 @@ export function beatAtTime(
  * inside the show.
  *
  * - An integer beat `b` returns `timestamp_b` exactly.
- * - A fractional beat `b + f` returns `timestamp_b + f * duration_b`.
+ * - A fractional beat `b + f` returns `timestamp_b` plus `f` of the gap to the next beat's
+ *   timestamp (the last beat uses its own duration). Inside a zero-length beat, such as the fixed
+ *   beat 0, that is `timestamp_b`, which `beatAtTime` maps to the next beat.
  * - Below 0 clamps to the first beat's timestamp; at or past `beats.length` clamps to the end of
  *   the last beat.
  * - With no beats, returns 0. `NaN` in gives `NaN` out.
@@ -124,7 +131,9 @@ export function timeAtBeat(beats: readonly BeatTiming[], beat: number): number {
 /**
  * The zero-based index of the beat that contains `seconds`, clamped to an existing beat
  * (`[0, beats.length - 1]`). Use this for a "current beat" display, such as the frame clock's
- * `currentBeatIndex`, so it agrees with `beatAtTime`. Returns -1 when there are no beats.
+ * `currentBeatIndex`, so it agrees with `beatAtTime`. Returns -1 when there are no beats, and 0
+ * for a `NaN` time (where `beatAtTime` returns `NaN`). Takes seconds; the frame clock's
+ * `currentTime` is in milliseconds.
  */
 export function beatIndexAtTime(
     beats: readonly BeatTiming[],

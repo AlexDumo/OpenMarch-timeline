@@ -177,4 +177,23 @@ describe("timeMap", () => {
             expect(beatIndexAtTime(none, 1)).toBe(-1);
         });
     });
+
+    describe("the fixed zero-length beat 0 every show starts with", () => {
+        // Position 0 has duration 0 (migration 0000), so beat 1 also starts at time 0.
+        const show = beatsFromDurations([0, 0.5, 0.5, 0.5]);
+
+        it("gives time 0 to beat 1, the later beat at the shared boundary", () => {
+            expect(beatAtTime(show, 0)).toBe(1);
+            expect(beatIndexAtTime(show, 0)).toBe(1);
+        });
+
+        it("maps times before the show to beat 0", () => {
+            expect(beatAtTime(show, -0.1)).toBe(0);
+        });
+
+        it("maps a position inside beat 0 to time 0, which reads back as beat 1", () => {
+            expect(timeAtBeat(show, 0.5)).toBe(0);
+            expect(beatAtTime(show, timeAtBeat(show, 0.5))).toBe(1);
+        });
+    });
 });
