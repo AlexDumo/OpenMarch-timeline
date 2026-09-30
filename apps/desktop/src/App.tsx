@@ -31,7 +31,7 @@ import {
     QueryClientProvider,
 } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { createAllUndoTriggers } from "./db-functions";
+import { createAllUndoTriggers, resetTimelineChangeLog } from "./db-functions";
 import { db } from "./global/database/db";
 import { historyKeys } from "./hooks/queries/useHistory";
 import tolgee from "./global/singletons/Tolgee";
@@ -200,6 +200,15 @@ function App() {
         if (databaseIsReady)
             createAllUndoTriggers(db).catch((error) => {
                 console.error("Error creating undo triggers:", error);
+            });
+    }, [databaseIsReady]);
+
+    useEffect(() => {
+        // A file was just opened (the window reloads on every open): drop change-log rows left by
+        // writes outside the wrapper, such as migrations or repair, and have listeners cold-build
+        if (databaseIsReady)
+            resetTimelineChangeLog(db).catch((error) => {
+                console.error("Error clearing the timeline change log:", error);
             });
     }, [databaseIsReady]);
 
