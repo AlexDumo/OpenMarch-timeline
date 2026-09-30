@@ -78,3 +78,7 @@ Exit code 0. `run_all.sh` itself truncates each line to 90 characters. Environme
 - `pnpm --dir apps/desktop run test` has 21 failing tests in `src/components/marcher/__test__/MarcherForm.test.tsx` and `src/components/mobile/__test__/RevisionsList.test.tsx` ("Invalid Chai property: toBeInTheDocument", "toHaveTextContent", "toHaveClass"): the jest-dom matchers aren't registered.
 - The same 21 fail the same way on `origin/main` (e731f3a2), so they predate the timeline work. Treat them as known when re-checking timeline PRs, and don't count them against a PR.
 - Workers reported them earlier as a worktree problem; they also fail in a normal checkout, so that explanation was incomplete. Not investigated further.
+
+### 2026-09-30 · lead session · jest-dom failures are environment-dependent
+
+- The 21 `MarcherForm`/`RevisionsList` failures recorded above did not occur in a full `pnpm --dir apps/desktop run test` run on a scratch work tree (PR #9 review: 87 files, 1,387 passed). They reproduce in the main checkout and on `origin/main`, so they depend on the environment (likely which `vitest`/jest-dom copy resolves), not on the code.

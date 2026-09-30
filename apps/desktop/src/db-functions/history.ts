@@ -9,6 +9,12 @@ import { DB, schema } from "../global/database/db";
 import { Constants } from "../global/Constants";
 import { getTableName, gt, sql, eq, desc, count } from "drizzle-orm";
 import { tableNamesToQueryKeys } from "../hooks/queries/utils";
+import type { ChangeBatch } from "@openmarch/core";
+import {
+    checkAndDrainTimelineChangesInTransaction,
+    emitTimelineChange,
+    notifyTimelineBatch,
+} from "./timelineChanges";
 
 const tablesWithHistory = [
     schema.beats,
@@ -53,6 +59,11 @@ const withTransactionWithHistoryLock = async <T>(
  * This function will group all of the database actions performed inside of it into a single undo/redo group.
  * Using a regular transaction will cause each database action to be its own undo/redo event.
  *
+ * It is also the spec §6 write wrapper for the timeline tables: after `func`, it rejects the whole
+ * edit if `timeline_commit_violations` returns any row, then drains `timeline_change_log` in the
+ * same transaction. Once the transaction commits, and before the next queued write starts, the
+ * drained batch goes to the `subscribeTimelineChanges` listeners. A failed edit delivers nothing.
+ *
  * @param db - The database connection
  * @param funcName - The name of the function to run in the transaction. This is for  logging.
  * @param func - The function to run in the transaction
@@ -66,6 +77,8 @@ export const transactionWithHistory = async <T>(
 ): Promise<T> => {
     // eslint-disable-next-line max-lines-per-function
     async function runLockedTransactionWithHistory(): Promise<T> {
+        let drained: ChangeBatch | undefined;
+        // eslint-disable-next-line max-lines-per-function
         const output = await db.transaction(async (tx) => {
             const startMessage = `=========== start ${funcName} ============`;
             let result: T;
@@ -158,6 +171,9 @@ export const transactionWithHistory = async <T>(
                  *    - Are there triggers for the table that the function is performing actions on?
                  *    - Do the functions actually perform actions on the database?
                  */
+
+                // Spec §6: commit-time invariants, then drain the change log
+                drained = await checkAndDrainTimelineChangesInTransaction(tx);
             } catch (err: any) {
                 // Remove the items from the history tables that were added by the transaction
                 error = err as Error;
@@ -170,6 +186,8 @@ export const transactionWithHistory = async <T>(
 
             return result!;
         });
+        // Only reached once the transaction has committed
+        notifyTimelineBatch(drained);
         return output;
     }
 
@@ -739,8 +757,19 @@ const switchTriggerMode = async (
  * @param db the database connection
  * @param type either "undo" or "redo"
  */
+function executeHistoryAction(
+    db: DbConnection,
+    type: HistoryType,
+): Promise<HistoryResponse> {
+    // Queue with wrapped edits, so batches reach listeners in commit order and no edit runs
+    // while the history triggers are switched to the other mode
+    return withTransactionWithHistoryLock(() =>
+        executeHistoryActionUnlocked(db, type),
+    );
+}
+
 // eslint-disable-next-line max-lines-per-function
-async function executeHistoryAction(
+async function executeHistoryActionUnlocked(
     db: DbConnection,
     type: HistoryType,
 ): Promise<HistoryResponse> {
@@ -821,15 +850,20 @@ async function executeHistoryAction(
         }
 
         let error: Error | undefined;
+        let committedBatch: ChangeBatch | undefined;
         try {
             // Temporarily disable foreign key checks
             await db.run(sql.raw("PRAGMA foreign_keys = OFF;"));
 
             /// Execute all of the SQL statements in the current history group
-            await db.transaction(async (tx) => {
+            const drained = await db.transaction(async (tx) => {
                 for (const sqlStatement of sqlStatements)
                     await tx.run(sqlStatement);
+                // Undo and redo are edits (spec §6.1, C-6): the same commit-time check and
+                // change-log drain as `transactionWithHistory`
+                return checkAndDrainTimelineChangesInTransaction(tx);
             });
+            committedBatch = drained;
         } catch (err: any) {
             error = err;
         } finally {
@@ -839,6 +873,10 @@ async function executeHistoryAction(
             // Switch the triggers back to undo mode and delete the redo rows when inputting new undo rows
             await switchTriggerMode(db, "undo", true, tableNames);
         }
+
+        // The replay has committed, so its changes reach the listeners even if the bookkeeping
+        // below fails
+        notifyTimelineBatch(committedBatch);
 
         if (error) throw error;
 
@@ -876,6 +914,20 @@ async function executeHistoryAction(
     }
 
     return response;
+}
+
+/**
+ * Clears `timeline_change_log` and tells the listeners to cold-build (ADR 0001 §5). Call it when a
+ * file is opened, and after any write that bypasses the wrapper (migrations, repair, conversion),
+ * so rows those writes logged are never delivered as part of a later edit's batch.
+ *
+ * @param db database connection
+ */
+export async function resetTimelineChangeLog(db: DbConnection | DB) {
+    await withTransactionWithHistoryLock(async () => {
+        await db.delete(schema.timeline_change_log).run();
+        emitTimelineChange({ kind: "reset" });
+    });
 }
 
 /**

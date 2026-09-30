@@ -18,3 +18,4 @@ export * from "./timelineShapes";
 export * from "./timelineTransitions";
 export * from "./timelineAssignments";
 export * from "./marcherHome";
+export * from "./timelineChanges";

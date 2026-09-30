@@ -4,7 +4,7 @@ title: Write wrapper, db-functions, undo, e2e fuzz
 status: in-progress
 owner: timeline-worker agent (timeline/p4-write-wrapper)
 branch: timeline/p4-write-wrapper
-pr: none
+pr: https://github.com/AlexDumo/OpenMarch-timeline/pull/9
 depends_on: [2, 3]
 updated: 2026-09-29
 ---
@@ -32,8 +32,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P4.1: Wrapper drain in transactionWithHistory
 
 - Owner: timeline-worker agent (timeline/p4-write-wrapper)
-- Status: in-progress
-- PR: none
+- Status: done
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/9
 - Parallel: no
 - Depends on: —
 
@@ -42,8 +42,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P4.2: Wrapper drain in undo and redo
 
 - Owner: timeline-worker agent (timeline/p4-write-wrapper)
-- Status: in-progress
-- PR: none
+- Status: done
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/9
 - Parallel: no
 - Depends on: P4.1
 
@@ -52,8 +52,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P4.3: Listener API and drain on open
 
 - Owner: timeline-worker agent (timeline/p4-write-wrapper)
-- Status: in-progress
-- PR: none
+- Status: done
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/9
 - Parallel: no
 - Depends on: P4.1
 
@@ -61,9 +61,9 @@ Listener API (subscribe/unsubscribe), and on file open: clear the log and signal
 
 ### P4.4: db-functions
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker agent (timeline/p4-db-functions)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/10
 - Parallel: yes
 - Depends on: P4.1
 
@@ -81,9 +81,9 @@ db-functions (`{action}InTransaction` plus public wrappers) for timelines, shape
 
 ### P4.6: Child-first deletes
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker agent (timeline/p4-db-functions)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/10
 - Parallel: yes
 - Depends on: P4.4
 
@@ -133,6 +133,9 @@ Tick an item only after running its check, and paste the command and result into
 Kept current by the phase lead: where things stand, surprises, and what not to redo.
 
 - Undo replays with foreign keys OFF and BEFORE triggers ON, and records deletes with a BEFORE DELETE trigger. That's why C-1 exists; don't "simplify" back to CASCADE.
+- The wrapper (P4.1-P4.3, PR #9) lives in `transactionWithHistory` and `executeHistoryAction`; the listener API and E-T6 check are in `src/db-functions/timelineChanges.ts`. Every committed edit must leave each shapeless transition with all its destinations, so tests that seed timeline rows must insert a shapeless transition and its destinations in one edit. Undo and redo now share the write lock with `transactionWithHistory`.
+- Undo edge cases that predate P4.2 (from the PR #9 review; fix in P4.8 or a follow-up): (1) `executeHistoryAction` calls `incrementGroup(db, "redo")` before and outside the replay transaction, so a rejected undo leaves `cur_redo_group` bumped and, at the group limit, can prune the oldest redo group, which breaks §6.1's "a rejected undo leaves both stacks unchanged" in that edge case. Move the increment after a successful commit, or document it. (2) The history-row DELETE and group refresh run after the replay commits, outside it; if they fail, the replay was applied and delivered but the group remains, so a retry would replay it again.
+- Optional: a `WHEN OLD.home_x IS NOT NEW.home_x OR OLD.home_y IS NOT NEW.home_y` guard on `timeline_log_marchers_upd` would stop undo/redo of a marcher rename from logging a no-op home change. Safe under U-2 (a logging trigger never rejects); harmless without it.
 
 ## Progress log
 
@@ -152,3 +155,24 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** fix `timelineHistory.test.ts` seeds that commit a shapeless transition without destinations (now E-T6), then add the listener tests.
 - **Blockers:** none.
 - **Resume from:** `git checkout timeline/p4-write-wrapper`; update `apps/desktop/src/db-functions/__test__/timelineHistory.test.ts` so every committed edit satisfies I-T6, then write `apps/desktop/src/db-functions/__test__/timelineChanges.test.ts`; run `pnpm --dir apps/desktop run test:history <file>`.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-write-wrapper) · P4.1, P4.2, P4.3
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/9 (commit `1358335b`). P4.1 adds the E-T6 commit check and change-log drain in `transactionWithHistory`, delivered after commit. P4.2 does the same inside the undo/redo replay transaction, and undo/redo now queue on the write lock. P4.3 adds `subscribeTimelineChanges` (`batch` and `reset`) and `resetTimelineChangeLog` on file open (`App.tsx`), and asserts in dev and test that the log is empty after each drain. Repair now copies marchers and the timeline tables parents first, skips `timeline_change_log` and clears it (the P3 cross-phase note). `timelineHistory.test.ts` seeds now insert a shapeless transition's destinations in the same edit.
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` pass. `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineChanges.test.ts src/db-functions/__test__/timelineHistory.test.ts src/db-functions/__test__/history.test.ts --silent`: 70/70 pass. `pnpm --dir apps/desktop run test:focused electron/database/__test__/repair.test.ts electron/database/migrations/__test__/`: 128/128 pass. `pnpm --dir apps/desktop run test:focused src/db-functions/`: 462 pass, 1 todo. eslint, prettier and cspell on the changed files: clean. Not run, per the current policy: the full `test:history`, the full desktop suite, and e2e. No exit-gate item ticked: none is covered by P4.1-P4.3 alone.
+- **Next:** review and merge PR #9. P4.4+ build on `transactionWithHistory` as is.
+- **Blockers:** none. Finding: undoing or redoing a marcher rename delivers a no-op `marchers` change (before equals after), because the history inverse rewrites every column and so fires `timeline_log_marchers_upd`. It's harmless after coalescing, and a test pins it. A cross-phase note in the Phase 3 file suggests an optional `WHEN` guard.
+
+### 2026-09-30 · lead session · P4.1 to P4.3 (reviewed and merged)
+
+- **Done:** fork PR #9 reviewed by a sub-agent (APPROVE WITH NITS; no regressions for non-timeline tables: the drain is after the group asserts and before commit, delivery happens once after commit and never on rollback, the change-log triggers can't be caught by the history trigger-mode switching, undo/redo sharing the write lock has no deadlock path, and the repair copy order is safe for files without timeline data). Before merging, the lead made `TimelineCommitViolationError` safe for an empty list. Merged as 54750956. The two undo edge cases that predate this PR, and an optional trigger guard, are in the handoff notes. P4.1 to P4.3 set to done.
+- **Checks:** at the PR head: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `pnpm --dir apps/desktop run test` (the regular suite: 87 files, 1,387 passed, 7 skipped; the pre-existing jest-dom failures didn't occur in this run); `pnpm --dir apps/desktop run test:history src/db-functions/__test__/ electron/database/__test__/repair.test.ts` (15 files, 503 passed). After the fix: tsc (pass) and `test:history .../timelineChanges.test.ts` (11 passed). The full `test:history` suite and e2e were skipped per policy.
+- **Next:** P4.4 and P4.6 are in progress; P4.5 (R-E1), P4.7 to P4.9 follow.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-db-functions) · P4.4, P4.6
+
+- **Done:** PR 10 on `timeline/p4-db-functions`: `{create,update,delete}...InTransaction` for timelines, shapes, transitions, assignments, slot destinations, marcher homes; one-edit shape/individual switch; child-first deletes of timelines and transitions (C-1); typed `TimelineWriteError`. `history.ts` untouched.
+- **Checks:** `tsc --noEmit` pass; `test:history timelineWrites.test.ts` 18 passed; `test:focused timelineWrites.test.ts` 18 passed; prettier, eslint and cspell clean. Full `test:history` and e2e skipped per policy.
+- **Next:** review; P4.5 builds on `updateTimelineTransitionsInTransaction`'s plain range path.
+- **Blockers:** none. Note: the combined trigger message "E-A1/E-A2" maps to code `E-A1`.
