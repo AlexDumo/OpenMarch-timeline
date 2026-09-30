@@ -72,7 +72,7 @@ db-functions (`{action}InTransaction` functions (no public wrappers by default, 
 ### P4.5: R-E1 range procedure
 
 - Owner: timeline-worker agent (timeline/p4-range-edit)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/12
 - Parallel: yes
 - Depends on: P4.4
@@ -92,7 +92,7 @@ Child-first deletes for timelines and transitions (C-1).
 ### P4.7: Write-path storage tests
 
 - Owner: timeline-worker agent (timeline/p4-range-edit)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/12
 - Parallel: yes
 - Depends on: P4.5
@@ -138,6 +138,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - Optional: a `WHEN OLD.home_x IS NOT NEW.home_x OR OLD.home_y IS NOT NEW.home_y` guard on `timeline_log_marchers_upd` would stop undo/redo of a marcher rename from logging a no-op home change. Safe under U-2 (a logging trigger never rejects); harmless without it.
 - From the PR #10 review, for P4.7 (tests) and the write path: add tests for E-T3/E-T4 (a block shape used for FTL, or with too few slots, on create, switch and shape update), E-A2 (shrinking `slot_count` below an occupied slot), an E-T6 row-trigger rejection, and a duplicate-id update. `updateTimelineTransitionsInTransaction` plans every edit from rows read before writing, so a call with the same id twice uses stale data: refuse duplicate ids or document it.
 - Error codes: combined trigger messages map to combined codes (`E-A1/E-A2`, `E-T3/E-T4`), because the database doesn't say which half failed. Commit-time E-T6 arrives as `TimelineCommitViolationError` (history.ts), row-trigger E-T6 as `TimelineWriteError`; P8.6 must handle both. CHECK failures (I-N2, I-T5) and a RESTRICT-blocked shape delete come out as `E-DB` (original error kept as `cause`); a pre-check refusing "shape in use" with `E-ARGS` would be friendlier.
+- R-E1 no-op: `setTimelineTransitionRangeInTransaction` writes nothing when the target equals the current range, and `transactionWithHistory` then fails its "no changes" assertion with a plain Error. Callers (P8.9: dragging a clip back where it started) must skip a no-op edit. An emptied row (I-A6) surfaces as `E-DB`, since the spec gives that CHECK no code.
 
 ## Progress log
 
@@ -214,3 +215,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Notes:**
   - An emptied row (QA-DB-13) fails the I-A6 CHECK, which surfaces as `E-DB`, the same as other CHECK failures.
   - A range edit to the current range writes nothing, so `transactionWithHistory` would reject it as an edit with no changes. Callers should skip it.
+
+### 2026-09-30 · lead session · P4.5, P4.7 (reviewed and merged)
+
+- **Done:** fork PR #12 reviewed by a sub-agent (APPROVE WITH NITS: R-E1 matches spec §6 and `rangeEdit` statement for statement; every intermediate state is valid in both directions, so undo replays; the plain range path still refuses stranding; QA-UNDO-2a to 2g round-trip on the real undo with exact comparisons). Before merging, the lead added a QA-UNDO-2 round trip to a disjoint target ([8, 24) to [30, 40)). Merged as 99419e1c. P4.5 and P4.7 set to done. The no-op behavior is in the handoff notes.
+- **Checks (PR):** tsc (pass); `test:history` on the four timeline db-function files (60 passed); after the added test, `timelineRangeEdit.test.ts` (23 passed).
+- **Checks (merged base):** on `timeline-try-2` at 99419e1c: `pnpm exec turbo run build --filter=@openmarch/desktop^...` (pass); `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on `timelineRangeEdit`, `timelineWrites`, `timelineChanges`, `timelineHistory` and `src/timeline/__test__/` (6 files, 92 passed).
+- **Next:** P4.8 (the remaining QA-UNDO cases and the two undo edge cases in the handoff notes) and P4.9 (end-to-end fuzz with the real undo).
+- **Blockers:** none.

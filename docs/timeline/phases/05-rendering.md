@@ -31,7 +31,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P5.1: Dev flag
 
 - Owner: timeline-worker (timeline/p5-resolver-store)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/11
 - Parallel: yes
 - Depends on: —
@@ -51,7 +51,7 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 ### P5.3: Resolver store and hooks
 
 - Owner: timeline-worker (timeline/p5-resolver-store)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/11
 - Parallel: yes
 - Depends on: —
@@ -133,6 +133,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - Missing a QA-PF budget is a finding, not a blocker. Move the resolver to a worker only if the budgets are badly missed.
 - Every show starts with a fixed, zero-length beat at position 0 (migration 0000). In the tempo map (`src/timeline/timeMap.ts`), beat 1 owns show time 0 and beat positions in [0, 1) are never reached during playback. P5.4 and P5.5 draw the show from beat 1; a resolver span over [0, 1) has no visible time.
 - The frame clock (`src/services/clock/frame-clock.ts`, copied unchanged from 0.2) isn't wired in yet. P5.4 must call `init` from a user gesture, register `setOnPause` if pause should land on a page end, and set the beat index with `beatIndexAtTime(beats, currentTime / 1000)`: the clock's `currentTime` is in milliseconds, `timeMap` takes seconds, and `beatIndexAtTime` returns -1 when there are no beats.
+- Resolver store (P5.3, `src/timeline/timelineStore.ts`): `positionsAt(beat, out)` returns false when no resolver is ready or when `out` isn't `2 * timelineMarcherIds().length` long (resize from that every frame after marcher adds/deletes). While a rebuild is pending, the old resolver stays "ready", so the render loop may draw one stale frame. After a failed cold build, batches are ignored until a reset or a flag toggle; consider retrying. Test gaps to fill in P5.8: a batch that switches a transition between shape and individual destinations, an edit committed while a cold build is pending, and a destination update that changes `slot_index`.
 
 ## Progress log
 
@@ -167,4 +168,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** `tsc --noEmit`: pass. `test:focused` on `timelineStore.test.tsx`, `timeMap.test.ts`, `timelineChanges.test.ts` and `parseFromWorkspaceSettings.test.ts`: 47 passed. `test:history` on `timelineStore.test.tsx`, `timelineChanges.test.ts` and `timelineHistory.test.ts`: 30 passed. eslint: 0 errors (2 unused-import warnings that were already in `useWorkspaceSettings.ts`). prettier and cspell: pass. Full `test:history`, e2e and `build:electron` not run (policy). No exit-gate items ticked: none are fully covered by these packages.
 - **Notes for P5.4 and P5.5:** read positions with `positionsAt(beat, out)`, where `out` has length `2 * timelineMarcherIds().length` in ascending id order. It returns false while no resolver is ready. Subscribe to `useTimelineResolverStore` `version` to know when to redraw a static frame. `snapshot.assignments` is only the cold build's input. P4.4 merged while this was in progress. The store still reads tables with drizzle and doesn't use the db-functions.
 - **Next:** review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-09-30 · lead session · P5.1, P5.3 (reviewed and merged)
+
+- **Done:** fork PR #11 reviewed by a sub-agent (APPROVE WITH NITS, no correctness bugs: the mirror is updated in place before `notify`, slot destinations replay correctly under the UNIQUE constraint, the cold build reads under the write lock so skipping batches while it's pending can't lose one, flag gating works, and the row-to-core mapping matches the triggers' images). Before merging, the lead made the store's `positionsAt` return false instead of throwing when the buffer size is stale, with a test. Merged as a3f97c41. P5.1 and P5.3 set to done; remaining nits in the handoff notes.
+- **Checks (PR):** tsc (pass); `test:history` on the store test and three timeline db-function files (48 passed); `pnpm --dir apps/desktop run test` (89 files, 1,415 passed); after the fix, the store test (11 passed).
+- **Checks (merged base):** on `timeline-try-2` at 99419e1c: `pnpm exec turbo run build --filter=@openmarch/desktop^...` (pass); `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on `timelineRangeEdit`, `timelineWrites`, `timelineChanges`, `timelineHistory` and `src/timeline/__test__/` (6 files, 92 passed).
+- **Next:** P5.4 (playback) and P5.5 (static render).
 - **Blockers:** none.
