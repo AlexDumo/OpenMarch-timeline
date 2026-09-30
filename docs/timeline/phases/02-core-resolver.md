@@ -150,3 +150,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** fix review findings, then add resolver golden/QA-FL tests (fixtures shared with `oracle.test.ts`) and notify() cases.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p2-resolver`, review `packages/core/src/timeline/resolver.ts`, then write `packages/core/src/timeline/__test__/resolver.test.ts`.
+
+### 2026-09-30 · timeline-worker (timeline/p2-resolver) · P2.1, P2.2, P2.3, P2.4, P2.9
+
+- **Done:** reviewed the draft against §9, §10.1, §10.2 and `ref/resolver.mjs`; it follows the reference. Fixes: `byDest` now follows the host's transition row (not the image), `slot_destinations` images also mark the image's `transition`, and `warmAll` compiles every FTL entry. Golden fixtures moved to `__test__/fixtures.ts` and `__test__/goldenSuite.ts`, run against the oracle and the resolver; `__test__/resolver.test.ts` adds 33 notify() cases, compared with a fresh build (exactly) and the oracle, with `checkCacheClosure()` after each. Commit `d601d3e1`.
+- **Checks:** `pnpm exec vitest run src/timeline/__test__/resolver.test.ts` (in `packages/core`): 64 passed. Mutation spot checks (removing W-1, W-2, W-3 origins, step 3.1, step 3.4, or the row-image transitions) each fail tests.
+- **Next:** full package checks, desktop typecheck, squash, PR.
+- **Blockers:** none.
+- **Resume from:** branch `timeline/p2-resolver` at `d601d3e1`; run `pnpm --dir packages/core run build`, `run test`, `tsc --noEmit -p .`, then the desktop build and typecheck; squash the two wip commits and open the PR.
