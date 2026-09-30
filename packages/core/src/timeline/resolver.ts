@@ -195,6 +195,11 @@ const sameXY = (a: unknown, b: unknown): boolean =>
  * table): `dest_shape_id`, `slot_count`, `path_style` or `path_params`. A
  * range or `order_mode` change recomputes nothing local. Individual
  * destinations arrive as `slot_destinations` changes instead.
+ *
+ * A `path_style` or `path_params` change recomputes both local caches, which is
+ * more than the table requires (it names `ftlGeometry` only) but never wrong.
+ * The params comparison is by `JSON.stringify`, so a key-order difference can
+ * only cause an extra recompute, never a missed one.
  */
 function localInputsChanged(before: RowImage, after: RowImage): boolean {
     return (
@@ -975,5 +980,20 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
 
 /** Cold build of the resolver (ADR 0001 section 4, spec 10.1). */
 export function createResolver(host: TimelineSnapshot): Resolver {
-    return createCachedResolver(host);
+    const r = createCachedResolver(host);
+    // Only the public interface: the internal caches, introspection and test
+    // hooks on the cached resolver stay unreachable at runtime too.
+    return {
+        positionAt: r.positionAt,
+        positionsAt: r.positionsAt,
+        marcherIds: r.marcherIds,
+        explain: r.explain,
+        ftlEntry: r.ftlEntry,
+        notify: r.notify,
+        warmAll: r.warmAll,
+        counters: r.counters,
+        resetCounters: r.resetCounters,
+        diagnostics: r.diagnostics,
+        checkCacheClosure: r.checkCacheClosure,
+    };
 }

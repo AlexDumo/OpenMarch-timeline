@@ -1162,6 +1162,9 @@ describe("notify() edge cases", () => {
                     [7],
                     [7],
                 ],
+                // path_style and path_params recompute destinations as well as
+                // ftlGeometry: more than the 9.4 table requires, deliberately (see
+                // localInputsChanged in resolver.ts).
                 [
                     "path_params (arc)",
                     (e) => e.updateTransition(6, { params: { bulge: 0.1 } }),
@@ -1203,5 +1206,21 @@ describe("notify() edge cases", () => {
             });
             expectAgrees(r, host);
         }
+    });
+
+    it("a range-only update and a destination change on one transition in one batch recompute its destinations", () => {
+        const host = richShow();
+        const r = createCachedResolver(host);
+        r.warmAll();
+        const e = new Editor(host);
+        e.updateTransition(6, { start: 11 });
+        e.updateTransition(6, {
+            points: (host.transitions[6].points ?? []).map(
+                ([x, y]) => [x + 1, y] as XY,
+            ),
+        });
+        const report = r.notify(e.batch());
+        expect(report.localRecomputed.destinations).toContain(6);
+        expectAgrees(r, host);
     });
 });
