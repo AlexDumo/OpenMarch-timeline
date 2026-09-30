@@ -30,8 +30,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P2.1: Row index and batch coalescing
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: —
 
@@ -40,8 +40,8 @@ Row index built only from batch after-images (by id, marcher and transition), pl
 ### P2.2: Caches and iterative pull-compile
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: P2.1
 
@@ -50,8 +50,8 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 ### P2.3: Invalidation (notify)
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: P2.2
 
@@ -60,8 +60,8 @@ Local caches (`spans`, `spansByTransition`, `destinations`, `ftlGeometry`) and c
 ### P2.4: Query and introspection API
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: P2.2
 
@@ -110,8 +110,8 @@ New dedicated assertions for P-8 (a shape edit leaves other transitions' caches 
 ### P2.9: Export the resolver
 
 - Owner: timeline-worker (timeline/p2-resolver)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/6
 - Parallel: no
 - Depends on: P2.4
 
@@ -158,3 +158,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** full package checks, desktop typecheck, squash, PR.
 - **Blockers:** none.
 - **Resume from:** branch `timeline/p2-resolver` at `d601d3e1`; run `pnpm --dir packages/core run build`, `run test`, `tsc --noEmit -p .`, then the desktop build and typecheck; squash the two wip commits and open the PR.
+
+### 2026-09-30 · timeline-worker (timeline/p2-resolver) · P2.1, P2.2, P2.3, P2.4, P2.9
+
+- **Done:** opened [PR #6](https://github.com/AlexDumo/OpenMarch-timeline/pull/6) (commits `51bedf4e` resolver + export, `5e4d98b2` tests; the wip commits were squashed and the branch rebased on `timeline-try-2`). `createResolver` is exported from `@openmarch/core` and matches ADR 0001 §4 with no renames. The golden/QA-FL/diagnostics fixtures are now shared (`__test__/fixtures.ts`, `__test__/goldenSuite.ts`) between the oracle and the resolver. `resolver.test.ts` holds 33 notify() cases, an inverse-edit case, a 27-batch sequence, W-4 early stop, counters and the cycle error.
+- **Checks:** `pnpm --dir packages/core run build` pass; `pnpm --dir packages/core run test` pass (18 files, 369 passed, 2 skipped); `pnpm --dir packages/core exec tsc --noEmit -p .` has no errors under `src/timeline` (the 54 errors it reports are all in `src/path-utility`); `pnpm exec turbo run build --filter=@openmarch/desktop^...` pass; `pnpm --dir apps/desktop exec tsc --noEmit` pass; prettier, eslint and cspell on `packages/core/src/timeline` are clean. Full `test:history` and e2e were not run (policy; no desktop code changed).
+- **Next:** review and merge PR #6. P2.5 to P2.8 are open and can reuse `__test__/fixtures.ts`, the `Editor` helper and `richShow()` in `resolver.test.ts`. Exit-gate item 3 (core build and test pass) becomes true on the base only when the PR merges, so it is not ticked yet.
+- **Blockers:** none.
