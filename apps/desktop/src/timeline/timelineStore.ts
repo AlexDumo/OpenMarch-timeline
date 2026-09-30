@@ -214,6 +214,10 @@ function hasMarcher(resolver: Resolver, marcherId: number): boolean {
 export function positionsAt(beat: Beat, out: Float64Array): boolean {
     const { resolver } = useTimelineResolverStore.getState();
     if (!resolver) return false;
+    // After a marcher is added or deleted, a render loop can still hold a buffer sized for the
+    // old count; the resolver would throw. Report "not drawn" instead, and let the caller resize
+    // from timelineMarcherIds().length.
+    if (out.length !== 2 * resolver.marcherIds().length) return false;
     resolver.positionsAt(beat, out);
     return true;
 }

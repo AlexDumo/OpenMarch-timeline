@@ -258,6 +258,18 @@ describeDbTests("timeline resolver store", (it) => {
             expect(state.resolver?.marcherIds()).toEqual([]);
             expect(positionsAt(1, new Float64Array(0))).toBe(true);
         });
+
+        it("positionsAt reports false for a buffer sized for a different marcher count", async ({
+            db,
+        }) => {
+            await seedShow(db);
+            await startTimelineResolver(db);
+            const count = timelineMarcherIds().length;
+            expect(count).toBeGreaterThan(0);
+            expect(positionsAt(1, new Float64Array(2 * count))).toBe(true);
+            expect(positionsAt(1, new Float64Array(2 * count - 2))).toBe(false);
+            expect(positionsAt(1, new Float64Array(2 * count + 2))).toBe(false);
+        });
     });
 
     describe("batches", () => {
