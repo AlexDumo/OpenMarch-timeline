@@ -188,3 +188,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** `pnpm --dir packages/core run test:fuzz`: 1,000 seeds, 72,349 batches, 0 divergent, 0 closure violations, 0 exceptions (26 s). `test:deep -- --oracle-overflow`: 20,000 direct cold, same after editing the first shape (39,999 nodes walked), 5,000 FTL all pass at `--stack-size=300`; the recursive oracle overflows there (RangeError), as designed, and is not used by the checks. Mutation check: dropping slot_destinations handling in `notify` gave 62 divergences in 100 x 40 (reverted). `run build` pass; `run test` 20 files, 372 passed, 2 skipped; tsc clean for the new files and outside `src/path-utility`; prettier, eslint (TS) and cspell clean. `test:history` and e2e not run (policy).
 - **Next:** review and merge PR #7. The exit-gate fuzz item is true once it merges (the command is in this entry).
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p2-resolver-tests) · P2.5, P2.8
+
+- **Done:** commit `7bf1aaeb` (wip) on `timeline/p2-resolver-tests`. `resolver.ts`: pull-compile now throws an internal error if a cache miss starts a compile while another compute runs (review follow-up a); a transition update recomputes local caches only when `dest`, `slots`, `style` or `params` change (spec 9.4 table: range and `order_mode` recompute nothing local); a marcher change that leaves `home` unchanged no longer evicts from −∞ (optional follow-up); clearly marked `testOnly` hooks (`localCaches`, `cachedNodeCount`, `putOrigin`, `dropOrigin`, `hideDependencies`). The shared helpers (`Editor`, `richShow`, `expectAgrees`, `NOTIFY_CASES`) moved from `resolver.test.ts` to `__test__/resolverHarness.ts`.
+- **Checks:** `pnpm exec vitest run src/timeline` in `packages/core`: 6 files, 176 passed.
+- **Next:** write `__test__/resolverInvalidation.test.ts` (QA-REG-1..4, QA-INV-02..07, QA-CX-01..05, P-8, P-10, follow-ups b to f).
+- **Blockers:** none.
+- **Resume from:** branch `timeline/p2-resolver-tests` at `7bf1aaeb`; run `pnpm install`, then add `packages/core/src/timeline/__test__/resolverInvalidation.test.ts`.
