@@ -72,8 +72,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P1.5: Golden, flattening and degenerate tests
 
 - Owner: timeline-worker (timeline/p1-golden-tests)
-- Status: claimed
-- PR: none
+- Status: in-review
+- PR: https://github.com/OpenMarch/OpenMarch/pull/1042
 - Parallel: yes
 - Depends on: P1.3
 
@@ -186,4 +186,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** PR #1038 merged (f9599090); P1.4 set to done.
 - **Checks:** on `timeline-try-2` at 84ea6191: `pnpm --dir packages/core run build` (pass); `pnpm --dir packages/core run test` (289 passed, 2 skipped); `pnpm --dir apps/desktop exec tsc --noEmit` (pass). `test:focused` on the migration, file-version and repair tests: `timelineTriggers.test.ts` failed to load, because P3.9's renderer hook imports `@om-electron/database/fileVersion` and `vitest.config.ts` lacked that alias. Fix: branch `timeline/fix-vitest-alias` (eb81e8a5); with it, 6 files and 126 tests pass.
 - **Next:** P1.5 and P1.6 are being started.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker · P1.5
+
+- **Done:** `packages/core/src/timeline/__test__/degenerate.test.ts`: QA-DG-1 to -7 (spec literal values, D-FTL-EMPTY on QA-DG-4), P-11 on every fixture, QA-REG-5 at 40 and 1,000 chained arcs (bound beta\*sqrt(1+a), max |P| <= 1e6, exact (1,1) arrival). The oracle handled 1,000 arcs without a stack overflow on Node 24. G1-G13, G8b, QA-FL-01..06 and QA-DB-25/-31 were already covered by P1.2-P1.4. PR: https://github.com/OpenMarch/OpenMarch/pull/1042 on `timeline/p1-golden-tests`. P1.5 is in review.
+- **Checks:** `pnpm --dir packages/core run build` (pass); `pnpm --dir packages/core run test` (16 files, 298 passed, 2 skipped); prettier, eslint, cspell on the new file (pass). Skipped per policy: full test:history and Playwright e2e.
+- **Next:** a person reviews and merges #1042. The exit-gate box "Every test in P1.5 and P1.6 passes" stays unticked until P1.6 lands.
+- **Resume from:** none; address review comments on PR 1042.
 - **Blockers:** none.
