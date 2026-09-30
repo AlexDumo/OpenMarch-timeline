@@ -30,8 +30,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### P5.1: Dev flag
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p5-resolver-store)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: —
@@ -50,8 +50,8 @@ Per-file dev flag in `workspace_settings` (optional zod field, default off), hid
 
 ### P5.3: Resolver store and hooks
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p5-resolver-store)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: —
