@@ -294,12 +294,54 @@ export const getOrmConnection = () => {
     return getOrm(persistentConnection);
 };
 
+/** The current suspension of the renderer's SQL, or null when it isn't suspended. */
+let sqlProxySuspension: { token: number; reason: string } | null = null;
+let lastSqlProxySuspensionToken = 0;
+
+/**
+ * Refuses the renderer's SQL (`sql:proxy`, `unsafeSql:proxy`) until
+ * `resumeSqlProxy` is called with the returned token. Convert on open (P9.3)
+ * suspends it for an open, so the page still showing the previous file can't
+ * reach the file being opened and converted; it resumes once the window has
+ * reloaded. A newer suspension takes over: resuming an older token then does
+ * nothing, so one open's late resume can't lift the next open's suspension.
+ */
+export function suspendSqlProxy(reason: string): number {
+    const token = ++lastSqlProxySuspensionToken;
+    sqlProxySuspension = { token, reason };
+    return token;
+}
+
+/** Lifts the suspension `token` started. Returns false when a newer suspension owns it. */
+export function resumeSqlProxy(token: number): boolean {
+    if (sqlProxySuspension?.token !== token) return false;
+    sqlProxySuspension = null;
+    return true;
+}
+
+/** Lifts any suspension. For tests and for recovering from an unexpected error. */
+export function forceResumeSqlProxy() {
+    sqlProxySuspension = null;
+}
+
+export function isSqlProxySuspended() {
+    return sqlProxySuspension !== null;
+}
+
+function assertSqlProxyNotSuspended() {
+    if (sqlProxySuspension !== null)
+        throw new Error(
+            `The database is not available: ${sqlProxySuspension.reason}`,
+        );
+}
+
 export async function handleSqlProxy(
     _: any,
     sql: string,
     params: any[],
     method: "all" | "run" | "get" | "values",
 ) {
+    assertSqlProxyNotSuspended();
     try {
         if (persistentConnectionPath !== DB_PATH) {
             closePersistentConnection();
@@ -324,7 +366,8 @@ export async function handleSqlProxy(
 }
 
 /** Directly executes the SQL query without any parameters */
-async function handleUnsafeSqlProxy(_: any, sql: string) {
+export async function handleUnsafeSqlProxy(_: any, sql: string) {
+    assertSqlProxyNotSuspended();
     const db = connect();
     try {
         return await handleUnsafeSqlProxyWithDb(db, sql);

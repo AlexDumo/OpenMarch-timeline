@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    beforeEach,
+    describe,
+    expect,
+    it,
+} from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "crypto";
 import * as fs from "fs";
@@ -36,6 +44,23 @@ async function createShowFile(filePath: string) {
     }
 }
 
+/**
+ * Setup hooks get more than the default 10 s: under a heavily loaded full-suite
+ * run, building the template show (all migrations) once took longer.
+ */
+const HOOK_TIMEOUT_MS = 60_000;
+
+/** Restores write access and removes `dir`; a no-op when setup never created it. */
+function cleanUpDir(dir: string | undefined) {
+    if (!dir || !fs.existsSync(dir)) return;
+    try {
+        fs.chmodSync(dir, 0o755);
+    } catch {
+        // best effort; rmSync below reports anything that matters
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+}
+
 const tableCounts = (filePath: string) => {
     const db = new DatabaseSync(filePath, { readOnly: true });
     try {
@@ -62,18 +87,31 @@ const tableCounts = (filePath: string) => {
 };
 
 describe("backupBeforeConversion", () => {
+    let templateDir: string | undefined;
+    let templatePath: string;
+    // Unset until beforeEach runs; afterEach must cope with a failed setup.
     let dir: string;
     let showPath: string;
 
-    beforeEach(async () => {
+    // Migrating a show is the slow part; do it once and copy the file for each test.
+    beforeAll(async () => {
+        templateDir = fs.mkdtempSync(
+            path.join(os.tmpdir(), "openmarch-backup-template-"),
+        );
+        templatePath = path.join(templateDir, "template.dots");
+        await createShowFile(templatePath);
+    }, HOOK_TIMEOUT_MS);
+
+    afterAll(() => cleanUpDir(templateDir));
+
+    beforeEach(() => {
         dir = fs.mkdtempSync(path.join(os.tmpdir(), "openmarch-backup-"));
         showPath = path.join(dir, "My Show.dots");
-        await createShowFile(showPath);
-    });
+        fs.copyFileSync(templatePath, showPath);
+    }, HOOK_TIMEOUT_MS);
 
     afterEach(() => {
-        fs.chmodSync(dir, 0o755);
-        fs.rmSync(dir, { recursive: true, force: true });
+        cleanUpDir(dir as string | undefined);
     });
 
     it("writes a copy next to the original that opens and matches its tables", () => {
@@ -294,7 +332,7 @@ describe("backupBeforeConversion", () => {
     );
 
     describe("a folder whose name looks like an error", () => {
-        let oddDir: string;
+        let oddDir: string | undefined;
         let oddShow: string;
         beforeEach(() => {
             oddDir = path.join(dir, "Full Band Permission denied");
@@ -302,7 +340,10 @@ describe("backupBeforeConversion", () => {
             oddShow = path.join(oddDir, "show.dots");
             fs.copyFileSync(showPath, oddShow);
         });
-        afterEach(() => fs.chmodSync(oddDir, 0o755));
+        afterEach(() => {
+            if (oddDir && fs.existsSync(oddDir)) fs.chmodSync(oddDir, 0o755);
+            oddDir = undefined;
+        });
 
         it("still backs up", () => {
             expect(backupBeforeConversion(oddShow).ok).toBe(true);
