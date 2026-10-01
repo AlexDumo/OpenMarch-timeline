@@ -127,7 +127,7 @@ Throughout:
 ## 6. Finish
 
 1. Run every exit-gate check that your package covers, plus the checks in
-   `docs/conventions/verification.md` for the changed area.
+   `docs/conventions/verification.md` for the changed area. If `tsc` or a test fails in a file you didn't touch, run `pnpm install` and rebuild the workspace packages before calling it unrelated: a stale install in a new work tree is the usual cause, and the base is kept clean.
 2. Squash or tidy `wip:` commits. Confirm
    `git log <base>..HEAD --format=%B` has no AI attribution or co-author lines
    (root `AGENTS.md`).
