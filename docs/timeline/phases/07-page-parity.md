@@ -197,6 +197,16 @@ For the exit-gate item "each feature's existing tests pass in timeline mode". Ad
 
 The PR #38 review showed that `test:timeline` passes mostly without reaching timeline code. Two causes. (1) Several write paths take `timelineMode` as a parameter that defaults to `false` (`createMarchers`, `deleteMarchers`, `setMarchersToNeighborPage`, `canvasCoordinateWriter`, `buildMarcherAppearancesByPageId`, and any others you find); tests call them without it, so on a converted file they write page rows, which the app never does (`marcher.ts` ~222 and ~334 had 0 hits). The default is also a trap for future callers. When the parameter is omitted, read the flag from the database inside the transaction (`timelineModeInTransaction`), or remove the parameter if every caller can rely on that. (2) Feature tests that matter for the inventory (marcher add and delete, swap, nudges and align, set to previous/next page, the inspector, coordinate and drill-chart exports, undo focus) aren't on the `base.tsx` fixtures or mock the flag. Move or add tests so that under `test:timeline` each one takes the timeline branch; prove it with a coverage run (`--coverage`, hit counts on the timeline branches) recorded in the log. Fix real bugs that turn up, or file them as packages. Page mode stays unchanged. Only after this can the "each feature's existing tests pass in timeline mode" exit-gate item be ticked.
 
+### P7.19: Page-mode undo focus never finds the page
+
+- Owner: unassigned
+- Status: open
+- PR: none
+- Parallel: yes
+- Depends on: none
+
+Found by P7.18. In page mode, undo and redo never jump to the edited page or select the edited marchers. `rowIdFromSql` in `apps/desktop/src/db-functions/history.ts` (~1172) returns `parseInt(sql.match(/WHERE rowid=(\d+)/)?.[0] || "-1")`; `[0]` is the whole match ("WHERE rowid=12"), so it parses to NaN, `performHistoryAction` finds no `marcher_pages` row, and it returns no `pageIdToGoTo`. Repro: on the `marchersAndPages` fixture with the flag off, update one marcher's row on page 3 with `updateMarcherPages`, then call `performHistoryAction("undo", db, { currentPageId: 1 })`: the result has `queriesToInvalidate` only, with no page and no marchers. Timeline mode is not affected (P7.13 takes the focus from the change batch). Fix: use the capture group (`?.[1]`), and add a page-mode assertion to the undo-focus test in `src/utilities/__test__/RegisteredActionsHandlerModes.test.tsx`, which skips the focus check in page mode for now. It changes page-mode behavior (undo starts jumping to pages, as the code intends), so it needs a page-mode sign-off.
+
 ### P7.15: Refresh views on edits outside the change log
 
 - Owner: timeline-worker (timeline/p7-15-refresh-views)
