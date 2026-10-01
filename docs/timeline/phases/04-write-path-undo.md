@@ -140,6 +140,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - Error codes: combined trigger messages map to combined codes (`E-A1/E-A2`, `E-T3/E-T4`), because the database doesn't say which half failed. Commit-time E-T6 arrives as `TimelineCommitViolationError` (history.ts), row-trigger E-T6 as `TimelineWriteError`; P8.6 must handle both. CHECK failures (I-N2, I-T5) and a RESTRICT-blocked shape delete come out as `E-DB` (original error kept as `cause`); a pre-check refusing "shape in use" with `E-ARGS` would be friendlier.
 - R-E1 no-op: `setTimelineTransitionRangeInTransaction` writes nothing when the target equals the current range, and `transactionWithHistory` then fails its "no changes" assertion with a plain Error. Callers (P8.9: dragging a clip back where it started) must skip a no-op edit. An emptied row (I-A6) surfaces as `E-DB`, since the spec gives that CHECK no code.
 - Follow-up (pre-existing, from the PR #13 review): if switching the history triggers back to undo mode in `executeHistoryAction`'s finally block throws after a successful commit, the drained batch is never delivered and the response reports failure.
+- `executeHistoryAction` switches only the replayed group's tables to redo mode, so a future trigger that writes another tracked table during a replay would log onto the wrong stack (the P4.9 v0.6 control breaks undo this way). No current trigger does this: the validation triggers only RAISE, the change-log triggers write `timeline_change_log`, and FKs are off during the replay.
 
 ## Progress log
 
@@ -306,3 +307,18 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** review and merge PR #15.
 - **Blockers:** none.
 - **Notes:** `executeHistoryAction` switches only the replayed group's tables to redo mode. A trigger that writes to another table during a replay therefore logs on the undo stack and clears the redo stack. Under the v0.6 trigger, that's how undo breaks. The current schema has no such trigger, so the app isn't affected, but a future cross-table writing trigger would hit the same problem.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-e2e-fuzz) · P4.9 (review fixes, checkpoint)
+
+- **Done:** follow-up commit `c8d8567e` on PR #15 for the lead's review:
+  - Batch count: a commit that changes logged data must deliver exactly one batch. One that changes none may deliver one only when every row's net change is a no-op. Writing a value that's already there fires the log triggers, and batches aren't coalesced, so an edit can log a change and its reverse.
+  - The comparison uses the columns the change-log triggers image. Timelines and a marcher's other columns aren't logged.
+  - `E-DB` rejections must be an expected reason. FOREIGN KEY is accepted only from the shape-in-use invalid change.
+  - Every generator and invalid change is named, counted and required in the coverage test. The coverage test skips when not every seed ran.
+  - Invalid changes count only when applied, and take turns from a random start per seed. The default is now 5 seeds × 80 steps, with every kind exercised at least twice.
+  - The v0.6 control accepts only failures from an undo or redo.
+  - Handoff note added on the trigger-mode switch.
+- **Checks:** tsc pass; `test:history src/db-functions/__test__/timelineE2eFuzz.test.ts`: 8 passed, 11 skipped; eslint, prettier and cspell clean.
+- **Next:** a medium run (100 × 80) is running; record its counts on the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p4-e2e-fuzz` (c8d8567e), then in `apps/desktop` run `TIMELINE_E2E_SEEDS=100 TIMELINE_E2E_STEPS=80 TIMELINE_E2E_REPORT=<file> pnpm run test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` in the background, and add its counts to PR #15 and this log.
