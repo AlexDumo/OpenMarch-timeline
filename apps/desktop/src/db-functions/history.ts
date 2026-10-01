@@ -15,6 +15,7 @@ import {
     emitTimelineChange,
     notifyTimelineBatch,
 } from "./timelineChanges";
+import { timelineHistoryFocus, timelineModeOn } from "./timelineHistoryFocus";
 
 const tablesWithHistory = [
     schema.beats,
@@ -227,6 +228,11 @@ export type HistoryResponse = {
      * The error that occurred when performing the action.
      */
     error?: { message: string; stack: string };
+    /**
+     * The timeline change batch the action committed (empty or absent when it changed no
+     * timeline rows).
+     */
+    timelineBatch?: ChangeBatch;
 };
 
 /**
@@ -920,6 +926,7 @@ async function executeHistoryActionUnlocked(
             success: true,
             tableNames,
             sqlStatements,
+            timelineBatch: committedBatch,
         };
     } catch (err: any) {
         console.error(err);
@@ -1157,20 +1164,57 @@ type PerformHistoryActionResponse = {
 };
 
 /**
+ * Performs an undo or redo and works out what to show afterwards: the page to jump to and the
+ * marchers to select.
+ *
+ * In page mode they come from the `marcher_pages` statements the action replayed. In timeline mode
+ * (P7.13) those rows are frozen, so they come from the action's timeline change batch instead
+ * (`timelineHistoryFocus`).
  *
  * @param type The type of history action to perform, either "undo" or "redo"
  * @param db The database connection to use, or undefined to create a new connection
+ * @param options.currentPageId the selected page; timeline mode stays on it when the action
+ * changed it
  * @returns Response from the history action
  */
 export async function performHistoryAction(
     type: "undo" | "redo",
-    db: DB,
+    db: DB | DbConnection,
+    options: { currentPageId?: number } = {},
 ): Promise<PerformHistoryActionResponse> {
-    const dbToUse = db;
-    let response: HistoryResponse;
+    // The focus is read in the action's own lock turn, after it commits and delivers its batch, so
+    // a queued undo, redo or edit can't run in between (two quick undo actions would otherwise both read
+    // the state after the second)
+    const { response, timelineFocus } = await withTransactionWithHistoryLock(
+        async () => {
+            const response = await executeHistoryActionUnlocked(db, type);
+            const timelineFocus =
+                response.success && (await timelineModeOn(db))
+                    ? await timelineHistoryFocus(
+                          db,
+                          response.timelineBatch ?? { changes: [] },
+                          {
+                              currentPageId: options.currentPageId,
+                              beatsChanged: response.tableNames.has(
+                                  getTableName(schema.beats),
+                              ),
+                          },
+                      )
+                    : undefined;
+            return { response, timelineFocus };
+        },
+    );
 
-    if (type === "undo") response = await performUndo(dbToUse);
-    else response = await performRedo(dbToUse);
+    const queriesToInvalidate: string[][] = tableNamesToQueryKeys(
+        response.tableNames,
+    );
+
+    if (timelineFocus)
+        return {
+            pageIdToGoTo: timelineFocus.pageIdToGoTo,
+            marcherIdsToSelect: timelineFocus.marcherIdsToSelect,
+            queriesToInvalidate,
+        };
 
     const modifiedPageIds: Set<number> = new Set();
     const modifiedMarcherIdsForPage: Record<number, Set<number>> = {};
@@ -1198,17 +1242,14 @@ export async function performHistoryAction(
         }
     }
 
-    const queriesToInvalidate: string[][] = tableNamesToQueryKeys(
-        response.tableNames,
-    );
-
     const pageIdToGoTo =
         modifiedPageIds.size > 0
             ? Math.max(...Array.from(modifiedPageIds))
             : undefined;
-    const marcherIdsToSelect = pageIdToGoTo
-        ? modifiedMarcherIdsForPage[pageIdToGoTo]
-        : undefined;
+    const marcherIdsToSelect =
+        pageIdToGoTo !== undefined
+            ? modifiedMarcherIdsForPage[pageIdToGoTo]
+            : undefined;
 
     return { pageIdToGoTo, marcherIdsToSelect, queriesToInvalidate };
 }
