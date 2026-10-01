@@ -18,7 +18,6 @@ import {
     deleteMarchersMutationOptions,
     updateMarchersMutationOptions,
 } from "@/hooks/queries";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { ModifiedMarcherArgs } from "@/db-functions";
 import { MarcherFormContents } from "@/components/marcher/MarchersModal";
 import {
@@ -36,9 +35,8 @@ export default function MarcherList({
     cancelActivatorStateProp = undefined,
 }: ListFormProps) {
     const queryClient = useQueryClient();
-    const timelineMode = useTimelineMode();
     const { mutate: deleteMarchers } = useMutation(
-        deleteMarchersMutationOptions(queryClient, timelineMode),
+        deleteMarchersMutationOptions(queryClient),
     );
     const { mutate: updateMarchers } = useMutation(
         updateMarchersMutationOptions(queryClient),

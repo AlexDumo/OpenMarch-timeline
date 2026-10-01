@@ -73,6 +73,26 @@ const pageEnds = (pages: readonly Page[]) => {
     return out;
 };
 
+/** Each marcher's position a third of the way through each transition, keyed by marcher id. */
+const midTransitions = (
+    ts: readonly { start_beat: number; end_beat: number }[],
+) => {
+    const r = resolver();
+    const out = new Map<number, [number, number][]>();
+    for (const id of r.marcherIds())
+        out.set(
+            id,
+            ts.map(
+                (t) =>
+                    r.positionAt(
+                        id,
+                        t.start_beat + (t.end_beat - t.start_beat) / 3,
+                    ) as never,
+            ),
+        );
+    return out;
+};
+
 /** Every position in `after` is bit for bit the one in `before`, for the marchers in `before`. */
 const expectSamePositions = (
     before: Map<number, [number, number][]>,
@@ -333,12 +353,64 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             // A marcher in the middle of the slot order
             const ids = marchersAndPages.expectedMarchers.map((m) => m.id);
             const victim = ids[1]!;
+            // Per transition: the victim's slot, and the last slot's marcher and point
+            const assignments = await db
+                .select()
+                .from(schema.timeline_assignments)
+                .all();
+            const points = await db
+                .select()
+                .from(schema.timeline_slot_destinations)
+                .all();
+            const expectedMoves = transitionsBefore.map((t) => {
+                const vacated = assignments.find(
+                    (a) => a.transition_id === t.id && a.marcher_id === victim,
+                )!.slot_index;
+                const last = assignments.find(
+                    (a) =>
+                        a.transition_id === t.id &&
+                        a.slot_index === t.slot_count - 1,
+                )!;
+                const point = points.find(
+                    (d) =>
+                        d.transition_id === t.id &&
+                        d.slot_index === t.slot_count - 1,
+                )!;
+                return { t, vacated, last, point };
+            });
+            expect(
+                expectedMoves.every((m) => m.vacated < m.t.slot_count - 1),
+                "the victim is not in the last slot",
+            ).toBe(true);
+            const midBefore = midTransitions(transitionsBefore);
 
             await deleteMarchers({
                 db,
                 marcherIds: new Set([victim]),
                 timelineMode: true,
             });
+            // The last slot's marcher and point moved into the vacated slot
+            for (const { t, vacated, last, point } of expectedMoves) {
+                const moved = await db
+                    .select()
+                    .from(schema.timeline_assignments)
+                    .where(eq(schema.timeline_assignments.id, last.id))
+                    .get();
+                expect(moved!.slot_index).toBe(vacated);
+                const dest = await db
+                    .select()
+                    .from(schema.timeline_slot_destinations)
+                    .where(
+                        eq(
+                            schema.timeline_slot_destinations.transition_id,
+                            t.id,
+                        ),
+                    )
+                    .all()
+                    .then((rows) => rows.find((r) => r.slot_index === vacated));
+                expect(Object.is(dest!.x, point.x)).toBe(true);
+                expect(Object.is(dest!.y, point.y)).toBe(true);
+            }
             const left = await db
                 .select()
                 .from(schema.timeline_assignments)
@@ -355,6 +427,12 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             expect(resolver().marcherIds()).not.toContain(victim);
             const endsAfter = pageEnds(pages);
             expectSamePositions(endsBefore, endsAfter, new Set([victim]));
+            // And mid-transition, while the marchers are on the move
+            expectSamePositions(
+                midBefore,
+                midTransitions(transitionsBefore),
+                new Set([victim]),
+            );
             expect(vacancies()).toEqual([]);
 
             const after = await snapshot(db);

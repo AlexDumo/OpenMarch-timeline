@@ -266,7 +266,9 @@ export const removeMarchersFromTimelineInTransaction = async ({
         vacatedByTransition.set(row.transition_id, set);
     }
 
-    // Transitions whose slot order an inheriting follow-the-leader transition may read (R-12)
+    // Marchers in an inheriting follow-the-leader transition, whose order R-12 may read from the
+    // slot indexes of their previous transition. The set includes the marchers being deleted;
+    // that is harmless, because it is only checked against the rows that remain after the delete.
     const ftlInherit = await tx
         .select({ id: t.id })
         .from(t)
@@ -359,6 +361,8 @@ export const removeMarchersFromTimelineInTransaction = async ({
                         ),
                     )
                     .get();
+                // Every slot of a shapeless transition has a point (I-T6), so this only happens
+                // in a file that already breaks I-T6; the commit check rejects the edit then
                 if (!point) break;
                 await tx
                     .update(d)
