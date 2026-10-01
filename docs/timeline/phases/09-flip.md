@@ -249,3 +249,25 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** `vite build` and the main-bundle check, `test:focused electron`, focused `test:history` on the converter tests, the desktop suite, then update the PR body.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p9-3-convert-on-open` (2cd23567). From `apps/desktop`, run `pnpm exec vite build` and check `dist-electron/main` for a separate chunk holding the converter. Then run the remaining checks listed above.
+
+### 2026-10-01 · timeline-worker (timeline/p9-3-convert-on-open) · P9.3
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/42 review fixes are pushed as follow-up commits, with no force-push: 2cd23567 (items 1 to 8), ca30a803 (`backup.test.ts` robustness), and normal merges of `timeline-try-2` (e0a985c7, d382ca09; d382ca09 brings in #43). The PR body is updated.
+- **Decisions to confirm:**
+  - **Stop status:** `database:repair` returns `null` when a main-process dialog already explained why the file didn't open; its channel and the other payload types are unchanged.
+  - **Renderer SQL during a conversion:** `sql:proxy` and `unsafeSql:proxy` refuse queries from just before the backup until the reloaded page navigates, with a 15 s fallback.
+  - **Dev-flag files:** a version-7 file with timeline rows and no conversion backup is treated as a dev-flag file and opens without a warning.
+  - **New-show wizard:** in timeline mode it also writes the imported first-page coordinates as homes.
+- **Checks:**
+  - On ca30a803, after `pnpm install` and the package build:
+    - `pnpm --dir apps/desktop run test`: 167 files passed, 8 skipped; 2,359 tests passed.
+    - `tsc --noEmit`: clean.
+    - `vite build`: passed. The converter is in a lazily loaded chunk, and `index.js` requires no react, zustand or sonner. No bundle has a leftover `import.meta`.
+    - `backup.test.ts`: 21 passed.
+  - On 2cd23567:
+    - `test:focused` on `electron` plus the touched renderer and converter tests: 22 files, 305 passed.
+    - Focused `test:history` on the converter and wizard tests: 4 files, 34 passed.
+    - eslint, prettier and cspell: clean.
+  - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run either.
+- **Next:** re-review and merge by the lead.
+- **Blockers:** none.
