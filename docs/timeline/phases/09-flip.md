@@ -228,3 +228,24 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - The dialogs are English-only.
 - **Next:** review and merge by the lead. Then P9.4 and P9.5.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p9-3-convert-on-open) · P9.3
+
+- **Done:** PR #42 review fixes, checkpoint 2cd23567 on `timeline/p9-3-convert-on-open` (after a normal merge of `timeline-try-2`, e0a985c7).
+  - 499 handled by every open caller and the renderer.
+  - Opens serialized; `BEGIN IMMEDIATE` recheck; "already converted" opens quietly; renderer SQL suspended during a conversion.
+  - New files created converted when the gate is on; the paint wait for the modal.
+  - Converter and flow loaded with dynamic `import()` only with the gate on.
+  - The dev-flag case separated from the older-release case; `findLatestBackup` scans the folder.
+  - Rollback tested per step; new tests in `electron/main/__test__/openShow.test.ts`, `openShowImports.test.ts`, `src/hooks/__test__/useLoadFileErrorHandler.test.tsx`, plus `newShowCompletion.test.ts`.
+- **Checks so far:**
+  - `vitest run electron/database/__test__/convertOnOpen.test.ts`: 34 passed.
+  - `electron/main/__test__/openShow.test.ts`: 10 passed.
+  - `openShowImports.test.ts`: 2 passed.
+  - `newShowCompletion.test.ts`: 15 passed.
+  - `useLoadFileErrorHandler.test.tsx`: 5 passed.
+  - `tsc --noEmit`: clean.
+  - eslint, prettier and cspell: clean.
+- **Next:** `vite build` and the main-bundle check, `test:focused electron`, focused `test:history` on the converter tests, the desktop suite, then update the PR body.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p9-3-convert-on-open` (2cd23567). From `apps/desktop`, run `pnpm exec vite build` and check `dist-electron/main` for a separate chunk holding the converter. Then run the remaining checks listed above.
