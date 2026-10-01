@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
+import { skipInTimelineMode } from "@/test/timelineMode";
 import { afterEach, describe, expect } from "vitest";
 import { sql } from "drizzle-orm";
 import { renderHook, waitFor } from "@testing-library/react";
@@ -412,26 +413,34 @@ describeDbTests("timeline rendering", (it) => {
             expectAt(coordsById(canvas)[1]!, [-1, -1], "not ready");
         });
 
-        it("with the flag off, uses the page path and ignores the resolver", async ({
-            db,
-            wrapper,
-        }) => {
-            await seedShow(db);
-            await startTimelineResolver(db);
-            const canvas = await createCanvasWithMarchers(db);
-            const { result } = renderAnimation(canvas, wrapper);
-            await waitFor(() =>
-                expect(result.current.timing.beats).toHaveLength(17),
-            );
-            expect(result.current.timelineMode).toBe(false);
+        it.skipIf(
+            skipInTimelineMode(
+                "it asserts the flag-off path; timeline test mode turns the flag on",
+            ),
+        )(
+            "with the flag off, uses the page path and ignores the resolver",
+            async ({ db, wrapper }) => {
+                await seedShow(db);
+                await startTimelineResolver(db);
+                const canvas = await createCanvasWithMarchers(db);
+                const { result } = renderAnimation(canvas, wrapper);
+                await waitFor(() =>
+                    expect(result.current.timing.beats).toHaveLength(17),
+                );
+                expect(result.current.timelineMode).toBe(false);
 
-            // The page path finds no marcher_pages timelines for these marchers, reports it
-            // (false stops playback) and moves nothing, even though a resolver is ready
-            expect(
-                result.current.animation.setMarcherPositionsAtTime(1250),
-            ).toBe(false);
-            for (const id of MARCHER_IDS)
-                expectAt(coordsById(canvas)[id]!, [-1, -1], `marcher ${id}`);
-        });
+                // The page path finds no marcher_pages timelines for these marchers, reports it
+                // (false stops playback) and moves nothing, even though a resolver is ready
+                expect(
+                    result.current.animation.setMarcherPositionsAtTime(1250),
+                ).toBe(false);
+                for (const id of MARCHER_IDS)
+                    expectAt(
+                        coordsById(canvas)[id]!,
+                        [-1, -1],
+                        `marcher ${id}`,
+                    );
+            },
+        );
     });
 });

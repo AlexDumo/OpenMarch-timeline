@@ -22,6 +22,12 @@ import { createTimelinesInTransaction } from "../timelines";
 import { createTimelineShapesInTransaction } from "../timelineShapes";
 import { createTimelineTransitionsInTransaction } from "../timelineTransitions";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * P8.3: the inspector's transition edits on a real database. Each is one undoable edit, undo and

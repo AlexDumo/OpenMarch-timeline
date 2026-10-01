@@ -40,6 +40,12 @@ import {
     timelineResolverSettled,
     useTimelineResolverStore,
 } from "../timelineStore";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * "Set all or selected marchers to the previous or next page"

@@ -16,6 +16,12 @@ import {
     touchesTimelineDisplayTables,
     useTimelineDisplayStore,
 } from "../timelineDisplay";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * The display signal (docs/timeline/phases/07-page-parity.md P7.15): edits to `timelines` rows

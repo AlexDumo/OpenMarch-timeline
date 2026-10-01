@@ -37,6 +37,12 @@ import { updateUtility } from "../utility";
 import { createTrack } from "../timelineCommands";
 import { readPageGrid, withTimelinePageRipple } from "../timelineRipple";
 import { TimelineWriteError } from "../timelineErrors";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * Page and beat ripple in timeline mode (docs/timeline/phases/07-page-parity.md P7.4, P7.5), on a
