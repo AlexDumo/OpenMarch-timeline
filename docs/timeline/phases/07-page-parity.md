@@ -313,8 +313,8 @@ Facts that change how to read the PR #14 note above:
 
 - [x] `src/db-functions/shapePages.ts` ~159 to 245 (`createShapePages` writes `shape_pages`, `shape_page_marchers` and, through `_updateChildMarcherPages` at ~127 to 157, `marcher_pages`), ~247 to 322 (`updateShapePages`), ~325 to 372 (`deleteShapePages`) · W · not handled · map to timeline shapes plus the transition into the shape, with slot order from the shape's marcher order (P7.11: gated off, not mapped. Each refuses inside its transaction in timeline mode (`E-ARGS`, `PAGE_SHAPES_TIMELINE_MESSAGE`) before writing. A page shape puts some of a page's marchers on an SVG path; the timeline form is a transition into a spec shape, which is a structural edit (Create Track, P8.9) and has no Bezier kinds. Spec shapes are made and edited by P8.2's editor and P7.11's canvas handles)
 - [x] `src/db-functions/shapePages.ts` ~377 to 480 (`copyShapePageToPage`; reads `marcher_pages` at ~447) and `src/hooks/queries/useShapePages.ts` ~101 to 155 · R and W · copy a shape to another page · not handled (P7.11: gated off; `copyShapePageToPage` refuses in timeline mode and the mutation toasts the reason. In timeline terms a copy is another transition into the same spec shape, made with Create Track)
-- [x] `src/db-functions/shapePageMarchers.ts` (reads ~62 to 165; order shifts, swaps and flatten ~165 to 375; create with conflict handling ~385 to 480) · R and W `shape_page_marchers` · not handled (P7.11: no change; nothing in the app writes through it except `shapePages.ts`, which refuses in timeline mode, and its reads feed only page mode's locks)
-- [x] `src/db-functions/shapes.ts` (`getShapes` ~74, create ~102 to 143, update ~145 to 192, delete ~194 to 235, `getShapesWithNoShapePages` ~237) · R and W `shapes` · not handled (P7.11: no change; only `shapePages.ts` calls its writers)
+- [x] `src/db-functions/shapePageMarchers.ts` (reads ~62 to 165; order shifts, swaps and flatten ~165 to 375; create with conflict handling ~385 to 480) · R and W `shape_page_marchers` · not handled (P7.11: gated off; its writers (create, update, delete, `swapPositionOrder`) refuse in timeline mode like `shapePages.ts`, through `pageShapesGate.ts`; its reads feed only page mode's locks)
+- [x] `src/db-functions/shapes.ts` (`getShapes` ~74, create ~102 to 143, update ~145 to 192, delete ~194 to 235, `getShapesWithNoShapePages` ~237) · R and W `shapes` · not handled (P7.11: gated off; `createShapes`, `updateShapes` and `deleteShapes` refuse in timeline mode, through `pageShapesGate.ts`)
 - [x] `src/global/classes/canvasObjects/MarcherShape.ts` ~35 to 100 (reads `shape_page_marchers`), ~250 to 275, ~285 to 335 (`_createMarcherShape` → `createShapePages`), ~336 to 380 (update args) and `StaticMarcherShape.ts` ~204 to 337 · R and W · canvas shape objects and edits (control point drag) · not handled (P7.11: gated off; no `MarcherShape` is drawn in timeline mode, so there are no control-point drags, and `useCreateMarcherShape` toasts a refusal. Spec shapes get `TimelineShapeOverlay` instead, with handles that commit once on release)
 - [x] `src/components/singletons/StateInitializer.tsx` ~37, ~104 (shape edit → `updateShapePagesMutationOptions`) · W · control point edits write shape pages and, through them, marcher pages · not handled (P7.11: no change; `updateMarcherShapeFn` only runs from a drawn `MarcherShape`, and `updateShapePages` refuses in timeline mode)
 - [x] `src/components/canvas/hooks/shapes.ts` ~19 to 40 and `src/components/canvas/hooks/canvasListeners.selection.ts` ~18 to 284 · R · shape rendering and selection by shape page · P5 left shapes drawn from page data (P7.11: timeline mode draws and reads no page shapes and removes any drawn before; selection then finds none. `useTimelineShapeCanvas` draws the spec shape picked in the inspector)
@@ -1145,3 +1145,18 @@ Facts that change how to read the PR #14 note above:
 - **Exit gate:** unchanged.
 - **Next:** review and merge PR #36.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-shapes) · P7.11 review fixes checkpoint
+
+- **Done:** follow-up commits on PR #36, not force-pushed: 278d38c4 and 6cb70b5e.
+  - **First press on a handle:** handles are transparent to the selection listeners (`isTimelineShapeHandle`). Pressing one starts its drag and keeps the marchers selected. A selection box lets go of any handle it takes in.
+  - **Unsaved drags:** the editor's `commit` returns `started`, `unchanged` or `busy`. Anything but `started` puts the shape back, and `busy` shows a toast. The dragged handle is laid out on release too.
+  - **Clicks and Escape:** a press under the canvas's click threshold commits nothing, and Escape cancels a drag.
+  - **Handles that meet:** move handles are drawn above the others.
+  - **Page shapes:** they are cleared whenever timeline mode turns on, and a page render still running stops (generation counter plus `isCurrent`).
+  - **Other fixes:** `useRenderMarcherShapes` is back at its original place in `Canvas.tsx`; the overlay follows the field theme; the picker is disabled while an edit is pending.
+  - **More writers gated:** `shapes.ts` writers and `shapePageMarchers.ts` writers (including `swapPositionOrder`) now refuse in timeline mode, through the shared `pageShapesGate.ts`.
+- **Checks:** `tsc --noEmit`: pass. Focused tests pass, including a real fabric mouse sequence through `useSelectionListeners`. Removing the handle guard fails 2 of its 3 tests.
+- **Next:** focused `test:history`, the desktop suite, the PR body, and the inventory notes for `shapes.ts` and `shapePageMarchers.ts`.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p7-shapes` at 6cb70b5e. Then run `pnpm --dir apps/desktop run test:history` on `src/db-functions/__test__/shapePagesTimelineMode.test.ts` and `marcherPage.test.ts`, followed by `pnpm --dir apps/desktop run test`, alone.
