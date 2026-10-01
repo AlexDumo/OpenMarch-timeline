@@ -119,8 +119,8 @@ Video export and `exportAppearances` sample the resolver.
 
 ### P7.10: Pathways, midpoints, step size and collisions in timeline mode
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-pathways)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
