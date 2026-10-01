@@ -81,8 +81,8 @@ Tests on fixture shows (including the e2e fixtures): resolver positions equal `m
 
 ### P6.6: Conversion equality corpus
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p6-equality-corpus)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P6.5
