@@ -1,6 +1,6 @@
 import { createResolver } from "@openmarch/core";
 import { asc, sql } from "drizzle-orm";
-import { schema } from "@/global/database/db";
+import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection } from "@/db-functions/types";
 import {
     isTimelineModeEnabled,
@@ -32,6 +32,14 @@ const DEFAULT_LAST_PAGE_COUNTS = 8;
 
 /** Mirrors `FIRST_PAGE_ID` in `src/db-functions/page.ts`: the first page, which holds only beat 0. */
 const FIRST_PAGE_ID = 0;
+
+/** The source file is in timeline mode, but its timeline couldn't be read or resolved. */
+export class SourceTimelineReadError extends Error {
+    constructor(cause: unknown) {
+        super("Couldn't read the timeline of this file", { cause });
+        this.name = "SourceTimelineReadError";
+    }
+}
 
 /** One marcher's position in the source file, in canvas pixels (the `marcher_pages` x/y units). */
 export interface SourceMarcherPosition {
@@ -143,14 +151,19 @@ export async function readSourceTimelinePositions({
         lastPageCounts: utility?.last_page_counts ?? DEFAULT_LAST_PAGE_COUNTS,
     });
 
-    const { snapshot } = await readTimelineTables(db);
-    const resolver = createResolver(snapshot);
-    const marcherIds = resolver.marcherIds();
-    const buffer = new Float64Array(2 * marcherIds.length);
-    resolver.positionsAt(endBeat, buffer);
-    return marcherIds.map((marcher_id, i) => ({
-        marcher_id,
-        x: buffer[2 * i]!,
-        y: buffer[2 * i + 1]!,
-    }));
+    try {
+        const { snapshot } = await readTimelineTables(db);
+        const resolver = createResolver(snapshot);
+        const marcherIds = resolver.marcherIds();
+        const buffer = new Float64Array(2 * marcherIds.length);
+        resolver.positionsAt(endBeat, buffer);
+        return marcherIds.map((marcher_id, i) => ({
+            marcher_id,
+            x: buffer[2 * i]!,
+            y: buffer[2 * i + 1]!,
+        }));
+    } catch (error) {
+        // Never fall back to the frozen page-era rows: they are stale in a timeline-mode file
+        throw new SourceTimelineReadError(error);
+    }
 }

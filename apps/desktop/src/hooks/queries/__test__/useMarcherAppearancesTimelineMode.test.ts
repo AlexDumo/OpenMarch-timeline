@@ -34,31 +34,43 @@ const {
 } = await import("..");
 const { marcherAppearancesQueryOptions } =
     await import("../useMarcherAppearances");
-const { updateWorkspaceSettingsMutationOptions } =
-    await import("../useWorkspaceSettings");
+const {
+    updateWorkspaceSettingsMutationOptions,
+    updateWorkspaceSettingsJSONMutationOptions,
+} = await import("../useWorkspaceSettings");
 
 const PAGE_ID = 7;
 const MARCHER_ID = 1;
 const OVERRIDE = { marcher_id: MARCHER_ID, fill_color: "#ff0000" };
 const THEME_FILL = "#000000";
+const TAG_ID = 5;
+const TAG_APPEARANCE = {
+    id: 1,
+    tag_id: TAG_ID,
+    priority: 1,
+    fill_color: "#00ff00",
+};
 
 /**
  * Seeds every query the appearance query reads (all with an infinite stale time), including a
  * per-page override for marcher 1. Nothing reads the database: `db` is mocked to an empty object.
  */
-const seededClient = () => {
+const seededClient = ({ tagged = false } = {}) => {
     const qc = new QueryClient();
     qc.setQueryData(allMarchersQueryOptions().queryKey, [
         { id: MARCHER_ID, section: "Trumpet" } as Marcher,
     ]);
     qc.setQueryData(allSectionAppearancesQueryOptions().queryKey, []);
-    qc.setQueryData(marcherIdsForAllTagIdsQueryOptions().queryKey, new Map());
+    qc.setQueryData(
+        marcherIdsForAllTagIdsQueryOptions().queryKey,
+        new Map(tagged ? [[TAG_ID, new Set([MARCHER_ID])]] : []),
+    );
     qc.setQueryData(
         resolvedTagAppearancesByPageIdQueryOptions({
             pageId: PAGE_ID,
             queryClient: qc,
         }).queryKey,
-        [],
+        (tagged ? [TAG_APPEARANCE] : []) as never,
     );
     qc.setQueryData(marcherPagesByPageQueryOptions(PAGE_ID).queryKey, {
         [MARCHER_ID]: OVERRIDE,
@@ -109,6 +121,40 @@ describe("canvas marcher appearances and the timeline flag", () => {
         const options = updateWorkspaceSettingsMutationOptions(qc);
         await options.onSuccess!(
             { timelineMode: true } as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+        );
+
+        expect(await appearanceStack(qc)).toHaveLength(1);
+    });
+
+    it("timeline mode still applies tag appearances", async () => {
+        mocks.getSettings.mockResolvedValue({ timelineMode: true });
+        const stack = await appearanceStack(seededClient({ tagged: true }));
+
+        expect(stack).toHaveLength(2);
+        expect(stack[0]).toMatchObject({ fill_color: "#00ff00" });
+        expect(stack[1]).toMatchObject({ fill_color: THEME_FILL });
+    });
+
+    it("a failed settings read keeps page mode's appearances", async () => {
+        mocks.getSettings.mockRejectedValue(new Error("settings read failed"));
+        const stack = await appearanceStack(seededClient());
+
+        expect(stack).toHaveLength(2);
+        expect(stack[0]).toMatchObject(OVERRIDE);
+    });
+
+    it("recomputes when the flag changes through the JSON settings mutation", async () => {
+        mocks.getSettings.mockResolvedValue({});
+        const qc = seededClient();
+        expect(await appearanceStack(qc)).toHaveLength(2);
+
+        mocks.getSettings.mockResolvedValue({ timelineMode: true });
+        const options = updateWorkspaceSettingsJSONMutationOptions(qc);
+        await options.onSuccess!(
+            '{"timelineMode":true}' as never,
             undefined as never,
             undefined as never,
             undefined as never,

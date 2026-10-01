@@ -19,12 +19,9 @@ import { MarcherPagesByMarcher } from "@/global/classes/MarcherPageIndex";
 import { FieldProperties } from "@openmarch/core";
 import { readTimelineMode } from "./useWorkspaceSettings";
 
-const KEY_BASE = "marcher-appearances";
+import { marcherAppearancesKeys } from "./marcherAppearancesKeys";
 
-export const marcherAppearancesKeys = {
-    all: () => [KEY_BASE] as const,
-    byPageId: (pageId: number) => [KEY_BASE, { pageId }] as const,
-};
+export { marcherAppearancesKeys };
 
 export type MarcherAppearanceByIdMap = Record<
     number,
@@ -170,7 +167,11 @@ export const marcherAppearancesQueryOptions = (
     queryOptions<MarcherAppearanceByIdMap>({
         queryKey: marcherAppearancesKeys.byPageId(pageId!),
         queryFn: async () => {
-            const timelineMode = await readTimelineMode(queryClient);
+            // Started with the other reads; a failed settings read means page mode, so it never
+            // blanks the appearances
+            const timelineMode = readTimelineMode(queryClient).catch(
+                () => false,
+            );
             const [
                 marchers,
                 sectionAppearances,
@@ -188,11 +189,18 @@ export const marcherAppearancesQueryOptions = (
                         queryClient,
                     }),
                 ),
-                timelineMode
-                    ? ({} satisfies MarcherPagesByMarcher)
-                    : queryClient.fetchQuery(
-                          marcherPagesByPageQueryOptions(pageId),
-                      ),
+                timelineMode.then(
+                    (
+                        on,
+                    ):
+                        | MarcherPagesByMarcher
+                        | Promise<MarcherPagesByMarcher> =>
+                        on
+                            ? {}
+                            : queryClient.fetchQuery(
+                                  marcherPagesByPageQueryOptions(pageId),
+                              ),
+                ),
                 queryClient.fetchQuery(fieldPropertiesQueryOptions()),
             ]);
             return _combineMarcherAppearances({

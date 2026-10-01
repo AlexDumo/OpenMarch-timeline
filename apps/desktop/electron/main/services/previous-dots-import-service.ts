@@ -65,7 +65,21 @@ export interface PreviousDotsImportResult {
     pageNumberOffset: number;
 }
 
-type SourceMarcher = typeof schema.marchers.$inferSelect;
+/**
+ * The marcher columns the import uses. Selected by name so a source file from before migration
+ * 0017 (no `home_x`/`home_y`) still reads, and so no other column reaches the new show.
+ */
+const sourceMarcherColumns = {
+    id: schema.marchers.id,
+    name: schema.marchers.name,
+    section: schema.marchers.section,
+    drill_prefix: schema.marchers.drill_prefix,
+    drill_order: schema.marchers.drill_order,
+    year: schema.marchers.year,
+    notes: schema.marchers.notes,
+};
+
+type SourceMarcher = PreviousDotsMarcherImport & { id: number };
 
 /**
  * Page mode: the source's last page `marcher_pages` rows, as before timeline mode existed.
@@ -147,8 +161,8 @@ export async function readPreviousDotsFile(
         if (!fieldProperties?.json_data)
             throw new Error("Field properties not found in source file");
 
-        const marchers = await orm
-            .select()
+        const marchers: SourceMarcher[] = await orm
+            .select(sourceMarcherColumns)
             .from(schema.marchers)
             .orderBy(
                 schema.marchers.drill_prefix,

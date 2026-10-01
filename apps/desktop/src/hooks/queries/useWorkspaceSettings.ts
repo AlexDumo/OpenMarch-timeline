@@ -18,7 +18,7 @@ import {
 } from "@/db-functions/workspaceSettings";
 import { mutationOptions } from "@tanstack/react-query";
 import { conToastError } from "@/utilities/utils";
-import { marcherAppearancesKeys } from "./useMarcherAppearances";
+import { marcherAppearancesKeys } from "./marcherAppearancesKeys";
 
 export const workspaceSettingsKeys = {
     all: () => ["workspaceSettings"] as const,
