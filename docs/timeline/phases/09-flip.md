@@ -1,9 +1,9 @@
 ---
 phase: 9
 title: Flip: convert on open
-status: not-started
-owner: unassigned
-branch: none
+status: in-progress
+owner: timeline-worker
+branch: timeline/p9-2-backup
 pr: none
 depends_on: [8]
 updated: 2026-09-29
@@ -38,8 +38,8 @@ Confirm C-8 is decided and implemented. If not, this phase is blocked.
 
 ### P9.2: Backup before converting
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p9-2-backup)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P9.1
