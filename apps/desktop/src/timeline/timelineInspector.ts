@@ -96,6 +96,43 @@ const spanOf = (s: SpanInfo): InspectedSpan => ({
     slot: s.slot,
 });
 
+/** The transition a span runs in, with its timeline and destination shape. */
+function inspectTransition(
+    transitionId: number | null,
+    sources: InspectionSources,
+): InspectedTransition | null {
+    if (transitionId === null) return null;
+    const { tables } = sources;
+    const row = sources.transitions[transitionId];
+    if (!row) return null;
+    const stored = tables.transitions.find((t) => t.id === transitionId);
+    const timeline =
+        stored && tables.timelines.find((t) => t.id === stored.timelineId);
+    return {
+        id: row.id,
+        timelineId: stored?.timelineId ?? null,
+        timelineName: timeline?.name ?? null,
+        start: row.start,
+        end: row.end,
+        style: row.style,
+        order: row.order,
+        slotCount: row.slots,
+        bulge: row.params?.bulge ?? null,
+        waypoints: row.params?.waypoints?.length ?? 0,
+        destination:
+            row.dest !== null
+                ? {
+                      kind: "shape",
+                      shapeId: row.dest,
+                      name:
+                          tables.shapes.find((s) => s.id === row.dest)?.name ??
+                          null,
+                      shape: sources.shapeKinds[row.dest] ?? "unknown",
+                  }
+                : { kind: "points", count: row.points?.length ?? 0 },
+    };
+}
+
 /** The inspector's account of `marcherId` at `beat`, given the resolver's explanation of it. */
 export function buildMarcherInspection(
     marcherId: number,
@@ -106,39 +143,7 @@ export function buildMarcherInspection(
     const { span } = explanation;
     const { tables } = sources;
 
-    let transition: InspectedTransition | null = null;
-    if (span.transitionId !== null) {
-        const row = sources.transitions[span.transitionId];
-        const stored = tables.transitions.find(
-            (t) => t.id === span.transitionId,
-        );
-        const timeline =
-            stored && tables.timelines.find((t) => t.id === stored.timelineId);
-        if (row)
-            transition = {
-                id: row.id,
-                timelineId: stored?.timelineId ?? null,
-                timelineName: timeline?.name ?? null,
-                start: row.start,
-                end: row.end,
-                style: row.style,
-                order: row.order,
-                slotCount: row.slots,
-                bulge: row.params?.bulge ?? null,
-                waypoints: row.params?.waypoints?.length ?? 0,
-                destination:
-                    row.dest !== null
-                        ? {
-                              kind: "shape",
-                              shapeId: row.dest,
-                              name:
-                                  tables.shapes.find((s) => s.id === row.dest)
-                                      ?.name ?? null,
-                              shape: sources.shapeKinds[row.dest] ?? "unknown",
-                          }
-                        : { kind: "points", count: row.points?.length ?? 0 },
-            };
-    }
+    const transition = inspectTransition(span.transitionId, sources);
 
     const layer =
         span.assignmentId === null
@@ -146,9 +151,10 @@ export function buildMarcherInspection(
             : (tables.assignments.find((a) => a.id === span.assignmentId)
                   ?.layer ?? null);
 
+    // The leading hold is the marcher standing at home
     const from = explanation.originFrom;
     const origin: InspectedOrigin =
-        from === "home"
+        from === "home" || (from.kind === "hold" && from.start === -Infinity)
             ? { kind: "home", xy: explanation.origin }
             : {
                   kind: "span",
