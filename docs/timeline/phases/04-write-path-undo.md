@@ -322,3 +322,22 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** a medium run (100 × 80) is running; record its counts on the PR.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p4-e2e-fuzz` (c8d8567e), then in `apps/desktop` run `TIMELINE_E2E_SEEDS=100 TIMELINE_E2E_STEPS=80 TIMELINE_E2E_REPORT=<file> pnpm run test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` in the background, and add its counts to PR #15 and this log.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-e2e-fuzz) · P4.9 (review fixes done)
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/15 is updated with the review fixes (`c8d8567e`) and the medium run's counts; it's back in review.
+- **Medium run:** `TIMELINE_E2E_SEEDS=100 TIMELINE_E2E_STEPS=80` passed: 103 tests passed and 11 control seeds were skipped, in 55 s.
+  - 8,000 steps and 3,407 committed edits; 96 commits delivered only no-op changes.
+  - 2,856 rejected edits, 1,135 of them with an applied invalid change.
+  - 1,786 undo and 360 redo steps.
+  - 5,553 verifications and 1,874,570 positions compared, with no failure.
+  - Every generator committed at least 53 times, and every invalid change was applied 71 to 88 times.
+  - The 79 FOREIGN KEY rejections equal the 79 shape-in-use invalid changes.
+- **Checks:**
+  - tsc: pass.
+  - `test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` (default size, now 5 × 80): 8 passed, 11 skipped.
+  - With `-t "seed 2:|every kind"`: the coverage test skips, 2 passed.
+  - eslint, prettier and cspell: clean.
+  - Skipped per policy: the full `test:history` suite, the full desktop suite and e2e.
+- **Next:** re-review and merge PR #15.
+- **Blockers:** none.
