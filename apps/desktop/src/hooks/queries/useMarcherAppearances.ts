@@ -17,6 +17,7 @@ import {
 import { AppearanceComponentOptional } from "@/entity-components/appearance";
 import { MarcherPagesByMarcher } from "@/global/classes/MarcherPageIndex";
 import { FieldProperties } from "@openmarch/core";
+import { readTimelineMode } from "./useWorkspaceSettings";
 
 const KEY_BASE = "marcher-appearances";
 
@@ -83,7 +84,7 @@ const separateTagAppearanceByMarcherId = (
  *
  * The appearance priority is as follows -
  *
- * 1. Individual marcher page appearance
+ * 1. Individual marcher page appearance (page mode only; see `marcherAppearancesQueryOptions`)
  * 2. Tag appearance (sorted by priority, as marchers can have multiple tags)
  * 3. Section appearance
  * 4. (Default) Field theme appearance
@@ -152,6 +153,15 @@ export const _combineMarcherAppearances = ({
     return appearancesByMarcherId;
 };
 
+/**
+ * Each marcher's appearance stack on a page, for the canvas.
+ *
+ * In timeline mode the per-page appearance fields of `marcher_pages` are dropped (P7.14), so the
+ * page's rows are not read and appearance comes from the tags, the section and the field theme
+ * only, as in the video and mobile exports (docs/timeline/phases/07-page-parity.md P7.16). The
+ * flag is read when the query runs; changing it invalidates these queries
+ * (`updateWorkspaceSettingsMutationOptions`).
+ */
 export const marcherAppearancesQueryOptions = (
     pageId: number | null | undefined,
     queryClient: QueryClient,
@@ -160,6 +170,7 @@ export const marcherAppearancesQueryOptions = (
     queryOptions<MarcherAppearanceByIdMap>({
         queryKey: marcherAppearancesKeys.byPageId(pageId!),
         queryFn: async () => {
+            const timelineMode = await readTimelineMode(queryClient);
             const [
                 marchers,
                 sectionAppearances,
@@ -177,7 +188,11 @@ export const marcherAppearancesQueryOptions = (
                         queryClient,
                     }),
                 ),
-                queryClient.fetchQuery(marcherPagesByPageQueryOptions(pageId)),
+                timelineMode
+                    ? ({} satisfies MarcherPagesByMarcher)
+                    : queryClient.fetchQuery(
+                          marcherPagesByPageQueryOptions(pageId),
+                      ),
                 queryClient.fetchQuery(fieldPropertiesQueryOptions()),
             ]);
             return _combineMarcherAppearances({
