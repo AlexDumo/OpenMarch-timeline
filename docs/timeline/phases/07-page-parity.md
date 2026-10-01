@@ -80,8 +80,8 @@ Beat insert and delete ripple timeline rows (same rules as P7.4).
 ### P7.6: Copy and paste
 
 - Owner: timeline-worker (timeline/p7-copy-paste)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/28
 - Parallel: yes
 - Depends on: P7.1
 
@@ -256,9 +256,9 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.6 Copy and paste of positions
 
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~857 to 986 (set all or selected marchers to the previous or next page's positions: four actions, `updateMarcherPages` at ~876, 913, 946, 981) · R neighbor page rows, W the current page · the only "copy position" features in the app · not handled · read `positionsAt` at the neighbor page end, write destinations
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~544 to 548 (previous and next page queries feeding those actions) · R · not handled
-- [ ] No clipboard copy and paste exists. P7.6 decides whether to add one or to close with the two items above. Shape copy to another page belongs to P7.11.
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~857 to 986 (set all or selected marchers to the previous or next page's positions: four actions, `updateMarcherPages` at ~876, 913, 946, 981) · R neighbor page rows, W the current page · the only "copy position" features in the app · not handled · read `positionsAt` at the neighbor page end, write destinations (P7.6: in timeline mode `copyPagePositions` reads the resolver at the neighbor page's end beat and the handler writes through `moveMarchersOnPage`)
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~544 to 548 (previous and next page queries feeding those actions) · R · not handled (P7.6: the neighbor-page queries are disabled in timeline mode)
+- [x] No clipboard copy and paste exists. P7.6 decides whether to add one or to close with the two items above. Shape copy to another page belongs to P7.11. (P7.6: closed with the two items above; no clipboard feature added, since neither the spec nor `ui.md` asks for one)
 
 #### P7.7 Coordinate sheets, drill charts and PDF
 
@@ -573,4 +573,33 @@ Facts that change how to read the PR #14 note above:
 - **Checks:** `tsc --noEmit` clean; `vitest run` on `timelinePageCopy.test.ts` and `timelineCoordinateWrites.test.ts`: 18 passed.
 - **Next:** focused `test:history`, the regular desktop suite, lint, then the PR.
 - **Resume from:** branch `timeline/p7-copy-paste` at `93b8f310`; run `pnpm --dir apps/desktop run test:history src/timeline/__test__/timelinePageCopy.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts` and `pnpm --dir apps/desktop run test` (background), then open the PR.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-copy-paste) · P7.6 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/28 (head `93b8f310`).
+  - "Set all or selected marchers to the previous or next page" works in timeline mode. `copyPagePositions` (`src/timeline/timelineCoordinateWrites.ts`) reads each marcher's position on the neighbor page from the resolver at that page's end beat. `RegisteredActionsHandler.tsx` then writes the moves through the `moveMarchersOnPage` mutation as one `transactionWithHistory` edit: homes on page 0, slot destinations on later pages.
+  - The P7.2 refusal (`refuseInTimelineMode`, `NOT_IN_TIMELINE_MODE_MESSAGE`) is removed.
+  - The neighbor-page `marcher_pages` queries are disabled in timeline mode.
+  - Page mode is unchanged.
+  - Ticked the 3 P7.6 inventory items.
+- **Decisions (P7.6, recorded for the phase):**
+  - **No clipboard copy and paste.** The app never had one, and neither the spec nor `ui.md` asks for one, so P7.6 is closed with the set-to-previous/next actions. Copying a shape to another page belongs to P7.11.
+  - **Marchers already at the source position get no move.** This avoids refusing a marcher that holds still across both pages, which has no move ending at the page's end beat. Positions are compared exactly.
+  - **The edit is all or nothing.** Say a marcher's position must change but it has no move ending at the page's end beat. Then the whole edit is refused with `E-ARGS` and nothing is written, as P7.2 decided. Structural page moves stay unowned (see the P8.9 cross-phase note).
+  - **No `withTimelinePageRipple`.** These actions write no pages or beats, only homes and slot destinations.
+  - **The success toast** now shows only after the edit is written.
+- **Checks:**
+  - `pnpm install`: ok.
+  - `pnpm exec turbo run build --filter=@openmarch/desktop^...`: 4 successful.
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
+  - `vitest run` on `timelinePageCopy.test.ts` and `timelineCoordinateWrites.test.ts`: 18 passed.
+  - `pnpm --dir apps/desktop run test:history` on `timelinePageCopy.test.ts`, `timelineCoordinateWrites.test.ts` and `timelineMoves.test.ts`: 3 files, 28 passed.
+  - `pnpm --dir apps/desktop run test`: 127 files passed, 1 failed; 1,870 tests passed, 1 failed; 1 unhandled error. Neither failure is related to this change:
+    - `useTimelineTracks.test.tsx` timed out under suite load. It passes alone (5 passed), and it imports no changed file.
+    - The unhandled error is the known Tolgee timer error (`findings.md`).
+  - eslint, prettier --check and cspell on the changed files: clean. The 3 `react-hooks/exhaustive-deps` warnings in `RegisteredActionsHandler.tsx` were already on the base.
+  - Skipped by policy: the full `test:history`, Playwright and `build:electron`. The app was not run by hand.
+- **Exit gate:** unchanged.
+- **Next:** review and merge PR #28.
 - **Blockers:** none.
