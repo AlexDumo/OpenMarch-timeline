@@ -92,7 +92,7 @@ Transitions: destination, style, bulge clamped to ±½, waypoints, `slot_count`,
 ### P8.4: Assignments and layers
 
 - Owner: timeline-worker (timeline/p8-assignments)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P8.3
@@ -434,3 +434,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** an assignments editor under each transition in the inspector's timeline section: the slot list with vacancies, nearest-slot casting, layer and range per assignment, and which ones are stolen.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-assignments`; `pnpm install`; build the desktop's dependencies.
+
+### 2026-10-01 · timeline-worker (timeline/p8-assignments) · P8.4
+
+- **Done:** wip commit 46e97d8e on `timeline/p8-assignments` (rebased on `timeline-try-2` after PR #28): `src/timeline/timelineCasting.ts` (nearest-slot casting with core's `hungarianAlgorithm`, padded so leftover slots stay vacant) and `src/db-functions/timelineAssignmentEdits.ts` (cast marchers into a transition, recast by nearest slot, move to a slot or trade slots, change layer or beats, remove). Casting reads positions from a resolver over the edit's own transaction, so it can't plan from positions a committing edit is about to change. `stealLayer` in `timelineCommands.ts` is now exported.
+- **Checks:** none yet.
+- **Next:** the pure planner (`src/timeline/timelineAssignmentEditor.ts`), the inspector's assignments editor, history tests.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-assignments`; `pnpm install`; build the desktop's dependencies; write `apps/desktop/src/timeline/timelineAssignmentEditor.ts` and `apps/desktop/src/components/inspector/TimelineAssignmentsEditor.tsx`.
