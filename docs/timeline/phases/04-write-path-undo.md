@@ -112,8 +112,8 @@ Tests through the real write path: QA-DB-11, -12, -13, -24, -25, -26 (26b inform
 ### P4.9: End-to-end fuzz with real undo
 
 - Owner: timeline-worker agent (timeline/p4-e2e-fuzz)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/15
 - Parallel: yes
 - Depends on: P4.8
 
@@ -287,3 +287,22 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** the large run (`TIMELINE_E2E_SEEDS=600 TIMELINE_E2E_STEPS=80`) in the background, then squash and open the PR.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p4-e2e-fuzz` (b5cc1d21), then in `apps/desktop` run `TIMELINE_E2E_SEEDS=600 TIMELINE_E2E_STEPS=80 TIMELINE_E2E_REPORT=<file> pnpm run test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` in the background; then squash the wip commits into one and open the PR.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-e2e-fuzz) · P4.9
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/15 (commit `9c93267a`, the wip commits squashed and rebased onto `timeline-try-2`). The PR adds `apps/desktop/src/db-functions/__test__/timelineE2eFuzz.test.ts`, a test only.
+- **Large run:** `TIMELINE_E2E_SEEDS=600 TIMELINE_E2E_STEPS=80` passed at the pre-rebase head: 603 tests passed and 11 control seeds were skipped, in 315 s.
+  - 48,000 steps and 24,419 committed edits: 7,138 changed individual destinations, 1,906 were R-E1 range edits, 1,232 were shape/individual switches and 4,706 committed at the group limit.
+  - 13,318 rejected edits, 4,336 of them with a deliberately invalid change.
+  - 10,829 undo and 1,821 redo steps.
+  - 37,069 verifications and about 12.5 million positions compared, with no failure.
+  - The v0.6 control broke undo on seed 1, step 15.
+- **Checks:**
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: pass.
+  - `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineE2eFuzz.test.ts`: 6 passed, 11 skipped (the control seeds after the first break), also after the rebase.
+  - eslint, prettier and cspell on the file: clean.
+  - Skipped per policy: the full `test:history` suite, the full desktop suite and e2e.
+- **Exit gate:** nothing ticked. The P4.9 item passes on the PR branch, but it becomes true on the base only when the PR merges.
+- **Next:** review and merge PR #15.
+- **Blockers:** none.
+- **Notes:** `executeHistoryAction` switches only the replayed group's tables to redo mode. A trigger that writes to another table during a replay therefore logs on the undo stack and clears the redo stack. Under the v0.6 trigger, that's how undo breaks. The current schema has no such trigger, so the app isn't affected, but a future cross-table writing trigger would hit the same problem.
