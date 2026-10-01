@@ -228,8 +228,8 @@ Facts that change how to read the PR #14 note above:
 - [x] `src/db-functions/marcher.ts` ~92 to 195 (`createMarchersInTransaction` inserts one `marcher_pages` row per marcher per page, starting at a free spot) · W · not handled for timeline rows (the P6 fixture loader calls it at `src/timeline/fixtures/loadTimelineFixture.ts` ~107) · add the home position and a vacant or filled slot in each transition (P7.3: `createMarchers({ timelineMode: true })` adds a home and a holding slot in each page move through `addMarchersToTimelineInTransaction`; `createMarchersInTransaction` is unchanged, so the fixture loader is unaffected)
 - [x] `src/db-functions/marcher.ts` ~290 to 315 (`deleteMarchers`; cascades to `marcher_pages` and `shape_page_marchers`) · W · not handled · also remove timeline assignments and slot rows (P7.3: `deleteMarchers({ timelineMode: true })` deletes the assignments first and compacts shapeless transitions through `removeMarchersFromTimelineInTransaction`)
 - [x] `src/db-functions/marcherHome.ts` ~7 to 30 (`updateMarcherHomesInTransaction`) · W of the marcher home · exists · confirm it is the right write for "move a marcher on page 0" (P7.3: confirmed; P7.2's page 0 move and P7.3's add both write homes through it)
-- [x] `src/hooks/queries/useMarchers.ts` ~84 to 150 (create and delete mutations; invalidate `marcher_pages` keys at ~94, 125, 144, and coordinate data at ~101, 148) · invalidation · not handled · add timeline query keys (P7.3: the mutations take the flag; no timeline React Query keys exist, and the resolver store follows each edit's change batch, which the tests check)
-- [x] `src/components/marcher/MarcherForm.tsx` ~178 and `src/components/marcher/MarcherList.tsx` ~74 · UI callers · not handled (P7.3: both pass `useTimelineMode()`; the new-show wizard reads no flag)
+- [x] `src/hooks/queries/useMarchers.ts` ~84 to 150 (create and delete mutations; invalidate `marcher_pages` keys at ~94, 125, 144, and coordinate data at ~101, 148) · invalidation · not handled · add timeline query keys (P7.3: the mutations read the flag when they run (`readTimelineMode`). No timeline React Query keys exist; the resolver store picks up marcher and timeline changes from each edit's change batch. Evidence: `timelineMarchers.test.ts` calls `timelineResolverSettled()` after each add, delete, undo and redo, then reads the new or removed marcher from the running store)
+- [x] `src/components/marcher/MarcherForm.tsx` ~178 and `src/components/marcher/MarcherList.tsx` ~74 · UI callers · not handled (P7.3: no change needed; the mutations read the flag themselves when they run, waiting for the settings if they are still loading)
 - [x] `src/components/launchpage/newShowCompletion.ts` ~249 to 262 (delete, then create marchers on import) · W · new-show import · not handled (P7.3: no change; a new show starts with the flag off, so it is page mode, and conversion later takes homes from page 0)
 - [x] `src/components/launchpage/newShowCompletion.ts` ~276 to 318 (`applyPreviousDotsCoordinates` writes page 0 `marcher_pages`) · W · new show from previous dots · not handled · in timeline mode this is the home position (P7.3: no change, for the same reason: new shows are page mode until converted)
 - [ ] `electron/main/services/previous-dots-import-service.ts` ~85 to 114 · R of the source file's last-page `marcher_pages` · import of a previous show · not handled · if the source is a converted show its page-era rows are frozen and stale; read home or the resolver instead
@@ -432,4 +432,20 @@ Facts that change how to read the PR #14 note above:
   - eslint, prettier --check and cspell on the changed files: clean. The only warnings are `react/prop-types` warnings in `MarcherForm.tsx` that were already there.
   - Skipped by policy: the full `test:history`, Playwright and `build:electron`. The app was not run by hand.
 - **Next:** review and merge PR #22. Exit-gate items unchanged.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p7-marchers) · P7.3 review fixes
+
+- **Done (from the lead review of PR #22, commit `d0024fbe`, after merging the current `timeline-try-2`):**
+  - The marcher create and delete mutations no longer take the flag from `useTimelineMode()`, which is false while the workspace settings load. They now read it when they run, through `readTimelineMode` in `useWorkspaceSettings.ts`, which uses the cached settings or waits for them to load. As a result, `MarcherForm.tsx` and `MarcherList.tsx` are back to their original code. New test `src/hooks/queries/__test__/useMarchersTimelineMode.test.ts` checks two things: a create or delete started before the settings load waits for them and takes the timeline path, and cached flag-off settings give page mode.
+  - The mid-order delete test now checks that the last slot's marcher has the vacated slot index, that the point at that slot holds the last slot's old coordinates (`Object.is`), and that positions a third of the way through each transition are unchanged.
+  - New comments in `timelineMarchers.ts`: the `if (!point) break` branch can only run in a file that already breaks I-T6; the follow-the-leader marcher set includes the deleted marchers, which is harmless.
+  - In this file, the notes on the `useMarchers.ts` and `MarcherForm.tsx` checklist items now describe the change. The query-keys item stays ticked, with the test evidence.
+- **Checks:**
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
+  - `vitest run` on `timelineMarchers.test.ts`, `useMarchersTimelineMode.test.ts` and `marcher.test.ts`: 3 files, 47 passed.
+  - `test:history` on `timelineMarchers.test.ts` and `marcher.test.ts`: 2 files, 44 passed.
+  - eslint, prettier --check and cspell on the changed files: clean. The only eslint warnings are two unused imports in `useWorkspaceSettings.ts` that were already there.
+  - Skipped by policy: the full `test:history`, Playwright and `build:electron`. I didn't rerun the regular desktop suite after these fixes.
+- **Next:** the lead re-reviews and merges PR #22.
 - **Blockers:** none.
