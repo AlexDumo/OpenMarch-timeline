@@ -101,9 +101,9 @@ Assignments: casting (nearest-slot auto-assign via `computeOptimalCoordinateMapp
 
 ### P8.5: Inspector
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p8-inspector)
+- Status: done
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/25
 - Parallel: yes
 - Depends on: P8.0
 
@@ -111,9 +111,9 @@ Inspector: `explain()` for the selected marcher, diagnostics, and the FTL trail 
 
 ### P8.6: Error messages
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p8-inspector)
+- Status: done
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/25
 - Parallel: yes
 - Depends on: —
 
@@ -153,6 +153,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - **Still to do (follow-up):** with the flag on, the page timeline's pencil button (`focusTimeline`, which opens beat editing) isn't rendered. Beat editing is reachable only by its shortcut or menu. Add an entry point to the timeline's transport.
   - **Stories:** Storybook isn't configured; the stories run under Vitest (`TimelineStories.test.tsx`).
   - **Follow-up (from P8.8):** a converted page show has only shapeless group moves, so with nothing selected the timeline shows no tracks (UI-3). Add an empty-state hint ("select marchers to see their tracks").
+- Inspector and messages (P8.5, P8.6): the inspector's timeline section is `TimelineInspectorSection` in `apps/desktop/src/components/inspector/` (data from `src/timeline/timelineInspector.ts` and `useTimelineInspections.ts`); timeline error messages are in `apps/desktop/src/timeline/timelineErrorMessages.ts` (`toastTimelineError`). Follow-ups: a friendlier E-ARGS pre-check for deleting a shape that a transition still uses (today it's E-DB with a generic message); a wording pass on E-ARGS texts. No FTL trail overlay on the canvas yet.
 
 ## Progress log
 
@@ -334,4 +335,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** fork PR #24 reviewed by a sub-agent (APPROVE WITH NITS: the shift's statement order keeps every intermediate state valid under the row triggers in both directions, with refusals decided before any write; Create Track reads the rows through the edit's transaction). UI-6 (Create Track's assignments steal one layer above the marchers' existing ones) accepted as consistent with D-6, R-2 and golden vector G2. The worker fixed the nits: UI-6 and the docstring now say a stolen move resumes afterwards with a catch-up; the picked shape clears when the selection becomes a marcher track, a page or nothing, or the track disappears (a range keeps it, since Create Track appears only on a range); Create Track is hidden with a shape picked and no marchers. Squash-merged as b8b63052. P8.9 set to done.
 - **Checks:** at f86164e6 (with the base merged in), in the worker's work tree: tsc (pass); `test:history src/db-functions/__test__/timelineCommands.test.ts` (11 passed); `pnpm --dir apps/desktop run test` (118 files, 1,727 passed).
 - **Next:** P8.2 to P8.6 (shapes, transitions, assignments, inspector, error messages).
+- **Blockers:** none.
+
+### 2026-10-01 · lead session · P8.5, P8.6 (reviewed and merged)
+
+- **Done:** the worker couldn't claim or log through `coord.sh` (the auto-mode classifier refused its edit of the coordination checkout under `.git/`), so the lead records it here. Fork PR #25 reviewed by a sub-agent (APPROVE WITH NITS: flag off renders as before; explain() fields interpreted correctly; all five §8.9 diagnostics explained; every error code incl. combined and commit-time maps to a message; E-DB leaks no SQL). The worker fixed the nits: no "not in the timeline" flash before the first read; the "N more" count excludes unknown marchers; no lowercasing of translated words (whole-sentence keys); diagnostics reuse the store's per-version list. Squash-merged. P8.5 and P8.6 set to done.
+- **Checks:** at ea037470, in the worker's work tree: tsc (pass); `test:focused src/timeline src/components/inspector` (22 files, 289 passed); `pnpm --dir apps/desktop run test` (126 files, 1,840 passed). An earlier run on this branch exited 1 from a flaky Tolgee timer after test teardown (recorded in findings.md); re-runs were clean. Not run (policy): full `test:history`, e2e, `build:electron`; the UI gate item needs a manual app check.
+- **Next:** P8.2 to P8.4 (shapes, transitions, assignments editors); P8.7 (scenarios, human).
 - **Blockers:** none.
