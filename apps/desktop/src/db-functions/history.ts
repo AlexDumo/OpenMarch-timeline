@@ -1182,34 +1182,39 @@ export async function performHistoryAction(
     db: DB | DbConnection,
     options: { currentPageId?: number } = {},
 ): Promise<PerformHistoryActionResponse> {
-    const dbToUse = db;
-    let response: HistoryResponse;
-
-    if (type === "undo") response = await performUndo(dbToUse);
-    else response = await performRedo(dbToUse);
+    // The focus is read in the action's own lock turn, after it commits and delivers its batch, so
+    // a queued undo, redo or edit can't run in between (two quick undo actions would otherwise both read
+    // the state after the second)
+    const { response, timelineFocus } = await withTransactionWithHistoryLock(
+        async () => {
+            const response = await executeHistoryActionUnlocked(db, type);
+            const timelineFocus =
+                response.success && (await timelineModeOn(db))
+                    ? await timelineHistoryFocus(
+                          db,
+                          response.timelineBatch ?? { changes: [] },
+                          {
+                              currentPageId: options.currentPageId,
+                              beatsChanged: response.tableNames.has(
+                                  getTableName(schema.beats),
+                              ),
+                          },
+                      )
+                    : undefined;
+            return { response, timelineFocus };
+        },
+    );
 
     const queriesToInvalidate: string[][] = tableNamesToQueryKeys(
         response.tableNames,
     );
 
-    if (response.success) {
-        // Read under the write lock so no later edit is half seen
-        const timelineFocus = await withTimelineWriteLock(async () =>
-            (await timelineModeOn(db))
-                ? await timelineHistoryFocus(
-                      db,
-                      response.timelineBatch ?? { changes: [] },
-                      options.currentPageId,
-                  )
-                : undefined,
-        );
-        if (timelineFocus)
-            return {
-                pageIdToGoTo: timelineFocus.pageIdToGoTo,
-                marcherIdsToSelect: timelineFocus.marcherIdsToSelect,
-                queriesToInvalidate,
-            };
-    }
+    if (timelineFocus)
+        return {
+            pageIdToGoTo: timelineFocus.pageIdToGoTo,
+            marcherIdsToSelect: timelineFocus.marcherIdsToSelect,
+            queriesToInvalidate,
+        };
 
     const modifiedPageIds: Set<number> = new Set();
     const modifiedMarcherIdsForPage: Record<number, Set<number>> = {};
@@ -1241,9 +1246,10 @@ export async function performHistoryAction(
         modifiedPageIds.size > 0
             ? Math.max(...Array.from(modifiedPageIds))
             : undefined;
-    const marcherIdsToSelect = pageIdToGoTo
-        ? modifiedMarcherIdsForPage[pageIdToGoTo]
-        : undefined;
+    const marcherIdsToSelect =
+        pageIdToGoTo !== undefined
+            ? modifiedMarcherIdsForPage[pageIdToGoTo]
+            : undefined;
 
     return { pageIdToGoTo, marcherIdsToSelect, queriesToInvalidate };
 }

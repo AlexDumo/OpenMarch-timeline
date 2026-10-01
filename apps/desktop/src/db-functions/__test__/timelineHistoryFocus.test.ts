@@ -24,7 +24,7 @@ import {
 import { deletePages } from "../page";
 import { createMarchers } from "../marcher";
 import { moveMarchersOnPage } from "../timelineMoves";
-import { pageForEndBeat } from "../timelineHistoryFocus";
+import { pageForEndBeat, timelineHistoryFocus } from "../timelineHistoryFocus";
 
 /**
  * Undo and redo in timeline mode (docs/timeline/phases/07-page-parity.md P7.13): the page to jump
@@ -241,6 +241,104 @@ describeDbTests("undo and redo in timeline mode", (it) => {
         expect(undo.pageIdToGoTo).toBe(page.id);
         expect(undo.marcherIdsToSelect).toEqual(assigned);
         await expectStoreMatchesColdBuild(db, pages);
+    });
+
+    it("two queued undo actions: each one's focus is read right after it, before the next runs", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const page = pages[3]!;
+        const t = schema.timeline_transitions;
+        // Edit 1 adds a marcher, who gets a slot in every page move
+        const [created] = await createMarchers({
+            db,
+            newMarchers: [
+                { section: "Trumpet", drill_prefix: "N", drill_order: 1 },
+            ],
+            timelineMode: true,
+        });
+        const id = created!.id;
+        // Edit 2 changes page 3's move, which selects everyone in it
+        const transition = (await db.select().from(t).all()).find(
+            (row) => row.end_beat === pageEndBeat(page),
+        )!;
+        await transactionWithHistory(db, "arcPageMove", async (tx) => {
+            await tx
+                .update(t)
+                .set({ path_style: "arc", path_params: '{"bulge":0.2}' })
+                .where(eq(t.id, transition.id))
+                .run();
+        });
+
+        // Queued back to back, as a quick double undo is
+        const [first, second] = await Promise.all([
+            performHistoryAction("undo", db, { currentPageId: pages[0]!.id }),
+            performHistoryAction("undo", db, { currentPageId: pages[0]!.id }),
+        ]);
+        // Read after the first undo only: the new marcher is still in the move. Read after both,
+        // it would be gone.
+        expect(first.pageIdToGoTo).toBe(page.id);
+        expect(first.marcherIdsToSelect?.has(id)).toBe(true);
+        expect(second.marcherIdsToSelect).toEqual(new Set([id]));
+        await expectStoreMatchesColdBuild(db, pages);
+    });
+
+    it("when beats changed too, deleted rows place nothing; rows that still exist decide", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const page = pages[3]!;
+        const [a] = await marcherIds(db);
+        const t = (
+            await db.select().from(schema.timeline_transitions).all()
+        ).find((row) => row.end_beat === pageEndBeat(page))!;
+        const gone = {
+            id: 999,
+            marcher: a!,
+            transition: 998,
+            slot: 0,
+            start: 1,
+            end: pageEndBeat(pages[5]!),
+            layer: 1,
+        };
+        const batch = {
+            changes: [
+                // A deleted assignment: its beats are on the old grid
+                {
+                    table: "assignments" as const,
+                    rowId: gone.id,
+                    before: gone,
+                    after: null,
+                },
+                // A destination that still exists, in page 3's move
+                {
+                    table: "slot_destinations" as const,
+                    rowId: t.id,
+                    before: { transition: t.id, slot: 0, x: 0, y: 0 },
+                    after: { transition: t.id, slot: 0, x: 1, y: 1 },
+                },
+            ],
+        };
+        const slot0 = (
+            await db.select().from(schema.timeline_assignments).all()
+        ).find((r) => r.transition_id === t.id && r.slot_index === 0)!;
+
+        const withoutBeats = await timelineHistoryFocus(db, batch);
+        expect([...withoutBeats.marcherIdsByPageId.keys()]).toEqual([
+            page.id,
+            pages[5]!.id,
+        ]);
+
+        const withBeats = await timelineHistoryFocus(db, batch, {
+            beatsChanged: true,
+        });
+        expect([...withBeats.marcherIdsByPageId.keys()]).toEqual([page.id]);
+        expect(withBeats.pageIdToGoTo).toBe(page.id);
+        expect(withBeats.marcherIdsToSelect).toEqual(
+            new Set([slot0.marcher_id]),
+        );
     });
 
     it("a page delete (ripple): undo goes to the earliest changed page, redo to the page before it", async ({

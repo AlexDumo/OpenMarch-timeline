@@ -20,7 +20,9 @@ import {
  *   assignment or slot destination belongs to the page its move ends on: the page whose beats
  *   `(start, end]` hold the row's end beat, which is the page "move a marcher on page N" edits
  *   (D-16). A shape belongs to the pages of the transitions that end on it. Rows are read as they
- *   are after the action: the row image after it, or the one before it for a deleted row.
+ *   are after the action: the row image after it, or the one before it for a deleted row. When
+ *   the action also changed `beats`, a deleted row's beats belong to the old beat grid and can't be
+ *   placed on the new one, so deleted rows place nothing; rows that still exist decide.
  * - **Marchers of a change:** the marcher whose home changed; the assignment's marcher; for a slot
  *   destination, the marcher in that slot; for a transition (or a shape), every marcher with an
  *   assignment in it, unless the batch also changes that transition's assignments or destinations,
@@ -54,9 +56,12 @@ const num = (image: RowImage | null, key: string): number | undefined => {
     return typeof value === "number" ? value : undefined;
 };
 
-/** The row as it is after the action: its image after it, or before it if it was deleted. */
-const current = (change: Change): RowImage | null =>
-    change.after ?? change.before;
+/**
+ * The row as it is after the action: its image after it, or before it if it was deleted. With
+ * `beatsChanged`, a deleted row's image is not used: its beats are on the old grid.
+ */
+const current = (change: Change, beatsChanged: boolean): RowImage | null =>
+    change.after ?? (beatsChanged ? null : change.before);
 
 /** The page whose beats `(start, end]` hold `endBeat`; the last page past the show's end. */
 export const pageForEndBeat = (
@@ -70,6 +75,8 @@ export const pageForEndBeat = (
 
 /** What the batch itself says, so rows the action deleted still count. */
 interface BatchScan {
+    /** The action changed `beats`, so deleted rows' beats can't be placed */
+    beatsChanged: boolean;
     /** End beat per transition: from the batch, then overwritten by the live rows */
     transitionEnd: Map<number, number>;
     /** Assignment images before and after the action */
@@ -81,8 +88,9 @@ interface BatchScan {
     transitionsWithSlotChanges: Set<number>;
 }
 
-const scanBatch = (batch: ChangeBatch): BatchScan => {
+const scanBatch = (batch: ChangeBatch, beatsChanged: boolean): BatchScan => {
     const scan: BatchScan = {
+        beatsChanged,
         transitionEnd: new Map(),
         assignments: [],
         shapeIds: new Set(),
@@ -90,7 +98,7 @@ const scanBatch = (batch: ChangeBatch): BatchScan => {
         transitionsWithSlotChanges: new Set(),
     };
     for (const change of batch.changes) {
-        const image = current(change);
+        const image = current(change, scan.beatsChanged);
         if (change.table === "transitions") {
             const end = num(image, "end");
             if (end !== undefined) scan.transitionEnd.set(change.rowId, end);
@@ -188,7 +196,7 @@ const changedPages = (
     };
 
     for (const change of batch.changes) {
-        const image = current(change);
+        const image = current(change, scan.beatsChanged);
         switch (change.table) {
             case "marchers":
                 add(pages[0], [change.rowId]);
@@ -233,19 +241,23 @@ const changedPages = (
  * Reads the page grid and the timeline rows as they are now; call it after the action commits,
  * under `withTimelineWriteLock` so no other edit runs in between.
  *
- * @param currentPageId the page the user is on, kept when the action changed it
+ * @param options.currentPageId the page the user is on, kept when the action changed it
+ * @param options.beatsChanged the action changed `beats`, so deleted rows are not placed
  */
 export async function timelineHistoryFocus(
     db: DbConnection | DB | DbTransaction,
     batch: ChangeBatch,
-    currentPageId?: number,
+    {
+        currentPageId,
+        beatsChanged = false,
+    }: { currentPageId?: number; beatsChanged?: boolean } = {},
 ): Promise<TimelineHistoryFocus> {
     if (batch.changes.length === 0) return NO_FOCUS();
     const reader = db as DbTransaction;
     const { pages } = await readPageGrid(reader);
     if (pages.length === 0) return NO_FOCUS();
 
-    const scan = scanBatch(batch);
+    const scan = scanBatch(batch, beatsChanged);
     const live = await readLiveRows(reader, scan);
     const byPage = changedPages(batch, pages, scan, live);
     // A shape-only change (to a shape no transition uses) has no page
