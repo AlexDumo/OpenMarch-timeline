@@ -13,21 +13,9 @@ import {
     TimelineMetronomeButton,
     TimelineMuteButton,
 } from "./TimelineControls";
-import {
-    Timeline,
-    type TimelineCreateTrackRequest,
-    type TimelineSelection,
-} from "./Timeline";
-import type { TimelineRangeChange } from "./TimelineViewModel";
+import { Timeline, type TimelineSelection } from "./Timeline";
+import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
-
-// TODO(P8.9): move the whole spec timeline through the write path (ui.md: TimelineRangeChange).
-// The change arrives in spec beats; its track's `linkId` is the spec timeline.
-const commitTimelineRange = (_change: TimelineRangeChange) => {};
-
-// TODO(P8.9): create a timeline, transition and assignments in one edit, and pass the selected
-// marcher or shape as `selectedTarget` so Create Track appears.
-const createTrack = (_request: TimelineCreateTrackRequest) => {};
 
 /** The page timeline's fullscreen toggle, for the timeline's transport */
 function FullscreenButton() {
@@ -74,8 +62,14 @@ export default function TimelineModePanel() {
         enabled: useTimelineMode(),
         selectedMarcherIds,
     });
+    const commands = useTimelineCommands({
+        database: db,
+        timelines,
+        selectedMarcherIds,
+    });
     const changeSelection = (next: TimelineSelection) => {
         setSelection(next);
+        commands.noteSelection(next);
         // Clicking a page in the ruler also seeks to its first beat, which `pageForSeek` reads as
         // the end of the page before it. Select the clicked page itself.
         if (next?.kind === "page" && !isPlaying)
@@ -100,10 +94,10 @@ export default function TimelineModePanel() {
                 </>
             }
             selection={selection}
-            selectedTarget={null}
+            selectedTarget={commands.selectedTarget}
             onSelectionChange={changeSelection}
-            onTimelineRangeCommit={commitTimelineRange}
-            onCreateTrack={createTrack}
+            onTimelineRangeCommit={commands.commitTimelineRange}
+            onCreateTrack={commands.createTrack}
         />
     );
 }
