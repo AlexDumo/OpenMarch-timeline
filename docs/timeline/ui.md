@@ -255,8 +255,28 @@ selected or not.
 Each change is one undoable edit through `createTimelineShape`,
 `updateTimelineShape` or `deleteTimelineShape`, a change that writes nothing
 is skipped, and the controls wait for shapes read at a newer store version
-after an edit (P8.4's guard). Drawing and dragging shapes on the canvas goes
-with the page-era shape tools (P7.11).
+after an edit (P8.4's guard).
+
+**Shapes on the canvas (P7.11).** The shape picked in the editor is drawn on
+the field: its outline, a block's cells, and handles. Round handles reshape
+it: a line's or freehand path's points, a circle's rim (its radius and start
+angle), a box's origin and far corner (the other corner stays put), and a
+block's last cell (its spacing). The square handle moves the whole shape (a
+circle's center, a block's origin). A drag redraws the shape on every mouse
+move and writes nothing; letting go commits one geometry edit through the
+editor, with the same guard, refusals and undo as a typed change. Until that
+edit settles the shape stays as dragged and takes no drags; then it is drawn
+from the editor's rows, so a refused drag snaps back. Nothing is drawn in
+page mode, before the resolver is ready, or while playing.
+
+Page mode's own shape tools stay page mode's. In timeline mode page shapes
+(`shape_pages`) aren't drawn or read, and their writers (create, edit, delete,
+copy to another page) refuse with a message, because they write page
+positions the timeline doesn't use. The line tool's **Create Shape** is
+disabled with the reason; **Apply coordinates** still moves the marchers
+onto the line (P7.2). There are no shape locks: moving a marcher whose slot
+is in a shape-backed transition switches that transition to individual
+points (P7.2).
 
 ## Porting notes
 

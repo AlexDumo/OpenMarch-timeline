@@ -13,6 +13,8 @@ import {
     toTimelineMoves,
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { TimelineWriteError } from "@/db-functions/timelineErrors";
+import { PAGE_SHAPES_TIMELINE_MESSAGE } from "@/db-functions/shapePages";
 import {
     setMarchersToNeighborPage,
     type NeighborPageDirection,
@@ -1213,6 +1215,17 @@ function RegisteredActionsHandler() {
                     break;
                 }
                 case RegisteredActionsEnum.createMarcherShape: {
+                    if (timelineMode) {
+                        // Page shapes write shape pages and marcher_pages (P7.11). The line's
+                        // positions can still be applied, so the alignment stays open.
+                        toastTimelineError(
+                            new TimelineWriteError(
+                                "E-ARGS",
+                                PAGE_SHAPES_TIMELINE_MESSAGE,
+                            ),
+                        );
+                        break;
+                    }
                     const firstMarcherPage = alignmentEventNewMarcherPages[0];
                     const lastMarcherPage =
                         alignmentEventNewMarcherPages[

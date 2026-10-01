@@ -4,6 +4,7 @@ import Endpoint from "./Endpoint";
 import Pathway, { DEFAULT_PATHWAY_STROKE_WIDTH } from "./Pathway";
 import Midpoint from "./Midpoint";
 import TimelinePathway from "./TimelinePathway";
+import type TimelineShapeOverlay from "./TimelineShapeOverlay";
 import { FieldProperties } from "@openmarch/core";
 import CanvasListeners from "../../../components/canvas/listeners/CanvasListeners";
 import Marcher from "@/global/classes/Marcher";
@@ -129,6 +130,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     lastPosX = 0;
     lastPosY = 0;
     marcherShapes: MarcherShape[] = [];
+    /** Timeline mode's picked spec shape, while one is drawn (P7.11, `useTimelineShapeCanvas`) */
+    timelineShapeOverlay: TimelineShapeOverlay | null = null;
     /**
      * The reference to the grid (the lines on the field) object to use for caching
      * This is needed to disable object caching while zooming, which greatly improves responsiveness.
@@ -1088,6 +1091,7 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                 controlPoint.bringToFront();
             });
         }
+        this.timelineShapeOverlay?.bringToFront();
     }
 
     renderMarcherShapes = async ({
@@ -1187,6 +1191,10 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                     ...(pageId !== undefined ? { page_id: pageId } : {}),
                     x,
                     y,
+                    // Timeline mode has no shape locks (P7.11): a page-era lock from an earlier
+                    // marcher_pages render must not stop a drag that P7.2 can write
+                    isLocked: false,
+                    lockedReason: "",
                 });
             },
         );

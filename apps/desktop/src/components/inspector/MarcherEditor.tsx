@@ -447,10 +447,16 @@ function MarcherEditor() {
         selectedMarchers.length === 1 ? selectedMarchers[0].id : -1,
         selectedPage ? pageEndBeat(selectedPage) : 0,
     );
+    // Timeline mode has no shape locks (P7.11): moving a marcher whose slot is in a shape-backed
+    // transition switches that transition to individual points (P7.2), and shape pages are
+    // frozen page-era rows. So the shape page marchers aren't read there.
     const { data: spmsForThisPage } = useQuery(
-        shapePageMarchersQueryByPageIdOptions(selectedPage?.id ?? null),
+        shapePageMarchersQueryByPageIdOptions(
+            timelineMode ? null : (selectedPage?.id ?? null),
+        ),
     );
     const editingDisabled = useMemo(() => {
+        if (timelineMode) return false;
         return (
             !marcherPagesLoaded ||
             Object.values(marcherPages).some(
@@ -459,7 +465,7 @@ function MarcherEditor() {
                     selectedMarcherIds.has(marcherPage.marcher_id),
             )
         );
-    }, [marcherPagesLoaded, marcherPages, selectedMarcherIds]);
+    }, [timelineMode, marcherPagesLoaded, marcherPages, selectedMarcherIds]);
 
     const coordsFormRef = useRef<HTMLFormElement>(null);
     const xInputRef = useRef<HTMLInputElement>(null);
@@ -481,6 +487,8 @@ function MarcherEditor() {
     };
 
     const createLineIsVisible = useCallback(() => {
+        // No shape locks in timeline mode (P7.11); the line tool applies positions (P7.2)
+        if (timelineMode) return true;
         if (!spmsForThisPage) return false;
         const marcherIdsWithShapes = new Set<number>(
             spmsForThisPage.map((spm) => spm.marcher_id),
@@ -492,7 +500,7 @@ function MarcherEditor() {
         return !selectedMarcherIds.some((marcherId) =>
             marcherIdsWithShapes.has(marcherId),
         );
-    }, [selectedMarchers, spmsForThisPage]);
+    }, [timelineMode, selectedMarchers, spmsForThisPage]);
 
     const rCoords = useMemo(() => {
         if (selectedMarchers.length !== 1 || !marcherPagesLoaded)

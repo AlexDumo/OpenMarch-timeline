@@ -13,6 +13,8 @@ import {
 } from "@/db-functions";
 import { schema } from "@/global/database/db";
 import { assert } from "@/utilities/utils";
+import { refuse } from "./timelineErrors";
+import { timelineModeInTransaction } from "./timelineRipple";
 
 type MarcherCoordinates = {
     marcher_id: number;
@@ -153,6 +155,20 @@ export async function _updateChildMarcherPages({
     });
 }
 
+/** Why page shapes can't be edited in timeline mode, as the refusal says it (P7.11). */
+export const PAGE_SHAPES_TIMELINE_MESSAGE =
+    "Page shapes can't be changed in timeline mode, because they would write page positions the timeline doesn't use. Draw and edit shapes in the Shapes part of the inspector's Timeline section instead.";
+
+/**
+ * Refuses (`E-ARGS`) a page-era shape edit when the file's timeline flag is on (P7.11), before
+ * anything is written. Shape pages, their marchers and the `marcher_pages` rows they move are
+ * frozen page-era data in timeline mode; the timeline's own shapes are `timeline_shapes`.
+ */
+async function refusePageShapesInTimelineMode(tx: DbTransaction) {
+    if (await timelineModeInTransaction(tx))
+        refuse(PAGE_SHAPES_TIMELINE_MESSAGE);
+}
+
 /**
  * Creates new shape pages in the database.
  */
@@ -172,6 +188,7 @@ export async function createShapePages({
         db,
         "createShapePages",
         async (tx) => {
+            await refusePageShapesInTimelineMode(tx);
             return await createShapePagesInTransaction({
                 newItems,
                 tx,
@@ -255,6 +272,7 @@ export async function updateShapePages({
         db,
         "updateShapePages",
         async (tx) => {
+            await refusePageShapesInTimelineMode(tx);
             return await updateShapePagesInTransaction({
                 modifiedItems,
                 tx,
@@ -335,6 +353,7 @@ export async function deleteShapePages({
         db,
         "deleteShapePages",
         async (tx) => {
+            await refusePageShapesInTimelineMode(tx);
             return await deleteShapePagesInTransaction({
                 itemIds,
                 tx,
@@ -387,6 +406,7 @@ export async function copyShapePageToPage({
         db,
         "copyShapePageToPage",
         async (tx) => {
+            await refusePageShapesInTimelineMode(tx);
             return await copyShapePageToPageInTransaction({
                 shapePageId,
                 targetPageId,

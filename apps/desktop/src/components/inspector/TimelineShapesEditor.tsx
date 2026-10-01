@@ -43,6 +43,7 @@ import {
     TimelineNotReadyError,
 } from "@/timeline/timelineCoordinateWrites";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import { useTimelineShapeCanvasStore } from "@/timeline/timelineShapeCanvas";
 import { Field, Help, NumberField } from "./TimelineTransitionEditor";
 import type { TimelineInspectorStringKey } from "./timelineInspectorStrings";
 
@@ -739,6 +740,26 @@ export function TimelineShapesEditor({
         },
         [run, target, frame],
     );
+    // The canvas draws the picked shape with handles; a drag commits through `edit` (P7.11)
+    const publish = useTimelineShapeCanvasStore((s) => s.set);
+    useEffect(() => {
+        publish({
+            target,
+            pending,
+            commit: target
+                ? (shape: ShapeRow) => {
+                      // Drawn from an older kind: plan nothing rather than a geometry it can't take
+                      if (shape.kind !== target.shape.kind) return;
+                      edit({ kind: "geometry", geometry: shape.geometry });
+                  }
+                : null,
+        });
+    }, [publish, target, pending, edit]);
+    useEffect(
+        () => () => publish({ target: null, pending: false, commit: null }),
+        [publish],
+    );
+
     const create = () =>
         void run(async () =>
             planNewShape(
@@ -810,6 +831,11 @@ export function TimelineShapesEditor({
                         ))}
                     </SelectContent>
                 </Select>
+            )}
+            {target && (
+                <Help testId="timeline-shape-canvas-help">
+                    {t("inspector.timeline.shapes.canvasHelp")}
+                </Help>
             )}
             {target && (
                 <ShapeEditor

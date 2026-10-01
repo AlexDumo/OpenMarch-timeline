@@ -35,6 +35,7 @@ import { ShapePath } from "@/global/classes/canvasObjects/ShapePath";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
+import { useTimelineShapeCanvas } from "@/timeline/useTimelineShapeCanvas";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { canvasCoordinateWriter } from "@/timeline/timelineCoordinateWrites";
 
@@ -121,7 +122,6 @@ export default function Canvas({
     useSelectionListeners({ canvas });
     useMovementListeners({ canvas });
     useAnimation({ canvas });
-    useRenderMarcherShapes({ canvas, selectedPage, isPlaying });
 
     // Function to center and fit the canvas to the container
     const centerAndFitCanvas = useCallback(() => {
@@ -631,6 +631,11 @@ export default function Canvas({
         enabled: timelineMode,
         redrawKey: marcherVisuals,
     });
+
+    // Page mode draws the selected page's page-era shapes; timeline mode draws none (P7.11)
+    useRenderMarcherShapes({ canvas, selectedPage, isPlaying, timelineMode });
+    // Timeline mode (P7.11): the spec shape picked in the inspector, with handles to drag
+    useTimelineShapeCanvas({ canvas, enabled: drawFromResolver, isPlaying });
 
     // Timeline mode (P7.10): paths, midpoints, endpoints and step-size warnings from the resolver
     // between page end beats, in place of the marcher_pages paths above

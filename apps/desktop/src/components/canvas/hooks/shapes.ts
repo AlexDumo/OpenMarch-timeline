@@ -7,26 +7,42 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
+/**
+ * Draws the selected page's page-era shapes (`MarcherShape`s from `shape_pages`).
+ *
+ * In timeline mode (P7.11) it draws none and reads none: shape pages are frozen page-era rows
+ * that no longer say where marchers are, and their edits would write `marcher_pages`. Any shapes
+ * drawn before the flag turned on are removed. Timeline mode draws the spec shape picked in the
+ * inspector instead (`useTimelineShapeCanvas`).
+ */
 export const useRenderMarcherShapes = ({
     canvas,
     selectedPage,
     isPlaying,
+    timelineMode = false,
 }: {
     canvas: OpenMarchCanvas | null;
     selectedPage: Page | null;
     isPlaying: boolean;
+    timelineMode?: boolean;
 }) => {
+    const pageId = timelineMode ? null : (selectedPage?.id ?? null);
     const { data: shapePagesOnSelectedPage } = useQuery(
-        shapePagesQueryByPageIdOptions(selectedPage?.id ?? null),
+        shapePagesQueryByPageIdOptions(pageId),
     );
     const { data: shapePageMarchersOnSelectedPage } = useQuery(
-        shapePageMarchersQueryByPageIdOptions(selectedPage?.id ?? null),
+        shapePageMarchersQueryByPageIdOptions(pageId),
     );
+
+    useEffect(() => {
+        if (canvas && timelineMode && canvas.marcherShapes.length > 0)
+            void canvas.renderMarcherShapes({ shapePages: [] });
+    }, [canvas, timelineMode]);
 
     // Update/render the MarcherShapes when the selected page or the ShapePages change
     // and the animation is not playing.
     useEffect(() => {
-        if (canvas && shapePagesOnSelectedPage && !isPlaying) {
+        if (canvas && !timelineMode && shapePagesOnSelectedPage && !isPlaying) {
             void canvas.renderMarcherShapes({
                 shapePages: shapePagesOnSelectedPage,
             });
@@ -35,6 +51,7 @@ export const useRenderMarcherShapes = ({
         canvas,
         selectedPage,
         isPlaying,
+        timelineMode,
         shapePagesOnSelectedPage,
         shapePageMarchersOnSelectedPage,
     ]);

@@ -23,6 +23,7 @@ import {
     buildShapeEditTargets,
     type ShapeFrame,
 } from "@/timeline/timelineShapeEditor";
+import { useTimelineShapeCanvasStore } from "@/timeline/timelineShapeCanvas";
 import { TIMELINE_INSPECTOR_STRINGS } from "../timelineInspectorStrings";
 import { TimelineShapesEditor } from "../TimelineShapesEditor";
 
@@ -558,5 +559,83 @@ describe("stale plans", () => {
                 geometry: { origin: [1, 2], width: 10, height: 6 },
             },
         });
+    });
+});
+
+describe("the canvas link (P7.11)", () => {
+    const canvasState = () => useTimelineShapeCanvasStore.getState();
+    const dragTo = async (shape: ShapeRow) => {
+        await act(async () => {
+            canvasState().commit!(shape);
+        });
+    };
+    const moved: ShapeRow = {
+        kind: "box",
+        geometry: { origin: [3, 4], width: 8, height: 4 },
+    };
+
+    it("publishes the picked shape, and nothing before a pick or after unmount", async () => {
+        const { unmount } = show();
+        expect(canvasState().target).toBeNull();
+        expect(canvasState().commit).toBeNull();
+        await editShape("Shape 3 (Box)");
+        expect(canvasState().target?.id).toBe(3);
+        expect(canvasState().target?.shape).toEqual(BOX);
+        expect(canvasState().pending).toBe(false);
+        expect(screen.getByTestId("timeline-shape-canvas-help")).toBeTruthy();
+        unmount();
+        expect(canvasState().target).toBeNull();
+        expect(canvasState().commit).toBeNull();
+    });
+
+    it("a drag commits one geometry edit, then waits for a newer version like a typed one", async () => {
+        const { rerender } = show();
+        await editShape("Shape 3 (Box)");
+        await dragTo(moved);
+        expect(mocks.update).toHaveBeenCalledTimes(1);
+        expect(mocks.update).toHaveBeenCalledWith({
+            db,
+            modified: { id: 3, geometry: moved.geometry },
+        });
+        expect(canvasState().pending).toBe(true);
+        // A second drag before the edit's rows arrive plans nothing
+        await dragTo({
+            kind: "box",
+            geometry: { origin: [5, 5], width: 8, height: 4 },
+        });
+        expect(mocks.update).toHaveBeenCalledTimes(1);
+        rerender(editor({ version: 2, shapes: { ...SHAPES, 3: moved } }));
+        expect(canvasState().pending).toBe(false);
+        expect(canvasState().target?.shape).toEqual(moved);
+    });
+
+    it("a drag that ends where it started writes nothing", async () => {
+        show();
+        await editShape("Shape 3 (Box)");
+        await dragTo(BOX);
+        expect(mocks.update).not.toHaveBeenCalled();
+        expect(canvasState().pending).toBe(false);
+    });
+
+    it("a drag of a shape drawn as another kind writes nothing", async () => {
+        show();
+        await editShape("Shape 3 (Box)");
+        await dragTo(LINE);
+        expect(mocks.update).not.toHaveBeenCalled();
+    });
+
+    it("a refused drag is toasted and the shape can be dragged again", async () => {
+        const refusal = new TimelineWriteError("E-S1", "box geometry");
+        mocks.update.mockRejectedValueOnce(refusal);
+        show();
+        await editShape("Shape 3 (Box)");
+        await dragTo({
+            kind: "box",
+            geometry: { origin: [1, 2], width: -8, height: 4 },
+        });
+        expect(mocks.toast).toHaveBeenCalledWith(refusal);
+        expect(canvasState().pending).toBe(false);
+        await dragTo(moved);
+        expect(mocks.update).toHaveBeenCalledTimes(2);
     });
 });
