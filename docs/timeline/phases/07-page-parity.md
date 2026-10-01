@@ -130,7 +130,7 @@ Path, midpoint and endpoint drawing, step-size warnings, the inspector's step si
 ### P7.11: Shapes and shape pages in timeline mode
 
 - Owner: timeline-worker (timeline/p7-shapes)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/36
 - Parallel: yes
 - Depends on: P7.1
@@ -167,6 +167,26 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 
 `marcher_pages` carries appearance overrides, rotation and notes with no timeline home, and the converter copies only x and y. First log a blocker asking a person to choose: drop them, keep them in the frozen page-era table, or add timeline fields (a schema and file format decision). Then P7.8 and P7.12 can finish their appearance work.
 
+### P7.16: Per-page appearance on the canvas and previous-show import
+
+- Owner: unassigned
+- Status: open
+- PR: none
+- Parallel: yes
+- Depends on: P7.14
+
+Two inventory items are still open. (1) In timeline mode the canvas still applies `marcher_pages` per-page appearance overrides (`MarcherPage.ts`, `useMarcherAppearances.ts` ~98 to 190), while the mobile and video exports drop them per P7.14. Drop them on the canvas in timeline mode too, so every surface agrees. Page mode is unchanged. (2) `previous-dots-import-service.ts` ~85 to 114 reads the source file's last-page `marcher_pages`, which are frozen and stale when the source is a converted show. Read positions from the source's timeline (resolver at the last page's end beat, or homes) when the source has timeline tables, and keep the old read otherwise.
+
+### P7.17: Existing feature tests in timeline mode
+
+- Owner: unassigned
+- Status: open
+- PR: none
+- Parallel: yes
+- Depends on: P7.2–P7.16
+
+For the exit-gate item "each feature's existing tests pass in timeline mode". Add a way to run the desktop suite with timeline mode on in the test fixtures (for example an env var the fixture setup reads), run it, and triage every failure: a real timeline-mode bug (fix it, or file it as a package), or a test that asserts page-mode internals (`marcher_pages` rows) and needs a timeline-mode variant or an explicit skip with a reason. Record the run command and its result in the log. Don't change the default (flag off) run.
+
 ### P7.15: Refresh views on edits outside the change log
 
 - Owner: timeline-worker (timeline/p7-15-refresh-views)
@@ -183,7 +203,7 @@ Tick an item only after running its check, and paste the command and result into
 
 - [x] Every item in the P7.1 inventory is checked off (handoff notes, grouped by P7.2 to P7.14) (dropped: never implemented, owner decision 2026-09-30)
 - [ ] Each feature's existing tests pass in timeline mode
-- [ ] `test:history` passes for every ripple procedure
+- [x] `test:history` passes for every ripple procedure (lead, 2026-10-01, at d1ffcafd: 7 files, 279 tests; see log)
 - [ ] Manual pass over editing, playback and export on a converted real show (human)
 
 ## Handoff notes
@@ -338,7 +358,7 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.14 (new) Per-marcher-per-page appearance, rotation and notes (decision first)
 
-- [ ] `electron/database/migrations/schema.ts` ~185 to 226 (`marcher_pages` columns: appearance columns, `rotation_degrees`, `notes`, path columns) · data with no timeline home · the converter copies only x and y · decision needed: drop, keep in the frozen page-era table, or add timeline fields. Record it as a blocker for a person before building anything
+- [x] `electron/database/migrations/schema.ts` ~185 to 226 (`marcher_pages` columns: appearance columns, `rotation_degrees`, `notes`, path columns) · data with no timeline home · the converter copies only x and y · decision needed: drop, keep in the frozen page-era table, or add timeline fields. Record it as a blocker for a person before building anything · decided in P7.14: dropped, never implemented (owner, 2026-09-30)
 - [ ] `src/global/classes/MarcherPage.ts` ~1 to 40 and `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 · R · the per-page appearance override sits first in the appearance stack · see P7.8
 - [x] `src/components/mobile/utilities/dots-to-om.ts` ~184 to 200 (`rotation_degrees` exported per coordinate) · R · see P7.12 (P7.12: left out in timeline mode, dropped per the P7.14 decision; page mode unchanged)
 
@@ -1174,4 +1194,36 @@ Facts that change how to read the PR #14 note above:
   - By policy: the full `test:history` suite, e2e and `build:electron`.
   - No manual run in the app.
 - **Next:** the lead re-reviews PR #36.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.11, exit gate
+
+- **Done:** reviewed PR #36 and squash-merged it at head 6cb70b5e.
+  - The review found two significant issues, both fixed:
+    - the first press on a shape handle deselected the marchers instead of dragging (handles are now transparent to selection);
+    - skipped commits left unsaved geometry on the canvas (it now snaps back, with a toast when busy).
+  - Also fixed:
+    - a click threshold and Escape-to-cancel for drags;
+    - stacked handles;
+    - the race when switching modes;
+    - restored hook order;
+    - the theme;
+    - the picker is locked while an edit is pending;
+    - all remaining page-shape writers are gated.
+- **Checks:**
+  - Lead, on 6cb70b5e:
+    - `tsc --noEmit`: pass.
+    - Focused `test:history src/db-functions/__test__/`: 29 files, 651 tests passed.
+    - `pnpm --dir apps/desktop run test`: 156 files, 2,242 tests passed, no errors.
+  - Exit-gate ripple check, on `timeline-try-2` at d1ffcafd:
+    - Command: `pnpm run test:history` on `timelineRipple`, `beat`, `page`, `measures`, `utility`, `timelineRangeEdit` and `timelineDisplay` tests, plus `src/components/timeline/audio`.
+    - Result: 7 files, 279 tests passed.
+    - The exit-gate item is ticked.
+  - Skipped by policy: full `test:history` and e2e.
+- **Next:**
+  - P7.11 was the last original package.
+  - Added P7.16 (per-page appearance on the canvas, previous-show import) for the two open inventory items.
+  - Added P7.17 (existing feature tests in timeline mode) for the remaining automated exit-gate item.
+  - The `schema.ts` inventory item is ticked per the P7.14 decision.
+  - The manual pass on a converted real show is a human item.
 - **Blockers:** none.
