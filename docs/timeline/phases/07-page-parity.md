@@ -924,3 +924,10 @@ Facts that change how to read the PR #14 note above:
   - **Mid-page motion in the mobile payload:** the payload carries only page-end positions, so shape paths and moves ending mid-page reach the mobile app as straight page-to-page moves. Carrying them would change the mobile format.
   - **Coordinate order:** coordinates are page-major in timeline mode. The mobile reader must look them up by (marcherId, pageId).
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-15-refresh-views) · P7.15 merge with P8.4
+
+- **Done:** merged `timeline-try-2` (P8.4, P7.12) into PR #32 with a normal merge commit. One conflict, in the imports of `useTimelineInspections.ts`; both kept. The assignment target's `version` is now the resolver version plus the display version, so the P8.4 editor's stale-plan guard re-enables after a display-only edit and can't hang; the transition editor's guard is per target object and already rebuilds. The combined `useTimelineViewVersions` hook and one load per write are kept.
+- **Checks:** `tsc --noEmit`: clean. `test:history` on timelineDisplay, timelineHistoryFocus, history, timelineAssignmentEdits: 88 passed. `vitest run` on `src/components/inspector` and `useTimelineInspections`: 76 passed. `pnpm --dir apps/desktop run test`: 139 files, 2037 tests passed. Skipped per policy: full `test:history`, e2e.
+- **Next:** re-review and merge.
+- **Blockers:** none.
