@@ -60,7 +60,7 @@ Marcher add and delete: the home position, plus a vacant or filled slot in each 
 ### P7.4: Page ripple procedures
 
 - Owner: timeline-worker (timeline/p7-ripple)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/26
 - Parallel: yes
 - Depends on: P7.1
@@ -70,7 +70,7 @@ Page insert, delete and resize as **ripple procedures** in app code, ordered so 
 ### P7.5: Beat ripple procedures
 
 - Owner: timeline-worker (timeline/p7-ripple)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/26
 - Parallel: yes
 - Depends on: P7.4
@@ -554,4 +554,15 @@ Facts that change how to read the PR #14 note above:
   - eslint, prettier --check and cspell on the changed files: clean.
   - Skipped by policy: the full `test:history`, Playwright and `build:electron`.
 - **Next:** the lead re-reviews and merges PR #26.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.4, P7.5
+
+- **Done:** re-checked PR #26 at e3ddff2c and squash-merged it as 549451b2.
+- **Checks:**
+  - `tsc --noEmit` in `apps/desktop`: pass.
+  - Focused `test:history` (`src/db-functions/__test__/`, `electron/database`, `src/components/timeline/audio`): 33 files passed; 756 tests passed.
+  - `pnpm --dir apps/desktop run test`: 127 files passed and 1,864 tests passed, with 1 unhandled error. That error is the known Tolgee timer (`window is not defined` in `TimelineInspectorSection.test.tsx`), recorded in `findings.md`, and doesn't come from this PR.
+  - Skipped by policy: the full `test:history` and e2e.
+- **Next:** P7.6, P7.10–P7.13; P7.7 needs the PDF IPC decision.
 - **Blockers:** none.
