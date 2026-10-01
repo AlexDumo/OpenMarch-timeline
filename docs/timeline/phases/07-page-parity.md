@@ -190,7 +190,7 @@ For the exit-gate item "each feature's existing tests pass in timeline mode". Ad
 ### P7.18: Feature tests that reach the timeline path
 
 - Owner: timeline-worker (timeline/p7-timeline-path-tests)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/39
 - Parallel: no
 - Depends on: P7.17
@@ -222,7 +222,7 @@ Edits to `timelines` rows alone (name, range) and shape renames produce an empty
 Tick an item only after running its check, and paste the command and result into the log.
 
 - [x] Every item in the P7.1 inventory is checked off (handoff notes, grouped by P7.2 to P7.14) (dropped: never implemented, owner decision 2026-09-30)
-- [ ] Each feature's existing tests pass in timeline mode
+- [x] Each feature's existing tests pass in timeline mode (lead, 2026-10-01, on 9aeb2217 after P7.17 and P7.18; see log)
 - [x] `test:history` passes for every ripple procedure (lead, 2026-10-01, at d1ffcafd: 7 files, 279 tests; see log)
 - [ ] Manual pass over editing, playback and export on a converted real show (human)
 
@@ -1514,4 +1514,26 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: the full `test:history` suite, e2e and `build:electron`.
 - **Exit gate:** I didn't tick it. Per the review it can be ticked when PR #39 merges.
 - **Next:** the lead merges PR #39.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.18, exit gate
+
+- **Done:** reviewed PR #39 and squash-merged it at head 9aeb2217.
+  - The review found no product defects.
+  - The author added fixes that make the tests stronger:
+    - **Stale reads:** before each action, `marcher_pages` is shifted off the resolver's positions. A mutation that reads stale positions now fails the nudge, align and swap tests.
+    - **No spill:** assertions check that nothing changes on the neighboring pages or for unselected marchers.
+    - **New coverage:** tests for set to next page and set all.
+    - **Harness check:** the harness asserts that the file's flag matches the run mode.
+  - The reviewer spot-checked coverage, and the timeline branches that had 0 hits are now hit.
+- **Checks (lead, on 9aeb2217):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history src/db-functions/__test__/`: 29 files, 651 tests passed.
+  - `pnpm --dir apps/desktop run test`: 161 files, 2,274 tests passed.
+  - `pnpm --dir apps/desktop run test:timeline`: 161 files, 2,230 tests passed, 58 skipped, 0 failed.
+  - Skipped by policy: the full `test:history` suite and e2e.
+- **Exit gate:**
+  - Ticked "each feature's existing tests pass in timeline mode".
+  - Still open: the human manual pass on a converted real show.
+- **P7.19** (page-mode undo focus) is open, waiting on an owner decision. Options: fix it here, send it upstream separately, or leave it.
 - **Blockers:** none.
