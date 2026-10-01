@@ -275,9 +275,9 @@ Facts that change how to read the PR #14 note above:
 #### P7.7 Coordinate sheets, drill charts and PDF
 
 - [x] `src/components/exporting/ExportCoordinatesModal.tsx` ~110 to 450 (coordinate sheet export; reads all marcher pages at ~122, builds rows at ~240 to 323, calls the PDF export at ~357) · R · not handled · sample the resolver at each page's end beat (P7.7, PR #35: `buildCoordinateSheets` with `readTimelineExportPositions`, the resolver at each page end beat)
-- [x] `src/components/exporting/MarcherCoordinateSheet.tsx` ~52 to 53, ~182 to 233, ~528, ~860 · R (per-marcher sheet preview and print) · not handled (P7.7: rows are a plain `PagePosition`; the modal's preview always shows example data)
-- [x] `src/components/exporting/CoordinateSheetTemplates.tsx` ~13 to 48, ~117 to 130, ~165 to 305 · R (templates take page rows) · not handled · change the row type to a plain position (P7.7: row type is `PagePosition`; the file has no importer in the app)
-- [x] `electron/main/services/export-utility-process.ts` ~185 (reads `marcher_pages` straight from the file), ~20 to 131, ~250 · R · PDF layout in a separate process · not handled · the resolver lives in the renderer, so either pass sampled rows in or run the resolver in that process (decide in P7.7) (P7.7: no change; the file is unreachable: nothing imports or forks it and it is not a Vite entry. Follow-up: delete it)
+- [x] `src/components/exporting/MarcherCoordinateSheet.tsx` ~52 to 53, ~182 to 233, ~528, ~860 · R (per-marcher sheet preview and print) · not handled (P7.7: rows are a plain `PagePosition`; the modal renders `MarcherCoordinateSheetPreview` only with `example`, so its non-example branch, which reads `marcher_pages` by marcher, is unreachable)
+- [x] `src/components/exporting/CoordinateSheetTemplates.tsx` ~13 to 48, ~117 to 130, ~165 to 305 · R (templates take page rows) · not handled · change the row type to a plain position (P7.7: row type is `PagePosition`; the file has no importers anywhere in the app, so it is dead code)
+- [x] `electron/main/services/export-utility-process.ts` ~185 (reads `marcher_pages` straight from the file), ~20 to 131, ~250 · R · PDF layout in a separate process · not handled · the resolver lives in the renderer, so either pass sampled rows in or run the resolver in that process (decide in P7.7) (P7.7: no change; the file is unreachable: nothing imports or forks it and it is not a Vite entry. Follow-up: delete it) Logged for Phase 10 cleanup in `10-cleanup.md`.
 - [x] `electron/main/index.ts` ~449 and `electron/preload/index.ts` ~238 to 261 (the PDF export and per-marcher document contracts) · IPC · changing the payload is an IPC contract change, so log it as a decision first (P7.7: no change; `export:pdf` and `export:generateDocForMarcher` take HTML and SVG rendered in the renderer, so no contract change)
 - [x] `src/components/exporting/ExportCoordinatesModal.tsx` ~703 to 1000 (drill chart export; marcher pages at ~706, appearances at ~741, `generateDrillChartExportSVGs` at ~913) · R · not handled (P7.7: the drill chart export passes the sampled map in timeline mode)
 - [x] `src/components/exporting/utils/svg-generator.ts` ~80 to 430 (per-page SVGs read the current, previous and next page rows to draw positions and pathways) · R · not handled (P7.7: takes a `PagePositionMap`)
@@ -1045,3 +1045,17 @@ Facts that change how to read the PR #14 note above:
 - **Next:** decide, per page-era shape tool, derive or gate in timeline mode; then canvas drawing and dragging of spec shapes on P8.2's db-functions.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p7-shapes`; `pnpm install`; build the desktop's dependencies.
+
+### 2026-10-01 · timeline-worker (timeline/p7-coordinate-sheets) · P7.7 review fixes checkpoint
+
+- **Done:** merged `timeline-try-2` (P7.10, #33) into PR #35 with a normal merge commit (`9f8a3823`, no conflicts), then committed the review fixes as `a30857a3`:
+  - **Show changed during an export:** `readTimelineExportPositions` also returns the snapshot's page and marcher ids. `readExportPositions` checks the React page and marcher lists against them and fails with "The show changed during the export. Try again." It reads before the progress pauses. React pages are still what renders, since the snapshot's pages have no measures.
+  - **Drill chart alignment:** individual drill charts stay aligned with `marchers`. A marcher missing on some page gets no pages and its PDF is skipped with a toast, never shifted. Neighbor-page lookups are null-safe. This fixes page mode too.
+  - **Close-time preview:** `timelinePreviewPositions` (`src/utilities/svgPreviewPositions.ts`) samples the store resolver only when `status === "ready"`, catches throws and takes no lock. Otherwise the handler returns the error string at once.
+  - **Page-mode edge cases:**
+    - a `workspace_settings` row that fails to parse means page mode, with a warning;
+    - the sheet export warns about marchers with no positions (quarter sheets used to abort the export);
+    - three new English strings.
+  - **Rounding:** the resolver returns the converted destinations exactly at page end beats, so the conversion test now asserts exact equality.
+- **Resume from:** wait for `pnpm --dir apps/desktop run test` (running alone), then run focused `test:history src/components/exporting`, update the PR #35 body (`pr-P7.7.md`) and log "review fixes ready".
+- **Blockers:** none.
