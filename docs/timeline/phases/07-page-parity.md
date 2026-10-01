@@ -179,8 +179,8 @@ Two inventory items are still open. (1) In timeline mode the canvas still applie
 
 ### P7.17: Existing feature tests in timeline mode
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-feature-tests)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.2–P7.16
