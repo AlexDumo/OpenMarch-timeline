@@ -8,91 +8,25 @@
 import { BrowserWindow, dialog, shell } from "electron";
 import { captureException } from "@sentry/electron/main";
 import type { ConvertOnOpenDialogs } from "./convertOnOpenFlow";
+import { showPreparingWindow, type PreparingWindow } from "./preparingWindow";
 
-const escapeHtml = (s: string) =>
-    s.replace(
-        /[&<>"']/g,
-        (c) =>
-            ({
-                "&": "&amp;",
-                "<": "&lt;",
-                ">": "&gt;",
-                '"': "&quot;",
-                "'": "&#39;",
-            })[c]!,
-    );
-
-function preparingHtml(fileName: string): string {
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Preparing your file</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
-<style>
-:root { color-scheme: light dark; }
-body { margin: 0; height: 100vh; display: flex; flex-direction: column; justify-content: center;
-  padding: 0 24px; box-sizing: border-box; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: Canvas; color: CanvasText; user-select: none; cursor: default; }
-h1 { font-size: 15px; margin: 0 0 6px; }
-p { margin: 0; opacity: .75; overflow: hidden; text-overflow: ellipsis; }
-</style></head><body>
-<h1>Preparing your file…</h1>
-<p>Backing up ${escapeHtml(fileName)} and converting it to timelines. This takes a few seconds.</p>
-</body></html>`;
-}
-
-/** Resolves `promise`, or undefined after `ms`, so a window problem can never hang the open. */
-const withTimeout = <T>(promise: Promise<T>, ms: number) =>
-    Promise.race([
-        promise,
-        new Promise<undefined>((resolve) => setTimeout(resolve, ms)),
-    ]);
-
-/**
- * Shows a small modal window over `parent`, and waits until it has painted:
- * `ready-to-show`, then two animation frames after showing it. Only then does
- * the blocking work start. Never throws; the window is a courtesy.
- */
-async function showPreparingWindow(
-    parent: BrowserWindow,
-    fileName: string,
-): Promise<BrowserWindow | undefined> {
-    try {
-        const preparing = new BrowserWindow({
-            parent,
-            modal: true,
-            width: 440,
-            height: 120,
-            frame: false,
-            resizable: false,
-            closable: false,
-            skipTaskbar: true,
-            show: false,
-            webPreferences: {
-                sandbox: true,
-                contextIsolation: true,
-                nodeIntegration: false,
-            },
-        });
-        const ready = new Promise<void>((resolve) =>
-            preparing.once("ready-to-show", () => resolve()),
-        );
-        await preparing.loadURL(
-            `data:text/html;charset=utf-8,${encodeURIComponent(preparingHtml(fileName))}`,
-        );
-        await withTimeout(ready, 2000);
-        preparing.show();
-        parent.setProgressBar(2); // indeterminate
-        // Two animation frames after showing: the window's first frame has been produced.
-        await withTimeout(
-            preparing.webContents.executeJavaScript(
-                "new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))",
-            ),
-            1000,
-        );
-        return preparing;
-    } catch (error) {
-        console.error("Could not show the preparing window:", error);
-        return undefined;
-    }
-}
+const createPreparingWindow = (parent: BrowserWindow): PreparingWindow =>
+    new BrowserWindow({
+        parent,
+        modal: true,
+        width: 440,
+        height: 120,
+        frame: false,
+        resizable: false,
+        closable: false,
+        skipTaskbar: true,
+        show: false,
+        webPreferences: {
+            sandbox: true,
+            contextIsolation: true,
+            nodeIntegration: false,
+        },
+    });
 
 function messageBox(
     win: BrowserWindow | null,
@@ -113,7 +47,11 @@ export function electronConvertOnOpenDialogs(
             // lone extra window would quit the app on Windows and Linux when it closes.
             const parent = win && !win.isDestroyed() ? win : null;
             const preparing = parent
-                ? await showPreparingWindow(parent, fileName)
+                ? await showPreparingWindow(
+                      parent,
+                      fileName,
+                      createPreparingWindow,
+                  )
                 : undefined;
             try {
                 return await work();
@@ -124,18 +62,27 @@ export function electronConvertOnOpenDialogs(
         },
 
         async warnOlderRelease(fileName, backupPath) {
+            const buttons = backupPath
+                ? ["Open Without Converting", "Show Backup", "Cancel"]
+                : ["Open Without Converting", "Cancel"];
+            const cancelId = buttons.length - 1;
             const { response } = await messageBox(win, {
                 type: "warning",
                 title: "Saved by an older version",
                 message: `"${fileName}" was saved by an older version of OpenMarch after it was converted to timelines.`,
-                detail: `Changes made in the older version are not in its timelines. It won't be converted again.\n\nA backup from before the conversion is at:\n${backupPath}`,
-                buttons: ["Open Without Converting", "Show Backup", "Cancel"],
-                defaultId: 2,
-                cancelId: 2,
+                detail:
+                    "Changes made in the older version are not in its timelines. It won't be converted again." +
+                    (backupPath
+                        ? `\n\nA backup from before the conversion is at:\n${backupPath}`
+                        : "\n\nNo backup from before the conversion was found next to it."),
+                buttons,
+                defaultId: cancelId,
+                cancelId,
                 noLink: true,
             });
             if (response === 0) return "open";
-            if (response === 1) shell.showItemInFolder(backupPath);
+            if (backupPath && response === 1)
+                shell.showItemInFolder(backupPath);
             return "stop";
         },
 

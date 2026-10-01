@@ -21,7 +21,15 @@ import {
     withDb,
 } from "@om-electron/database/__test__/convertOnOpenFixtures";
 import type { ConvertOnOpenDialogs } from "../convertOnOpenFlow";
-import { openShowFile, type OpenShowResult } from "../openShow";
+import {
+    openOnce,
+    openShowFile,
+    pendingOpenCount,
+    resumeSqlProxyAfterReload,
+    type OpenShowResult,
+} from "../openShow";
+import { EventEmitter } from "events";
+import type { DatabaseSync } from "node:sqlite";
 
 /** Fake dialogs that record every call. */
 function fakeDialogs({
@@ -63,11 +71,14 @@ async function open(
         env = GATE_ON,
         dialogs = fakeDialogs().dialogs,
         hooks,
+        resume = true,
     }: {
         isNewFile?: boolean;
         env?: Record<string, string | undefined>;
         dialogs?: ConvertOnOpenDialogs;
         hooks?: ConvertOnOpenHooks;
+        /** Resume the renderer's SQL right away, as setActiveDb does once the window reloaded. */
+        resume?: boolean;
     } = {},
 ): Promise<OpenShowResult> {
     const result = await openShowFile(filePath, isNewFile, {
@@ -77,8 +88,8 @@ async function open(
         hooks,
     });
     result.db?.close();
-    // setActiveDb resumes the renderer's SQL once the window has reloaded.
-    if (result.sqlSuspended) DatabaseServices.resumeSqlProxy();
+    if (resume && result.sqlSuspension !== undefined)
+        DatabaseServices.resumeSqlProxy(result.sqlSuspension);
     return result;
 }
 
@@ -102,7 +113,7 @@ describe("opening a show with convert on open", () => {
     });
 
     afterEach(() => {
-        DatabaseServices.resumeSqlProxy();
+        DatabaseServices.forceResumeSqlProxy();
         DatabaseServices.closePersistentConnection();
         DatabaseServices.setDbPath("", false);
         fs.rmSync(tempDir, { recursive: true, force: true });
@@ -113,7 +124,8 @@ describe("opening a show with convert on open", () => {
         const { dialogs, calls } = fakeDialogs();
         const result = await open(showPath, { env: {}, dialogs });
 
-        expect(result).toMatchObject({ status: 200, sqlSuspended: false });
+        expect(result).toMatchObject({ status: 200 });
+        expect(result.sqlSuspension).toBeUndefined();
         expect(calls).toEqual([]);
         expect(stateOf(showPath)).toMatchObject({
             userVersion: 7,
@@ -132,7 +144,8 @@ describe("opening a show with convert on open", () => {
 
         const result = await open(showPath, { dialogs });
 
-        expect(result).toMatchObject({ status: 200, sqlSuspended: true });
+        expect(result.status).toBe(200);
+        expect(result.sqlSuspension).toEqual(expect.any(Number));
         expect(sqlDuringConversion).toBe(false);
         expect(await sqlProxyWorks()).toBe(true);
         expect(calls).toEqual(["preparing show.dots", "converted show.dots"]);
@@ -266,6 +279,143 @@ describe("opening a show with convert on open", () => {
         expect(stateOf(otherPath).userVersion).toBe(8);
     });
 
+    describe("the renderer's SQL", () => {
+        it("only a suspension's own token lifts it", () => {
+            const a = DatabaseServices.suspendSqlProxy("a");
+            const b = DatabaseServices.suspendSqlProxy("b");
+            expect(DatabaseServices.resumeSqlProxy(a)).toBe(false);
+            expect(DatabaseServices.isSqlProxySuspended()).toBe(true);
+            expect(DatabaseServices.resumeSqlProxy(b)).toBe(true);
+            expect(DatabaseServices.isSqlProxySuspended()).toBe(false);
+        });
+
+        it("A's resume after its reload doesn't lift B's suspension while B is preparing", async () => {
+            const otherPath = path.join(tempDir, "other.dots");
+            await createPageShow(otherPath);
+
+            // A opens and converts; setActiveDb arms the resume for after the reload.
+            const a = await open(showPath, { resume: false });
+            expect(a.status).toBe(200);
+            const reloadA = new EventEmitter();
+            const resumedA = resumeSqlProxyAfterReload(
+                a.sqlSuspension!,
+                reloadA as never,
+            );
+
+            // B opens (queued behind nothing now) and waits in its preparing state.
+            let release!: () => void;
+            const released = new Promise<void>((r) => (release = r));
+            let entered!: () => void;
+            const inPreparing = new Promise<void>((r) => (entered = r));
+            const b = fakeDialogs({
+                preparing: async () => {
+                    entered();
+                    await released;
+                },
+            });
+            const openB = open(otherPath, {
+                dialogs: b.dialogs,
+                resume: false,
+            });
+            await inPreparing;
+
+            // A's page finishes reloading now: its resume must leave B's suspension alone.
+            reloadA.emit("did-navigate");
+            await resumedA;
+            expect(await sqlProxyWorks()).toBe(false);
+
+            release();
+            const resultB = await openB;
+            expect(resultB.status).toBe(200);
+            expect(await sqlProxyWorks()).toBe(false);
+            const reloadB = new EventEmitter();
+            const resumedB = resumeSqlProxyAfterReload(
+                resultB.sqlSuspension!,
+                reloadB as never,
+            );
+            reloadB.emit("did-navigate");
+            await resumedB;
+            expect(await sqlProxyWorks()).toBe(true);
+            expect(stateOf(otherPath).userVersion).toBe(8);
+        });
+
+        it("resumes after the fallback when the reload never navigates, and at once without a window", async () => {
+            const token = DatabaseServices.suspendSqlProxy("test");
+            await resumeSqlProxyAfterReload(
+                token,
+                new EventEmitter() as never,
+                20,
+            );
+            expect(DatabaseServices.isSqlProxySuspended()).toBe(false);
+
+            const token2 = DatabaseServices.suspendSqlProxy("test");
+            await resumeSqlProxyAfterReload(token2, null);
+            expect(DatabaseServices.isSqlProxySuspended()).toBe(false);
+        });
+
+        it("a failed open lifts its own suspension", async () => {
+            await expect(
+                openShowFile(showPath, false, {
+                    migrationsFolder: path.join(tempDir, "no-migrations-here"),
+                    env: GATE_ON,
+                    dialogs: () => fakeDialogs().dialogs,
+                }),
+            ).rejects.toThrow();
+            expect(DatabaseServices.isSqlProxySuspended()).toBe(false);
+        });
+    });
+
+    it("closes its connection when an open throws", async () => {
+        let connection: DatabaseSync | undefined;
+        await expect(
+            openShowFile(showPath, false, {
+                migrationsFolder: path.join(tempDir, "no-migrations-here"),
+                env: GATE_ON,
+                dialogs: () => fakeDialogs().dialogs,
+                onConnect: (db) => (connection = db),
+            }),
+        ).rejects.toThrow();
+        expect(connection).toBeDefined();
+        expect(connection!.isOpen).toBe(false);
+    });
+
+    it("a second open of a file that is waiting on a dialog returns the first open's result", async () => {
+        await open(showPath);
+        withDb(showPath, (db) => db.exec("PRAGMA user_version = 7"));
+        let answer!: (choice: "open" | "stop") => void;
+        const answered = new Promise<"open" | "stop">((r) => (answer = r));
+        let warnings = 0;
+        const dialogs: ConvertOnOpenDialogs = {
+            ...fakeDialogs().dialogs,
+            warnOlderRelease: async () => {
+                warnings++;
+                return answered;
+            },
+        };
+        const deps = {
+            migrationsFolder,
+            env: GATE_ON,
+            dialogs: () => dialogs,
+        };
+
+        const first = openOnce(showPath, () =>
+            openShowFile(showPath, false, deps),
+        );
+        const second = openOnce(path.join(tempDir, ".", "show.dots"), () =>
+            openShowFile(showPath, false, deps),
+        );
+        expect(pendingOpenCount()).toBe(1);
+        answer("stop");
+        const [a, b] = await Promise.all([first, second]);
+
+        expect(a).toBe(b);
+        expect(a.status).toBe(OPEN_STOPPED_STATUS);
+        expect(warnings).toBe(1);
+        expect(pendingOpenCount()).toBe(0);
+        if (a.sqlSuspension !== undefined)
+            DatabaseServices.resumeSqlProxy(a.sqlSuspension);
+    });
+
     describe("new files", () => {
         it("gate on: created converted, with no backup and no dialogs", async () => {
             const newPath = path.join(tempDir, "new.dots");
@@ -273,7 +423,8 @@ describe("opening a show with convert on open", () => {
 
             const result = await open(newPath, { isNewFile: true, dialogs });
 
-            expect(result).toMatchObject({ status: 200, sqlSuspended: false });
+            expect(result).toMatchObject({ status: 200 });
+            expect(result.sqlSuspension).toBeUndefined();
             expect(calls).toEqual([]);
             expect(backupsIn(tempDir)).toEqual([]);
             const state = stateOf(newPath);

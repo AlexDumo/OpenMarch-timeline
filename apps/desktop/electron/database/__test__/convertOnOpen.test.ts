@@ -21,6 +21,8 @@ import { BACKUP_NAME_SUFFIX } from "../backup";
 import {
     CONVERT_ON_OPEN_ENV,
     isConvertOnOpenEnabled,
+    initializeNewFileAsTimeline,
+    TIMELINE_CONVERTED_AT_KEY,
     withTimelineModeOn,
 } from "../convertOnOpenGate";
 import {
@@ -44,7 +46,7 @@ import {
 
 /** Records what the flow asked; answers the older-release warning with `choice`. */
 function testUi(choice: "open" | "stop" = "stop") {
-    const calls = { warned: [] as string[], prepared: 0 };
+    const calls = { warned: [] as (string | undefined)[], prepared: 0 };
     const ui: ConvertOnOpenUi = {
         warnOlderRelease: async (backupPath) => {
             calls.warned.push(backupPath);
@@ -57,6 +59,9 @@ function testUi(choice: "open" | "stop" = "stop") {
     };
     return { ui, calls };
 }
+
+const CONVERTED_AT = "2026-10-01T12:00:00.000Z";
+const fixedNow = () => new Date(CONVERTED_AT);
 
 /** The file's hash just before the convert-on-open step (opening itself writes to the file). */
 let hashBeforeStep = "";
@@ -88,7 +93,10 @@ async function openLikeSetActiveDb(
         await migrator.applyPendingMigrations(migrationsFolder);
         hashBeforeStep = sha256(filePath);
         beforeStep?.();
-        return await runConvertOnOpen(filePath, db, ui, { env, hooks });
+        return await runConvertOnOpen(filePath, db, ui, {
+            env,
+            hooks: { now: fixedNow, ...hooks },
+        });
     } finally {
         db.close();
     }
@@ -200,16 +208,18 @@ describe("convert on open", () => {
         expect(after.triggers).toEqual(before.triggers);
         expect(outcome.report?.pages.length).toBeGreaterThan(0);
 
-        // Other workspace settings are kept.
+        // Other workspace settings are kept; the conversion marker is written.
         expect(JSON.parse(after.settingsJson!)).toMatchObject({
             defaultTempo: 120,
             timelineMode: true,
+            [TIMELINE_CONVERTED_AT_KEY]: CONVERTED_AT,
         });
     });
 
-    it("converts a show with only page 0: the flag and the version, homes from page 0", async () => {
-        const blank = path.join(tempDir, "blank.dots");
-        await createBlankShow(blank);
+    /** A blank show with one marcher on page 0 at (12.5, 40). */
+    async function createPageZeroShow(filePath: string) {
+        await createBlankShow(filePath);
+        const blank = filePath;
         withDb(blank, (db) => {
             db.exec(
                 "INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Trumpet', 'T', 1)",
@@ -233,6 +243,11 @@ describe("convert on open", () => {
                     "INSERT INTO marcher_pages (marcher_id, page_id, x, y) VALUES (1, 0, 12.5, 40)",
                 ),
             );
+    }
+
+    it("converts a show with only page 0: the flag, the marker and the version, homes from page 0, no timeline rows", async () => {
+        const blank = path.join(tempDir, "blank.dots");
+        await createPageZeroShow(blank);
 
         const outcome = await openLikeSetActiveDb(blank);
 
@@ -243,9 +258,57 @@ describe("convert on open", () => {
         const after = stateOf(blank);
         expect(after.userVersion).toBe(8);
         expect(after.timelineMode).toBe(true);
-        expect(after.timelines).toBe(1);
+        expect(after.timelines).toBe(0);
         expect(after.transitions).toBe(0);
         expect(after.homes).toEqual([{ id: 1, home_x: 12.5, home_y: 40 }]);
+    });
+
+    it("a converted empty show and a new file made with the gate on end up alike", async () => {
+        const converted = path.join(tempDir, "converted.dots");
+        await createBlankShow(converted);
+        await openLikeSetActiveDb(converted);
+
+        const fresh = path.join(tempDir, "fresh.dots");
+        await createBlankShow(fresh);
+        withDb(fresh, (db) => initializeNewFileAsTimeline(db, fixedNow));
+
+        const pick = (filePath: string) => {
+            const state = stateOf(filePath);
+            const settings = JSON.parse(state.settingsJson!) as Record<
+                string,
+                unknown
+            >;
+            return {
+                userVersion: state.userVersion,
+                timelines: state.timelines,
+                transitions: state.transitions,
+                assignments: state.assignments,
+                timelineMode: state.timelineMode,
+                marker: settings[TIMELINE_CONVERTED_AT_KEY],
+                homes: state.homes,
+                changeLog: state.changeLog,
+                history: state.history,
+                shapes: withDb(filePath, (db) =>
+                    db
+                        .prepare("SELECT count(*) AS n FROM timeline_shapes")
+                        .get(),
+                ),
+                destinations: withDb(filePath, (db) =>
+                    db
+                        .prepare(
+                            "SELECT count(*) AS n FROM timeline_slot_destinations",
+                        )
+                        .get(),
+                ),
+            };
+        };
+        expect(pick(converted)).toEqual(pick(fresh));
+        expect(pick(fresh)).toMatchObject({
+            userVersion: 8,
+            timelines: 0,
+            timelineMode: true,
+            marker: CONVERTED_AT,
+        });
     });
 
     it.each([
@@ -268,26 +331,19 @@ describe("convert on open", () => {
             expect(outcome).toMatchObject({ status: "converted" });
             expect(JSON.parse(stateOf(showPath).settingsJson!)).toEqual({
                 timelineMode: true,
+                [TIMELINE_CONVERTED_AT_KEY]: CONVERTED_AT,
             });
         },
     );
 
-    it("withTimelineModeOn keeps the other settings and replaces bad JSON", () => {
+    it("withTimelineModeOn keeps the other settings, sets the marker and replaces bad JSON", () => {
+        const on = { timelineMode: true, [TIMELINE_CONVERTED_AT_KEY]: "t" };
         expect(
-            JSON.parse(withTimelineModeOn('{"a":1,"timelineMode":false}')),
-        ).toEqual({
-            a: 1,
-            timelineMode: true,
-        });
-        expect(JSON.parse(withTimelineModeOn(undefined))).toEqual({
-            timelineMode: true,
-        });
-        expect(JSON.parse(withTimelineModeOn("null"))).toEqual({
-            timelineMode: true,
-        });
-        expect(JSON.parse(withTimelineModeOn("{"))).toEqual({
-            timelineMode: true,
-        });
+            JSON.parse(withTimelineModeOn('{"a":1,"timelineMode":false}', "t")),
+        ).toEqual({ a: 1, ...on });
+        expect(JSON.parse(withTimelineModeOn(undefined, "t"))).toEqual(on);
+        expect(JSON.parse(withTimelineModeOn("null", "t"))).toEqual(on);
+        expect(JSON.parse(withTimelineModeOn("{", "t"))).toEqual(on);
     });
 
     it("doesn't convert again when a converted file is reopened", async () => {
@@ -311,25 +367,37 @@ describe("convert on open", () => {
         await openLikeSetActiveDb(other);
         const convertedElsewhere = fs.readFileSync(other);
 
+        const thisOpensBackup = path.join(
+            tempDir,
+            `show (${BACKUP_NAME_SUFFIX}).dots`,
+        );
+
         const outcome = await openLikeSetActiveDb(showPath, {
             hooks: {
                 backup: (filePath) => {
                     fs.writeFileSync(filePath, convertedElsewhere);
+                    // The snapshot would hold the converted content under a "before" name.
+                    fs.writeFileSync(thisOpensBackup, convertedElsewhere);
                     return {
                         ok: true,
-                        backupPath: path.join(tempDir, "fake-backup.dots"),
-                        userVersion: 7,
+                        backupPath: thisOpensBackup,
+                        userVersion: 8,
                     };
                 },
             },
         });
 
-        expect(outcome).toMatchObject({
+        expect(outcome).toEqual({
             kind: "conversion",
             status: "already-converted",
         });
         expect(sha256(showPath)).toBe(sha256(other));
         expect(stateOf(showPath).timelines).toBe(1);
+        // The misleading backup is gone; the other instance's own backup is untouched.
+        expect(fs.existsSync(thisOpensBackup)).toBe(false);
+        expect(backupsIn(tempDir)).toEqual([
+            `other (${BACKUP_NAME_SUFFIX}).dots`,
+        ]);
     });
 
     describe("a failed backup", () => {
@@ -456,11 +524,72 @@ describe("convert on open", () => {
             },
         );
 
-        it("without a conversion backup next to it (made with the dev flag): opens as it is, no warning", async () => {
-            await openLikeSetActiveDb(showPath);
-            reopenInOlderRelease();
+        const removeBackups = () => {
             for (const f of backupsIn(tempDir))
                 fs.rmSync(path.join(tempDir, f));
+        };
+
+        it("converted, then reset to 7, with its backup gone: the marker still warns, with no backup to offer", async () => {
+            await openLikeSetActiveDb(showPath);
+            reopenInOlderRelease();
+            removeBackups();
+            const before = stateOf(showPath);
+            const { ui, calls } = testUi("stop");
+
+            const outcome = await openLikeSetActiveDb(showPath, { ui });
+
+            expect(outcome).toEqual({
+                kind: "older-release",
+                backupPath: undefined,
+                choice: "stop",
+            });
+            expect(calls).toEqual({ warned: [undefined], prepared: 0 });
+            expect(stateOf(showPath)).toEqual(before);
+            expect(sha256(showPath)).toBe(hashBeforeStep);
+        });
+
+        it("a new file made with the gate on, then reset to 7 by an older release: warns (it has no timeline rows)", async () => {
+            const fresh = path.join(tempDir, "fresh.dots");
+            await createBlankShow(fresh);
+            withDb(fresh, (db) => initializeNewFileAsTimeline(db, fixedNow));
+            withDb(fresh, (db) => {
+                db.exec("PRAGMA user_version = 7");
+                db.exec(
+                    "INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Trumpet', 'T', 1)",
+                );
+            });
+            expect(stateOf(fresh).timelines).toBe(0);
+            const { ui, calls } = testUi("stop");
+
+            const outcome = await openLikeSetActiveDb(fresh, { ui });
+
+            expect(outcome).toEqual({
+                kind: "older-release",
+                backupPath: undefined,
+                choice: "stop",
+            });
+            expect(calls).toEqual({ warned: [undefined], prepared: 0 });
+            expect(stateOf(fresh).userVersion).toBe(7);
+        });
+
+        it("made with the dev flag (timeline rows, no marker, no backup): opens as it is, no warning", async () => {
+            await openLikeSetActiveDb(showPath);
+            reopenInOlderRelease();
+            removeBackups();
+            // What the dev command (P6.4) leaves: rows and the flag, but no marker.
+            withDb(showPath, (db) => {
+                const { json_data } = db
+                    .prepare("SELECT json_data FROM workspace_settings")
+                    .get() as { json_data: string };
+                const settings = JSON.parse(json_data) as Record<
+                    string,
+                    unknown
+                >;
+                delete settings[TIMELINE_CONVERTED_AT_KEY];
+                db.prepare("UPDATE workspace_settings SET json_data = ?").run(
+                    JSON.stringify(settings),
+                );
+            });
             const before = stateOf(showPath);
             const { ui, calls } = testUi("stop");
 

@@ -9,6 +9,7 @@
  * and its dialogs flow are loaded with a dynamic `import()` only once the gate
  * is on.
  */
+import * as path from "path";
 import type { DatabaseSync } from "node:sqlite";
 import * as DatabaseServices from "../database/database.services";
 import { getOrm } from "../database/db";
@@ -22,18 +23,44 @@ import {
 import type { ConvertOnOpenHooks } from "../database/convertOnOpen";
 import type { ConvertOnOpenDialogs } from "./convertOnOpenFlow";
 
+/** How long the conversion's connection waits for another connection's lock. */
+const CONVERSION_BUSY_TIMEOUT_MS = 5000;
+
 let openTail: Promise<unknown> = Promise.resolve();
 
 /**
  * Runs `open` after every open queued before it has finished, so two opens
- * (for example a double click, or a second file while the first converts)
- * never interleave. Never call it from inside another queued open.
+ * (for example a second file while the first converts) never interleave.
+ * Never call it from inside another queued open.
  */
 export function withOpenLock<T>(open: () => Promise<T>): Promise<T> {
     const run = openTail.then(open, open);
     openTail = run.catch(() => undefined);
     return run;
 }
+
+const pendingOpens = new Map<string, Promise<unknown>>();
+
+/**
+ * Runs `open` for `filePath`, unless an open of the same file is already
+ * queued or running (for example waiting on a dialog): then it returns that
+ * open's result instead of queueing another, so a double click opens once.
+ */
+export function openOnce<T>(
+    filePath: string,
+    open: () => Promise<T>,
+): Promise<T> {
+    if (!filePath) return open();
+    const key = path.resolve(filePath);
+    const pending = pendingOpens.get(key);
+    if (pending) return pending as Promise<T>;
+    const run = open().finally(() => pendingOpens.delete(key));
+    pendingOpens.set(key, run);
+    return run;
+}
+
+/** Number of opens queued or running; for tests. */
+export const pendingOpenCount = () => pendingOpens.size;
 
 export interface OpenShowDeps {
     migrationsFolder: string;
@@ -44,6 +71,8 @@ export interface OpenShowDeps {
     dialogs: () => ConvertOnOpenDialogs;
     /** Test hooks for the conversion. */
     hooks?: ConvertOnOpenHooks;
+    /** Called with the open's connection as soon as it exists. For tests. */
+    onConnect?: (db: DatabaseSync) => void;
 }
 
 export interface OpenShowResult {
@@ -52,58 +81,98 @@ export interface OpenShowResult {
     /** The open connection, on success. The caller owns it. */
     db?: DatabaseSync;
     /**
-     * True when the renderer's SQL was suspended for a conversion. The caller
-     * resumes it once the window has reloaded (or right away when nothing opens).
+     * The token of the renderer-SQL suspension this open started (existing
+     * files with the gate on), or undefined. The caller resumes it with
+     * `resumeSqlProxyAfterReload` once the window has reloaded, or right away
+     * when nothing opens.
      */
-    sqlSuspended: boolean;
+    sqlSuspension?: number;
 }
 
-/** Opens `filePath` as the active database. Not serialized; use `openShowFile` or `withOpenLock`. */
+/**
+ * Opens `filePath` as the active database. Not serialized; use `openShowFile`
+ * or `withOpenLock`. Closes its connection if it throws.
+ */
 export async function openShowDatabase(
     filePath: string,
     isNewFile: boolean,
     deps: OpenShowDeps,
 ): Promise<OpenShowResult> {
+    const gateOn = isConvertOnOpenEnabled(deps.env);
+    // With the gate on, an existing file may be converted: from here until the window has
+    // reloaded, the page showing the previous file must not reach this one.
+    const sqlSuspension =
+        gateOn && !isNewFile
+            ? DatabaseServices.suspendSqlProxy("a file is being opened")
+            : undefined;
+    try {
+        return await openWithSuspension(
+            filePath,
+            isNewFile,
+            deps,
+            gateOn,
+            sqlSuspension,
+        );
+    } catch (error) {
+        // The caller never sees a token from a failed open, so lift it here.
+        if (sqlSuspension !== undefined)
+            DatabaseServices.resumeSqlProxy(sqlSuspension);
+        throw error;
+    }
+}
+
+async function openWithSuspension(
+    filePath: string,
+    isNewFile: boolean,
+    deps: OpenShowDeps,
+    gateOn: boolean,
+    sqlSuspension: number | undefined,
+): Promise<OpenShowResult> {
+    const stopped = (status: number): OpenShowResult => ({
+        status,
+        sqlSuspension,
+    });
+
     const resCode = DatabaseServices.setDbPath(filePath, isNewFile);
-    if (resCode !== 200) return { status: resCode, sqlSuspended: false };
+    if (resCode !== 200) return stopped(resCode);
 
     const db = DatabaseServices.connect();
-    if (!db) return { status: 500, sqlSuspended: false };
+    if (!db) return stopped(500);
+    deps.onConnect?.(db);
+    let keepOpen = false;
+    try {
+        const orm = getOrm(db);
+        const migrator = new DrizzleMigrationService(orm, db);
+        if (!isNewFile && migrator.hasPendingMigrations(deps.migrationsFolder))
+            deps.beforeMigrations?.(filePath);
+        // Sets the version only on a new, empty file; an existing file keeps its
+        // version (ADR 0001 §6). setDbPath already refused newer files.
+        applyFileVersionDecision(db, isNewFile);
+        await migrator.applyPendingMigrations(deps.migrationsFolder);
 
-    const orm = getOrm(db);
-    const migrator = new DrizzleMigrationService(orm, db);
-    if (!isNewFile && migrator.hasPendingMigrations(deps.migrationsFolder))
-        deps.beforeMigrations?.(filePath);
-    // Sets the version only on a new, empty file; an existing file keeps its
-    // version (ADR 0001 §6). setDbPath already refused newer files.
-    applyFileVersionDecision(db, isNewFile);
-    await migrator.applyPendingMigrations(deps.migrationsFolder);
-
-    const gateOn = isConvertOnOpenEnabled(deps.env);
-    if (isNewFile) {
-        await DrizzleMigrationService.initializeDatabase(orm, db);
-        // With the gate on, a new file starts as a timeline file (no backup, no conversion).
-        if (gateOn) initializeNewFileAsTimeline(db);
-        return { status: 200, db, sqlSuspended: false };
+        if (isNewFile) {
+            await DrizzleMigrationService.initializeDatabase(orm, db);
+            // With the gate on, a new file starts as a timeline file (no backup, no conversion).
+            if (gateOn) initializeNewFileAsTimeline(db);
+        } else if (gateOn) {
+            db.exec(`PRAGMA busy_timeout = ${CONVERSION_BUSY_TIMEOUT_MS}`);
+            const { convertOnOpenInMain } = await import("./convertOnOpenFlow");
+            const next = await convertOnOpenInMain(
+                filePath,
+                db,
+                deps.dialogs(),
+                { env: deps.env, hooks: deps.hooks },
+            );
+            if (next === "stop") {
+                DatabaseServices.setDbPath("", false);
+                return stopped(OPEN_STOPPED_STATUS);
+            }
+        }
+        keepOpen = true;
+        return { status: 200, db, sqlSuspension };
+    } finally {
+        if (!keepOpen) db.close();
     }
-    if (!gateOn) return { status: 200, db, sqlSuspended: false };
-
-    let sqlSuspended = false;
-    const { convertOnOpenInMain } = await import("./convertOnOpenFlow");
-    const next = await convertOnOpenInMain(filePath, db, deps.dialogs(), {
-        env: deps.env,
-        hooks: deps.hooks,
-        beforeConvert: () => {
-            DatabaseServices.suspendSqlProxy("the file is being converted");
-            sqlSuspended = true;
-        },
-    });
-    if (next === "stop") {
-        db.close();
-        DatabaseServices.setDbPath("", false);
-        return { status: OPEN_STOPPED_STATUS, sqlSuspended };
-    }
-    return { status: 200, db, sqlSuspended };
 }
 
 /** `openShowDatabase`, serialized with every other open. */
@@ -113,4 +182,38 @@ export function openShowFile(
     deps: OpenShowDeps,
 ): Promise<OpenShowResult> {
     return withOpenLock(() => openShowDatabase(filePath, isNewFile, deps));
+}
+
+/** The part of `webContents` that tells when the reload has navigated. */
+export interface NavigationEvents {
+    once(event: "did-navigate", listener: () => void): unknown;
+}
+
+/**
+ * Lifts the renderer-SQL suspension `token` once the window has reloaded
+ * (`did-navigate`), or after `fallbackMs` if it never does, or at once when
+ * there is no window. Resolves when it is lifted. Only lifts its own
+ * suspension: if a later open suspended SQL meanwhile, that one stays.
+ */
+export function resumeSqlProxyAfterReload(
+    token: number,
+    webContents: NavigationEvents | null,
+    fallbackMs = 15_000,
+): Promise<void> {
+    if (!webContents) {
+        DatabaseServices.resumeSqlProxy(token);
+        return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+        let done = false;
+        const resume = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            DatabaseServices.resumeSqlProxy(token);
+            resolve();
+        };
+        const timer = setTimeout(resume, fallbackMs);
+        webContents.once("did-navigate", resume);
+    });
 }

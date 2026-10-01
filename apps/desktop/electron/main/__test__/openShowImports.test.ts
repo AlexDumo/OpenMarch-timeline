@@ -50,7 +50,7 @@ describe("the main-process open path's imports", () => {
     afterEach(async () => {
         const services =
             await import("@om-electron/database/database.services");
-        services.resumeSqlProxy();
+        services.forceResumeSqlProxy();
         services.closePersistentConnection();
         services.setDbPath("", false);
         fs.rmSync(tempDir, { recursive: true, force: true });

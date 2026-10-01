@@ -18,12 +18,12 @@ import {
 export interface ConvertOnOpenDialogs {
     /**
      * The file was converted, then saved by an older release. Resolves `open`
-     * to open it as it is, or `stop` to open nothing (offering the backup is
-     * the dialog's job).
+     * to open it as it is, or `stop` to open nothing. Offering the backup, or
+     * saying none was found (`backupPath` undefined), is the dialog's job.
      */
     warnOlderRelease(
         fileName: string,
-        backupPath: string,
+        backupPath: string | undefined,
     ): Promise<"open" | "stop">;
     /** Shows a blocking "preparing your file" state while `work` runs. */
     whilePreparing<T>(fileName: string, work: () => Promise<T>): Promise<T>;
@@ -43,9 +43,6 @@ export type ConvertOnOpenNext = "continue" | "stop";
 /**
  * Runs the convert-on-open step for the file at `filePath`, open on `db` with
  * migrations applied, and tells the person what happened.
- *
- * @param beforeConvert called right before the backup, so the caller can stop
- *   other writers (the old renderer) from reaching the file
  */
 export async function convertOnOpenInMain(
     filePath: string,
@@ -54,11 +51,9 @@ export async function convertOnOpenInMain(
     {
         env,
         hooks,
-        beforeConvert,
     }: {
         env?: Record<string, string | undefined>;
         hooks?: ConvertOnOpenHooks;
-        beforeConvert?: () => void;
     } = {},
 ): Promise<ConvertOnOpenNext> {
     const fileName = basename(filePath);
@@ -70,7 +65,6 @@ export async function convertOnOpenInMain(
             warnOlderRelease: (backupPath) =>
                 dialogs.warnOlderRelease(fileName, backupPath),
             whilePreparing: (work) => dialogs.whilePreparing(fileName, work),
-            beforeConvert,
         },
         { env, hooks },
     );
@@ -80,7 +74,7 @@ export async function convertOnOpenInMain(
         case "none":
             if (outcome.reason === "dev-timeline-file")
                 console.log(
-                    `convert on open: ${filePath} has timeline rows and no conversion backup (dev flag); opened as it is`,
+                    `convert on open: ${filePath} has timeline rows but no conversion marker or backup (dev flag); opened as it is`,
                 );
             return "continue";
         case "older-release":
@@ -102,7 +96,7 @@ export async function convertOnOpenInMain(
             return "continue";
         case "already-converted":
             console.log(
-                `convert on open: ${filePath} was converted meanwhile; opened as it is`,
+                `convert on open: ${filePath} was converted meanwhile; opened as it is, and this open's backup was removed`,
             );
             return "continue";
         case "backup-failed":

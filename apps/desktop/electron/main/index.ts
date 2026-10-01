@@ -37,8 +37,10 @@ import { repairDatabase } from "../database/repair";
 import { OPEN_STOPPED_STATUS } from "../database/convertOnOpenGate";
 import { electronConvertOnOpenDialogs } from "./convertOnOpenDialogs";
 import {
+    openOnce,
     openShowDatabase,
     openShowFile,
+    resumeSqlProxyAfterReload,
     withOpenLock,
     type OpenShowDeps,
 } from "./openShow";
@@ -776,11 +778,12 @@ async function openDatabaseAtPathWithoutReload(
         // making a new file give the same result.
         const result = await openShowFile(filePath, isNewFile, openShowDeps());
         result.db?.close();
+        // A draft is a new file: it never suspends the renderer's SQL.
+        if (result.sqlSuspension !== undefined)
+            DatabaseServices.resumeSqlProxy(result.sqlSuspension);
         if (result.status !== 200) {
-            if (result.sqlSuspended) DatabaseServices.resumeSqlProxy();
             return result.status === OPEN_STOPPED_STATUS ? result.status : -1;
         }
-        if (result.sqlSuspended) DatabaseServices.resumeSqlProxy();
 
         store.set("databasePath", filePath);
         win?.setTitle("OpenMarch - " + filePath);
@@ -1362,31 +1365,14 @@ const openShowDeps = (): OpenShowDeps => ({
     dialogs: () => electronConvertOnOpenDialogs(win),
 });
 
-/**
- * Lets the renderer's SQL through again once the window has reloaded, so the
- * page that showed the previous file can't reach the converted one.
- */
-function resumeSqlProxyAfterReload() {
-    const webContents = win && !win.isDestroyed() ? win.webContents : null;
-    if (!webContents) {
-        DatabaseServices.resumeSqlProxy();
-        return;
-    }
-    let resumed = false;
-    const resume = () => {
-        if (resumed) return;
-        resumed = true;
-        DatabaseServices.resumeSqlProxy();
-    };
-    webContents.once("did-navigate", resume);
-    // Never leave the app without a database if the reload doesn't navigate.
-    setTimeout(resume, 15_000);
-}
+/** The window's navigation events, for resuming the renderer's SQL after a reload. */
+const reloadEvents = () => (win && !win.isDestroyed() ? win.webContents : null);
 
 /**
  * Sets the active database path and reloads the window. Opens are serialized:
  * one that starts while another runs (for example while a file converts)
- * waits for it.
+ * waits for it, and a second open of a file that is already queued or waiting
+ * on a dialog returns that open's result instead of opening it again.
  *
  * @param path path to the database file
  * @param isNewFile True if this is a new file, false if it is an existing file
@@ -1394,50 +1380,49 @@ function resumeSqlProxyAfterReload() {
  *   dialog already explained why nothing opened
  */
 function setActiveDb(path: string, isNewFile = false): Promise<number> {
-    return withOpenLock(() => setActiveDbNow(path, isNewFile));
+    // Get the current path from the store if the path is "."
+    // I.e. last opened file
+    if (path === ".") path = store.get("databasePath") as string;
+    return openOnce(path, () =>
+        withOpenLock(() => setActiveDbNow(path, isNewFile)),
+    );
 }
 
 async function setActiveDbNow(path: string, isNewFile: boolean) {
-    let sqlSuspended = false;
     try {
-        // Get the current path from the store if the path is "."
-        // I.e. last opened file
-        if (path === ".") path = store.get("databasePath") as string;
-
         const result = await openShowDatabase(path, isNewFile, openShowDeps());
-        sqlSuspended = result.sqlSuspended;
         result.db?.close();
+        const token = result.sqlSuspension;
 
-        if (result.status === OPEN_STOPPED_STATUS) {
-            // Convert on open (P9.3, behind OPENMARCH_CONVERT_ON_OPEN until P9.4): a dialog
-            // already told the person why the file didn't open. Open nothing.
-            store.delete("databasePath");
-            win?.setTitle("OpenMarch");
-            DatabaseServices.resumeSqlProxy();
-            win?.webContents.reload();
-            return result.status;
-        }
         if (result.status !== 200) {
+            if (token !== undefined) DatabaseServices.resumeSqlProxy(token);
             store.delete("databasePath");
-            console.error(
-                `Error loading database file [code=${result.status}] [path=${path}]`,
-            );
-            if (sqlSuspended) DatabaseServices.resumeSqlProxy();
+            if (result.status === OPEN_STOPPED_STATUS) {
+                // Convert on open (P9.3, behind OPENMARCH_CONVERT_ON_OPEN until P9.4): a dialog
+                // already told the person why the file didn't open. Open nothing.
+                win?.setTitle("OpenMarch");
+                win?.webContents.reload();
+            } else {
+                console.error(
+                    `Error loading database file [code=${result.status}] [path=${path}]`,
+                );
+            }
             return result.status;
         }
 
         win?.setTitle("OpenMarch - " + path);
         store.set("databasePath", path); // Save current db path
         win?.webContents.reload();
-        if (sqlSuspended) resumeSqlProxyAfterReload();
+        // Only once the reloaded page has navigated may it query the file. Another open can
+        // start meanwhile; it takes the suspension over, and this resume then leaves it be.
+        if (token !== undefined)
+            void resumeSqlProxyAfterReload(token, reloadEvents());
 
         return result.status;
     } catch (error) {
         captureException(error);
         store.delete("databasePath"); // Reset database path
         DatabaseServices.setDbPath("", false);
-        if (sqlSuspended || DatabaseServices.isSqlProxySuspended())
-            DatabaseServices.resumeSqlProxy();
         dialog.showErrorBox("Error Loading Database", (error as Error).message);
         win?.webContents.reload();
         throw error;

@@ -294,31 +294,44 @@ export const getOrmConnection = () => {
     return getOrm(persistentConnection);
 };
 
-/** Why the renderer's SQL is refused right now, or null when it isn't. */
-let sqlProxySuspendedReason: string | null = null;
+/** The current suspension of the renderer's SQL, or null when it isn't suspended. */
+let sqlProxySuspension: { token: number; reason: string } | null = null;
+let lastSqlProxySuspensionToken = 0;
 
 /**
  * Refuses the renderer's SQL (`sql:proxy`, `unsafeSql:proxy`) until
- * `resumeSqlProxy`. Convert on open (P9.3) calls it before converting a file,
- * so the page still showing the previous file can't write into the new one
- * while it is converted; the window reloads afterwards.
+ * `resumeSqlProxy` is called with the returned token. Convert on open (P9.3)
+ * suspends it for an open, so the page still showing the previous file can't
+ * reach the file being opened and converted; it resumes once the window has
+ * reloaded. A newer suspension takes over: resuming an older token then does
+ * nothing, so one open's late resume can't lift the next open's suspension.
  */
-export function suspendSqlProxy(reason: string) {
-    sqlProxySuspendedReason = reason;
+export function suspendSqlProxy(reason: string): number {
+    const token = ++lastSqlProxySuspensionToken;
+    sqlProxySuspension = { token, reason };
+    return token;
 }
 
-export function resumeSqlProxy() {
-    sqlProxySuspendedReason = null;
+/** Lifts the suspension `token` started. Returns false when a newer suspension owns it. */
+export function resumeSqlProxy(token: number): boolean {
+    if (sqlProxySuspension?.token !== token) return false;
+    sqlProxySuspension = null;
+    return true;
+}
+
+/** Lifts any suspension. For tests and for recovering from an unexpected error. */
+export function forceResumeSqlProxy() {
+    sqlProxySuspension = null;
 }
 
 export function isSqlProxySuspended() {
-    return sqlProxySuspendedReason !== null;
+    return sqlProxySuspension !== null;
 }
 
 function assertSqlProxyNotSuspended() {
-    if (sqlProxySuspendedReason !== null)
+    if (sqlProxySuspension !== null)
         throw new Error(
-            `The database is not available: ${sqlProxySuspendedReason}`,
+            `The database is not available: ${sqlProxySuspension.reason}`,
         );
 }
 
