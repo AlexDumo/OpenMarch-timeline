@@ -130,8 +130,8 @@ Path, midpoint and endpoint drawing, step-size warnings, the inspector's step si
 ### P7.11: Shapes and shape pages in timeline mode
 
 - Owner: timeline-worker (timeline/p7-shapes)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/36
 - Parallel: yes
 - Depends on: P7.1
 
@@ -230,7 +230,7 @@ Facts that change how to read the PR #14 note above:
 - [x] `src/utilities/CoordinateActions.ts` (rounding ~58, vertical and horizontal align ~184 and ~217, distribute ~252, flip ~317) · pure helpers typed on `MarcherPage` and `ModifiedMarcherPageArgs` · not handled · loosen the input and output types so timeline code can reuse them (P7.2: no change needed; timeline code passes `MarcherPage` objects with resolver x/y)
 - [x] `src/components/canvas/listeners/LineListeners.ts` ~150 to 262 (`setGlobalNewMarcherPages` at ~262) → `src/components/canvas/Canvas.tsx` ~360 → `src/stores/AlignmentEventStore.ts` ~12 to 67 → `src/components/inspector/AlignmentEditor.tsx` ~12 to 23 → the apply-quick-shape action at `RegisteredActionsHandler.tsx` ~1212 to 1223 · W (preview, then apply) · line and alignment tool · not handled · the apply step is the write (P7.2: preview reads the drawn positions; the apply step is routed)
 - [x] `src/components/inspector/MarcherEditor.tsx` ~171 to 246 (horizontal and vertical distribute buttons) · W through the shared mutation · not handled (P7.2)
-- [ ] `src/components/inspector/MarcherEditor.tsx` ~433 to 452 and `src/components/inspector/ShapeSelector.tsx` ~19 to 31 · R of the `isLocked` flag, which comes from shape membership · not handled · lock rules must come from timeline shapes
+- [x] `src/components/inspector/MarcherEditor.tsx` ~433 to 452 and `src/components/inspector/ShapeSelector.tsx` ~19 to 31 · R of the `isLocked` flag, which comes from shape membership · not handled · lock rules must come from timeline shapes (P7.11: timeline mode has no shape locks, since a move into a shape-backed transition switches it to points (P7.2); `editingDisabled` is false there, shape page marchers aren't read, and the timeline canvas render clears a page-era `isLocked`)
 - [x] `src/components/inspector/MarcherEditor.tsx` ~487 to 500 (the x/y display from `ReadableCoords.fromMarcherPage`) and `src/global/classes/ReadableCoords.ts` ~94 · R · not handled · display from the resolver (P7.2: the display uses `usePositionAt` at the page's end beat in timeline mode)
 - [x] `src/components/canvas/hooks/canvasListeners.selection.ts` ~29 to 30, ~263 · R · selection reads the page's marcher pages · not handled (P7.2: no change needed; the page query is only an effect dependency, no coordinates are read)
 - [x] `src/components/canvas/Canvas.tsx` ~70 to 78, ~364 to 400, ~566 to 596 · R · page-mode static render, skipped once the resolver is ready · P5 (`drawFromResolver`, `useTimelineStaticRender`); the queries still run (P5; gating the queries is P7.13)
@@ -257,7 +257,7 @@ Facts that change how to read the PR #14 note above:
 - [x] `src/db-functions/page.ts` ~340 to 425 (`updatePagesInTransaction`), ~178 (`updateLastPageCounts`), ~471 (`ensureSecondBeatHasPage`) · W · page resize and rename · not handled · resize is a ripple (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
 - [x] `src/hooks/queries/usePages.ts` ~56 to 62 (invalidates `marcher_pages` keys), ~176 to 260 (mutations) and `src/hooks/queries/sharedInvalidators.ts` ~15 to 37 (`invalidateByPage`) · invalidation · add timeline keys (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
 - [x] `src/components/timeline/PageTimeline.tsx` ~35 to 45; `src/components/timeline/PageTimeline.utils.ts` ~103; `src/components/inspector/PageEditor.tsx` ~16; `src/components/inspector/PageNotesSection.tsx` ~17 · UI callers of the page mutations · not handled (PageNotesSection edits notes only and likely needs no change) (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
-- [ ] `src/db-functions/shapePages.ts` ~347 to 372 and the foreign key on `shape_pages.page_id` · W cascade · deleting a page deletes its shape pages · see P7.11
+- [x] `src/db-functions/shapePages.ts` ~347 to 372 and the foreign key on `shape_pages.page_id` · W cascade · deleting a page deletes its shape pages · see P7.11 (P7.11: no change; the cascade removes only frozen page-era shape pages, which timeline mode doesn't read)
 
 #### P7.5 Beat ripple procedures (insert, delete, change the timing of beats)
 
@@ -311,16 +311,16 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.11 (new) Shapes and shape pages in timeline mode
 
-- [ ] `src/db-functions/shapePages.ts` ~159 to 245 (`createShapePages` writes `shape_pages`, `shape_page_marchers` and, through `_updateChildMarcherPages` at ~127 to 157, `marcher_pages`), ~247 to 322 (`updateShapePages`), ~325 to 372 (`deleteShapePages`) · W · not handled · map to timeline shapes plus the transition into the shape, with slot order from the shape's marcher order
-- [ ] `src/db-functions/shapePages.ts` ~377 to 480 (`copyShapePageToPage`; reads `marcher_pages` at ~447) and `src/hooks/queries/useShapePages.ts` ~101 to 155 · R and W · copy a shape to another page · not handled
-- [ ] `src/db-functions/shapePageMarchers.ts` (reads ~62 to 165; order shifts, swaps and flatten ~165 to 375; create with conflict handling ~385 to 480) · R and W `shape_page_marchers` · not handled
-- [ ] `src/db-functions/shapes.ts` (`getShapes` ~74, create ~102 to 143, update ~145 to 192, delete ~194 to 235, `getShapesWithNoShapePages` ~237) · R and W `shapes` · not handled
-- [ ] `src/global/classes/canvasObjects/MarcherShape.ts` ~35 to 100 (reads `shape_page_marchers`), ~250 to 275, ~285 to 335 (`_createMarcherShape` → `createShapePages`), ~336 to 380 (update args) and `StaticMarcherShape.ts` ~204 to 337 · R and W · canvas shape objects and edits (control point drag) · not handled
-- [ ] `src/components/singletons/StateInitializer.tsx` ~37, ~104 (shape edit → `updateShapePagesMutationOptions`) · W · control point edits write shape pages and, through them, marcher pages · not handled
-- [ ] `src/components/canvas/hooks/shapes.ts` ~19 to 40 and `src/components/canvas/hooks/canvasListeners.selection.ts` ~18 to 284 · R · shape rendering and selection by shape page · P5 left shapes drawn from page data
-- [ ] `src/components/inspector/ShapeEditor.tsx` ~44 to 200, ~260 (copy to page, delete, edit) and `src/stores/SelectionStore.ts` · UI for shapes · not handled
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~1225 to 1244 (create a marcher shape from the alignment event) · W · not handled
-- [ ] `src/hooks/queries/useShapePages.ts` ~29 to 100 (queries and keys) and `src/hooks/queries/utils.ts` ~41 (a `shape_page_marchers` change invalidates shape pages and marcher pages) · R and invalidation · not handled
+- [x] `src/db-functions/shapePages.ts` ~159 to 245 (`createShapePages` writes `shape_pages`, `shape_page_marchers` and, through `_updateChildMarcherPages` at ~127 to 157, `marcher_pages`), ~247 to 322 (`updateShapePages`), ~325 to 372 (`deleteShapePages`) · W · not handled · map to timeline shapes plus the transition into the shape, with slot order from the shape's marcher order (P7.11: gated off, not mapped. Each refuses inside its transaction in timeline mode (`E-ARGS`, `PAGE_SHAPES_TIMELINE_MESSAGE`) before writing. A page shape puts some of a page's marchers on an SVG path; the timeline form is a transition into a spec shape, which is a structural edit (Create Track, P8.9) and has no Bezier kinds. Spec shapes are made and edited by P8.2's editor and P7.11's canvas handles)
+- [x] `src/db-functions/shapePages.ts` ~377 to 480 (`copyShapePageToPage`; reads `marcher_pages` at ~447) and `src/hooks/queries/useShapePages.ts` ~101 to 155 · R and W · copy a shape to another page · not handled (P7.11: gated off; `copyShapePageToPage` refuses in timeline mode and the mutation toasts the reason. In timeline terms a copy is another transition into the same spec shape, made with Create Track)
+- [x] `src/db-functions/shapePageMarchers.ts` (reads ~62 to 165; order shifts, swaps and flatten ~165 to 375; create with conflict handling ~385 to 480) · R and W `shape_page_marchers` · not handled (P7.11: no change; nothing in the app writes through it except `shapePages.ts`, which refuses in timeline mode, and its reads feed only page mode's locks)
+- [x] `src/db-functions/shapes.ts` (`getShapes` ~74, create ~102 to 143, update ~145 to 192, delete ~194 to 235, `getShapesWithNoShapePages` ~237) · R and W `shapes` · not handled (P7.11: no change; only `shapePages.ts` calls its writers)
+- [x] `src/global/classes/canvasObjects/MarcherShape.ts` ~35 to 100 (reads `shape_page_marchers`), ~250 to 275, ~285 to 335 (`_createMarcherShape` → `createShapePages`), ~336 to 380 (update args) and `StaticMarcherShape.ts` ~204 to 337 · R and W · canvas shape objects and edits (control point drag) · not handled (P7.11: gated off; no `MarcherShape` is drawn in timeline mode, so there are no control-point drags, and `useCreateMarcherShape` toasts a refusal. Spec shapes get `TimelineShapeOverlay` instead, with handles that commit once on release)
+- [x] `src/components/singletons/StateInitializer.tsx` ~37, ~104 (shape edit → `updateShapePagesMutationOptions`) · W · control point edits write shape pages and, through them, marcher pages · not handled (P7.11: no change; `updateMarcherShapeFn` only runs from a drawn `MarcherShape`, and `updateShapePages` refuses in timeline mode)
+- [x] `src/components/canvas/hooks/shapes.ts` ~19 to 40 and `src/components/canvas/hooks/canvasListeners.selection.ts` ~18 to 284 · R · shape rendering and selection by shape page · P5 left shapes drawn from page data (P7.11: timeline mode draws and reads no page shapes and removes any drawn before; selection then finds none. `useTimelineShapeCanvas` draws the spec shape picked in the inspector)
+- [x] `src/components/inspector/ShapeEditor.tsx` ~44 to 200, ~260 (copy to page, delete, edit) and `src/stores/SelectionStore.ts` · UI for shapes · not handled (P7.11: `ShapeEditor` renders nothing in timeline mode and its query is off; P8.2's `TimelineShapesEditor` is the shape UI there)
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~1225 to 1244 (create a marcher shape from the alignment event) · W · not handled (P7.11: refused with a toast in timeline mode; `AlignmentEditor` disables Create Shape and says why, and Apply coordinates still works)
+- [x] `src/hooks/queries/useShapePages.ts` ~29 to 100 (queries and keys) and `src/hooks/queries/utils.ts` ~41 (a `shape_page_marchers` change invalidates shape pages and marcher pages) · R and invalidation · not handled (P7.11: the queries are off in timeline mode's callers; the mutations show a refusal through `toastTimelineError`; `utils.ts` needs no change, since timeline mode writes none of these tables)
 
 #### P7.12 (new) Mobile and performer exports
 
@@ -1120,3 +1120,28 @@ Facts that change how to read the PR #14 note above:
 - **Next:** the regular desktop suite (running), then the PR, the inventory ticks and in-review.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p7-shapes`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` alone, in the background; then squash and open the PR with `pr-P7.11.md`.
+
+### 2026-10-01 · timeline-worker (timeline/p7-shapes) · P7.11 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/36 (one commit, e9dad983, on `timeline-try-2` after P7.7).
+  - **Canvas drawing and dragging of spec shapes:** the shape picked in P8.2's editor is drawn on the field with handles. Round handles reshape it; the square handle moves it. A drag redraws locally and commits once, on release, through the editor's `edit`. That gives it the resolver + display version guard, one `updateTimelineShape`, and refusals through `toastTimelineError`. The shape stays as dragged while the edit is pending, then is redrawn from the editor's rows, so a refused drag snaps back. Files: `src/timeline/timelineShapeCanvas.ts`, `src/global/classes/canvasObjects/TimelineShapeOverlay.ts`, `src/timeline/useTimelineShapeCanvas.ts`.
+  - **Page-era shape tools: gated off in timeline mode, not derived.** Shape pages aren't drawn or read. `createShapePages`, `updateShapePages`, `deleteShapePages` and `copyShapePageToPage` refuse inside their transaction (`E-ARGS`, `PAGE_SHAPES_TIMELINE_MESSAGE`), and the mutations toast the reason. Create Shape on the line tool is disabled with the reason. The old `ShapeEditor` renders nothing. There are no shape locks.
+  - Ticked the 10 P7.11 inventory items, the P7.2 `isLocked` item and the P7.4 shape page cascade item, each with its note.
+- **Decisions (P7.11, for the lead):**
+  - **Gate rather than derive the page shape tools.** A page shape puts some of a page's marchers on an SVG path, which can include Bezier segments. Its timeline form is a transition into a spec shape: a structural edit (Create Track into a shape, P8.9), and spec shapes have no Bezier kind. Copy to another page is, in timeline terms, another transition into the same spec shape.
+  - **No shape locks in timeline mode.** A move into a shape-backed transition switches it to points (P7.2). The timeline canvas render clears a page-era `isLocked`.
+  - **The refusal lives in the db-functions** (the flag is read in the transaction, as `withTimelinePageRipple` does), so no path can write page shapes in timeline mode.
+- **Follow-ups (unowned):** drawing a new shape by dragging on the field; coordinate rounding while dragging a handle; outlines for every shape used at the selected page, not only the picked one.
+- **Checks:**
+  - `tsc --noEmit`: pass, on the rebased head too.
+  - The 6 new and changed test files: 69 passed, on the rebased head.
+  - Focused `test:history` on `shapePagesTimelineMode.test.ts` and `marcherPage.test.ts`: 62 passed.
+  - `pnpm --dir apps/desktop run test`, run alone, before the rebase onto P7.7: 150 files passed, 7 skipped; 2,194 tests passed. There is no file overlap with P7.7.
+  - Mutation check: removing the lock clearing fails the new lock test.
+  - eslint: 0 errors, no new warnings. prettier and cspell: pass.
+- **Skipped:**
+  - By policy: the full `test:history` suite, e2e and `build:electron`.
+  - No manual run in the app.
+- **Exit gate:** unchanged.
+- **Next:** review and merge PR #36.
+- **Blockers:** none.
