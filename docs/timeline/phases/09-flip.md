@@ -99,7 +99,7 @@ User-facing docs in `apps/website` and release notes.
 ### P9.8: Convert off the main process
 
 - Owner: timeline-worker (timeline/p9-8-convert-worker)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P9.3
@@ -351,3 +351,17 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Still open:** a manual app run with `OPENMARCH_CONVERT_ON_OPEN=1` (dialogs and the preparing window). This is human.
 - **Next:** P9.8 (convert off the main process) and P9.5 (freeze page-era writes).
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p9-8-convert-worker) · P9.8
+
+- **Done:** checkpoint 8da15a6c (`wip:`) on `timeline/p9-8-convert-worker`.
+  - **Choice: `node:worker_threads`, not `utilityProcess`.** A worker runs under vitest (a `utilityProcess` exists only inside Electron), so the P9.3 tests run through the real worker path. It shares the process, so it starts fast and needs no second process. Checked first: a thread that exits, throws or is terminated inside a `BEGIN IMMEDIATE` transaction has its `DatabaseSync` closed by Node, the journal rolls the transaction back, and a new connection can write at once. Electron 40 loads a worker script and its `node_modules` from inside `app.asar`, with `node:sqlite` (checked with a packed test app).
+  - `electron/database/convertOnOpenWorker.ts` (the worker entry, its own connection, 5 s busy timeout), `convertOnOpenProtocol.ts` (messages, plain-data test hooks), `electron/main/convertWorkerHost.ts` (starts it, resolves only after the thread exits, terminates workers on `before-quit`). `openShow.ts` closes its connection before the worker starts and reopens it after; the open lock and the SQL suspension are unchanged. Vite builds the worker as a third entry to `dist-electron/worker/`.
+  - Progress: the worker posts "backing up", then pages done out of total; the preparing window shows them (`executeJavaScript` on the main-process-owned window) and the taskbar bar. No IPC channel to the renderer, so no C-n note.
+  - Bulk path: assignments go in as chunked multi-row inserts (500 rows), destinations chunked; the converter writes page by page for progress. 400 × 100: conversion 3,791 ms before, 1,430 ms after (in-thread timing).
+  - Renderer-free worker bundle: split `historyTriggers.ts` out of `history.ts`, `timelineTransitionsInTransaction.ts` and `timelineShapesInTransaction.ts` out of their modules (the old modules re-export them and keep the undoable wrappers), `convertPagesInTransaction.ts` out of `writePageConversion.ts`, `assert` and `mainProcessLog` out of `utils.ts`, and `sqlProxy.ts` out of `database.services.ts`. The worker bundle now loads no react, zustand, sonner, electron or renderer db module.
+  - **P9.3 bug found and fixed:** `createTriggers` ran the history triggers through `window.electron.unsafeSqlProxy` unless `VITEST` was set, so in the real main process the conversion's `create-undo-triggers` step would have thrown and every conversion would have rolled back. It now runs them on its own connection whenever there is no `window`.
+- **Checks:** `tsc --noEmit` clean. Tests not run yet.
+- **Next:** tests (P9.3 tests through the worker, crash and failure rollback, a timer keeps firing during a large conversion, terminate on quit, worker bundle), then the focused suites.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p9-8-convert-worker` (8da15a6c), run `pnpm install` and the package build, then write the worker tests in `electron/database/__test__/` and `electron/main/__test__/`.
