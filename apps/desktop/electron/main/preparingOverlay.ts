@@ -18,6 +18,8 @@ const STATUS_ID = "om-preparing-status";
 const BAR_ID = "om-preparing-bar";
 /** Marks the page elements the overlay made inert, so hiding it restores only those. */
 const INERT_MARK = "data-om-preparing-inert";
+/** Where the page keeps the overlay's key listener, so hiding it removes that listener. */
+const KEY_BLOCKER = "__omPreparingKeyBlocker";
 
 /** The status line and bar fraction (undefined: indeterminate) for `progress`. */
 export function describePreparingProgress(progress: ConvertProgress): {
@@ -64,19 +66,39 @@ export function throttleProgress(
 
 /** The script that removes the overlay and makes the page usable again. */
 const removeOverlayScript = `
+  if (window.${KEY_BLOCKER}) {
+    for (const type of ["keydown", "keypress", "keyup"])
+      window.removeEventListener(type, window.${KEY_BLOCKER}, true);
+    delete window.${KEY_BLOCKER};
+  }
   document.getElementById(${JSON.stringify(PREPARING_OVERLAY_ID)})?.remove();
   for (const el of Array.from(document.querySelectorAll("[${INERT_MARK}]"))) {
     el.removeAttribute("inert");
     el.removeAttribute(${JSON.stringify(INERT_MARK)});
   }`;
 
+export interface OverlayOptions {
+    /**
+     * Draw minimize and close buttons in the overlay's title strip: on
+     * Windows and Linux the window's own controls are part of the page, which
+     * the overlay makes inert. Close takes the quit-during-conversion path.
+     */
+    windowControls: boolean;
+}
+
 /**
  * The script that puts the overlay over the page. It makes the rest of the
- * page inert (no clicks, focus or keys reach it), and resolves two animation
- * frames after adding the overlay, once it has been painted. The file name is
- * set as text, never as HTML.
+ * page inert (no clicks or focus reach it), and stops every key from reaching
+ * the page's handlers (undo, redo, playback and the like); keys with Cmd,
+ * Ctrl or Alt keep their default, so menu shortcuts such as Quit still work
+ * (the main process blocks Reload). The top strip still drags the window.
+ * Resolves two animation frames after adding the overlay, once it has been
+ * painted. The file name is set as text, never as HTML.
  */
-export function showOverlayScript(fileName: string): string {
+export function showOverlayScript(
+    fileName: string,
+    { windowControls }: OverlayOptions = { windowControls: false },
+): string {
     return `(() => {${removeOverlayScript}
   const make = (tag, css, text) => {
     const el = document.createElement(tag);
@@ -101,7 +123,24 @@ export function showOverlayScript(fileName: string): string {
   status.id = ${JSON.stringify(STATUS_ID)};
   status.setAttribute("aria-live", "polite");
   card.append(bar, status);
-  overlay.append(card);
+  const strip = make("div", "position:absolute;top:0;left:0;right:0;height:40px;display:flex;justify-content:flex-end;align-items:stretch;-webkit-app-region:drag;");
+  if (${JSON.stringify(windowControls)}) {
+    const control = (label, symbol, action) => {
+      const button = make("button", "-webkit-app-region:no-drag;cursor:pointer;border:0;background:transparent;color:#fff;font:16px sans-serif;padding:0 16px;", symbol);
+      button.setAttribute("aria-label", label);
+      button.addEventListener("click", () => window.electron?.[action]?.());
+      return button;
+    };
+    strip.append(control("Minimize", "\u2013", "minimizeWindow"), control("Close", "\u2715", "closeWindow"));
+  }
+  overlay.append(strip, card);
+  const blockKey = (event) => {
+    event.stopImmediatePropagation();
+    if (!event.metaKey && !event.ctrlKey && !event.altKey) event.preventDefault();
+  };
+  window.${KEY_BLOCKER} = blockKey;
+  for (const type of ["keydown", "keypress", "keyup"])
+    window.addEventListener(type, blockKey, true);
   for (const el of Array.from(document.body.children)) {
     if (el.hasAttribute("inert")) continue;
     el.setAttribute("inert", "");
@@ -153,11 +192,17 @@ const run = (target: PreparingTarget, code: string) =>
 export async function showPreparingOverlay(
     target: PreparingTarget,
     fileName: string,
+    options: OverlayOptions = {
+        windowControls: process.platform !== "darwin",
+    },
 ): Promise<void> {
     try {
         if (target.isDestroyed()) return;
         target.setProgressBar(2); // 2: indeterminate
-        await withTimeout(run(target, showOverlayScript(fileName)), 1000);
+        await withTimeout(
+            run(target, showOverlayScript(fileName, options)),
+            1000,
+        );
     } catch (error) {
         console.error("Could not show the preparing overlay:", error);
     }

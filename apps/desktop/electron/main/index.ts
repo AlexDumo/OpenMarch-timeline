@@ -40,10 +40,12 @@ import {
     appQuitRequested,
     conversionInProgress,
     defaultConvertWorkerPath,
-    keepFileToReopen,
+    markQuitRequested,
     quitInsteadOfClosing,
     stopConversionWorkersOnQuit,
 } from "./convertWorkerHost";
+import { closeShowFileNow } from "./closeShowFile";
+import { blockReloadWhileConverting } from "./reloadGuard";
 import {
     openOnce,
     openShowDatabase,
@@ -257,6 +259,9 @@ async function createWindow(title?: string) {
         // conversion (rolled back; the file reopens next launch) and then quits (P9.9).
         if (quitInsteadOfClosing(event, app)) return;
 
+        // Closing the main window always ends in a quit: from here no conversion starts, and an
+        // open's dialog closes as if cancelled, so the close below can't wait on it (P9.9).
+        markQuitRequested();
         event.preventDefault();
         win!.hide(); // use non-null assertion now that we're inside the if-block
 
@@ -270,6 +275,11 @@ async function createWindow(title?: string) {
         win!.destroy();
         win = null;
         app.quit();
+    });
+
+    // No reload shortcut while a file converts on open (P9.9).
+    win.webContents.on("before-input-event", (event, input) => {
+        blockReloadWhileConverting(event, input);
     });
 
     // Make all links open with the browser, not with the application
@@ -1225,43 +1235,15 @@ export function closeCurrentFile(isAppQuitting = false): Promise<number> {
     return withOpenLock(() => closeCurrentFileNow(isAppQuitting));
 }
 
-async function closeCurrentFileNow(isAppQuitting: boolean) {
-    console.log("closeCurrentFile called. isAppQuitting:", isAppQuitting);
-    // console.trace();
-
-    if (!win) return -1;
-
-    if (currentNewShowDraftPath) {
-        await discardNewShowDraft();
-        if (!isAppQuitting) {
-            win.webContents.reload();
-        }
-        return 200;
-    }
-
-    // The preview needs an open file the page can draw: none while an open has the renderer's
-    // SQL suspended (it is reloading, or a conversion was stopped), so don't wait 5 s for it.
-    const dbPath = DatabaseServices.getDbPath();
-    if (dbPath && !DatabaseServices.isSqlProxySuspended()) {
-        try {
-            const svgResult = await requestSvgBeforeClose(win);
-            updateRecentFileSvgPreview(dbPath, svgResult);
-        } catch (error) {
-            console.error("Error getting SVG on close:", error);
-        }
-    }
-
-    // Close the current file
-    DatabaseServices.setDbPath("", false);
-    // A conversion the quit stopped keeps its file as the one to reopen on the next launch.
-    if (!keepFileToReopen(isAppQuitting)) store.set("databasePath", "");
-
-    // Only reload if we're NOT quitting the app
-    if (!isAppQuitting) {
-        win.webContents.reload();
-    }
-
-    return 200;
+function closeCurrentFileNow(isAppQuitting: boolean) {
+    return closeShowFileNow(isAppQuitting, {
+        page: () => (win && !win.isDestroyed() ? win.webContents : null),
+        hasDraft: () => currentNewShowDraftPath !== null,
+        discardDraft: discardNewShowDraft,
+        requestSvg: () => requestSvgBeforeClose(win!),
+        saveSvgPreview: updateRecentFileSvgPreview,
+        forgetFileToReopen: () => store.set("databasePath", ""),
+    });
 }
 
 // Audio files

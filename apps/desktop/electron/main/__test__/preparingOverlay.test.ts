@@ -134,6 +134,79 @@ describe("showPreparingOverlay (P9.9)", () => {
     });
 });
 
+describe("the overlay is modal (P9.9)", () => {
+    const press = (init: KeyboardEventInit) => {
+        const event = new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            ...init,
+        });
+        document.getElementById("app-button")!.dispatchEvent(event);
+        return event;
+    };
+
+    it("keeps keys from the page's handlers (undo, playback…) until it hides", async () => {
+        const pageKeys: string[] = [];
+        const record = (event: KeyboardEvent) => pageKeys.push(event.key);
+        window.addEventListener("keydown", record);
+        document.addEventListener("keydown", record, true);
+        try {
+            const { target } = fakeMainWindow();
+            await showPreparingOverlay(target, "show.dots", {
+                windowControls: false,
+            });
+
+            const space = press({ key: " " });
+            const undo = press({ key: "z", metaKey: true });
+            const quit = press({ key: "q", ctrlKey: true });
+            expect(pageKeys).toEqual([]);
+            // Plain keys lose their default; shortcuts keep it, so the menu's Quit still works.
+            expect(space.defaultPrevented).toBe(true);
+            expect(undo.defaultPrevented).toBe(false);
+            expect(quit.defaultPrevented).toBe(false);
+
+            hidePreparingOverlay(target);
+            await Promise.resolve();
+            press({ key: "z", metaKey: true });
+            expect(pageKeys).toEqual(["z", "z"]);
+        } finally {
+            window.removeEventListener("keydown", record);
+            document.removeEventListener("keydown", record, true);
+        }
+    });
+
+    it("on Windows and Linux, draws minimize and close, which reach the window's own controls", async () => {
+        const electron = {
+            minimizeWindow: vi.fn(),
+            maximizeWindow: vi.fn(),
+            closeWindow: vi.fn(),
+        };
+        vi.stubGlobal("electron", electron);
+        const { target } = fakeMainWindow();
+        await showPreparingOverlay(target, "show.dots", {
+            windowControls: true,
+        });
+
+        const button = (label: string) =>
+            overlay()!.querySelector<HTMLButtonElement>(
+                `button[aria-label="${label}"]`,
+            )!;
+        button("Close").click();
+        button("Minimize").click();
+
+        expect(electron.closeWindow).toHaveBeenCalledOnce();
+        expect(electron.minimizeWindow).toHaveBeenCalledOnce();
+    });
+
+    it("on macOS, draws no window controls (the traffic lights stay native)", async () => {
+        const { target } = fakeMainWindow();
+        await showPreparingOverlay(target, "show.dots", {
+            windowControls: false,
+        });
+        expect(overlay()!.querySelectorAll("button")).toHaveLength(0);
+    });
+});
+
 describe("showPreparingProgress (P9.8)", () => {
     it("shows the backup, then pages done out of total, in the overlay and on the taskbar", async () => {
         const { target, state } = fakeMainWindow();

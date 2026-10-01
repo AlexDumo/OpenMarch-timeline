@@ -14,15 +14,34 @@ import {
     showPreparingProgress,
     throttleProgress,
 } from "./preparingOverlay";
-import { beginPreparing, conversionWorkersStopped } from "./convertWorkerHost";
+import {
+    appQuitRequested,
+    beginPreparing,
+    conversionWorkersStopped,
+    onQuitRequested,
+} from "./convertWorkerHost";
 
-function messageBox(
+/**
+ * A message box over `win` that closes as if cancelled once the app starts
+ * quitting (P9.9), so a dialog left on a window that is closing can't hold
+ * the open, and with it the quit, forever. (On macOS a message box with no
+ * parent window runs synchronously and can't be closed this way; that only
+ * happens at startup, before the main window exists.)
+ */
+async function messageBox(
     win: BrowserWindow | null,
     options: Electron.MessageBoxOptions,
 ): Promise<Electron.MessageBoxReturnValue> {
-    return win && !win.isDestroyed()
-        ? dialog.showMessageBox(win, options)
-        : dialog.showMessageBox(options);
+    const controller = new AbortController();
+    const stopListening = onQuitRequested(() => controller.abort());
+    try {
+        const withSignal = { ...options, signal: controller.signal };
+        return await (win && !win.isDestroyed()
+            ? dialog.showMessageBox(win, withSignal)
+            : dialog.showMessageBox(withSignal));
+    } finally {
+        stopListening();
+    }
 }
 
 /** Native dialogs over `win` (or app-modal when there is no window yet, at startup). */
@@ -50,6 +69,8 @@ export function electronConvertOnOpenDialogs(
         },
 
         async warnOlderRelease(fileName, backupPath) {
+            // Quitting: open nothing, as Cancel would.
+            if (appQuitRequested()) return "stop";
             const buttons = backupPath
                 ? ["Open Without Converting", "Show Backup", "Cancel"]
                 : ["Open Without Converting", "Cancel"];
@@ -75,6 +96,8 @@ export function electronConvertOnOpenDialogs(
         },
 
         converted(fileName, backupPath) {
+            // A conversion that finished just as the app quits: no sheet over a closing window.
+            if (appQuitRequested()) return;
             void messageBox(win, {
                 type: "info",
                 title: "Converted to timelines",
@@ -85,8 +108,8 @@ export function electronConvertOnOpenDialogs(
         },
 
         async backupFailed(fileName, message) {
-            // The app is quitting and stopped the worker: nothing to tell.
-            if (conversionWorkersStopped()) return;
+            // The app is quitting (and maybe stopped the worker): nothing to tell.
+            if (appQuitRequested()) return;
             await messageBox(win, {
                 type: "error",
                 title: "Couldn't back up your file",
@@ -99,6 +122,7 @@ export function electronConvertOnOpenDialogs(
         async conversionFailed(fileName, error, backupPath) {
             if (conversionWorkersStopped()) return;
             captureException(error);
+            if (appQuitRequested()) return;
             await messageBox(win, {
                 type: "error",
                 title: "Couldn't convert your file",

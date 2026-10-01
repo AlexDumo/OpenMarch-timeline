@@ -57,6 +57,8 @@ let stoppedByQuit = false;
 /** Open flows between showing "Preparing your file…" and its end (P9.9). */
 let preparing = 0;
 let idleWaiters: (() => void)[] = [];
+/** Called once, when the app starts quitting (`onQuitRequested`). */
+let quitListeners = new Set<() => void>();
 
 /**
  * True once a quit stopped a conversion (a running worker, or one about to
@@ -68,6 +70,38 @@ export const conversionWorkersStopped = () => stoppedByQuit;
 
 /** True once the app started quitting: a new open or conversion must not start. */
 export const appQuitRequested = () => quitRequested;
+
+/**
+ * Marks the app as quitting (from `before-quit`, or the main window's `close`
+ * handler, which always ends in a quit): no conversion starts from now on,
+ * and the open flow's dialogs close as if cancelled (`onQuitRequested`).
+ */
+export function markQuitRequested(): void {
+    if (quitRequested) return;
+    quitRequested = true;
+    const listeners = [...quitListeners];
+    quitListeners = new Set();
+    for (const listener of listeners) {
+        try {
+            listener();
+        } catch {
+            // A listener never stops the quit.
+        }
+    }
+}
+
+/**
+ * Calls `listener` once the app starts quitting, at once if it already has.
+ * Returns a function that stops listening.
+ */
+export function onQuitRequested(listener: () => void): () => void {
+    if (quitRequested) {
+        listener();
+        return () => {};
+    }
+    quitListeners.add(listener);
+    return () => quitListeners.delete(listener);
+}
 
 /**
  * True while an open shows "Preparing your file…" or a conversion worker runs:
@@ -136,6 +170,9 @@ export function quitInsteadOfClosing(
 export function resetConversionQuitForTests() {
     quitRequested = false;
     stoppedByQuit = false;
+    preparing = 0;
+    idleWaiters = [];
+    quitListeners = new Set();
 }
 
 /** Number of conversion workers running; for tests. */
@@ -316,7 +353,12 @@ export interface QuittingApp {
         listener: (event: { preventDefault(): void }) => void,
     ): unknown;
     quit(): void;
+    /** Ends the process at once, without `before-quit` or closing windows. */
+    exit(exitCode?: number): void;
 }
+
+/** How long a held quit waits for the conversion to stop and the file to close. */
+export const QUIT_STOP_TIMEOUT_MS = 15_000;
 
 export interface QuitDuringConversionOptions {
     /**
@@ -325,6 +367,8 @@ export interface QuitDuringConversionOptions {
      */
     beforeQuitting?: () => void | Promise<void>;
     log?: (message: string) => void;
+    /** How long to wait before ending the process anyway (default `QUIT_STOP_TIMEOUT_MS`). */
+    timeoutMs?: number;
 }
 
 /**
@@ -338,6 +382,11 @@ export interface QuitDuringConversionOptions {
  *    keeps the file as the one to reopen, and convert, on the next launch;
  * 3. runs `beforeQuitting`, then quits again, so no second Quit is needed.
  *
+ * If that takes longer than `timeoutMs` (a native SQLite call such as the
+ * backup's `VACUUM INTO` can't be interrupted, or a dialog blocks), it ends
+ * the process with `app.exit()`: SQLite's journal rolls the conversion back
+ * when the file is next opened. Further Quits meanwhile are held too.
+ *
  * A quit with no conversion in progress isn't held up. Every quit stops any
  * later conversion from starting.
  */
@@ -348,18 +397,26 @@ export function stopConversionWorkersOnQuit(
     // eslint-disable-next-line no-console
     const log = options.log ?? ((message: string) => console.log(message));
     let stopping = false;
+    const timeoutMs = options.timeoutMs ?? QUIT_STOP_TIMEOUT_MS;
     app.on("before-quit", (event) => {
         const converting = conversionInProgress();
         log(
-            `before-quit: ${converting ? (stopping ? "still stopping the conversion" : "stopping the conversion first") : "no conversion in progress"}`,
+            `before-quit: ${stopping ? "still stopping the conversion" : converting ? "stopping the conversion first" : "no conversion in progress"}`,
         );
-        quitRequested = true;
+        markQuitRequested();
+        if (stopping) {
+            event.preventDefault();
+            return;
+        }
         if (!converting) return;
         event.preventDefault();
-        if (stopping) return;
         stopping = true;
         if (running.size > 0) stoppedByQuit = true;
-        void (async () => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timedOut = new Promise<"timeout">((resolve) => {
+            timer = setTimeout(() => resolve("timeout"), timeoutMs);
+        });
+        const stop = (async () => {
             try {
                 await terminateConversionWorkers();
                 await whenConversionsEnd();
@@ -368,10 +425,20 @@ export function stopConversionWorkersOnQuit(
                 log(
                     `before-quit: stopping the conversion failed: ${String(error)}`,
                 );
-            } finally {
-                stopping = false;
-                app.quit();
             }
+            return "stopped" as const;
         })();
+        void Promise.race([stop, timedOut]).then((outcome) => {
+            clearTimeout(timer);
+            if (outcome === "timeout") {
+                log(
+                    `before-quit: the conversion didn't stop within ${timeoutMs} ms; exiting (SQLite rolls it back on the next open)`,
+                );
+                app.exit(0);
+                return;
+            }
+            stopping = false;
+            app.quit();
+        });
     });
 }

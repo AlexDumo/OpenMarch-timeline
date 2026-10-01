@@ -1,6 +1,7 @@
 import * as mainProcess from "./index";
 import { MenuItem } from "electron";
-import { app, dialog, Menu, shell } from "electron";
+import { app, dialog, Menu, shell, type BrowserWindow } from "electron";
+import { reloadUnlessConverting } from "./reloadGuard";
 
 const isMacOS = process.platform === "darwin";
 
@@ -123,8 +124,29 @@ template.push(
         new MenuItem({
             label: "View",
             submenu: [
-                { role: "reload" },
-                { role: "forceReload" },
+                // Not while a file converts on open (P9.9).
+                {
+                    label: "Reload",
+                    accelerator: "CmdOrCtrl+R",
+                    click(_item, focusedWindow) {
+                        reloadUnlessConverting(
+                            (focusedWindow as BrowserWindow | undefined)
+                                ?.webContents,
+                            false,
+                        );
+                    },
+                },
+                {
+                    label: "Force Reload",
+                    accelerator: "Shift+CmdOrCtrl+R",
+                    click(_item, focusedWindow) {
+                        reloadUnlessConverting(
+                            (focusedWindow as BrowserWindow | undefined)
+                                ?.webContents,
+                            true,
+                        );
+                    },
+                },
                 { role: "toggleDevTools" },
                 { type: "separator" },
                 { role: "resetZoom" },
