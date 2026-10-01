@@ -1,9 +1,9 @@
 ---
 phase: 8
 title: Timeline authoring MVP
-status: not-started
-owner: unassigned
-branch: none
+status: in-progress
+owner: timeline-worker (timeline/p8-timeline-ui)
+branch: timeline/p8-timeline-ui
 pr: none
 depends_on: [7]
 updated: 2026-09-29
@@ -41,8 +41,8 @@ Confirm `docs/timeline/ui.md` (set its status to accepted), and answer U-Q1 to U
 
 ### P8.1: Port the 0.2 timeline
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p8-timeline-ui)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P8.0, P5.9
