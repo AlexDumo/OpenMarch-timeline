@@ -140,7 +140,7 @@ Shape create, edit, delete, copy to another page and the shape lock rules. Today
 ### P7.12: Mobile and performer exports
 
 - Owner: timeline-worker (timeline/p7-mobile-exports)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/30
 - Parallel: yes
 - Depends on: P7.1
@@ -904,4 +904,23 @@ Facts that change how to read the PR #14 note above:
 - **Checks:** `tsc --noEmit`: clean. `test:history` on timelineDisplay, timelineHistoryFocus and history: 72 passed. `pnpm --dir apps/desktop run test`: 134 files, 1966 tests passed. Skipped per policy: full `test:history`, e2e.
 - **Note:** a drill number edit doesn't move the resolver version (the change log's marcher image doesn't carry it), so the display signal is what refreshes labels; a new marcher moves both.
 - **Next:** re-review and merge.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.12
+
+- **Done:** reviewed PR #30 and squash-merged it at head 357f1e90. The review found no blockers, but these were fixed before merging:
+  - every read now happens under one lock;
+  - sampling yields to the event loop;
+  - the redundant settle call is gone;
+  - the lock warning is in the doc comments;
+  - new tests: rotation drop, post-conversion page and marcher, and a page-mode snapshot.
+- **Checks** (lead, on 357f1e90):
+  - `tsc --noEmit`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/` and `src/components/mobile`: 33 files, 692 tests passed.
+  - `pnpm --dir apps/desktop run test`: 134 files, 1,965 tests passed, no errors.
+  - That head predates #31 (P8.4). The two touch disjoint files and merge cleanly; a combined base run is planned after #32.
+  - Skipped by policy: full `test:history` and e2e.
+- **Open question for a person:**
+  - **Mid-page motion in the mobile payload:** the payload carries only page-end positions, so shape paths and moves ending mid-page reach the mobile app as straight page-to-page moves. Carrying them would change the mobile format.
+  - **Coordinate order:** coordinates are page-major in timeline mode. The mobile reader must look them up by (marcherId, pageId).
 - **Blockers:** none.
