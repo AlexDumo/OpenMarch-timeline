@@ -305,3 +305,18 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Update the PR body.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p9-3-convert-on-open` (08f73fc0). From `apps/desktop`, run `pnpm exec vite build`, then `pnpm run test:focused electron`, then `pnpm run test`.
+
+### 2026-10-01 · timeline-worker (timeline/p9-3-convert-on-open) · P9.3
+
+- **Done:** second-review fixes are complete on 08f73fc0, and the PR https://github.com/AlexDumo/OpenMarch-timeline/pull/42 body is updated. The previous entry lists the changes. The ADR 0001 §6 text in that entry still needs applying by the lead.
+- **Checks (08f73fc0):**
+  - `tsc --noEmit`: clean.
+  - `vite build`: passed.
+    - The startup chunks require no react, zustand or sonner, and contain no renderer db code.
+    - The convert-on-open chunk loads only through the dynamic `import()`.
+    - No bundle contains `import.meta`.
+  - `test:focused electron` plus `useLoadFileErrorHandler` and `newShowCompletion`: 21 files, 300 passed.
+  - `pnpm run test`, run alone: 169 files passed, 8 skipped; 2,373 tests passed.
+  - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run either.
+- **Next:** re-review and merge by the lead; then apply the ADR §6 text.
+- **Blockers:** none.
