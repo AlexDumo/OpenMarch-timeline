@@ -52,8 +52,8 @@ Bring the timeline components and stories from `origin/0.2` (`568056aa`, `apps/d
 ### P8.8: View-model adapter
 
 - Owner: timeline-worker (timeline/p8-adapter)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/21
 - Parallel: yes
 - Depends on: P8.1
 
@@ -244,3 +244,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the suite result, eslint/prettier/cspell, tidy the commits, open the PR.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-adapter`; `pnpm --dir apps/desktop run test` (in the background); then squash the wip commits and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+
+### 2026-09-30 · timeline-worker (timeline/p8-adapter) · P8.8
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/21 (one commit, 9d200950, rebased on `timeline-try-2` at dd253109). The adapter, `resolverSpans`, `useTimelineTracks` wired into `TimelineModePanel`, the beat-0 view axis (UI-5), linked-clip ring and diagnostic badges. U-Q1 and U-Q4 decided in `ui.md` (UI-3, UI-4).
+- **For P8.9:** `onTimelineRangeCommit` and `onCreateTrack` now arrive in spec beats; a clip move carries the clip's spec range shifted by the drag, and the track's `linkId` is the spec timeline id. Dragging previews only the dragged clip.
+- **Checks:** build of desktop deps: pass. `tsc --noEmit`: pass (after rebase). `vitest run src/components/timeline/__test__/ src/timeline/__test__/`: 27 files, 316 passed (after rebase). `pnpm --dir apps/desktop run test`: 112 files, 1,664 passed (before the rebase, which touched no files of this PR). eslint 0 errors; prettier and cspell pass. Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Exit gate:** nothing ticked (the UI verification item needs a manual app check).
+- **Next:** review and merge by the lead; then P8.9.
+- **Blockers:** none.
