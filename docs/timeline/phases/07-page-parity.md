@@ -140,7 +140,7 @@ Shape create, edit, delete, copy to another page and the shape lock rules. Today
 ### P7.12: Mobile and performer exports
 
 - Owner: timeline-worker (timeline/p7-mobile-exports)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -706,4 +706,12 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`. I didn't run the app by hand.
 - **Exit gate:** unchanged.
 - **Next:** review and merge PR #29.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-mobile-exports) · P7.12 checkpoint
+
+- **Done:** commit `31e23071` on `timeline/p7-mobile-exports`. New `apps/desktop/src/timeline/timelinePagePositions.ts`: `readTimelinePagePositions(db)` awaits `timelinePositionsSettled()`, then, under the write lock, cold-builds a resolver (`acquireExportResolver`, P7.8) and reads the pages (`readShowTiming`), and samples every marcher at each page's end beat (`sampleTimelinePagePositions`, `pageEndBeat`). `dots-to-om.ts` reads the timeline flag from `workspace_settings` and, in timeline mode, builds the payload's coordinates from those samples instead of `marcher_pages`, with no per-page rotation or appearance overrides (dropped, P7.14). Page mode is unchanged. Tests: `src/components/mobile/utilities/__test__/dots-to-om.timeline.test.ts`.
+- **Checks:** `tsc --noEmit` clean; `vitest run src/components/mobile`: 8 files, 83 passed. The in-flight-write test fails when the wait is removed (checked by hand).
+- **Next:** the regular desktop suite, then the PR.
+- **Resume from:** branch `timeline/p7-mobile-exports` at `31e23071`; run `pnpm --dir apps/desktop run test` in the background, then open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
 - **Blockers:** none.
