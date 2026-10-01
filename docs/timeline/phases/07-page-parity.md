@@ -59,8 +59,8 @@ Marcher add and delete: the home position, plus a vacant or filled slot in each 
 
 ### P7.4: Page ripple procedures
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-ripple)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -69,8 +69,8 @@ Page insert, delete and resize as **ripple procedures** in app code, ordered so 
 
 ### P7.5: Beat ripple procedures
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-ripple)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.4
