@@ -5,6 +5,7 @@ import type {
     Diagnostic,
     Explanation,
     Resolver,
+    SpanInfo,
     XY,
 } from "@openmarch/core";
 import { withTimelineWriteLock } from "@/db-functions/history";
@@ -324,4 +325,27 @@ export function useDiagnostics(): Diagnostic[] {
         void version;
         return resolver ? resolver.diagnostics() : noDiagnostics;
     }, [resolver, version]);
+}
+
+/**
+ * A marcher's resolver spans (spec R-2, R-3), sorted, from the leading hold to the trailing one.
+ * The public resolver API (spec §10.1) has no span list, so this walks `explain` from one span's
+ * end to the next; it costs one `explain` per span. For the timeline's view-model adapter
+ * (`timelineViewModel.ts`). Empty for a marcher the resolver doesn't have (yet).
+ */
+export function resolverSpans(
+    resolver: Resolver,
+    marcherId: number,
+): SpanInfo[] {
+    const spans: SpanInfo[] = [];
+    if (!hasMarcher(resolver, marcherId)) return spans;
+    let beat = -Infinity;
+    while (beat < Infinity) {
+        const span = resolver.explain(marcherId, beat).span;
+        // A partition never repeats a span; guard against a resolver that would loop
+        if (span.end <= beat) break;
+        spans.push(span);
+        beat = span.end;
+    }
+    return spans;
 }

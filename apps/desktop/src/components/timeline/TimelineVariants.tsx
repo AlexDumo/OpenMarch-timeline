@@ -174,6 +174,11 @@ function TimelineSurface({
     const audioTop = trackTop + trackBandHeight + (expanded ? 4 : 2);
     const timelineHeight = audioTop + waveformHeight + 4;
     const selectionRange = getSelectionRange(selection, model);
+    const selectedLinkId =
+        selection?.kind === "track"
+            ? model.tracks.find((track) => track.id === selection.trackId)
+                  ?.linkId
+            : undefined;
     const [selectionInteraction, setSelectionInteraction] =
         useState<TimelineSelectionInteraction | null>(null);
     const selectionIdentity =
@@ -315,6 +320,14 @@ function TimelineSurface({
                                 selected={
                                     selection?.kind === "track" &&
                                     selection.trackId === track.id
+                                }
+                                linked={
+                                    selectedLinkId != null &&
+                                    track.linkId === selectedLinkId &&
+                                    !(
+                                        selection?.kind === "track" &&
+                                        selection.trackId === track.id
+                                    )
                                 }
                                 onSelect={(trackId) =>
                                     onSelectionChange({
