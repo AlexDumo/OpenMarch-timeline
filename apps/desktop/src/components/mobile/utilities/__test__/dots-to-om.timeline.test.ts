@@ -1,12 +1,18 @@
-import { afterEach, describe, expect, it as plainIt } from "vitest";
+import { afterEach, describe, expect, it as plainIt, vi } from "vitest";
 import { FieldProperties } from "@openmarch/core";
 import type { OpenMarchShowData } from "@openmarch/schema";
 import { safeValidateOpenMarchData } from "@openmarch/schema";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { FieldPropertiesSchema } from "@/components/field/fieldPropertiesSchema";
 import type { DB } from "@/global/database/db";
+import { createMarchers } from "@/db-functions/marcher";
 import { updateMarcherPages } from "@/db-functions/marcherPage";
-import { moveMarchersOnPage } from "@/db-functions/timelineMoves";
+import { createLastPage, deletePages } from "@/db-functions/page";
+import { transactionWithHistory } from "@/db-functions/history";
+import {
+    moveMarchersOnPage,
+    moveMarchersOnPageInTransaction,
+} from "@/db-functions/timelineMoves";
 import { updateWorkspaceSettingsParsed } from "@/db-functions/workspaceSettings";
 import type Page from "@/global/classes/Page";
 import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
@@ -65,27 +71,64 @@ const expectSameCoordinates = (
 };
 
 describe("sampleTimelinePagePositions", () => {
-    plainIt("samples every marcher at every page's end beat", () => {
-        const calls: [number, number][] = [];
-        const resolver = {
-            marcherIds: () => [7, 9],
-            positionAt: (m: number, b: number): [number, number] => {
-                calls.push([m, b]);
-                return [m * 10, b];
-            },
-        };
-        const pages = [
-            { id: 0, beats: [{ index: 0 }] },
-            { id: 4, beats: [{ index: 1 }, { index: 2 }, { index: 3 }] },
-        ] as unknown as Page[];
+    plainIt(
+        "samples every marcher at every page's end beat, page-major",
+        async () => {
+            const beats: number[] = [];
+            const ids = [7, 9];
+            const resolver = {
+                marcherIds: () => ids,
+                positionsAt: (b: number, out: Float64Array) => {
+                    beats.push(b);
+                    ids.forEach((m, i) => {
+                        out[2 * i] = m * 10;
+                        out[2 * i + 1] = b;
+                    });
+                },
+            };
+            const pages = [
+                { id: 0, beats: [{ index: 0 }] },
+                { id: 4, beats: [{ index: 1 }, { index: 2 }, { index: 3 }] },
+            ] as unknown as Page[];
 
-        expect(sampleTimelinePagePositions(resolver, pages)).toEqual([
-            { marcher_id: 7, page_id: 0, x: 70, y: 1 },
-            { marcher_id: 9, page_id: 0, x: 90, y: 1 },
-            { marcher_id: 7, page_id: 4, x: 70, y: 4 },
-            { marcher_id: 9, page_id: 4, x: 90, y: 4 },
-        ]);
-        expect(calls.map(([, b]) => b)).toEqual([1, 1, 4, 4]);
+            expect(
+                await sampleTimelinePagePositions({ resolver, pages }),
+            ).toEqual([
+                { marcher_id: 7, page_id: 0, x: 70, y: 1 },
+                { marcher_id: 9, page_id: 0, x: 90, y: 1 },
+                { marcher_id: 7, page_id: 4, x: 70, y: 4 },
+                { marcher_id: 9, page_id: 4, x: 90, y: 4 },
+            ]);
+            // One positionsAt call per page
+            expect(beats).toEqual([1, 4]);
+        },
+    );
+
+    plainIt("yields to the event loop on a long sample", async () => {
+        const ids = Array.from({ length: 50 }, (_, i) => i + 1);
+        let now = 0;
+        const clock = vi
+            .spyOn(performance, "now")
+            .mockImplementation(() => (now += 5));
+        const timeout = vi.spyOn(globalThis, "setTimeout");
+        try {
+            const pages = Array.from({ length: 20 }, (_, i) => ({
+                id: i,
+                beats: [{ index: i }],
+            })) as unknown as Page[];
+            const out = await sampleTimelinePagePositions({
+                resolver: {
+                    marcherIds: () => ids,
+                    positionsAt: (_b: number, out: Float64Array) => out.fill(1),
+                },
+                pages,
+            });
+            expect(out).toHaveLength(20 * 50);
+            expect(timeout).toHaveBeenCalled();
+        } finally {
+            clock.mockRestore();
+            timeout.mockRestore();
+        }
     });
 });
 
@@ -230,6 +273,8 @@ describeDbTests("dots-to-om in timeline mode", (it) => {
         );
     });
 
+    // A wrapped write joins the FIFO write lock when it is called, so the export's lock alone
+    // waits for it; no separate settle is needed for the export's private resolver
     it("waits for a timeline write still in flight", async ({
         db,
         marchersAndPages: _,
@@ -243,11 +288,15 @@ describeDbTests("dots-to-om in timeline mode", (it) => {
         const resolver = await acquireExportResolver(db);
         const [x, y] = resolver.positionAt(3, pageEndBeat(page));
 
-        // A nudge is still being written when the export starts
-        const nudge = moveMarchersOnPage({
-            db,
-            page,
-            moves: [{ marcherId: 3, x: x + 12, y }],
+        // A nudge is still being written when the export starts: its edit has begun but takes
+        // 100 ms before it writes anything
+        const nudge = transactionWithHistory(db, "slowNudge", async (tx) => {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            return moveMarchersOnPageInTransaction({
+                tx,
+                page,
+                moves: [{ marcherId: 3, x: x + 12, y }],
+            });
         });
         const exported = exportShow(db);
         await nudge;
@@ -271,5 +320,169 @@ describeDbTests("dots-to-om in timeline mode", (it) => {
         const { coordinates } = await exportShow(db);
 
         expectSameCoordinates(coordinates, expected);
+    });
+
+    it("drops a page-era rotation in timeline mode only", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        const pageId = marchersAndPages.expectedPages[1].id;
+        await updateMarcherPages({
+            db,
+            modifiedMarcherPages: [
+                { marcher_id: 2, page_id: pageId, rotation_degrees: 45 },
+            ],
+        });
+        await convertPagesToTimeline(db);
+        const rotated = key({ marcherId: "2", pageId: String(pageId) });
+
+        const pageMode = byKey((await exportShow(db)).coordinates);
+        await setTimelineMode(db, true);
+        const timeline = await exportShow(db);
+
+        expect(pageMode.get(rotated)!.rotation_degrees).toBe(45);
+        expect(
+            timeline.coordinates.some((c) => c.rotation_degrees !== undefined),
+        ).toBe(false);
+    });
+
+    it("covers a page and a marcher created after conversion", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await setTimelineMode(db, true);
+        const [created] = await createMarchers({
+            db,
+            newMarchers: [
+                { section: "Flute", drill_prefix: "N", drill_order: 1 },
+            ],
+            timelineMode: true,
+        });
+        await createLastPage({ db, newPageCounts: 4, createNewBeats: true });
+        // Neither has page-era rows to fall back on
+        await db.delete(schema.marcher_pages);
+        const pages = await sortedPages(db);
+        const newPage = pages[pages.length - 1]!;
+        const resolver = await acquireExportResolver(db);
+
+        const show = await exportShow(db);
+
+        expect(safeValidateOpenMarchData(show).success).toBe(true);
+        expect(show.pages.map((p) => p.id)).toContain(String(newPage.id));
+        expect(show.performers.map((p) => p.id)).toContain(created!.id);
+        const performerIds = show.performers.map((p) => String(p.id));
+        expect(show.coordinates).toHaveLength(
+            show.pages.length * performerIds.length,
+        );
+        const coordinates = byKey(show.coordinates);
+        for (const page of show.pages)
+            for (const marcherId of performerIds)
+                expect(
+                    coordinates.get(key({ marcherId, pageId: page.id })),
+                    `${marcherId}:${page.id}`,
+                ).toBeDefined();
+        // The new marcher on the new page sits where the resolver puts it
+        const [x0, y0] = resolver.positionAt(
+            created!.id,
+            pageEndBeat(pages[0]!),
+        );
+        const [x1, y1] = resolver.positionAt(created!.id, pageEndBeat(newPage));
+        const first = coordinates.get(
+            key({
+                marcherId: String(created!.id),
+                pageId: String(pages[0]!.id),
+            }),
+        )!;
+        const last = coordinates.get(
+            key({ marcherId: String(created!.id), pageId: String(newPage.id) }),
+        )!;
+        const row = await db.query.field_properties.findFirst();
+        const { pixelsPerStep } = new FieldProperties(
+            FieldPropertiesSchema.parse(JSON.parse(row!.json_data)),
+        );
+        expect(last.xSteps - first.xSteps).toBeCloseTo(
+            (x1 - x0) / pixelsPerStep,
+            9,
+        );
+        expect(last.ySteps - first.ySteps).toBeCloseTo(
+            -(y1 - y0) / pixelsPerStep,
+            9,
+        );
+    });
+
+    it("reads every row under one lock: a write queued mid-export waits", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await setTimelineMode(db, true);
+        const pages = await sortedPages(db);
+        const lastPage = pages[pages.length - 1]!;
+        const before = await exportShow(db);
+
+        // Queue a marcher add and a page delete while the export is reading its rows (after
+        // marchers and pages), and give them 100 ms to commit before the reads go on. Under the
+        // export's write lock they can't start, so the snapshot read next misses them too.
+        let writes: Promise<unknown> | undefined;
+        const measures = vi
+            .spyOn(db.query.measures, "findMany")
+            .mockImplementation((...args) => {
+                measures.mockRestore();
+                writes = Promise.all([
+                    createMarchers({
+                        db,
+                        newMarchers: [
+                            {
+                                section: "Flute",
+                                drill_prefix: "N",
+                                drill_order: 1,
+                            },
+                        ],
+                        timelineMode: true,
+                    }),
+                    deletePages({ db, pageIds: new Set([lastPage.id]) }),
+                ]);
+                const grace = new Promise((resolve) =>
+                    setTimeout(resolve, 100),
+                );
+                return Promise.race([writes, grace]).then(() =>
+                    db.query.measures.findMany(...args),
+                ) as unknown as ReturnType<typeof db.query.measures.findMany>;
+            });
+        const show = await exportShow(db);
+        await writes;
+
+        expect(writes).toBeDefined();
+        // The export saw neither write, and its pages and coordinates agree
+        expect(show.pages).toEqual(before.pages);
+        expect(show.performers).toEqual(before.performers);
+        expectSameCoordinates(show.coordinates, before.coordinates);
+        // Both writes did commit afterwards
+        const after = await exportShow(db);
+        expect(after.performers).toHaveLength(before.performers.length + 1);
+        expect(after.pages.map((p) => p.id)).not.toContain(String(lastPage.id));
+        expect(after.coordinates).toHaveLength(
+            after.pages.length * after.performers.length,
+        );
+    });
+
+    it("keeps page mode's output unchanged", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        await updateMarcherPages({
+            db,
+            modifiedMarcherPages: [
+                {
+                    marcher_id: 2,
+                    page_id: marchersAndPages.expectedPages[1].id,
+                    rotation_degrees: 30,
+                    shape_type: "x",
+                },
+            ],
+        });
+
+        expect(await exportShow(db)).toMatchSnapshot();
     });
 });

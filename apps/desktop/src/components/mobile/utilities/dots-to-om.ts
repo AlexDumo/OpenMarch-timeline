@@ -20,7 +20,12 @@ import {
     isTimelineModeEnabled,
     workspaceSettingsSchema,
 } from "@/settings/workspaceSettings";
-import { readTimelinePagePositions } from "@/timeline/timelinePagePositions";
+import { withTimelineWriteLock } from "@/db-functions/history";
+import {
+    readTimelinePageSnapshot,
+    sampleTimelinePagePositions,
+    type TimelinePageSnapshot,
+} from "@/timeline/timelinePagePositions";
 import {
     buildPerformerAppearanceShowData,
     databaseMarcherPagesToMarcherPages,
@@ -235,39 +240,19 @@ function buildMeasuresFromTiming({
 // Data fetch + schema build (keeps toOpenMarchSchema under max-lines)
 // -----------------------------------------------------------------------------
 
-/**
- * In page mode, every `marcher_pages` row. In timeline mode those rows are frozen page-era data
- * (docs/timeline/phases/07-page-parity.md P7.12), so the positions come from the resolver at each
- * page's end beat instead. The per-page rotation and appearance fields have no timeline home
- * (P7.14), so they are left out.
- */
-async function fetchPagePositions(
-    db: DB,
-    timelineMode: boolean,
-): Promise<{
-    marcherPagesRows: MarcherPageRow[];
-    positionRows: readonly PagePositionRow[];
-}> {
-    if (timelineMode) {
-        const positionRows = await readTimelinePagePositions(db);
-        return { marcherPagesRows: [], positionRows };
-    }
-    const marcherPagesRows = await db.query.marcher_pages.findMany();
-    return { marcherPagesRows, positionRows: marcherPagesRows };
-}
-
 const parseWorkspaceSettings = (row: { json_data: string } | undefined) =>
     row ? workspaceSettingsSchema.parse(JSON.parse(row.json_data)) : undefined;
 
-async function fetchDotsData(db: DB) {
-    const workspaceSettingsRow = await db.query.workspace_settings.findFirst({
-        columns: { json_data: true },
-    });
-    const workspaceSettings = parseWorkspaceSettings(workspaceSettingsRow);
-    const { marcherPagesRows, positionRows } = await fetchPagePositions(
-        db,
-        isTimelineModeEnabled(workspaceSettings),
+const readWorkspaceSettings = async (db: DB) =>
+    parseWorkspaceSettings(
+        await db.query.workspace_settings.findFirst({
+            columns: { json_data: true },
+        }),
     );
+
+/** Every row the payload needs except the marcher positions. */
+async function readShowRows(db: DB) {
+    const workspaceSettings = await readWorkspaceSettings(db);
 
     const timingRows = (await db
         .select()
@@ -314,17 +299,63 @@ async function fetchDotsData(db: DB) {
         marchersRows,
         pagesRows,
         measuresRows,
-        marcherPagesRows,
-        positionRows,
         workspaceSettings,
         pagesInOrder,
         performerAppearanceExportData,
     };
 }
 
-function buildOpenMarchFromRows(
-    data: Awaited<ReturnType<typeof fetchDotsData>>,
-): OpenMarchShowData {
+type DotsData = Awaited<ReturnType<typeof readShowRows>> & {
+    marcherPagesRows: MarcherPageRow[];
+    positionRows: readonly PagePositionRow[];
+};
+
+async function readPageModeData(db: DB): Promise<DotsData> {
+    const rows = await readShowRows(db);
+    const marcherPagesRows = await db.query.marcher_pages.findMany();
+    return { ...rows, marcherPagesRows, positionRows: marcherPagesRows };
+}
+
+/**
+ * In page mode, the positions are every `marcher_pages` row. In timeline mode those rows are
+ * frozen page-era data (docs/timeline/phases/07-page-parity.md P7.12), so the positions come from
+ * the resolver at each page's end beat instead. The per-page rotation and appearance fields have
+ * no timeline home (P7.14), so they are left out.
+ *
+ * In timeline mode every read and the resolver build happen inside one `withTimelineWriteLock`,
+ * so the pages, marchers and positions all come from the same committed state: a write started
+ * before the export has committed, and none can start until the reads finish. Sampling runs
+ * after the lock is released, on the private resolver.
+ */
+async function fetchDotsData(db: DB): Promise<DotsData> {
+    if (!isTimelineModeEnabled(await readWorkspaceSettings(db)))
+        return readPageModeData(db);
+    const read = await withTimelineWriteLock(
+        async (): Promise<
+            | { kind: "page"; data: DotsData }
+            | {
+                  kind: "timeline";
+                  rows: Awaited<ReturnType<typeof readShowRows>>;
+                  snapshot: TimelinePageSnapshot;
+              }
+        > => {
+            const rows = await readShowRows(db);
+            // The flag can change while the lock is awaited; the rows read under it decide
+            if (!isTimelineModeEnabled(rows.workspaceSettings))
+                return { kind: "page", data: await readPageModeData(db) };
+            return {
+                kind: "timeline",
+                rows,
+                snapshot: await readTimelinePageSnapshot(db),
+            };
+        },
+    );
+    if (read.kind === "page") return read.data;
+    const positionRows = await sampleTimelinePagePositions(read.snapshot);
+    return { ...read.rows, marcherPagesRows: [], positionRows };
+}
+
+function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
     const {
         timingRows,
         fieldPropsRow,
@@ -425,6 +456,10 @@ function buildOpenMarchFromRows(
  * Builds an OpenMarch schema object from the currently open .dots database.
  * Uses the persistent ORM connection from getOrmConnection().
  *
+ * In timeline mode it reads under the timeline write lock (`withTimelineWriteLock`), so it must
+ * never be called from inside a wrapped write (`transactionWithHistory`): that would wait for
+ * the lock its own caller holds.
+ *
  * @returns Valid OpenMarchSchema object
  * @throws "Db is not open" if no show is open
  * @throws ZodError (or formatted error) if built data fails schema validation
@@ -446,6 +481,10 @@ export async function toOpenMarchSchema(db: DB): Promise<OpenMarchShowData> {
 /**
  * Converts the current .dots database to a compressed OpenMarch file.
  * Uses the persistent ORM connection from getOrmConnection().
+ *
+ * In timeline mode it reads under the timeline write lock (`withTimelineWriteLock`), so it must
+ * never be called from inside a wrapped write (`transactionWithHistory`): that would wait for
+ * the lock its own caller holds.
  *
  * @returns Compressed OpenMarch file bytes
  * @throws "Db is not open" if no show is open
