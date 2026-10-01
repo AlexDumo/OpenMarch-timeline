@@ -61,8 +61,8 @@ A pure adapter from the stored tables and the resolver to `TimelineViewModel`, f
 
 ### P8.9: Timeline commands
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p8-commands)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P8.8
