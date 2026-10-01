@@ -80,7 +80,7 @@ Beat insert and delete ripple timeline rows (same rules as P7.4).
 ### P7.6: Copy and paste
 
 - Owner: timeline-worker (timeline/p7-copy-paste)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -565,4 +565,12 @@ Facts that change how to read the PR #14 note above:
   - `pnpm --dir apps/desktop run test`: 127 files passed and 1,864 tests passed, with 1 unhandled error. That error is the known Tolgee timer (`window is not defined` in `TimelineInspectorSection.test.tsx`), recorded in `findings.md`, and doesn't come from this PR.
   - Skipped by policy: the full `test:history` and e2e.
 - **Next:** P7.6, P7.10–P7.13; P7.7 needs the PDF IPC decision.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-copy-paste) · P7.6 checkpoint
+
+- **Done:** commit `93b8f310` on `timeline/p7-copy-paste`. `copyPagePositions` in `apps/desktop/src/timeline/timelineCoordinateWrites.ts` plans "set all or selected marchers to the previous or next page" from the resolver (each marcher's position at the source page's end beat; marchers already there get no move). The four actions in `RegisteredActionsHandler.tsx` use it in timeline mode and write through `moveMarchersOnPage` (one `transactionWithHistory` edit; homes on page 0, slot destinations otherwise), replacing the P7.2 refusal (`refuseInTimelineMode` removed). The neighbor-page `marcher_pages` queries no longer run in timeline mode. Tests: `src/timeline/__test__/timelinePageCopy.test.ts`.
+- **Checks:** `tsc --noEmit` clean; `vitest run` on `timelinePageCopy.test.ts` and `timelineCoordinateWrites.test.ts`: 18 passed.
+- **Next:** focused `test:history`, the regular desktop suite, lint, then the PR.
+- **Resume from:** branch `timeline/p7-copy-paste` at `93b8f310`; run `pnpm --dir apps/desktop run test:history src/timeline/__test__/timelinePageCopy.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts` and `pnpm --dir apps/desktop run test` (background), then open the PR.
 - **Blockers:** none.
