@@ -266,7 +266,11 @@ export const moveMarchersOnPage = async ({
     db: DbConnection;
     page: TimelineMovePage;
     moves: readonly TimelineMarcherMove[];
-}): Promise<TimelineMoveResult> =>
-    await transactionWithHistory(db, "moveMarchersOnPage", (tx) =>
+}): Promise<TimelineMoveResult> => {
+    // Nothing to move: don't open an edit (it would be an empty undo step)
+    if (moves.length === 0)
+        return { homes: [], slots: [], convertedTransitionIds: [] };
+    return await transactionWithHistory(db, "moveMarchersOnPage", (tx) =>
         moveMarchersOnPageInTransaction({ tx, page, moves }),
     );
+};

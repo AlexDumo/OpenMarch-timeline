@@ -4,7 +4,15 @@ import {
     fieldPropertiesQueryOptions,
     swapMarchersMutationOptions,
     useUpdateSelectedMarchersOnSelectedPage,
+    moveMarchersOnPageMutationOptions,
 } from "@/hooks/queries";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import type { ModifiedMarcherPageArgs } from "@/db-functions/marcherPage";
+import type MarcherPage from "@/global/classes/MarcherPage";
+import {
+    toTimelineMoves,
+    withTimelinePositions,
+} from "@/timeline/timelineCoordinateWrites";
 import { createCircle } from "@openmarch/core";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -36,6 +44,12 @@ import { requestOpenNewShowDialog } from "@/utilities/openNewShowDialog";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
 import { AlertDialogAction, AlertDialogCancel, Button } from "@openmarch/ui";
 import { CircleNotchIcon } from "@phosphor-icons/react";
+
+/** Shows an error's message as a toast. */
+const conToastErrorMessage = (e: unknown) => {
+    console.error(e);
+    toast.error(e instanceof Error ? e.message : String(e));
+};
 
 /**
  * The interface for the registered actions. This exists so it is easy to see what actions are available.
@@ -553,6 +567,10 @@ function RegisteredActionsHandler() {
     const { mutate: updateMarcherPages } = useMutation(
         updateMarcherPagesMutationOptions(queryClient),
     );
+    const timelineMode = useTimelineMode();
+    const { mutate: moveMarchersOnPage } = useMutation(
+        moveMarchersOnPageMutationOptions(),
+    );
     const { mutate: createMarcherShape } = useCreateMarcherShape();
     const selectedMarchersContext = useSelectedMarchers();
     const selectedMarchers = selectedMarchersContext?.selectedMarchers ?? [];
@@ -616,8 +634,47 @@ function RegisteredActionsHandler() {
         const output = selectedMarchers.map(
             (marcher) => marcherPages[marcher.id],
         );
-        return output;
-    }, [marcherPages, marcherPagesLoaded, selectedMarchers, selectedPage]);
+        if (!timelineMode) return output;
+
+        // Timeline mode (P7.2): the tools start from what the canvas draws, the resolver's
+        // positions at the page's end beat
+        try {
+            return withTimelinePositions(
+                selectedPage,
+                output.filter((mp): mp is MarcherPage => mp != null),
+            );
+        } catch (e) {
+            conToastErrorMessage(e);
+            return [];
+        }
+    }, [
+        marcherPages,
+        marcherPagesLoaded,
+        selectedMarchers,
+        selectedPage,
+        timelineMode,
+    ]);
+
+    /**
+     * Writes new coordinates for marchers on the selected page: `marcher_pages` in page mode
+     * (unchanged), slot destinations or homes in timeline mode (P7.2).
+     */
+    const updateCoordinates = useCallback(
+        (changes: ModifiedMarcherPageArgs[]) => {
+            if (!timelineMode) {
+                updateMarcherPages(changes);
+                return;
+            }
+            // The changes' page ids can be left over from an earlier render; the tools act on
+            // the selected page
+            if (!selectedPage) return;
+            moveMarchersOnPage({
+                page: selectedPage,
+                moves: toTimelineMoves(changes),
+            });
+        },
+        [timelineMode, updateMarcherPages, selectedPage, moveMarchersOnPage],
+    );
 
     // Arrow movement defaults
     const isUpdatingDirection = useRef(false);
@@ -1093,7 +1150,7 @@ function RegisteredActionsHandler() {
                             yAxis: !uiSettings.lockY,
                         },
                     );
-                    updateMarcherPages(roundedCoords);
+                    updateCoordinates(roundedCoords);
                     break;
                 }
                 case RegisteredActionsEnum.lockX:
@@ -1112,14 +1169,14 @@ function RegisteredActionsHandler() {
                     const alignedCoords = CoordinateActions.alignVertically({
                         marcherPages: getSelectedMarcherPages(),
                     });
-                    updateMarcherPages(alignedCoords);
+                    updateCoordinates(alignedCoords);
                     break;
                 }
                 case RegisteredActionsEnum.alignHorizontally: {
                     const alignedCoords = CoordinateActions.alignHorizontally({
                         marcherPages: getSelectedMarcherPages(),
                     });
-                    updateMarcherPages(alignedCoords);
+                    updateCoordinates(alignedCoords);
                     break;
                 }
                 case RegisteredActionsEnum.evenlyDistributeVertically: {
@@ -1128,7 +1185,7 @@ function RegisteredActionsHandler() {
                             marcherPages: getSelectedMarcherPages(),
                             fieldProperties,
                         });
-                    updateMarcherPages(distributedCoords);
+                    updateCoordinates(distributedCoords);
                     break;
                 }
                 case RegisteredActionsEnum.evenlyDistributeHorizontally: {
@@ -1137,21 +1194,21 @@ function RegisteredActionsHandler() {
                             marcherPages: getSelectedMarcherPages(),
                             fieldProperties,
                         });
-                    updateMarcherPages(distributedCoords);
+                    updateCoordinates(distributedCoords);
                     break;
                 }
                 case RegisteredActionsEnum.flipHorizontal: {
                     const flippedCoords = CoordinateActions.flipHorizontal(
                         getSelectedMarcherPages(),
                     );
-                    updateMarcherPages(flippedCoords);
+                    updateCoordinates(flippedCoords);
                     break;
                 }
                 case RegisteredActionsEnum.flipVertical: {
                     const flippedCoords = CoordinateActions.flipVertical(
                         getSelectedMarcherPages(),
                     );
-                    updateMarcherPages(flippedCoords);
+                    updateCoordinates(flippedCoords);
                     break;
                 }
                 case RegisteredActionsEnum.swapMarchers: {
@@ -1162,6 +1219,16 @@ function RegisteredActionsHandler() {
                         );
                         toast.error(t("actions.swap.mustSelectTwo"));
                         return;
+                    }
+                    if (timelineMode) {
+                        // Timeline mode: each marcher takes the other's position on this page
+                        const pair = getSelectedMarcherPages();
+                        if (pair.length !== 2) return;
+                        updateCoordinates([
+                            { ...pair[0], x: pair[1].x, y: pair[1].y },
+                            { ...pair[1], x: pair[0].x, y: pair[0].y },
+                        ]);
+                        break;
                     }
                     swapMarchers({
                         pageId: selectedPage.id,
@@ -1210,7 +1277,7 @@ function RegisteredActionsHandler() {
                     break;
                 }
                 case RegisteredActionsEnum.applyQuickShape: {
-                    updateMarcherPages(
+                    updateCoordinates(
                         alignmentEventNewMarcherPages.map((marcherPage) => ({
                             marcher_id: marcherPage.marcher_id,
                             page_id: marcherPage.page_id,
@@ -1330,6 +1397,8 @@ function RegisteredActionsHandler() {
             setAlignmentEvent,
             setAlignmentEventMarchers,
             updateSelectedMarchers,
+            updateCoordinates,
+            timelineMode,
         ],
     );
 
