@@ -122,6 +122,8 @@ export default function Canvas({
     useSelectionListeners({ canvas });
     useMovementListeners({ canvas });
     useAnimation({ canvas });
+    // Page mode draws the selected page's page-era shapes; timeline mode draws none (P7.11)
+    useRenderMarcherShapes({ canvas, selectedPage, isPlaying, timelineMode });
 
     // Function to center and fit the canvas to the container
     const centerAndFitCanvas = useCallback(() => {
@@ -632,10 +634,13 @@ export default function Canvas({
         redrawKey: marcherVisuals,
     });
 
-    // Page mode draws the selected page's page-era shapes; timeline mode draws none (P7.11)
-    useRenderMarcherShapes({ canvas, selectedPage, isPlaying, timelineMode });
     // Timeline mode (P7.11): the spec shape picked in the inspector, with handles to drag
-    useTimelineShapeCanvas({ canvas, enabled: drawFromResolver, isPlaying });
+    useTimelineShapeCanvas({
+        canvas,
+        enabled: drawFromResolver,
+        isPlaying,
+        theme: fieldProperties?.theme,
+    });
 
     // Timeline mode (P7.10): paths, midpoints, endpoints and step-size warnings from the resolver
     // between page end beats, in place of the marcher_pages paths above

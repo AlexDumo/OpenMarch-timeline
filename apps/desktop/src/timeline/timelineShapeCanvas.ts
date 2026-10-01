@@ -328,6 +328,15 @@ function dragBlockSpacing(
 // The editor's link to the canvas
 // ---------------------------------------------------------------------------
 
+/**
+ * What became of a drag's commit:
+ *
+ * - `started`: an edit is being planned and written;
+ * - `unchanged`: the dragged shape is the stored one (or another kind), so nothing was written;
+ * - `busy`: another edit was pending, so the drag was dropped (the editor says so).
+ */
+export type ShapeCommitResult = "started" | "unchanged" | "busy";
+
 export interface TimelineShapeCanvasState {
     /** The shape picked in the inspector's shape editor, as the editor shows it; null for none */
     target: ShapeEditTarget | null;
@@ -339,8 +348,10 @@ export interface TimelineShapeCanvasState {
     /**
      * Commits a new geometry for `target` as one edit, through the editor (its stale-plan guard,
      * one `transactionWithHistory`, refusals through `toastTimelineError`). Null with no target.
+     * Says whether an edit started; when it didn't, nothing was saved and the canvas puts the
+     * shape back as the editor has it.
      */
-    commit: ((shape: ShapeRow) => void) | null;
+    commit: ((shape: ShapeRow) => ShapeCommitResult) | null;
     set: (
         state: Pick<TimelineShapeCanvasState, "target" | "pending" | "commit">,
     ) => void;

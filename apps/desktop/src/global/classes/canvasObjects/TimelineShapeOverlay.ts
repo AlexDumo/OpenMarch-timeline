@@ -16,18 +16,70 @@ export interface TimelineShapeOverlayColors {
     handleFill: string;
 }
 
+/**
+ * A press shorter than both of these is a click, not a drag, so it commits nothing. The canvas
+ * uses the same numbers for marchers (`OpenMarchCanvas.DRAG_TIMER_MILLISECONDS` and
+ * `DISTANCE_THRESHOLD`).
+ */
+export interface DragThreshold {
+    milliseconds: number;
+    /** Screen pixels between the press and the release */
+    distance: number;
+}
+
+export const DEFAULT_DRAG_THRESHOLD: DragThreshold = {
+    milliseconds: 300,
+    distance: 20,
+};
+
 const HANDLE_RADIUS = 6;
 const MOVE_HANDLE_SIZE = 12;
 const CELL_RADIUS = 3;
 
 /** A handle on the canvas, and which of `shapeHandles` it is. */
-type HandleObject = fabric.Object & { timelineShapeHandle: ShapeHandle };
+export type TimelineShapeHandleObject = fabric.Object & {
+    timelineShapeHandle: ShapeHandle;
+};
+
+/**
+ * Whether `object` is a handle of a `TimelineShapeOverlay`. The canvas's selection listeners treat
+ * handles as transparent: pressing one must start its drag, not change which marchers are
+ * selected, and a rubber-band selection must not pick one up.
+ */
+export function isTimelineShapeHandle(
+    object: unknown,
+): object is TimelineShapeHandleObject {
+    return (
+        typeof object === "object" &&
+        object !== null &&
+        "timelineShapeHandle" in object
+    );
+}
+
+interface DragState {
+    handle: TimelineShapeHandleObject;
+    time: number;
+    x: number;
+    y: number;
+    cancelled: boolean;
+}
+
+const mouseOf = (options: unknown): MouseEvent | null => {
+    const e = (options as { e?: unknown } | undefined)?.e;
+    return e && typeof (e as MouseEvent).clientX === "number"
+        ? (e as MouseEvent)
+        : null;
+};
 
 /**
  * A spec shape drawn on the canvas in timeline mode (P7.11): its outline (a block's cells too)
  * and, when interactive, a handle for each of `shapeHandles`. Dragging a handle redraws the shape
  * locally on every mouse move and writes nothing; releasing it calls `onCommit` once with the new
- * shape. Page mode never creates one; its shapes are `MarcherShape`s.
+ * shape. A press shorter than the drag threshold, or a drag cancelled with Escape, puts the shape
+ * back and commits nothing. Page mode never creates one; its shapes are `MarcherShape`s.
+ *
+ * Move handles are drawn above the others, so a shape whose handles land on one spot (a block
+ * with no spacing, a freehand point at the middle of its bounds) can always be moved.
  *
  * Coordinates are field units. Like the marcher dots and the timeline paths, everything is offset
  * by half a grid line, so the outline runs through the dots it places.
@@ -37,16 +89,20 @@ export default class TimelineShapeOverlay {
 
     private outline: fabric.Polyline | null = null;
     private cells: fabric.Circle[] = [];
-    private handles: HandleObject[] = [];
+    /** In `shapeHandles` order */
+    private handles: TimelineShapeHandleObject[] = [];
     /** The shape as drawn when the drag started; drags are planned from it */
     private base: ShapeRow | null = null;
     /** The shape as drawn now, during a drag */
     private preview: ShapeRow | null = null;
+    private interactive = false;
+    private drag: DragState | null = null;
 
     constructor(
         private readonly canvas: fabric.Canvas,
-        private readonly colors: TimelineShapeOverlayColors,
+        private colors: TimelineShapeOverlayColors,
         private readonly onCommit: (shape: ShapeRow) => void,
+        private readonly threshold: DragThreshold = DEFAULT_DRAG_THRESHOLD,
     ) {}
 
     /** The shape as drawn now (the dragged one during a drag), or null when nothing is drawn. */
@@ -54,18 +110,17 @@ export default class TimelineShapeOverlay {
         return this.preview;
     }
 
-    /** The handles on the canvas, in `shapeHandles` order. For tests and the canvas's z-order. */
-    get handleObjects(): readonly fabric.Object[] {
+    /** The handles on the canvas, in `shapeHandles` order. */
+    get handleObjects(): readonly TimelineShapeHandleObject[] {
         return this.handles;
     }
 
-    /**
-     * Draws `shape`, replacing whatever was drawn. Handles are drawn only when `interactive`.
-     */
+    /** Draws `shape`, replacing whatever was drawn. Handles are drawn only when `interactive`. */
     show(shape: ShapeRow, interactive: boolean): void {
         this.clear();
         this.base = shape;
         this.preview = shape;
+        this.interactive = interactive;
         const outline = shapeOutline(shape);
         this.outline = new fabric.Polyline(
             this.toCanvasPoints(outline.points, outline.closed),
@@ -91,36 +146,40 @@ export default class TimelineShapeOverlay {
             this.cells.push(dot);
             this.canvas.add(dot);
         }
-        if (interactive)
-            for (const handle of shapeHandles(shape)) {
-                const object = this.makeHandle(handle);
-                this.handles.push(object);
-                this.canvas.add(object);
-            }
+        if (interactive) {
+            this.handles = shapeHandles(shape).map((h) => this.makeHandle(h));
+            for (const handle of this.inZOrder()) this.canvas.add(handle);
+        }
         this.bringToFront();
         this.canvas.requestRenderAll();
     }
 
-    /** Lets the handles be dragged, or not (while an edit is pending). */
+    /** New colors (the field theme changed); redraws what is drawn. */
+    setColors(colors: TimelineShapeOverlayColors): void {
+        this.colors = colors;
+        if (this.base && !this.drag) this.show(this.base, this.interactive);
+    }
+
+    /**
+     * Lets the handles be dragged, or not (while an edit is pending). A drag already under way
+     * keeps going, so its release still reaches `onCommit`, which can refuse it.
+     */
     setInteractive(interactive: boolean): void {
+        this.interactive = interactive;
         for (const handle of this.handles)
             handle.set({ selectable: interactive, evented: interactive });
-        if (!interactive) {
-            const active = this.canvas.getActiveObject();
-            if (active && (this.handles as fabric.Object[]).includes(active))
-                this.canvas.discardActiveObject();
-        }
         this.canvas.requestRenderAll();
     }
 
-    /** Puts the handles above everything else, so a marcher under one can't take its drag. */
+    /** Puts the handles above everything else, move handles last, so marchers can't take a drag. */
     bringToFront(): void {
         this.outline?.bringToFront();
-        for (const handle of this.handles) handle.bringToFront();
+        for (const handle of this.inZOrder()) handle.bringToFront();
     }
 
     /** Removes everything this overlay drew. */
     clear(): void {
+        this.endDrag();
         const active = this.canvas.getActiveObject();
         if (active && (this.handles as fabric.Object[]).includes(active))
             this.canvas.discardActiveObject();
@@ -135,7 +194,19 @@ export default class TimelineShapeOverlay {
         this.canvas.requestRenderAll();
     }
 
-    private makeHandle(handle: ShapeHandle): HandleObject {
+    /** Point handles first, then move handles, which win where handles overlap. */
+    private inZOrder(): TimelineShapeHandleObject[] {
+        return [
+            ...this.handles.filter(
+                (h) => h.timelineShapeHandle.role !== "move",
+            ),
+            ...this.handles.filter(
+                (h) => h.timelineShapeHandle.role === "move",
+            ),
+        ];
+    }
+
+    private makeHandle(handle: ShapeHandle): TimelineShapeHandleObject {
         const common = {
             left: handle.at[0] + TimelineShapeOverlay.gridOffset,
             top: handle.at[1] + TimelineShapeOverlay.gridOffset,
@@ -156,11 +227,41 @@ export default class TimelineShapeOverlay {
                       height: MOVE_HANDLE_SIZE,
                   })
                 : new fabric.Circle({ ...common, radius: HANDLE_RADIUS })
-        ) as HandleObject;
+        ) as TimelineShapeHandleObject;
         object.timelineShapeHandle = handle;
+        object.on("mousedown", (options) => this.startDrag(object, options));
         object.on("moving", () => this.handleMoving(object));
-        object.on("modified", () => this.handleModified(object));
+        object.on("modified", (options) =>
+            this.handleModified(object, options),
+        );
+        object.on("mouseup", () => this.endDrag());
         return object;
+    }
+
+    private readonly onKeyDown = (event: KeyboardEvent) => {
+        if (event.key !== "Escape" || !this.drag || !this.base) return;
+        this.drag.cancelled = true;
+        this.preview = this.base;
+        this.layout(this.base, null);
+    };
+
+    private startDrag(handle: TimelineShapeHandleObject, options: unknown) {
+        this.endDrag();
+        const e = mouseOf(options);
+        this.drag = {
+            handle,
+            time: Date.now(),
+            x: e?.clientX ?? 0,
+            y: e?.clientY ?? 0,
+            cancelled: false,
+        };
+        window.addEventListener("keydown", this.onKeyDown);
+    }
+
+    private endDrag() {
+        if (!this.drag) return;
+        this.drag = null;
+        window.removeEventListener("keydown", this.onKeyDown);
     }
 
     /** Where a handle object sits, in field units. */
@@ -171,8 +272,13 @@ export default class TimelineShapeOverlay {
         ];
     }
 
-    private handleMoving(object: HandleObject): void {
+    private handleMoving(object: TimelineShapeHandleObject): void {
         if (!this.base) return;
+        if (this.drag?.cancelled) {
+            // Cancelled with Escape: the handle stays where the shape has it
+            this.layout(this.base, null);
+            return;
+        }
         this.preview = dragHandle(
             this.base,
             object.timelineShapeHandle.id,
@@ -181,8 +287,30 @@ export default class TimelineShapeOverlay {
         this.layout(this.preview, object);
     }
 
-    private handleModified(object: HandleObject): void {
+    /** Whether the release ends a press too short and too small to be a drag. */
+    private isClick(options: unknown): boolean {
+        const drag = this.drag;
+        const e = mouseOf(options);
+        if (!drag || !e) return false;
+        return (
+            Date.now() - drag.time < this.threshold.milliseconds &&
+            Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <
+                this.threshold.distance
+        );
+    }
+
+    private handleModified(
+        object: TimelineShapeHandleObject,
+        options: unknown,
+    ): void {
         if (!this.base) return;
+        if (this.drag?.cancelled || this.isClick(options)) {
+            this.preview = this.base;
+            this.layout(this.base, null);
+            this.endDrag();
+            return;
+        }
+        this.endDrag();
         const shape = dragHandle(
             this.base,
             object.timelineShapeHandle.id,
@@ -191,7 +319,7 @@ export default class TimelineShapeOverlay {
         this.preview = shape;
         // Later drags (before the edit comes back) start from what is drawn
         this.base = shape;
-        this.layout(shape, object);
+        this.layout(shape, null);
         this.onCommit(shape);
     }
 

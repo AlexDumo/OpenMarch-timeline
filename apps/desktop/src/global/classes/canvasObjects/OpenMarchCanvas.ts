@@ -1094,10 +1094,18 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         this.timelineShapeOverlay?.bringToFront();
     }
 
+    /**
+     * Draws `shapePages` as `MarcherShape`s, replacing the ones drawn before.
+     *
+     * @param isCurrent checked after each await: once it returns false (a newer render started,
+     * or timeline mode turned on, P7.11), this render stops adding shapes
+     */
     renderMarcherShapes = async ({
         shapePages,
+        isCurrent = () => true,
     }: {
         shapePages: ShapePage[];
+        isCurrent?: () => boolean;
     }) => {
         const existingMarcherShapeMap = new Map(
             this.marcherShapes.map((mp) => [mp.shapePage.shape_id, mp]),
@@ -1119,9 +1127,11 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             const existingMarcherShape = existingMarcherShapeMap.get(
                 shapePage.shape_id,
             );
+            if (!isCurrent()) return;
             if (existingMarcherShape) {
                 existingMarcherShape.setShapePage(shapePage);
                 await existingMarcherShape.refreshMarchers();
+                if (!isCurrent()) return;
                 const index = this.marcherShapes.findIndex(
                     (ms) => ms.shapePage.shape_id === shapePage.shape_id,
                 );

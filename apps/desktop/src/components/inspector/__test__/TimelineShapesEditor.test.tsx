@@ -39,11 +39,13 @@ const mocks = vi.hoisted(() => ({
     update: vi.fn(),
     remove: vi.fn(),
     toast: vi.fn(),
+    warning: vi.fn(),
     settled: vi.fn(),
     positions: {} as Record<number, [number, number]>,
     positionAt: vi.fn(),
 }));
 
+vi.mock("sonner", () => ({ toast: { warning: mocks.warning } }));
 vi.mock("@/db-functions/timelineShapes", () => ({
     createTimelineShape: mocks.create,
     updateTimelineShape: mocks.update,
@@ -205,6 +207,7 @@ beforeEach(() => {
     mocks.update.mockReset().mockResolvedValue({});
     mocks.remove.mockReset().mockResolvedValue(undefined);
     mocks.toast.mockReset();
+    mocks.warning.mockReset();
     mocks.settled.mockReset().mockResolvedValue(undefined);
     mocks.positions = {};
     mocks.positionAt
@@ -565,9 +568,11 @@ describe("stale plans", () => {
 describe("the canvas link (P7.11)", () => {
     const canvasState = () => useTimelineShapeCanvasStore.getState();
     const dragTo = async (shape: ShapeRow) => {
+        let result: string | undefined;
         await act(async () => {
-            canvasState().commit!(shape);
+            result = canvasState().commit!(shape);
         });
+        return result;
     };
     const moved: ShapeRow = {
         kind: "box",
@@ -591,19 +596,28 @@ describe("the canvas link (P7.11)", () => {
     it("a drag commits one geometry edit, then waits for a newer version like a typed one", async () => {
         const { rerender } = show();
         await editShape("Shape 3 (Box)");
-        await dragTo(moved);
+        expect(await dragTo(moved)).toBe("started");
         expect(mocks.update).toHaveBeenCalledTimes(1);
         expect(mocks.update).toHaveBeenCalledWith({
             db,
             modified: { id: 3, geometry: moved.geometry },
         });
         expect(canvasState().pending).toBe(true);
-        // A second drag before the edit's rows arrive plans nothing
-        await dragTo({
-            kind: "box",
-            geometry: { origin: [5, 5], width: 8, height: 4 },
-        });
+        // The picker waits too, so nothing else is picked mid-edit
+        expect(
+            screen.getAllByRole("combobox")[1]!.hasAttribute("disabled"),
+        ).toBe(true);
+        // A second drag before the edit's rows arrive plans nothing, and says so
+        expect(
+            await dragTo({
+                kind: "box",
+                geometry: { origin: [5, 5], width: 8, height: 4 },
+            }),
+        ).toBe("busy");
         expect(mocks.update).toHaveBeenCalledTimes(1);
+        expect(mocks.warning).toHaveBeenCalledWith(
+            TIMELINE_INSPECTOR_STRINGS["inspector.timeline.shapes.dragDropped"],
+        );
         rerender(editor({ version: 2, shapes: { ...SHAPES, 3: moved } }));
         expect(canvasState().pending).toBe(false);
         expect(canvasState().target?.shape).toEqual(moved);
@@ -612,16 +626,32 @@ describe("the canvas link (P7.11)", () => {
     it("a drag that ends where it started writes nothing", async () => {
         show();
         await editShape("Shape 3 (Box)");
-        await dragTo(BOX);
+        expect(await dragTo(BOX)).toBe("unchanged");
         expect(mocks.update).not.toHaveBeenCalled();
         expect(canvasState().pending).toBe(false);
+        expect(mocks.warning).not.toHaveBeenCalled();
     });
 
     it("a drag of a shape drawn as another kind writes nothing", async () => {
         show();
         await editShape("Shape 3 (Box)");
-        await dragTo(LINE);
+        expect(await dragTo(LINE)).toBe("unchanged");
         expect(mocks.update).not.toHaveBeenCalled();
+    });
+
+    it("a drag released while a typed change is being saved is dropped, and says so", async () => {
+        let finish: () => void = () => {};
+        mocks.update.mockImplementationOnce(
+            () => new Promise<void>((resolve) => (finish = resolve)),
+        );
+        show();
+        await editShape("Shape 3 (Box)");
+        await commit("Width", "10");
+        expect(mocks.update).toHaveBeenCalledTimes(1);
+        expect(await dragTo(moved)).toBe("busy");
+        expect(mocks.update).toHaveBeenCalledTimes(1);
+        expect(mocks.warning).toHaveBeenCalledTimes(1);
+        await act(async () => finish());
     });
 
     it("a refused drag is toasted and the shape can be dragged again", async () => {
