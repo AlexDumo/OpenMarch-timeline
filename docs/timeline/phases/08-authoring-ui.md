@@ -97,7 +97,7 @@ Transitions: destination, style, bulge clamped to ±½, waypoints, `slot_count`,
 - Parallel: yes
 - Depends on: P8.3
 
-Assignments: casting (nearest-slot auto-assign via `computeOptimalCoordinateMapping` in core), steals as layers, and visible vacancies.
+Assignments: casting (nearest-slot auto-assign with core's Hungarian solve, `hungarianAlgorithm`, which `computeOptimalCoordinateMapping` wraps; lowest vacant slots for follow the leader), steals as layers, and visible vacancies.
 
 ### P8.5: Inspector
 
@@ -482,3 +482,26 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Exit gate:** nothing ticked. The UI verification item needs a manual app check.
 - **Next:** review and merge by the lead.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-assignments) · P8.4 (review fixes)
+
+- **Done:** merged `timeline-try-2` (f34cc8e8, with #29). Commit ed095df0 on PR https://github.com/AlexDumo/OpenMarch-timeline/pull/31 fixes the lead's review:
+  1. **Follow the leader** is never cast by nearest slot: new marchers take the lowest vacant slots, and recast is refused, with the reason shown, in the db-functions and the editor. Its founders' targets come from trail order (R-9, R-12).
+  2. **Recast** starts each member from its row's first winning span, so a breakaway at the row's start doesn't skew the cast; rows that never win cost nothing.
+  3. **Big transitions:** every member is listed, and only the vacant rows are capped (16). The vacancy line is a range summary ("0–9, 12, … (+N)"), and the slot is a typed number instead of a list of up to 10000 options.
+  4. **Steals:** a cast names the moves it steals beats from, in a note after it commits. `stealLayer`'s refusal message fits each caller.
+  5. **Create Track** falls back to id order past `MAX_CAST_SLOTS`.
+  6. **Stale-plan guard:** after an edit, the editor waits for a target from a newer store version, so a rebuild from the same rows (scrubbing, playback) doesn't re-enable it.
+  7. **Docs:** `ui.md` UI-7 and the recast help note that recasting a direct move can reorder a downstream follow-the-leader move under `inherit` (QA-SC-07). The P8.4 description here no longer names `computeOptimalCoordinateMapping`.
+  8. **Tests added:** follow the leader (`inherit` and `slot`), recast after a breakaway at the start, refusals past 500 slots, a beats change that hits E-A3, members past slot 64, the vacancy summary, the steal note, and a version guard across an edit that changes ids.
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history`: `timelineAssignmentEdits.test.ts`, `timelineCommands.test.ts` and `useTimelineInspections.test.tsx`, 34 passed.
+  - `test:focused` on the inspector and the planner and casting tests: 7 files, 140 passed.
+  - Mutation checks: starting a recast at the row's own start fails the breakaway test; casting follow the leader by nearest slot fails both follow-the-leader tests.
+  - eslint: 0 errors. prettier and cspell: pass.
+  - The desktop suite is running.
+  - Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Next:** read the suite result, update the PR body, report back.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-assignments`; `pnpm --dir apps/desktop run test` (in the background); update PR #31's body from `pr-P8.4.md`.
