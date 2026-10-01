@@ -1313,3 +1313,18 @@ Facts that change how to read the PR #14 note above:
 - **Exit gate:** "each feature's existing tests pass in timeline mode" isn't ticked. It becomes true on the base only when this PR merges, so it waits for the merge.
 - **Next:** review and merge PR #38. Then tick the exit-gate item with the run 3 command and result.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-page-appearance) · P7.16 review fixes checkpoint
+
+- **Done:** pushed `46fa7373` to PR #37, on top of `bb33dd9b` (the earlier entry's `6e4b367d` was the hash before an amend; `bb33dd9b` is the pushed commit).
+  - Fix 1: the import selects only the marcher columns it uses, so a source from before 0017 reads, and `home_x`/`home_y` no longer leak into the result.
+  - Fix 2: a timeline read or resolve failure throws `SourceTimelineReadError` ("Couldn't read the timeline of this file"), with no fallback to frozen rows.
+  - Fix 3: `sourceTimelinePositions.ts` imports `schema` from `@om-electron/database/migrations/schema`, the leaf behind `@om-electron/database/db`, which avoids pulling electron into tests.
+  - Fix 4: the appearance query starts `readTimelineMode(...).catch(() => false)` alongside the other reads.
+  - Fix 5: `marcherAppearancesKeys` moved to the leaf `src/hooks/queries/marcherAppearancesKeys.ts`.
+  - Fix 6: new tests for a pre-0017 source, marcher fields, a timeline read failure that closes the handle, holding at the last span's end, a flagged source with no pages, the source file unchanged, a settings read failure, the JSON mutation, and tags in timeline mode.
+- **Follow-up (not done):** `src/timeline/timelineRows.ts` still imports `schema` from the renderer module `@/global/database/db`, so the main bundle still pulls in that module through `readTimelineTables`. Changing it touches shared code; the lead can route it.
+- **Checks:** `tsc --noEmit` pass; the 2 test files pass with 23 tests; eslint has no new warnings. Build, focused `test:history` and the suite are running.
+- **Next:** finish the checks, then update the PR body.
+- **Blockers:** none.
+- **Resume from:** on `timeline/p7-page-appearance` at `46fa7373`, run `pnpm --dir apps/desktop run build`, focused `test:history` on the 2 test files, then `pnpm --dir apps/desktop run test` alone. Then update the PR #37 body and log "review fixes ready".
