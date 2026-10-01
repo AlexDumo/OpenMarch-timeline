@@ -39,8 +39,8 @@ Inventory every reader and writer of `marcher_pages`, `shape_pages` and the path
 
 ### P7.2: Selection, drag and alignment
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-drag-align)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
