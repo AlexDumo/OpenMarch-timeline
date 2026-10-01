@@ -831,3 +831,11 @@ Facts that change how to read the PR #14 note above:
 - **Next:** time a large seeded show, run focused `test:history` and the desktop suite, then update the PR body.
 - **Resume from:** branch `timeline/p7-mobile-exports` at `357f1e90`. Time the export with a scratch test (500 marchers × 200 pages, not committed). Then run `pnpm --dir apps/desktop run test:history src/components/mobile/utilities/__test__/dots-to-om.timeline.test.ts src/components/mobile/utilities/__test__/dots-to-om.test.ts` and, separately, `pnpm --dir apps/desktop run test`.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-pathways) · P7.10 checkpoint 2
+
+- **Done:** tests written and passing, `timeline-try-2` merged in (clean), commit `b75c95f7`. Tests: `src/timeline/__test__/timelinePaths.test.ts` (sampler on G1, G4, G6, G8 and G8b; midsets, lengths, step sizes, warnings, the canvas renderer), `src/timeline/__test__/useTimelinePathRender.test.tsx`, `src/components/canvas/hooks/__test__/editablePath.test.tsx`.
+- **Checks:** `tsc --noEmit` clean; the 3 new test files: 27 passed; `prettier --check`, `cspell` and `eslint` on the changed files: clean apart from warnings already on the base. The regular desktop suite is running.
+- **Next:** read the suite result, open the PR.
+- **Resume from:** branch `timeline/p7-pathways` at `b75c95f7`; re-run `pnpm --dir apps/desktop run test` (background, alone), then open the PR from the scratch body `pr-P7.10.md` with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+- **Blockers:** none.
