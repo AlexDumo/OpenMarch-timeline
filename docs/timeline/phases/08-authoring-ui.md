@@ -359,3 +359,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** unit tests for the planner, component tests for each control, history tests on a real DB.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-transitions`; `pnpm install`; `pnpm exec turbo run build --filter=@openmarch/desktop^... --force`; write `apps/desktop/src/timeline/__test__/timelineTransitionEditor.test.ts`, `apps/desktop/src/components/inspector/__test__/TimelineTransitionEditor.test.tsx` and `apps/desktop/src/db-functions/__test__/timelineTransitionEdits.test.ts`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-transitions) · P8.3
+
+- **Done:** wip commits 63a4472c (tests) and 93502c7d (`ui.md` notes) on `timeline/p8-transitions`. Planner unit tests, component tests for each control, a section test, the hook's edit targets against a real DB, and history tests for a style change, a bulge change, both destination switches and two slot-count changes (undo and redo round-trip the rows, and the resolver store follows each step).
+- **Checks:** `tsc --noEmit`: pass. `test:focused src/components/inspector src/timeline/__test__/useTimelineInspections.test.tsx src/timeline/__test__/timelineTransitionEditor.test.ts src/timeline/__test__/timelineErrorMessages.test.ts`: 5 files, 95 passed. `test:history src/db-functions/__test__/timelineTransitionEdits.test.ts`: 9 passed. eslint: 0 errors. prettier and cspell: pass. The regular desktop suite is running.
+- **Next:** read the suite result, squash, open the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-transitions`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` (in the background); then squash the wip commits and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
