@@ -9,6 +9,13 @@ import {
     updateShapePages,
 } from "../shapePages";
 import { TimelineWriteError } from "../timelineErrors";
+import { createShapes, deleteShapes, updateShapes } from "../shapes";
+import {
+    createShapePageMarchers,
+    deleteShapePageMarchers,
+    swapPositionOrder,
+    updateShapePageMarchers,
+} from "../shapePageMarchers";
 
 /**
  * P7.11: in timeline mode the page-era shape writers (`createShapePages`, `updateShapePages`,
@@ -166,6 +173,69 @@ describeDbTests("page shapes in timeline mode", (it) => {
             expect(await db.select().from(schema.shape_pages).all()).toEqual(
                 [],
             );
+        });
+
+        it("refuses the shape and shape page marcher writers too, and writes nothing", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setTimelineFlag(db, false);
+            const shapePage = await createLineOnPage1(db);
+            const spms = await db.select().from(schema.shape_page_marchers);
+            expect(spms).toHaveLength(2);
+            await setTimelineFlag(db, true);
+            const before = await snapshot(db);
+
+            await expectRefusal(() => createShapes({ db, newItems: [{}] }));
+            await expectRefusal(() =>
+                updateShapes({
+                    db,
+                    modifiedItems: [{ id: shapePage.shape_id, name: "A" }],
+                }),
+            );
+            await expectRefusal(() =>
+                deleteShapes({ db, itemIds: new Set([shapePage.shape_id]) }),
+            );
+            await expectRefusal(() =>
+                createShapePageMarchers({
+                    db,
+                    newItems: [
+                        {
+                            shape_page_id: shapePage.id,
+                            marcher_id: 3,
+                            position_order: 2,
+                        },
+                    ],
+                }),
+            );
+            await expectRefusal(() =>
+                updateShapePageMarchers({
+                    db,
+                    modifiedItems: [{ id: spms[0]!.id, notes: "x" }],
+                }),
+            );
+            await expectRefusal(() =>
+                deleteShapePageMarchers({
+                    db,
+                    itemIds: new Set([spms[0]!.id]),
+                }),
+            );
+            await expectRefusal(() =>
+                swapPositionOrder({
+                    db,
+                    spmId1: spms[0]!.id,
+                    spmId2: spms[1]!.id,
+                }),
+            );
+            expect(await snapshot(db)).toEqual(before);
+
+            // Page mode is unchanged: the same swap works with the flag off
+            await setTimelineFlag(db, false);
+            await swapPositionOrder({
+                db,
+                spmId1: spms[0]!.id,
+                spmId2: spms[1]!.id,
+            });
         });
     });
 });

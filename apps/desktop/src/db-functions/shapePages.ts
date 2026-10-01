@@ -13,8 +13,12 @@ import {
 } from "@/db-functions";
 import { schema } from "@/global/database/db";
 import { assert } from "@/utilities/utils";
-import { refuse } from "./timelineErrors";
-import { timelineModeInTransaction } from "./timelineRipple";
+import {
+    PAGE_SHAPES_TIMELINE_MESSAGE,
+    refusePageShapesInTimelineMode,
+} from "./pageShapesGate";
+
+export { PAGE_SHAPES_TIMELINE_MESSAGE };
 
 type MarcherCoordinates = {
     marcher_id: number;
@@ -153,20 +157,6 @@ export async function _updateChildMarcherPages({
         tx,
         modifiedMarcherPages: marcherPageUpdates,
     });
-}
-
-/** Why page shapes can't be edited in timeline mode, as the refusal says it (P7.11). */
-export const PAGE_SHAPES_TIMELINE_MESSAGE =
-    "Page shapes can't be changed in timeline mode, because they would write page positions the timeline doesn't use. Draw and edit shapes in the Shapes part of the inspector's Timeline section instead.";
-
-/**
- * Refuses (`E-ARGS`) a page-era shape edit when the file's timeline flag is on (P7.11), before
- * anything is written. Shape pages, their marchers and the `marcher_pages` rows they move are
- * frozen page-era data in timeline mode; the timeline's own shapes are `timeline_shapes`.
- */
-async function refusePageShapesInTimelineMode(tx: DbTransaction) {
-    if (await timelineModeInTransaction(tx))
-        refuse(PAGE_SHAPES_TIMELINE_MESSAGE);
 }
 
 /**
