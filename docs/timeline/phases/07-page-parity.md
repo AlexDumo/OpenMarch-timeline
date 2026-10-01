@@ -737,3 +737,17 @@ Facts that change how to read the PR #14 note above:
 - **Next:** read the suite's result, then update the PR body.
 - **Resume from:** branch `timeline/p7-undo-redo` at `61814b53`. Re-run `pnpm --dir apps/desktop run test` (background), then update PR #29's body from the scratch file `pr-P7.13.md`.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-undo-redo) · P7.13 review fixes in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/29 is updated at head `61814b53`: the merge of `timeline-try-2`, plus the review fixes described in the checkpoint above. The PR body now says that page mode jumps to page 0. It also states the known limit: turning the flag off at runtime starts with an empty coordinate cache.
+- **Checks:**
+  - `pnpm --dir apps/desktop run test` (one run, after the merge): 133 files passed, 7 skipped; 1,953 tests passed.
+  - Earlier at the same head:
+    - `tsc --noEmit`: clean.
+    - The new and changed test files: 16 passed.
+    - Focused `test:history` (6 files): 121 passed.
+    - eslint and cspell on the changed files: clean.
+  - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`.
+- **Next:** the lead re-reviews and merges PR #29.
+- **Blockers:** none.
