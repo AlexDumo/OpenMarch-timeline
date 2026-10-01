@@ -39,7 +39,7 @@ Confirm C-8 is decided and implemented. If not, this phase is blocked.
 ### P9.2: Backup before converting
 
 - Owner: timeline-worker (timeline/p9-2-backup)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/40
 - Parallel: yes
 - Depends on: P9.1
@@ -147,4 +147,25 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** addressed the PR 40 review in commit f905edda: dangling-symlink loop fixed (`lstat`, bounded retries), verification checks only the copy and the snapshot is retaken on a concurrent commit, `file-busy` and `name-too-long` codes, error-code classification (file system and SQLite), 255-byte name truncation, short temp names, orphan sweep, safer publish, WAL docs, and the performance note for P9.3.
 - **Checks:** from `apps/desktop` after `pnpm install`: `pnpm tsc --noEmit` clean; eslint clean on the two files; `pnpm run test:focused electron/database/__test__/backup.test.ts` 21 passed; `pnpm run test:focused electron/database` 194 passed. Skipped per the current policy: full `test:history` and e2e.
 - **Next:** re-review and merge; then P9.3.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P9.2
+
+- **Done:** reviewed PR #40 and squash-merged it at head f905edda.
+  - The review found two high-severity issues, both fixed:
+    - an endless loop when a dangling symlink sits on the backup name;
+    - a false verification failure when another connection committed during the backup.
+  - It also found medium issues, fixed:
+    - BUSY handling;
+    - error classification by error code instead of by message text, which had read a folder named "Full Band" as `disk-full`;
+    - long names;
+    - publishing the backup;
+    - sweeping orphaned temp files;
+    - WAL documentation.
+- **Checks (lead, on f905edda):**
+  - `tsc --noEmit`: pass.
+  - `test:focused electron/database`: 11 files, 194 tests passed.
+  - `pnpm --dir apps/desktop run test`: 162 files and 2,295 tests passed on the second run. The first run had one failure in `timelineHistory.test.ts` ("trigger 'timelines_it' already exists"). That file passed 3 times alone and in the rerun, so it's recorded in `findings.md`.
+  - Skipped by policy: full `test:history` and e2e.
+- **Next:** P9.3 (convert on open) can start. See the handoff note on blocking the UI or moving off the main thread.
 - **Blockers:** none.

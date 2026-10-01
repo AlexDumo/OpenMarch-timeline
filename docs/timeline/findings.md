@@ -145,3 +145,12 @@ Exit code 0. `run_all.sh` itself truncates each line to 90 characters. Environme
   - Loss report: 8 curved shapes and nothing else.
 - **Jev** (`scripts/timeline/jev-equality`, 6 moments and up to 48 marchers per show, coordinates only): 12 of 12 real samples judged "same" (P ≥ 0.99), agreeing with the numeric verdict. 10 of 10 controls agree: the identical control got P 0.99; one marcher moved, two swapped, shifted and mirrored got P 0.02 to 0.15.
 - **Reading:** on these two shows the converter is exact at page ends and identical between them at the same beat. The only visible change is timing inside uneven-tempo pages, where timeline motion follows beats (C-7). Curved shapes are kept only as their marchers' points (C-8).
+
+### 2026-10-01 · lead · flaky: `timelineHistory.test.ts` "trigger already exists"
+
+- **Seen once:** in a full desktop suite run on PR #40's head f905edda (`pnpm --dir apps/desktop run test`).
+- **Failing test:** "C-1: RESTRICT with child-first deletes > deleting children, then the transition, then the timeline, undoes and redoes as one edit".
+- **Error:** `malformed database schema (timelines_it) - trigger 'timelines_it' already exists` (`ERR_SQLITE_ERROR`, SQLite result code 11).
+- **Not reproduced:** the file passed 3 times alone, and the full suite passed on the next run.
+- **Likely cause:** a test database collision, either another vitest process in the same work tree or the history-trigger refresh racing within the file.
+- **Next time:** if it recurs, check for concurrent vitest processes first, then look at `createTriggers`/`recreateChangeLogTriggers` in the test setup.
