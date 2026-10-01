@@ -170,7 +170,7 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 ### P7.16: Per-page appearance on the canvas and previous-show import
 
 - Owner: timeline-worker (timeline/p7-page-appearance)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/37
 - Parallel: yes
 - Depends on: P7.14
@@ -266,7 +266,7 @@ Facts that change how to read the PR #14 note above:
 - [x] `src/components/marcher/MarcherForm.tsx` ~178 and `src/components/marcher/MarcherList.tsx` ~74 · UI callers · not handled (P7.3: no change needed; the mutations read the flag themselves when they run, waiting for the settings if they are still loading)
 - [x] `src/components/launchpage/newShowCompletion.ts` ~249 to 262 (delete, then create marchers on import) · W · new-show import · not handled (P7.3: no change; a new show starts with the flag off, so it is page mode, and conversion later takes homes from page 0)
 - [x] `src/components/launchpage/newShowCompletion.ts` ~276 to 318 (`applyPreviousDotsCoordinates` writes page 0 `marcher_pages`) · W · new show from previous dots · not handled · in timeline mode this is the home position (P7.3: no change, for the same reason: new shows are page mode until converted)
-- [ ] `electron/main/services/previous-dots-import-service.ts` ~85 to 114 · R of the source file's last-page `marcher_pages` · import of a previous show · not handled · if the source is a converted show its page-era rows are frozen and stale; read home or the resolver instead
+- [x] `electron/main/services/previous-dots-import-service.ts` ~85 to 114 · R of the source file's last-page `marcher_pages` · import of a previous show · not handled · if the source is a converted show its page-era rows are frozen and stale; read home or the resolver instead · done in P7.16 (#37): a timeline-mode source is read through its own resolver
 - [x] `electron/database/repair.ts` ~235 to 241, ~303 (`removeOrphanMarcherPages`) · W cleanup · repair · likely no change until Phase 10, since the page-era tables stay; confirm it deletes nothing the converter relies on (P7.3: confirmed; it deletes only page rows whose marcher or page no longer exists, which the converter never reads)
 
 #### P7.4 Page ripple procedures (insert, delete, resize pages)
@@ -359,7 +359,7 @@ Facts that change how to read the PR #14 note above:
 #### P7.14 (new) Per-marcher-per-page appearance, rotation and notes (decision first)
 
 - [x] `electron/database/migrations/schema.ts` ~185 to 226 (`marcher_pages` columns: appearance columns, `rotation_degrees`, `notes`, path columns) · data with no timeline home · the converter copies only x and y · decision needed: drop, keep in the frozen page-era table, or add timeline fields. Record it as a blocker for a person before building anything · decided in P7.14: dropped, never implemented (owner, 2026-09-30)
-- [ ] `src/global/classes/MarcherPage.ts` ~1 to 40 and `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 · R · the per-page appearance override sits first in the appearance stack · see P7.8
+- [x] `src/global/classes/MarcherPage.ts` ~1 to 40 and `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 · R · the per-page appearance override sits first in the appearance stack · see P7.8 · done in P7.16 (#37): dropped on the canvas in timeline mode
 - [x] `src/components/mobile/utilities/dots-to-om.ts` ~184 to 200 (`rotation_degrees` exported per coordinate) · R · see P7.12 (P7.12: left out in timeline mode, dropped per the P7.14 decision; page mode unchanged)
 
 #### Checked: no timeline work needed
@@ -1341,4 +1341,24 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: full `test:history`, e2e and `build:electron`.
 - **Follow-up for the lead:** `timelineRows.ts` imports the renderer `@/global/database/db`, so the main bundle still pulls it in.
 - **Next:** the lead re-reviews PR #37.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.16
+
+- **Done:** reviewed PR #37 and squash-merged it at head 46fa7373.
+  - **Review fixes:**
+    - The import selects only the marcher columns it uses. This fixes imports from files older than 0017, a bug that predates P7.16 (from #1037).
+    - A clear error when a source timeline can't be read.
+    - The appearance query survives a failed settings read.
+    - The import cycle between modules is gone.
+    - Added tests: hold-versus-home, an unchanged source file, the handle closed on error, and tag appearances.
+  - Two inventory items ticked.
+- **Checks (lead, on 46fa7373):**
+  - `tsc --noEmit`: pass.
+  - `pnpm run build`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/`, `electron/main/services` and `src/hooks/queries`: 35 files, 699 tests passed.
+  - `pnpm --dir apps/desktop run test`: 158 files, 2,265 tests passed, no errors.
+  - Skipped by policy: the full `test:history` and e2e suites.
+- **Follow-up (unowned, low):** `src/timeline/timelineRows.ts` imports the renderer's `@/global/database/db`, so the main bundle pulls that module in through `readTimelineTables`. It's harmless today, because `window` is only touched inside callbacks. It's fragile if anything top-level touches `window` later. Fix: import `schema` from `@om-electron/database/migrations/schema`.
+- **Next:** P7.17 (PR #38) under review. Then only the human manual pass remains in the Phase 7 exit gate.
 - **Blockers:** none.
