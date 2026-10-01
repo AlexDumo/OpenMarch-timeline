@@ -311,3 +311,20 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Exit gate:** nothing ticked. The UI verification item needs a manual app check by a person.
 - **Next:** review and merge by the lead.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-commands) · P8.9 (review fixes)
+
+- **Done:** merged `timeline-try-2` (aaaeff66). Commit f86164e6 on PR #24 addresses the lead's nits:
+  1. **Create Track docs** (the `createTrackInTransaction` docstring, and UI-6 in `ui.md`): the marcher doesn't jump at the range start, but it holds still over the range. A stolen move in progress resumes afterwards with a catch-up (D-7), which shows as a change of speed. UI-6 lives only on this PR's branch, not yet on `timeline-try-2`, so `ui.md` is edited in the PR rather than through `coord.sh`.
+  2. **The picked shape is dropped** when the selection becomes a marcher's track, a page or nothing, and when its track disappears; it doesn't come back if the track returns.
+     - **Deviation from the review:** a range selection keeps the shape. Create Track is only offered on a range (`showCreateTrack` needs `selection.kind === "range"`), so the flow is to pick the shape's track and then select a range. Clearing the shape on a range would make shape tracks unreachable.
+  3. **A shape with no selected marchers** is no target, so Create Track is hidden.
+  - Tests: range keeps the shape; a page, nothing or a marcher's track drops it; a disappearing track drops it; Create Track is hidden with no marchers selected.
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - `test:history src/db-functions/__test__/timelineCommands.test.ts`: 11 passed.
+  - `test:focused src/components/timeline/__test__/`: 13 files, 153 passed (2 skipped).
+  - eslint, prettier and cspell on the changed files: clean.
+  - Not re-run: the regular desktop suite. Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Next:** re-review and merge by the lead.
+- **Blockers:** none.
