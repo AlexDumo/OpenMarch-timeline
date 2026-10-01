@@ -90,8 +90,8 @@ Copy and paste of positions.
 ### P7.7: Coordinate sheets and PDF
 
 - Owner: timeline-worker (timeline/p7-coordinate-sheets)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/35
 - Parallel: yes
 - Depends on: P7.1
 
@@ -274,16 +274,16 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.7 Coordinate sheets, drill charts and PDF
 
-- [ ] `src/components/exporting/ExportCoordinatesModal.tsx` ~110 to 450 (coordinate sheet export; reads all marcher pages at ~122, builds rows at ~240 to 323, calls the PDF export at ~357) · R · not handled · sample the resolver at each page's end beat
-- [ ] `src/components/exporting/MarcherCoordinateSheet.tsx` ~52 to 53, ~182 to 233, ~528, ~860 · R (per-marcher sheet preview and print) · not handled
-- [ ] `src/components/exporting/CoordinateSheetTemplates.tsx` ~13 to 48, ~117 to 130, ~165 to 305 · R (templates take page rows) · not handled · change the row type to a plain position
-- [ ] `electron/main/services/export-utility-process.ts` ~185 (reads `marcher_pages` straight from the file), ~20 to 131, ~250 · R · PDF layout in a separate process · not handled · the resolver lives in the renderer, so either pass sampled rows in or run the resolver in that process (decide in P7.7)
-- [ ] `electron/main/index.ts` ~449 and `electron/preload/index.ts` ~238 to 261 (the PDF export and per-marcher document contracts) · IPC · changing the payload is an IPC contract change, so log it as a decision first
-- [ ] `src/components/exporting/ExportCoordinatesModal.tsx` ~703 to 1000 (drill chart export; marcher pages at ~706, appearances at ~741, `generateDrillChartExportSVGs` at ~913) · R · not handled
-- [ ] `src/components/exporting/utils/svg-generator.ts` ~80 to 430 (per-page SVGs read the current, previous and next page rows to draw positions and pathways) · R · not handled
-- [ ] `src/utilities/SvgPreviewHandler.tsx` ~32 to 36, ~66, ~129 to 136 (launch page preview SVGs on close) · R · not handled
-- [ ] `src/global/classes/MarcherPage.ts` ~41 to 90 and `src/global/classes/MarcherPageIndex.ts` · R helpers (lookup by marcher and page, nested maps) used by the exports above · not handled · replace or adapt with a position-by-page map built from the resolver
-- [ ] `src/hooks/queries/useMarcherPages.ts` ~58 to 125 (`allMarcherPagesQueryOptions` and the by-page and by-marcher queries) and `src/db-functions/marcherPage.ts` ~411 to 470 · R · the page-era query layer all of the above use · stays until Phase 10; add a sibling query that samples the resolver
+- [x] `src/components/exporting/ExportCoordinatesModal.tsx` ~110 to 450 (coordinate sheet export; reads all marcher pages at ~122, builds rows at ~240 to 323, calls the PDF export at ~357) · R · not handled · sample the resolver at each page's end beat (P7.7, PR #35: `buildCoordinateSheets` with `readTimelineExportPositions`, the resolver at each page end beat)
+- [x] `src/components/exporting/MarcherCoordinateSheet.tsx` ~52 to 53, ~182 to 233, ~528, ~860 · R (per-marcher sheet preview and print) · not handled (P7.7: rows are a plain `PagePosition`; the modal's preview always shows example data)
+- [x] `src/components/exporting/CoordinateSheetTemplates.tsx` ~13 to 48, ~117 to 130, ~165 to 305 · R (templates take page rows) · not handled · change the row type to a plain position (P7.7: row type is `PagePosition`; the file has no importer in the app)
+- [x] `electron/main/services/export-utility-process.ts` ~185 (reads `marcher_pages` straight from the file), ~20 to 131, ~250 · R · PDF layout in a separate process · not handled · the resolver lives in the renderer, so either pass sampled rows in or run the resolver in that process (decide in P7.7) (P7.7: no change; the file is unreachable: nothing imports or forks it and it is not a Vite entry. Follow-up: delete it)
+- [x] `electron/main/index.ts` ~449 and `electron/preload/index.ts` ~238 to 261 (the PDF export and per-marcher document contracts) · IPC · changing the payload is an IPC contract change, so log it as a decision first (P7.7: no change; `export:pdf` and `export:generateDocForMarcher` take HTML and SVG rendered in the renderer, so no contract change)
+- [x] `src/components/exporting/ExportCoordinatesModal.tsx` ~703 to 1000 (drill chart export; marcher pages at ~706, appearances at ~741, `generateDrillChartExportSVGs` at ~913) · R · not handled (P7.7: the drill chart export passes the sampled map in timeline mode)
+- [x] `src/components/exporting/utils/svg-generator.ts` ~80 to 430 (per-page SVGs read the current, previous and next page rows to draw positions and pathways) · R · not handled (P7.7: takes a `PagePositionMap`)
+- [x] `src/utilities/SvgPreviewHandler.tsx` ~32 to 36, ~66, ~129 to 136 (launch page preview SVGs on close) · R · not handled (P7.7: samples the store resolver for the first page in timeline mode)
+- [x] `src/global/classes/MarcherPage.ts` ~41 to 90 and `src/global/classes/MarcherPageIndex.ts` · R helpers (lookup by marcher and page, nested maps) used by the exports above · not handled · replace or adapt with a position-by-page map built from the resolver (P7.7: the exports use `PagePositionMap`, built from the resolver in timeline mode; page mode still uses these helpers)
+- [x] `src/hooks/queries/useMarcherPages.ts` ~58 to 125 (`allMarcherPagesQueryOptions` and the by-page and by-marcher queries) and `src/db-functions/marcherPage.ts` ~411 to 470 · R · the page-era query layer all of the above use · stays until Phase 10; add a sibling query that samples the resolver (P7.7: kept for page mode until Phase 10; instead of a sibling query, the exports read once under the write lock with `readTimelineExportPositions`, as P7.12 does)
 
 #### P7.8 Video export and appearances
 
@@ -1013,4 +1013,27 @@ Facts that change how to read the PR #14 note above:
   - `pnpm --dir apps/desktop run test`: 142 files and 2,067 tests passed, no errors.
   - Skipped by policy: full `test:history` and e2e.
 - **Next:** P7.11 after P8.2 (PR #34) merges, and P7.7 in progress.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-coordinate-sheets) · P7.7 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/35 (head `a9de7bea`, one commit). In timeline mode the coordinate sheet export, the drill chart export and the launch-page preview take positions from the resolver at each page's end beat, never from `marcher_pages`. `readTimelineExportPositions(db)` (`src/components/exporting/utils/exportPagePositions.ts`) returns `null` in page mode and otherwise reads the flag, tables and pages under one `withTimelineWriteLock` (P7.12's `readTimelinePageSnapshot`), then samples a private resolver. Sheet rendering moved to `buildCoordinateSheets` (`utils/coordinateSheets.tsx`). Ticked all 10 P7.7 inventory items.
+- **Decisions (P7.7, for the lead):**
+  - **No IPC change, so no `C-n` or ADR amendment.** The lead's direction assumed the utility process reads `marcher_pages` for the PDF. It doesn't run: `export-utility-process.ts` has no importer, no fork and no Vite entry. The live calls (`export:pdf`, `export:generateDocForMarcher`) already carry HTML and SVG rendered in the renderer, so the resolver stays in the renderer with no contract change. If the lead still wants that recorded, it would be a Proposed ADR 0001 amendment needing human acceptance; I didn't write one for a contract that doesn't change.
+  - Per-page appearance, rotation and notes stay out (P7.14).
+  - The close-time preview samples the store's resolver, since previews may and exports build a private one (P7.8).
+- **Follow-up (unowned):** delete the dead `export-utility-process.ts`, or leave it for Phase 10.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - `vitest run` on `coordinateSheets.test.tsx` and `exportPagePositions.test.ts`: 11 passed. This includes the page-mode deep-equal guard against the pre-P7.7 rendering.
+  - `pnpm --dir apps/desktop run test`: 141 files passed, 7 skipped; 2,048 tests passed.
+  - `test:history src/components/exporting`, run alone after the suite: 10 files, 88 passed.
+  - eslint, prettier and cspell on the 9 changed files: clean. The only eslint warning was already on the base.
+- **Skipped:**
+  - By policy: full `test:history` and e2e.
+  - `build:electron`.
+  - A manual run in the app.
+  - No db-functions changed.
+- **Exit gate:** unchanged.
+- **Next:** review and merge PR #35.
 - **Blockers:** none.
