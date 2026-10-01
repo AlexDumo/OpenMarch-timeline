@@ -190,7 +190,7 @@ For the exit-gate item "each feature's existing tests pass in timeline mode". Ad
 ### P7.18: Feature tests that reach the timeline path
 
 - Owner: timeline-worker (timeline/p7-timeline-path-tests)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P7.17
@@ -1419,3 +1419,14 @@ Facts that change how to read the PR #14 note above:
 - **Exit gate:** "each feature's existing tests pass in timeline mode" stays open until P7.18 lands.
 - **Next:** P7.18.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-timeline-path-tests) · P7.18 checkpoint
+
+- **Done:** commit a8025975 (`wip:`) on `timeline/p7-timeline-path-tests`.
+  - `createMarchers` and `deleteMarchers` no longer take `timelineMode`; they read the file's flag inside the edit (`timelineModeInTransaction`). The marcher mutations stop passing it. This also fixes `newShowCompletion.ts`, which called both without the flag.
+  - `buildMarcherAppearancesByPageId` and `useRenderMarcherShapes` take `timelineMode` as a required argument (no default). `canvasCoordinateWriter` and `setMarchersToNeighborPage` already required it.
+  - Test helper `setTimelineModeFlag(db, on)` in `src/test/timelineMode.ts`. Timeline-native tests that passed `timelineMode: true` now set the flag instead. `useMarchersTimelineMode.test.ts` now runs on the `base.tsx` fixtures, so it checks the file's mode in both runs.
+- **Checks:** the 10 affected test files pass under `vitest run` (121 passed) and `test:timeline` (after pinning the flag off in `timelineUndo`'s FK-cascade test). `tsc --noEmit` passes.
+- **Next:** a fixture-driven test that renders `RegisteredActionsHandler` (swap, nudges, align, set to previous/next page, undo focus), then the inspector and the exports.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p7-timeline-path-tests`; `pnpm install`; build the desktop's dependencies; write `src/utilities/__test__/RegisteredActionsHandlerModes.test.tsx`.
