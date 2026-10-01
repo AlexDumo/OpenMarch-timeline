@@ -81,10 +81,17 @@ export const fetchMarchers = () => {
     void queryClient.invalidateQueries({ queryKey: [KEY_BASE] });
 };
 
-export const createMarchersMutationOptions = (qc: QueryClient) => {
+/**
+ * @param timelineMode The file's timeline flag (`useTimelineMode`). In timeline mode the new
+ * marchers also get a home and a holding slot in each page move (P7.3).
+ */
+export const createMarchersMutationOptions = (
+    qc: QueryClient,
+    timelineMode = false,
+) => {
     return mutationOptions({
         mutationFn: (newMarchers: NewMarcherArgs[]) =>
-            createMarchers({ db, newMarchers }),
+            createMarchers({ db, newMarchers, timelineMode }),
         onSuccess: async (_, variables) => {
             // Invalidate all marcher queries
             await qc.invalidateQueries({
@@ -131,10 +138,17 @@ export const updateMarchersMutationOptions = (qc: QueryClient) => {
     });
 };
 
-export const deleteMarchersMutationOptions = (qc: QueryClient) => {
+/**
+ * @param timelineMode The file's timeline flag (`useTimelineMode`). In timeline mode the deleted
+ * marchers' slots are also compacted where that moves no one (P7.3).
+ */
+export const deleteMarchersMutationOptions = (
+    qc: QueryClient,
+    timelineMode = false,
+) => {
     return mutationOptions({
         mutationFn: (marcherIds: Set<number>) =>
-            deleteMarchers({ db, marcherIds }),
+            deleteMarchers({ db, marcherIds, timelineMode }),
         onSuccess: (_, variables) => {
             // Invalidate all marcher queries
             void qc.invalidateQueries({

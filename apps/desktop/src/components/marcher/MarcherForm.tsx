@@ -27,6 +27,7 @@ import {
     createMarchersMutationOptions,
     updateMarchersMutationOptions,
 } from "@/hooks/queries";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { ModifiedMarcherArgs, NewMarcherArgs } from "@/db-functions";
 
 export interface MarcherFormProps {
@@ -85,8 +86,10 @@ const MarcherForm: React.FC<MarcherFormProps> = ({
         enabled: !existingMarchers && !wizardMode,
     });
     const marchers = existingMarchers ?? dbMarchers;
+    // The new-show wizard has no open file, so no flag to read
+    const timelineMode = useTimelineMode(!wizardMode);
     const createMarchersMutation = useMutation(
-        createMarchersMutationOptions(queryClient),
+        createMarchersMutationOptions(queryClient, timelineMode),
     );
     const updateMarchers = useMutation(
         updateMarchersMutationOptions(queryClient),
