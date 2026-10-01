@@ -264,3 +264,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** P5.8 QA-SC-11 scale measurement (QA-PF-01 to -04) and the P5.3 test gaps.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (5d39a10f); write `src/timeline/__test__/timelineScale.test.ts` that loads `sc11(1)` into a real DB and prints QA-PF numbers, then record them in `findings.md`.
+
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.6, P5.7, P5.8
+
+- **Done:** wip commits squashed into 818fa51b on `timeline/p5-warm-fixtures` (rebased on `timeline-try-2`). P5.8 additions: `src/timeline/__test__/timelineScale.test.ts` (QA-SC-11 seed 1 loaded into a real DB, QA-PF-01 to -04 measured; about 5 s, so it stays in the regular suite) and the P5.3 gaps in `timelineStore.test.tsx` (shape ↔ individual destinations, a `slot_index` change, an edit and a reset while a cold build is pending). QA-PF numbers recorded in `findings.md`: every budget is met except one of three QA-PF-03 walk samples (3.51 ms against ≤ 2 ms, likely JIT warm-up; recorded as a finding).
+- **Checks:** scale test three times (pass, numbers in `findings.md`); `vitest run src/timeline/__test__/timelineStore.test.tsx` (14 passed). The regular desktop suite is running.
+- **Next:** suite result, focused `test:history` on the store test, eslint/prettier/cspell, then the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (818fa51b); run `pnpm --dir apps/desktop run test` in the background and `pnpm --dir apps/desktop run test:history src/timeline/__test__/timelineStore.test.tsx`, then open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.

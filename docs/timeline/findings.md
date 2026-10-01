@@ -26,6 +26,30 @@ Entry format:
 
 <!-- Append performance entries below. -->
 
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.8 · QA-PF-01
+
+- Result: 0.047, 0.060 and 0.069 ms p99 over three runs (budget ≤ 1 ms); p50 0.027 to 0.028 ms; worst single frame 0.16 to 1.5 ms. 3,000 `positionsAt` calls for all 250 marchers at beats spread over the show, after `warmAll`, resolver only.
+- Machine and commit: Apple M1 Pro (8 cores, 16 GB), macOS (Darwin 25.5.0, arm64), Node v24.14.1 under Vitest (jsdom environment), 818fa51b on `timeline/p5-warm-fixtures`.
+- Fixture seed and command: seed 1, `env TIMELINE_PF_OUT=<file> pnpm exec vitest run src/timeline/__test__/timelineScale.test.ts` in `apps/desktop`. The show: 250 marchers, 200 transitions, 120 shapes, 10 timelines, 4,223 assignments (380 layer-1 steals), a 32-transition chain, 250 beats.
+
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.8 · QA-PF-02
+
+- Result: cold `warmAll()` median 4.4 to 4.9 ms over three runs of seven fresh resolvers each (budget ≤ 16 ms); the first, unoptimized run of each process took 6.8 ms. Building the resolver from the tables first takes about 5 ms (`readTimelineTables`) plus about 6 ms (`createTimelineHost`). The P5.6 idle warming pass over the same show queries 130 transition boundaries in 3 or 4 slices of 4 ms, 8.5 to 9.3 ms in all, and its longest single query is 0.44 to 0.52 ms, so no slice blocks a frame.
+- Machine and commit: as for QA-PF-01.
+- Fixture seed and command: as for QA-PF-01.
+
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.8 · QA-PF-03
+
+- Result: moving the first shape of the deepest chain by 4 steps, committed through `updateTimelineShapesInTransaction`, dirties 1,448 origins and 20 FTL entries. Walk (`resolver.notify`): 0.98, 1.22 and 3.51 ms over three runs (budget ≤ 2 ms; the 3.51 ms run is over budget). Updating the store's mirror before it: 0.11 to 0.16 ms. First pull at beat 249.5, the end of the chain: 1.23, 3.30 and 1.36 ms (budget ≤ 16 ms), recomputing 1,422 origins and 20 FTL entries; the next frame takes 0.03 ms.
+- Machine and commit: as for QA-PF-01.
+- Fixture seed and command: as for QA-PF-01. Each number is one sample, the first edit in its process, so it includes JIT warm-up. That probably explains the 3.51 ms walk: a finding to re-measure with repeated edits before anyone acts on it, not a blocker.
+
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.8 · QA-PF-04
+
+- Result: 2.38 to 2.56 MB, median 2.51 to 2.53 MB over three runs (budget ≤ 5 MB). Measured as the heap growth from building one resolver over the SC-11 rows and calling `warmAll`, between forced garbage collections. The rows themselves are shared and not counted, so this is everything the resolver derives (spans, indexes, destinations, FTL geometry, origins, entries), a slight overestimate of the caches alone.
+- Machine and commit: as for QA-PF-01.
+- Fixture seed and command: as for QA-PF-01.
+
 ## Scenario verdicts (human)
 
 Questions a person must answer, recorded here:
