@@ -190,8 +190,8 @@ For the exit-gate item "each feature's existing tests pass in timeline mode". Ad
 ### P7.18: Feature tests that reach the timeline path
 
 - Owner: timeline-worker (timeline/p7-timeline-path-tests)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/39
 - Parallel: no
 - Depends on: P7.17
 
@@ -1452,3 +1452,43 @@ Facts that change how to read the PR #14 note above:
 - **Next:** file P7.19; the full `test:timeline` run with `--coverage`, the default run, focused history runs, then the PR.
 - **Blockers:** none.
 - **Resume from:** on `timeline/p7-timeline-path-tests` at 97a8780f, run `VITEST_TIMELINE_MODE=true pnpm exec vitest run --silent=true --coverage` alone in `apps/desktop`, in the background.
+
+### 2026-10-01 · timeline-worker (timeline/p7-timeline-path-tests) · P7.18 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/39, one commit (88a68598) on `timeline-try-2`.
+  - **Write paths:** `createMarchers` and `deleteMarchers` read the flag inside the edit (`timelineModeInTransaction`); their `timelineMode` parameter is gone. This fixes `newShowCompletion.ts`, which called both without the flag.
+  - **Required flag:** `buildMarcherAppearancesByPageId` and `useRenderMarcherShapes` require `timelineMode`. `canvasCoordinateWriter` and `setMarchersToNeighborPage` already did. No other `timelineMode = false` default exists in `src` or `electron`.
+  - **Harness:** `src/test/featureHarness.tsx` plus fixture tests for every inventory feature. The tests are `RegisteredActionsHandlerModes` (nudge, align, swap, set to previous page, undo focus), `MarcherEditorModes` (the inspector), `exportsModes` (coordinate sheet and drill chart), and `useMarchersTimelineMode` and `marcher.test.ts` (add and delete). Each takes page mode in the default run and timeline mode under `test:timeline`; in timeline mode they also check that `marcher_pages` is unchanged.
+  - **Docs:** `testing.md` updated, and `setTimelineModeFlag(db, on)` added for timeline-native tests.
+- **Coverage (statement hits on the timeline branch):**
+  - The three columns:
+    - **full:** the whole `test:timeline` suite with `--coverage`.
+    - **fixture:** only the 5 fixture-driven files; none opts out.
+    - **review:** the PR #38 review run.
+  - `marcher.ts` create → `addMarchersToTimelineInTransaction` (old ~222): full 52, fixture 40, review 0.
+  - `marcher.ts` delete → `removeMarchersFromTimelineInTransaction` (old ~334): full 21, fixture 15, review 0.
+  - `readTimelineMode`: full 30, fixture 7, review 0.
+  - `performHistoryAction` timeline-focus branch (`history.ts` 1228/1229): full 14/13, fixture 1/1, review 0/0.
+  - `useUpdateSelectedMarchers` timeline branch: full 2, fixture 2, review 0.
+  - `RegisteredActionsHandler`:
+    - resolver records: 4;
+    - timeline write: 2;
+    - swap timeline branch: 1.
+    - Full and fixture runs agree; the review run didn't load this file.
+  - Smaller branches, as full/fixture:
+    - `setMarchersToNeighborPage` timeline branch: 14/1.
+    - `MarcherEditor` resolver position: 2/2.
+    - `readTimelineExportPositions` sampled positions: 10/3.
+    - `buildMarcherAppearancesByPageId` timeline branch: 30/21.
+- **Filed:** P7.19, page-mode undo focus never fires (`rowIdFromSql` parses the whole match). It's a page-mode bug, so it's not fixed here.
+- **Checks:** all from `apps/desktop`, on 88a68598.
+  - `tsc --noEmit`: pass.
+  - `pnpm run test`, once and alone: 161 files passed, 7 skipped; 2,272 passed, 14 skipped, 15 todo.
+  - `VITEST_TIMELINE_MODE=true vitest run --silent=true --coverage` (`test:timeline` with coverage), once and alone: 161 files passed, 7 skipped; 2,228 passed, 58 skipped, 15 todo.
+  - Fixture-only coverage run: 45 passed.
+  - Focused `test:history` and `test:timeline-history` on the `marcher`, `timelineMarchers`, `timelineUndo` and `timelineHistoryFocus` tests: 72 passed each.
+  - prettier `--check`, cspell, eslint and the pre-commit hook: pass.
+  - Skipped by policy: the full `test:history` suite, e2e and `build:electron`.
+- **Exit gate:** not ticked. "Each feature's existing tests pass in timeline mode" can be ticked when PR #39 merges: the coverage above shows each feature's timeline branches hit by fixture-driven tests under `test:timeline`.
+- **Next:** the lead reviews PR #39.
+- **Blockers:** none.
