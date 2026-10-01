@@ -474,3 +474,14 @@ Facts that change how to read the PR #14 note above:
 - **Checks:** `pnpm install` ok; `pnpm exec turbo run build --filter=@openmarch/desktop^...` ok; `pnpm --dir apps/desktop exec tsc --noEmit` clean; `vitest run src/timeline/__test__/timelineKeyframes.test.ts src/timeline/__test__/timelineExport.test.ts src/components/exporting` passed (keyframes on G1, G8, G8b, G6 and G12: boundaries present, dense chord error within tolerance for 0.01 and 1e-4, Float32 rounding, determinism, tempo change; frame sampling equals `positionAt` at `beatAtTime`, page mode unchanged; appearances ignore page rows; cold-built and store resolvers on a real DB); `pnpm --dir apps/desktop run test` (full regular suite) 119 files passed, 7 skipped, 1734 tests passed; eslint, prettier and cspell on `src/timeline` and `src/components/exporting` clean (one existing warning in `MarcherCoordinateSheet.tsx`). Skipped per policy: `test:history`, Playwright, `build:electron`.
 - **Next:** review and merge.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-exports) · P7.8, P7.9 review fixes
+
+- **Done (lead review of PR #23, commit 88fcbfb6):**
+  - `acquireExportResolver` always cold-builds a separate resolver, so an edit during a long export can't change later frames; the live preview still uses the store's resolver, and now redraws when the store version changes. Test: an edit committed mid-export leaves the export resolver unchanged while the store follows it.
+  - Keyframes: hitting the depth cap now reports `maxErrorAboveTolerance` per marcher and in the JSON, and logs a warning (test forces the cap with a tiny tolerance and `maxDepth`). Doc comments say the tolerance is a sampled bound (7 probes per piece) and that `keyframesToMarcherTimelines` can merge keys under 1 ms apart.
+  - `timelineMode` is passed to `buildMarcherAppearancesByPageId` at the drill chart export and `SvgPreviewHandler` as well (covered by the builder's timeline-mode test).
+  - In timeline mode the video preview's duration comes from `showEndTime(beats)`.
+- **Checks:** `tsc --noEmit` clean; `vitest run src/timeline src/components/exporting` 287 passed; `pnpm --dir apps/desktop run test` 119 files passed, 7 skipped, 1735 tests passed; eslint, prettier and cspell clean (one existing warning in `MarcherCoordinateSheet.tsx`). Merged `timeline-try-2` first.
+- **Next:** re-review and merge.
+- **Blockers:** none.
