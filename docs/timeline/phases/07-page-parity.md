@@ -1493,3 +1493,25 @@ Facts that change how to read the PR #14 note above:
 - **Exit gate:** not ticked. "Each feature's existing tests pass in timeline mode" can be ticked when PR #39 merges: the coverage above shows each feature's timeline branches hit by fixture-driven tests under `test:timeline`.
 - **Next:** the lead reviews PR #39.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-timeline-path-tests) · P7.18 review fixes ready
+
+- **Done:** follow-up commit 9aeb2217 on PR https://github.com/AlexDumo/OpenMarch-timeline/pull/39 (not force-pushed). The PR body is updated.
+  - **Stale reads caught:** `RegisteredActionsHandlerModes.test.tsx`, in timeline mode, first moves every `marcher_pages` row off the resolver's position (outside history, undo triggers dropped).
+    - Mutation check, run locally and not committed: with `getSelectedMarcherPages` (~640) reading the rows instead of the resolver, nudge, align and swap fail under `test:timeline`.
+    - The neighbor-page actions would read stale neighbor rows the same way.
+  - **No spill:** each action checks that the selected marchers and 4 bystanders on PAGE−1 and PAGE+1, and the bystanders on PAGE, don't move.
+  - **New tests:** set selected to the next page, and set all to the previous page.
+  - **Harness:** `setUpFeature` asserts that the file's flag matches the run's mode.
+  - **Inventory:** a note under P7.3 that `applyPreviousDotsCoordinates` writes `marcher_pages` whatever the mode.
+  - **P7.19:** left as is (open).
+- **Checks:** all on 9aeb2217.
+  - `tsc --noEmit`: pass.
+  - The 5 fixture files: 47 passed under `vitest run`, and 47 passed under `test:timeline`.
+  - `pnpm run test:timeline`, once and alone: 161 files passed, 7 skipped; 2,230 passed, 58 skipped.
+  - `pnpm run test`, once and alone: 161 files passed, 7 skipped; 2,274 passed, 14 skipped.
+  - Pre-commit (eslint, prettier, cspell): pass.
+  - Skipped by policy: the full `test:history` suite, e2e and `build:electron`.
+- **Exit gate:** I didn't tick it. Per the review it can be ticked when PR #39 merges.
+- **Next:** the lead merges PR #39.
+- **Blockers:** none.
