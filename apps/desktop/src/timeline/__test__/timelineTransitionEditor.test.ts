@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
-import type { ShapeRow, TransitionRow, XY } from "@openmarch/core";
+import type {
+    ShapeRow,
+    TimelineSnapshot,
+    TransitionRow,
+    XY,
+} from "@openmarch/core";
+import { rowBuilder, tr } from "../fixtures/fixtureTypes";
 import {
     buildTransitionEditTarget,
+    buildTransitionEditTargets,
     clampBulge,
+    clampSlotCount,
+    MAX_SLOT_COUNT,
+    shapeBlocker,
     DEFAULT_BULGE,
     editableTransitionId,
     followTheLeaderBlocker,
@@ -125,6 +135,107 @@ describe("editableTransitionId", () => {
         // Later in the hold, nothing ends here
         expect(editableTransitionId(inspect(show, 1, 20))).toBeNull();
     });
+
+    /**
+     * Marcher 1 moves in T1 [0, 8) then T2 [8, 16), back to back; marcher 2 moves in T1 and then
+     * holds; marcher 3 holds through T1 and starts T2 at 8.
+     */
+    const backToBack = (): TimelineSnapshot => {
+        const row = rowBuilder();
+        return {
+            marchers: [1, 2, 3].map((id) => ({ id, home: [0, id] as XY })),
+            shapes: {},
+            transitions: {
+                1: tr(1, 0, 8, null, {
+                    slots: 2,
+                    points: [
+                        [10, 0],
+                        [10, 5],
+                    ],
+                }),
+                2: tr(2, 8, 16, null, {
+                    slots: 2,
+                    points: [
+                        [20, 0],
+                        [20, 5],
+                    ],
+                }),
+            },
+            assignments: [
+                row(1, 1, 0, 0, 8),
+                row(2, 1, 1, 0, 8),
+                row(1, 2, 0, 8, 16),
+                row(3, 2, 1, 8, 16),
+            ],
+        };
+    };
+
+    it("at a page boundary between back-to-back moves, edits the move that ends there, not the next one", () => {
+        const show = backToBack();
+        // explain(1, 8) is T2's founding span; the page's move is T1
+        expect(inspect(show, 1, 8).transition?.id).toBe(2);
+        expect(editableTransitionId(inspect(show, 1, 8))).toBe(1);
+        // Mid-move, it is the move in progress
+        expect(editableTransitionId(inspect(show, 1, 12))).toBe(2);
+    });
+
+    it("a selection mixing a holding and a moving marcher offers only the moves that end at the beat", () => {
+        const show = backToBack();
+        expect(editableTransitionId(inspect(show, 2, 8))).toBe(1);
+        // Marcher 3 held through T1 and starts T2 at 8: nothing of its own ends here
+        expect(editableTransitionId(inspect(show, 3, 8))).toBeNull();
+        const { transitions, shapes, assignments } = show;
+        expect(
+            buildTransitionEditTargets(
+                [1, 2, 3].map((id) => inspect(show, id, 8)),
+                { transitions, shapes, assignments },
+            ).map((t) => t.id),
+        ).toEqual([1]);
+    });
+});
+
+describe("clampSlotCount and shapeBlocker", () => {
+    it("rounds and clamps a slot count to [min, 10000] (I-N2)", () => {
+        expect(clampSlotCount(2.6, 1)).toBe(3);
+        expect(clampSlotCount(0, 2)).toBe(2);
+        expect(clampSlotCount(1e9, 1)).toBe(MAX_SLOT_COUNT);
+        expect(MAX_SLOT_COUNT).toBe(10000);
+    });
+
+    it("refuses a block for follow the leader (E-T3) and a block smaller than the slots (E-T4)", () => {
+        const block = {
+            id: 2,
+            name: null,
+            kind: "block" as const,
+            capacity: 4,
+        };
+        const path = {
+            id: 1,
+            name: null,
+            kind: "line" as const,
+            capacity: null,
+        };
+        expect(shapeBlocker(targetOf(), block)).toBeNull();
+        expect(shapeBlocker(targetOf({ slots: 5 }), block)).toBe("tooSmall");
+        expect(
+            shapeBlocker(
+                targetOf({
+                    style: "follow_the_leader",
+                    params: { waypoints: [] },
+                }),
+                block,
+            ),
+        ).toBe("ftlBlock");
+        expect(
+            shapeBlocker(
+                targetOf({
+                    style: "follow_the_leader",
+                    params: { waypoints: [] },
+                }),
+                path,
+            ),
+        ).toBeNull();
+    });
 });
 
 describe("follow-the-leader blockers", () => {
@@ -216,8 +327,8 @@ describe("transitionShapeOptions", () => {
                 { id: 1, name: "Opener line" },
             ]),
         ).toEqual([
-            { id: 1, name: "Opener line", kind: "line" },
-            { id: 2, name: null, kind: "block" },
+            { id: 1, name: "Opener line", kind: "line", capacity: null },
+            { id: 2, name: null, kind: "block", capacity: 4 },
         ]);
     });
 });
@@ -330,6 +441,19 @@ describe("planTransitionEdit", () => {
                 order: "slot",
             }),
         ).toEqual({ fn: "update", args: { id: 7, orderMode: "slot" } });
+    });
+
+    it("a slot count beyond 10000 is planned as 10000, not as a billion points", () => {
+        const points = targetOf({ dest: null, points: [[0, 0]], slots: 1 });
+        const plan = planTransitionEdit(points, {
+            kind: "slotCount",
+            slotCount: 1e9,
+        });
+        expect(plan?.fn).toBe("update");
+        const args = (plan as { args: { slotCount: number; points: XY[] } })
+            .args;
+        expect(args.slotCount).toBe(10000);
+        expect(args.points).toHaveLength(10000);
     });
 
     it("a slot count change carries resized points for a shapeless transition", () => {

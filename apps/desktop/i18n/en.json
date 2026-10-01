@@ -666,6 +666,8 @@
                 "orderSlotHelp": "Follow the leader orders the trail by slot number.",
                 "pickShape": "Destination shape",
                 "range": "Beats {start} to {end}",
+                "shapeNoFtl": "{shape}: follow the leader can't end in a block",
+                "shapeTooSmall": "{shape}: holds only {capacity} of {slots} slots",
                 "slotCount": "Slots",
                 "slotCountMin": "At least {min}, because slot {slot} has a marcher assigned.",
                 "slotCountPoints": "New slots start at the last slot's point.",

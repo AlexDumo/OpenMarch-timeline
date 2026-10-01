@@ -1,6 +1,7 @@
 import {
     useCallback,
     useEffect,
+    useRef,
     useState,
     type KeyboardEvent,
     type ReactNode,
@@ -32,7 +33,10 @@ import type { DbConnection } from "@/db-functions/types";
 import {
     applyTransitionEdit,
     clampBulge,
+    clampSlotCount,
     followTheLeaderBlocker,
+    MAX_SLOT_COUNT,
+    shapeBlocker,
     planTransitionEdit,
     type TransitionEdit,
     type TransitionEditTarget,
@@ -83,6 +87,8 @@ function NumberField({
     const [text, setText] = useState(shown(value));
     useEffect(() => setText(shown(value)), [value]);
     const commit = () => {
+        // Unchanged text: the shown value is rounded, so committing it would write a new value
+        if (text === shown(value)) return;
         const parsed = Number(text);
         if (text.trim() === "" || !Number.isFinite(parsed)) {
             setText(shown(value));
@@ -343,9 +349,18 @@ export function TimelineTransitionEditor({
     database: DbConnection;
     t: Translate;
 }) {
-    const [pending, setPending] = useState(false);
+    /**
+     * The target the last committed edit was planned from. The inspector keeps showing it until
+     * the rows of the new store version are read, so the controls stay disabled until `target`
+     * is rebuilt; a second edit planned from the old target would undo the first (a waypoint
+     * removed twice from the same list, say). The ref guards clicks before the next render.
+     */
+    const plannedFrom = useRef<TransitionEditTarget | null>(null);
+    const [awaiting, setAwaiting] = useState<TransitionEditTarget | null>(null);
+    const pending = awaiting === target;
     const edit = useCallback(
         async (change: TransitionEdit) => {
+            if (plannedFrom.current === target) return;
             let plan;
             try {
                 plan = planTransitionEdit(target, change);
@@ -354,13 +369,15 @@ export function TimelineTransitionEditor({
                 return;
             }
             if (plan === null) return;
-            setPending(true);
+            plannedFrom.current = target;
+            setAwaiting(target);
             try {
                 await applyTransitionEdit(database, plan);
             } catch (error) {
+                // Nothing was written, so the shown target is still current
+                plannedFrom.current = null;
+                setAwaiting(null);
                 toastTimelineError(error);
-            } finally {
-                setPending(false);
             }
         },
         [target, database],
@@ -552,14 +569,34 @@ export function TimelineTransitionEditor({
                             label={t("inspector.timeline.edit.pickShape")}
                         />
                         <SelectContent>
-                            {shapes.map((shape) => (
-                                <SelectItem
-                                    key={shape.id}
-                                    value={String(shape.id)}
-                                >
-                                    {shapeLabel(shape, t)}
-                                </SelectItem>
-                            ))}
+                            {shapes.map((shape) => {
+                                const blocker = shapeBlocker(target, shape);
+                                const label = shapeLabel(shape, t);
+                                return (
+                                    <SelectItem
+                                        key={shape.id}
+                                        value={String(shape.id)}
+                                        disabled={blocker !== null}
+                                    >
+                                        {blocker === null
+                                            ? label
+                                            : blocker === "ftlBlock"
+                                              ? t(
+                                                    "inspector.timeline.edit.shapeNoFtl",
+                                                    { shape: label },
+                                                )
+                                              : t(
+                                                    "inspector.timeline.edit.shapeTooSmall",
+                                                    {
+                                                        shape: label,
+                                                        capacity:
+                                                            shape.capacity ?? 0,
+                                                        slots: target.slotCount,
+                                                    },
+                                                )}
+                                    </SelectItem>
+                                );
+                            })}
                         </SelectContent>
                     </Select>
                 )}
@@ -590,14 +627,15 @@ export function TimelineTransitionEditor({
                     testId="timeline-edit-slot-count"
                     value={target.slotCount}
                     min={target.minSlotCount}
+                    max={MAX_SLOT_COUNT}
                     step={1}
                     disabled={pending}
                     onCommit={(value) =>
                         void edit({
                             kind: "slotCount",
-                            slotCount: Math.max(
+                            slotCount: clampSlotCount(
+                                value,
                                 target.minSlotCount,
-                                Math.round(value),
                             ),
                         })
                     }

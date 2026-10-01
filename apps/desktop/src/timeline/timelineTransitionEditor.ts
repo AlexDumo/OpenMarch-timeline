@@ -22,10 +22,12 @@ import type { TimelineViewShape } from "./timelineViewModel";
  * The inspector's transition editor (P8.3): what it edits, and how each control's change becomes
  * one undoable edit. Pure apart from `applyTransitionEdit`, which runs the planned db-function.
  *
- * Every change is planned against the transition as the resolver store last saw it. A change
- * that would write nothing is planned as `null` and skipped, since an edit that writes nothing
- * is refused by `transactionWithHistory`. The db-functions validate everything again before
- * writing, so a stale plan is refused, never half-applied.
+ * Every change is planned against the transition as the inspector shows it. A change that would
+ * write nothing is planned as `null` and skipped, since an edit that writes nothing is refused by
+ * `transactionWithHistory`. The db-functions validate each write, but they can't tell a stale
+ * plan from a fresh one: a plan made from a target shown before the previous edit landed would
+ * write over that edit. So the editor plans nothing until the target is rebuilt after its last
+ * edit (`TimelineTransitionEditor`).
  */
 
 /** The bulge a transition gets when it becomes an arc. */
@@ -36,6 +38,8 @@ export interface TransitionShapeOption {
     id: number;
     name: string | null;
     kind: ShapeRow["kind"];
+    /** A block's cell count; null for the path kinds */
+    capacity: number | null;
 }
 
 /** A transition as the editor shows it. */
@@ -79,22 +83,19 @@ export type PlannedTransitionEdit =
       };
 
 /**
- * The transition a marcher's inspection edits: the one its span runs in or, when it is holding
- * from exactly this beat, the one that brought it here (the move that ends at the page).
+ * The transition a marcher's inspection edits at a page's end beat: the move that brought it
+ * there. Spans are half-open, so when a span starts exactly at the beat, that span (a hold, or
+ * the next page's move) isn't it: the move ending here is the previous span's transition, if the
+ * previous span was a move at all. Otherwise it is the move the beat falls inside.
  */
 export function editableTransitionId(
     inspection: MarcherInspection,
 ): number | null {
-    if (inspection.transition) return inspection.transition.id;
     const { span, origin } = inspection;
-    if (
-        span.kind === "hold" &&
-        span.start === inspection.beat &&
-        origin.kind === "span" &&
-        origin.transitionId !== null
-    )
-        return origin.transitionId;
-    return null;
+    if (span.start === inspection.beat)
+        return origin.kind === "span" ? origin.transitionId : null;
+    if (span.kind === "hold") return null;
+    return inspection.transition?.id ?? null;
 }
 
 /** The editor's view of transition `id`, from the resolver's rows and the stored assignments. */
@@ -167,6 +168,10 @@ export function transitionShapeOptions(
             id: Number(id),
             name: names.get(Number(id)) ?? null,
             kind: shape.kind,
+            capacity:
+                shape.kind === "block"
+                    ? shape.geometry.rows * shape.geometry.cols
+                    : null,
         }))
         .sort((a, b) => a.id - b.id);
 }
@@ -178,6 +183,29 @@ export function followTheLeaderBlocker(
     if (target.destination.kind !== "shape") return "noShape";
     if (target.destination.shape?.kind === "block") return "block";
     return null;
+}
+
+/**
+ * Why a shape can't be a transition's destination, or null when it can: follow the leader can't
+ * end in a block (I-T3, E-T3), and a block must have a cell for every slot (I-T4, E-T4).
+ */
+export function shapeBlocker(
+    target: TransitionEditTarget,
+    shape: TransitionShapeOption,
+): "ftlBlock" | "tooSmall" | null {
+    if (shape.kind !== "block") return null;
+    if (target.style === "follow_the_leader") return "ftlBlock";
+    if (shape.capacity !== null && shape.capacity < target.slotCount)
+        return "tooSmall";
+    return null;
+}
+
+/** The most slots a transition can have (I-N2). */
+export const MAX_SLOT_COUNT = 10000;
+
+/** A typed slot count as a whole number from `min` (the assigned slots) to `MAX_SLOT_COUNT`. */
+export function clampSlotCount(value: number, min: number): number {
+    return Math.min(MAX_SLOT_COUNT, Math.max(min, Math.round(value)));
 }
 
 /** A bulge clamped to the minor arcs (D-15, |k| ≤ ½); null for a value that isn't a number. */
@@ -285,17 +313,17 @@ export function planTransitionEdit(
         case "orderMode":
             if (edit.order === target.order) return null;
             return update({ orderMode: edit.order });
-        case "slotCount":
-            if (edit.slotCount === target.slotCount) return null;
+        case "slotCount": {
+            // Never plan more than I-N2 allows, so no huge point list is built for a typo
+            const slotCount = clampSlotCount(edit.slotCount, 1);
+            if (slotCount === target.slotCount) return null;
             if (target.destination.kind === "individual")
                 return update({
-                    slotCount: edit.slotCount,
-                    points: resizePoints(
-                        target.destination.points,
-                        edit.slotCount,
-                    ),
+                    slotCount,
+                    points: resizePoints(target.destination.points, slotCount),
                 });
-            return update({ slotCount: edit.slotCount });
+            return update({ slotCount });
+        }
         case "destinationShape":
             if (
                 target.destination.kind === "shape" &&

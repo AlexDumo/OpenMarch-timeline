@@ -16,7 +16,7 @@ import {
     it,
     vi,
 } from "vitest";
-import type { ShapeRow, TransitionRow } from "@openmarch/core";
+import type { ShapeRow, TransitionRow, XY } from "@openmarch/core";
 import type { DbConnection } from "@/db-functions/types";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import {
@@ -71,8 +71,8 @@ const BLOCK: ShapeRow = {
     geometry: { origin: [0, 0], rows: 2, cols: 2, spacing: [2, 2] },
 };
 const SHAPES: TransitionShapeOption[] = [
-    { id: 1, name: "Opener line", kind: "line" },
-    { id: 2, name: null, kind: "block" },
+    { id: 1, name: "Opener line", kind: "line", capacity: null },
+    { id: 2, name: null, kind: "block", capacity: 4 },
 ];
 
 const row = (over: Partial<TransitionRow> = {}): TransitionRow => ({
@@ -87,7 +87,8 @@ const row = (over: Partial<TransitionRow> = {}): TransitionRow => ({
     ...over,
 });
 
-const show = (
+/** The editor for transition 7 as `over` describes it; a new target object each call. */
+const editor = (
     over: Partial<TransitionRow> = {},
     { slotsTaken = [0], shapes = SHAPES } = {},
 ) => {
@@ -104,15 +105,17 @@ const show = (
             layer: 0,
         })),
     })!;
-    return render(
+    return (
         <TimelineTransitionEditor
             target={target}
             shapes={shapes}
             database={db}
             t={t}
-        />,
+        />
     );
 };
+
+const show = (...args: Parameters<typeof editor>) => render(editor(...args));
 
 const group = (label: string) => screen.getByRole("group", { name: label });
 const option = (groupLabel: string, name: string) =>
@@ -293,6 +296,8 @@ describe("bulge", () => {
             db,
             modified: { id: 7, pathParams: { bulge: 0.5 } },
         });
+        cleanup();
+        show({ style: "arc", params: { bulge: 0.1 } });
         await commit("Bulge value", "-0.75");
         expect(mocks.update).toHaveBeenLastCalledWith({
             db,
@@ -308,6 +313,26 @@ describe("bulge", () => {
         await commit("Bulge value", "0.1");
         await commit("Bulge value", "abc");
         expect(mocks.update).not.toHaveBeenCalled();
+    });
+
+    it("focusing and leaving a non-round value writes nothing (the shown value is rounded)", async () => {
+        show({ style: "arc", params: { bulge: 0.1234 } });
+        const input = screen.getByRole("spinbutton", { name: "Bulge value" });
+        expect((input as HTMLInputElement).value).toBe("0.123");
+        await act(async () => {
+            fireEvent.focus(input);
+            fireEvent.blur(input);
+        });
+        await act(async () => {
+            fireEvent.keyDown(input, { key: "Enter" });
+        });
+        expect(mocks.update).not.toHaveBeenCalled();
+        // A real change still commits
+        await commit("Bulge value", "0.2");
+        expect(mocks.update).toHaveBeenCalledWith({
+            db,
+            modified: { id: 7, pathParams: { bulge: 0.2 } },
+        });
     });
 
     it("the slider commits one edit when released", async () => {
@@ -357,6 +382,8 @@ describe("waypoints", () => {
         ftl();
         await click(screen.getByRole("button", { name: "Remove waypoint 1" }));
         expect(lastWaypoints()).toEqual([[3, 4]]);
+        cleanup();
+        ftl();
         await click(screen.getByRole("button", { name: "Move waypoint 2 up" }));
         expect(lastWaypoints()).toEqual([
             [3, 4],
@@ -367,6 +394,60 @@ describe("waypoints", () => {
                 .getByRole("button", { name: "Move waypoint 1 up" })
                 .hasAttribute("disabled"),
         ).toBe(true);
+    });
+
+    it("two quick edits: the second waits for the first to show, so it can't undo it", async () => {
+        const three = {
+            style: "follow_the_leader" as const,
+            params: {
+                waypoints: [
+                    [1, 2],
+                    [3, 4],
+                    [5, 6],
+                ] as XY[],
+            },
+        };
+        const { rerender } = show(three);
+        await click(screen.getByRole("button", { name: "Remove waypoint 2" }));
+        expect(lastWaypoints()).toEqual([
+            [1, 2],
+            [5, 6],
+        ]);
+        // The edit landed, but the inspector still shows the old list: nothing is planned from it
+        await click(screen.getByRole("button", { name: "Remove waypoint 3" }));
+        await click(screen.getByRole("button", { name: "Add waypoint" }));
+        expect(mocks.update).toHaveBeenCalledTimes(1);
+        expect(
+            screen
+                .getByRole("button", { name: "Add waypoint" })
+                .hasAttribute("disabled"),
+        ).toBe(true);
+        // The rebuilt target arrives; the next edit is planned from it
+        rerender(
+            editor({
+                ...three,
+                params: {
+                    waypoints: [
+                        [1, 2],
+                        [5, 6],
+                    ],
+                },
+            }),
+        );
+        await click(screen.getByRole("button", { name: "Remove waypoint 2" }));
+        expect(mocks.update).toHaveBeenCalledTimes(2);
+        expect(lastWaypoints()).toEqual([[1, 2]]);
+    });
+
+    it("after a refusal, the controls work again at once", async () => {
+        mocks.update.mockRejectedValueOnce(
+            new TimelineWriteError("E-P1", "waypoints"),
+        );
+        ftl();
+        await click(screen.getByRole("button", { name: "Remove waypoint 1" }));
+        expect(mocks.toast).toHaveBeenCalledTimes(1);
+        await click(screen.getByRole("button", { name: "Remove waypoint 1" }));
+        expect(mocks.update).toHaveBeenCalledTimes(2);
     });
 
     it("edits a coordinate, and the same value writes nothing", async () => {
@@ -458,6 +539,40 @@ describe("destination", () => {
         );
     });
 
+    it("the picker disables the shapes the database would refuse, and says why", async () => {
+        const open = async () => {
+            await act(async () => {
+                fireEvent.keyDown(screen.getByRole("combobox"), {
+                    key: "Enter",
+                });
+            });
+        };
+        // A 2x2 block holds 4: too small for 5 slots (E-T4)
+        show({ slots: 5 });
+        await open();
+        const small = await screen.findByRole("option", {
+            name: "Shape 2 (block): holds only 4 of 5 slots",
+        });
+        expect(small.getAttribute("aria-disabled")).toBe("true");
+        expect(
+            screen
+                .getByRole("option", { name: "Opener line (line)" })
+                .getAttribute("aria-disabled"),
+        ).not.toBe("true");
+        cleanup();
+        // Follow the leader can't end in a block (E-T3)
+        show({ style: "follow_the_leader", params: { waypoints: [] } });
+        await open();
+        const ftlBlock = await screen.findByRole("option", {
+            name: "Shape 2 (block): follow the leader can't end in a block",
+        });
+        expect(ftlBlock.getAttribute("aria-disabled")).toBe("true");
+        await act(async () => {
+            fireEvent.keyDown(ftlBlock, { key: "Enter" });
+        });
+        expect(mocks.destination).not.toHaveBeenCalled();
+    });
+
     it("says so when there are no shapes to pick", () => {
         show({}, { shapes: [] });
         expect(
@@ -487,6 +602,15 @@ describe("slot count", () => {
         expect(mocks.update).toHaveBeenCalledWith({
             db,
             modified: { id: 7, slotCount: 3 },
+        });
+    });
+
+    it("is capped at 10000 (I-N2)", async () => {
+        show();
+        await commit("Slots", "1000000000");
+        expect(mocks.update).toHaveBeenCalledWith({
+            db,
+            modified: { id: 7, slotCount: 10000 },
         });
     });
 

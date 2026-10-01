@@ -104,7 +104,7 @@ describeDbTests("useTimelineInspections", (it) => {
             destination: { kind: "shape", shapeId: 1 },
         });
         expect(result.current.shapeOptions).toEqual([
-            { id: 1, name: "Front line", kind: "line" },
+            { id: 1, name: "Front line", kind: "line", capacity: null },
         ]);
     });
 

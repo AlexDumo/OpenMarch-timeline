@@ -103,6 +103,10 @@ export const TIMELINE_INSPECTOR_STRINGS = {
     "inspector.timeline.edit.destinationShape": "Shape",
     "inspector.timeline.edit.destinationIndividual": "Individual points",
     "inspector.timeline.edit.pickShape": "Destination shape",
+    "inspector.timeline.edit.shapeNoFtl":
+        "{shape}: follow the leader can't end in a block",
+    "inspector.timeline.edit.shapeTooSmall":
+        "{shape}: holds only {capacity} of {slots} slots",
     "inspector.timeline.edit.noShapes":
         "There are no shapes yet. Draw one to use it as a destination.",
     "inspector.timeline.edit.individualHelp":
