@@ -150,6 +150,55 @@ describeDbTests("useTimelineInspections", (it) => {
         );
     });
 
+    it("counts only known marchers as omitted, and reports the unknown ones", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await transactionWithHistory(db, "moreMarchers", async (tx) => {
+            await tx.insert(schema.marchers).values(
+                Array.from({ length: 10 }, (_, k) => ({
+                    id: k + 3,
+                    section: "Brass",
+                    drill_prefix: "B",
+                    drill_order: k + 3,
+                    home_x: 0,
+                    home_y: 0,
+                })),
+            );
+        });
+        await startTimelineResolver(db);
+        // 12 known marchers and one the resolver lacks
+        const ids = [...Array.from({ length: 12 }, (_, k) => k + 1), 99];
+        const { result } = renderHook(() =>
+            useTimelineInspections({
+                database: db,
+                enabled: true,
+                marcherIds: ids,
+                beat: 5,
+            }),
+        );
+        await waitFor(() =>
+            expect(result.current.inspections).toHaveLength(10),
+        );
+        expect(result.current.omitted).toBe(2);
+        expect(result.current.unknownMarcherIds).toEqual([99]);
+    });
+
+    it("reports no unknown marchers while disabled", async ({ db }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const ids = [99];
+        const { result } = renderHook(() =>
+            useTimelineInspections({
+                database: db,
+                enabled: false,
+                marcherIds: ids,
+                beat: 5,
+            }),
+        );
+        expect(result.current.unknownMarcherIds).toEqual([]);
+    });
+
     it("reads nothing while disabled", async ({ db }) => {
         await seedShow(db);
         await startTimelineResolver(db);

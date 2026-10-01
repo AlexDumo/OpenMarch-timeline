@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Diagnostic } from "@openmarch/core";
 import type { DbConnection } from "@/db-functions/types";
-import { getTimelineHost, useTimelineResolverStore } from "./timelineStore";
+import {
+    getTimelineHost,
+    useDiagnostics,
+    useTimelineResolverStore,
+} from "./timelineStore";
 import {
     buildMarcherInspection,
     type MarcherInspection,
@@ -41,8 +45,10 @@ export function useTimelineInspections({
     beat: number | null;
 }): {
     inspections: readonly MarcherInspection[];
-    /** Marchers selected beyond `MAX_INSPECTED_MARCHERS` */
+    /** Known marchers selected beyond `MAX_INSPECTED_MARCHERS` */
     omitted: number;
+    /** Selected marchers the resolver doesn't have; empty until a resolver is ready */
+    unknownMarcherIds: readonly number[];
     diagnostics: readonly Diagnostic[];
 } {
     const resolver = useTimelineResolverStore((s) => s.resolver);
@@ -68,10 +74,19 @@ export function useTimelineInspections({
         };
     }, [active, database, version]);
 
-    const diagnostics = useMemo(() => {
+    const storeDiagnostics = useDiagnostics();
+    const diagnostics = active ? storeDiagnostics : NO_DIAGNOSTICS;
+
+    const known = useMemo(() => {
         void version;
-        return active && resolver ? resolver.diagnostics() : NO_DIAGNOSTICS;
-    }, [active, resolver, version]);
+        if (!active || !resolver)
+            return { ids: [] as number[], unknown: [] as number[] };
+        const have = new Set(resolver.marcherIds());
+        return {
+            ids: marcherIds.filter((id) => have.has(id)),
+            unknown: marcherIds.filter((id) => !have.has(id)),
+        };
+    }, [active, resolver, version, marcherIds]);
 
     const built = useMemo(() => {
         if (!active || !resolver || !loaded || beat === null) return [];
@@ -79,7 +94,6 @@ export function useTimelineInspections({
         if (loaded.version !== version) return null;
         const host = getTimelineHost();
         if (!host) return [];
-        const known = new Set(resolver.marcherIds());
         const shapeKinds: Record<number, string> = {};
         for (const [id, shape] of Object.entries(host.snapshot.shapes))
             shapeKinds[Number(id)] = shape.kind;
@@ -89,8 +103,7 @@ export function useTimelineInspections({
             shapeKinds,
             showDiagnostics: diagnostics,
         };
-        return marcherIds
-            .filter((id) => known.has(id))
+        return known.ids
             .slice(0, MAX_INSPECTED_MARCHERS)
             .map((id) =>
                 buildMarcherInspection(
@@ -100,13 +113,14 @@ export function useTimelineInspections({
                     sources,
                 ),
             );
-    }, [active, resolver, loaded, version, beat, marcherIds, diagnostics]);
+    }, [active, resolver, loaded, version, beat, known, diagnostics]);
 
     const last = useRef<readonly MarcherInspection[]>([]);
     if (built !== null) last.current = built;
     return {
         inspections: built ?? last.current,
-        omitted: Math.max(0, marcherIds.length - MAX_INSPECTED_MARCHERS),
+        omitted: Math.max(0, known.ids.length - MAX_INSPECTED_MARCHERS),
+        unknownMarcherIds: known.unknown,
         diagnostics,
     };
 }

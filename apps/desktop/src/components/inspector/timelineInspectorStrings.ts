@@ -49,8 +49,12 @@ export const TIMELINE_INSPECTOR_STRINGS = {
     "inspector.timeline.slot.value": "{slot} of {count}",
     "inspector.timeline.progress.value": "{percent}%",
     "inspector.timeline.origin.home": "Home ({x}, {y})",
-    "inspector.timeline.origin.span":
-        "End of the previous {kind} span in transition {transition} ({x}, {y})",
+    "inspector.timeline.origin.spanFounding":
+        "End of the previous founding span in transition {transition} ({x}, {y})",
+    "inspector.timeline.origin.spanJoin":
+        "End of the previous join span in transition {transition} ({x}, {y})",
+    "inspector.timeline.origin.spanResume":
+        "End of the previous resume span in transition {transition} ({x}, {y})",
     "inspector.timeline.origin.spanHold": "Where it was holding ({x}, {y})",
 
     "inspector.timeline.pathStyle.direct": "Direct",

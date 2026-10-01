@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
     timelineMode: true,
     inspections: [] as unknown[],
     diagnostics: [] as unknown[],
+    unknown: [] as number[],
     selectedMarchers: [] as Array<{ id: number; drill_number: string }>,
     selectedPage: null as unknown,
 }));
@@ -55,6 +56,7 @@ vi.mock("@/timeline/useTimelineInspections", () => ({
     useTimelineInspections: vi.fn(() => ({
         inspections: mocks.inspections,
         omitted: 0,
+        unknownMarcherIds: mocks.unknown,
         diagnostics: mocks.diagnostics,
     })),
 }));
@@ -73,6 +75,7 @@ beforeEach(() => {
     mocks.timelineMode = true;
     mocks.inspections = [];
     mocks.diagnostics = [];
+    mocks.unknown = [];
     mocks.selectedMarchers = [];
     mocks.selectedPage = null;
 });
@@ -267,6 +270,22 @@ describe("TimelineInspectorSection", () => {
             screen.getByText(`Show diagnostics (${mocks.diagnostics.length})`),
         ).toBeTruthy();
         expect(screen.getByTestId("timeline-show-diagnostics")).toBeTruthy();
+    });
+
+    it("says a marcher isn't in the timeline only when the hook reports it unknown", () => {
+        mocks.selectedMarchers = [
+            { id: 2, drill_number: "T2" },
+            { id: 3, drill_number: "T3" },
+        ];
+        mocks.selectedPage = { id: 1, beats: [{ index: 7 }] };
+        // Rows still loading: nothing is reported missing
+        renderSection();
+        expect(screen.queryByText(/isn't in the timeline yet/)).toBeNull();
+        cleanup();
+        mocks.unknown = [3];
+        renderSection();
+        expect(screen.getByText("T3 isn't in the timeline yet.")).toBeTruthy();
+        expect(screen.queryByText(/T2 isn't/)).toBeNull();
     });
 
     it("asks for a page when marchers are selected but no page is", () => {

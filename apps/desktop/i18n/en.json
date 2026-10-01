@@ -686,7 +686,9 @@
             },
             "origin": {
                 "home": "Home ({x}, {y})",
-                "span": "End of the previous {kind} span in transition {transition} ({x}, {y})",
+                "spanFounding": "End of the previous founding span in transition {transition} ({x}, {y})",
+                "spanJoin": "End of the previous join span in transition {transition} ({x}, {y})",
+                "spanResume": "End of the previous resume span in transition {transition} ({x}, {y})",
                 "spanHold": "Where it was holding ({x}, {y})"
             },
             "pathStyle": {

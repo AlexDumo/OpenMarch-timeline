@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import { useTranslate } from "@tolgee/react";
 import { WarningIcon, InfoIcon } from "@phosphor-icons/react";
-import type { Diagnostic, XY } from "@openmarch/core";
+import type { Diagnostic, SpanKind, XY } from "@openmarch/core";
 import { db } from "@/global/database/db";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -11,10 +11,7 @@ import {
     groupDiagnosticsByTransition,
     type MarcherInspection,
 } from "@/timeline/timelineInspector";
-import {
-    MAX_INSPECTED_MARCHERS,
-    useTimelineInspections,
-} from "@/timeline/useTimelineInspections";
+import { useTimelineInspections } from "@/timeline/useTimelineInspections";
 import { InspectorCollapsible } from "./InspectorCollapsible";
 import {
     DIAGNOSTIC_STRING_KEYS,
@@ -42,6 +39,14 @@ export function useInspectorTranslate(): InspectorTranslate {
         [t],
     );
 }
+
+/** One whole sentence per span kind, so no translated word is changed or spliced in. */
+const ORIGIN_SPAN_KEYS = {
+    hold: "inspector.timeline.origin.spanHold",
+    founding: "inspector.timeline.origin.spanFounding",
+    join: "inspector.timeline.origin.spanJoin",
+    resume: "inspector.timeline.origin.spanResume",
+} as const satisfies Record<SpanKind, TimelineInspectorStringKey>;
 
 /** A coordinate, rounded for reading. */
 const num = (value: number) => String(Math.round(value * 100) / 100);
@@ -180,10 +185,7 @@ export function MarcherInspectionView({
                                 "inspector.timeline.origin.spanHold",
                                 xy(origin.xy),
                             )
-                          : t("inspector.timeline.origin.span", {
-                                kind: t(
-                                    `inspector.timeline.span.${origin.span}`,
-                                ).toLowerCase(),
+                          : t(ORIGIN_SPAN_KEYS[origin.span], {
                                 transition: origin.transitionId,
                                 ...xy(origin.xy),
                             })}
@@ -351,16 +353,13 @@ function TimelineInspectorContent() {
         [selectedMarchers],
     );
     const beat = selectedPage ? pageEndBeat(selectedPage) : null;
-    const { inspections, omitted, diagnostics } = useTimelineInspections({
-        database: db,
-        enabled: true,
-        marcherIds,
-        beat,
-    });
-    const missing = selectedMarchers.filter(
-        (m) => beat !== null && !inspections.some((i) => i.marcherId === m.id),
-    );
-
+    const { inspections, omitted, diagnostics, unknownMarcherIds } =
+        useTimelineInspections({
+            database: db,
+            enabled: true,
+            marcherIds,
+            beat,
+        });
     return (
         <InspectorCollapsible
             defaultOpen
@@ -383,12 +382,11 @@ function TimelineInspectorContent() {
                     {t("inspector.timeline.omitted", { count: omitted })}
                 </p>
             )}
-            {missing.length > 0 &&
-                inspections.length < MAX_INSPECTED_MARCHERS &&
-                missing.map((m) => (
-                    <p key={m.id} className="text-sub text-text/60">
+            {beat !== null &&
+                unknownMarcherIds.map((id) => (
+                    <p key={id} className="text-sub text-text/60">
                         {t("inspector.timeline.notInTimeline", {
-                            marcher: m.drill_number,
+                            marcher: labels.get(id) ?? "",
                         })}
                     </p>
                 ))}
