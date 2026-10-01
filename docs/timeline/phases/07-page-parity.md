@@ -170,7 +170,7 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 ### P7.15: Refresh views on edits outside the change log
 
 - Owner: timeline-worker (timeline/p7-15-refresh-views)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/32
 - Parallel: yes
 - Depends on: P7.13
@@ -930,4 +930,24 @@ Facts that change how to read the PR #14 note above:
 - **Done:** merged `timeline-try-2` (P8.4, P7.12) into PR #32 with a normal merge commit. One conflict, in the imports of `useTimelineInspections.ts`; both kept. The assignment target's `version` is now the resolver version plus the display version, so the P8.4 editor's stale-plan guard re-enables after a display-only edit and can't hang; the transition editor's guard is per target object and already rebuilds. The combined `useTimelineViewVersions` hook and one load per write are kept.
 - **Checks:** `tsc --noEmit`: clean. `test:history` on timelineDisplay, timelineHistoryFocus, history, timelineAssignmentEdits: 88 passed. `vitest run` on `src/components/inspector` and `useTimelineInspections`: 76 passed. `pnpm --dir apps/desktop run test`: 139 files, 2037 tests passed. Skipped per policy: full `test:history`, e2e.
 - **Next:** re-review and merge.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.15
+
+- **Done:** reviewed PR #32 and squash-merged it at head b46fe6c8.
+  - Review fixes:
+    - The table check is now an SQL `EXISTS` that can't abort an edit; it no longer pulls every undo statement into JS.
+    - A real ripple test was added.
+    - Rollback, refusal and failed undo/redo don't bump.
+    - `marchers` was added for drill-number labels.
+    - Each write causes a single combined load.
+    - Undo/redo now use the shared parser.
+  - Merged with #31: the P8.4 editor guard keys on resolver + display version, so display-only edits can't leave it disabled.
+- **Checks (lead, on b46fe6c8, which includes #30 and #31):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/` and `src/components/mobile`: 35 files, 719 tests passed.
+  - `pnpm --dir apps/desktop run test`: 139 files, 2,037 tests passed, no errors.
+  - This run is also the combined check of #30 + #31 owed from P7.12.
+  - Skipped by policy: full `test:history` and e2e.
+- **Next:** P7.10 fixes (PR #33), P8.2 in progress; P7.11 and P7.7 remain.
 - **Blockers:** none.
