@@ -109,7 +109,9 @@ describeDbTests("useTimelineInspections", (it) => {
         // P8.4: the same transition's slots, with drill numbers and the vacancy
         expect(result.current.assignmentEdits).toEqual([
             {
+                version: expect.any(Number),
                 transitionId: 1,
+                style: "direct",
                 start: 1,
                 end: 9,
                 slotCount: 3,

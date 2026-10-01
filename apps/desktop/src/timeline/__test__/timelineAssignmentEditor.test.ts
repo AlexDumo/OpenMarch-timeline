@@ -5,9 +5,11 @@ import {
     buildAssignmentEditTarget,
     castBlocker,
     castCandidates,
+    castMode,
     planAssignmentEdit,
     recastBlocker,
     stolenRanges,
+    summarizeSlots,
     type AssignmentEditTarget,
 } from "../timelineAssignmentEditor";
 import { MAX_CAST_SLOTS } from "../timelineCasting";
@@ -26,7 +28,7 @@ const golden = (name: string): TimelineSnapshot => {
 
 const targetOf = (show: TimelineSnapshot, transitionId: number) => {
     const resolver = createResolver(show);
-    return buildAssignmentEditTarget(show.transitions[transitionId]!, {
+    return buildAssignmentEditTarget(show.transitions[transitionId]!, 1, {
         assignments: show.assignments,
         labels: new Map(show.marchers.map((m) => [m.id, `M${m.id}`])),
         spansOf: (id) => resolver.spanInfos(id),
@@ -104,8 +106,12 @@ describe("the target", () => {
     });
 });
 
-const target = (over: Partial<AssignmentEditTarget> = {}) => ({
+const target = (
+    over: Partial<AssignmentEditTarget> = {},
+): AssignmentEditTarget => ({
+    version: 1,
     transitionId: 7,
+    style: "direct",
     start: 0,
     end: 8,
     slotCount: 3,
@@ -136,6 +142,17 @@ describe("blockers", () => {
         expect(
             castBlocker(target({ slotCount: MAX_CAST_SLOTS + 1 }), [2], 1),
         ).toBe("tooManySlots");
+    });
+
+    it("follow the leader casts into the lowest vacant slots, at any size, and is never recast (R-9, R-12)", () => {
+        const ftl = target({
+            style: "follow_the_leader",
+            slotCount: MAX_CAST_SLOTS + 1,
+        });
+        expect(castMode(ftl)).toBe("lowest");
+        expect(castBlocker(ftl, [2], 1)).toBeNull();
+        expect(recastBlocker(ftl)).toBe("followTheLeader");
+        expect(castMode(target({ style: "arc" }))).toBe("nearest");
     });
 
     it("recasting needs a member and a solvable slot count", () => {
@@ -184,5 +201,18 @@ describe("planAssignmentEdit", () => {
             { kind: "recast" },
         ] as const)
             expect(planAssignmentEdit(t, edit)).toEqual(edit);
+    });
+});
+
+describe("summarizeSlots", () => {
+    it("writes runs as ranges", () => {
+        expect(summarizeSlots([0, 1, 2, 3, 5, 7, 8])).toBe("0–3, 5, 7–8");
+        expect(summarizeSlots([4])).toBe("4");
+        expect(summarizeSlots([])).toBe("");
+    });
+
+    it("stops after a few parts and counts the slots left", () => {
+        const slots = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 20, 22, 23, 30];
+        expect(summarizeSlots(slots, 2)).toBe("0–9, 12, … (+4)");
     });
 });

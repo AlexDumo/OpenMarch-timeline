@@ -1,9 +1,16 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { createResolver, type AssignmentRow } from "@openmarch/core";
+import {
+    createResolver,
+    type AssignmentRow,
+    type Resolver,
+    type XY,
+} from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import {
     castDistance,
+    castSlots,
+    castsByNearestSlot,
     MAX_CAST_SLOTS,
     nearestSlots,
     transitionSlotPoints,
@@ -94,17 +101,35 @@ const reinsertWithSlots = async (
 // Casting
 // ---------------------------------------------------------------------------
 
+/** A cast marcher whose new assignment steals beats from its moves in other transitions (R-2). */
+export interface CastSteal {
+    marcherId: number;
+    /** The transitions it now overrides over some of the beats, in id order */
+    transitionIds: number[];
+}
+
+export interface CastResult {
+    assignments: DatabaseTimelineAssignment[];
+    /** Only the marchers that steal something */
+    steals: CastSteal[];
+}
+
 /**
- * Casts `marcherIds` into transition `transitionId` (D-4): each gets a vacant slot by nearest-slot
- * casting from where it stands at the transition's start beat, and an assignment over the whole
- * transition. Each marcher's assignment goes one layer above the highest layer it already has over
- * those beats, or at 0 where it has none, so it steals them (R-2, decision UI-7 in ui.md) instead
- * of colliding with what's there (E-A3).
+ * Casts `marcherIds` into transition `transitionId` (D-4), each with an assignment over the whole
+ * transition:
+ *
+ * - **Slots:** for direct and arc, each takes a vacant slot by nearest-slot casting from where it
+ *   stands at the transition's start beat. For follow the leader, slots don't decide where
+ *   founders go (R-9, R-12), so they take the lowest vacant slots, in id order.
+ * - **Layer:** one above the highest layer the marcher already has over those beats, or 0 where it
+ *   has none, so it steals them (R-2, decision UI-7 in ui.md) instead of colliding (E-A3). The
+ *   result names the transitions each marcher steals from.
  *
  * Refused before anything is written (`E-ARGS`): no marchers, a marcher named twice, a missing
  * marcher or transition, a marcher already in the transition, too few vacant slots, or more than
- * `MAX_CAST_SLOTS` slots.
+ * `MAX_CAST_SLOTS` slots for nearest-slot casting.
  */
+// eslint-disable-next-line max-lines-per-function
 export const castMarchersIntoTransitionInTransaction = async ({
     tx,
     transitionId,
@@ -113,7 +138,7 @@ export const castMarchersIntoTransitionInTransaction = async ({
     tx: DbTransaction;
     transitionId: number;
     marcherIds: readonly number[];
-}): Promise<DatabaseTimelineAssignment[]> => {
+}): Promise<CastResult> => {
     if (marcherIds.length === 0) refuse("select the marchers to cast");
     if (new Set(marcherIds).size !== marcherIds.length)
         refuse("a marcher appears more than once");
@@ -133,7 +158,8 @@ export const castMarchersIntoTransitionInTransaction = async ({
         refuse(
             `${already.length === 1 ? "a selected marcher is" : "some selected marchers are"} already in this transition`,
         );
-    refuseTooManySlots(transition.slots);
+    const nearest = castsByNearestSlot(transition.style);
+    if (nearest) refuseTooManySlots(transition.slots);
     const taken = new Set(members.map((a) => a.slot));
     const vacant: number[] = [];
     for (let slot = 0; slot < transition.slots; slot++)
@@ -143,19 +169,42 @@ export const castMarchersIntoTransitionInTransaction = async ({
             `the transition has ${plural(vacant.length, "vacant slot")} for ${plural(marcherIds.length, "marcher")}. Raise its slot count first`,
         );
 
-    const resolver = createResolver(snapshot);
-    const points = transitionSlotPoints(transition, snapshot.shapes);
-    const cast = nearestSlots(
-        [...marcherIds]
-            .sort((a, b) => a - b)
-            .map((id) => ({
+    const ids = [...marcherIds].sort((a, b) => a - b);
+    let cast: Map<number, number>;
+    if (nearest) {
+        const resolver = createResolver(snapshot);
+        const points = transitionSlotPoints(transition, snapshot.shapes);
+        cast = castSlots(
+            transition.style,
+            ids.map((id) => ({
                 id,
                 xy: resolver.positionAt(id, transition.start),
             })),
-        vacant.map((slot) => ({ slot, xy: points[slot]! })),
-    );
+            vacant.map((slot) => ({ slot, xy: points[slot]! })),
+        );
+    } else
+        cast = castSlots(
+            transition.style,
+            ids.map((id) => ({ id, xy: null })),
+            vacant.map((slot) => ({ slot, xy: [0, 0] })),
+        );
+
     const newAssignments = [];
-    for (const marcherId of [...marcherIds].sort((a, b) => a - b))
+    const steals: CastSteal[] = [];
+    for (const marcherId of ids) {
+        const overlapping = snapshot.assignments.filter(
+            (a) =>
+                a.marcher === marcherId &&
+                a.start < transition.end &&
+                transition.start < a.end,
+        );
+        if (overlapping.length > 0)
+            steals.push({
+                marcherId,
+                transitionIds: [
+                    ...new Set(overlapping.map((a) => a.transition)),
+                ].sort((a, b) => a - b),
+            });
         newAssignments.push({
             marcherId,
             transitionId,
@@ -167,12 +216,15 @@ export const castMarchersIntoTransitionInTransaction = async ({
                 [marcherId],
                 transition.start,
                 transition.end,
+                "so the marcher can't be cast over them",
             ),
         });
-    return await createTimelineAssignmentsInTransaction({
+    }
+    const assignments = await createTimelineAssignmentsInTransaction({
         tx,
         newAssignments,
     });
+    return { assignments, steals };
 };
 
 /** `castMarchersIntoTransitionInTransaction` as one undoable edit. */
@@ -184,7 +236,7 @@ export const castMarchersIntoTransition = async ({
     db: DbConnection;
     transitionId: number;
     marcherIds: readonly number[];
-}): Promise<DatabaseTimelineAssignment[]> =>
+}): Promise<CastResult> =>
     await transactionWithHistory(db, "castMarchersIntoTransition", (tx) =>
         castMarchersIntoTransitionInTransaction({
             tx,
@@ -194,13 +246,31 @@ export const castMarchersIntoTransition = async ({
     );
 
 /**
+ * Where marcher `marcherId` stands when assignment `assignmentId` first wins (R-2): the start of
+ * its first winning span, which isn't the row's own start when a higher layer steals that
+ * (a breakaway at the start). Null when the row never wins, so its slot costs nothing.
+ */
+const firstWinningPosition = (
+    resolver: Resolver,
+    marcherId: number,
+    assignmentId: number,
+): XY | null => {
+    const span = resolver
+        .spanInfos(marcherId)
+        .find((s) => s.assignmentId === assignmentId);
+    return span ? resolver.positionAt(marcherId, span.start) : null;
+};
+
+/**
  * Recasts transition `transitionId`'s marchers by nearest slot: each marcher's slot is chosen again
- * among all the slots, from where it stands when its assignment starts, so that the total distance
- * is as small as it can be. Beats and layers don't change. A marcher whose slot changes has its
- * assignment deleted and inserted again with the new slot, so that two marchers can trade slots
- * without a moment where both hold one (UNIQUE (transition_id, slot_index)).
+ * among all the slots, from where it stands when its assignment first wins (a row that never wins
+ * can take any slot), so that the total distance is as small as it can be. Beats and layers don't
+ * change. A marcher whose slot changes has its assignment deleted and inserted again with the new
+ * slot, so that two marchers can trade slots without a moment where both hold one
+ * (UNIQUE (transition_id, slot_index)).
  *
- * Refused before anything is written (`E-ARGS`): a missing transition, no marchers in it, more
+ * Refused before anything is written (`E-ARGS`): a missing transition, a follow-the-leader one
+ * (its founders' targets come from trail order, not slots: R-9, R-12), no marchers in it, more
  * than `MAX_CAST_SLOTS` slots, or a cast that wouldn't shorten the total distance (so a tie never
  * reshuffles anybody).
  */
@@ -214,6 +284,10 @@ export const recastTransitionInTransaction = async ({
     const { snapshot } = await readTimelineTables(tx);
     const transition = snapshot.transitions[transitionId];
     if (!transition) refuse(`transition ${transitionId} does not exist`);
+    if (!castsByNearestSlot(transition.style))
+        refuse(
+            "follow the leader places its marchers by their order on the trail, not by slot, so it can't be recast by nearest slot",
+        );
     const members: AssignmentRow[] = snapshot.assignments
         .filter((a) => a.transition === transitionId)
         .sort((a, b) => a.marcher - b.marcher);
@@ -224,7 +298,7 @@ export const recastTransitionInTransaction = async ({
     const points = transitionSlotPoints(transition, snapshot.shapes);
     const marchers: CastMarcher[] = members.map((a) => ({
         id: a.marcher,
-        xy: resolver.positionAt(a.marcher, a.start),
+        xy: firstWinningPosition(resolver, a.marcher, a.id),
     }));
     const cast = nearestSlots(
         marchers,

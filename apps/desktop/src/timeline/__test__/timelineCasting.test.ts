@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { TransitionRow, XY } from "@openmarch/core";
 import {
     castDistance,
+    castSlots,
+    MAX_CAST_SLOTS,
     nearestSlots,
     transitionSlotPoints,
 } from "../timelineCasting";
@@ -148,5 +150,72 @@ describe("transitionSlotPoints", () => {
         expect(points[0]![0]).toBeCloseTo(0);
         expect(points[1]![0]).toBeCloseTo(20);
         expect(points[2]![0]).toBeCloseTo(40);
+    });
+});
+
+describe("castSlots", () => {
+    const far = [
+        { id: 1, xy: [100, 0] as XY },
+        { id: 2, xy: [0, 0] as XY },
+    ];
+    const line = slotsAt([
+        [0, 0],
+        [50, 0],
+        [100, 0],
+    ]);
+
+    it("casts direct and arc by nearest slot", () => {
+        for (const style of ["direct", "arc"] as const)
+            expect(Object.fromEntries(castSlots(style, far, line))).toEqual({
+                1: 2,
+                2: 0,
+            });
+    });
+
+    it("gives follow the leader the lowest slots in the marchers' order, wherever they stand", () => {
+        expect(
+            Object.fromEntries(castSlots("follow_the_leader", far, line)),
+        ).toEqual({ 1: 0, 2: 1 });
+        // Only among the slots it is given
+        expect(
+            Object.fromEntries(
+                castSlots("follow_the_leader", far, [
+                    { slot: 7, xy: [0, 0] },
+                    { slot: 3, xy: [0, 0] },
+                ]),
+            ),
+        ).toEqual({ 1: 3, 2: 7 });
+    });
+
+    it("falls back to the lowest slots in order past MAX_CAST_SLOTS", () => {
+        const n = MAX_CAST_SLOTS + 1;
+        const marchers = Array.from({ length: n }, (_, i) => ({
+            id: i + 1,
+            // In reverse, so nearest-slot casting would reverse them
+            xy: [n - 1 - i, 0] as XY,
+        }));
+        const slots = slotsAt(Array.from({ length: n }, (_, i): XY => [i, 0]));
+        const cast = castSlots("direct", marchers, slots);
+        expect(cast.get(1)).toBe(0);
+        expect(cast.get(n)).toBe(n - 1);
+    });
+});
+
+describe("a marcher that never moves in the transition", () => {
+    it("costs nothing wherever it goes, so the others get their nearest slots", () => {
+        const cast = nearestSlots(
+            [
+                { id: 1, xy: null },
+                { id: 2, xy: [0, 0] },
+            ],
+            slotsAt([
+                [0, 0],
+                [50, 0],
+            ]),
+        );
+        expect(Object.fromEntries(cast)).toEqual({ 1: 1, 2: 0 });
+        expect(
+            castDistance([{ id: 1, xy: null }], [[0, 0]], new Map([[1, 0]])),
+        ).toBe(0);
     });
 });

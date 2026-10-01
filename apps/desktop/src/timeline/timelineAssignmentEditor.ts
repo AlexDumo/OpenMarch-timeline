@@ -1,4 +1,9 @@
-import type { AssignmentRow, SpanInfo, TransitionRow } from "@openmarch/core";
+import type {
+    AssignmentRow,
+    PathStyle,
+    SpanInfo,
+    TransitionRow,
+} from "@openmarch/core";
 import type { DbConnection } from "@/db-functions/types";
 import {
     castMarchersIntoTransition,
@@ -6,8 +11,9 @@ import {
     removeAssignment,
     setAssignmentSlot,
     updateAssignment,
+    type CastResult,
 } from "@/db-functions/timelineAssignmentEdits";
-import { MAX_CAST_SLOTS } from "./timelineCasting";
+import { castsByNearestSlot, MAX_CAST_SLOTS } from "./timelineCasting";
 
 /**
  * The inspector's assignments editor (P8.4): who is in a transition's slots, which slots are
@@ -16,8 +22,9 @@ import { MAX_CAST_SLOTS } from "./timelineCasting";
  *
  * As in the transition editor, every change is planned against the target the inspector shows, a
  * change that would write nothing is planned as `null` and skipped, and the editor plans nothing
- * until the target is rebuilt after its last edit. Casting picks its slots inside the edit's own
- * transaction, from the positions the committed rows give.
+ * until a target built from a newer store version than its last edit's arrives (`version`; a
+ * target rebuilt from the same rows, as scrubbing does, doesn't count). Casting picks its slots
+ * inside the edit's own transaction, from the positions the committed rows give.
  */
 
 /** Part of an assignment's beats where another assignment of the marcher wins (R-2). */
@@ -44,7 +51,10 @@ export interface AssignmentMember {
 
 /** A transition's slots and assignments, as the editor shows them. */
 export interface AssignmentEditTarget {
+    /** The resolver store version of the rows this target was built from */
+    version: number;
     transitionId: number;
+    style: PathStyle;
     start: number;
     end: number;
     slotCount: number;
@@ -91,6 +101,7 @@ export function stolenRanges(
 /** The editor's view of `transition`'s slots, from the stored assignments and resolver spans. */
 export function buildAssignmentEditTarget(
     transition: TransitionRow,
+    version: number,
     sources: {
         assignments: readonly AssignmentRow[];
         labels: ReadonlyMap<number, string>;
@@ -117,7 +128,9 @@ export function buildAssignmentEditTarget(
     for (let slot = 0; slot < transition.slots; slot++)
         if (!taken.has(slot)) vacantSlots.push(slot);
     return {
+        version,
         transitionId: transition.id,
+        style: transition.style,
         start: transition.start,
         end: transition.end,
         slotCount: transition.slots,
@@ -143,18 +156,50 @@ export function castBlocker(
 ): "noneSelected" | "allCast" | "noVacancy" | "tooManySlots" | null {
     if (selectedCount === 0) return "noneSelected";
     if (candidates.length === 0) return "allCast";
-    if (target.slotCount > MAX_CAST_SLOTS) return "tooManySlots";
+    if (castMode(target) === "nearest" && target.slotCount > MAX_CAST_SLOTS)
+        return "tooManySlots";
     if (target.vacantSlots.length < candidates.length) return "noVacancy";
     return null;
 }
 
+/**
+ * How casting picks slots: by nearest slot for direct and arc, and the lowest vacant slots for
+ * follow the leader, whose founders' targets come from trail order, not slots (R-9, R-12).
+ */
+export const castMode = (target: AssignmentEditTarget): "nearest" | "lowest" =>
+    castsByNearestSlot(target.style) ? "nearest" : "lowest";
+
 /** Why the transition can't be recast by nearest slot, or null when it can. */
 export function recastBlocker(
     target: AssignmentEditTarget,
-): "noMembers" | "tooManySlots" | null {
+): "followTheLeader" | "noMembers" | "tooManySlots" | null {
+    if (castMode(target) === "lowest") return "followTheLeader";
     if (target.members.length === 0) return "noMembers";
     if (target.slotCount > MAX_CAST_SLOTS) return "tooManySlots";
     return null;
+}
+
+/**
+ * Slot numbers for reading: runs as ranges ("0–9, 12"), at most `maxParts` parts, then the
+ * count of the rest ("… (+N)").
+ */
+export function summarizeSlots(slots: readonly number[], maxParts = 6): string {
+    const parts: { text: string; count: number }[] = [];
+    for (let i = 0; i < slots.length; ) {
+        let j = i;
+        while (j + 1 < slots.length && slots[j + 1] === slots[j]! + 1) j++;
+        parts.push({
+            text: j === i ? `${slots[i]}` : `${slots[i]}–${slots[j]}`,
+            count: j - i + 1,
+        });
+        i = j + 1;
+    }
+    const shown = parts.slice(0, maxParts);
+    const rest = parts
+        .slice(maxParts)
+        .reduce((total, part) => total + part.count, 0);
+    const text = shown.map((p) => p.text).join(", ");
+    return rest > 0 ? `${text}, … (+${rest})` : text;
 }
 
 /**
@@ -186,20 +231,19 @@ export function planAssignmentEdit(
     }
 }
 
-/** Runs a planned change as one undoable edit. */
+/** Runs a planned change as one undoable edit; a cast answers with what it stole. */
 export async function applyAssignmentEdit(
     db: DbConnection,
     plan: AssignmentEdit,
     transitionId: number,
-): Promise<void> {
+): Promise<CastResult | void> {
     switch (plan.kind) {
         case "cast":
-            await castMarchersIntoTransition({
+            return await castMarchersIntoTransition({
                 db,
                 transitionId,
                 marcherIds: plan.marcherIds,
             });
-            return;
         case "recast":
             await recastTransition({ db, transitionId });
             return;

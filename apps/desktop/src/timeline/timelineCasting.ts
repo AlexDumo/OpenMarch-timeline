@@ -1,5 +1,6 @@
 import {
     hungarianAlgorithm,
+    type PathStyle,
     type ShapeRow,
     type TransitionRow,
     type XY,
@@ -15,7 +16,17 @@ import { shapeSlotPoints } from "./timelineTransitionEditor";
  * solve as core's `computeOptimalCoordinateMapping`, called through `hungarianAlgorithm`
  * directly: that wrapper needs as many marchers as targets and answers with coordinates, and
  * casting needs slot indexes with vacancies left over (D-13), where two slots can share a point.
+ *
+ * Nearest-slot casting assumes slot `i` goes to point `p_i`, which holds only for the order-free
+ * styles (direct and arc, R-7, R-8). Follow the leader sends its founders to `p_{n-m+q}` by trail
+ * order (R-9 step 5, R-12): under `inherit` the founders' slots don't matter at all, and one more
+ * founder shifts every target. So follow the leader is never cast by nearest slot: new marchers
+ * take the lowest vacant slots (`castSlots`), and recasting it is refused.
  */
+
+/** Whether `style` sends slot `i` to point `p_i` (R-7, R-8), so nearest-slot casting means something. */
+export const castsByNearestSlot = (style: PathStyle): boolean =>
+    style !== "follow_the_leader";
 
 /**
  * The most slots casting solves for. The solve is cubic in the slot count: 500 slots take about
@@ -23,10 +34,10 @@ import { shapeSlotPoints } from "./timelineTransitionEditor";
  */
 export const MAX_CAST_SLOTS = 500;
 
-/** A marcher and where it stands. */
+/** A marcher and where it stands; null when it never moves in the transition (any slot is free). */
 export interface CastMarcher {
     readonly id: number;
-    readonly xy: XY;
+    readonly xy: XY | null;
 }
 
 /** A slot and its destination. */
@@ -73,7 +84,7 @@ export function nearestSlots(
     // A square problem: the rows past the marchers are free, so they take the vacancies
     const cost = Array.from({ length: n }, (_, i) => {
         const marcher = marchers[i];
-        return slots.map((s) => (marcher ? distance(marcher.xy, s.xy) : 0));
+        return slots.map((s) => (marcher?.xy ? distance(marcher.xy, s.xy) : 0));
     });
     // assignment[j] = i: slot j (1-based) goes to row i (1-based)
     const assignment = hungarianAlgorithm(cost, n);
@@ -93,7 +104,28 @@ export function castDistance(
     let total = 0;
     for (const m of marchers) {
         const point = points[cast.get(m.id)!];
-        if (point) total += distance(m.xy, point);
+        if (point && m.xy) total += distance(m.xy, point);
     }
     return total;
+}
+
+/**
+ * The slots for new marchers in a transition: by nearest slot (`nearestSlots`) for an order-free
+ * style, and otherwise, or past `MAX_CAST_SLOTS`, the lowest of `slots` in the marchers' order
+ * (follow the leader orders its marchers by trail, not by slot; a bigger solve is too slow for
+ * one click).
+ */
+export function castSlots(
+    style: PathStyle,
+    marchers: readonly CastMarcher[],
+    slots: readonly CastSlot[],
+): Map<number, number> {
+    if (castsByNearestSlot(style) && slots.length <= MAX_CAST_SLOTS)
+        return nearestSlots(marchers, slots);
+    if (slots.length < marchers.length)
+        throw new Error(
+            `${slots.length} slots can't take ${marchers.length} marchers`,
+        );
+    const lowest = [...slots].sort((a, b) => a.slot - b.slot);
+    return new Map(marchers.map((m, i) => [m.id, lowest[i]!.slot]));
 }

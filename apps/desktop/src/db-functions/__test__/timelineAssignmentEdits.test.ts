@@ -3,6 +3,7 @@ import { asc, eq, getTableName } from "drizzle-orm";
 import { createResolver, type Resolver, type XY } from "@openmarch/core";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { readTimelineTables } from "@/timeline/timelineRows";
+import { MAX_CAST_SLOTS } from "@/timeline/timelineCasting";
 import {
     startTimelineResolver,
     stopTimelineResolver,
@@ -244,12 +245,17 @@ describeDbTests("timeline assignment edits (P8.4)", (it) => {
             db,
             marchersAndPages: _,
         }) => {
-            const { m, t } = await setUp(db);
-            await castMarchersIntoTransition({
+            const { m, t, u } = await setUp(db);
+            const result = await castMarchersIntoTransition({
                 db,
                 transitionId: t,
                 marcherIds: [m[2], m[3]],
             });
+            // The result names what each marcher now steals from, for the inspector's note
+            expect(result.steals).toEqual([
+                { marcherId: m[2], transitionIds: [u] },
+            ]);
+            expect(result.assignments).toHaveLength(2);
             const rows = await rowsOf(db, t);
             // Marcher 3 already moves at layer 0 over [0, 8) in U; marcher 4 has nothing there
             expect(rows.find((a) => a.marcher_id === m[2])!.layer).toBe(1);
@@ -480,5 +486,259 @@ describeDbTests("timeline assignment edits (P8.4)", (it) => {
                 },
             );
         });
+    });
+});
+
+/** The first four marchers' ids. */
+const firstFour = async (db: DbConnection) =>
+    (
+        await db
+            .select({ id: schema.marchers.id })
+            .from(schema.marchers)
+            .orderBy(asc(schema.marchers.id))
+            .all()
+    )
+        .slice(0, 4)
+        .map((m) => m.id) as [number, number, number, number];
+
+/**
+ * One edit: `homes` for the first marchers, a line from (0, 0) to (60, 0), and a timeline [0, 8)
+ * with one transition into the line as `transition` describes; returns the ids.
+ */
+const lineTransition = async (
+    db: DbConnection,
+    homes: XY[],
+    transition: {
+        slotCount: number;
+        pathStyle?: "direct" | "follow_the_leader";
+        orderMode?: "inherit" | "slot";
+        members: { marcher: number; slot: number }[];
+    },
+) => {
+    const m = await firstFour(db);
+    return await transactionWithHistory(db, "setUp", async (tx) => {
+        for (const [i, xy] of homes.entries())
+            await tx
+                .update(schema.marchers)
+                .set({ home_x: xy[0], home_y: xy[1] })
+                .where(eq(schema.marchers.id, m[i]!));
+        const [line] = await createTimelineShapesInTransaction({
+            tx,
+            newShapes: [
+                {
+                    kind: "line",
+                    geometry: {
+                        points: [
+                            [0, 0],
+                            [60, 0],
+                        ],
+                    },
+                },
+            ],
+        });
+        const [timeline] = await createTimelinesInTransaction({
+            tx,
+            newTimelines: [{ startBeat: 0, endBeat: 8 }],
+        });
+        const ftl = transition.pathStyle === "follow_the_leader";
+        const [t] = await createTimelineTransitionsInTransaction({
+            tx,
+            newTransitions: [
+                {
+                    timelineId: timeline!.id,
+                    startBeat: 0,
+                    endBeat: 8,
+                    slotCount: transition.slotCount,
+                    destination: { kind: "shape", shapeId: line!.id },
+                    pathStyle: transition.pathStyle ?? "direct",
+                    pathParams: ftl ? { waypoints: [] } : null,
+                    orderMode: transition.orderMode ?? "inherit",
+                },
+            ],
+        });
+        await createTimelineAssignmentsInTransaction({
+            tx,
+            newAssignments: transition.members.map((a) => ({
+                marcherId: m[a.marcher]!,
+                transitionId: t!.id,
+                slotIndex: a.slot,
+                startBeat: 0,
+                endBeat: 8,
+                layer: 0,
+            })),
+        });
+        return { m, t: t!.id, timelineId: timeline!.id };
+    });
+};
+
+describeDbTests("timeline assignment edits, review cases (P8.4)", (it) => {
+    for (const orderMode of ["inherit", "slot"] as const)
+        it(`follow the leader (${orderMode}): casts into the lowest vacant slots, not the nearest, and refuses a recast`, async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            // Slots at x = 0, 20, 40, 60; marcher 1 holds slot 1. Nearest would put marcher 4
+            // (x = 15) in slot 0 and marcher 3 (x = 45) in slot 2.
+            const { m, t } = await lineTransition(db, HOMES, {
+                slotCount: 4,
+                pathStyle: "follow_the_leader",
+                orderMode,
+                members: [{ marcher: 0, slot: 1 }],
+            });
+            await startTimelineResolver(db);
+            await roundTrip(
+                db,
+                () =>
+                    castMarchersIntoTransition({
+                        db,
+                        transitionId: t,
+                        marcherIds: [m[3], m[2]],
+                    }),
+                async () => {
+                    expect(await slotsOf(db, t)).toEqual([
+                        [m[2], 0],
+                        [m[0], 1],
+                        [m[3], 2],
+                    ]);
+                },
+            );
+            const error = await expectRefused(db, "E-ARGS", () =>
+                recastTransition({ db, transitionId: t }),
+            );
+            expect(error.message).toMatch(/follow the leader/);
+        });
+
+    it("recasts from where a marcher is when its row first wins, not from the row's start (a breakaway at the start)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        // Slots at x = 0 and 60. Marcher 1 (home x = 0) holds slot 0 and marcher 2 (x = 20)
+        // slot 1, but a layer-1 breakaway takes marcher 1 to (60, 10) over [0, 4), so its row in
+        // T only wins from beat 4, at (60, 10): trading is shorter. From marcher 1's home it isn't.
+        const { m, t } = await lineTransition(
+            db,
+            [
+                [0, 0],
+                [20, 0],
+            ],
+            {
+                slotCount: 2,
+                members: [
+                    { marcher: 0, slot: 0 },
+                    { marcher: 1, slot: 1 },
+                ],
+            },
+        );
+        await transactionWithHistory(db, "breakaway", async (tx) => {
+            const [timeline] = await createTimelinesInTransaction({
+                tx,
+                newTimelines: [{ startBeat: 0, endBeat: 4 }],
+            });
+            const [u] = await createTimelineTransitionsInTransaction({
+                tx,
+                newTransitions: [
+                    {
+                        timelineId: timeline!.id,
+                        startBeat: 0,
+                        endBeat: 4,
+                        slotCount: 1,
+                        destination: {
+                            kind: "individual",
+                            points: [[60, 10]],
+                        },
+                    },
+                ],
+            });
+            await createTimelineAssignmentsInTransaction({
+                tx,
+                newAssignments: [
+                    {
+                        marcherId: m[0],
+                        transitionId: u!.id,
+                        slotIndex: 0,
+                        startBeat: 0,
+                        endBeat: 4,
+                        layer: 1,
+                    },
+                ],
+            });
+        });
+        await recastTransition({ db, transitionId: t });
+        expect(await slotsOf(db, t)).toEqual([
+            [m[1], 0],
+            [m[0], 1],
+        ]);
+    });
+
+    it("refuses casting and recasting past MAX_CAST_SLOTS by nearest slot, writing nothing", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { m, t } = await lineTransition(db, HOMES, {
+            slotCount: MAX_CAST_SLOTS + 1,
+            members: [{ marcher: 0, slot: 0 }],
+        });
+        const cast = await expectRefused(db, "E-ARGS", () =>
+            castMarchersIntoTransition({
+                db,
+                transitionId: t,
+                marcherIds: [m[1]],
+            }),
+        );
+        expect(cast.message).toMatch(`up to ${MAX_CAST_SLOTS}`);
+        await expectRefused(db, "E-ARGS", () =>
+            recastTransition({ db, transitionId: t }),
+        );
+    });
+
+    it("refuses a beats change that overlaps the marcher's move on the same layer (E-A3)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { m, rows } = await setUp(db);
+        await updateAssignment({
+            db,
+            assignmentId: rows[0]!,
+            change: { endBeat: 4 },
+        });
+        // Marcher 1 joins another move over [4, 8) at layer 0
+        await transactionWithHistory(db, "join", async (tx) => {
+            const [timeline] = await createTimelinesInTransaction({
+                tx,
+                newTimelines: [{ startBeat: 4, endBeat: 8 }],
+            });
+            const [v] = await createTimelineTransitionsInTransaction({
+                tx,
+                newTransitions: [
+                    {
+                        timelineId: timeline!.id,
+                        startBeat: 4,
+                        endBeat: 8,
+                        slotCount: 1,
+                        destination: { kind: "individual", points: [[5, 5]] },
+                    },
+                ],
+            });
+            await createTimelineAssignmentsInTransaction({
+                tx,
+                newAssignments: [
+                    {
+                        marcherId: m[0],
+                        transitionId: v!.id,
+                        slotIndex: 0,
+                        startBeat: 4,
+                        endBeat: 8,
+                        layer: 0,
+                    },
+                ],
+            });
+        });
+        await expectRefused(db, "E-A3", () =>
+            updateAssignment({
+                db,
+                assignmentId: rows[0]!,
+                change: { endBeat: 8 },
+            }),
+        );
     });
 });

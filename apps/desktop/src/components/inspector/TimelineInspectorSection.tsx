@@ -411,6 +411,7 @@ function TimelineInspectorContent() {
                             <TimelineAssignmentsEditor
                                 target={slots}
                                 selectedMarcherIds={marcherIds}
+                                labels={labels}
                                 database={db}
                                 t={t}
                             />

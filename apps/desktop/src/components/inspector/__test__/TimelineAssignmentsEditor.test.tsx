@@ -4,30 +4,24 @@ import {
     fireEvent,
     render,
     screen,
-    waitFor,
     within,
 } from "@testing-library/react";
-import {
-    afterEach,
-    beforeAll,
-    beforeEach,
-    describe,
-    expect,
-    it,
-    vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AssignmentRow, SpanInfo, TransitionRow } from "@openmarch/core";
 import type { DbConnection } from "@/db-functions/types";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { buildAssignmentEditTarget } from "@/timeline/timelineAssignmentEditor";
 import { MAX_CAST_SLOTS } from "@/timeline/timelineCasting";
 import { TIMELINE_INSPECTOR_STRINGS } from "../timelineInspectorStrings";
-import { TimelineAssignmentsEditor } from "../TimelineAssignmentsEditor";
+import {
+    MAX_LISTED_VACANT_SLOTS,
+    TimelineAssignmentsEditor,
+} from "../TimelineAssignmentsEditor";
 
 /**
  * P8.4: the inspector's assignments editor shows the slots, the vacancies and the steals, sends
  * one db-function call per change, skips a change that writes nothing, says why a disabled action
- * is disabled, and toasts a refusal.
+ * is disabled, waits for a newer store version after an edit, and toasts a refusal.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -37,6 +31,7 @@ const mocks = vi.hoisted(() => ({
     update: vi.fn(),
     remove: vi.fn(),
     toast: vi.fn(),
+    info: vi.fn(),
 }));
 
 vi.mock("@/db-functions/timelineAssignmentEdits", () => ({
@@ -49,6 +44,7 @@ vi.mock("@/db-functions/timelineAssignmentEdits", () => ({
 vi.mock("@/timeline/timelineErrorMessages", () => ({
     toastTimelineError: mocks.toast,
 }));
+vi.mock("sonner", () => ({ toast: { info: mocks.info } }));
 
 const db = { name: "test-db" } as unknown as DbConnection;
 
@@ -71,27 +67,24 @@ const TRANSITION: TransitionRow = {
     params: null,
 };
 
+const row = (
+    id: number,
+    marcher: number,
+    slot: number,
+    over: Partial<AssignmentRow> = {},
+): AssignmentRow => ({
+    id,
+    marcher,
+    transition: 7,
+    slot,
+    start: 0,
+    end: 8,
+    layer: 0,
+    ...over,
+});
+
 /** Marcher 1 in slot 0 and marcher 2 in slot 2; slots 1 and 3 vacant. */
-const ROWS: AssignmentRow[] = [
-    {
-        id: 11,
-        marcher: 1,
-        transition: 7,
-        slot: 0,
-        start: 0,
-        end: 8,
-        layer: 0,
-    },
-    {
-        id: 12,
-        marcher: 2,
-        transition: 7,
-        slot: 2,
-        start: 0,
-        end: 8,
-        layer: 0,
-    },
-];
+const ROWS: AssignmentRow[] = [row(11, 1, 0), row(12, 2, 2)];
 
 const span = (
     marcherId: number,
@@ -115,23 +108,34 @@ const SPANS: Record<number, SpanInfo[]> = {
     2: [span(2, 0, 4, 12, 7), span(2, 4, 8, 30, 9)],
 };
 
-/** The editor for transition 7; a new target object each call. */
+const LABELS = new Map([
+    [1, "A1"],
+    [2, "B2"],
+    [3, "C3"],
+    [4, "D4"],
+]);
+
+/** The editor for transition 7 at store `version`; a new target object each call. */
 const editor = ({
     transition = TRANSITION,
     rows = ROWS,
     selected = [] as number[],
+    version = 1,
 } = {}) => (
     <TimelineAssignmentsEditor
-        target={buildAssignmentEditTarget(transition, {
+        target={buildAssignmentEditTarget(transition, version, {
             assignments: rows,
             labels: new Map([
-                [1, "A1"],
-                [2, "B2"],
-                [3, "C3"],
+                ...LABELS,
+                ...rows.map((r): [number, string] => [
+                    r.marcher,
+                    LABELS.get(r.marcher) ?? `M${r.marcher}`,
+                ]),
             ]),
             spansOf: (id) => SPANS[id] ?? [],
         })}
         selectedMarcherIds={selected}
+        labels={LABELS}
         database={db}
         t={t}
     />
@@ -155,23 +159,13 @@ const commitNumber = async (label: string, value: string) => {
     });
 };
 
-beforeAll(() => {
-    // Radix Select uses these, which jsdom lacks
-    Element.prototype.scrollIntoView ??= vi.fn();
-    Element.prototype.hasPointerCapture ??= vi.fn(() => false);
-    Element.prototype.releasePointerCapture ??= vi.fn();
-});
 afterEach(cleanup);
 beforeEach(() => {
-    for (const fn of [
-        mocks.cast,
-        mocks.recast,
-        mocks.slot,
-        mocks.update,
-        mocks.remove,
-    ])
+    for (const fn of [mocks.recast, mocks.slot, mocks.update, mocks.remove])
         fn.mockReset().mockResolvedValue([]);
+    mocks.cast.mockReset().mockResolvedValue({ assignments: [], steals: [] });
     mocks.toast.mockReset();
+    mocks.info.mockReset();
 });
 
 describe("TimelineAssignmentsEditor", () => {
@@ -195,6 +189,33 @@ describe("TimelineAssignmentsEditor", () => {
         );
     });
 
+    it("in a big transition, lists every member past slot 64 and caps only the vacant rows", async () => {
+        const rows = [row(11, 1, 0), row(12, 2, 70), row(13, 3, 199)];
+        show({ transition: { ...TRANSITION, slots: 200 }, rows });
+        for (const slot of [0, 70, 199])
+            expect(screen.getByTestId(`timeline-slot-${slot}`)).toBeTruthy();
+        // And they can be edited
+        await commitNumber("Layer for C3", "2");
+        expect(mocks.update).toHaveBeenCalledWith({
+            db,
+            assignmentId: 13,
+            change: { layer: 2 },
+        });
+        const vacantRows = screen
+            .getAllByTestId(/^timeline-slot-/)
+            .filter((el) => el.textContent?.endsWith("vacant"));
+        expect(vacantRows).toHaveLength(MAX_LISTED_VACANT_SLOTS);
+        expect(
+            screen.getByTestId("timeline-assign-more-vacant").textContent,
+        ).toBe(
+            `${197 - MAX_LISTED_VACANT_SLOTS} more vacant slots aren't listed.`,
+        );
+        // The vacancy line is a short summary of ranges
+        expect(
+            screen.getByTestId("timeline-assign-vacancies").textContent,
+        ).toBe("Vacant slots, where nobody goes (197): 1–69, 71–198");
+    });
+
     it("says where a higher layer steals an assignment (R-2, UI-1)", () => {
         show();
         expect(
@@ -210,31 +231,31 @@ describe("TimelineAssignmentsEditor", () => {
     it("says there are no vacancies when every slot is filled", () => {
         show({
             transition: { ...TRANSITION, slots: 3 },
-            rows: [...ROWS, { ...ROWS[0]!, id: 13, marcher: 3, slot: 1 }],
+            rows: [...ROWS, row(13, 3, 1)],
         });
         expect(screen.getByText("No vacant slots.")).toBeTruthy();
         expect(screen.queryByTestId("timeline-assign-vacancies")).toBeNull();
     });
 
     describe("casting", () => {
+        const castButton = () => button("Cast selected marchers");
+        const castHelp = () =>
+            screen.getByTestId("timeline-assign-cast-help").textContent;
+
         it("is disabled without a selection, and says why", () => {
             show();
-            expect(
-                button("Cast selected marchers").hasAttribute("disabled"),
-            ).toBe(true);
-            expect(
-                screen.getByTestId("timeline-assign-cast-help").textContent,
-            ).toBe("Select marchers to cast them into this transition.");
+            expect(castButton().hasAttribute("disabled")).toBe(true);
+            expect(castHelp()).toBe(
+                "Select marchers to cast them into this transition.",
+            );
         });
 
         it("is disabled when every selected marcher is in already", () => {
             show({ selected: [1, 2] });
-            expect(
-                button("Cast selected marchers").hasAttribute("disabled"),
-            ).toBe(true);
-            expect(
-                screen.getByTestId("timeline-assign-cast-help").textContent,
-            ).toBe("Every selected marcher is already in this transition.");
+            expect(castButton().hasAttribute("disabled")).toBe(true);
+            expect(castHelp()).toBe(
+                "Every selected marcher is already in this transition.",
+            );
         });
 
         it("is disabled with too few vacancies, and names the counts", () => {
@@ -242,12 +263,8 @@ describe("TimelineAssignmentsEditor", () => {
                 transition: { ...TRANSITION, slots: 3 },
                 selected: [3, 4],
             });
-            expect(
-                button("Cast selected marchers").hasAttribute("disabled"),
-            ).toBe(true);
-            expect(
-                screen.getByTestId("timeline-assign-cast-help").textContent,
-            ).toBe(
+            expect(castButton().hasAttribute("disabled")).toBe(true);
+            expect(castHelp()).toBe(
                 "Selected marchers who need a slot: 2. Vacant slots: 1. Raise the slot count first.",
             );
         });
@@ -257,27 +274,61 @@ describe("TimelineAssignmentsEditor", () => {
                 transition: { ...TRANSITION, slots: MAX_CAST_SLOTS + 1 },
                 selected: [3],
             });
-            expect(
-                button("Cast selected marchers").hasAttribute("disabled"),
-            ).toBe(true);
+            expect(castButton().hasAttribute("disabled")).toBe(true);
             expect(
                 button("Recast by nearest slot").hasAttribute("disabled"),
             ).toBe(true);
             expect(
                 screen.getByTestId("timeline-assign-recast-help").textContent,
             ).toContain(`up to ${MAX_CAST_SLOTS} slots`);
-            // Only the first slots are listed
-            expect(screen.getByText(/more slots aren't listed/)).toBeTruthy();
         });
 
         it("casts only the selected marchers not in the transition", async () => {
             show({ selected: [2, 3] });
-            await click(button("Cast selected marchers"));
+            await click(castButton());
             expect(mocks.cast).toHaveBeenCalledWith({
                 db,
                 transitionId: 7,
                 marcherIds: [3],
             });
+            expect(mocks.info).not.toHaveBeenCalled();
+        });
+
+        it("names the moves a cast steals beats from", async () => {
+            mocks.cast.mockResolvedValueOnce({
+                assignments: [],
+                steals: [
+                    { marcherId: 3, transitionIds: [9] },
+                    { marcherId: 4, transitionIds: [5, 9] },
+                ],
+            });
+            show({ selected: [3, 4] });
+            await click(castButton());
+            expect(mocks.info).toHaveBeenCalledWith(
+                "Cast on a higher layer, so these marchers now leave their other moves for these beats: C3 (transition 9); D4 (transition 5, 9)",
+            );
+        });
+
+        it("follow the leader: casts into the lowest vacant slots at any size, says why, and can't be recast", () => {
+            show({
+                transition: {
+                    ...TRANSITION,
+                    style: "follow_the_leader",
+                    params: { waypoints: [] },
+                    slots: MAX_CAST_SLOTS + 1,
+                },
+                selected: [3],
+            });
+            expect(castButton().hasAttribute("disabled")).toBe(false);
+            expect(castHelp()).toContain("into the lowest vacant slots");
+            expect(
+                button("Recast by nearest slot").hasAttribute("disabled"),
+            ).toBe(true);
+            expect(
+                screen.getByTestId("timeline-assign-recast-help").textContent,
+            ).toBe(
+                "Follow the leader places marchers by their order on the trail, not by slot, so it can't be recast by nearest slot.",
+            );
         });
     });
 
@@ -295,39 +346,16 @@ describe("TimelineAssignmentsEditor", () => {
         ).toBe("Nobody is in this transition yet.");
     });
 
-    it("moves a marcher to a vacant slot, or trades with an occupied one", async () => {
-        const pick = async (name: string) => {
-            await act(async () => {
-                fireEvent.keyDown(
-                    within(screen.getByTestId("timeline-slot-0")).getByRole(
-                        "combobox",
-                    ),
-                    { key: "Enter" },
-                );
-            });
-            const item = await screen.findByRole("option", { name });
-            await act(async () => {
-                fireEvent.keyDown(item, { key: "Enter" });
-            });
-        };
-        const { rerender } = show();
-        await pick("Slot 3 (vacant)");
-        await waitFor(() =>
-            expect(mocks.slot).toHaveBeenCalledWith({
-                db,
-                assignmentId: 11,
-                slot: 3,
-            }),
-        );
-        rerender(editor());
-        await pick("Slot 2 (trade with B2)");
-        await waitFor(() =>
-            expect(mocks.slot).toHaveBeenLastCalledWith({
-                db,
-                assignmentId: 11,
-                slot: 2,
-            }),
-        );
+    it("moves a marcher to a typed slot; the same slot writes nothing", async () => {
+        show();
+        await commitNumber("Slot for A1", "0");
+        expect(mocks.slot).not.toHaveBeenCalled();
+        await commitNumber("Slot for A1", "3");
+        expect(mocks.slot).toHaveBeenCalledWith({
+            db,
+            assignmentId: 11,
+            slot: 3,
+        });
     });
 
     it("changes a layer; unchanged text writes nothing", async () => {
@@ -358,17 +386,25 @@ describe("TimelineAssignmentsEditor", () => {
         expect(mocks.remove).toHaveBeenCalledWith({ db, assignmentId: 11 });
     });
 
-    it("two quick edits: the second waits for the first to show", async () => {
+    it("after an edit that replaces rows, waits for a newer store version; a rebuild from the same rows doesn't count", async () => {
         const { rerender } = show();
-        await click(button("Remove A1 from this transition"));
-        await click(button("Remove B2 from this transition"));
-        expect(mocks.remove).toHaveBeenCalledTimes(1);
+        // A trade deletes rows 11 and 12 and inserts them again under new ids
+        await commitNumber("Slot for A1", "2");
+        expect(mocks.slot).toHaveBeenCalledTimes(1);
         expect(
-            button("Remove B2 from this transition").hasAttribute("disabled"),
+            button("Remove A1 from this transition").hasAttribute("disabled"),
         ).toBe(true);
-        rerender(editor({ rows: [ROWS[1]!] }));
-        await click(button("Remove B2 from this transition"));
-        expect(mocks.remove).toHaveBeenCalledTimes(2);
+        // Scrubbing rebuilds the target from the same rows: a new object, the same version
+        rerender(editor({ version: 1 }));
+        expect(
+            button("Remove A1 from this transition").hasAttribute("disabled"),
+        ).toBe(true);
+        await click(button("Remove A1 from this transition"));
+        expect(mocks.remove).not.toHaveBeenCalled();
+        // The edit's rows arrive: new ids, a newer version
+        rerender(editor({ version: 2, rows: [row(21, 2, 0), row(22, 1, 2)] }));
+        await click(button("Remove A1 from this transition"));
+        expect(mocks.remove).toHaveBeenCalledWith({ db, assignmentId: 22 });
     });
 
     it("toasts a refusal and keeps the controls usable", async () => {

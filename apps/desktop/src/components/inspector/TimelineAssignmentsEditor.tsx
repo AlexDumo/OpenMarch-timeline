@@ -1,19 +1,16 @@
 import { useCallback, useRef, useState } from "react";
 import { TrashIcon, WarningIcon } from "@phosphor-icons/react";
-import {
-    Button,
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTriggerButton,
-} from "@openmarch/ui";
+import { toast } from "sonner";
+import { Button } from "@openmarch/ui";
 import type { DbConnection } from "@/db-functions/types";
 import {
     applyAssignmentEdit,
     castBlocker,
     castCandidates,
+    castMode,
     planAssignmentEdit,
     recastBlocker,
+    summarizeSlots,
     type AssignmentEdit,
     type AssignmentEditTarget,
     type AssignmentMember,
@@ -28,68 +25,11 @@ type Translate = (
     params?: Record<string, string | number>,
 ) => string;
 
-/** The most slots listed one by one; the rest are counted. */
-export const MAX_LISTED_SLOTS = 64;
-
-function SlotPicker({
-    member,
-    target,
-    disabled,
-    onPick,
-    t,
-}: {
-    member: AssignmentMember;
-    target: AssignmentEditTarget;
-    disabled: boolean;
-    onPick: (slot: number) => void;
-    t: Translate;
-}) {
-    // Every slot is an option, up to 10000 (I-N2), so they're mounted only while the list is open;
-    // closed, the current slot alone names the value
-    const [open, setOpen] = useState(false);
-    const bySlot = new Map(target.members.map((m) => [m.slot, m]));
-    const slots = open
-        ? Array.from({ length: target.slotCount }, (_, slot) => slot)
-        : [member.slot];
-    return (
-        <Select
-            value={String(member.slot)}
-            disabled={disabled}
-            open={open}
-            onOpenChange={setOpen}
-            onValueChange={(value) => {
-                if (value !== "") onPick(Number(value));
-            }}
-        >
-            <SelectTriggerButton
-                label={t("inspector.timeline.assign.slotFor", {
-                    marcher: member.label,
-                })}
-            />
-            <SelectContent>
-                {slots.map((slot) => {
-                    const occupant = bySlot.get(slot);
-                    return (
-                        <SelectItem key={slot} value={String(slot)}>
-                            {occupant === undefined
-                                ? t("inspector.timeline.assign.slotVacant", {
-                                      slot,
-                                  })
-                                : occupant.assignmentId === member.assignmentId
-                                  ? t("inspector.timeline.assign.slot", {
-                                        slot,
-                                    })
-                                  : t("inspector.timeline.assign.slotTrade", {
-                                        slot,
-                                        marcher: occupant.label,
-                                    })}
-                        </SelectItem>
-                    );
-                })}
-            </SelectContent>
-        </Select>
-    );
-}
+/**
+ * The most vacant slots listed one by one; the rest are counted. Members are always all listed,
+ * so a big transition's vacancies can't hide anybody.
+ */
+export const MAX_LISTED_VACANT_SLOTS = 16;
 
 function MemberRow({
     member,
@@ -130,16 +70,24 @@ function MemberRow({
                     <TrashIcon size={16} />
                 </Button>
             </div>
-            <SlotPicker
-                member={member}
-                target={target}
-                disabled={disabled}
-                onPick={(slot) =>
-                    edit({ kind: "slot", assignmentId: id, slot })
-                }
-                t={t}
-            />
             <div className="flex flex-wrap items-center gap-6">
+                <span className="text-sub text-text/60">
+                    {t("inspector.timeline.label.slot")}
+                </span>
+                <NumberField
+                    label={t("inspector.timeline.assign.slotFor", {
+                        marcher: member.label,
+                    })}
+                    testId={`timeline-assign-slot-${id}`}
+                    value={member.slot}
+                    min={0}
+                    max={target.slotCount - 1}
+                    step={1}
+                    disabled={disabled}
+                    onCommit={(slot) =>
+                        edit({ kind: "slot", assignmentId: id, slot })
+                    }
+                />
                 <span className="text-sub text-text/60">
                     {t("inspector.timeline.label.layer")}
                 </span>
@@ -155,6 +103,8 @@ function MemberRow({
                         edit({ kind: "layer", assignmentId: id, layer })
                     }
                 />
+            </div>
+            <div className="flex flex-wrap items-center gap-6">
                 <span className="text-sub text-text/60">
                     {t("inspector.timeline.label.beats")}
                 </span>
@@ -222,50 +172,128 @@ function MemberRow({
     );
 }
 
+function castHelp(
+    target: AssignmentEditTarget,
+    candidates: readonly number[],
+    blocker: ReturnType<typeof castBlocker>,
+    t: Translate,
+): string {
+    switch (blocker) {
+        case null:
+            return castMode(target) === "nearest"
+                ? t("inspector.timeline.assign.castHelp", {
+                      count: candidates.length,
+                  })
+                : t("inspector.timeline.assign.castHelpFtl", {
+                      count: candidates.length,
+                  });
+        case "noVacancy":
+            return t("inspector.timeline.assign.castNoVacancy", {
+                count: candidates.length,
+                vacant: target.vacantSlots.length,
+            });
+        case "tooManySlots":
+            return t("inspector.timeline.assign.tooManySlots", {
+                max: MAX_CAST_SLOTS,
+            });
+        case "allCast":
+            return t("inspector.timeline.assign.castAllCast");
+        case "noneSelected":
+            return t("inspector.timeline.assign.castNoneSelected");
+    }
+}
+
+function recastHelp(
+    blocker: ReturnType<typeof recastBlocker>,
+    t: Translate,
+): string {
+    switch (blocker) {
+        case null:
+            return t("inspector.timeline.assign.recastHelp");
+        case "followTheLeader":
+            return t("inspector.timeline.assign.recastFtl");
+        case "tooManySlots":
+            return t("inspector.timeline.assign.tooManySlots", {
+                max: MAX_CAST_SLOTS,
+            });
+        case "noMembers":
+            return t("inspector.timeline.assign.recastNoMembers");
+    }
+}
+
 /**
  * A transition's slots and assignments (P8.4): who is in each slot, which slots are vacant
- * (D-13), each assignment's layer and beats, and where a higher layer steals it (R-2). Casts the
- * selected marchers into vacant slots, or recasts everyone, by nearest slot. Each change is one
- * undoable edit, a change that writes nothing is skipped, and a refusal is a toast with its
- * friendly message.
+ * (D-13), each assignment's slot, layer and beats, and where a higher layer steals it (R-2).
+ * Casts the selected marchers into vacant slots, or recasts everyone, by nearest slot (lowest
+ * vacant slots for follow the leader). Each change is one undoable edit, a change that writes
+ * nothing is skipped, and a refusal is a toast with its friendly message.
  */
 export function TimelineAssignmentsEditor({
     target,
     selectedMarcherIds,
+    labels,
     database,
     t,
 }: {
     target: AssignmentEditTarget;
     selectedMarcherIds: readonly number[];
+    /** Drill numbers of the selected marchers, to name the ones a cast makes steal */
+    labels: ReadonlyMap<number, string>;
     database: DbConnection;
     t: Translate;
 }) {
     /**
-     * The target the last committed edit was planned from. The controls stay disabled until the
-     * inspector rebuilds the target from the edit's rows, so a quick second edit (two slot trades,
-     * say) is never planned from the slots before the first. The ref guards clicks before the
-     * next render.
+     * The store version the last committed edit was planned from. The controls stay disabled
+     * until a target built from a newer version arrives: a target rebuilt from the same rows (by
+     * scrubbing or playback) is still the one before the edit, and a second edit planned from it
+     * would undo the first or name rows the first replaced. The ref guards clicks before the next
+     * render.
      */
-    const plannedFrom = useRef<AssignmentEditTarget | null>(null);
-    const [awaiting, setAwaiting] = useState<AssignmentEditTarget | null>(null);
-    const pending = awaiting === target;
+    const plannedAt = useRef<number | null>(null);
+    const [awaiting, setAwaiting] = useState<number | null>(null);
+    const pending = awaiting !== null && awaiting >= target.version;
     const edit = useCallback(
         async (change: AssignmentEdit) => {
-            if (plannedFrom.current === target) return;
+            if (
+                plannedAt.current !== null &&
+                plannedAt.current >= target.version
+            )
+                return;
             const plan = planAssignmentEdit(target, change);
             if (plan === null) return;
-            plannedFrom.current = target;
-            setAwaiting(target);
+            plannedAt.current = target.version;
+            setAwaiting(target.version);
+            let result;
             try {
-                await applyAssignmentEdit(database, plan, target.transitionId);
+                result = await applyAssignmentEdit(
+                    database,
+                    plan,
+                    target.transitionId,
+                );
             } catch (error) {
                 // Nothing was written, so the shown target is still current
-                plannedFrom.current = null;
+                plannedAt.current = null;
                 setAwaiting(null);
                 toastTimelineError(error);
+                return;
             }
+            if (result && result.steals.length > 0)
+                toast.info(
+                    t("inspector.timeline.assign.castStole", {
+                        list: result.steals
+                            .map((s) =>
+                                t("inspector.timeline.assign.castStoleItem", {
+                                    marcher:
+                                        labels.get(s.marcherId) ??
+                                        String(s.marcherId),
+                                    transitions: s.transitionIds.join(", "),
+                                }),
+                            )
+                            .join("; "),
+                    }),
+                );
         },
-        [target, database],
+        [target, database, labels, t],
     );
 
     const candidates = castCandidates(target, selectedMarcherIds);
@@ -275,8 +303,12 @@ export function TimelineAssignmentsEditor({
         selectedMarcherIds.length,
     );
     const cannotRecast = recastBlocker(target);
-    const bySlot = new Map(target.members.map((m) => [m.slot, m]));
-    const listed = Math.min(target.slotCount, MAX_LISTED_SLOTS);
+    const listedVacant = target.vacantSlots.slice(0, MAX_LISTED_VACANT_SLOTS);
+    const rows = [
+        ...target.members.map((member) => ({ slot: member.slot, member })),
+        ...listedVacant.map((slot) => ({ slot, member: null })),
+    ].sort((a, b) => a.slot - b.slot);
+    const unlistedVacant = target.vacantSlots.length - listedVacant.length;
 
     return (
         <section
@@ -314,7 +346,7 @@ export function TimelineAssignmentsEditor({
                         />
                         {t("inspector.timeline.assign.vacantList", {
                             count: target.vacantSlots.length,
-                            slots: target.vacantSlots.join(", "),
+                            slots: summarizeSlots(target.vacantSlots),
                         })}
                     </p>
                 )}
@@ -325,42 +357,10 @@ export function TimelineAssignmentsEditor({
                 help={
                     <>
                         <Help testId="timeline-assign-cast-help">
-                            {cannotCast === null
-                                ? t("inspector.timeline.assign.castHelp", {
-                                      count: candidates.length,
-                                  })
-                                : cannotCast === "noVacancy"
-                                  ? t(
-                                        "inspector.timeline.assign.castNoVacancy",
-                                        {
-                                            count: candidates.length,
-                                            vacant: target.vacantSlots.length,
-                                        },
-                                    )
-                                  : cannotCast === "tooManySlots"
-                                    ? t(
-                                          "inspector.timeline.assign.tooManySlots",
-                                          { max: MAX_CAST_SLOTS },
-                                      )
-                                    : cannotCast === "allCast"
-                                      ? t(
-                                            "inspector.timeline.assign.castAllCast",
-                                        )
-                                      : t(
-                                            "inspector.timeline.assign.castNoneSelected",
-                                        )}
+                            {castHelp(target, candidates, cannotCast, t)}
                         </Help>
                         <Help testId="timeline-assign-recast-help">
-                            {cannotRecast === null
-                                ? t("inspector.timeline.assign.recastHelp")
-                                : cannotRecast === "tooManySlots"
-                                  ? t(
-                                        "inspector.timeline.assign.tooManySlots",
-                                        { max: MAX_CAST_SLOTS },
-                                    )
-                                  : t(
-                                        "inspector.timeline.assign.recastNoMembers",
-                                    )}
+                            {recastHelp(cannotRecast, t)}
                         </Help>
                     </>
                 }
@@ -389,12 +389,16 @@ export function TimelineAssignmentsEditor({
 
             <Field
                 label={t("inspector.timeline.assign.slots")}
-                help={<Help>{t("inspector.timeline.assign.layerHelp")}</Help>}
+                help={
+                    <>
+                        <Help>{t("inspector.timeline.assign.slotHelp")}</Help>
+                        <Help>{t("inspector.timeline.assign.layerHelp")}</Help>
+                    </>
+                }
             >
                 <ol className="flex flex-col gap-8">
-                    {Array.from({ length: listed }, (_, slot) => {
-                        const member = bySlot.get(slot);
-                        return member ? (
+                    {rows.map(({ slot, member }) =>
+                        member ? (
                             <MemberRow
                                 key={slot}
                                 member={member}
@@ -418,13 +422,13 @@ export function TimelineAssignmentsEditor({
                                     slot,
                                 })}
                             </li>
-                        );
-                    })}
+                        ),
+                    )}
                 </ol>
-                {target.slotCount > listed && (
-                    <Help>
-                        {t("inspector.timeline.assign.moreSlots", {
-                            count: target.slotCount - listed,
+                {unlistedVacant > 0 && (
+                    <Help testId="timeline-assign-more-vacant">
+                        {t("inspector.timeline.assign.moreVacant", {
+                            count: unlistedVacant,
                         })}
                     </Help>
                 )}

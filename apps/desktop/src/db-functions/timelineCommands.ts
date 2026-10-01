@@ -2,7 +2,7 @@ import { and, eq, inArray, lt, gt, notInArray, sql } from "drizzle-orm";
 import { createResolver, validateDestination } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables, shapeFromRow } from "@/timeline/timelineRows";
-import { nearestSlots, transitionSlotPoints } from "@/timeline/timelineCasting";
+import { castSlots, transitionSlotPoints } from "@/timeline/timelineCasting";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
@@ -253,6 +253,8 @@ export const stealLayer = async (
     marcherIds: readonly number[],
     start: number,
     end: number,
+    /** Ends the refusal's message, after "the range already has assignments at the highest layer" */
+    consequence = "so a new track can't be added over it",
 ): Promise<number> => {
     const a = schema.timeline_assignments;
     const overlapping = await tx
@@ -271,7 +273,7 @@ export const stealLayer = async (
     if (layer > MAX_LAYER)
         throw new TimelineWriteError(
             "E-A3",
-            `the range already has assignments at the highest layer (${MAX_LAYER}), so a new track can't be added over it`,
+            `the range already has assignments at the highest layer (${MAX_LAYER}), ${consequence}`,
         );
     return layer;
 };
@@ -386,7 +388,10 @@ export const createTrackInTransaction = async ({
             },
             { [shape.id]: shapeFromRow(shape) },
         );
-        slotOf = nearestSlots(
+        // Past MAX_CAST_SLOTS the solve is too slow for one click, so castSlots falls back to id
+        // order (marcherIds is sorted)
+        slotOf = castSlots(
+            "direct",
             marcherIds.map((id) => ({
                 id,
                 xy: resolver.positionAt(id, startBeat),

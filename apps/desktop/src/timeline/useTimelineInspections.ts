@@ -157,11 +157,15 @@ export function useTimelineInspections({
             loaded.tables.marchers.map((m) => [m.id, m.label]),
         );
         const assignmentEdits = transitionEdits.map((target) =>
-            buildAssignmentEditTarget(host.snapshot.transitions[target.id]!, {
-                assignments: loaded.tables.assignments,
-                labels,
-                spansOf: (id) => resolverSpans(resolver, id),
-            }),
+            buildAssignmentEditTarget(
+                host.snapshot.transitions[target.id]!,
+                loaded.version,
+                {
+                    assignments: loaded.tables.assignments,
+                    labels,
+                    spansOf: (id) => resolverSpans(resolver, id),
+                },
+            ),
         );
         return {
             inspections,
