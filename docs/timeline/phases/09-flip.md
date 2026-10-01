@@ -109,8 +109,8 @@ Before P9.4 turns convert-on-open on for everyone, move the backup (P9.2) and th
 ### P9.9: Quit during conversion
 
 - Owner: timeline-worker (timeline/p9-9-quit-during-conversion)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/46
 - Parallel: yes
 - Depends on: P9.8
 
@@ -528,3 +528,27 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** quit tests (mocked `app` and `BrowserWindow`), the existing worker-host quit test, `sql:proxy` refusal tests, then the focused suites.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p9-9-quit-during-conversion` (0077e289), `pnpm install`, then write `electron/main/__test__/quitDuringConversion.test.ts` and update `convertWorkerHost.test.ts`'s quit test.
+
+### 2026-10-01 · timeline-worker (timeline/p9-9-quit-during-conversion) · P9.9
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/46 (one commit, c5cb013f). The previous entry and the PR have the design.
+  - "Preparing your file…" is an overlay in the main window's page, not a native window, so nothing can refuse the quit's close.
+  - `before-quit` logs a line. During a conversion it holds the quit, stops the worker or keeps it from starting, waits for the open to end, closes the file (keeping `databasePath`), and quits again. One Quit is enough.
+  - Closing the main window during a conversion quits the same way.
+  - The SVG timeout came from the conversion flow: the main window's close waited for the open, then asked a reloading, suspended page for a preview. That request is now skipped when no file is open or the SQL is suspended.
+  - The `sql:proxy` and `unsafeSql:proxy` refusals are logged once per open at debug level, with no handler errors.
+- **Decisions (lead to confirm):**
+  - The overlay instead of a closable native window.
+  - The quit flag is now sticky: a conversion after a quit is refused, and a new conversion no longer resets the flag (a P9.8 review point).
+  - The refusal marker in the reply of the two existing SQL channels (between main and preload). The renderer-facing API is unchanged, so I didn't add a C-n note.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - eslint: 0 errors.
+  - prettier, cspell and the pre-commit hook: clean.
+  - `electron/main` with `convertOnOpen` and `database.services`: 11 files, 168 tests passed.
+  - `test:focused electron`: 22 files passed, 1 skipped; 379 tests passed.
+  - `pnpm --dir apps/desktop run build`: passed.
+  - Skipped per the policy: the full `test:history` suite (no history files touched) and e2e. `build:electron` wasn't run.
+- **Not done:** the packaged re-run of the quit check (needs the owner's go-ahead; no app was launched).
+- **Next:** review and merge by the lead, then the packaged quit re-run and the owner's manual pass for P9.4.
+- **Blockers:** none.
