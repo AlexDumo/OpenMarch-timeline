@@ -1,8 +1,8 @@
 ---
 phase: 7
 title: Parity with page workflows
-status: not-started
-owner: unassigned
+status: in-progress
+owner: timeline-worker
 branch: none
 pr: none
 depends_on: [6]
@@ -29,8 +29,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### P7.1: Inventory page-coordinate code
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (none, docs only)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: —
