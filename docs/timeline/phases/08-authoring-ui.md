@@ -592,3 +592,22 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Exit gate:** nothing ticked. The UI verification item needs a manual app check.
 - **Next:** review and merge by the lead.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2 (review fixes)
+
+- **Done:** merged `timeline-try-2` (81c94cdd, with #33, P7.10). Commit ace16e71 on PR https://github.com/AlexDumo/OpenMarch-timeline/pull/34 fixes the lead's review:
+  1. **Open paths:** a box, circle or block converted to freehand is now an open path, so its first and last slots no longer stack (freehand samples at `i/(n-1)`). A kind change on a shape in use says that its users' slots are re-spread. The "same ground" wording is fixed in `ui.md` and the help text. Test: for every source shape and target kind, at 2, 3, 5, 16, 17 and 40 slots, every slot point is distinct. Putting the closing point back fails 3 tests.
+  2. **Delete in use:** `deleteTimelineShape` checks `dest_shape_id` inside the edit and refuses with an `E-ARGS` message that names the transitions. The foreign key stays the backstop, with its own test (E-DB through `deleteTimelineShapesInTransaction`).
+  3. **Circle from a selection:** the radius is the first marcher's distance from the middle (the mean when that is 0), so the circle passes through marcher 1. Tested with marchers at unequal distances.
+  4. **Double click:** an in-flight ref covers the whole edit. Test: a second click while the create is in flight, even after the version moves, creates nothing. Removing the ref fails it.
+  5. **Unknown marchers:** selected marchers that aren't in the timeline are refused with a toast (E-ARGS) instead of drawing at the field's middle.
+  6. **New tests:** circle and block through collinear marchers; freehand through coincident marchers; non-whole rows and columns (planner, and E-S1 on a real DB).
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - `test:focused` (planner, inspector, error-message and transition-planner tests): 7 files, 169 passed.
+  - Focused `test:history` on the shape test files (`timelineShapeEdits`, `timelineMoves`, `timelineMarchers`, `timelineAssignmentEdits`, `timelineTransitionEdits`, `timelineCommands`, `useTimelineInspections`, `timelinePageCopy`): 8 files, 96 passed.
+  - eslint: 0 errors. prettier and cspell: pass.
+  - The desktop suite is running.
+- **Next:** read the suite result, update the PR body, report back.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-2-shapes`; `pnpm --dir apps/desktop run test` (in the background); update PR #34's body from `pr-P8.2.md`.
