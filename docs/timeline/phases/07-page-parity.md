@@ -50,7 +50,7 @@ Selection, drag and alignment tools write slot destinations.
 ### P7.3: Marcher add and delete
 
 - Owner: timeline-worker (timeline/p7-marchers)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -398,4 +398,12 @@ Facts that change how to read the PR #14 note above:
 - **Done:** fork PR #20 reviewed by a sub-agent (APPROVE WITH NITS: page mode unchanged on every routed path with hooks unconditional; the page N rule picks the highest-layer assignment ending at N's end beat per R-2 and refuses structural moves; the shape → individual switch keeps every other marcher's position bit for bit; positions come from the resolver, so no stale `marcher_pages` reaches a timeline write). The worker fixed the nits: timeline-mode selections come from the selected marchers rather than `marcher_pages`; "set to previous/next page" is refused in timeline mode until P7.6; every refusal is decided before the first write; added layered, multi-page, transition-ends-later and swap tests. Squash-merged. P7.2 set to done.
 - **Checks:** at 483150f5: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on `timelineMoves.test.ts` and `timelineCoordinateWrites.test.ts` (21 passed); `pnpm --dir apps/desktop run test` (106 files, 1,597 passed).
 - **Next:** P7.3 onward.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p7-marchers) · P7.3 checkpoint
+
+- **Done:** `apps/desktop/src/db-functions/timelineMarchers.ts` (`addMarchersToTimelineInTransaction`, `removeMarchersFromTimelineInTransaction`), wired into `createMarchers` and `deleteMarchers` behind a `timelineMode` argument (default false, so page mode is unchanged), the mutation options in `useMarchers.ts`, and the UI callers (`MarcherForm.tsx`, `MarcherList.tsx`) through `useTimelineMode`. Add: home at a free spot (checked against homes), then each shapeless transition whose rows are all layer 0 over the whole transition grows by one slot per new marcher, with the destination at the home and a layer-0 assignment over the transition. Delete: assignments deleted first, then shapeless transitions compacted (drop the last slot if vacated, otherwise move the last slot's marcher and point into the vacated slot), skipping shape-backed transitions and ones sharing a marcher with an inheriting follow-the-leader transition. Commit `b9ea5b68` (wip, untested).
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` → clean. No tests yet.
+- **Next:** tests in `src/db-functions/__test__/timelineMarchers.test.ts` (converted show: add, delete, undo/redo, flag off).
+- **Resume from:** branch `timeline/p7-marchers` at `b9ea5b68`; write the tests modelled on `timelineMoves.test.ts`, run them with `pnpm --dir apps/desktop exec vitest run src/db-functions/__test__/timelineMarchers.test.ts` and with `test:history`.
 - **Blockers:** none.
