@@ -81,7 +81,7 @@ Static render: in timeline mode, draw positions at the selected page's end beat 
 ### P5.6: Idle warming
 
 - Owner: timeline-worker (timeline/p5-warm-fixtures)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P5.4
@@ -91,7 +91,7 @@ Idle warming outward from the playback position.
 ### P5.7: Fixture loader
 
 - Owner: timeline-worker (timeline/p5-warm-fixtures)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P5.3
@@ -101,7 +101,7 @@ Dev fixture loader that builds G1 to G13 and the QA-SC scenarios into a show.
 ### P5.8: Tests and performance numbers
 
 - Owner: timeline-worker (timeline/p5-warm-fixtures)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P5.5, P5.7
@@ -232,3 +232,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** the resumed worker reviews and finishes P5.6, then does P5.7 and P5.8.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (e56cb6b3), run tsc and the `src/timeline/__test__/` tests, then continue.
+
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.6, P5.7, P5.8
+
+- **Done:** resumed under the existing claim from wip commit e56cb6b3 on `timeline/p5-warm-fixtures`. Status set to in-progress. Dependencies installed and `turbo run build --filter=@openmarch/desktop^...` passes in the work tree.
+- **Checks:** none on the code yet.
+- **Next:** review and test the P5.6 draft (`src/timeline/timelineWarm.ts`, `timelineStore.ts`), then P5.7 and P5.8.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p5-warm-fixtures`; run `tsc --noEmit` and `test:focused src/timeline/__test__/`, then write `src/timeline/__test__/timelineWarm.test.ts` with fake timers.
