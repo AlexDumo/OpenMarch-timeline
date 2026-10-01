@@ -26,3 +26,17 @@ fixtures (`VITEST_TIMELINE_MODE=true`, see `apps/desktop/src/test/timelineMode.t
 fixtures are converted to timeline rows and the workspace `timelineMode` flag is set. A file whose
 tests set up timeline mode themselves calls `keepFixturesInPageMode(reason)`; a test that asserts
 page-mode behavior that timeline mode drops uses `it.skipIf(skipInTimelineMode(reason))`.
+`test:timeline-history` sets both variables, and the ripple-affected history tests (page, beat,
+measures, marcher, utility) then also check the five timeline data tables through
+`timelineHistoryTables()`. `keepFixturesInPageMode` keeps module state, so it needs vitest's
+per-file isolation (the default) and throws under `--no-isolate`.
+
+A passing `test:timeline` run means every existing test passes with converted fixtures and the
+flag on. It does not cover:
+
+- tests that don't use the `base.tsx` fixtures (mocked databases, pure functions);
+- functions that take `timelineMode` as a parameter defaulting to `false`, which these tests call
+  without it, so they still take the page path;
+- undo and redo checks, unless `VITEST_ENABLE_HISTORY=true` is also set (`test:timeline-history`).
+
+Timeline behavior is really exercised for page, beat and measure ripple and for the mobile export.

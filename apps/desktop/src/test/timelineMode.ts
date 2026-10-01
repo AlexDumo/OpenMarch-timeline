@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { count } from "drizzle-orm";
+import { count, type Table } from "drizzle-orm";
 import { drizzle as sqliteProxyDrizzle } from "drizzle-orm/sqlite-proxy";
 import { schema } from "@/../electron/database/db";
 import { createAllUndoTriggers, dropAllUndoTriggers } from "@/db-functions";
@@ -22,6 +22,12 @@ import { handleSqlProxyWithDbBetterSqlite } from "./sqlProxyTestUtil";
  */
 export const TIMELINE_TEST_MODE = process.env.VITEST_TIMELINE_MODE === "true";
 
+/**
+ * Set by `keepFixturesInPageMode`. This is module state, so it relies on vitest's per-file
+ * isolation (the default `isolate: true`, which gives each test file fresh modules). Under
+ * `--no-isolate` (or `isolate: false`) the module is shared, and one file's opt-out would leak into
+ * the files that run after it in the same worker; `keepFixturesInPageMode` refuses to run there.
+ */
 let pageModeFixtures = false;
 
 /**
@@ -29,15 +35,43 @@ let pageModeFixtures = false;
  * level of a file whose tests already build their own timeline state (they convert the show or
  * write timeline rows, and set the flag themselves), so they test timeline mode either way.
  * `reason` documents why; it isn't read.
+ *
+ * Throws when vitest runs without per-file isolation, where the opt-out would leak (see above).
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function keepFixturesInPageMode(reason: string): void {
+    // vitest's worker state (internal); without it the guard does nothing
+    const worker = (
+        globalThis as {
+            __vitest_worker__?: { config?: { isolate?: boolean } };
+        }
+    ).__vitest_worker__;
+    if (TIMELINE_TEST_MODE && worker?.config?.isolate === false)
+        throw new Error(
+            "keepFixturesInPageMode needs vitest's per-file isolation; run test:timeline without --no-isolate",
+        );
     pageModeFixtures = true;
 }
 
 /** Whether the fixtures should put the test database into timeline mode. */
 export const timelineFixtureMode = (): boolean =>
     TIMELINE_TEST_MODE && !pageModeFixtures;
+
+/**
+ * The five timeline data tables (ADR 0001 §3), for a history test's `tablesToCheck` in timeline
+ * test mode, so undo and redo are checked on the timeline rows a ripple procedure rewrites. Empty
+ * otherwise, so the default run checks the same tables as before.
+ */
+export const timelineHistoryTables = (): Table[] =>
+    timelineFixtureMode()
+        ? [
+              schema.timelines,
+              schema.timeline_shapes,
+              schema.timeline_transitions,
+              schema.timeline_assignments,
+              schema.timeline_slot_destinations,
+          ]
+        : [];
 
 /**
  * Whether to skip a test (or a `describe`) in timeline test mode. Use it only for a test that

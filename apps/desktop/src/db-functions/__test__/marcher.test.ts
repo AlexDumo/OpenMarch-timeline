@@ -9,7 +9,10 @@ import { describeDbTests, schema } from "@/test/base";
 import { getTestWithHistory } from "@/test/history";
 import { transactionWithHistory } from "../history";
 import { eq, inArray } from "drizzle-orm";
-import { timelineFixtureMode } from "@/test/timelineMode";
+import {
+    timelineFixtureMode,
+    timelineHistoryTables,
+} from "@/test/timelineMode";
 
 describeDbTests("marchers", (it) => {
     describe("database interactions", () => {
@@ -18,6 +21,7 @@ describeDbTests("marchers", (it) => {
             schema.marcher_pages,
             schema.pages,
             schema.beats,
+            ...timelineHistoryTables(),
         ]);
 
         describe("getMarchers", () => {
