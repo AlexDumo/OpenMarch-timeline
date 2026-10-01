@@ -55,6 +55,11 @@ resolver, and which package owns motion.
   `shape_page_marchers` become page-era tables. They stay writable behind the
   dev flag until Phase 9, are read-only for one release after it, and are
   dropped in Phase 10.
+  The database enforces the freeze with `page_era_frozen_*` triggers keyed on
+  the file's flag. Deletes that cascade from a deleted marcher or page are
+  allowed, and history steps the freeze refuses are skipped with a notice
+  (P9.5, C-10). Releases that predate the version guard can't edit a converted
+  file's page-era rows.
 - Rollout order: a per-file dev flag in `workspace_settings` (optional zod
   field, default off, hidden from normal users; P5.1); a converter run on demand
   behind the flag (Phase 6); page-workflow parity (Phase 7); then convert on
