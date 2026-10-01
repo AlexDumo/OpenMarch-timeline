@@ -236,3 +236,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** unit tests (golden G2, G3, G12, shape track, diagnostics, converted show, validator), the hook test against a real DB, then U-Q1/U-Q4 in ui.md.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-adapter`; `pnpm install`; write `apps/desktop/src/timeline/__test__/timelineViewModel.test.ts` and `useTimelineTracks.test.tsx`; run `pnpm --dir apps/desktop run test:focused src/timeline/__test__/timelineViewModel.test.ts`.
+
+### 2026-09-30 · timeline-worker (timeline/p8-adapter) · P8.8
+
+- **Done:** tests on `timeline/p8-adapter` (caf5de2c, 36851fa5): adapter unit tests on the golden fixtures (G2, G3, G12 steals across timelines, G4 gap, G13 shape track and default set, G9 and G11 badges, a converted page show's linked clips, every golden fixture through `validateTimelineViewModel`), the beat axis, `resolverSpans` against R-2's worked example, the hook against a real DB (rebuilds after a committed edit and its undo), and the timeline's linked ring, badge and spec-beat commands. Decisions recorded in `ui.md`: UI-3 (U-Q1, default tracks), UI-4 (U-Q4, shape activity rule kept), UI-5 (beat 0 not drawn).
+- **Checks:** `vitest run src/components/timeline/__test__/ src/timeline/__test__/`: 26 files, 305 passed. The regular desktop suite is running.
+- **Next:** read the suite result, eslint/prettier/cspell, tidy the commits, open the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-adapter`; `pnpm --dir apps/desktop run test` (in the background); then squash the wip commits and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.

@@ -40,6 +40,30 @@ from it. The spec still wins on the model; this file decides presentation.
   16-beat move). The UI snaps to page lines by default as an aid, and a
   modifier key turns snapping off. The reference validator's page-boundary
   rule is removed when the components are ported.
+- **UI-3: the default tracks (answers U-Q1, P8.8).** The timeline shows every
+  shape track, plus a marcher's track in a timeline when the marcher moves
+  individually there (it has an assignment to a one-slot transition without a
+  shape, which is what Create Track makes for a marcher) or is selected.
+  Group moves without a shape, such as a converted page show's page moves,
+  show only for the selected marchers. Why: the number of default tracks
+  follows what was authored (shapes and individual moves), not the band's
+  size, so a 250-marcher show doesn't open with hundreds of tracks; a shape
+  track already stands for its members; an individual move has nothing else
+  to stand for it, and is how a breakaway steal (G2) shows; and the selection
+  brings up any other marcher on demand.
+- **UI-4: shape track activity (answers U-Q4, P8.8).** The provisional rule
+  stands: a shape track is active where at least one member's winning span
+  is in its transitions, and inactive where every member is stolen or none is
+  assigned. A partial steal (G12's leader) shows on the stolen marcher's own
+  track, not on the shape's.
+- **UI-5: the zero-length beat 0 isn't drawn (P8.8).** Every show starts with a
+  fixed beat 0 that has no time (`timeMap.ts`). The timeline's x axis starts
+  at beat 1: view beat `v` is spec beat `v + 1`, and spec positions in
+  `[0, 1)` draw at view 0, so the first timed page starts right after the
+  initial page's inset. `Timeline` converts at its boundary: its props
+  (tracks, playback position) and its commands (seek, clip move, Create
+  Track) stay in spec beats, and a clip move sends the clip's spec range
+  shifted by the dragged beats.
 
 ## Mapping the spec onto the view model
 
@@ -53,7 +77,7 @@ from the stored tables and the resolver, and nothing in it is stored.
 | Marcher track `legs`                         | the marcher's resolver spans (R-2) inside the clip: a hold span is `hold`; any other span is `move`                                                                                                                                                                        |
 | Marcher track `activitySpans`                | active where the marcher's winning span belongs to an assignment in this timeline; inactive otherwise (UI-1)                                                                                                                                                               |
 | Shape track                                  | one per spec timeline and shape used as a destination in it: the transitions whose `dest_shape_id` is that shape (a group move). Spec shapes have no time; the track shows the moves into them                                                                             |
-| Shape track `activitySpans`                  | active where at least one member's winning span is in those transitions; inactive where all are stolen (provisional, U-Q4)                                                                                                                                                 |
+| Shape track `activitySpans`                  | active where at least one member's winning span is in those transitions; inactive where all are stolen (UI-4)                                                                                                                                                              |
 | `TimelineRangeChange {timelineId, range}`    | moves the whole spec timeline. Clips from the same timeline move together, so the UI highlights linked clips                                                                                                                                                               |
 | `TimelineCreateTrackRequest {target, range}` | one edit: a new timeline over the range with one transition. For a marcher, a shapeless one-slot `direct` transition whose destination starts at the marcher's position at the range start; for a shape, a transition into it with the selected marchers assigned to slots |
 
@@ -65,7 +89,11 @@ These belong in the inspector (P8.5), not the timeline:
   and slot casting;
 - the layer of each assignment (spec Q-8 stays open for anything richer);
 - diagnostics (§8.9 requires them). The timeline adds a warning badge on any
-  clip whose range has a diagnostic; the inspector lists them.
+  clip whose range has a diagnostic; the inspector lists them. A marcher
+  track's badge counts the diagnostics about that marcher and the
+  transition-wide ones (such as `D-VACANT`) of the transitions it is assigned
+  to in that timeline; a shape track's counts all of its transitions'
+  diagnostics. The badge's tooltip lists them.
 
 ## Porting notes
 
@@ -81,10 +109,8 @@ These belong in the inspector (P8.5), not the timeline:
 
 ## Open UI questions
 
-- **U-Q1:** which tracks show by default. A 250-marcher show gives hundreds of
-  marcher tracks; candidates are shape tracks plus individually moved marchers,
-  or only the selection.
+- **U-Q1:** which tracks show by default. Decided: UI-3.
 - **U-Q2:** what resizing a clip edge means: an R-E1 range edit on the
   timeline's transitions, or on one assignment.
 - **U-Q3:** how layers show on the timeline, if at all (spec Q-8).
-- **U-Q4:** the shape track's activity rule above is provisional.
+- **U-Q4:** the shape track's activity rule. Decided: UI-4.
