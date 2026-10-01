@@ -11,6 +11,7 @@ import * as path from "path";
 import { getOrm } from "../db";
 import { DrizzleMigrationService } from "../services/DrizzleMigrationService";
 import { applyFileVersionDecision } from "../fileVersion";
+import { recreateChangeLogTriggers } from "../migrations/triggers";
 
 const migrationsFolder = path.resolve(__dirname, "../migrations");
 
@@ -76,6 +77,25 @@ describe("change-log trigger refresh on open", () => {
                 )
                 .get() as { x: number };
             expect(Object.is(row.x, 0.1 + 0.2)).toBe(true);
+
+            // All 15 change-log triggers exist, and an up-to-date file isn't rewritten on open
+            const count = db
+                .prepare(
+                    `SELECT count(*) AS n FROM sqlite_master WHERE type='trigger' AND name LIKE 'timeline_log_%'`,
+                )
+                .get() as { n: number };
+            expect(count.n).toBe(15);
+            const schemaVersion = () =>
+                (
+                    db.prepare("PRAGMA schema_version").get() as {
+                        schema_version: number;
+                    }
+                ).schema_version;
+            // The refresh itself only rewrites stale triggers. (Opening a file still rewrites every
+            // trigger today: the migration callback drops and recreates them on each open.)
+            const before = schemaVersion();
+            recreateChangeLogTriggers(db);
+            expect(schemaVersion()).toBe(before);
         } finally {
             db.close();
         }

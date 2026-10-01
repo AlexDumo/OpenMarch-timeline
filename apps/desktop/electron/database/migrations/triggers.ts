@@ -329,15 +329,51 @@ function timelineChangeLogTriggers(): Record<string, string> {
 }
 
 /**
- * Drops and recreates only the change-log triggers. Every trigger uses `CREATE TRIGGER IF NOT
- * EXISTS`, and `createAllTriggers` runs only when a migration is pending, so a file that was
+ * Trigger SQL as `sqlite_master` stores it: SQLite drops the `IF NOT EXISTS` clause and the
+ * trailing semicolon; whitespace differences are ignored too.
+ */
+const normalizeTriggerSql = (sql: string) =>
+    sql
+        .replace(/\s+/g, " ")
+        .replace(/CREATE TRIGGER IF NOT EXISTS/i, "CREATE TRIGGER")
+        .trim()
+        .replace(/;$/, "")
+        .trim();
+
+/**
+ * Brings the change-log triggers up to this build's bodies. Every trigger uses `CREATE TRIGGER IF
+ * NOT EXISTS`, and `createAllTriggers` runs only when a migration is pending, so a file that was
  * migrated before a change to a trigger body keeps the old body. The migration service calls this
- * on every open so the change-log bodies always match this build.
+ * on every open, after the file-version guard. Only missing or changed triggers are recreated, so
+ * an up-to-date file isn't written to (no schema or mtime change), and the recreation is one
+ * transaction, so a failure can't leave a trigger dropped.
  */
 export const recreateChangeLogTriggers = (dbConnection: DatabaseSync) => {
-    for (const [name, trigger] of Object.entries(timelineChangeLogTriggers())) {
-        dbConnection.exec(`DROP TRIGGER IF EXISTS ${name}`);
-        dbConnection.exec(trigger);
+    const wanted = Object.entries(timelineChangeLogTriggers());
+    const current = new Map(
+        (
+            dbConnection
+                .prepare(
+                    `SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'timeline_log_%'`,
+                )
+                .all() as { name: string; sql: string }[]
+        ).map((row) => [row.name, normalizeTriggerSql(row.sql)]),
+    );
+    const stale = wanted.filter(
+        ([name, trigger]) => current.get(name) !== normalizeTriggerSql(trigger),
+    );
+    if (stale.length === 0) return;
+
+    dbConnection.exec("BEGIN IMMEDIATE");
+    try {
+        for (const [name, trigger] of stale) {
+            dbConnection.exec(`DROP TRIGGER IF EXISTS ${name}`);
+            dbConnection.exec(trigger);
+        }
+        dbConnection.exec("COMMIT");
+    } catch (error) {
+        dbConnection.exec("ROLLBACK");
+        throw error;
     }
 };
 
