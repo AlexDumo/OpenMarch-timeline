@@ -7,8 +7,10 @@
  * gate is on) are allowed to hold renderer modules.
  */
 import { describe, expect, it } from "vitest";
+import * as fs from "fs";
 import * as path from "path";
 import { build, type Rollup } from "vite";
+import { defaultConvertWorkerPath } from "../convertWorkerHost";
 
 const root = path.resolve(__dirname, "../../..");
 
@@ -87,4 +89,28 @@ describe("the main-process startup bundle", () => {
             ),
         ).toBe(true);
     }, 120_000);
+});
+
+describe("the app build", () => {
+    // Vite loads `vite.config.mjs` (tsc's output of `vite.config.mts`, checked in) before
+    // `vite.config.mts`, so both must build the worker where the host looks for it (P9.8).
+    it.each(["vite.config.mts", "vite.config.mjs"])(
+        "%s builds the convert-on-open worker next to the main process",
+        (file) => {
+            const config = fs.readFileSync(path.join(root, file), "utf-8");
+            expect(config).toContain(
+                'entry: "electron/database/convertOnOpenWorker.ts"',
+            );
+            expect(config).toContain('outDir: "dist-electron/worker"');
+            expect(
+                defaultConvertWorkerPath(path.join(root, "dist-electron/main")),
+            ).toBe(
+                path.join(
+                    root,
+                    "dist-electron/worker",
+                    `${path.parse("convertOnOpenWorker.ts").name}.js`,
+                ),
+            );
+        },
+    );
 });

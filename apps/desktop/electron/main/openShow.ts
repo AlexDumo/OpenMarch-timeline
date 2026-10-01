@@ -5,9 +5,13 @@
  * It has no Electron dependency, so tests drive it directly.
  *
  * With the convert-on-open gate off (the default), this does what
- * `setActiveDb` always did, and loads nothing from the renderer: the converter
- * and its dialogs flow are loaded with a dynamic `import()` only once the gate
- * is on.
+ * `setActiveDb` always did: the converter and its dialogs flow are loaded
+ * with a dynamic `import()` only once the gate is on. The worker host is light
+ * (`node:worker_threads`), and the worker loads the converter itself.
+ *
+ * The backup and the conversion run in a worker thread (P9.8) when
+ * `deps.convertWorker` names the built worker, as the app does. The open's own
+ * connection is closed while the worker has the file, and reopened after.
  */
 import * as path from "path";
 import type { DatabaseSync } from "node:sqlite";
@@ -22,6 +26,8 @@ import {
 } from "../database/convertOnOpenGate";
 import type { ConvertOnOpenHooks } from "../database/convertOnOpen";
 import type { ConvertOnOpenDialogs } from "./convertOnOpenFlow";
+import { convertInWorker } from "./convertWorkerHost";
+import type { ConvertWorkerTestHooks } from "../database/convertOnOpenProtocol";
 
 /** How long the conversion's connection waits for another connection's lock. */
 const CONVERSION_BUSY_TIMEOUT_MS = 5000;
@@ -69,7 +75,17 @@ export interface OpenShowDeps {
     beforeMigrations?: (filePath: string) => void;
     /** The convert-on-open dialogs. Only called when the gate is on and an existing file opens. */
     dialogs: () => ConvertOnOpenDialogs;
-    /** Test hooks for the conversion. */
+    /**
+     * Runs the backup and conversion in a worker thread (P9.8). Without it they run on this
+     * thread, on the open's connection (tests of the open flow).
+     */
+    convertWorker?: {
+        /** The built worker (`defaultConvertWorkerPath`). */
+        workerPath: string;
+        /** Test hooks for the worker. */
+        test?: ConvertWorkerTestHooks;
+    };
+    /** Test hooks for the in-thread conversion. */
     hooks?: ConvertOnOpenHooks;
     /** Called with the open's connection as soon as it exists. For tests. */
     onConnect?: (db: DatabaseSync) => void;
@@ -136,9 +152,10 @@ async function openWithSuspension(
     const resCode = DatabaseServices.setDbPath(filePath, isNewFile);
     if (resCode !== 200) return stopped(resCode);
 
-    const db = DatabaseServices.connect();
+    let db = DatabaseServices.connect();
     if (!db) return stopped(500);
     deps.onConnect?.(db);
+    let isOpen = true;
     let keepOpen = false;
     try {
         const orm = getOrm(db);
@@ -157,12 +174,38 @@ async function openWithSuspension(
         } else if (gateOn) {
             db.exec(`PRAGMA busy_timeout = ${CONVERSION_BUSY_TIMEOUT_MS}`);
             const { convertOnOpenInMain } = await import("./convertOnOpenFlow");
+            const worker = deps.convertWorker;
+            const checkDb = db;
             const next = await convertOnOpenInMain(
                 filePath,
-                db,
+                checkDb,
                 deps.dialogs(),
-                { env: deps.env, hooks: deps.hooks },
+                {
+                    env: deps.env,
+                    hooks: deps.hooks,
+                    convert: worker
+                        ? async (onProgress) => {
+                              // The worker needs the file to itself: this connection holds no
+                              // transaction, but close it anyway so nothing of ours can lock it.
+                              checkDb.close();
+                              isOpen = false;
+                              return convertInWorker(filePath, {
+                                  workerPath: worker.workerPath,
+                                  busyTimeoutMs: CONVERSION_BUSY_TIMEOUT_MS,
+                                  onProgress,
+                                  test: worker.test,
+                              });
+                          }
+                        : undefined,
+                },
             );
+            if (!isOpen) {
+                // The worker has exited, so its connection is closed. Reopen ours.
+                db = DatabaseServices.connect();
+                isOpen = true;
+                deps.onConnect?.(db);
+                db.exec(`PRAGMA busy_timeout = ${CONVERSION_BUSY_TIMEOUT_MS}`);
+            }
             if (next === "stop") {
                 DatabaseServices.setDbPath("", false);
                 return stopped(OPEN_STOPPED_STATUS);
@@ -171,7 +214,7 @@ async function openWithSuspension(
         keepOpen = true;
         return { status: 200, db, sqlSuspension };
     } finally {
-        if (!keepOpen) db.close();
+        if (!keepOpen && isOpen) db.close();
     }
 }
 

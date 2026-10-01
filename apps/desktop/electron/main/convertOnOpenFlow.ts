@@ -4,14 +4,15 @@
  * turns its outcome into dialogs and a "continue" or "stop" answer. It imports
  * no Electron module, so tests drive it with fake dialogs;
  * `convertOnOpenDialogs.ts` holds the real ones. `openShow.ts` loads this
- * module with a dynamic `import()` only once the gate is on, because the
- * converter pulls in renderer modules.
+ * module with a dynamic `import()` only once the gate is on.
  */
 import { basename } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import {
     runConvertOnOpen,
     type ConvertOnOpenHooks,
+    type ConvertOnOpenResult,
+    type ConvertProgress,
 } from "../database/convertOnOpen";
 
 /** What the step shows the person. `convertOnOpenDialogs.ts` implements it with native dialogs. */
@@ -25,8 +26,14 @@ export interface ConvertOnOpenDialogs {
         fileName: string,
         backupPath: string | undefined,
     ): Promise<"open" | "stop">;
-    /** Shows a blocking "preparing your file" state while `work` runs. */
-    whilePreparing<T>(fileName: string, work: () => Promise<T>): Promise<T>;
+    /**
+     * Shows a "preparing your file" state while `work` runs, and passes `work`
+     * a function that reports its progress there.
+     */
+    whilePreparing<T>(
+        fileName: string,
+        work: (onProgress?: (progress: ConvertProgress) => void) => Promise<T>,
+    ): Promise<T>;
     /** The file was converted (doesn't wait for the person). */
     converted(fileName: string, backupPath: string): void;
     backupFailed(fileName: string, message: string): Promise<void>;
@@ -51,9 +58,14 @@ export async function convertOnOpenInMain(
     {
         env,
         hooks,
+        convert,
     }: {
         env?: Record<string, string | undefined>;
         hooks?: ConvertOnOpenHooks;
+        /** Backs up and converts the file elsewhere (the worker, P9.8); see `runConvertOnOpen`. */
+        convert?: (
+            onProgress: (progress: ConvertProgress) => void,
+        ) => Promise<ConvertOnOpenResult>;
     } = {},
 ): Promise<ConvertOnOpenNext> {
     const fileName = basename(filePath);
@@ -66,7 +78,7 @@ export async function convertOnOpenInMain(
                 dialogs.warnOlderRelease(fileName, backupPath),
             whilePreparing: (work) => dialogs.whilePreparing(fileName, work),
         },
-        { env, hooks },
+        { env, hooks, convert },
     );
     switch (outcome.kind) {
         case "disabled":

@@ -3,14 +3,32 @@
  * The main-process open path (`openShow.ts`) with convert on open (P9.3):
  * the dialogs it shows, the stop status, serialized opens, the renderer's SQL
  * held off during a conversion, and new files. Real files; fake dialogs.
+ * "Through the worker" runs the conversion in the app's worker thread (P9.8).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+} from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as DatabaseServices from "@om-electron/database/database.services";
 import { OPEN_STOPPED_STATUS } from "@om-electron/database/convertOnOpenGate";
 import type { ConvertOnOpenHooks } from "@om-electron/database/convertOnOpen";
+import type {
+    ConvertProgress,
+    ConvertWorkerTestHooks,
+} from "@om-electron/database/convertOnOpenProtocol";
+import {
+    buildConvertWorker,
+    type BuiltConvertWorker,
+} from "@om-electron/database/__test__/buildConvertWorker";
 import {
     backupsIn,
     createPageShow,
@@ -35,10 +53,13 @@ import type { DatabaseSync } from "node:sqlite";
 function fakeDialogs({
     olderRelease = "stop",
     preparing,
+    onProgress,
 }: {
     olderRelease?: "open" | "stop";
     /** Runs inside the preparing state, before the work. */
     preparing?: () => Promise<void>;
+    /** Receives the progress the work reports. */
+    onProgress?: (progress: ConvertProgress) => void;
 } = {}) {
     const calls: string[] = [];
     const dialogs: ConvertOnOpenDialogs = {
@@ -49,7 +70,7 @@ function fakeDialogs({
         async whilePreparing(fileName, work) {
             calls.push(`preparing ${fileName}`);
             await preparing?.();
-            return work();
+            return work(onProgress);
         },
         converted(fileName) {
             calls.push(`converted ${fileName}`);
@@ -71,12 +92,16 @@ async function open(
         env = GATE_ON,
         dialogs = fakeDialogs().dialogs,
         hooks,
+        convertWorker,
+        onConnect,
         resume = true,
     }: {
         isNewFile?: boolean;
         env?: Record<string, string | undefined>;
         dialogs?: ConvertOnOpenDialogs;
         hooks?: ConvertOnOpenHooks;
+        convertWorker?: { workerPath: string; test?: ConvertWorkerTestHooks };
+        onConnect?: (db: DatabaseSync) => void;
         /** Resume the renderer's SQL right away, as setActiveDb does once the window reloaded. */
         resume?: boolean;
     } = {},
@@ -86,6 +111,8 @@ async function open(
         env,
         dialogs: () => dialogs,
         hooks,
+        convertWorker,
+        onConnect,
     });
     result.db?.close();
     if (resume && result.sqlSuspension !== undefined)
@@ -455,6 +482,135 @@ describe("opening a show with convert on open", () => {
                 userVersion: 7,
                 timelineMode: undefined,
             });
+        });
+    });
+
+    describe("through the worker (P9.8)", () => {
+        let worker: BuiltConvertWorker;
+        beforeAll(async () => {
+            worker = await buildConvertWorker();
+        }, 120_000);
+        afterAll(() => worker?.remove());
+
+        it("converts with its connection closed, reopens it, and reports progress", async () => {
+            const connections: DatabaseSync[] = [];
+            const progress: ConvertProgress[] = [];
+            const openWhileConverting: boolean[] = [];
+            let sqlDuringConversion: boolean | undefined;
+            const { dialogs, calls } = fakeDialogs({
+                preparing: async () => {
+                    sqlDuringConversion = await sqlProxyWorks();
+                },
+                onProgress: (p) => {
+                    progress.push(p);
+                    openWhileConverting.push(
+                        connections.some((db) => db.isOpen),
+                    );
+                },
+            });
+
+            const result = await openShowFile(showPath, false, {
+                migrationsFolder,
+                env: GATE_ON,
+                dialogs: () => dialogs,
+                convertWorker: { workerPath: worker.workerPath },
+                onConnect: (db) => connections.push(db),
+            });
+
+            try {
+                expect(result.status).toBe(200);
+                expect(calls).toEqual([
+                    "preparing show.dots",
+                    "converted show.dots",
+                ]);
+                // The worker had the file to itself; the open then reconnected.
+                expect(openWhileConverting.length).toBeGreaterThan(1);
+                expect(openWhileConverting.every((open) => !open)).toBe(true);
+                expect(connections).toHaveLength(2);
+                expect(connections[0]!.isOpen).toBe(false);
+                expect(result.db).toBe(connections[1]);
+                expect(result.db!.prepare("PRAGMA user_version").get()).toEqual(
+                    { user_version: 8 },
+                );
+                expect(progress[0]).toEqual({ phase: "backup" });
+                expect(progress.at(-1)).toEqual({
+                    phase: "convert",
+                    pagesDone: 6,
+                    pagesTotal: 6,
+                });
+                // The renderer's SQL stayed suspended until the window reloads.
+                expect(sqlDuringConversion).toBe(false);
+                expect(await sqlProxyWorks()).toBe(false);
+            } finally {
+                result.db?.close();
+                DatabaseServices.resumeSqlProxy(result.sqlSuspension!);
+            }
+            expect(await sqlProxyWorks()).toBe(true);
+            expect(DatabaseServices.getDbPath()).toBe(showPath);
+        });
+
+        it("a worker crash stops the open, leaves the file at 7 and keeps the backup", async () => {
+            const before = stateOf(showPath);
+            const { dialogs, calls } = fakeDialogs();
+
+            const result = await open(showPath, {
+                dialogs,
+                convertWorker: {
+                    workerPath: worker.workerPath,
+                    test: { crashAfterStep: "convert" },
+                },
+            });
+
+            expect(result.status).toBe(OPEN_STOPPED_STATUS);
+            expect(result.db).toBeUndefined();
+            expect(DatabaseServices.getDbPath()).toBe("");
+            expect(calls).toEqual([
+                "preparing show.dots",
+                "conversion failed show.dots",
+            ]);
+            expect(stateOf(showPath)).toEqual(before);
+            expect(backupsIn(tempDir)).toHaveLength(1);
+        });
+
+        it("a second file opened while the worker converts waits for it", async () => {
+            const otherPath = path.join(tempDir, "other.dots");
+            await createPageShow(otherPath);
+            const order: string[] = [];
+            const first = open(showPath, {
+                dialogs: fakeDialogs({
+                    onProgress: (p) => {
+                        if (p.phase === "convert" && p.pagesDone === 1)
+                            order.push("first converting");
+                    },
+                }).dialogs,
+                convertWorker: {
+                    workerPath: worker.workerPath,
+                    test: { blockPerPageMs: 100 },
+                },
+            }).then((r) => {
+                order.push("first done");
+                return r;
+            });
+            const second = open(otherPath, {
+                dialogs: fakeDialogs({
+                    preparing: async () => {
+                        order.push("second preparing");
+                    },
+                }).dialogs,
+                convertWorker: { workerPath: worker.workerPath },
+            });
+
+            const results = await Promise.all([first, second]);
+
+            expect(results.map((r) => r.status)).toEqual([200, 200]);
+            expect(order).toEqual([
+                "first converting",
+                "first done",
+                "second preparing",
+            ]);
+            expect(stateOf(showPath).userVersion).toBe(8);
+            expect(stateOf(otherPath).userVersion).toBe(8);
+            expect(DatabaseServices.getDbPath()).toBe(otherPath);
         });
     });
 });

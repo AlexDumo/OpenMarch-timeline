@@ -4,6 +4,7 @@
  * Electron so tests can drive it with a fake window. `convertOnOpenDialogs.ts`
  * passes a real `BrowserWindow`.
  */
+import type { ConvertProgress } from "../database/convertOnOpenProtocol";
 
 const escapeHtml = (s: string) =>
     s.replace(
@@ -27,11 +28,58 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column; justify-
   padding: 0 24px; box-sizing: border-box; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: Canvas; color: CanvasText; user-select: none; cursor: default; }
 h1 { font-size: 15px; margin: 0 0 6px; }
-p { margin: 0; opacity: .75; overflow: hidden; text-overflow: ellipsis; }
+p { margin: 0; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+progress { width: 100%; margin: 10px 0 4px; }
 </style></head><body>
 <h1>Preparing your file…</h1>
-<p>Backing up ${escapeHtml(fileName)} and converting it to timelines. This takes a few seconds.</p>
+<p>Backing up ${escapeHtml(fileName)} and converting it to timelines.</p>
+<progress id="bar"></progress>
+<p id="status">Starting…</p>
 </body></html>`;
+}
+
+/** The status line and bar fraction (undefined: indeterminate) for `progress`. */
+export function describePreparingProgress(progress: ConvertProgress): {
+    status: string;
+    fraction: number | undefined;
+} {
+    if (progress.phase === "backup")
+        return { status: "Backing up…", fraction: undefined };
+    const { pagesDone, pagesTotal } = progress;
+    return {
+        status: `Converting page ${pagesDone} of ${pagesTotal}…`,
+        fraction: pagesTotal > 0 ? pagesDone / pagesTotal : undefined,
+    };
+}
+
+/**
+ * Shows `progress` in the preparing window (its status line and bar) and on
+ * the parent's taskbar or dock icon. Runs in the main process while the worker
+ * converts (P9.8); never throws, since the window is a courtesy.
+ */
+export function showPreparingProgress(
+    window: PreparingWindow | undefined,
+    parent: PreparingParent | undefined,
+    progress: ConvertProgress,
+): void {
+    const { status, fraction } = describePreparingProgress(progress);
+    try {
+        if (parent && !parent.isDestroyed())
+            parent.setProgressBar(fraction ?? 2); // 2: indeterminate
+        if (window && !window.isDestroyed())
+            void window.webContents
+                .executeJavaScript(
+                    `(() => {
+  const status = document.getElementById("status");
+  if (status) status.textContent = ${JSON.stringify(status)};
+  const bar = document.getElementById("bar");
+  if (bar) { ${fraction === undefined ? 'bar.removeAttribute("value");' : `bar.value = ${fraction};`} }
+})()`,
+                )
+                .catch(() => undefined);
+    } catch (error) {
+        console.error("Could not show the conversion progress:", error);
+    }
 }
 
 /** Resolves `promise`, or undefined after `ms`, so a window problem can never hang the open. */

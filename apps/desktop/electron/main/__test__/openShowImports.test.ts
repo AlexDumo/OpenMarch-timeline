@@ -3,7 +3,8 @@
  * With convert on open off (the default), opening a file loads none of the
  * renderer modules the converter needs (P9.3): the main process imports
  * `convertOnOpenFlow` and the converter only once the gate is on. The second
- * test checks the spies do see those modules once the gate is on.
+ * test checks the spies do see those modules once the gate is on; since P9.8
+ * the converter loads no renderer module either (it also runs in a worker).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
@@ -91,7 +92,7 @@ describe("the main-process open path's imports", () => {
         expect([...loaded]).toEqual([]);
     });
 
-    it("gate on: the converter and its renderer modules load (the spies work)", async () => {
+    it("gate on: the converter loads (the spies work), and still no renderer module (P9.8)", async () => {
         const { openShowFile } = await import("../openShow");
         const { createPageShow, migrationsFolder, GATE_ON } =
             await import("@om-electron/database/__test__/convertOnOpenFixtures");
@@ -107,8 +108,9 @@ describe("the main-process open path's imports", () => {
         result.db?.close();
 
         expect(result.status).toBe(200);
-        expect(loaded).toContain("convertOnOpenFlow");
-        expect(loaded).toContain("convertOnOpen");
-        expect(loaded).toContain("@/global/database/db");
+        expect([...loaded].sort()).toEqual([
+            "convertOnOpen",
+            "convertOnOpenFlow",
+        ]);
     });
 });

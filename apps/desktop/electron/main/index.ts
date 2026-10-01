@@ -37,6 +37,10 @@ import { repairDatabase } from "../database/repair";
 import { OPEN_STOPPED_STATUS } from "../database/convertOnOpenGate";
 import { electronConvertOnOpenDialogs } from "./convertOnOpenDialogs";
 import {
+    defaultConvertWorkerPath,
+    stopConversionWorkersOnQuit,
+} from "./convertWorkerHost";
+import {
     openOnce,
     openShowDatabase,
     openShowFile,
@@ -527,6 +531,9 @@ function initGetters() {
     //       await exportCanvas(dataUrl)
     //);
 }
+
+// A conversion running in its worker (P9.8) is stopped, and so rolled back, before the app quits.
+stopConversionWorkersOnQuit(app);
 
 app.on("window-all-closed", async () => {
     win = null;
@@ -1363,6 +1370,8 @@ const openShowDeps = (): OpenShowDeps => ({
     migrationsFolder: migrationsFolderPath(),
     beforeMigrations: backupBeforeMigrations,
     dialogs: () => electronConvertOnOpenDialogs(win),
+    // The backup and conversion run in a worker thread, off this event loop (P9.8).
+    convertWorker: { workerPath: defaultConvertWorkerPath(__dirname) },
 });
 
 /** The window's navigation events, for resuming the renderer's SQL after a reload. */

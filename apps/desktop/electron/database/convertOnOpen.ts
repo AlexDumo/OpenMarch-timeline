@@ -1,8 +1,10 @@
 /**
  * Converts a page-era show to timelines the first time it is opened (Phase 9,
- * P9.3; ADR 0001 §6). Main process only, and loaded only once the gate in
- * `convertOnOpenGate.ts` is on, because the converter pulls in renderer
- * modules. `electron/main/convertOnOpenFlow.ts` adds the dialogs around it.
+ * P9.3; ADR 0001 §6). The app runs the backup and the conversion in a worker
+ * thread (`convertOnOpenWorker.ts`, P9.8), so the main process stays
+ * responsive; the check runs in the main process, which loads this module
+ * only once the gate in `convertOnOpenGate.ts` is on.
+ * `electron/main/convertOnOpenFlow.ts` adds the dialogs around it.
  *
  * Runs after migrations, on a file whose `user_version` the guard in
  * `fileVersion.ts` already accepted:
@@ -26,7 +28,7 @@ import * as path from "path";
 import type { DatabaseSync } from "node:sqlite";
 import { sql } from "drizzle-orm";
 import type { PageConversionReport } from "@/timeline/convert/planPageConversion";
-import { convertPagesToTimelineInTransaction } from "@/timeline/convert/writePageConversion";
+import { convertPagesToTimelineInTransaction } from "@/timeline/convert/convertPagesInTransaction";
 import {
     assertNoTimelineCommitViolationsInTransaction,
     drainTimelineChangeLogInTransaction,
@@ -34,7 +36,7 @@ import {
 import {
     createAllUndoTriggers,
     dropAllUndoTriggers,
-} from "@/db-functions/history";
+} from "@/db-functions/historyTriggers";
 import { deleteTimelinesInTransaction } from "@/db-functions/timelines";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import { getOrm, schema } from "./db";
@@ -49,6 +51,11 @@ import {
     readUserVersion,
     TIMELINE_MODEL_USER_VERSION,
 } from "./fileVersion";
+import {
+    CONVERSION_STEPS,
+    type ConversionStep,
+    type ConvertProgress,
+} from "./convertOnOpenProtocol";
 import {
     hasConversionMarker,
     isConvertOnOpenEnabled,
@@ -199,21 +206,12 @@ export type ConvertOnOpenResult =
     /** The conversion failed and was rolled back. The backup is kept. */
     | { status: "conversion-failed"; backupPath: string; error: Error };
 
-/** The writes of the conversion transaction, in order. */
-export const CONVERSION_STEPS = [
-    "drop-undo-triggers",
-    "convert",
-    "flag",
-    "commit-check",
-    "drain-change-log",
-    "clear-history",
-    "create-undo-triggers",
-    "user-version",
-] as const;
-export type ConversionStep = (typeof CONVERSION_STEPS)[number];
+export { CONVERSION_STEPS, type ConversionStep, type ConvertProgress };
 
-/** Test hooks. Production callers pass nothing. */
+/** Hooks: `onProgress` for the preparing window; the others are for tests. */
 export interface ConvertOnOpenHooks {
+    /** Called before the backup, and after each converted page. */
+    onProgress?: (progress: ConvertProgress) => void;
     /** Replaces `backupBeforeConversion`. */
     backup?: (filePath: string) => BackupResult;
     /** Runs inside the transaction after each step. Throw to test the rollback. */
@@ -240,6 +238,7 @@ export async function convertFileOnOpen(
     db: DatabaseSync,
     hooks: ConvertOnOpenHooks = {},
 ): Promise<ConvertOnOpenResult> {
+    hooks.onProgress?.({ phase: "backup" });
     const backup = (hooks.backup ?? backupBeforeConversion)(filePath);
     if (!backup.ok) return { status: "backup-failed", backup };
 
@@ -265,7 +264,14 @@ export async function convertFileOnOpen(
                     .get();
                 const converted =
                     (pages?.n ?? 0) > 0
-                        ? await convertPagesToTimelineInTransaction(tx)
+                        ? await convertPagesToTimelineInTransaction(tx, {
+                              onProgress: (pagesDone, pagesTotal) =>
+                                  hooks.onProgress?.({
+                                      phase: "convert",
+                                      pagesDone,
+                                      pagesTotal,
+                                  }),
+                          })
                         : undefined;
                 // Only page 0: the converter's timeline has no moves. Drop it, so the file
                 // matches a new one made with the gate on (homes stay seeded from page 0).
@@ -321,8 +327,13 @@ export interface ConvertOnOpenUi {
     warnOlderRelease: (
         backupPath: string | undefined,
     ) => Promise<"open" | "stop">;
-    /** Runs the backup and conversion while a blocking "preparing your file" state shows. */
-    whilePreparing: <T>(work: () => Promise<T>) => Promise<T>;
+    /**
+     * Runs the backup and conversion while a "preparing your file" state
+     * shows. `work` reports its progress through the function it is given.
+     */
+    whilePreparing: <T>(
+        work: (onProgress?: (progress: ConvertProgress) => void) => Promise<T>,
+    ) => Promise<T>;
 }
 
 export type ConvertOnOpenOutcome =
@@ -348,9 +359,17 @@ export async function runConvertOnOpen(
     {
         env = process.env,
         hooks,
+        convert,
     }: {
         env?: Record<string, string | undefined>;
         hooks?: ConvertOnOpenHooks;
+        /**
+         * Backs up and converts the file instead of `convertFileOnOpen` on
+         * `db`: the app runs them in a worker (P9.8). It must not use `db`.
+         */
+        convert?: (
+            onProgress: (progress: ConvertProgress) => void,
+        ) => Promise<ConvertOnOpenResult>;
     } = {},
 ): Promise<ConvertOnOpenOutcome> {
     if (!isConvertOnOpenEnabled(env)) return { kind: "disabled" };
@@ -365,9 +384,18 @@ export async function runConvertOnOpen(
                 choice: await ui.warnOlderRelease(check.backupPath),
             };
         case "convert": {
-            const result = await ui.whilePreparing(() =>
-                convertFileOnOpen(filePath, db, hooks),
-            );
+            const result = await ui.whilePreparing((onProgress) => {
+                const report = (progress: ConvertProgress) => {
+                    hooks?.onProgress?.(progress);
+                    onProgress?.(progress);
+                };
+                return convert
+                    ? convert(report)
+                    : convertFileOnOpen(filePath, db, {
+                          ...hooks,
+                          onProgress: report,
+                      });
+            });
             return { kind: "conversion", ...result };
         }
     }
