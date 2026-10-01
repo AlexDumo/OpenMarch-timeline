@@ -52,7 +52,7 @@ Bring the timeline components and stories from `origin/0.2` (`568056aa`, `apps/d
 ### P8.8: View-model adapter
 
 - Owner: timeline-worker (timeline/p8-adapter)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P8.1
@@ -228,3 +228,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at 41d22557: tsc (pass); `test:focused src/components/timeline/__test__/` (129 passed); `pnpm --dir apps/desktop run test` (109 files, 1,629 passed). At 5a8b1b99: tsc (pass); `test:focused src/components/timeline/__test__/ src/timeline/__test__/` (23 files, 277 passed).
 - **Next:** P8.8 (view-model adapter) and P8.9 (timeline commands); P8.2 to P8.6 are open.
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p8-adapter) · P8.8
+
+- **Done:** claimed P8.8. Branch `timeline/p8-adapter` from `timeline-try-2`; wip commit 17349b84: the pure adapter `src/timeline/timelineViewModel.ts` (`buildTimelineTracks`, marcher and shape tracks, legs, UI-1 activity, diagnostics badges, `linkId` per spec timeline), the view beat axis that hides the zero-length beat 0 (`createTimelineBeatAxis`, applied at the `Timeline` boundary for pages, measures, tracks, cursor, seeks and commands), `resolverSpans` in `timelineStore.ts` (walks the public `explain`; core's API is unchanged), `useTimelineTracks` (rereads the rows under the write lock on each store version) wired into `TimelineModePanel`, and a linked-clip ring plus diagnostic badge on clips.
+- **Checks:** `tsc --noEmit`: pass. `test:focused src/components/timeline/__test__/`: 136 passed. eslint: 0 errors.
+- **Next:** unit tests (golden G2, G3, G12, shape track, diagnostics, converted show, validator), the hook test against a real DB, then U-Q1/U-Q4 in ui.md.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-adapter`; `pnpm install`; write `apps/desktop/src/timeline/__test__/timelineViewModel.test.ts` and `useTimelineTracks.test.tsx`; run `pnpm --dir apps/desktop run test:focused src/timeline/__test__/timelineViewModel.test.ts`.
