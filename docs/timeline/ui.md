@@ -82,6 +82,31 @@ from it. The spec still wins on the model; this file decides presentation.
   a move in progress, the marcher stops for the range and the stolen move then
   resumes with a catch-up, a visible change of speed, because progress is
   measured against that transition's own end (D-7).
+- **UI-7: casting and layers (P8.4).** For direct and arc, casting gives each
+  marcher a slot by nearest slot: the cast that makes the total distance from
+  where the marchers stand to their slots' destinations as small as it can be.
+  A new marcher stands where it is at the transition's start; for a recast, a
+  member stands where it is when its row first wins (R-2), which is later than
+  the row's start when a breakaway steals that, and a row that never wins can
+  take any slot. Create Track into a shape casts this way too, instead of
+  filling slots in id order (by id past 500 marchers, where the solve gets
+  slow). Follow the leader isn't cast by nearest slot: its founders go to
+  `p_{n-m+q}` by trail order (R-9, R-12), so under `inherit` their slots don't
+  matter and one more founder shifts every target. New marchers take its
+  lowest vacant slots, and recasting it is refused. A marcher cast into an
+  existing transition gets an assignment over the whole transition, one layer
+  above the highest layer it already has over those beats (0 where it has
+  none), so it steals them like Create Track does (UI-6); the inspector then
+  names the moves it steals from. The layer is chosen per marcher, since layers
+  only rank one marcher's own moves (R-2). A recast that wouldn't shorten the
+  total distance is refused, so ties never reshuffle anybody. Recasting a
+  direct or arc move changes the slot order that a later follow-the-leader
+  move under `inherit` takes its trail order from (R-12), so it can reorder
+  that trail (the FTL → box → FTL case that QA-SC-07 judges); the recast help
+  says so. Why: nearest-slot casting keeps paths short and avoids crossings
+  without the designer placing everyone by hand; casting reads the positions
+  from the rows inside the edit's own transaction, so it can't plan from a
+  resolver that hasn't caught up with an earlier edit.
 
 ## Mapping the spec onto the view model
 
@@ -153,6 +178,36 @@ disabled until the inspector shows the edited transition, so a quick second
 edit is never planned from the old one.
 Clip and track selections in the timeline don't drive the editor yet.
 
+**Casting and layers (P8.4).** Below each transition's editor,
+`TimelineAssignmentsEditor` lists its slots: every member by drill number, and
+the first 16 vacant slots (the rest are counted), with a warning line that
+sums up the vacant slots as ranges, such as "0–9, 12, … (+N)" (D-13,
+`D-VACANT`). For each member it edits:
+
+- the slot, typed as a number: a vacant slot is taken, and an occupied one is
+  traded with its marcher (both rows are deleted and inserted again, so no
+  moment has two marchers in one slot);
+- the layer (a whole number from -1000 to 1000), with a note that the higher
+  layer wins where a marcher's moves overlap. The same layer over the same
+  beats as another of its moves is refused (E-A3);
+- the first and end beats, inside the transition (E-A1);
+- removal, which leaves the slot vacant.
+
+Each member says where it's stolen: the beats where a higher layer wins, and
+by which transition (R-2), the inspector's counterpart of UI-1's dashed spans.
+Two actions cast (UI-7): **Cast selected marchers** puts the selected marchers
+who aren't in the transition into its vacant slots (nearest, or lowest for
+follow the leader), and a note names the moves the cast steals beats from;
+**Recast by nearest slot** re-picks every member's slot. Each is disabled, with
+the reason, when nothing is selected, everyone selected is in already, there
+are too few vacant slots (raise the slot count first), the transition is
+empty, it is follow the leader (recast only), or nearest-slot casting would
+solve more than 500 slots (the solve is cubic; 500 take about 30 ms). Edits
+follow the transition editor's rules: one undoable edit each, and refusals as
+toasts. After an edit, the controls stay disabled until the inspector shows a
+target built from a newer store version than the edit was planned from; a
+target rebuilt from the same rows (scrubbing, playback) doesn't count.
+
 ## Porting notes
 
 - The components depend on 0.2's frame-clock store
@@ -170,5 +225,8 @@ Clip and track selections in the timeline don't drive the editor yet.
 - **U-Q1:** which tracks show by default. Decided: UI-3.
 - **U-Q2:** what resizing a clip edge means: an R-E1 range edit on the
   timeline's transitions, or on one assignment.
-- **U-Q3:** how layers show on the timeline, if at all (spec Q-8).
+- **U-Q3:** how layers show on the timeline, if at all (spec Q-8). Since
+  P8.4 the inspector shows and edits each assignment's layer and where it's
+  stolen (UI-7); the timeline itself still shows steals only as dashed spans
+  (UI-1).
 - **U-Q4:** the shape track's activity rule. Decided: UI-4.

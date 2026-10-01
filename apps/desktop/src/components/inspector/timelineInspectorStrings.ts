@@ -119,6 +119,56 @@ export const TIMELINE_INSPECTOR_STRINGS = {
     "inspector.timeline.edit.slotCountPoints":
         "New slots start at the last slot's point.",
 
+    "inspector.timeline.assign.title": "Slots in transition {id}",
+    "inspector.timeline.assign.filled": "{filled} of {count} slots filled",
+    "inspector.timeline.assign.noVacant": "No vacant slots.",
+    "inspector.timeline.assign.vacantList":
+        "Vacant slots, where nobody goes ({count}): {slots}",
+    "inspector.timeline.assign.vacantSlot": "Slot {slot}: vacant",
+    "inspector.timeline.assign.moreVacant":
+        "{count} more vacant slots aren't listed.",
+    "inspector.timeline.assign.casting": "Casting",
+    "inspector.timeline.assign.cast": "Cast selected marchers",
+    "inspector.timeline.assign.castHelp":
+        "Puts the selected marchers who aren't in this transition yet ({count}) into the vacant slots nearest to where they stand when it starts, one layer above any other move they have at these beats, so this one wins.",
+    "inspector.timeline.assign.castHelpFtl":
+        "Puts the selected marchers who aren't in this transition yet ({count}) into the lowest vacant slots, one layer above any other move they have at these beats. Follow the leader places marchers by their order on the trail, not by slot, so the nearest slot means nothing here.",
+    "inspector.timeline.assign.castNoneSelected":
+        "Select marchers to cast them into this transition.",
+    "inspector.timeline.assign.castAllCast":
+        "Every selected marcher is already in this transition.",
+    "inspector.timeline.assign.castNoVacancy":
+        "Selected marchers who need a slot: {count}. Vacant slots: {vacant}. Raise the slot count first.",
+    "inspector.timeline.assign.castStole":
+        "Cast on a higher layer, so these marchers now leave their other moves for these beats: {list}",
+    "inspector.timeline.assign.castStoleItem":
+        "{marcher} (transition {transitions})",
+    "inspector.timeline.assign.recast": "Recast by nearest slot",
+    "inspector.timeline.assign.recastHelp":
+        "Gives every marcher in this transition the slot nearest to where it starts, keeping its beats and layer. A later follow-the-leader move that inherits its order from this one will follow the new slot order.",
+    "inspector.timeline.assign.recastFtl":
+        "Follow the leader places marchers by their order on the trail, not by slot, so it can't be recast by nearest slot.",
+    "inspector.timeline.assign.recastNoMembers":
+        "Nobody is in this transition yet.",
+    "inspector.timeline.assign.tooManySlots":
+        "Automatic casting handles up to {max} slots. Type each marcher's slot instead.",
+    "inspector.timeline.assign.slots": "Slots",
+    "inspector.timeline.assign.slotHelp":
+        "Type a vacant slot to move a marcher there, or an occupied one to trade places with its marcher.",
+    "inspector.timeline.assign.layerHelp":
+        "Where a marcher's moves overlap, the one on the higher layer wins, and the others are stolen for those beats.",
+    "inspector.timeline.assign.slotMember": "Slot {slot}: {marcher}",
+    "inspector.timeline.assign.slotFor": "Slot for {marcher}",
+    "inspector.timeline.assign.layerFor": "Layer for {marcher}",
+    "inspector.timeline.assign.startFor": "First beat for {marcher}",
+    "inspector.timeline.assign.endFor": "End beat for {marcher}",
+    "inspector.timeline.assign.remove": "Remove {marcher} from this transition",
+    "inspector.timeline.assign.notStolen": "Wins all of its beats.",
+    "inspector.timeline.assign.stolen":
+        "Stolen from beat {start} to {end} by a higher layer.",
+    "inspector.timeline.assign.stolenBy":
+        "Stolen from beat {start} to {end} by transition {transition} on a higher layer.",
+
     "inspector.timeline.diagnostics.title": "Diagnostics",
     "inspector.timeline.diagnostics.none": "No diagnostics.",
     "inspector.timeline.diagnostics.showTitle": "Show diagnostics ({count})",

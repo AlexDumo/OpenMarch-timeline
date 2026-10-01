@@ -3,6 +3,7 @@ import type { Diagnostic } from "@openmarch/core";
 import type { DbConnection } from "@/db-functions/types";
 import {
     getTimelineHost,
+    resolverSpans,
     useDiagnostics,
     useTimelineResolverStore,
 } from "./timelineStore";
@@ -17,6 +18,10 @@ import {
     type TransitionShapeOption,
 } from "./timelineTransitionEditor";
 import { useTimelineViewVersions } from "./useTimelineViewVersions";
+import {
+    buildAssignmentEditTarget,
+    type AssignmentEditTarget,
+} from "./timelineAssignmentEditor";
 import { readVersionedTimelineViewTables } from "./useTimelineTracks";
 import type { TimelineViewTables } from "./timelineViewModel";
 
@@ -29,12 +34,14 @@ interface Built {
     readonly inspections: readonly MarcherInspection[];
     readonly transitionEdits: readonly TransitionEditTarget[];
     readonly shapeOptions: readonly TransitionShapeOption[];
+    readonly assignmentEdits: readonly AssignmentEditTarget[];
 }
 
 const EMPTY_BUILT: Built = {
     inspections: [],
     transitionEdits: [],
     shapeOptions: [],
+    assignmentEdits: [],
 };
 
 interface VersionedTables {
@@ -77,6 +84,8 @@ export function useTimelineInspections({
     transitionEdits: readonly TransitionEditTarget[];
     /** The shapes a transition can head to */
     shapeOptions: readonly TransitionShapeOption[];
+    /** The slots and assignments of each of `transitionEdits` (P8.4), in the same order */
+    assignmentEdits: readonly AssignmentEditTarget[];
 } {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const { version, displayVersion } = useTimelineViewVersions();
@@ -145,17 +154,35 @@ export function useTimelineInspections({
                     sources,
                 ),
             );
+        const transitionEdits = buildTransitionEditTargets(inspections, {
+            transitions: host.snapshot.transitions,
+            shapes: host.snapshot.shapes,
+            assignments: loaded.tables.assignments,
+        });
+        const labels = new Map(
+            loaded.tables.marchers.map((m) => [m.id, m.label]),
+        );
+        const assignmentEdits = transitionEdits.map((target) =>
+            buildAssignmentEditTarget(
+                host.snapshot.transitions[target.id]!,
+                // Moves on a display-only edit too, so the editors' guard can't wait on a
+                // resolver version that never comes
+                loaded.version + loaded.displayVersion,
+                {
+                    assignments: loaded.tables.assignments,
+                    labels,
+                    spansOf: (id) => resolverSpans(resolver, id),
+                },
+            ),
+        );
         return {
             inspections,
-            transitionEdits: buildTransitionEditTargets(inspections, {
-                transitions: host.snapshot.transitions,
-                shapes: host.snapshot.shapes,
-                assignments: loaded.tables.assignments,
-            }),
+            transitionEdits,
             shapeOptions: transitionShapeOptions(
                 host.snapshot.shapes,
                 loaded.tables.shapes,
             ),
+            assignmentEdits,
         };
     }, [
         active,
@@ -175,6 +202,7 @@ export function useTimelineInspections({
         inspections: current.inspections,
         transitionEdits: current.transitionEdits,
         shapeOptions: current.shapeOptions,
+        assignmentEdits: current.assignmentEdits,
         omitted: Math.max(0, known.ids.length - MAX_INSPECTED_MARCHERS),
         unknownMarcherIds: known.unknown,
         diagnostics,

@@ -7,7 +7,11 @@ import {
     performUndo,
     transactionWithHistory,
 } from "@/db-functions/history";
-import { startTimelineResolver, stopTimelineResolver } from "../timelineStore";
+import {
+    startTimelineResolver,
+    stopTimelineResolver,
+    useTimelineResolverStore,
+} from "../timelineStore";
 import { useTimelineInspections } from "../useTimelineInspections";
 
 /**
@@ -110,6 +114,28 @@ describeDbTests("useTimelineInspections", (it) => {
         });
         expect(result.current.shapeOptions).toEqual([
             { id: 1, name: "Front line", kind: "line", capacity: null },
+        ]);
+        // P8.4: the same transition's slots, with drill numbers and the vacancy
+        expect(result.current.assignmentEdits).toEqual([
+            {
+                version: expect.any(Number),
+                transitionId: 1,
+                style: "direct",
+                start: 1,
+                end: 9,
+                slotCount: 3,
+                members: [1, 2].map((id, slot) => ({
+                    assignmentId: id,
+                    marcherId: id,
+                    label: `B${id}`,
+                    slot,
+                    start: 1,
+                    end: 9,
+                    layer: 4,
+                    stolen: [],
+                })),
+                vacantSlots: [2],
+            },
         ]);
     });
 
@@ -265,5 +291,42 @@ describeDbTests("useTimelineInspections", (it) => {
         await waitFor(() => expect(name()).toBe("Opener"));
         await performRedo(db);
         await waitFor(() => expect(name()).toBe("Renamed"));
+    });
+
+    it("a display-only edit raises the assignment target's version, so an editor waiting on it re-enables (P7.15, P8.4)", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const ids = [1, 2];
+        const { result } = renderHook(() =>
+            useTimelineInspections({
+                database: db,
+                enabled: true,
+                marcherIds: ids,
+                beat: 5,
+            }),
+        );
+        await waitFor(() =>
+            expect(result.current.assignmentEdits).toHaveLength(1),
+        );
+        const before = result.current.assignmentEdits[0]!.version;
+        const resolverVersion = useTimelineResolverStore.getState().version;
+
+        // A timeline rename writes no change-log row: only the display version moves
+        await transactionWithHistory(db, "renameTimeline", (tx) =>
+            tx
+                .update(schema.timelines)
+                .set({ name: "Renamed" })
+                .where(eq(schema.timelines.id, 1)),
+        );
+        await waitFor(() =>
+            expect(result.current.assignmentEdits[0]!.version).toBeGreaterThan(
+                before,
+            ),
+        );
+        expect(useTimelineResolverStore.getState().version).toBe(
+            resolverVersion,
+        );
     });
 });
