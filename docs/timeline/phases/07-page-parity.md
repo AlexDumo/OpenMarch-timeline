@@ -839,3 +839,29 @@ Facts that change how to read the PR #14 note above:
 - **Next:** read the suite result, open the PR.
 - **Resume from:** branch `timeline/p7-pathways` at `b75c95f7`; re-run `pnpm --dir apps/desktop run test` (background, alone), then open the PR from the scratch body `pr-P7.10.md` with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-mobile-exports) · P7.12 review fixes ready
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/30 is at head `357f1e90`. It merges `timeline-try-2` (with #29) at `3566f8a5`, and its body is updated. The fixes are in the checkpoint above. The PR body now also says:
+  - In timeline mode, `coordinates` is page-major: pages in show order, then marchers by id. The mobile reader (not in this repo) must look coordinates up by `(marcherId, pageId)`.
+  - The "same moment" claim now covers every read, because all reads run under one lock.
+- **Timing:** measured with a scratch test, not committed. The seeded show was 500 marchers × 201 pages (100,500 positions), in the test environment.
+
+  | Step                                                | Time                                                      |
+  | --------------------------------------------------- | --------------------------------------------------------- |
+  | Timeline export                                     | ~500 to 620 ms                                            |
+  | Page-mode export                                    | ~630 to 690 ms                                            |
+  | Locked reads plus resolver cold build               | ~310 ms, one stretch, the same work the video export does |
+  | Sampling                                            | ~300 ms, with the longest event-loop gap 37 ms            |
+  | Schema validation                                   | ~17 ms                                                    |
+  | Converting the seeded show (not part of the export) | ~19 s                                                     |
+
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - `vitest run src/components/mobile`: 8 files, 88 passed.
+  - `test:history` on `dots-to-om.timeline.test.ts` and `dots-to-om.test.ts`, run alone: 25 passed.
+  - `pnpm --dir apps/desktop run test`, run once: 134 files passed, 7 skipped; 1,965 tests passed, no errors.
+  - eslint, prettier and cspell: clean, apart from the `max-lines-per-function` warning that was already on the base.
+  - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`.
+- **Next:** the lead re-reviews and merges PR #30.
+- **Blockers:** none.
