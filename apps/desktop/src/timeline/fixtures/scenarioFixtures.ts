@@ -219,9 +219,9 @@ export function sc11(
         }
     }
     const groups: number[][] = [];
-    let nextMarcher = 1;
     for (const n of groupSizes) {
-        groups.push(Array.from({ length: n }, () => nextMarcher++));
+        const first = groups.reduce((sum, g) => sum + g.length, 1);
+        groups.push(Array.from({ length: n }, (_, i) => first + i));
     }
 
     // How many transitions each group gets: group 0 is the deep chain
@@ -333,7 +333,6 @@ export function sc11(
     };
 
     // Group transitions: each group moves through its own chain, back to back with a few gaps
-    let rowId = 1;
     let showEnd = 1;
     groups.forEach((members, g) => {
         let beat = 1;
@@ -350,7 +349,8 @@ export function sc11(
             const slots = shuffle(members.map((_, i) => i));
             members.forEach((m, i) =>
                 assignments.push({
-                    id: rowId++,
+                    // Ids count up from 1 in push order
+                    id: assignments.length + 1,
                     marcher: m,
                     transition: t,
                     slot: slots[i]!,
@@ -394,7 +394,7 @@ export function sc11(
         );
         rows.forEach((r, slot) =>
             assignments.push({
-                id: rowId++,
+                id: assignments.length + 1,
                 marcher: r.marcher,
                 transition: t,
                 slot,
