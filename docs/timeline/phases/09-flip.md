@@ -59,10 +59,10 @@ A post-migration step in the main process runs the converter in one transaction,
 ### P9.4: Remove the dev flag
 
 - Owner: unassigned
-- Status: open
+- Status: blocked
 - PR: none
 - Parallel: no
-- Depends on: P9.3, P9.8
+- Depends on: P9.3, P9.8, P9.9
 
 Remove the dev flag. Timeline mode is the only mode. Prerequisites (from the P9.8 review): a packaged smoke run (`build:electron`, then open a page-era show with `OPENMARCH_CONVERT_ON_OPEN=1` and confirm the worker loads from `app.asar`), and a manual app pass by the owner on a copy of a real show.
 
@@ -105,6 +105,16 @@ User-facing docs in `apps/website` and release notes.
 - Depends on: P9.3
 
 Before P9.4 turns convert-on-open on for everyone, move the backup (P9.2) and the conversion (P9.3) off the Electron main process, into a worker thread or `utilityProcess`, so large shows don't freeze the app (about 1–2 s for a 50 MB backup and about 4 s to convert 400 marchers by 100 pages, all synchronous today; Windows marks a window "Not Responding" after about 5 s). Keep one transaction and exact rollback, keep the "Preparing your file" modal responsive with progress if cheap, and also consider the bulk-insert path from Phase 6's handoff notes (chunked multi-row inserts) to cut conversion time. `export-utility-process.ts` is dead code (P7.7), not a working pattern.
+
+### P9.9: Quit during conversion
+
+- Owner: unassigned
+- Status: open
+- PR: none
+- Parallel: yes
+- Depends on: P9.8
+
+From the P9.4 packaged smoke run: on macOS a Quit sent while the "Preparing your file" window is up is cancelled (`User canceled (-128)`), so the conversion runs to completion and the app keeps running until a second Quit. Make a quit during conversion stop the worker (rollback, file stays at 7, reopens next launch, per P9.8) and then quit. Likely cause: the `modal: true, closable: false` preparing window in `convertOnOpenDialogs.ts`. Also quiet the expected `sql:proxy` "a file is being opened" handler errors (log once at debug level, not as errors). Verify with automated tests only; the packaged re-run needs the owner's go-ahead.
 
 ## Exit gate
 
@@ -485,3 +495,23 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - a packaged smoke run (`build:electron`, then open a page-era show with `OPENMARCH_CONVERT_ON_OPEN=1`);
   - the owner's manual pass on a copy of a real show.
 - **Blockers:** P9.4 waits on those.
+
+### 2026-10-01 · lead · P9.4 packaged smoke run
+
+- **Done:** a worker ran the packaged smoke run on `timeline-try-2` at a4616dd0 (P9.3, P9.5 and P9.8), with the owner's approval.
+  - Setup: show B on a scratch copy only, with an isolated `--user-data-dir` and automatic updates off. The original's sha256 was the same before and after. All copies have since been deleted.
+  - **Build:** `pnpm install`, the turbo package build, and `pnpm --dir apps/desktop run build:electron` all passed. `dist-electron/worker/convertOnOpenWorker.js` sits inside `app.asar` and is not unpacked.
+  - **Convert at startup** (with `OPENMARCH_CONVERT_ON_OPEN=1`): converted in 195 ms.
+    - File: `user_version` 8, `integrity_check` ok, `timelineMode` true, `timelineConvertedAt` set.
+    - Timeline rows written: 22 transitions, 2,090 assignments and 2,090 destinations.
+    - Page-era tables unchanged. Homes were seeded and undo history cleared.
+  - **Backup:** at version 7, and it matches the original's user data.
+  - **Reopen:** opening the converted file again doesn't convert again.
+  - **Preparing window:** appears when the file is opened in a running app. At startup there's no window, by design.
+- **Failed: quitting during a conversion (macOS).**
+  - What happened: a Quit sent while the preparing window was up was cancelled (`User canceled (-128)`). The conversion finished, the file ended at version 8, and the app kept running until a second Quit.
+  - Impact: the data is safe, but the quit is lost.
+  - Likely cause: the `modal: true, closable: false` preparing window (`convertOnOpenDialogs.ts`).
+- **Noise:** about 10 `sql:proxy` "a file is being opened" errors per open in a running app, plus "Error getting SVG on close" on quit.
+- **Next:** P9.9, a fix for quitting during conversion, with automated tests only. After that, re-run the quit check and the owner's manual pass.
+- **Blockers:** P9.4 is blocked until quitting during conversion works.
