@@ -81,7 +81,7 @@ Static render: in timeline mode, draw positions at the selected page's end beat 
 ### P5.6: Idle warming
 
 - Owner: timeline-worker (timeline/p5-warm-fixtures)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/16
 - Parallel: yes
 - Depends on: P5.4
@@ -91,7 +91,7 @@ Idle warming outward from the playback position.
 ### P5.7: Fixture loader
 
 - Owner: timeline-worker (timeline/p5-warm-fixtures)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/16
 - Parallel: yes
 - Depends on: P5.3
@@ -101,7 +101,7 @@ Dev fixture loader that builds G1 to G13 and the QA-SC scenarios into a show.
 ### P5.8: Tests and performance numbers
 
 - Owner: timeline-worker (timeline/p5-warm-fixtures)
-- Status: in-review
+- Status: in-progress
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/16
 - Parallel: yes
 - Depends on: P5.5, P5.7
@@ -135,6 +135,8 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - The frame clock (`src/services/clock/frame-clock.ts`, copied unchanged from 0.2) isn't wired in yet. P5.4 kept the existing `getLivePlaybackPosition` clock, so wiring the frame clock is deferred to P8.1, which must call `init` from a user gesture, register `setOnPause` if pause should land on a page end, and set the beat index with `beatIndexAtTime(beats, currentTime / 1000)`: the clock's `currentTime` is in milliseconds, `timeMap` takes seconds, and `beatIndexAtTime` returns -1 when there are no beats.
 - Resolver store (P5.3, `src/timeline/timelineStore.ts`): `positionsAt(beat, out)` returns false when no resolver is ready or when `out` isn't `2 * timelineMarcherIds().length` long (resize from that every frame after marcher adds/deletes). While a rebuild is pending, the old resolver stays "ready", so the render loop may draw one stale frame. After a failed cold build, batches are ignored until a reset or a flag toggle; consider retrying. Test gaps to fill in P5.8: a batch that switches a transition between shape and individual destinations, an edit committed while a cold build is pending, and a destination update that changes `slot_index`.
 - Playback and static render (P5.4, P5.5): the canvas draws from `marcher_pages` until the resolver store reports ready (and after a failed build), then from the resolver. Page N's end beat is `lastBeat.index + 1` (the next page's start beat; page 0 → 1), which agrees with the page-mode keyframe time. Canvas drag is disabled in timeline mode (marchers snap back); every other `marcher_pages` writer is still reachable (see Phase 7's handoff notes). Pathways, midpoints, endpoints, collision markers and shapes are still drawn from `marcher_pages` in timeline mode and can disagree with the drawn marchers. `renderMarcherPositions` keeps a stale `coordinate.page_id` from the last page render, which Phase 7 must replace before re-enabling drag. While the resolver isn't ready, playback runs with frozen marchers.
+- P5.8 is open only for its Playwright spec (checking rendered positions at several beats), deferred by the current no-e2e policy; everything else in P5.8 is merged.
+- From the PR #16 review: QA-PF-03's walk time is a single first-edit sample (3.51 ms once, likely JIT warm-up); re-measure with about 10 repeated edits and record median and max. The SC-11 generator's steal transitions span the union of their rows, so most steal rows are joins (they raise the FTL non-founding and rebase diagnostics), noisier than "an L1 steal over the second half"; document or limit their styles. Idle warming adds to `resolver.counters()` in the background, so counter readers in the running app see warming's work. The dev console API (`window.openmarchTimeline`) is installed only in development builds, while the flag is on.
 
 ## Progress log
 
@@ -293,3 +295,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Exit gate:** nothing ticked. The P5.8 tests and the `findings.md` numbers become true on the base only when this merges, and the Playwright spec is still missing. The regular suite passes with the flag off on this branch.
 - **Next:** review and merge by the lead. Then a follow-up for the Playwright spec once the policy allows e2e runs.
 - **Blockers:** none.
+
+### 2026-09-30 · lead session · P5.6, P5.7, P5.8 (reviewed and merged)
+
+- **Done:** fork PR #16 reviewed by a sub-agent (APPROVE WITH NITS: warming never blocks a frame and is cancelled and restarted correctly on batch, reset and stop; G1–G13, G8b and SC-01/-03/-05 match the spec; `sc11` follows the QA-SC-11 recipe and is deterministic; the loader is one undoable edit through the real db-functions; the performance test asserts no budget). Before merging, the lead gated the fixture-writing console API to development builds (the flag lives in the file, so a shared file could otherwise expose it in a release build) and added hook tests for installing and removing it. Merged. P5.6 and P5.7 set to done; P5.8 stays in-progress for its deferred Playwright spec. Remaining nits in the handoff notes.
+- **Checks:** at the PR head: tsc (pass); `test:focused src/timeline/__test__/ src/components/canvas/__test__/` (10 files, 121 passed); `test:history` on the store, store-warm and fixture-load tests (3 files, 40 passed); the worker's regular desktop suite (98 files, 1,544 passed). After the gate: tsc, eslint, and the dev-API and fixture tests (30 passed). QA-PF numbers are in `findings.md`.
+- **Next:** Phase 6 (page → timeline converter) can start; P4.9 is in rework.
+- **Blockers:** P5.8's Playwright spec waits on the e2e policy.
