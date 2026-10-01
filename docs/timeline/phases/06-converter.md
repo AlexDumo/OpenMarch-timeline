@@ -1,9 +1,9 @@
 ---
 phase: 6
 title: Page→timeline converter
-status: not-started
-owner: unassigned
-branch: none
+status: in-progress
+owner: timeline-worker (timeline/p6-converter)
+branch: timeline/p6-converter
 pr: none
 depends_on: [5]
 updated: 2026-09-29
@@ -29,8 +29,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### P6.1: Confirm page semantics
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p6-converter)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: —
@@ -39,8 +39,8 @@ Confirm the page semantics in code: which beat range each page's move covers, an
 
 ### P6.2: Converter
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p6-converter)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P6.1
@@ -49,8 +49,8 @@ Pure converter (desktop-side, reading via Drizzle): homes from page 0; one timel
 
 ### P6.3: Loss report
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p6-converter)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P6.2
@@ -59,8 +59,8 @@ Loss report per page: pathways, midsets and curved SVG shapes, which are kept on
 
 ### P6.4: Dev command
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p6-converter)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P6.2
@@ -69,8 +69,8 @@ Dev command that runs the converter as one `transactionWithHistory` edit, so it 
 
 ### P6.5: Converter tests
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p6-converter)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P6.4
