@@ -120,7 +120,7 @@ Video export and `exportAppearances` sample the resolver.
 ### P7.10: Pathways, midpoints, step size and collisions in timeline mode
 
 - Owner: timeline-worker (timeline/p7-pathways)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -801,4 +801,12 @@ Facts that change how to read the PR #14 note above:
   - `pnpm --dir apps/desktop run test`: 133 files, 1,953 tests passed, no errors.
   - Skipped by policy: the full `test:history` and e2e suites.
 - **Next:** route the stale `useTimelineTracks` follow-up. It is caused by edits to `timelines` rows and shape names, which the change log doesn't cover.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-pathways) · P7.10 checkpoint
+
+- **Done:** commit `cb984e71` (wip, no tests yet) on `timeline/p7-pathways`. `sampleMarcherPath` in `src/timeline/timelineKeyframes.ts` (P7.9's span-edge plus bisection sampler, in beats); new `src/timeline/timelinePaths.ts` (paths between page end beats, midset midpoint, length, step sizes), `TimelinePathway` (a fabric polyline), `OpenMarchCanvas.renderTimelinePathVisuals`, `useTimelinePathRender` (wired in `Canvas.tsx`; the page-mode path effect and the drag redraw skip once the resolver draws), `useTimelineStepSizes` (inspector), `StepSize.fromDistance`, an optional `distance` for `evaluatePathWarning`, `marcher_id` from the canvas marcher in `LineListeners`, and editable-path writers that write nothing in timeline mode.
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
+- **Next:** tests for the sampler, paths, step sizes and the canvas renderer; then the suite and the PR.
+- **Resume from:** branch `timeline/p7-pathways` at `cb984e71`; write `src/timeline/__test__/timelinePaths.test.ts` (golden fixtures with arcs and follow-the-leader), run `pnpm --dir apps/desktop exec vitest run src/timeline/__test__/timelinePaths.test.ts`.
 - **Blockers:** none.
