@@ -120,8 +120,8 @@ Video export and `exportAppearances` sample the resolver.
 ### P7.10: Pathways, midpoints, step size and collisions in timeline mode
 
 - Owner: timeline-worker (timeline/p7-pathways)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/33
 - Parallel: yes
 - Depends on: P7.1
 
@@ -301,13 +301,13 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.10 (new) Pathways, midpoints, step size and collisions in timeline mode
 
-- [ ] `src/global/classes/canvasObjects/OpenMarchCanvas.ts` ~1253 to 1303 (`renderPathVisual`), ~1307 to 1455 (`renderPathVisuals` reads the previous, current and next page rows), ~1457 to 1476 (hide), with `MarcherVisualGroup.ts`, `Pathway.ts`, `Midpoint.ts`, `Endpoint.ts` and `stepSizeWarning.ts` in `src/global/classes/` · R · P5 left these drawing from page data, so they can disagree with the drawn marchers
-- [ ] `src/components/canvas/Canvas.tsx` ~70 to 78, ~258 to 295, ~402 to 450 and `src/components/canvas/hooks/canvasListeners.movement.ts` ~32 to 107 · R · path render effects fed by page queries · not handled
-- [ ] `src/components/canvas/listeners/LineListeners.ts` ~75 to 262 · R and preview-only draw of temporary pathways from marchers to the line · not handled (the apply step is P7.2)
-- [ ] `src/global/classes/StepSize.ts` ~143 to 240 and `src/components/inspector/MarcherEditor.tsx` ~502 to 562, ~658 to 715 · R · step sizes between the previous and current page rows · not handled · compute step size between page end beats from the resolver
-- [ ] `src/global/classes/CollisionDetection.ts` ~26 to 70, ~149 to 153, ~215 to 300, `src/stores/CollisionStore.ts` ~11 to 45, `src/hooks/useAnimation.ts` ~38, ~140 to 164, `src/components/canvas/Canvas.tsx` ~604 to 640 (markers), `src/components/toolbar/Toolbar.tsx` ~19, `src/components/toolbar/tabs/CollisionsTab.tsx` ~13 · R · collisions from page-mode timelines and the page-row hash; currently not computed in either mode (see the facts above) · decide whether to revive on the resolver or leave dormant
-- [ ] `src/hooks/queries/usePathways.ts` ~48 to 290 (reads at ~81 and ~90; creates and updates `pathways` and sets `marcher_pages.path_data_id` at ~147 to 154; deletes at ~200), `src/db-functions/pathways.ts` ~16 to 90 (`updateEndPoint`, `findPageIdsForPathway`), `src/components/canvas/hooks/editablePath.tsx` ~14 to 45, `src/global/classes/canvasObjects/EditablePath.ts` ~15 to 125 · W `pathways` and `marcher_pages` · dormant (no reachable UI) · decide: leave frozen until Phase 10, or gate off in timeline mode. C-8: curved paths are a spec decision for Phase 9, not here
-- [ ] `midsets` table · no reader or writer · confirm there is no work and close (mocks only)
+- [x] `src/global/classes/canvasObjects/OpenMarchCanvas.ts` ~1253 to 1303 (`renderPathVisual`), ~1307 to 1455 (`renderPathVisuals` reads the previous, current and next page rows), ~1457 to 1476 (hide), with `MarcherVisualGroup.ts`, `Pathway.ts`, `Midpoint.ts`, `Endpoint.ts` and `stepSizeWarning.ts` in `src/global/classes/` · R · P5 left these drawing from page data, so they can disagree with the drawn marchers (P7.10, PR #33: `renderTimelinePathVisuals` draws `TimelinePathway` polylines sampled from the resolver between page end beats; midpoint = midset; straight lines hidden)
+- [x] `src/components/canvas/Canvas.tsx` ~70 to 78, ~258 to 295, ~402 to 450 and `src/components/canvas/hooks/canvasListeners.movement.ts` ~32 to 107 · R · path render effects fed by page queries · not handled (P7.10: `useTimelinePathRender` replaces the page path effect once the resolver draws; the drag redraw is skipped then; the queries stay for the fallback, per P7.13)
+- [x] `src/components/canvas/listeners/LineListeners.ts` ~75 to 262 · R and preview-only draw of temporary pathways from marchers to the line · not handled (the apply step is P7.2) (P7.10: positions already come from the drawn marchers; the marcher id now comes from the canvas marcher, since a resolver-drawn `coordinate` has no `marcher_id`)
+- [x] `src/global/classes/StepSize.ts` ~143 to 240 and `src/components/inspector/MarcherEditor.tsx` ~502 to 562, ~658 to 715 · R · step sizes between the previous and current page rows · not handled · compute step size between page end beats from the resolver (P7.10: `useTimelineStepSizes`, length along the resolver path over the page's counts; `StepSize.fromDistance`)
+- [x] `src/global/classes/CollisionDetection.ts` ~26 to 70, ~149 to 153, ~215 to 300, `src/stores/CollisionStore.ts` ~11 to 45, `src/hooks/useAnimation.ts` ~38, ~140 to 164, `src/components/canvas/Canvas.tsx` ~604 to 640 (markers), `src/components/toolbar/Toolbar.tsx` ~19, `src/components/toolbar/tabs/CollisionsTab.tsx` ~13 · R · collisions from page-mode timelines and the page-row hash; currently not computed in either mode (see the facts above) · decide whether to revive on the resolver or leave dormant (P7.10: left dormant in both modes; nothing feeds the store in timeline mode. Reviving it is a feature, not parity; it should sample `positionsAt` per beat)
+- [x] `src/hooks/queries/usePathways.ts` ~48 to 290 (reads at ~81 and ~90; creates and updates `pathways` and sets `marcher_pages.path_data_id` at ~147 to 154; deletes at ~200), `src/db-functions/pathways.ts` ~16 to 90 (`updateEndPoint`, `findPageIdsForPathway`), `src/components/canvas/hooks/editablePath.tsx` ~14 to 45, `src/global/classes/canvasObjects/EditablePath.ts` ~15 to 125 · W `pathways` and `marcher_pages` · dormant (no reachable UI) · decide: leave frozen until Phase 10, or gate off in timeline mode. C-8: curved paths are a spec decision for Phase 9, not here (P7.10: gated off; `useEditablePath` writes nothing in timeline mode, reading the flag when it runs; page-era data left frozen until Phase 10)
+- [x] `midsets` table · no reader or writer · confirm there is no work and close (mocks only) (P7.10: confirmed, no reader or writer outside mocks)
 
 #### P7.11 (new) Shapes and shape pages in timeline mode
 
@@ -864,4 +864,36 @@ Facts that change how to read the PR #14 note above:
   - eslint, prettier and cspell: clean, apart from the `max-lines-per-function` warning that was already on the base.
   - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`.
 - **Next:** the lead re-reviews and merges PR #30.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-pathways) · P7.10 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/33 (head `b75c95f7`, with the current `timeline-try-2` merged in). In timeline mode, once the resolver is ready, paths, midpoints, endpoints, step-size warnings and the inspector's step sizes come from the resolver between page end beats, not from `marcher_pages`. Page mode is unchanged.
+  - `sampleMarcherPath` (`src/timeline/timelineKeyframes.ts`) reuses P7.9's sampler in beats.
+  - `src/timeline/timelinePaths.ts` holds the page paths and step sizes.
+  - Drawing: `TimelinePathway` (a polyline) and `OpenMarchCanvas.renderTimelinePathVisuals`, called by `useTimelinePathRender` from `Canvas.tsx`.
+  - Inspector: `useTimelineStepSizes`.
+  - The drag redraw no longer puts back straight lines in timeline mode.
+  - The line tool preview takes the marcher id from the canvas marcher.
+  - The editable-path writers write nothing in timeline mode.
+  - Ticked the 7 P7.10 inventory items.
+- **Decisions (P7.10, recorded for the phase):**
+  - **Paths are sampled from the resolver** between the previous and current pages' end beats. Arcs and follow-the-leader moves draw as curves, within 0.25 field units.
+  - **Midpoint = midset:** the position halfway through the move in counts, on the drawn path. For a constant-pace straight move this is page mode's midpoint.
+  - **Step size = distance along the path over the page's counts,** measured at 0.01 tolerance. For a straight move it equals page mode's.
+  - **Collisions stay dormant in both modes** (the trigger is commented out). Reviving them is a feature beyond parity. When someone does, they should sample `positionsAt` per beat.
+  - **Dormant pathway writers are gated off in timeline mode,** with the flag read when they run. The page-era `pathways` data stays frozen until Phase 10. Curved-path authoring stays C-8 (Phase 9).
+  - **`midsets`:** no work.
+  - **`marcher_pages` queries in `Canvas.tsx` and the movement listener stay.** They feed the page-mode fallback until the resolver is ready (as P7.13 noted).
+- **Checks:**
+  - `pnpm install`: ok.
+  - `turbo run build --filter=@openmarch/desktop^...`: 4 successful.
+  - `tsc --noEmit`: clean, after the merge.
+  - The 3 new test files: 27 passed.
+  - Paths, keyframes and `src/global/classes`: 254 passed.
+  - `pnpm --dir apps/desktop run test`, run alone: 136 files passed, 7 skipped; 1,980 tests passed, no errors.
+  - prettier `--check` and cspell on the changed files: clean. eslint on the changed files: only warnings that were already on the base.
+  - Skipped by policy: the full `test:history` suite and Playwright. No db-functions changed, so no focused `test:history` was run. `build:electron` wasn't run, and I didn't run the app by hand.
+- **Exit gate:** unchanged. "Each feature's existing tests pass in timeline mode" is a phase-wide item, not ticked here.
+- **Next:** review and merge PR #33.
 - **Blockers:** none.
