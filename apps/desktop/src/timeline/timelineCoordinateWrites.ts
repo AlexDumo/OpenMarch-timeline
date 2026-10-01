@@ -4,9 +4,13 @@ import {
     type TimelineMovePage,
 } from "@/db-functions/timelineMoves";
 import type { DbConnection } from "@/db-functions/types";
+import { withTimelineWriteLock } from "@/db-functions/history";
 import type { CoordinateRecord } from "@/utilities/CoordinateActions";
 import { pageEndBeat } from "./timelineCanvas";
-import { useTimelineResolverStore } from "./timelineStore";
+import {
+    timelineResolverSettled,
+    useTimelineResolverStore,
+} from "./timelineStore";
 
 /**
  * The seam between the page-era coordinate tools and timeline writes in timeline mode
@@ -107,6 +111,17 @@ export async function transformMarchersOnPage<R extends MarcherXY>({
     const next = transform(timelineCoordinateRecords(page, marcherIds));
     await moveMarchersOnPage({ db, page, moves: toTimelineMoves(next) });
     return next;
+}
+
+/**
+ * Settles once every timeline write queued so far has committed and reached the resolver, and no
+ * cold build is pending. Call it before reading positions to plan a new write from them: without
+ * it, a write still in flight (a nudge pressed just before) is missing from the resolver, and the
+ * plan starts from stale positions. Never call it from inside a wrapped write.
+ */
+export async function timelinePositionsSettled(): Promise<void> {
+    await withTimelineWriteLock(async () => undefined);
+    await timelineResolverSettled();
 }
 
 /** What `copyPagePositions` plans: the marchers it covers and the moves that change something. */
