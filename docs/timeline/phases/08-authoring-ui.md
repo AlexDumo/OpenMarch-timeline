@@ -281,3 +281,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** history tests (`src/db-functions/__test__/timelineCommands.test.ts`), then wire `TimelineModePanel`.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-commands`; `pnpm install`; `pnpm exec turbo run build --filter=@openmarch/desktop^... --force`; write `apps/desktop/src/db-functions/__test__/timelineCommands.test.ts` and run `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineCommands.test.ts`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-commands) · P8.9
+
+- **Done:** wip commits 81134b8d (history tests) and 64ff2aa8 (panel wiring) on `timeline/p8-commands`. `useTimelineCommands` (`src/components/timeline/useTimelineCommands.ts`) replaces the `TODO(P8.9)` no-ops in `TimelineModePanel`: a clip move shifts the clip's `linkId` timeline by the dragged beats (a zero shift is skipped), Create Track's target is a shape picked by selecting its track (taking the selected marchers) or else the one selected marcher, and refusals show `error.message` (which starts with the code) through `conToastError`.
+- **Checks:** `tsc --noEmit`: pass. `test:history src/db-functions/__test__/timelineCommands.test.ts`: 11 passed; a mutation that moves assignments in the wrong order fails 4 of the shift tests. `vitest run src/components/timeline/__test__/TimelineCommands.test.tsx`: 8 passed. eslint and prettier on the changed files: clean. The regular desktop suite is running.
+- **Next:** read the suite result; record UI-6 in `ui.md` and the handoff notes; cross-phase note for Phase 7 (structural moves still refused); tidy and open the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-commands`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` (in the background); then the docs and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
