@@ -60,7 +60,7 @@ Marcher add and delete: the home position, plus a vacant or filled slot in each 
 ### P7.4: Page ripple procedures
 
 - Owner: timeline-worker (timeline/p7-ripple)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -70,7 +70,7 @@ Page insert, delete and resize as **ripple procedures** in app code, ordered so 
 ### P7.5: Beat ripple procedures
 
 - Owner: timeline-worker (timeline/p7-ripple)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.4
@@ -491,4 +491,12 @@ Facts that change how to read the PR #14 note above:
 - **Done:** fork PR #23 reviewed by a sub-agent (APPROVE WITH NITS: page mode unchanged on every export path; frame sampling and keyframe boundaries correct, including beat 0 and tempo changes). The worker fixed the nits: video export always cold-builds its own resolver (an edit mid-export no longer changes later frames; tested); the keyframe export reports the worst error left when the subdivision depth cap is hit and warns; the other two appearance callers ignore the dropped per-page fields; the preview redraws on store version changes and takes its duration from the beats. Squash-merged. P7.8 and P7.9 set to done.
 - **Checks:** at 88fcbfb6, in the worker's work tree: tsc (pass); `test:focused src/timeline src/components/exporting` (25 files, 287 passed); the worker's regular desktop suite (119 files, 1,735 passed). It merged cleanly onto the base after PR #24.
 - **Next:** P7.4 and P7.5 (page and beat ripple), now that P8.9's timeline shift exists.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-ripple) · P7.4, P7.5 checkpoint
+
+- **Done:** `apps/desktop/src/db-functions/timelineRipple.ts` (commit `f9ea01bf`, wip, untested): `withTimelinePageRipple(tx, edit)` reads the page grid (beat ids in order, each page's ordinal range, as `fromDatabasePages` builds it) before a page or beat edit, runs the edit, reads it again and rewrites timelines, transitions and assignments to match in the same transaction. The flag is read inside the transaction from `workspace_settings`, so page mode is unchanged and no caller threads a flag. Wrapped: `createBeats`, `updateBeats`, `deleteBeats`, `shiftBeats`, `flattenOrder`, `createPages`, `updatePages`, `deletePages`, `deletePageYank`, `createLastPage`, `createTempoGroupAndPageFromWorkspaceSettings`, `updateUtility`, the page update and measures-and-beats mutations, split page, tempo group create and update, cascade measure delete, MusicXML import and the audio player's beat edits.
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` clean. No tests yet.
+- **Next:** tests in `src/db-functions/__test__/timelineRipple.test.ts`.
+- **Resume from:** branch `timeline/p7-ripple` at `f9ea01bf`; write the tests (converted `marchersAndPages` show with the flag set in `workspace_settings`): beat insert before, inside and after a move; beat delete inside a move and refusals; page resize; page insert and delete; undo/redo round trips; flag off. Run with `pnpm --dir apps/desktop exec vitest run src/db-functions/__test__/timelineRipple.test.ts` and `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineRipple.test.ts`.
 - **Blockers:** none.
