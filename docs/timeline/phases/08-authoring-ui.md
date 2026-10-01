@@ -82,7 +82,7 @@ Shapes: draw and edit `line`, `freehand`, `circle`, `box` and `block` in absolut
 ### P8.3: Transitions
 
 - Owner: timeline-worker (timeline/p8-transitions)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/27
 - Parallel: yes
 - Depends on: P8.0
@@ -399,4 +399,24 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Note:** the session scratchpad is shared with another worker (P7.6). Its `pr.md` was briefly used as this PR's body; PR #27's body was rewritten at once, and my inserted section was removed from that file.
 - **Checks:** `tsc --noEmit`: pass. `test:focused` (inspector and timeline editor files): 5 files, 105 passed. `test:history src/db-functions/__test__/timelineTransitionEdits.test.ts`: 9 passed. `pnpm --dir apps/desktop run test`: 130 files, 1,923 passed. eslint 0 errors; prettier and cspell pass. Not run (policy): full `test:history`, e2e, `build:electron`.
 - **Next:** re-review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P8.3
+
+- **Done:** reviewed PR #27. The review found five issues, all fixed in dbca9b8d and a936ac98:
+  - the editor targeted the next page's move on back-to-back moves;
+  - edits could be planned from stale rows;
+  - blurring a field wrote its rounded value;
+  - slot count had no cap;
+  - the shape picker offered shapes the database refuses.
+    Squash-merged at head a936ac98.
+- **Checks (lead, on a936ac98):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history src/db-functions/__test__/`: 24 files, 592 tests passed.
+  - `pnpm --dir apps/desktop run test`: 130 files and 1,923 tests passed, no errors.
+  - Skipped by policy: the full `test:history` and e2e suites.
+- **Next:**
+  - P8.4 (assignments and layers) is unblocked.
+  - Optional follow-ups: timeline clip/track selection driving the editor, picking waypoints on the canvas, exporting `sampleDestinations` from core (ADR 0001 §4).
+  - The UI exit-gate item still needs a manual app check.
 - **Blockers:** none.
