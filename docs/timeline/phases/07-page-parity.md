@@ -180,7 +180,7 @@ Two inventory items are still open. (1) In timeline mode the canvas still applie
 ### P7.17: Existing feature tests in timeline mode
 
 - Owner: timeline-worker (timeline/p7-feature-tests)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/38
 - Parallel: yes
 - Depends on: P7.2–P7.16
@@ -1398,4 +1398,24 @@ Facts that change how to read the PR #14 note above:
 - **Skipped:** by policy, the full `test:history` suite, e2e and `build:electron`.
 - **Exit gate:** not ticked; P7.18 covers the remaining coverage.
 - **Next:** the lead re-reviews PR #38.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.17
+
+- **Done:** reviewed PR #38 and squash-merged it at head a12e954b.
+  - The review confirmed that the run passes mostly without reaching timeline code.
+  - Timeline behavior is really exercised only for page/beat/measure ripple and the mobile export.
+  - Fixes:
+    - timeline tables are now in the ripple tests' history checks;
+    - `test:timeline-history` added;
+    - isolation guard on `keepFixturesInPageMode`;
+    - honest scope in `testing.md` and the PR.
+- **Checks (lead, on a12e954b):**
+  - `tsc --noEmit`: pass.
+  - `pnpm --dir apps/desktop run test`: 158 files, 2,265 tests passed.
+  - `pnpm --dir apps/desktop run test:timeline`: 158 files, 2,221 tests passed, 58 skipped, 0 failed.
+  - `test:timeline-history` on the page, beat, measures, marcher and utility tests: 5 files, 257 tests passed.
+  - Skipped by policy: the full `test:history` suite and e2e.
+- **Exit gate:** "each feature's existing tests pass in timeline mode" stays open until P7.18 lands.
+- **Next:** P7.18.
 - **Blockers:** none.
