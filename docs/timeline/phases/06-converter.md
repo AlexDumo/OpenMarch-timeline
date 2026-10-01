@@ -92,7 +92,7 @@ Verify that a converted show plays back like the original. (1) A purpose-built t
 ### P6.7: Glide across missing rows
 
 - Owner: timeline-worker (timeline/p6-gap-glide)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/43
 - Parallel: yes
 - Depends on: P6.5
@@ -339,4 +339,21 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - eslint, prettier and cspell on the changed files: clean.
   - Not run (policy): the full `test:history` suite, e2e and `build:electron`. The corpus runner was not re-run, because its shows have no gaps or pathways.
 - **Next:** re-review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P6.7
+
+- **Done:** reviewed PR #43 and squash-merged it at head 976e2a17.
+  - The review found one medium issue, now fixed: a corrupt or empty pathway aborted the whole conversion. It now falls back to a straight line and is reported.
+  - Also fixed:
+    - a test pinning the hold when the neighboring page has no beats;
+    - non-default path positions in the generated show;
+    - `pageEndBeat` moved to a pure module;
+    - handoff notes.
+- **Checks (lead, on 976e2a17):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/`, `conversionEquality` and `src/timeline/convert`: 30 files, 652 tests passed.
+  - `pnpm --dir apps/desktop run test`: 2,303 tests passed and 1 failed. The failure was a 10 s `beforeEach` timeout in `backup.test.ts` (P9.2) while the machine was loaded: the run took 1,047 s against the usual ~130 s, with another worker's tests running. `backup.test.ts` alone passed 21 of 21 twice. Recorded in `findings.md`.
+  - Skipped by policy: full `test:history` and e2e.
+- **Next:** P9.3 (PR #42) fixes are in progress.
 - **Blockers:** none.
