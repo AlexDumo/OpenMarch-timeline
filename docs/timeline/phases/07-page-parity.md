@@ -49,8 +49,8 @@ Selection, drag and alignment tools write slot destinations.
 
 ### P7.3: Marcher add and delete
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-marchers)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
