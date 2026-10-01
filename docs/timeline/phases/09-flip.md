@@ -108,8 +108,8 @@ Before P9.4 turns convert-on-open on for everyone, move the backup (P9.2) and th
 
 ### P9.9: Quit during conversion
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p9-9-quit-during-conversion)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P9.8
