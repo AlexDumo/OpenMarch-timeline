@@ -51,8 +51,8 @@ Bring the timeline components and stories from `origin/0.2` (`568056aa`, `apps/d
 
 ### P8.8: View-model adapter
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p8-adapter)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P8.1
