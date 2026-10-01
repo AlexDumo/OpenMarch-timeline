@@ -109,10 +109,11 @@ Tick an item only after running its check, and paste the command and result into
 Kept current by the phase lead: where things stand, surprises, and what not to redo.
 
 - **P9.2 backup API (for P9.3).** `apps/desktop/electron/database/backup.ts` exports `backupBeforeConversion(filePath): BackupResult` (synchronous, main process only; PR 40).
-  - Call it before converting, with the file's path, while no migration or conversion transaction is open on it. Convert only when `result.ok` is true. On `ok: false`, show `result.message` (English, safe to show) and stop; `result.code` is one of `source-missing`, `directory-not-writable`, `disk-full`, `source-unreadable`, `verification-failed`, `unknown`. It never throws for those.
+  - Call it before converting, with the file's path, while no migration or conversion transaction is open on it. Convert only when `result.ok` is true. On `ok: false`, show `result.message` (English, safe to show) and stop; `result.code` is one of `source-missing`, `directory-not-writable`, `disk-full`, `file-busy`, `name-too-long`, `source-unreadable`, `verification-failed`, `unknown`. It never throws for those.
   - On success it returns `{ ok: true, backupPath, userVersion }`. The backup is next to the original, named `<name> (before timeline conversion).dots`, then `... conversion 2).dots`, `3`, and so on. Show `backupPath` in the "converted, backup saved" message and use it for the "file came back at 7, restore the backup" offer.
-  - It is a `VACUUM INTO` snapshot from a read-only connection, verified before it gets its final name, so it is consistent even if another connection has the file open. It never writes to the original. If P9.3 later needs the version check first, run `decideFileVersion` before calling this, so a too-new file isn't backed up.
-  - `nextBackupPath(filePath, exists?)` and `BACKUP_NAME_SUFFIX` are exported too. Nothing calls the backup yet. It needs no IPC or ADR change; if P9.3 wants the renderer to trigger or show it, that goes through the usual IPC rules.
+  - It is a `VACUUM INTO` snapshot from a read-only connection (5 s busy timeout), verified (integrity check, `user_version`, schema) before it gets its final name, so it is consistent even if another connection has the file open or commits meanwhile. It never writes to the original's main file; on a WAL file SQLite may touch the `-wal`/`-shm` side files. If P9.3 needs the version check first, run `decideFileVersion` before calling this, so a too-new file isn't backed up.
+  - **Performance:** it runs on the calling thread and takes roughly 1 to 2 s for a 50 MB file. P9.3 must either show a blocking "preparing your file" state or run it off the main thread. `export-utility-process.ts` is dead code (P7.7), not a pattern to reuse.
+  - `nextBackupPath` and `BACKUP_NAME_SUFFIX` are exported too; the second argument of `backupBeforeConversion` is for tests only. Nothing calls the backup yet. It needs no IPC or ADR change; if P9.3 wants the renderer to trigger or show it, that goes through the usual IPC rules.
 
 ## Progress log
 
@@ -140,3 +141,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** from `apps/desktop`: `pnpm run test:focused electron/database/__test__/backup.test.ts` 9 passed; `pnpm run test:focused electron/database/__test__/fileVersion` 36 passed; `pnpm tsc --noEmit` clean apart from existing `Timeline.stories.tsx` errors; prettier, cspell and the pre-commit hook passed. Skipped per the current policy: full `test:history` and e2e.
 - **Next:** review and merge; then P9.3.
 - **Blockers:** none. The phase formally depends on Phase 8, where P8.7's human verdicts are open.
+
+### 2026-10-01 · timeline-worker · P9.2
+
+- **Done:** addressed the PR 40 review in commit f905edda: dangling-symlink loop fixed (`lstat`, bounded retries), verification checks only the copy and the snapshot is retaken on a concurrent commit, `file-busy` and `name-too-long` codes, error-code classification (file system and SQLite), 255-byte name truncation, short temp names, orphan sweep, safer publish, WAL docs, and the performance note for P9.3.
+- **Checks:** from `apps/desktop` after `pnpm install`: `pnpm tsc --noEmit` clean; eslint clean on the two files; `pnpm run test:focused electron/database/__test__/backup.test.ts` 21 passed; `pnpm run test:focused electron/database` 194 passed. Skipped per the current policy: full `test:history` and e2e.
+- **Next:** re-review and merge; then P9.3.
+- **Blockers:** none.
