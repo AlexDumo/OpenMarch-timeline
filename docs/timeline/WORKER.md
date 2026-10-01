@@ -138,7 +138,7 @@ Throughout:
    checks you ran, with results. Workers can share one scratchpad, so name
    temporary files after your package (`pr-P8.3.md`, not `pr.md`), and read a
    body file back before passing it to `--body-file`.
-4. Through `coord.sh`: set `- Status: in-review` and `- PR: <url>`. Edit only your package's section: a regex over the whole file can hit the first `- PR:` line instead of yours. Before `coord.sh commit`, run `git diff` in the coordination checkout and confirm only your package's lines and your log entry changed, tick only
+4. Through `coord.sh`: set `- Status: in-review` and `- PR: <url>`. Edit only your package's section: a regex over the whole file can hit the first `- PR:` line instead of yours. Before `coord.sh commit`, run `git diff` in the coordination checkout and confirm only your package's lines and your log entry changed. Tick only
    the exit-gate items you actually ran and whose outcome is already true on
    the base branch. An item that only becomes true when your PR merges (such
    as "the root copies are gone") waits for the merge; say so in the log, and append a final log entry.
