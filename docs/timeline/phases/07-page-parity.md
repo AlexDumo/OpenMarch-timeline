@@ -1243,3 +1243,17 @@ Facts that change how to read the PR #14 note above:
 - **Next:** run the new tests, `tsc`, lint, then the desktop suite.
 - **Blockers:** none.
 - **Resume from:** in `apps/desktop`, run `pnpm exec vitest run src/hooks/queries/__test__/useMarcherAppearancesTimelineMode.test.ts electron/main/services/__test__/previous-dots-import-service.test.ts` and fix failures; then `pnpm exec tsc --noEmit`.
+
+### 2026-10-01 · timeline-worker (timeline/p7-feature-tests) · P7.17 checkpoint 2
+
+- **Done:** commit 564e5fcd on `timeline/p7-feature-tests`.
+  - The blank fixture database now only gets the flag (a new timeline-mode file has no timeline rows); data fixtures are converted.
+  - `keepFixturesInPageMode(reason)` (in `src/test/timelineMode.ts`) for the 14 test files that already set up timeline mode themselves, and `skipInTimelineMode(reason)` for 6 tests and describes that assert page-mode behavior timeline mode drops.
+  - `marcher.test.ts` has a timeline-mode variant for `getMarchers` (homes come from page 0 after conversion).
+- **Checks:**
+  - Run 1 (blank database converted too): 316 failed in 30 files; 1,926 passed.
+  - Run 2 (blank database flag only, no test changes): 201 failed in 19 files; 2,041 passed.
+  - The 6 changed files run in timeline mode: 91 passed, 44 skipped.
+- **Next:** full timeline-mode run 3 (running), then the default run, the PR and the triage table.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p7-feature-tests` at 564e5fcd; `pnpm install`; build the desktop's dependencies; run `pnpm --dir apps/desktop run test:timeline` alone in the background, then `pnpm --dir apps/desktop run test` alone.
