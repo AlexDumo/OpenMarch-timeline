@@ -2,11 +2,13 @@ import { describe, expect } from "vitest";
 import { eq, getTableName } from "drizzle-orm";
 import type { ChangeBatch } from "@openmarch/core";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
+import type { DbTransaction } from "../types";
 import { getTestWithHistory } from "@/test/history";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import {
     TimelineCommitViolationError,
     TimelineWriteError,
+    createLegacyPageTransitionsInTransaction,
     createTimelineAssignmentsInTransaction,
     createTimelineShapesInTransaction,
     createTimelineTransitionsInTransaction,
@@ -127,8 +129,8 @@ const block = (rows: number, cols: number) =>
     }) as const;
 
 /**
- * One edit: 4 marchers, a timeline [0, 64), a line shape, and transition T over [8, 24) with 4
- * slots on the line. Its assignments (ids 1 to 4):
+ * One edit: 4 marchers, a timeline [8, 24), a line shape, and transition T spanning it (C-11) with
+ * 4 slots on the line. Its assignments (ids 1 to 4):
  *
  * - 1: marcher 1, `[8, 24)`, anchored at both ends;
  * - 2: marcher 2, `[12, 20)`, unanchored;
@@ -146,7 +148,7 @@ const seed = (db: DbConnection) =>
             })),
         );
         const [timeline] = await createTimelinesInTransaction({
-            newTimelines: [{ name: "Opener", startBeat: 0, endBeat: 64 }],
+            newTimelines: [{ name: "Opener", startBeat: 8, endBeat: 24 }],
             tx,
         });
         const [shape] = await createTimelineShapesInTransaction({
@@ -183,6 +185,15 @@ const seed = (db: DbConnection) =>
         });
         return { timelineId: timeline!.id, shapeId: shape!.id, t: t!.id };
     });
+
+/** A new timeline over `[start, end)`, for a transition that spans it (C-11). */
+const timelineOver = async (tx: DbTransaction, start: number, end: number) =>
+    (
+        await createTimelinesInTransaction({
+            newTimelines: [{ startBeat: start, endBeat: end }],
+            tx,
+        })
+    )[0]!.id;
 
 /** One edit: the R-E1 procedure on transition `id`. */
 const rangeEdit = (db: DbConnection, id: number, start: number, end: number) =>
@@ -242,12 +253,12 @@ describeDbTests("timeline range edit (R-E1) and write-path storage", (it) => {
         testWithHistory(
             "QA-DB-24: stretching into a same-layer neighbor is rejected with E-A3",
             async ({ db }) => {
-                const { timelineId, shapeId, t } = await seed(db);
+                const { shapeId, t } = await seed(db);
                 await transactionWithHistory(db, "neighbor", async (tx) => {
                     const [u] = await createTimelineTransitionsInTransaction({
                         newTransitions: [
                             {
-                                timelineId,
+                                timelineId: await timelineOver(tx, 24, 40),
                                 startBeat: 24,
                                 endBeat: 40,
                                 slotCount: 1,
@@ -274,10 +285,67 @@ describeDbTests("timeline range edit (R-E1) and write-path storage", (it) => {
         );
 
         testWithHistory(
-            "a range outside the timeline is rejected with E-T1, and a missing transition with E-ARGS",
+            "the timeline and every transition in it move together (C-11)",
             async ({ db }) => {
-                const { t } = await seed(db);
-                await expectRejected(db, "E-T1", () => rangeEdit(db, t, 8, 80));
+                const { timelineId, shapeId, t } = await seed(db);
+                const [sibling] = await transactionWithHistory(
+                    db,
+                    "sibling",
+                    (tx) =>
+                        createTimelineTransitionsInTransaction({
+                            newTransitions: [
+                                {
+                                    timelineId,
+                                    slotCount: 1,
+                                    destination: { kind: "shape", shapeId },
+                                },
+                            ],
+                            tx,
+                        }),
+                );
+                await rangeEdit(db, t, 4, 30);
+                expect(await transitionRange(db, t)).toEqual([4, 30]);
+                expect(await transitionRange(db, sibling!.id)).toEqual([4, 30]);
+                const timeline = await db
+                    .select()
+                    .from(schema.timelines)
+                    .where(eq(schema.timelines.id, timelineId))
+                    .get();
+                expect([timeline!.start_beat, timeline!.end_beat]).toEqual([
+                    4, 30,
+                ]);
+            },
+        );
+
+        testWithHistory(
+            "a legacy timeline whose transitions don't span it, and a missing transition, are refused with E-ARGS",
+            async ({ db }) => {
+                const { shapeId } = await seed(db);
+                const legacy = await transactionWithHistory(
+                    db,
+                    "legacy",
+                    async (tx) => {
+                        const timelineId = await timelineOver(tx, 32, 64);
+                        const [row] =
+                            await createLegacyPageTransitionsInTransaction({
+                                newTransitions: [
+                                    {
+                                        timelineId,
+                                        startBeat: 32,
+                                        endBeat: 48,
+                                        slotCount: 1,
+                                        destination: { kind: "shape", shapeId },
+                                    },
+                                ],
+                                tx,
+                            });
+                        return row!.id;
+                    },
+                );
+                const error = await expectRejected(db, "E-ARGS", () =>
+                    rangeEdit(db, legacy, 32, 40),
+                );
+                expect(error.message).toMatch(/older conversion/);
                 await expectRejected(db, "E-ARGS", () =>
                     rangeEdit(db, 999, 0, 8),
                 );
@@ -564,8 +632,6 @@ describeDbTests("timeline range edit (R-E1) and write-path storage", (it) => {
                             newTransitions: [
                                 {
                                     timelineId,
-                                    startBeat: 32,
-                                    endBeat: 48,
                                     slotCount: 1,
                                     pathStyle: "arc",
                                     pathParams: { waypoints: [[1, 1]] },
@@ -596,7 +662,10 @@ describeDbTests("timeline range edit (R-E1) and write-path storage", (it) => {
     });
 
     describe("block shapes: E-T3/E-T4 (PR #10 follow-up)", () => {
-        /** The seed, plus a 2x2 block (capacity 4) and a shapeless 2-slot transition over [32, 48). */
+        /**
+         * The seed, plus a 2x2 block (capacity 4), a shapeless 2-slot transition spanning a new
+         * timeline [32, 48), and an empty timeline [48, 64) (`timelineId` now names it).
+         */
         const seedBlocks = async (db: DbConnection) => {
             const seeded = await seed(db);
             return await transactionWithHistory(db, "blocks", async (tx) => {
@@ -608,7 +677,7 @@ describeDbTests("timeline range edit (R-E1) and write-path storage", (it) => {
                     await createTimelineTransitionsInTransaction({
                         newTransitions: [
                             {
-                                timelineId: seeded.timelineId,
+                                timelineId: await timelineOver(tx, 32, 48),
                                 startBeat: 32,
                                 endBeat: 48,
                                 slotCount: 2,
@@ -625,6 +694,7 @@ describeDbTests("timeline range edit (R-E1) and write-path storage", (it) => {
                     });
                 return {
                     ...seeded,
+                    timelineId: await timelineOver(tx, 48, 64),
                     blockId: blockShape!.id,
                     individualId: individual!.id,
                 };

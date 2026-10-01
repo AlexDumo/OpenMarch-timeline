@@ -252,7 +252,7 @@ export function buildTimelineTracks(
         .flatMap((timeline, index) =>
             tracksOfTimeline(
                 context,
-                timeline.id,
+                timeline,
                 TIMELINE_TRACK_COLORS[index % TIMELINE_TRACK_COLORS.length],
             ),
         );
@@ -294,10 +294,11 @@ function shapeTracksOfTimeline(
 
 function tracksOfTimeline(
     context: BuildContext,
-    timelineId: number,
+    timeline: { id: number; start: number; end: number },
     color: string,
 ): TimelineInput[] {
     const { filter, transitionById, rowsByTransition, spansOf } = context;
+    const timelineId = timeline.id;
     const transitions = context.transitionsByTimeline.get(timelineId) ?? [];
     const tracks: TimelineInput[] = [];
 
@@ -342,12 +343,12 @@ function tracksOfTimeline(
         tracks.push(
             marcherTrack({
                 timelineId,
+                clip: { start: timeline.start, end: timeline.end },
                 marcherId,
                 label:
                     context.marcherLabel.get(marcherId) ??
                     `Marcher ${marcherId}`,
                 color,
-                rows,
                 inTimeline,
                 spans,
                 diagnostics,
@@ -361,6 +362,9 @@ function tracksOfTimeline(
  * Splits a shape's transitions into clips: a gap between two moves into the shape starts a new
  * clip when another shape's transition in the timeline occupies it, so the shape doesn't seem to
  * hold through another formation.
+ *
+ * TODO(P9.10): every transition spans its timeline (C-11), so only a legacy converted timeline
+ * has gaps to split; remove this once the converter writes a timeline per page move.
  */
 function clipsOfShape(
     shapeTransitions: readonly TimelineViewTransition[],
@@ -389,29 +393,29 @@ function clipsOfShape(
 
 function marcherTrack({
     timelineId,
+    clip,
     marcherId,
     label,
     color,
-    rows,
     inTimeline,
     spans,
     diagnostics,
 }: {
     timelineId: number;
+    /**
+     * The timeline's range (ui.md UI-8): the clip is the timeline, and the marcher's assignments
+     * show as the active spans inside it
+     */
+    clip: Interval;
     marcherId: number;
     label: string;
     color: string;
-    rows: readonly AssignmentRow[];
     inTimeline: ReadonlySet<number>;
     spans: readonly SpanInfo[];
     /** The badge's diagnostics, chosen by the caller */
     diagnostics: readonly Diagnostic[];
 }): TimelineInput {
     const id = marcherTrackId(timelineId, marcherId);
-    const clip: Interval = {
-        start: Math.min(...rows.map((r) => r.start)),
-        end: Math.max(...rows.map((r) => r.end)),
-    };
     const legs: TimelineLegInput[] = [];
     const active: Interval[] = [];
     for (const span of spans) {
