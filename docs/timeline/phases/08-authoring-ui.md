@@ -92,8 +92,8 @@ Transitions: destination, style, bulge clamped to ±½, waypoints, `slot_count`,
 ### P8.4: Assignments and layers
 
 - Owner: timeline-worker (timeline/p8-assignments)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/31
 - Parallel: yes
 - Depends on: P8.3
 
@@ -442,3 +442,43 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** the pure planner (`src/timeline/timelineAssignmentEditor.ts`), the inspector's assignments editor, history tests.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-assignments`; `pnpm install`; build the desktop's dependencies; write `apps/desktop/src/timeline/timelineAssignmentEditor.ts` and `apps/desktop/src/components/inspector/TimelineAssignmentsEditor.tsx`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-assignments) · P8.4
+
+- **Done:** wip commits 5faed882, 3b3a4b27 and 36bbc97b on `timeline/p8-assignments`:
+  - `TimelineAssignmentsEditor` under each transition editor in the inspector's timeline section: slots by drill number, vacant slots (with a warning line), per-member slot (take a vacant one or trade), layer, beats, remove, and where a higher layer steals it. **Cast selected marchers** and **Recast by nearest slot**, each disabled with its reason.
+  - Planner `src/timeline/timelineAssignmentEditor.ts`; `useTimelineInspections` returns `assignmentEdits`.
+  - Create Track into a shape now casts by nearest slot instead of id order.
+  - Decision UI-7 (casting and layers) and the editor recorded in `ui.md` on the code branch.
+- **Checks:** `tsc --noEmit`: pass. `test:history src/db-functions/__test__/timelineAssignmentEdits.test.ts`: 11 passed; `test:history src/db-functions/__test__/timelineCommands.test.ts`: 12 passed; `test:history src/timeline/__test__/useTimelineInspections.test.tsx`: 6 passed. `test:focused` on the inspector and the new planner/casting tests: 7 files, 130 passed. Mutations: zero casting cost fails 6 tests; id-order Create Track fails the new nearest-slot test. The regular desktop suite is running.
+- **Next:** read the suite result; eslint, prettier, cspell; squash; open the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-assignments`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` (in the background); then squash and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-assignments) · P8.4
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/31 (one commit, b8a3a5b1, on `timeline-try-2`).
+  - **The editor:** `TimelineAssignmentsEditor` sits under each transition editor in the inspector. It shows:
+    - the slots, with each member's drill number;
+    - vacant slots, with a warning line (D-13);
+    - for each member: its slot (take a vacant one or trade), layer, beats, a remove button, and where a higher layer steals it (R-2).
+  - **Casting:** two actions, each disabled with its reason when it can't run:
+    - **Cast selected marchers** fills vacant slots by nearest slot. Each marcher's layer is one above its other moves at those beats (per-marcher steal).
+    - **Recast by nearest slot** re-picks every member's slot. A recast that wouldn't shorten the total distance is refused.
+  - **Create Track** into a shape now casts by nearest slot instead of id order.
+  - **Decision UI-7** is recorded in `ui.md` on the code branch.
+- **For the handoff notes:**
+  - Files: the editor is `src/components/inspector/TimelineAssignmentsEditor.tsx`; the planner is `src/timeline/timelineAssignmentEditor.ts`; casting is `src/timeline/timelineCasting.ts` (Hungarian solve, capped at 500 slots); the db-functions are `src/db-functions/timelineAssignmentEdits.ts`.
+  - Casting reads positions from the rows inside its own transaction, so it doesn't need `timelinePositionsSettled()`.
+  - Follow-ups: timeline track and clip selections don't drive the editor yet. Only the first 64 slots are listed.
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history`: `timelineAssignmentEdits.test.ts` 11 passed, `timelineCommands.test.ts` 12 passed, `useTimelineInspections.test.tsx` 6 passed.
+  - `test:focused` on the inspector and the new planner and casting tests: 7 files, 130 passed.
+  - `pnpm --dir apps/desktop run test`: 135 files, 1,980 passed. This ran on 36bbc97b, before a small picker and wording change; the focused tests were re-run after that change.
+  - Mutation checks: zeroing the casting cost fails 6 tests; reverting Create Track to id order fails the new test.
+  - eslint: 0 errors. prettier and cspell: pass.
+  - Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Exit gate:** nothing ticked. The UI verification item needs a manual app check.
+- **Next:** review and merge by the lead.
+- **Blockers:** none.

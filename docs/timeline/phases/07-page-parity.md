@@ -119,8 +119,8 @@ Video export and `exportAppearances` sample the resolver.
 
 ### P7.10: Pathways, midpoints, step size and collisions in timeline mode
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-pathways)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -139,9 +139,9 @@ Shape create, edit, delete, copy to another page and the shape lock rules. Today
 
 ### P7.12: Mobile and performer exports
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p7-mobile-exports)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/30
 - Parallel: yes
 - Depends on: P7.1
 
@@ -150,7 +150,7 @@ The mobile app payload and the performer appearance export read every page row. 
 ### P7.13: Undo, redo and query invalidation in timeline mode
 
 - Owner: timeline-worker (timeline/p7-undo-redo)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/29
 - Parallel: yes
 - Depends on: P7.1
@@ -166,6 +166,16 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 - Depends on: P7.1
 
 `marcher_pages` carries appearance overrides, rotation and notes with no timeline home, and the converter copies only x and y. First log a blocker asking a person to choose: drop them, keep them in the frozen page-era table, or add timeline fields (a schema and file format decision). Then P7.8 and P7.12 can finish their appearance work.
+
+### P7.15: Refresh views on edits outside the change log
+
+- Owner: timeline-worker (timeline/p7-15-refresh-views)
+- Status: claimed
+- PR: none
+- Parallel: yes
+- Depends on: P7.13
+
+Edits to `timelines` rows alone (name, range) and shape renames produce an empty change batch, so the resolver store version doesn't move and `useTimelineTracks` (and anything else keyed on that version) shows stale rows. See the handoff note from the P7.13 review. Spec 10.2 fixes the change log at five tables, and these edits don't affect resolution, so don't add tables to the change log or bump the resolver version for them. Instead, add a separate view signal: after any `transactionWithHistory`, undo or redo that touched `timelines` or `timeline_shapes`, bump a display version that the tracks and inspector views also follow. Cover undo and redo of a ripple that only moves a timeline's range, and a shape rename.
 
 ## Exit gate
 
@@ -186,6 +196,8 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - From the P7.2 review (PR #20): in timeline mode, "set all/selected marchers to the previous/next page" is refused with a toast ("This isn't available in timeline mode yet.") and writes nothing, because it would copy stale `marcher_pages` rows. P7.6 (PR #28) replaced that refusal with a resolver-based version (`setMarchersToNeighborPage` in `src/utilities/setMarchersToNeighborPage.ts`, planning with `copyPagePositions`); `refuseInTimelineMode` no longer exists. The P7.2 coordinate tools read only the resolver in timeline mode, never `marcher_pages`, so they keep working once P7.3 stops writing those rows.
 
 - Open item (from the P7.4/P7.5 review, PR #26): page and beat edits made while the timeline flag is OFF don't ripple the timeline rows (`withTimelinePageRipple` only runs in timeline mode). Turning the flag back on then shows rows over the wrong beats. Out of scope for P7.4/P7.5; it needs a policy before the flip (Phase 9), for example always ripple once a file has timeline rows, or re-convert on toggle.
+
+- Unowned follow-up (from the P7.13 review, PR #29): some edits don't advance the resolver store version, so `useTimelineTracks` (and anything else that reloads on that version) keeps showing stale rows until a later batch arrives. These are edits to `timelines` rows alone (name, range) and shape renames. Cause: the change log (`timeline_change_log`, spec §10.2) covers only five tables (marchers, shapes, transitions, assignments, slot destinations), and a shape's row image has no name. So these writes give an empty batch, `notifyTimelineBatch` delivers nothing, and the version stays put. Not caused by P7.13. The lead routes it.
 
 ### P7.1 inventory of page-coordinate code
 
@@ -312,9 +324,9 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.12 (new) Mobile and performer exports
 
-- [ ] `src/components/mobile/utilities/dots-to-om.ts` ~165 to 205 (`buildCoordinates` converts every page row to steps), ~265 (reads all `marcher_pages`), ~372 · R · mobile app payload · not handled · build the same payload from the resolver at page end beats (or from the P7.9 keyframes if the mobile format changes; that format change is a decision)
+- [x] `src/components/mobile/utilities/dots-to-om.ts` ~165 to 205 (`buildCoordinates` converts every page row to steps), ~265 (reads all `marcher_pages`), ~372 · R · mobile app payload · not handled · build the same payload from the resolver at page end beats (or from the P7.9 keyframes if the mobile format changes; that format change is a decision) (P7.12, PR #30: timeline mode samples a cold-built resolver at each page end beat through `readTimelinePagePositions`; page format kept)
 - [x] `src/components/mobile/utilities/performer-appearance-export.ts` ~99 to 170, ~219 to 290 (appearance data per page, built from page rows) · R · not handled · depends on the P7.14 decision (dropped: never implemented, owner decision 2026-09-30)
-- [ ] `src/components/mobile/utilities/upload-service.ts` ~2 · caller of the export · no change expected
+- [x] `src/components/mobile/utilities/upload-service.ts` ~2 · caller of the export · no change expected (P7.12: confirmed, no change)
 
 #### P7.13 (new) Undo, redo and query invalidation in timeline mode
 
@@ -328,7 +340,7 @@ Facts that change how to read the PR #14 note above:
 
 - [ ] `electron/database/migrations/schema.ts` ~185 to 226 (`marcher_pages` columns: appearance columns, `rotation_degrees`, `notes`, path columns) · data with no timeline home · the converter copies only x and y · decision needed: drop, keep in the frozen page-era table, or add timeline fields. Record it as a blocker for a person before building anything
 - [ ] `src/global/classes/MarcherPage.ts` ~1 to 40 and `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 · R · the per-page appearance override sits first in the appearance stack · see P7.8
-- [ ] `src/components/mobile/utilities/dots-to-om.ts` ~184 to 200 (`rotation_degrees` exported per coordinate) · R · see P7.12
+- [x] `src/components/mobile/utilities/dots-to-om.ts` ~184 to 200 (`rotation_degrees` exported per coordinate) · R · see P7.12 (P7.12: left out in timeline mode, dropped per the P7.14 decision; page mode unchanged)
 
 #### Checked: no timeline work needed
 
@@ -706,4 +718,87 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`. I didn't run the app by hand.
 - **Exit gate:** unchanged.
 - **Next:** review and merge PR #29.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-mobile-exports) · P7.12 checkpoint
+
+- **Done:** commit `31e23071` on `timeline/p7-mobile-exports`. New `apps/desktop/src/timeline/timelinePagePositions.ts`: `readTimelinePagePositions(db)` awaits `timelinePositionsSettled()`, then, under the write lock, cold-builds a resolver (`acquireExportResolver`, P7.8) and reads the pages (`readShowTiming`), and samples every marcher at each page's end beat (`sampleTimelinePagePositions`, `pageEndBeat`). `dots-to-om.ts` reads the timeline flag from `workspace_settings` and, in timeline mode, builds the payload's coordinates from those samples instead of `marcher_pages`, with no per-page rotation or appearance overrides (dropped, P7.14). Page mode is unchanged. Tests: `src/components/mobile/utilities/__test__/dots-to-om.timeline.test.ts`.
+- **Checks:** `tsc --noEmit` clean; `vitest run src/components/mobile`: 8 files, 83 passed. The in-flight-write test fails when the wait is removed (checked by hand).
+- **Next:** the regular desktop suite, then the PR.
+- **Resume from:** branch `timeline/p7-mobile-exports` at `31e23071`; run `pnpm --dir apps/desktop run test` in the background, then open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-undo-redo) · P7.13 review fixes checkpoint
+
+- **Done (lead review of PR #29; merged `timeline-try-2` first, with #27 and #28, in a normal merge commit; review fixes in `61814b53`):**
+  - **One lock turn:** `performHistoryAction` now reads the timeline focus in the action's own lock turn, right after it commits and delivers its batch. Before, two quick undo actions queued as undo, undo, focus, focus, so the first focus saw the state after the second undo. Test: two queued undo actions; the first focus still sees the marcher that the second undo removes.
+  - **Waiting for the target page:** `useHistory` keeps the target page pending until the page list has it, then goes there and selects the marchers. The marchers are selected only together with that page; with no page, only the marchers are selected. New hook test `src/hooks/queries/__test__/useHistory.test.tsx` covers page 0, a page that appears after the page list is fetched again, restored marchers, and the no-page case.
+  - **Page 0 in page mode:** page mode now selects the marchers on page 0 too (`!== undefined`). Together with the earlier `!= null` fix in `useHistory`, page mode can now jump to page 0.
+  - **Deletes across beat changes:** when the action also changed `beats`, rows it deleted no longer place a page, because their beats are on the old grid. Rows that still exist decide. Tested on a crafted batch.
+  - **Handoff note added** (as the lead asked): the follow-up for `timelines`-only edits and shape renames that don't advance the store version.
+  - **Known limit for the PR:** turning the flag off while the app is running starts with an empty page-mode coordinate cache, because nothing was fetched in timeline mode. Playback can stop until those queries load.
+- **Checks:**
+  - `pnpm install` and `turbo run build --filter=@openmarch/desktop^...`: ok.
+  - `tsc --noEmit`: clean.
+  - `vitest run` on `timelineHistoryFocus.test.ts` and `useHistory.test.tsx`: 16 passed.
+  - `test:history` on timelineHistoryFocus, history, timelineUndo, timelineMoves, timelineMarchers and timelineRipple: 6 files, 121 passed.
+  - eslint and cspell on the changed files: clean.
+  - The regular desktop suite is running.
+- **Next:** read the suite's result, then update the PR body.
+- **Resume from:** branch `timeline/p7-undo-redo` at `61814b53`. Re-run `pnpm --dir apps/desktop run test` (background), then update PR #29's body from the scratch file `pr-P7.13.md`.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-undo-redo) · P7.13 review fixes in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/29 is updated at head `61814b53`: the merge of `timeline-try-2`, plus the review fixes described in the checkpoint above. The PR body now says that page mode jumps to page 0. It also states the known limit: turning the flag off at runtime starts with an empty coordinate cache.
+- **Checks:**
+  - `pnpm --dir apps/desktop run test` (one run, after the merge): 133 files passed, 7 skipped; 1,953 tests passed.
+  - Earlier at the same head:
+    - `tsc --noEmit`: clean.
+    - The new and changed test files: 16 passed.
+    - Focused `test:history` (6 files): 121 passed.
+    - eslint and cspell on the changed files: clean.
+  - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`.
+- **Next:** the lead re-reviews and merges PR #29.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-mobile-exports) · P7.12 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/30 (head `31e23071`, one commit). In timeline mode the mobile app payload (`dots-to-om.ts`) takes each marcher's position on each page from the resolver at the page's end beat, through the new `readTimelinePagePositions` (`src/timeline/timelinePagePositions.ts`). That function awaits `timelinePositionsSettled()`, then, under the write lock, cold-builds a private resolver (`acquireExportResolver`, P7.8) and reads the pages (`readShowTiming`). It never reads `marcher_pages`. Page mode is unchanged. Ticked the 2 open P7.12 inventory items and the P7.14 `rotation_degrees` item that points here.
+- **Decisions (P7.12, recorded for the phase):**
+  - **Payload format kept:** one position per marcher per page, as page mode sends. P7.9's keyframes are not used, because that would change the mobile format.
+  - **Per-page fields left out:** in timeline mode the payload has no per-page `rotation_degrees` and no per-page appearance overrides, following the P7.14 decision. Section and tag appearances are unchanged.
+  - **Snapshot:** the export uses its own cold-built resolver, so an edit made during the upload can't change it halfway. A write still in flight when the export starts is included.
+  - `sampleTimelinePagePositions` is a pure helper that P7.7 (coordinate sheets) can reuse for "positions by page" from the resolver.
+- **Open question for a person (not a blocker):** the mobile app sees only page-end positions. Timeline motion that a page-end sample can't show (shape paths, or steals and holds that end mid-page) is flattened to straight moves between pages. Carrying it would mean adding keyframes (`buildKeyframes`, P7.9) to the mobile payload, which is a format change for the mobile app and server.
+- **Not in scope:** `electron/main/services/previous-dots-import-service.ts` (P7.3's open item) still reads a converted source file's frozen `marcher_pages`.
+- **Checks:**
+  - `pnpm install`: ok.
+  - `pnpm exec turbo run build --filter=@openmarch/desktop^...`: 4 successful.
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
+  - `vitest run src/components/mobile`: 8 files, 83 passed.
+  - `test:history` on `dots-to-om.timeline.test.ts` and `dots-to-om.test.ts`, run alone after the suite: 2 files, 20 passed.
+  - `pnpm --dir apps/desktop run test`: 132 files passed, 7 skipped; 1,944 tests passed, no errors.
+  - eslint, prettier `--check` and cspell on the 3 changed files: clean. The only warning (`max-lines-per-function` on `buildOpenMarchFromRows`) was already on the base.
+  - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`. No db-functions changed. I didn't run the app by hand.
+- **Exit gate:** unchanged.
+- **Next:** review and merge PR #30.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.13
+
+- **Done:** reviewed PR #29 and squash-merged it at head 61814b53.
+  - The review found two medium issues, both fixed:
+    - The focus was read in a second lock turn, so a quick double undo saw the later state.
+    - `useHistory` searched the page list from before the action, so a restored or added page was dropped.
+  - Also fixed:
+    - page-mode marcher selection on page 0;
+    - deleted rows across beat changes no longer decide the page.
+  - The branch merged #27 and #28 before verification.
+- **Checks (lead, on 61814b53):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history src/db-functions/__test__/`: 25 files, 604 tests passed.
+  - `pnpm --dir apps/desktop run test`: 133 files, 1,953 tests passed, no errors.
+  - Skipped by policy: the full `test:history` and e2e suites.
+- **Next:** route the stale `useTimelineTracks` follow-up. It is caused by edits to `timelines` rows and shape names, which the change log doesn't cover.
 - **Blockers:** none.
