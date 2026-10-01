@@ -1059,3 +1059,16 @@ Facts that change how to read the PR #14 note above:
   - **Rounding:** the resolver returns the converted destinations exactly at page end beats, so the conversion test now asserts exact equality.
 - **Resume from:** wait for `pnpm --dir apps/desktop run test` (running alone), then run focused `test:history src/components/exporting`, update the PR #35 body (`pr-P7.7.md`) and log "review fixes ready".
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-coordinate-sheets) · P7.7 review fixes ready
+
+- **Done:** PR #35 head `a30857a3` (follow-up commits, no force-push): merge `9f8a3823` plus the review fixes listed in the previous entry. PR body updated: review fixes, page-mode edge-case behavior (including the "Marcher pages not loaded" toast), exact rounding, and checks.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - Export tests (`src/components/exporting/utils/__test__` and `svgPreviewPositions.test.ts`): 6 files, 60 passed.
+  - `pnpm --dir apps/desktop run test`, once and alone: 147 files, 2,112 tests passed.
+  - Focused `test:history src/components/exporting`, after the suite: 11 files, 102 passed.
+  - eslint, prettier and cspell: clean. The only eslint warning was already on the base.
+- **Skipped by policy:** full `test:history` and e2e. Also not run: `build:electron`, and a manual run in the app. No db-functions changed.
+- **Next:** re-review and merge PR #35.
+- **Blockers:** none.
