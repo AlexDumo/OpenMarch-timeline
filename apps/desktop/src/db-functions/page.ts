@@ -22,7 +22,10 @@ import {
     updateUtilityInTransaction,
 } from "@/db-functions";
 import { schema } from "@/global/database/db";
-import { withTimelinePageRipple } from "./timelineRipple";
+import {
+    timelineModeInTransaction,
+    withTimelinePageRipple,
+} from "./timelineRipple";
 import { assert } from "@/utilities/utils";
 import { WorkspaceSettings } from "@/settings/workspaceSettings";
 import {
@@ -287,15 +290,19 @@ export const createPagesInTransaction = async ({
             pageBeatMap.get(a.id)!.position - pageBeatMap.get(b.id)!.position,
     );
 
-    const createdPageIds = createdPages.map((page) => page.id);
-    await tx
-        .delete(schema.marcher_pages)
-        .where(inArray(schema.marcher_pages.page_id, createdPageIds));
+    // Timeline mode: pages don't own positions and marcher pages are frozen (P9.5), so a new page
+    // gets no marcher pages. The timeline ripple (`withTimelinePageRipple`) handles the motion.
+    if (!(await timelineModeInTransaction(tx))) {
+        const createdPageIds = createdPages.map((page) => page.id);
+        await tx
+            .delete(schema.marcher_pages)
+            .where(inArray(schema.marcher_pages.page_id, createdPageIds));
 
-    await _createMarcherPages({
-        tx,
-        sortedNewPages,
-    });
+        await _createMarcherPages({
+            tx,
+            sortedNewPages,
+        });
+    }
 
     return createdPages.map(realDatabasePageToDatabasePage);
 };
@@ -536,14 +543,21 @@ export const deletePagesInTransaction = async ({
         "Last page before deletion not found",
     );
 
-    await tx
-        .delete(schema.marcher_pages)
-        .where(inArray(schema.marcher_pages.page_id, Array.from(pageIds)));
+    const deleteMarcherPages = () =>
+        tx
+            .delete(schema.marcher_pages)
+            .where(inArray(schema.marcher_pages.page_id, Array.from(pageIds)));
+    // Timeline mode: marcher pages are frozen (P9.5), and the freeze triggers only let a row go
+    // once its page is gone. So the pages go first; their rows follow through the foreign-key
+    // cascade, or the delete after it where foreign keys are off.
+    const timelineMode = await timelineModeInTransaction(tx);
+    if (!timelineMode) await deleteMarcherPages();
 
     const deletedPages = await tx
         .delete(schema.pages)
         .where(inArray(schema.pages.id, Array.from(pageIds)))
         .returning();
+    if (timelineMode) await deleteMarcherPages();
 
     const lastPageAfterDeletion = await getLastPage({ tx });
     assert(lastPageAfterDeletion != null, "Last page after deletion not found");

@@ -16,6 +16,7 @@ import {
     notifyTimelineBatch,
 } from "./timelineChanges";
 import { timelineHistoryFocus, timelineModeOn } from "./timelineHistoryFocus";
+import { isPageEraFrozenError } from "./pageEraFreezeMarker";
 import {
     bumpTimelineDisplayVersion,
     historyStatementTable,
@@ -247,6 +248,11 @@ export type HistoryResponse = {
      * timeline rows).
      */
     timelineBatch?: ChangeBatch;
+    /**
+     * True when the page-era freeze (P9.5) refused the action's replay. The group can never be
+     * applied in timeline mode, so it was removed from its stack; nothing else changed.
+     */
+    skippedFrozenGroup?: boolean;
 };
 
 /**
@@ -931,7 +937,36 @@ async function executeHistoryActionUnlocked(
             await switchTriggerMode(db, "undo", true, tableNames);
         }
 
-        if (error) throw error;
+        if (error) {
+            // The page-era freeze (P9.5) refused the replay: a group that writes frozen page-era
+            // rows can never be applied in timeline mode. Drop it from its stack (the rolled-back
+            // transaction left no counterpart on the other stack), so it doesn't stay on top.
+            if (isPageEraFrozenError(error)) {
+                await db.transaction(async (tx) => {
+                    await tx.run(
+                        sql.raw(
+                            `DELETE FROM ${tableName} WHERE "history_group"=${currentGroup};`,
+                        ),
+                    );
+                    await refreshCurrentGroups(tx);
+                });
+                mainProcessLog(
+                    "warn",
+                    `Skipped ${type} group ${currentGroup}: it writes page-era rows, which are frozen in timeline mode`,
+                );
+                return {
+                    success: false,
+                    tableNames: new Set(),
+                    sqlStatements: [],
+                    skippedFrozenGroup: true,
+                    error: {
+                        message: messageWithCauses(error),
+                        stack: error.stack ?? "Failed to get stack",
+                    },
+                };
+            }
+            throw error;
+        }
 
         // The action has committed; deliver its batch
         notifyTimelineBatch(committedBatch);
@@ -1177,6 +1212,12 @@ type PerformHistoryActionResponse = {
     pageIdToGoTo: number | undefined;
     marcherIdsToSelect: Set<number> | undefined;
     queriesToInvalidate: string[][] | undefined;
+    /**
+     * Set when the action didn't apply: `page-era-frozen` when the freeze (P9.5) refused it and
+     * the group was dropped from its stack; `error` for any other failure, which leaves both
+     * stacks as they were.
+     */
+    failure?: { kind: "page-era-frozen" } | { kind: "error"; message: string };
 };
 
 /**
@@ -1220,6 +1261,19 @@ export async function performHistoryAction(
             return { response, timelineFocus };
         },
     );
+
+    if (!response.success)
+        return {
+            pageIdToGoTo: undefined,
+            marcherIdsToSelect: undefined,
+            queriesToInvalidate: undefined,
+            failure: response.skippedFrozenGroup
+                ? { kind: "page-era-frozen" }
+                : {
+                      kind: "error",
+                      message: response.error?.message ?? "unknown error",
+                  },
+        };
 
     const queriesToInvalidate: string[][] = tableNamesToQueryKeys(
         response.tableNames,

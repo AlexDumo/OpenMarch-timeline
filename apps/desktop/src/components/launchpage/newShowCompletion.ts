@@ -308,12 +308,9 @@ async function applyPreviousDotsCoordinates(
         db,
         "applyPreviousDotsCoordinates",
         async (tx) => {
-            await updateMarcherPagesInTransaction({
-                tx,
-                modifiedMarcherPages: updates,
-            });
             // A new show made with convert on open on starts in timeline mode (P9.3): the
-            // first-page positions are the marchers' homes, as the converter seeds them.
+            // first-page positions are the marchers' homes, as the converter seeds them, and
+            // marcher pages are frozen (P9.5)
             if (await timelineModeInTransaction(tx))
                 await updateMarcherHomesInTransaction({
                     tx,
@@ -321,6 +318,11 @@ async function applyPreviousDotsCoordinates(
                         marcherId: u.marcher_id,
                         home: [u.x, u.y],
                     })),
+                });
+            else
+                await updateMarcherPagesInTransaction({
+                    tx,
+                    modifiedMarcherPages: updates,
                 });
         },
     );
