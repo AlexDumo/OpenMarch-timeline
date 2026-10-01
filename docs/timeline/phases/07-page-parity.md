@@ -180,7 +180,7 @@ Two inventory items are still open. (1) In timeline mode the canvas still applie
 ### P7.17: Existing feature tests in timeline mode
 
 - Owner: timeline-worker (timeline/p7-feature-tests)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.2–P7.16
@@ -1227,3 +1227,11 @@ Facts that change how to read the PR #14 note above:
   - The `schema.ts` inventory item is ticked per the P7.14 decision.
   - The manual pass on a converted real show is a human item.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-feature-tests) · P7.17 checkpoint
+
+- **Done:** commit 6f2ac9c9 on `timeline/p7-feature-tests`: `VITEST_TIMELINE_MODE=true` (script `pnpm --dir apps/desktop run test:timeline`) makes the `base.tsx` fixtures convert each fixture database's page show (`convertPagesToTimelineInTransaction`, `replace: true`, undo triggers dropped, `timeline_change_log` cleared) and turn the workspace `timelineMode` flag on. Helper: `src/test/timelineMode.ts`. The default run is unchanged.
+- **Checks:** `test:timeline src/db-functions/__test__/marcherPage.test.ts`: 41 failed, 18 passed (page shape writers refuse in timeline mode, as expected), which shows the mode takes effect.
+- **Next:** the full desktop suite in timeline mode (running), then triage.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p7-feature-tests`; `pnpm install`; build the desktop's dependencies; run `pnpm --dir apps/desktop run test:timeline` alone, in the background, with `--reporter=json`, and triage the failures.
