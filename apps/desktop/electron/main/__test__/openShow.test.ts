@@ -44,6 +44,7 @@ import {
     openShowFile,
     pendingOpenCount,
     resumeSqlProxyAfterReload,
+    withOpenLock,
     type OpenShowResult,
 } from "../openShow";
 import { EventEmitter } from "events";
@@ -570,6 +571,81 @@ describe("opening a show with convert on open", () => {
             ]);
             expect(stateOf(showPath)).toEqual(before);
             expect(backupsIn(tempDir)).toHaveLength(1);
+        });
+
+        it("a close during the worker's conversion waits for the open, which reopens its own file", async () => {
+            const order: string[] = [];
+            let close: Promise<void> | undefined;
+            const { dialogs } = fakeDialogs({
+                onProgress: (p) => {
+                    if (p.phase !== "convert" || close) return;
+                    order.push("converting");
+                    // What "Close File" does (closeCurrentFile): it waits for the open lock.
+                    close = withOpenLock(async () => {
+                        order.push("close");
+                        DatabaseServices.setDbPath("", false);
+                    });
+                },
+            });
+
+            const result = await openShowFile(showPath, false, {
+                migrationsFolder,
+                env: GATE_ON,
+                dialogs: () => dialogs,
+                convertWorker: {
+                    workerPath: worker.workerPath,
+                    test: { blockPerPageMs: 50 },
+                },
+            });
+            order.push("opened");
+            try {
+                expect(result.status).toBe(200);
+                expect(result.db!.prepare("PRAGMA user_version").get()).toEqual(
+                    { user_version: 8 },
+                );
+            } finally {
+                result.db?.close();
+                DatabaseServices.resumeSqlProxy(result.sqlSuspension!);
+            }
+            await close;
+            expect(order).toEqual(["converting", "opened", "close"]);
+            expect(DatabaseServices.getDbPath()).toBe("");
+        });
+
+        it("reopens its own file even when the active path changed mid-conversion", async () => {
+            let changed = false;
+            const { dialogs, calls } = fakeDialogs({
+                onProgress: (p) => {
+                    if (p.phase !== "convert" || changed) return;
+                    changed = true;
+                    // A path change that doesn't wait for the lock.
+                    DatabaseServices.setDbPath("", false);
+                },
+            });
+
+            const result = await openShowFile(showPath, false, {
+                migrationsFolder,
+                env: GATE_ON,
+                dialogs: () => dialogs,
+                convertWorker: { workerPath: worker.workerPath },
+            });
+            try {
+                expect(changed).toBe(true);
+                expect(result.status).toBe(200);
+                expect(calls).toEqual([
+                    "preparing show.dots",
+                    "converted show.dots",
+                ]);
+                expect(result.db!.prepare("PRAGMA user_version").get()).toEqual(
+                    { user_version: 8 },
+                );
+                expect(result.db!.prepare("PRAGMA busy_timeout").get()).toEqual(
+                    { timeout: 5000 },
+                );
+            } finally {
+                result.db?.close();
+                DatabaseServices.resumeSqlProxy(result.sqlSuspension!);
+            }
         });
 
         it("a second file opened while the worker converts waits for it", async () => {

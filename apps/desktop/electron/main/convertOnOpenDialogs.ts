@@ -11,6 +11,7 @@ import type { ConvertOnOpenDialogs } from "./convertOnOpenFlow";
 import {
     showPreparingProgress,
     showPreparingWindow,
+    throttleProgress,
     type PreparingWindow,
 } from "./preparingWindow";
 import { conversionWorkersStopped } from "./convertWorkerHost";
@@ -60,8 +61,10 @@ export function electronConvertOnOpenDialogs(
                 : undefined;
             try {
                 // The worker converts off this thread (P9.8): show how far it has got.
-                return await work((p) =>
-                    showPreparingProgress(preparing, parent, p),
+                return await work(
+                    throttleProgress((p) =>
+                        showPreparingProgress(preparing, parent, p),
+                    ),
                 );
             } finally {
                 if (preparing && !preparing.isDestroyed()) preparing.destroy();

@@ -9,6 +9,7 @@ import {
     describePreparingProgress,
     showPreparingProgress,
     showPreparingWindow,
+    throttleProgress,
     type PreparingParent,
     type PreparingWindow,
 } from "../preparingWindow";
@@ -183,5 +184,35 @@ describe("showPreparingProgress (P9.8)", () => {
                 pagesTotal: 0,
             }).fraction,
         ).toBeUndefined();
+    });
+});
+
+describe("throttleProgress (P9.8)", () => {
+    it("passes on at most one update per interval, plus each new phase and the final page", () => {
+        let t = 0;
+        const shown: string[] = [];
+        const report = throttleProgress(
+            (p) =>
+                shown.push(
+                    p.phase === "backup"
+                        ? "backup"
+                        : `${p.pagesDone}/${p.pagesTotal}`,
+                ),
+            100,
+            () => t,
+        );
+
+        report({ phase: "backup" });
+        // 200 pages, 2 ms apart: 400 ms of progress.
+        for (let page = 1; page <= 200; page++) {
+            t += 2;
+            report({ phase: "convert", pagesDone: page, pagesTotal: 200 });
+        }
+
+        expect(shown[0]).toBe("backup");
+        expect(shown[1]).toBe("1/200"); // the new phase, at once
+        expect(shown.at(-1)).toBe("200/200"); // always the final state
+        expect(shown.length).toBeLessThanOrEqual(2 + 4 + 1);
+        expect(shown.length).toBeGreaterThanOrEqual(5);
     });
 });

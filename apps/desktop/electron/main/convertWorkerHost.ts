@@ -11,8 +11,17 @@
  * and reopens it afterwards.
  */
 import * as path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { Worker } from "node:worker_threads";
 import type { ConvertOnOpenResult } from "../database/convertOnOpen";
+import {
+    conversionMarkerOf,
+    readWorkspaceSettingsJson,
+} from "../database/convertOnOpenGate";
+import {
+    readUserVersion,
+    TIMELINE_MODEL_USER_VERSION,
+} from "../database/fileVersion";
 import {
     deserializeError,
     type ConvertProgress,
@@ -45,7 +54,9 @@ let quitting = false;
 
 /**
  * True once `stopConversionWorkersOnQuit` stopped workers to quit: the open
- * flow then shows no "couldn't convert" dialog for the stopped conversion.
+ * flow then shows no "couldn't convert" dialog for the stopped conversion, and
+ * keeps the file as the one to reopen. A conversion that starts afterwards
+ * means the quit was cancelled, so it resets this.
  */
 export const conversionWorkersStopped = () => quitting;
 
@@ -64,6 +75,30 @@ function fromWorker(result: SerializedConvertResult): ConvertOnOpenResult {
             >["report"],
         };
     return result;
+}
+
+/**
+ * True when the file at `filePath` holds this open's committed conversion:
+ * version 8 and the marker time this open asked for. Reads only; false when the
+ * file can't be read.
+ */
+export function committedConversion(
+    filePath: string,
+    convertedAt: string,
+): boolean {
+    let db: DatabaseSync | undefined;
+    try {
+        db = new DatabaseSync(filePath, { readOnly: true });
+        db.exec("PRAGMA busy_timeout = 5000");
+        return (
+            readUserVersion(db) === TIMELINE_MODEL_USER_VERSION &&
+            conversionMarkerOf(readWorkspaceSettingsJson(db)) === convertedAt
+        );
+    } catch {
+        return false;
+    } finally {
+        db?.close();
+    }
 }
 
 /** What an open reports when the worker ended without a result. */
@@ -100,10 +135,14 @@ export function convertInWorker(
     filePath: string,
     options: ConvertInWorkerOptions,
 ): Promise<ConvertOnOpenResult> {
+    // A conversion starting means any earlier quit was cancelled.
+    quitting = false;
+    const convertedAt = options.test?.now ?? new Date().toISOString();
     return new Promise<ConvertOnOpenResult>((resolve) => {
         const request: ConvertWorkerRequest = {
             filePath,
             busyTimeoutMs: options.busyTimeoutMs,
+            convertedAt,
             test: options.test,
         };
         let worker: Worker;
@@ -149,17 +188,26 @@ export function convertInWorker(
         });
         worker.on("exit", (code) => {
             running.delete(worker);
-            if (result) resolve(result);
-            else
-                resolve(
-                    endedEarly(
-                        backupPath,
-                        stopped.has(worker)
-                            ? "the app quit"
-                            : (failure ??
-                                  `the worker exited with code ${code}`),
-                    ),
+            const outcome =
+                result ??
+                endedEarly(
+                    backupPath,
+                    stopped.has(worker)
+                        ? "the app quit"
+                        : (failure ?? `the worker exited with code ${code}`),
                 );
+            // The file decides: a thread that died between COMMIT and posting its result (or
+            // whose result couldn't be sent) still converted the file.
+            if (
+                outcome.status === "conversion-failed" &&
+                committedConversion(filePath, convertedAt)
+            )
+                resolve({
+                    status: "converted",
+                    backupPath: outcome.backupPath,
+                    report: undefined,
+                });
+            else resolve(outcome);
         });
     });
 }

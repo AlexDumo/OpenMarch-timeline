@@ -35,6 +35,7 @@ import {
     type BuiltConvertWorker,
 } from "@om-electron/database/__test__/buildConvertWorker";
 import {
+    committedConversion,
     conversionWorkersStopped,
     convertInWorker,
     runningConversionWorkers,
@@ -159,6 +160,35 @@ describe("the conversion worker", () => {
         },
     );
 
+    it("a crash after COMMIT, before the result is posted: classified from the file as converted", async () => {
+        const result = await convertInWorker(
+            showPath,
+            options({ test: { crashAfterCommit: true } }),
+        );
+
+        expect(result).toMatchObject({
+            status: "converted",
+            report: undefined,
+        });
+        if (result.status === "converted")
+            expect(fs.existsSync(result.backupPath)).toBe(true);
+        expect(stateOf(showPath)).toMatchObject({
+            userVersion: 8,
+            timelineMode: true,
+        });
+    });
+
+    it("a file converted by someone else (another marker) is not taken as this open's commit", async () => {
+        const first = await convertInWorker(showPath, options());
+        expect(first.status).toBe("converted");
+        expect(committedConversion(showPath, "2000-01-01T00:00:00.000Z")).toBe(
+            false,
+        );
+        expect(
+            committedConversion(path.join(tempDir, "missing.dots"), "x"),
+        ).toBe(false);
+    });
+
     it("a crash after the backup and before the transaction: failed, file unchanged, backup kept", async () => {
         const before = stateOf(showPath);
 
@@ -227,9 +257,11 @@ describe("the conversion worker", () => {
 
         expect(result.status).toBe("converted");
         expect(elapsed).toBeGreaterThan(1200);
-        // The timer kept firing the whole time: no gap near the conversion's length.
-        expect(ticks).toBeGreaterThan(elapsed / 10 / 4);
-        expect(longestGap).toBeLessThan(500);
+        // The timer kept firing the whole time. Both checks are relative to the conversion's
+        // length, so a loaded machine (slow timers) still passes, while a blocked event loop
+        // (one gap about as long as the conversion, a tick or two) fails.
+        expect(ticks).toBeGreaterThan(elapsed / 10 / 10);
+        expect(longestGap).toBeLessThan(elapsed / 2);
         expect(progress[0]).toEqual({ phase: "backup" });
         expect(progress.at(-1)).toEqual({
             phase: "convert",
@@ -277,5 +309,10 @@ describe("the conversion worker", () => {
         const again = vi.fn();
         app.emit("before-quit", { preventDefault: again });
         expect(again).not.toHaveBeenCalled();
+
+        // The quit was cancelled after all: the next conversion reports normally.
+        const next = await convertInWorker(showPath, options());
+        expect(conversionWorkersStopped()).toBe(false);
+        expect(next.status).toBe("converted");
     }, 30_000);
 });

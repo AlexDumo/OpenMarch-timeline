@@ -200,8 +200,9 @@ async function openWithSuspension(
                 },
             );
             if (!isOpen) {
-                // The worker has exited, so its connection is closed. Reopen ours.
-                db = DatabaseServices.connect();
+                // The worker has exited, so its connection is closed. Reopen ours, on this open's
+                // own file: the active path is global.
+                db = DatabaseServices.connectToPath(filePath);
                 isOpen = true;
                 deps.onConnect?.(db);
                 db.exec(`PRAGMA busy_timeout = ${CONVERSION_BUSY_TIMEOUT_MS}`);

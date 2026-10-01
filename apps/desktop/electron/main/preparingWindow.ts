@@ -53,6 +53,35 @@ export function describePreparingProgress(progress: ConvertProgress): {
 }
 
 /**
+ * Passes progress on to `show` at most every `intervalMs` (10 a second by
+ * default), so a show with many pages doesn't flood the window with scripts.
+ * A new phase and the final page are always passed on.
+ */
+export function throttleProgress(
+    show: (progress: ConvertProgress) => void,
+    intervalMs = 100,
+    now: () => number = () => Date.now(),
+): (progress: ConvertProgress) => void {
+    let lastShown = -Infinity;
+    let lastPhase: ConvertProgress["phase"] | undefined;
+    return (progress) => {
+        const t = now();
+        const final =
+            progress.phase === "convert" &&
+            progress.pagesDone >= progress.pagesTotal;
+        if (
+            progress.phase !== lastPhase ||
+            final ||
+            t - lastShown >= intervalMs
+        ) {
+            lastShown = t;
+            lastPhase = progress.phase;
+            show(progress);
+        }
+    };
+}
+
+/**
  * Shows `progress` in the preparing window (its status line and bar) and on
  * the parent's taskbar or dock icon. Runs in the main process while the worker
  * converts (P9.8); never throws, since the window is a courtesy.

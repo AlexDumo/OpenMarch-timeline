@@ -46,7 +46,7 @@ export async function runConvertWorker(
     request: ConvertWorkerRequest,
     post: (message: ConvertWorkerMessage) => void,
 ): Promise<void> {
-    const { filePath, busyTimeoutMs, test = {} } = request;
+    const { filePath, busyTimeoutMs, convertedAt, test = {} } = request;
     const db = new DatabaseSync(filePath);
     let result: ConvertOnOpenResult;
     try {
@@ -78,11 +78,13 @@ export async function runConvertWorker(
                 if (step === test.failAfterStep)
                     throw new Error(`disk vanished after ${step}`);
             },
-            now: test.now ? () => new Date(test.now!) : undefined,
+            now: () => new Date(convertedAt),
         });
     } finally {
         db.close();
     }
+    if (test.crashAfterCommit && result.status === "converted")
+        process.exit(TEST_CRASH_EXIT_CODE);
     post({ type: "result", result: serializeResult(result) });
 }
 

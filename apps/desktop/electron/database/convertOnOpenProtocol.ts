@@ -33,7 +33,7 @@ export type ConvertProgress =
  * can't cross to a worker. Production passes none.
  */
 export interface ConvertWorkerTestHooks {
-    /** The ISO time written into the conversion marker. */
+    /** The ISO time written into the conversion marker (the host's `convertedAt`). */
     now?: string;
     /** Return this instead of backing up. */
     backupFailure?: Extract<BackupResult, { ok: false }>;
@@ -43,6 +43,8 @@ export interface ConvertWorkerTestHooks {
     crashAfterStep?: ConversionStep;
     /** End the worker thread right after the backup, before the transaction. */
     crashAfterBackup?: boolean;
+    /** End the worker thread after the transaction committed, before it posts the result. */
+    crashAfterCommit?: boolean;
     /** Busy-wait this long after each page, so tests can watch a long conversion. */
     blockPerPageMs?: number;
 }
@@ -52,6 +54,12 @@ export interface ConvertWorkerRequest {
     filePath: string;
     /** How long the worker's connection waits for another connection's lock. */
     busyTimeoutMs: number;
+    /**
+     * The ISO time the conversion writes as its marker. The host picks it, so
+     * after a worker that ended without a result it can tell from the file
+     * whether this conversion committed.
+     */
+    convertedAt: string;
     test?: ConvertWorkerTestHooks;
 }
 

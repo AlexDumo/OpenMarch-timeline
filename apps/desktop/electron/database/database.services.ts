@@ -153,7 +153,16 @@ export function databaseIsReady() {
 }
 
 export function connect() {
-    if (!DB_PATH) {
+    return connectToPath(DB_PATH);
+}
+
+/**
+ * Opens a connection to `path`, whatever the active path is. An open uses it to
+ * reconnect to its own file after the convert-on-open worker (P9.8), since the
+ * active path is global.
+ */
+export function connectToPath(path: string) {
+    if (!path) {
         throw new Error("Database path is empty");
     }
     try {
@@ -163,7 +172,7 @@ export function connect() {
         if (!sqlite?.DatabaseSync) {
             throw new Error("node:sqlite module is unavailable");
         }
-        return new sqlite.DatabaseSync(DB_PATH);
+        return new sqlite.DatabaseSync(path);
     } catch (error: any) {
         console.error(error);
 
@@ -236,6 +245,21 @@ function assertSqlProxyNotSuspended() {
         throw new Error(
             `The database is not available: ${sqlProxySuspension.reason}`,
         );
+}
+
+/** How long the audio handlers' connections wait for another connection's lock. */
+const AUDIO_BUSY_TIMEOUT_MS = 5000;
+
+/**
+ * A connection for the `audio:*` handlers. Like the renderer's SQL, they are
+ * refused while an open suspends it (P9.8: the file may be converting in the
+ * worker), and they wait for a lock instead of failing at once.
+ */
+function audioConnection(): DatabaseSync {
+    assertSqlProxyNotSuspended();
+    const db = connect();
+    db.exec(`PRAGMA busy_timeout = ${AUDIO_BUSY_TIMEOUT_MS}`);
+    return db;
 }
 
 export async function handleSqlProxy(
@@ -318,7 +342,7 @@ export function initHandlers() {
  * @returns Array of measures
  */
 async function getAudioFilesDetails(db?: DatabaseSync): Promise<AudioFile[]> {
-    const dbToUse = db || connect();
+    const dbToUse = db || audioConnection();
     const stmt = dbToUse.prepare(
         `SELECT id, path, nickname, selected FROM ${Constants.AudioFilesTableName}`,
     );
@@ -337,7 +361,7 @@ async function getAudioFilesDetails(db?: DatabaseSync): Promise<AudioFile[]> {
 export async function getSelectedAudioFile(
     db?: DatabaseSync,
 ): Promise<AudioFile | null> {
-    const dbToUse = db || connect();
+    const dbToUse = db || audioConnection();
     try {
         const stmt = dbToUse.prepare(
             `SELECT * FROM ${Constants.AudioFilesTableName} WHERE selected = 1`,
@@ -376,7 +400,7 @@ export async function getSelectedAudioFile(
 async function setSelectAudioFile(
     audioFileId: number,
 ): Promise<AudioFile | null> {
-    const db = connect();
+    const db = audioConnection();
     const stmt = db.prepare(
         `UPDATE ${Constants.AudioFilesTableName} SET selected = 0`,
     );
@@ -400,7 +424,7 @@ type AudioFileInsert = {
 export async function insertAudioFile(
     audioFile: AudioFileInsert,
 ): Promise<LegacyDatabaseResponse<AudioFile[]>> {
-    const db = connect();
+    const db = audioConnection();
     const stmt = db.prepare(
         `UPDATE ${Constants.AudioFilesTableName} SET selected = 0`,
     );
@@ -473,7 +497,7 @@ export async function insertAudioFile(
 async function updateAudioFiles(
     audioFileUpdates: ModifiedAudioFileArgs[],
 ): Promise<LegacyDatabaseResponse<AudioFile[]>> {
-    const db = connect();
+    const db = audioConnection();
     let output: LegacyDatabaseResponse<AudioFile[]> = { success: true };
     try {
         for (const audioFileUpdate of audioFileUpdates) {
@@ -540,7 +564,7 @@ async function updateAudioFiles(
  * @returns {success: boolean, error?: string}
  */
 async function deleteAudioFile(audioFileId: number): Promise<AudioFile | null> {
-    const db = connect();
+    const db = audioConnection();
     try {
         const wasSelectedStmt = db.prepare(
             `SELECT selected FROM ${Constants.AudioFilesTableName} WHERE id = ?`,
