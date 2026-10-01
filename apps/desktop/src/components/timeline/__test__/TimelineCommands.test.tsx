@@ -13,6 +13,7 @@ import type { DbConnection } from "@/db-functions/types";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { createTrack, shiftTimeline } from "@/db-functions/timelineCommands";
 import { conToastError } from "@/utilities/utils";
+import { timelineErrorMessage } from "@/timeline/timelineErrorMessages";
 import { Timeline, type TimelineInput } from "../Timeline";
 import type { TimelineSelection } from "../TimelineViewModel";
 import {
@@ -168,7 +169,7 @@ describe("the timeline's commands", () => {
         expect(shiftTimeline).not.toHaveBeenCalled();
     });
 
-    it("a refused move shows its message, with its code, as a toast", async () => {
+    it("a refused move shows its own message (E-ARGS) as a toast", async () => {
         const error = new TimelineWriteError(
             "E-ARGS",
             "the timeline starts at beat 1, so it can't move 2 beats earlier",
@@ -186,9 +187,33 @@ describe("the timeline's commands", () => {
         pointer(clip, "pointerup", 32);
         await flush();
         expect(conToastError).toHaveBeenCalledWith(
-            "E-ARGS: the timeline starts at beat 1, so it can't move 2 beats earlier",
+            "the timeline starts at beat 1, so it can't move 2 beats earlier",
             error,
         );
+    });
+
+    it("a refused move with a database code shows the mapped message, not the code", async () => {
+        const error = new TimelineWriteError(
+            "E-A3",
+            "assignments overlap on layer 0",
+        );
+        vi.mocked(shiftTimeline).mockRejectedValue(error);
+        render(
+            <Harness
+                timelines={[input("A", 7, 3, 9)]}
+                selectedMarcherIds={new Set()}
+            />,
+        );
+        const clip = screen.getByLabelText(/^A timeline/);
+        pointer(clip, "pointerdown", 64);
+        pointer(clip, "pointermove", 32);
+        pointer(clip, "pointerup", 32);
+        await flush();
+        expect(conToastError).toHaveBeenCalledWith(
+            timelineErrorMessage(error),
+            error,
+        );
+        expect(vi.mocked(conToastError).mock.calls[0]![0]).not.toMatch(/E-A3/);
     });
 
     it("Create Track for the one selected marcher sends the range in spec beats", () => {

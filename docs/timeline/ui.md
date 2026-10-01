@@ -113,6 +113,17 @@ These belong in the inspector (P8.5), not the timeline:
   transition without a shape shows once, on the first shown marcher track
   assigned to it. The badge's tooltip lists them.
 
+**Where they are (P8.5).** The inspector's Timeline section
+(`TimelineInspectorSection`, timeline mode only) explains each selected marcher
+(up to 10) at the selected page's end beat from `explain`: span kind with a
+plain-language note, its beats, the transition and the spec timeline it belongs
+to, the assignment's layer, slot, progress, origin (home, or the end of the
+previous span), path style, bulge, waypoints, destination, and for
+follow-the-leader spans the member order place, order source and target. It
+then lists that marcher's diagnostics, and below it every diagnostic of the
+show by transition. It is read-only; editing is P8.3. Errors are worded by
+`timelineErrorMessages.ts` (P8.6).
+
 ## Porting notes
 
 - The components depend on 0.2's frame-clock store
