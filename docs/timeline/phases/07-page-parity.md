@@ -80,7 +80,7 @@ Beat insert and delete ripple timeline rows (same rules as P7.4).
 ### P7.6: Copy and paste
 
 - Owner: timeline-worker (timeline/p7-copy-paste)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/28
 - Parallel: yes
 - Depends on: P7.1
@@ -139,8 +139,8 @@ Shape create, edit, delete, copy to another page and the shape lock rules. Today
 
 ### P7.12: Mobile and performer exports
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-mobile-exports)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -149,9 +149,9 @@ The mobile app payload and the performer appearance export read every page row. 
 
 ### P7.13: Undo, redo and query invalidation in timeline mode
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p7-undo-redo)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/29
 - Parallel: yes
 - Depends on: P7.1
 
@@ -183,7 +183,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - This is the long pole. Split P7.1's inventory into more work packages if it's large.
 - From the PR #14 review, the `marcher_pages` writers still reachable in timeline mode (only canvas drag is blocked), a head start for P7.1's inventory: keyboard nudges, snap/round, align, distribute and flip (`RegisteredActionsHandler.tsx` ~876 to 1213); the transform mutation in `useMarcherPages.ts` (~281); the alignment and line tools (`LineListeners.ts` ~262 → `setGlobalNewMarcherPages` → `AlignmentEditor.tsx`); the inspector x/y fields (`MarcherEditor.tsx`); `editablePath.tsx` and shape edits. Canvas drag (`DefaultListeners.ts` ~159, `updateMarcherPagesFunction`) reads `coordinate.page_id`, which is stale in timeline mode.
 
-- From the P7.2 review (PR #20): in timeline mode, "set all/selected marchers to the previous/next page" is refused with a toast ("This isn't available in timeline mode yet.") and writes nothing, because it would copy stale `marcher_pages` rows. P7.6 replaces the refusal (`refuseInTimelineMode` in `src/timeline/timelineCoordinateWrites.ts`) with a resolver-based version. The P7.2 coordinate tools read only the resolver in timeline mode, never `marcher_pages`, so they keep working once P7.3 stops writing those rows.
+- From the P7.2 review (PR #20): in timeline mode, "set all/selected marchers to the previous/next page" is refused with a toast ("This isn't available in timeline mode yet.") and writes nothing, because it would copy stale `marcher_pages` rows. P7.6 (PR #28) replaced that refusal with a resolver-based version (`setMarchersToNeighborPage` in `src/utilities/setMarchersToNeighborPage.ts`, planning with `copyPagePositions`); `refuseInTimelineMode` no longer exists. The P7.2 coordinate tools read only the resolver in timeline mode, never `marcher_pages`, so they keep working once P7.3 stops writing those rows.
 
 - Open item (from the P7.4/P7.5 review, PR #26): page and beat edits made while the timeline flag is OFF don't ripple the timeline rows (`withTimelinePageRipple` only runs in timeline mode). Turning the flag back on then shows rows over the wrong beats. Out of scope for P7.4/P7.5; it needs a policy before the flip (Phase 9), for example always ripple once a file has timeline rows, or re-convert on toggle.
 
@@ -206,7 +206,7 @@ Facts that change how to read the PR #14 note above:
 - [x] `src/components/canvas/listeners/DefaultListeners.ts` ~144 to 159 · W · canvas drag and rotate; reads the stale `coordinate.page_id` · P5 blocked it (`Canvas.tsx` ~238 to 244 snaps back) · re-enable by writing the slot destination of the transition ending at the selected page's end beat (D-16) (P7.2: drag routed through `canvasCoordinateWriter`, which ignores `page_id` in timeline mode)
 - [x] `src/components/canvas/Canvas.tsx` ~238 to 244 · W gate · the drag callback is swapped for a refresh in timeline mode · replace with the timeline write path (P7.2: replaced by the timeline write path)
 - [x] `src/global/classes/canvasObjects/OpenMarchCanvas.ts` ~125 (the drag callback type), ~1150 (`renderMarcherPositions` copies the last page render's `coordinate`, so `page_id` is stale) · W plumbing · P5 partial · give timeline-mode marchers a real page id, or drop `page_id` from the drag path (P7.2: drag path drops `page_id`; `renderMarcherPositions` stamps the drawn page id)
-- [x] `src/hooks/queries/useMarcherPages.ts` ~133 to 146 (`updateMarcherPagesMutationOptions`), ~222 to 312 (`useUpdateSelectedMarchers`, call at ~281, and the selected-page wrapper) · W · the one mutation behind nudges, align, distribute, flip, circle and the inspector · not handled · route to timeline slot edits; this is the main seam for the whole package (P7.2: `useUpdateSelectedMarchers` has a timeline branch; `moveMarchersOnPageMutationOptions` added. `updateMarcherPagesMutationOptions` is unchanged; its remaining timeline-mode callers are set-to-previous/next (P7.6) and the dormant `editablePath` (P7.10))
+- [x] `src/hooks/queries/useMarcherPages.ts` ~133 to 146 (`updateMarcherPagesMutationOptions`), ~222 to 312 (`useUpdateSelectedMarchers`, call at ~281, and the selected-page wrapper) · W · the one mutation behind nudges, align, distribute, flip, circle and the inspector · not handled · route to timeline slot edits; this is the main seam for the whole package (P7.2: `useUpdateSelectedMarchers` has a timeline branch; `moveMarchersOnPageMutationOptions` added. `updateMarcherPagesMutationOptions` is unchanged; its remaining timeline-mode caller is the dormant `editablePath` (P7.10); set-to-previous/next stopped using it in timeline mode in P7.6)
 - [x] `src/db-functions/marcherPage.ts` ~141 to 228 (`updateMarcherPagesInTransaction`, `updateMarcherPages`) · W `marcher_pages`, and W `pathways` through `updateEndPoint` (~170 to 196) · not handled · the timeline equivalent edits a destination, with no pathway fix-up (P7.2: the timeline equivalent is `moveMarchersOnPage` in `src/db-functions/timelineMoves.ts`; the page function stays for page mode)
 - [x] `src/utilities/RegisteredActionsHandler.tsx` ~995 to 1070 (nudge up, down, left, right via `updateSelectedMarchersAsync` at ~1007, 1026, 1045, 1064) · W · not handled (P7.2)
 - [x] `src/utilities/RegisteredActionsHandler.tsx` ~1073 to 1097 (snap to nearest fraction, `updateMarcherPages` at ~1096) · W · not handled (P7.2)
@@ -279,7 +279,7 @@ Facts that change how to read the PR #14 note above:
 - [x] `src/components/exporting/video/videoRenderer.ts` ~19, ~46 and `src/components/exporting/video/videoFrameRenderer.ts` ~9 to 16, ~92, ~106 (take per-marcher page-mode timelines and call the keyframe interpolator) · R · not handled (done: `frameSampler` replaces the page keyframes in timeline mode, page mode unchanged)
 - [x] `src/components/exporting/utils/exportAppearances.ts` ~31 to 70 (`buildMarcherAppearancesByPageId` reads each page's rows for per-marcher-page appearances) · R · not handled · depends on the P7.14 decision (dropped: never implemented, owner decision 2026-09-30)
 - [x] `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 (`_combineMarcherAppearances` puts the page row's appearance first in the stack; the query fetches marcher pages by page) · R · canvas appearances as well as exports · not handled · depends on the P7.14 decision (dropped: never implemented, owner decision 2026-09-30)
-- [ ] `src/components/singletons/StateInitializer.tsx` ~41 to 70 (prefetch of appearances and coordinate data for the selected, next and previous pages) · R · not handled · see P7.13
+- [x] `src/components/singletons/StateInitializer.tsx` ~41 to 70 (prefetch of appearances and coordinate data for the selected, next and previous pages) · R · not handled · see P7.13 (P7.13: coordinate data prefetch gated in timeline mode; appearances still prefetched)
 - [x] `electron/main/services/video-export-service.ts` · no direct reads (it receives encoded chunks) · no change expected; confirm (confirmed: no marcher, page or coordinate reads; no change)
 
 #### P7.9 Keyframe export
@@ -318,11 +318,11 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.13 (new) Undo, redo and query invalidation in timeline mode
 
-- [ ] `src/db-functions/history.ts` ~1160 to 1215 (after undo or redo, the page to jump to and the marchers to select come only from `marcher_pages` statements) · R · not handled · timeline table changes (already logged in `tablesWithHistory` at ~28 to 41) need the equivalent: select the affected marchers and jump to the affected page
-- [ ] `src/hooks/queries/utils.ts` ~25 to 54 and `src/hooks/queries/useHistory.ts` ~50 to 80 (query keys per table; "greedily invalidate all coordinate data") · invalidation · timeline table names map to their own keys, but no page-parity query uses those keys yet; wire them in as the other packages add queries
-- [ ] `src/hooks/queries/sharedInvalidators.ts` ~15 to 37 · invalidation after coordinate edits · add the timeline queries
-- [ ] `src/hooks/useAnimation.ts` ~44 (`useManyCoordinateData` keeps fetching page rows in timeline mode) and `src/components/singletons/StateInitializer.tsx` ~41 to 70 (prefetches coordinate data) · R · wasted work and a stale-data risk in timeline mode · gate by mode
-- [ ] Resolver rebuild on undo and redo of timeline tables (`notifyTimelineBatch` in `src/db-functions/history.ts`) · P4 and P5 · verify with a `test:history` case, not just by reading
+- [x] `src/db-functions/history.ts` ~1160 to 1215 (after undo or redo, the page to jump to and the marchers to select come only from `marcher_pages` statements) · R · not handled · timeline table changes (already logged in `tablesWithHistory` at ~28 to 41) need the equivalent: select the affected marchers and jump to the affected page (P7.13: `timelineHistoryFocus` reads the action's change batch in timeline mode, PR #29)
+- [x] `src/hooks/queries/utils.ts` ~25 to 54 and `src/hooks/queries/useHistory.ts` ~50 to 80 (query keys per table; "greedily invalidate all coordinate data") · invalidation · timeline table names map to their own keys, but no page-parity query uses those keys yet; wire them in as the other packages add queries (P7.13: no package added a timeline React Query; timeline tables now map to no keys, and views follow the resolver store version)
+- [x] `src/hooks/queries/sharedInvalidators.ts` ~15 to 37 · invalidation after coordinate edits · add the timeline queries (P7.13: no change needed; there are no timeline queries to add)
+- [x] `src/hooks/useAnimation.ts` ~44 (`useManyCoordinateData` keeps fetching page rows in timeline mode) and `src/components/singletons/StateInitializer.tsx` ~41 to 70 (prefetches coordinate data) · R · wasted work and a stale-data risk in timeline mode · gate by mode (P7.13: both gated; appearance prefetches stay, the canvas reads them in both modes)
+- [x] Resolver rebuild on undo and redo of timeline tables (`notifyTimelineBatch` in `src/db-functions/history.ts`) · P4 and P5 · verify with a `test:history` case, not just by reading (P7.13: `timelineHistoryFocus.test.ts` compares the store with a fresh cold build after each undo and redo, under `test:history`)
 
 #### P7.14 (new) Per-marcher-per-page appearance, rotation and notes (decision first)
 
@@ -602,4 +602,108 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: the full `test:history`, Playwright and `build:electron`. The app was not run by hand.
 - **Exit gate:** unchanged.
 - **Next:** review and merge PR #28.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-copy-paste) · P7.6 review fixes checkpoint
+
+- **Done (lead review of PR #28, commit `560510e1`):**
+  - **Stale-resolver plans:** the action now runs `timelinePositionsSettled()` (`src/timeline/timelineCoordinateWrites.ts`) before planning. That waits for `withTimelineWriteLock`, so every queued write has committed and delivered its batch, and then for `timelineResolverSettled()`. A nudge still in flight is no longer missed.
+  - **Testable action:** the four actions are one plain function, `setMarchersToNeighborPage` (`src/utilities/setMarchersToNeighborPage.ts`). It takes `timelineMode`, the writes, `notify` and `t`, and the handler only wires it up. The success message shows only after `mutateAsync` resolves, and a refused write shows none.
+  - **Translated planning errors:** planning errors go through `toastTimelineError`, both here and in P7.2's `getSelectedMarcherPages`. `conToastErrorMessage` is removed.
+  - **Drill numbers in refusals:** the `E-ARGS` and `E-T5` refusals in `moveMarchersOnPage` name the marcher by drill number (`drill_prefix` + `drill_order`), falling back to the id. The edit is still all or nothing.
+  - **Tests:** `timelinePageCopy.test.ts` now runs `setMarchersToNeighborPage` itself. It covers:
+    - both page-mode branches;
+    - the missing previous/next page message and an empty selection;
+    - success only after the write;
+    - previous from the last page and next from the second-to-last;
+    - a shape-backed transition, which switches to individual points;
+    - follow-the-leader, which is refused with `E-T5`;
+    - a write in flight. Without the wait, this test fails; I checked by removing the wait.
+  - **Docs:** the handoff note and the `useMarcherPages.ts` inventory note no longer mention `refuseInTimelineMode`. Cross-phase note on the stale-resolver pattern: below, and in Phase 8's log.
+- **Cross-phase note (stale-resolver plans), for P7.10 to P7.13:** any tool that reads `useTimelineResolverStore.getState().resolver` to plan a write can plan from stale positions while an earlier write is still in its transaction. Batches reach the resolver only on commit. Await `timelinePositionsSettled()` before planning; never call it inside a wrapped write. P7.2's tools still read the resolver synchronously (`getSelectedMarcherPages`, `transformMarchersOnPage`). Rapid nudges are serialized by `isUpdatingDirection`, but an align pressed right after a nudge can still miss the nudge. Left as a follow-up; no package owns it yet.
+- **Checks:** `tsc --noEmit` clean. `vitest run` on `timelinePageCopy.test.ts` and `timelineMoves.test.ts`: 25 passed. eslint, prettier and cspell on the changed files: clean, apart from the 3 warnings already on the base. The desktop suite and focused `test:history` are running.
+- **Resume from:** branch `timeline/p7-copy-paste` at `560510e1`. Read the suite log, rerun `pnpm --dir apps/desktop run test:history src/timeline/__test__/timelinePageCopy.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts src/db-functions/__test__/timelineMoves.test.ts` alone, then update the PR #28 body.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-undo-redo) · P7.13 checkpoint
+
+- **Done:** commit `5a935213` (wip). New `apps/desktop/src/db-functions/timelineHistoryFocus.ts`: in timeline mode, `performHistoryAction` picks the page to jump to and the marchers to select from the action's committed change batch (now returned as `HistoryResponse.timelineBatch`) instead of `marcher_pages` statements. Timeline table names map to no React Query keys. `useAnimation` and `StateInitializer` no longer fetch page-mode coordinate data in timeline mode. Tests in `src/db-functions/__test__/timelineHistoryFocus.test.ts`.
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` clean; `vitest run src/db-functions/__test__/timelineHistoryFocus.test.ts`: 10 passed.
+- **Next:** focused `test:history`, the regular desktop suite, lint, then the PR.
+- **Resume from:** branch `timeline/p7-undo-redo` at `5a935213`; run `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineHistoryFocus.test.ts src/db-functions/__test__/history.test.ts src/db-functions/__test__/timelineUndo.test.ts` and `pnpm --dir apps/desktop run test` (background), then open the PR.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-copy-paste) · P7.6 review fixes ready
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/28 is at head `560510e1`, and the PR body is updated with the review fixes listed in the checkpoint above. P7.6 stays in review; the Owner, Status, PR and inventory lines are confirmed on `timeline-try-2`.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - `vitest run` on `timelinePageCopy`, `timelineCoordinateWrites` and `timelineMoves`: 35 passed.
+  - `test:history` on the same three files: 35 passed.
+  - `pnpm --dir apps/desktop run test`, run once: 127 files passed, 1 failed; 1,870 tests passed, 8 failed. All 8 are in `timelinePageCopy.test.ts` ("attempt to write a readonly database"). I had run that file in history mode at the same time, from the same directory, and the test database path is `<cwd>/<task id>.tmp.dots`, so the two runs collided. Run alone afterwards, it passes in both modes (above).
+  - eslint, prettier and cspell: clean, apart from 3 warnings that are already on the base.
+  - Skipped by policy: the full `test:history`, Playwright and `build:electron`.
+- **Next:** the lead re-reviews and merges PR #28.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.6
+
+- **Done:** reviewed PR #28 and squash-merged it at head 560510e1.
+  - The review found five items, all fixed in 560510e1:
+    - the action now waits for queued writes to settle before planning;
+    - planning errors go through `toastTimelineError`;
+    - refusals name marchers by drill number;
+    - the action is extracted to `setMarchersToNeighborPage` with real branch tests;
+    - the phase docs no longer mention `refuseInTimelineMode`.
+- **Checks** (run by the lead on 560510e1):
+  - `tsc --noEmit`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/`, `timelinePageCopy` and `timelineCoordinateWrites`: 25 files, 608 tests passed.
+  - `pnpm --dir apps/desktop run test`: 128 files and 1,878 tests passed, no errors.
+  - Skipped by policy: the full `test:history` suite and e2e.
+- **Next:** P7.2's tools still plan without waiting for writes to settle. That gap went to the P7.13 worker, either to fix or to log as a follow-up.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-undo-redo) · P7.13 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/29 (head `fd7b1d53`, two `wip:` commits to squash). New `apps/desktop/src/db-functions/timelineHistoryFocus.ts`. With the flag on, `performHistoryAction` takes the page and marchers from the action's committed change batch, now returned as `HistoryResponse.timelineBatch`. It no longer uses `marcher_pages` statements. Other changes:
+  - `useHistory.ts` passes the selected page.
+  - It jumps to page 0 too: page 0's id is 0, so it now compares with `!= null`.
+  - It never selects an undefined page.
+  - It selects marchers from the marcher list fetched after the invalidation.
+  - Timeline table names map to no React Query keys.
+  - `useAnimation` and `StateInitializer` no longer fetch page-mode coordinate data in timeline mode.
+  - Page mode is unchanged.
+  - Ticked the 5 P7.13 items and the P7.8 `StateInitializer` item, which points here.
+- **Decisions (P7.13, recorded for the phase):**
+  - **Page of a change:**
+    - A home change belongs to the first page.
+    - A transition, assignment or slot destination belongs to the page whose beats `(start, end]` hold its end beat (D-16).
+    - A shape change belongs to the pages of the transitions into it.
+    - A deleted row is read from its image before the action.
+  - **Marchers of a change:**
+    - A home change: that marcher. An assignment: its marcher. A slot destination: the marcher in that slot.
+    - A transition or shape: everyone assigned to it, unless the batch also changes that transition's assignments or destinations. Then those rows name the marchers.
+  - **Which page to show:** the current page if the action changed it. Otherwise the earliest changed page (where a ripple or marcher add begins). The marchers changed on it are selected; with none, the selection is left alone.
+  - **Timeline mode never reads `marcher_pages` statements after an undo**, even when the action also replayed some (page ops still write them inside the ripple).
+- **Not changed, on purpose:**
+  - `Canvas.tsx` keeps its `marcher_pages` queries: P5's fallback draws from them until the resolver is ready, and P7.10's path visuals depend on them.
+- **Findings for follow-ups:**
+  - `rowIdFromSql` in `history.ts` parses the whole `WHERE rowid=N` match, so it returns `NaN`. Page mode has therefore never navigated after an undo. Left alone (page-mode behavior).
+  - A change to `timelines` rows alone (name, range) is not in the change batch, so the store version doesn't bump. `useTimelineTracks` keeps showing the old row until some later batch arrives. This can happen after an undo of a ripple that only moved a timeline's range. It needs a version bump outside the change log, or the `timelines` table added to it (spec §10.2 lists only five tables). Unowned; the lead should route it.
+  - `useHistory` reads `pages` from the render that started the action. A redo that restores a page this render doesn't know yet stays on the current page instead of jumping.
+  - From the lead's note: the P7.2 coordinate tools still plan from the resolver synchronously, so an action pressed right after a nudge, or right after an undo, can plan from the state before it. PR #28's `timelinePositionsSettled()` is the fix. P7.13 left it alone because #28 is still open; it's a follow-up.
+  - The open threads named for this package stay open:
+    - flag-off edits don't ripple (P7.4 handoff note; needs a policy);
+    - the inspector's stale-target window after a write (PR #27). P7.13 needed no shared fix for it.
+- **Checks:**
+  - `pnpm install`: ok.
+  - `pnpm exec turbo run build --filter=@openmarch/desktop^...`: 4 successful.
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
+  - `vitest run src/db-functions/__test__/timelineHistoryFocus.test.ts`: 10 passed.
+  - `test:history` on timelineHistoryFocus, history, timelineUndo, timelineMoves, timelineMarchers and timelineRipple: 6 files, 119 passed. Run at `fd7b1d53`, after the suite had finished.
+  - `pnpm --dir apps/desktop run test`: 128 files passed, 7 skipped; 1,874 tests passed. The run started at `5a935213`; the `fd7b1d53` refactor of the same module landed while it was running.
+  - eslint, prettier `--check` and cspell on the changed files: clean. The only eslint warnings are 3 in `StateInitializer.tsx` that were already there.
+  - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`. I didn't run the app by hand.
+- **Exit gate:** unchanged.
+- **Next:** review and merge PR #29.
 - **Blockers:** none.

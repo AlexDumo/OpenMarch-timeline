@@ -12,7 +12,12 @@ import {
     type MarcherInspection,
 } from "@/timeline/timelineInspector";
 import { useTimelineInspections } from "@/timeline/useTimelineInspections";
+import type {
+    TransitionEditTarget,
+    TransitionShapeOption,
+} from "@/timeline/timelineTransitionEditor";
 import { InspectorCollapsible } from "./InspectorCollapsible";
+import { TimelineTransitionEditor } from "./TimelineTransitionEditor";
 import {
     DIAGNOSTIC_STRING_KEYS,
     TIMELINE_INSPECTOR_STRINGS,
@@ -20,6 +25,9 @@ import {
 } from "./timelineInspectorStrings";
 
 type Params = Record<string, string | number>;
+
+const NO_EDITS: readonly TransitionEditTarget[] = [];
+const NO_SHAPES: readonly TransitionShapeOption[] = [];
 
 /** Looks a string up by key, with its English text as the default. */
 export type InspectorTranslate = (
@@ -353,13 +361,19 @@ function TimelineInspectorContent() {
         [selectedMarchers],
     );
     const beat = selectedPage ? pageEndBeat(selectedPage) : null;
-    const { inspections, omitted, diagnostics, unknownMarcherIds } =
-        useTimelineInspections({
-            database: db,
-            enabled: true,
-            marcherIds,
-            beat,
-        });
+    const {
+        inspections,
+        omitted,
+        diagnostics,
+        unknownMarcherIds,
+        transitionEdits = NO_EDITS,
+        shapeOptions = NO_SHAPES,
+    } = useTimelineInspections({
+        database: db,
+        enabled: true,
+        marcherIds,
+        beat,
+    });
     return (
         <InspectorCollapsible
             defaultOpen
@@ -374,6 +388,15 @@ function TimelineInspectorContent() {
                     key={inspection.marcherId}
                     inspection={inspection}
                     label={labels.get(inspection.marcherId) ?? ""}
+                    t={t}
+                />
+            ))}
+            {transitionEdits.map((target) => (
+                <TimelineTransitionEditor
+                    key={target.id}
+                    target={target}
+                    shapes={shapeOptions}
+                    database={db}
                     t={t}
                 />
             ))}

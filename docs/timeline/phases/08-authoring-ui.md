@@ -82,7 +82,7 @@ Shapes: draw and edit `line`, `freehand`, `circle`, `box` and `block` in absolut
 ### P8.3: Transitions
 
 - Owner: timeline-worker (timeline/p8-transitions)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/27
 - Parallel: yes
 - Depends on: P8.0
@@ -91,8 +91,8 @@ Transitions: destination, style, bulge clamped to ±½, waypoints, `slot_count`,
 
 ### P8.4: Assignments and layers
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p8-assignments)
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P8.3
@@ -387,3 +387,58 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Exit gate:** nothing ticked. The UI verification item needs a manual app check.
 - **Next:** review and merge by the lead.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-transitions) · P8.3 (review fixes)
+
+- **Done:** commits dbca9b8d (code and tests) and a936ac98 (`ui.md`) on PR https://github.com/AlexDumo/OpenMarch-timeline/pull/27 fix the lead's five findings:
+  1. At a page's end beat the editor now edits the move that ends there, not the next page's move starting there (spans are half-open). Tests cover back-to-back moves and a selection that mixes holding and moving marchers.
+  2. After an edit, nothing is planned until the inspector shows the rebuilt target, so a quick second edit can't write over the first. The module comment is corrected. Tests: two quick waypoint removals, and controls re-enabled after a refusal.
+  3. Number fields commit only changed text, so blurring a rounded value (0.1234 shown as 0.123) writes nothing. Tested.
+  4. Slot counts are clamped to 10000 (I-N2) in the field and in the planner. Tested.
+  5. The shape picker disables, with the reason, blocks for follow the leader (E-T3) and blocks smaller than the slot count (E-T4). Tested.
+- **Note:** the session scratchpad is shared with another worker (P7.6). Its `pr.md` was briefly used as this PR's body; PR #27's body was rewritten at once, and my inserted section was removed from that file.
+- **Checks:** `tsc --noEmit`: pass. `test:focused` (inspector and timeline editor files): 5 files, 105 passed. `test:history src/db-functions/__test__/timelineTransitionEdits.test.ts`: 9 passed. `pnpm --dir apps/desktop run test`: 130 files, 1,923 passed. eslint 0 errors; prettier and cspell pass. Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Next:** re-review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P8.3
+
+- **Done:** reviewed PR #27. The review found five issues, all fixed in dbca9b8d and a936ac98:
+  - the editor targeted the next page's move on back-to-back moves;
+  - edits could be planned from stale rows;
+  - blurring a field wrote its rounded value;
+  - slot count had no cap;
+  - the shape picker offered shapes the database refuses.
+    Squash-merged at head a936ac98.
+- **Checks (lead, on a936ac98):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history src/db-functions/__test__/`: 24 files, 592 tests passed.
+  - `pnpm --dir apps/desktop run test`: 130 files and 1,923 tests passed, no errors.
+  - Skipped by policy: the full `test:history` and e2e suites.
+- **Next:**
+  - P8.4 (assignments and layers) is unblocked.
+  - Optional follow-ups: timeline clip/track selection driving the editor, picking waypoints on the canvas, exporting `sampleDestinations` from core (ADR 0001 §4).
+  - The UI exit-gate item still needs a manual app check.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-copy-paste) · Cross-phase note from P7.6
+
+- **Done:** found in the PR #28 review. Code that reads `useTimelineResolverStore.getState().resolver` to plan a write can start from stale positions while an earlier write is still in its transaction, because change batches reach the resolver only on commit. P7.6 adds `timelinePositionsSettled()` (`apps/desktop/src/timeline/timelineCoordinateWrites.ts`), which waits for `withTimelineWriteLock` and then `timelineResolverSettled()`. Await it before planning a write from resolver positions. Never call it inside a wrapped write: it would wait for itself.
+- **Checks:** none for this note.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-assignments) · P8.4
+
+- **Done:** claimed P8.4. Branch `timeline/p8-assignments` from `timeline-try-2` (at 33ac65e6, after P8.3).
+- **Checks:** none yet.
+- **Next:** an assignments editor under each transition in the inspector's timeline section: the slot list with vacancies, nearest-slot casting, layer and range per assignment, and which ones are stolen.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-assignments`; `pnpm install`; build the desktop's dependencies.
+
+### 2026-10-01 · timeline-worker (timeline/p8-assignments) · P8.4
+
+- **Done:** wip commit 46e97d8e on `timeline/p8-assignments` (rebased on `timeline-try-2` after PR #28): `src/timeline/timelineCasting.ts` (nearest-slot casting with core's `hungarianAlgorithm`, padded so leftover slots stay vacant) and `src/db-functions/timelineAssignmentEdits.ts` (cast marchers into a transition, recast by nearest slot, move to a slot or trade slots, change layer or beats, remove). Casting reads positions from a resolver over the edit's own transaction, so it can't plan from positions a committing edit is about to change. `stealLayer` in `timelineCommands.ts` is now exported.
+- **Checks:** none yet.
+- **Next:** the pure planner (`src/timeline/timelineAssignmentEditor.ts`), the inspector's assignments editor, history tests.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-assignments`; `pnpm install`; build the desktop's dependencies; write `apps/desktop/src/timeline/timelineAssignmentEditor.ts` and `apps/desktop/src/components/inspector/TimelineAssignmentsEditor.tsx`.

@@ -121,8 +121,37 @@ to, the assignment's layer, slot, progress, origin (home, or the end of the
 previous span), path style, bulge, waypoints, destination, and for
 follow-the-leader spans the member order place, order source and target. It
 then lists that marcher's diagnostics, and below it every diagnostic of the
-show by transition. It is read-only; editing is P8.3. Errors are worded by
-`timelineErrorMessages.ts` (P8.6).
+show by transition. Errors are worded by `timelineErrorMessages.ts` (P8.6).
+
+**Editing a transition (P8.3).** Below the explanations, the section has an
+editor (`TimelineTransitionEditor`) for the move that brought each selected
+marcher to the page: the transition of the span that ends at the beat, or the
+one the beat falls inside. Spans are half-open, so a move that starts at the
+beat (the next page's) isn't offered, and a marcher that held through the page
+offers nothing. It edits:
+
+- the path style. Follow the leader is disabled, with the reason, without a
+  destination shape (I-T5) or with a block (I-T3). A new arc starts at bulge
+  0.25, and a new follow-the-leader with no waypoints;
+- the bulge, by slider or number, clamped to ±½ with a note that larger arcs
+  aren't supported (D-15);
+- the follow-the-leader waypoints: add (at the last one), remove, reorder, and
+  numeric x and y. Picking them on the canvas is a follow-up;
+- the order mode, with a one-line note on what each does (R-12);
+- the destination: a shape from the list, or individual points. Switching to
+  points copies the shape's slot samples (R-13), so nobody moves until a point
+  is changed (D-16, Q-14). Individual points are disabled for follow the leader.
+  The picker disables, with the reason, a block for follow the leader (E-T3)
+  and a block with fewer cells than slots (E-T4);
+- the slot count, from the highest assigned slot + 1 (the note names the slot)
+  to 10000 (I-N2). A shapeless transition's new slots start at its last point.
+
+Each change is one undoable edit through the transition db-functions, a change
+that writes nothing is skipped (a number field commits only changed text), and
+a refusal is a toast with its P8.6 message. After an edit, the controls stay
+disabled until the inspector shows the edited transition, so a quick second
+edit is never planned from the old one.
+Clip and track selections in the timeline don't drive the editor yet.
 
 ## Porting notes
 
