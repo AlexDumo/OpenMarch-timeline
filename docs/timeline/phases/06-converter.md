@@ -107,3 +107,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** P6.2 converter in `apps/desktop/src/timeline/convert/`.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p6-converter` on the fork; write the pure planner `src/timeline/convert/planPageConversion.ts`, then the reader/writer.
+
+### 2026-09-30 · timeline-worker (timeline/p6-converter) · P6.2, P6.3, P6.4
+
+- **Done:** checkpoint 5a5313f2 on `timeline/p6-converter`. `apps/desktop/src/timeline/convert/planPageConversion.ts` (pure planner and loss report), `writePageConversion.ts` (reads the page model inside the edit, refuses E-ARGS when timeline rows exist unless `replace`, writes through the db-functions in one `transactionWithHistory`), `convertPages` on the dev console API (`fixtures/timelineFixtures.ts`), `getMarcherTimelines` exported for the tests. Pure tests in `src/timeline/__test__/planPageConversion.test.ts`.
+- **Checks:** `tsc --noEmit` (pass); `test:focused src/timeline/__test__/planPageConversion.test.ts` (10 passed).
+- **Next:** real-DB tests (P6.5) on the `marchersAndPages` fixture.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p6-converter` (5a5313f2); write `apps/desktop/src/timeline/__test__/pageConversion.test.ts` (boundary positions bit for bit, keyframe match between pages, undo, refusal and replace, loss report, only page 0), then run it with `test:focused` and `test:history`.
