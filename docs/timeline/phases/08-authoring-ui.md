@@ -144,12 +144,13 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - None yet.
 - Porting the 0.2 timeline (P8.1): 0.2's `TimelineContainer` computes the beat with its own `getBeatIndexAtTime(beats, timeMs)`, in milliseconds, returning 0 with no beats. Replace it with `beatIndexAtTime(beats, timeMs / 1000)` from `src/timeline/timeMap.ts`, so there is one tempo map, and don't pass its -1 (no beats) to `setCurrentBeatIndex`. Don't bring back 0.2's `getBeatIndexAtTime` or `getNearestBeatIndex`.
 - After P8.1 (PR #19), the timeline is in `apps/desktop/src/components/timeline/`:
-  - **Clock:** `Timeline` takes a `playback` prop and doesn't read the frame clock. `useTimelinePlayback` feeds it from the existing clock (`IsPlayingContext`, the selected page and `getLivePlaybackPosition`). While playing, the cursor is `beatIndexAtTime`; while paused, it's `pageEndBeat(selectedPage)`. Seeking selects the page containing the beat. Wiring the frame clock later means changing only that hook.
-  - **Data (P8.8):** `TimelineModePanel` passes real beats, pages and measures and `NO_TIMELINES`. Replace that with the adapter's `TimelineInput[]` (`TODO(P8.8)`). View beat indexes are real beat indexes (spec beat positions), so the fixed beat 0 is a one-beat-wide empty column before page 1.
+  - **Clock:** `Timeline` takes a `playback` prop and doesn't read the frame clock. `useTimelinePlayback` feeds it from the existing clock (`IsPlayingContext`, the selected page and `getLivePlaybackPosition`). While playing, the cursor is `beatIndexAtTime`; while paused, it's `pageEndBeat(selectedPage)`, and `pageLabel` names the selected page in the transport and playhead labels. Seeking to a beat line selects the page whose move contains or ends at that line (`pageForSeek`), so seeking to the paused cursor keeps the selection. A ruler page click selects that page directly (`TimelineModePanel`). Wiring the frame clock later means changing only that hook.
+  - **Data (P8.8):** `TimelineModePanel` passes real beats, pages and measures and `NO_TIMELINES`. Replace that with the adapter's `TimelineInput[]` (`TODO(P8.8)`). View beat indexes are real beat indexes (spec beat positions), so the fixed beat 0 is a one-beat-wide empty column before page 1. Compress that column in the adapter (`TODO(P8.8)` in `createTimelineViewModel`).
   - **Commands (P8.9):** `commitTimelineRange` and `createTrack` are no-ops, and `selectedTarget` is null, so Create Track is hidden (`TODO(P8.9)`).
   - **Snapping:** `getPageSnapBeats`, `snapBoundary`, `snapRangeOffset` and `isPageSnapDisabled` in `TimelineGeometry.ts`. The snap distance is 24 px, and Alt turns snapping off.
   - **Gating:** `TimelineContainer` shows the timeline instead of the page timeline when the flag is on, except while beats are being edited. The audio player stays mounted and hidden.
   - **Still to do:** the waveform is empty until it's wired to the audio player.
+  - **Still to do (follow-up):** with the flag on, the page timeline's pencil button (`focusTimeline`, which opens beat editing) isn't rendered. Beat editing is reachable only by its shortcut or menu. Add an entry point to the timeline's transport.
   - **Stories:** Storybook isn't configured; the stories run under Vitest (`TimelineStories.test.tsx`).
 
 ## Progress log
@@ -197,4 +198,26 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Full `test:history`, e2e and `build:electron`: not run (policy). No history tests apply.
 - **Exit gate:** nothing ticked. The UI verification item needs a manual app check by a person.
 - **Next:** review and merge by the lead; then P8.8.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p8-timeline-ui) · P8.1 (review fixes)
+
+- **Done:** commit 5a8b1b99 on PR #19 addresses the lead's review nits:
+  1. Seeking uses `pageForSeek` (the page whose move contains or ends at the line), so seeking to the paused cursor keeps the selection. A ruler page click now selects that page directly; otherwise its seek to the page's first beat would select the page before it.
+  2. While paused, `TimelinePlayback.pageLabel` names the selected page in the transport and playhead labels.
+  3. A clip move recomputes its offset on release with that event's Alt state.
+  4. `TODO(P8.8)` added for the beat-0 column; handoff notes updated, including the missing `focusTimeline` entry point (follow-up).
+- **Tests added:**
+  - `pageForSeek`.
+  - The hook: seeking to `pageEndBeat(selected)` keeps the selection, a mid-page seek, and the paused label.
+  - The variants: the release modifier and the label override.
+  - Geometry: the label override.
+  - The container: a ruler page click selects that page. A mutation that removes the panel fix makes this test fail.
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - `test:focused src/components/timeline/__test__/`: 136 passed (11 files; 2 were already skipped).
+  - eslint: 0 errors (13 warnings in untouched files).
+  - prettier `--check` and cspell: pass.
+  - Regular desktop suite, full `test:history`, e2e and `build:electron`: not re-run.
+- **Next:** re-review and merge by the lead.
 - **Blockers:** none.
