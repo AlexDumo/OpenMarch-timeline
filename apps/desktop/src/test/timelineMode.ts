@@ -84,8 +84,21 @@ export const timelineHistoryTables = (): Table[] =>
 export const skipInTimelineMode = (reason: string): boolean =>
     timelineFixtureMode();
 
-/** Turns the `timelineMode` flag on in `workspace_settings`, keeping the other settings. */
-async function setTimelineFlag(tx: DbTransaction): Promise<void> {
+/**
+ * Turns the file's `timelineMode` flag on or off in `workspace_settings`, keeping the other
+ * settings. Writes outside the history wrapper, as a settings change does in the app. For tests
+ * that set up timeline mode themselves: the write paths read the flag from the file
+ * (`timelineModeInTransaction`), so this is how a test picks the mode.
+ */
+export async function setTimelineModeFlag(
+    db: DbConnection,
+    on: boolean,
+): Promise<void> {
+    await db.transaction((tx) => setTimelineFlag(tx, on));
+}
+
+/** Sets the `timelineMode` flag in `workspace_settings`, keeping the other settings. */
+async function setTimelineFlag(tx: DbTransaction, on = true): Promise<void> {
     const row = await tx
         .select({
             id: schema.workspace_settings.id,
@@ -99,7 +112,7 @@ async function setTimelineFlag(tx: DbTransaction): Promise<void> {
     } catch {
         settings = {};
     }
-    const json_data = JSON.stringify({ ...settings, timelineMode: true });
+    const json_data = JSON.stringify({ ...settings, timelineMode: on });
     if (row)
         await tx.update(schema.workspace_settings).set({ json_data }).run();
     else

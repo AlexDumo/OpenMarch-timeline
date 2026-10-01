@@ -363,7 +363,6 @@ describeDbTests("dots-to-om in timeline mode", (it) => {
             newMarchers: [
                 { section: "Flute", drill_prefix: "N", drill_order: 1 },
             ],
-            timelineMode: true,
         });
         await createLastPage({ db, newPageCounts: 4, createNewBeats: true });
         // Neither has page-era rows to fall back on
@@ -445,7 +444,6 @@ describeDbTests("dots-to-om in timeline mode", (it) => {
                                 drill_order: 1,
                             },
                         ],
-                        timelineMode: true,
                     }),
                     deletePages({ db, pageIds: new Set([lastPage.id]) }),
                 ]);

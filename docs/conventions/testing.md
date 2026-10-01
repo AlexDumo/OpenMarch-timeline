@@ -31,12 +31,19 @@ measures, marcher, utility) then also check the five timeline data tables throug
 `timelineHistoryTables()`. `keepFixturesInPageMode` keeps module state, so it needs vitest's
 per-file isolation (the default) and throws under `--no-isolate`.
 
-A passing `test:timeline` run means every existing test passes with converted fixtures and the
-flag on. It does not cover:
+Write paths read the flag from the file, not from a parameter that defaults to page mode:
+`createMarchers` and `deleteMarchers` read it inside their edit (`timelineModeInTransaction`), and
+helpers that can't read the database (`buildMarcherAppearancesByPageId`, `useRenderMarcherShapes`,
+`canvasCoordinateWriter`, `setMarchersToNeighborPage`) require it. A timeline-native test picks the
+mode with `setTimelineModeFlag(db, on)`.
 
-- tests that don't use the `base.tsx` fixtures (mocked databases, pure functions);
-- functions that take `timelineMode` as a parameter defaulting to `false`, which these tests call
-  without it, so they still take the page path;
-- undo and redo checks, unless `VITEST_ENABLE_HISTORY=true` is also set (`test:timeline-history`).
+To test a feature in whichever mode the fixture is in, render it with
+`apps/desktop/src/test/featureHarness.tsx` (the app's providers, the timeline resolver host, page
+and marcher selection, and `positionOn`, which reads the resolver in timeline mode and
+`marcher_pages` otherwise). The coordinate actions, undo focus, the marcher inspector, the
+coordinate sheet and drill chart exports, and the marcher add and delete mutations have such
+tests, so `test:timeline` takes their timeline path.
 
-Timeline behavior is really exercised for page, beat and measure ripple and for the mobile export.
+A passing `test:timeline` run does not cover tests that don't use the `base.tsx` fixtures (mocked
+databases, pure functions), or undo and redo checks unless `VITEST_ENABLE_HISTORY=true` is also
+set (`test:timeline-history`).

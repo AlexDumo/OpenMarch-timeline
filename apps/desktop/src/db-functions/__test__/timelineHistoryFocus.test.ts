@@ -183,7 +183,6 @@ describeDbTests("undo and redo in timeline mode", (it) => {
             newMarchers: [
                 { section: "Trumpet", drill_prefix: "N", drill_order: 1 },
             ],
-            timelineMode: true,
         });
         const id = created!.id;
 
@@ -262,7 +261,6 @@ describeDbTests("undo and redo in timeline mode", (it) => {
             newMarchers: [
                 { section: "Trumpet", drill_prefix: "N", drill_order: 1 },
             ],
-            timelineMode: true,
         });
         const id = created!.id;
         // Edit 2 changes page 3's move, which selects everyone in it
