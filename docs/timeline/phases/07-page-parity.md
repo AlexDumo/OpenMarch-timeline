@@ -139,8 +139,8 @@ Shape create, edit, delete, copy to another page and the shape lock rules. Today
 
 ### P7.12: Mobile and performer exports
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-mobile-exports)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
