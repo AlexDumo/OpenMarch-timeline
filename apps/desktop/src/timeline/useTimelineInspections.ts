@@ -10,6 +10,12 @@ import {
     buildMarcherInspection,
     type MarcherInspection,
 } from "./timelineInspector";
+import {
+    buildTransitionEditTargets,
+    transitionShapeOptions,
+    type TransitionEditTarget,
+    type TransitionShapeOption,
+} from "./timelineTransitionEditor";
 import { readVersionedTimelineViewTables } from "./useTimelineTracks";
 import type { TimelineViewTables } from "./timelineViewModel";
 
@@ -17,6 +23,18 @@ import type { TimelineViewTables } from "./timelineViewModel";
 export const MAX_INSPECTED_MARCHERS = 10;
 
 const NO_DIAGNOSTICS: Diagnostic[] = [];
+
+interface Built {
+    readonly inspections: readonly MarcherInspection[];
+    readonly transitionEdits: readonly TransitionEditTarget[];
+    readonly shapeOptions: readonly TransitionShapeOption[];
+}
+
+const EMPTY_BUILT: Built = {
+    inspections: [],
+    transitionEdits: [],
+    shapeOptions: [],
+};
 
 interface VersionedTables {
     readonly version: number;
@@ -50,6 +68,13 @@ export function useTimelineInspections({
     /** Selected marchers the resolver doesn't have; empty until a resolver is ready */
     unknownMarcherIds: readonly number[];
     diagnostics: readonly Diagnostic[];
+    /**
+     * The transitions the inspections can edit (P8.3), once each, in the order of the inspections:
+     * each marcher's current transition, or the one that ends at the beat
+     */
+    transitionEdits: readonly TransitionEditTarget[];
+    /** The shapes a transition can head to */
+    shapeOptions: readonly TransitionShapeOption[];
 } {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
@@ -89,11 +114,12 @@ export function useTimelineInspections({
     }, [active, resolver, version, marcherIds]);
 
     const built = useMemo(() => {
-        if (!active || !resolver || !loaded || beat === null) return [];
+        if (!active || !resolver || !loaded || beat === null)
+            return EMPTY_BUILT;
         // Rows of another version: wait for the matching read
         if (loaded.version !== version) return null;
         const host = getTimelineHost();
-        if (!host) return [];
+        if (!host) return EMPTY_BUILT;
         const shapeKinds: Record<number, string> = {};
         for (const [id, shape] of Object.entries(host.snapshot.shapes))
             shapeKinds[Number(id)] = shape.kind;
@@ -103,7 +129,7 @@ export function useTimelineInspections({
             shapeKinds,
             showDiagnostics: diagnostics,
         };
-        return known.ids
+        const inspections = known.ids
             .slice(0, MAX_INSPECTED_MARCHERS)
             .map((id) =>
                 buildMarcherInspection(
@@ -113,12 +139,27 @@ export function useTimelineInspections({
                     sources,
                 ),
             );
+        return {
+            inspections,
+            transitionEdits: buildTransitionEditTargets(inspections, {
+                transitions: host.snapshot.transitions,
+                shapes: host.snapshot.shapes,
+                assignments: loaded.tables.assignments,
+            }),
+            shapeOptions: transitionShapeOptions(
+                host.snapshot.shapes,
+                loaded.tables.shapes,
+            ),
+        };
     }, [active, resolver, loaded, version, beat, known, diagnostics]);
 
-    const last = useRef<readonly MarcherInspection[]>([]);
+    const last = useRef<Built>(EMPTY_BUILT);
     if (built !== null) last.current = built;
+    const current = built ?? last.current;
     return {
-        inspections: built ?? last.current,
+        inspections: current.inspections,
+        transitionEdits: current.transitionEdits,
+        shapeOptions: current.shapeOptions,
         omitted: Math.max(0, known.ids.length - MAX_INSPECTED_MARCHERS),
         unknownMarcherIds: known.unknown,
         diagnostics,

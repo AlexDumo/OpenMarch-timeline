@@ -121,8 +121,31 @@ to, the assignment's layer, slot, progress, origin (home, or the end of the
 previous span), path style, bulge, waypoints, destination, and for
 follow-the-leader spans the member order place, order source and target. It
 then lists that marcher's diagnostics, and below it every diagnostic of the
-show by transition. It is read-only; editing is P8.3. Errors are worded by
-`timelineErrorMessages.ts` (P8.6).
+show by transition. Errors are worded by `timelineErrorMessages.ts` (P8.6).
+
+**Editing a transition (P8.3).** Below the explanations, the section has an
+editor (`TimelineTransitionEditor`) for each transition the selected marchers
+are in at the beat, or, for a marcher holding from exactly that beat, the
+transition that brought it there (the page's move). It edits:
+
+- the path style. Follow the leader is disabled, with the reason, without a
+  destination shape (I-T5) or with a block (I-T3). A new arc starts at bulge
+  0.25, and a new follow-the-leader with no waypoints;
+- the bulge, by slider or number, clamped to ±½ with a note that larger arcs
+  aren't supported (D-15);
+- the follow-the-leader waypoints: add (at the last one), remove, reorder, and
+  numeric x and y. Picking them on the canvas is a follow-up;
+- the order mode, with a one-line note on what each does (R-12);
+- the destination: a shape from the list, or individual points. Switching to
+  points copies the shape's slot samples (R-13), so nobody moves until a point
+  is changed (D-16, Q-14). Individual points are disabled for follow the leader;
+- the slot count. It can't go below the highest assigned slot + 1 (the note
+  names the slot), and a shapeless transition's new slots start at its last
+  point.
+
+Each change is one undoable edit through the transition db-functions, a change
+that writes nothing is skipped, and a refusal is a toast with its P8.6 message.
+Clip and track selections in the timeline don't drive the editor yet.
 
 ## Porting notes
 
