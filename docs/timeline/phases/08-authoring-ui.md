@@ -72,8 +72,8 @@ Wire the UI's commands to the write path: moving a clip moves its whole timeline
 ### P8.2: Shapes
 
 - Owner: timeline-worker (timeline/p8-2-shapes)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/34
 - Parallel: yes
 - Depends on: P8.0
 
@@ -559,3 +559,36 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the suite result; squash; open the PR.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-2-shapes`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` (in the background); then squash the wip commits and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2` with the body from `pr-P8.2.md`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/34 (one commit, 715e6dce, rebased on `timeline-try-2` after P7.12 and P7.15).
+  - `TimelineShapesEditor` sits in the inspector's timeline section and shows with or without a page.
+    - **New shape:** a shape of any kind is drawn through the selected marchers where they stand at the page's end beat, or at the field's middle when nobody is selected.
+    - **Edit:** pick a shape to change its name, its kind and its geometry for that kind.
+    - **Delete:** only unused shapes.
+  - Each change is one undoable edit through the new `createTimelineShape`, `updateTimelineShape` and `deleteTimelineShape`. The planner is `src/timeline/timelineShapeEditor.ts`.
+  - **Keeping the transitions that use a shape valid:**
+    - a kind change to a block gets a cell for every slot of the transitions using the shape (I-T4);
+    - a block for a follow-the-leader user (I-T3) and deleting a shape in use (I-D1) are disabled, with the reason;
+    - a smaller block grid is sent as typed, and the database refuses it (E-T3/E-T4) through `toastTimelineError`.
+  - **After the P7.15 rebase:** shape targets match both the resolver version and the display version, and their guard version is the sum, as the other editors' is.
+  - `ui.md` has "Shapes (P8.2)" on the code branch.
+- **Split with P7.11:** see the first P8.2 entry. In short, P7.11 keeps the page-era canvas shape tools and on-canvas drawing; P8.2 is the `timeline_shapes` editor.
+- **For the handoff notes:**
+  - Files: the editor is `src/components/inspector/TimelineShapesEditor.tsx`; the planner is `src/timeline/timelineShapeEditor.ts`; the db-functions are in `src/db-functions/timelineShapes.ts`. `useTimelineInspections` returns `shapeEdits` (`{ version, targets }`).
+  - Follow-ups:
+    - drawing and dragging spec shapes on the canvas (with P7.11);
+    - picking the shape to edit from a timeline shape track;
+    - a friendlier message for the combined E-T3/E-T4 code when the change is to a shape, not a transition's destination.
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - `test:focused` on the planner, inspector, error-message and transition-planner tests: 7 files, 160 passed.
+  - Focused `test:history` on every test file that uses `timelineShapes.ts`: 8 files, 94 passed (after the rebase).
+  - `pnpm --dir apps/desktop run test` on the rebased head: 149 files (142 passed, 7 skipped), 2,095 tests passed.
+  - Mutation checks: removing the version guard fails the stale-plan test; enabling the block kind for a follow-the-leader user fails the I-T3 test.
+  - eslint: 0 errors. prettier and cspell: pass.
+  - Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Exit gate:** nothing ticked. The UI verification item needs a manual app check.
+- **Next:** review and merge by the lead.
+- **Blockers:** none.
