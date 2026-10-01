@@ -62,7 +62,7 @@ A post-migration step in the main process runs the converter in one transaction,
 - Status: open
 - PR: none
 - Parallel: no
-- Depends on: P9.3
+- Depends on: P9.3, P9.8
 
 Remove the dev flag. Timeline mode is the only mode.
 
@@ -95,6 +95,16 @@ Open a corpus of real older `.dots` files: positions at page boundaries match, a
 - Depends on: P9.4
 
 User-facing docs in `apps/website` and release notes.
+
+### P9.8: Convert off the main process
+
+- Owner: unassigned
+- Status: open
+- PR: none
+- Parallel: yes
+- Depends on: P9.3
+
+Before P9.4 turns convert-on-open on for everyone, move the backup (P9.2) and the conversion (P9.3) off the Electron main process, into a worker thread or `utilityProcess`, so large shows don't freeze the app (about 1–2 s for a 50 MB backup and about 4 s to convert 400 marchers by 100 pages, all synchronous today; Windows marks a window "Not Responding" after about 5 s). Keep one transaction and exact rollback, keep the "Preparing your file" modal responsive with progress if cheap, and also consider the bulk-insert path from Phase 6's handoff notes (chunked multi-row inserts) to cut conversion time. `export-utility-process.ts` is dead code (P7.7), not a working pattern.
 
 ## Exit gate
 
