@@ -92,7 +92,7 @@ Verify that a converted show plays back like the original. (1) A purpose-built t
 ### P6.7: Glide across missing rows
 
 - Owner: timeline-worker (timeline/p6-gap-glide)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P6.5
@@ -278,3 +278,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Exit gate:** "three real shows" is still open (two run); it needs one more show from the owner.
 - **Next:** P6.7 (gap glide, linear in beats) is open.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p6-gap-glide) · P6.7
+
+- **Done:** checkpoint baf75054 on `timeline/p6-gap-glide`. `planPageConversion.ts` gives a marcher with no row on a middle page a slot there, linear in beats between its neighboring rows (along the next row's pathway when it has one), and reports it in a new `interpolated` list; it still holds before its first row and after its last. The generated show gained a two-page gap, a gap before a pathway row and a gap on the last page; the equality harness got a `gapEnd` bucket and reports the millisecond difference of gap samples on its own.
+- **Checks:** `test:focused` on `conversionEquality`, `planPageConversion` and `pageConversion`: 3 files passed (`missingRow` max 1.1e-13 over 30 samples; gap page ends max 0).
+- **Next:** tsc, lint, mutation check, focused `test:history`, the corpus runner, then the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p6-gap-glide` (baf75054), run `pnpm install` and the workspace build, then the checks above.
