@@ -187,6 +187,16 @@ Two inventory items are still open. (1) In timeline mode the canvas still applie
 
 For the exit-gate item "each feature's existing tests pass in timeline mode". Add a way to run the desktop suite with timeline mode on in the test fixtures (for example an env var the fixture setup reads), run it, and triage every failure: a real timeline-mode bug (fix it, or file it as a package), or a test that asserts page-mode internals (`marcher_pages` rows) and needs a timeline-mode variant or an explicit skip with a reason. Record the run command and its result in the log. Don't change the default (flag off) run.
 
+### P7.18: Feature tests that reach the timeline path
+
+- Owner: unassigned
+- Status: open
+- PR: none
+- Parallel: no
+- Depends on: P7.17
+
+The PR #38 review showed that `test:timeline` passes mostly without reaching timeline code. Two causes. (1) Several write paths take `timelineMode` as a parameter that defaults to `false` (`createMarchers`, `deleteMarchers`, `setMarchersToNeighborPage`, `canvasCoordinateWriter`, `buildMarcherAppearancesByPageId`, and any others you find); tests call them without it, so on a converted file they write page rows, which the app never does (`marcher.ts` ~222 and ~334 had 0 hits). The default is also a trap for future callers. When the parameter is omitted, read the flag from the database inside the transaction (`timelineModeInTransaction`), or remove the parameter if every caller can rely on that. (2) Feature tests that matter for the inventory (marcher add and delete, swap, nudges and align, set to previous/next page, the inspector, coordinate and drill-chart exports, undo focus) aren't on the `base.tsx` fixtures or mock the flag. Move or add tests so that under `test:timeline` each one takes the timeline branch; prove it with a coverage run (`--coverage`, hit counts on the timeline branches) recorded in the log. Fix real bugs that turn up, or file them as packages. Page mode stays unchanged. Only after this can the "each feature's existing tests pass in timeline mode" exit-gate item be ticked.
+
 ### P7.15: Refresh views on edits outside the change log
 
 - Owner: timeline-worker (timeline/p7-15-refresh-views)
