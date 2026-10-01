@@ -49,8 +49,8 @@ Back up the file before converting (next to the original, with a clear name).
 ### P9.3: Convert on open
 
 - Owner: timeline-worker (timeline/p9-3-convert-on-open)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/42
 - Parallel: no
 - Depends on: P9.2
 
@@ -177,3 +177,44 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** wire `runConvertOnOpen` into `setActiveDb` with the main-process dialogs and the "preparing your file" window.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p9-3-convert-on-open` (ef821e98); add `electron/main/convertOnOpenFlow.ts` and call it from `setActiveDb` in `electron/main/index.ts` after migrations.
+
+### 2026-10-01 · timeline-worker (timeline/p9-3-convert-on-open) · P9.3
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/42 (commit 49947660, squashed and rebased on `timeline-try-2`).
+  - `apps/desktop/electron/database/convertOnOpen.ts`:
+    - The gate, the check and the result types.
+    - The conversion: back up with `backupBeforeConversion`; only when that succeeds, ONE transaction:
+      - converts;
+      - turns `timelineMode` on;
+      - clears the undo and redo stacks;
+      - runs the commit check and drains the change log;
+      - sets `user_version = 8`.
+  - `apps/desktop/electron/main/convertOnOpenFlow.ts`: the native dialogs and the "Preparing your file…" window. `setActiveDb` in `electron/main/index.ts` calls it after migrations, for existing files only.
+  - To let the main process load the converter, `fromDatabasePages` moved to `src/global/classes/Page.fromDatabase.ts`, and the page/beat row mappers and `FIRST_PAGE_ID` to `src/db-functions/rowMappers.ts`. The old modules re-export them.
+- **Decisions (lead to confirm in review):**
+  - **Gate:** the env var `OPENMARCH_CONVERT_ON_OPEN=1` (or `true`). It's off by default; P9.4 removes it.
+  - **Backup or conversion failure:** the app opens nothing and shows a native error dialog. The open flow has no read-only mode. `setActiveDb` returns the main-only status 499 (`OPEN_STOPPED_STATUS`), and `load-file-response` isn't sent for it. No IPC channel or payload type changed, so there's no ADR item.
+  - **Version 7 with timeline rows:** the app warns and offers "Open Without Converting" (it writes nothing and warns again on the next open), "Show Backup" (reveals the newest backup and opens nothing) or "Cancel".
+  - **Undo history:** the conversion clears it, because page-era undo entries would edit frozen tables.
+  - **Blocking state:** a modal window (sandbox, no scripts) over the main window. At startup, with no main window yet, the work runs before the window appears.
+- **Performance** (scratch test, not committed): the conversion took 1.2 s for 250 marchers × 50 pages and 3.9 s for 400 × 100. That is linear, about 0.1 ms per assignment. The backup took 22 ms and 55 ms on those files; P9.2 measured 1 to 2 s at 50 MB. Handoff follow-up (2), the bulk insert path, would cut the conversion time.
+- **Checks:** all from `apps/desktop`:
+  - `vitest run electron/database/__test__/convertOnOpen.test.ts`: 11 passed. It runs in the node environment. It covers:
+    - with the gate on: backup, version 8, flag on, rows;
+    - with the gate off: no change;
+    - an injected backup failure and a real `directory-not-writable` one: the file is unchanged;
+    - rollback: no partial rows, version 7, the backup kept;
+    - a version 8 reopen: no conversion;
+    - the version-7-with-rows warning, for both choices.
+  - `test:focused` on `electron/database`, the Page, Beat, page, beat and converter tests, `conversionEquality`, `timelineDevApi` and `timelineFixtureLoad`: 21 files, 499 passed.
+  - `test:history` on page, beat, Page, `pageConversion` and `planPageConversion`: 5 files, 245 passed (before the rebase).
+  - `tsc --noEmit`: clean.
+  - `vite build`: passed, and the main bundle has no fabric.
+  - eslint, prettier and cspell: clean.
+  - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run either.
+- **Not done:**
+  - A manual run of the app with the gate on (dialogs and the preparing window).
+  - New files are still created at 7 and converted on their next open. With the gate on, a show from the new-show wizard is converted, with a backup, when it first opens. Proposed for P9.4.
+  - The dialogs are English-only.
+- **Next:** review and merge by the lead. Then P9.4 and P9.5.
+- **Blockers:** none.
