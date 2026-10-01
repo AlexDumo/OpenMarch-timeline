@@ -68,9 +68,9 @@ Remove the dev flag. Timeline mode is the only mode.
 
 ### P9.5: Freeze page-era writes
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p9-5-freeze-page-writes)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/45
 - Parallel: yes
 - Depends on: P9.3
 
@@ -98,9 +98,9 @@ User-facing docs in `apps/website` and release notes.
 
 ### P9.8: Convert off the main process
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p9-8-convert-worker)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/44
 - Parallel: yes
 - Depends on: P9.3
 
@@ -350,4 +350,61 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Skipped by policy: full `test:history` and e2e.
 - **Still open:** a manual app run with `OPENMARCH_CONVERT_ON_OPEN=1` (dialogs and the preparing window). This is human.
 - **Next:** P9.8 (convert off the main process) and P9.5 (freeze page-era writes).
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p9-8-convert-worker) · P9.8
+
+- **Done:** checkpoint 8da15a6c (`wip:`) on `timeline/p9-8-convert-worker`.
+  - **Choice: `node:worker_threads`, not `utilityProcess`.** A worker runs under vitest (a `utilityProcess` exists only inside Electron), so the P9.3 tests run through the real worker path. It shares the process, so it starts fast and needs no second process. Checked first: a thread that exits, throws or is terminated inside a `BEGIN IMMEDIATE` transaction has its `DatabaseSync` closed by Node, the journal rolls the transaction back, and a new connection can write at once. Electron 40 loads a worker script and its `node_modules` from inside `app.asar`, with `node:sqlite` (checked with a packed test app).
+  - `electron/database/convertOnOpenWorker.ts` (the worker entry, its own connection, 5 s busy timeout), `convertOnOpenProtocol.ts` (messages, plain-data test hooks), `electron/main/convertWorkerHost.ts` (starts it, resolves only after the thread exits, terminates workers on `before-quit`). `openShow.ts` closes its connection before the worker starts and reopens it after; the open lock and the SQL suspension are unchanged. Vite builds the worker as a third entry to `dist-electron/worker/`.
+  - Progress: the worker posts "backing up", then pages done out of total; the preparing window shows them (`executeJavaScript` on the main-process-owned window) and the taskbar bar. No IPC channel to the renderer, so no C-n note.
+  - Bulk path: assignments go in as chunked multi-row inserts (500 rows), destinations chunked; the converter writes page by page for progress. 400 × 100: conversion 3,791 ms before, 1,430 ms after (in-thread timing).
+  - Renderer-free worker bundle: split `historyTriggers.ts` out of `history.ts`, `timelineTransitionsInTransaction.ts` and `timelineShapesInTransaction.ts` out of their modules (the old modules re-export them and keep the undoable wrappers), `convertPagesInTransaction.ts` out of `writePageConversion.ts`, `assert` and `mainProcessLog` out of `utils.ts`, and `sqlProxy.ts` out of `database.services.ts`. The worker bundle now loads no react, zustand, sonner, electron or renderer db module.
+  - **P9.3 bug found and fixed:** `createTriggers` ran the history triggers through `window.electron.unsafeSqlProxy` unless `VITEST` was set, so in the real main process the conversion's `create-undo-triggers` step would have thrown and every conversion would have rolled back. It now runs them on its own connection whenever there is no `window`.
+- **Checks:** `tsc --noEmit` clean. Tests not run yet.
+- **Next:** tests (P9.3 tests through the worker, crash and failure rollback, a timer keeps firing during a large conversion, terminate on quit, worker bundle), then the focused suites.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p9-8-convert-worker` (8da15a6c), run `pnpm install` and the package build, then write the worker tests in `electron/database/__test__/` and `electron/main/__test__/`.
+
+### 2026-10-01 · timeline-worker (timeline/p9-8-convert-worker) · P9.8
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/44 (one commit, b82a8cb0). The previous entry has the design.
+  - The worker: `electron/database/convertOnOpenWorker.ts`, `convertOnOpenProtocol.ts` and `electron/main/convertWorkerHost.ts`. A crash after the backup becomes `conversion-failed` and keeps the backup; a crash before it becomes `backup-failed` (`unknown`). On quit, workers are terminated and rolled back, and no dialog is shown.
+  - The progress window: `showPreparingProgress` in `preparingWindow.ts` (status line, bar and taskbar).
+  - The bulk insert: `insertTimelineAssignmentsBulkInTransaction`, plus chunked destinations.
+  - **Build:** Vite loads the checked-in `vite.config.mjs` (tsc's output of the `.mts`) before `vite.config.mts`, so both now build the worker. `mainBundle.test.ts` checks both. Recorded in `findings.md`.
+  - **Timing (400 × 100):** the conversion takes 1,430 ms instead of 3,791 ms; recorded in `findings.md`.
+- **Decisions (lead to confirm):**
+  - `worker_threads` over `utilityProcess` (reasons in the previous entry).
+  - The open's own connection is closed before the worker starts and reopened after, rather than kept open idle.
+  - Progress reaches the preparing window through `executeJavaScript`, from the main process. No IPC contract changed, so there is no C-n note.
+  - Without `deps.convertWorker`, `openShowDatabase` still converts on its own thread. The app always passes the worker; tests of the dialog flow don't.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - eslint, prettier, cspell and the pre-commit hook: clean.
+  - `convertOnOpen.test.ts`: 74 passed (every P9.3 test in-thread and through the worker).
+  - `convertWorkerHost.test.ts`: 14 passed (bundle, crash per step, timer responsiveness, quit).
+  - `openShow` with `openShowImports`: 21 passed.
+  - `preparingWindow`: 6 passed. `mainBundle`: 3 passed. `timelineWrites`: 19 passed. `historyTriggers`: 1 passed.
+  - `test:focused electron src/db-functions src/timeline src/components/inspector src/global src/utilities src/hooks`: 116 files passed, 6 skipped; 1,885 tests passed.
+  - Focused `test:history` on 12 history and converter files: 11 passed, 1 skipped; 159 tests passed.
+  - `vite build`: passed, with `dist-electron/worker/convertOnOpenWorker.js` built. That file converted a show in a one-off test.
+  - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run.
+- **Not done:** a manual app run with `OPENMARCH_CONVERT_ON_OPEN=1` to see the window's progress and the quit path (human).
+- **Next:** review and merge by the lead; then P9.4 (both of its dependencies would then be done).
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P9.5 (recorded for the worker)
+
+- **Done:** the P9.5 worker opened PR #45, but couldn't write to the coordination checkout from its sandbox. With the project owner's approval, the lead recorded its status here.
+- **What the PR does:**
+  - adds 18 `page_era_frozen_*` triggers that refuse writes to `marcher_pages`, `midsets`, `pathways`, `shapes`, `shape_pages` and `shape_page_marchers` while the timeline flag is on; cascaded deletes are still allowed;
+  - adds app-level `E-ARGS` refusals;
+  - stops the marcher, page and new-show writers from writing `marcher_pages` in timeline mode.
+- **Checks (worker):**
+  - `pnpm run test`: 171 files, 2,402 tests passed.
+  - Electron `convertOnOpen`, `repair` and `pageEraFreeze` tests: 99 passed.
+  - Focused `test:history`: 262 passed.
+  - `test:timeline`: one failure, fixed afterwards; the full timeline run wasn't repeated.
+- **Next:** lead review. The C-10 note and the ADR 0001 line go in after review confirms the design.
 - **Blockers:** none.
