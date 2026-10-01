@@ -71,8 +71,8 @@ Wire the UI's commands to the write path: moving a clip moves its whole timeline
 
 ### P8.2: Shapes
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p8-2-shapes)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P8.0
@@ -534,3 +534,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Follow-up: timeline clip and track selection doesn't drive the inspector editors yet.
   - The UI exit-gate item needs a manual app check.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2
+
+- **Done:** claimed P8.2. Branch `timeline/p8-2-shapes` from `timeline-try-2` (at dd7e3e2e, after P8.4).
+- **Checks:** none yet.
+- **Next:** read the shape rules in the spec and P7.11; split the work with P7.11; build the shape editor.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-2-shapes`; `pnpm install`; build the desktop's dependencies.
