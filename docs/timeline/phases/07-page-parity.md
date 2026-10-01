@@ -1430,3 +1430,15 @@ Facts that change how to read the PR #14 note above:
 - **Next:** a fixture-driven test that renders `RegisteredActionsHandler` (swap, nudges, align, set to previous/next page, undo focus), then the inspector and the exports.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p7-timeline-path-tests`; `pnpm install`; build the desktop's dependencies; write `src/utilities/__test__/RegisteredActionsHandlerModes.test.tsx`.
+
+### 2026-10-01 · timeline-worker (timeline/p7-timeline-path-tests) · P7.18 checkpoint 2
+
+- **Done:** commits 3d3fe59b and 97a8780f (`wip:`) on `timeline/p7-timeline-path-tests`.
+  - `src/test/featureHarness.tsx`: renders a feature with the app's providers and `TimelineResolverHost` on a `base.tsx` fixture, selects a page and marchers, and reads positions where the mode keeps them.
+  - New fixture tests that take the file's mode: `RegisteredActionsHandlerModes.test.tsx` (nudge, align, swap, set selected to previous page, undo focus), `MarcherEditorModes.test.tsx` (inspector coordinates and the timeline section), `exportsModes.test.ts` (coordinate sheet and drill chart through `readExportPositions`). Each passes in both runs. In timeline mode they also check that `marcher_pages` is unchanged.
+  - `docs/conventions/testing.md` updated.
+- **Found:** page-mode undo focus never fires. `rowIdFromSql` in `history.ts` returns `parseInt` of the whole match (`?.[0]`, "WHERE rowid=N"), which is NaN, so `performHistoryAction` never finds a `marcher_pages` row and returns no page. Not a timeline bug, and P7.18 keeps page mode unchanged, so it is filed as P7.19 instead of fixed here.
+- **Checks:** each new file passes under `vitest run` and `test:timeline`; `tsc --noEmit` passes.
+- **Next:** file P7.19; the full `test:timeline` run with `--coverage`, the default run, focused history runs, then the PR.
+- **Blockers:** none.
+- **Resume from:** on `timeline/p7-timeline-path-tests` at 97a8780f, run `VITEST_TIMELINE_MODE=true pnpm exec vitest run --silent=true --coverage` alone in `apps/desktop`, in the background.
