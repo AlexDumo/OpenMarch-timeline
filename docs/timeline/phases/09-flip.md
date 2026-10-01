@@ -109,7 +109,7 @@ Before P9.4 turns convert-on-open on for everyone, move the backup (P9.2) and th
 ### P9.9: Quit during conversion
 
 - Owner: timeline-worker (timeline/p9-9-quit-during-conversion)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P9.8
@@ -515,3 +515,16 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Noise:** about 10 `sql:proxy` "a file is being opened" errors per open in a running app, plus "Error getting SVG on close" on quit.
 - **Next:** P9.9, a fix for quitting during conversion, with automated tests only. After that, re-run the quit check and the owner's manual pass.
 - **Blockers:** P9.4 is blocked until quitting during conversion works.
+
+### 2026-10-01 · timeline-worker (timeline/p9-9-quit-during-conversion) · P9.9
+
+- **Done:** checkpoint 0077e289 (`wip:`) on `timeline/p9-9-quit-during-conversion`.
+  - **Cause (Electron 40 source):** `NativeWindowMac::Close()` on a window with `closable: false` calls `WindowCloseCancelled`, which clears `Browser::is_quitting_`, so the quit is cancelled. The `before-quit` handler also held the quit only while a worker ran, so a Quit during the overlay's paint wait (before the worker starts) went straight to closing windows.
+  - **Choice (per the lead's note):** the native preparing window is gone. "Preparing your file…" is an overlay in the main window's page, injected with `executeJavaScript` (no IPC channel, no database query); the rest of the page is made `inert`. `preparingWindow.ts` became `preparingOverlay.ts`.
+  - `convertWorkerHost.ts`: `beginPreparing()` marks the whole preparing step; `before-quit` logs, and while a conversion is in progress holds the quit, stops the worker (or keeps it from starting), waits for the open to end, runs `beforeQuitting`, then quits again. The quit flag is now sticky (a quit that reaches a conversion can't be cancelled; the handler finishes it).
+  - `index.ts`: closing the main window during a conversion quits through the same path; `window:close` skips `closeCurrentFile` then; an open queued behind a stopped one doesn't start; the SVG preview on close is skipped when no file is open or the SQL is suspended (that is where the 5 s "Timeout waiting for SVG response" came from).
+  - `sql:proxy` and `unsafeSql:proxy` return a refusal marker while suspended (`sqlProxyRefusal.ts`), logged once per suspension at debug level; the preload turns it back into a rejection.
+- **Checks:** `tsc --noEmit` clean; `preparingOverlay.test.ts` 8 passed.
+- **Next:** quit tests (mocked `app` and `BrowserWindow`), the existing worker-host quit test, `sql:proxy` refusal tests, then the focused suites.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p9-9-quit-during-conversion` (0077e289), `pnpm install`, then write `electron/main/__test__/quitDuringConversion.test.ts` and update `convertWorkerHost.test.ts`'s quit test.
