@@ -91,8 +91,8 @@ Transitions: destination, style, bulge clamped to ±½, waypoints, `slot_count`,
 
 ### P8.4: Assignments and layers
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p8-assignments)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P8.3
@@ -426,3 +426,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** found in the PR #28 review. Code that reads `useTimelineResolverStore.getState().resolver` to plan a write can start from stale positions while an earlier write is still in its transaction, because change batches reach the resolver only on commit. P7.6 adds `timelinePositionsSettled()` (`apps/desktop/src/timeline/timelineCoordinateWrites.ts`), which waits for `withTimelineWriteLock` and then `timelineResolverSettled()`. Await it before planning a write from resolver positions. Never call it inside a wrapped write: it would wait for itself.
 - **Checks:** none for this note.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-assignments) · P8.4
+
+- **Done:** claimed P8.4. Branch `timeline/p8-assignments` from `timeline-try-2` (at 33ac65e6, after P8.3).
+- **Checks:** none yet.
+- **Next:** an assignments editor under each transition in the inspector's timeline section: the slot list with vacancies, nearest-slot casting, layer and range per assignment, and which ones are stolen.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-assignments`; `pnpm install`; build the desktop's dependencies.
