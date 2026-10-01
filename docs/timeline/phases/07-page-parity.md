@@ -1112,3 +1112,11 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: full `test:history` and e2e.
 - **Next:** P7.11.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-shapes) · P7.11 checkpoint 2
+
+- **Done:** commits 2a773c6b and c4186b75 on `timeline/p7-shapes`: tests for the handle planner (`src/timeline/__test__/timelineShapeCanvas.test.ts`), the overlay and hook (`useTimelineShapeCanvas.test.tsx`), the editor's canvas link (in `TimelineShapesEditor.test.tsx`), the shape page refusals on a real DB (`src/db-functions/__test__/shapePagesTimelineMode.test.ts`), the dropped shape lock (`timelineRender.test.tsx`) and Create Shape's disabled reason (`AlignmentEditor.test.tsx`); "Shapes on the canvas (P7.11)" in `ui.md` on the code branch.
+- **Checks:** `tsc --noEmit`: pass. The 6 test files: pass. Focused `test:history` on `shapePagesTimelineMode.test.ts` and `marcherPage.test.ts` (the db-function touched is `shapePages.ts`): 2 files, 62 passed. eslint on the changed files: 0 errors, no new warnings.
+- **Next:** the regular desktop suite (running), then the PR, the inventory ticks and in-review.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p7-shapes`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` alone, in the background; then squash and open the PR with `pr-P7.11.md`.
