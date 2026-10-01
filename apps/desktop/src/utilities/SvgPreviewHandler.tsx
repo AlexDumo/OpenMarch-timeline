@@ -13,15 +13,35 @@ import {
     marcherIdsForAllTagIdsQueryOptions,
     tagAppearanceByPageIdMapQueryOptions,
 } from "@/hooks/queries";
-import type MarcherPageMap from "@/global/classes/MarcherPageIndex";
+import {
+    pagePositionMapFromRows,
+    type PagePositionMap,
+} from "@/components/exporting/utils/exportPagePositions";
 import type Page from "@/global/classes/Page";
 import type Marcher from "@/global/classes/Marcher";
 import type { FieldProperties } from "@openmarch/core";
 import { useTimingObjects } from "@/hooks";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useQuery } from "@tanstack/react-query";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import { sampleTimelinePagePositions } from "@/timeline/timelinePagePositions";
 
 const SVG_GENERATION_ERROR = "ERROR: Failed to generate SVG";
+
+/**
+ * Timeline mode: the page's positions from the live resolver at its end beat
+ * (docs/timeline/phases/07-page-parity.md P7.7), or undefined while no resolver is ready. A
+ * preview may use the store's resolver; exports build a private one.
+ */
+async function timelinePositionsForPage(
+    page: Page,
+): Promise<PagePositionMap | undefined> {
+    const { resolver } = useTimelineResolverStore.getState();
+    if (!resolver) return undefined;
+    return pagePositionMapFromRows(
+        await sampleTimelinePagePositions({ resolver, pages: [page] }),
+    );
+}
 
 /**
  * Handler for generating canvas preview SVGs on app close for launch page
@@ -57,7 +77,7 @@ const SvgPreviewHandler: React.FC = () => {
             !fieldProperties ||
             !marchers?.length ||
             !sectionAppearances ||
-            !marcherPages ||
+            (!timelineMode && !marcherPages) ||
             !marcherIdsByTagId ||
             !allTagAppearances ||
             !tagAppearanceIdsByPageId ||
@@ -90,7 +110,8 @@ const SvgPreviewHandler: React.FC = () => {
     ]);
 
     const fieldPropertiesRef = useRef(fieldProperties);
-    const marcherPagesRef = useRef<MarcherPageMap | undefined>(marcherPages);
+    const marcherPagesRef = useRef<PagePositionMap | undefined>(marcherPages);
+    const timelineModeRef = useRef(timelineMode);
     const marchersRef = useRef(Array.isArray(marchers) ? marchers : []);
     const pagesRef = useRef(pages);
     const marcherAppearancesByPageIdRef = useRef(marcherAppearancesByPageId);
@@ -102,6 +123,10 @@ const SvgPreviewHandler: React.FC = () => {
     useEffect(() => {
         marcherPagesRef.current = marcherPages;
     }, [marcherPages]);
+
+    useEffect(() => {
+        timelineModeRef.current = timelineMode;
+    }, [timelineMode]);
 
     useEffect(() => {
         marchersRef.current = Array.isArray(marchers) ? marchers : [];
@@ -119,7 +144,7 @@ const SvgPreviewHandler: React.FC = () => {
         async (
             fieldProps: FieldProperties,
             page: Page,
-            marcherPagesMap: MarcherPageMap | undefined,
+            marcherPagesMap: PagePositionMap | undefined,
             allMarchers: Marcher[],
         ): Promise<string> => {
             try {
@@ -172,7 +197,6 @@ const SvgPreviewHandler: React.FC = () => {
         window.electron.onGetSvgForClose(async () => {
             const currentFieldProps = fieldPropertiesRef.current;
             const currentPages = pagesRef.current;
-            const currentMarcherPages = marcherPagesRef.current;
             const currentMarchers = marchersRef.current;
 
             const firstPage =
@@ -186,6 +210,11 @@ const SvgPreviewHandler: React.FC = () => {
                 );
                 return SVG_GENERATION_ERROR;
             }
+
+            // Timeline mode: marcher_pages is frozen page-era data, so sample the resolver
+            const currentMarcherPages = timelineModeRef.current
+                ? await timelinePositionsForPage(firstPage)
+                : marcherPagesRef.current;
 
             const svg = await generateSvgPreview(
                 currentFieldProps,

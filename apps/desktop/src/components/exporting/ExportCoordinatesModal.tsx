@@ -1,10 +1,6 @@
 /* eslint-disable no-control-regex */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ReactDOMServer from "react-dom/server";
-import MarcherCoordinateSheetPreview, {
-    StaticMarcherCoordinateSheet,
-    StaticQuarterMarcherSheet,
-} from "./MarcherCoordinateSheet";
+import MarcherCoordinateSheetPreview from "./MarcherCoordinateSheet";
 import {
     allMarcherPagesQueryOptions,
     allSectionAppearancesQueryOptions,
@@ -14,7 +10,8 @@ import {
     tagAppearanceByPageIdMapQueryOptions,
 } from "@/hooks/queries";
 import { buildMarcherAppearancesByPageId } from "./utils/exportAppearances";
-import { getByMarcherId } from "@/global/classes/MarcherPage";
+import { buildCoordinateSheets } from "./utils/coordinateSheets";
+import { readTimelineExportPositions } from "./utils/exportPagePositions";
 import {
     Dialog,
     DialogClose,
@@ -107,15 +104,6 @@ const mobileExportScreenshotUrls = [2, 3, 4, 5].map(
     (index) => `https://assets.openmarch.com/desktop/mobile-wipe/${index}.webp`,
 );
 
-function chunkArray<T>(arr: T[], size: number): T[][] {
-    const result: T[][] = [];
-    for (let i = 0; i < arr.length; i += size) {
-        result.push(arr.slice(i, i + size));
-    }
-    return result;
-}
-const QUARTER_ROWS = 28; // Increased from 25 to fit more rows
-
 // eslint-disable-next-line max-lines-per-function
 function CoordinateSheetExport() {
     const [isTerse, setIsTerse] = useState(false);
@@ -128,7 +116,7 @@ function CoordinateSheetExport() {
         allMarchersQueryOptions(),
     );
     const { pages } = useTimingObjects();
-    const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
+    const { data: marcherPages } = useQuery(
         allMarcherPagesQueryOptions({
             pinkyPromiseThatYouKnowWhatYouAreDoing: true,
         }),
@@ -180,7 +168,7 @@ function CoordinateSheetExport() {
             return;
         }
 
-        if (!marcherPagesLoaded || !marchersLoaded) {
+        if (!marchersLoaded) {
             setIsLoading(true);
             return;
         }
@@ -224,9 +212,6 @@ function CoordinateSheetExport() {
                 throw new Error(t("exportCoordinates.cancelledByUser"));
             setProgress(25);
 
-            // More detailed progress for sheet generation
-            let groupedSheets: any[];
-
             // Check for cancellation
             if (isCancelled.current) {
                 throw new Error(t("exportCoordinates.cancelledByUser"));
@@ -238,109 +223,27 @@ function CoordinateSheetExport() {
             if (isCancelled.current)
                 throw new Error(t("exportCoordinates.cancelledByUser"));
 
-            const pageOrderById: Record<number, number> = {};
-            pages.forEach((page) => {
-                pageOrderById[page.id] = page.order;
+            // Page mode reads marcher_pages; timeline mode samples the resolver at each
+            // page's end beat (P7.7)
+            const positions =
+                (await readTimelineExportPositions(db)) ?? marcherPages;
+            if (!positions)
+                throw new Error(t("exportCoordinates.marcherPagesNotLoaded"));
+
+            const groupedSheets = buildCoordinateSheets({
+                marchers: processedMarchers,
+                pages,
+                positions,
+                fieldProperties,
+                options: {
+                    quarterPages,
+                    terse: isTerse,
+                    includeMeasures,
+                    useXY,
+                    roundingDenominator,
+                },
+                t,
             });
-
-            // split to quarter sheets
-            if (quarterPages) {
-                // Create quarter sheets for each marcher, organized by performer number
-                groupedSheets = processedMarchers.flatMap((marcher) => {
-                    const marcherPagesForMarcher = Object.entries(
-                        marcherPages.marcherPagesByMarcher[marcher.id],
-                    )
-                        .sort(
-                            ([pageIdA], [pageIdB]) =>
-                                (pageOrderById[Number(pageIdA)] ?? 0) -
-                                (pageOrderById[Number(pageIdB)] ?? 0),
-                        )
-                        .map(([, mp]) => mp);
-
-                    const rowChunks = chunkArray(
-                        marcherPagesForMarcher,
-                        QUARTER_ROWS,
-                    );
-
-                    return rowChunks.map((rowChunk, chunkIdx) => {
-                        try {
-                            const renderedHtml = ReactDOMServer.renderToString(
-                                <StaticQuarterMarcherSheet
-                                    marcher={marcher}
-                                    pages={pages}
-                                    marcherPages={rowChunk}
-                                    fieldProperties={fieldProperties}
-                                    roundingDenominator={roundingDenominator}
-                                    terse={isTerse}
-                                    quarterPageNumber={chunkIdx + 1}
-                                    useXY={useXY}
-                                    includeMeasures={includeMeasures}
-                                />,
-                            );
-
-                            // Clean up the HTML to prevent URL encoding issues
-                            const cleanedHtml = renderedHtml
-                                .replace(/[\u0000-\u001F\u007F-\u009F]/g, "") // Remove control characters
-                                .replace(/\s+/g, " ") // Normalize whitespace
-                                .trim();
-
-                            return {
-                                name: marcher.name,
-                                drillNumber: marcher.drill_number,
-                                section:
-                                    marcher.section ||
-                                    t("exportCoordinates.unsortedSection"),
-                                renderedPage: cleanedHtml,
-                            };
-                        } catch (error) {
-                            console.error(
-                                `Error rendering quarter page for ${marcher.drill_number}:`,
-                                error,
-                            );
-                            return {
-                                name: marcher.name,
-                                drillNumber: marcher.drill_number,
-                                section:
-                                    marcher.section ||
-                                    t("exportCoordinates.unsortedSection"),
-                                renderedPage: `<div><h3>${t("exportCoordinates.errorRendering", { drillNumber: marcher.drill_number })}</h3><p>${error instanceof Error ? error.message : t("exportCoordinates.unknownError")}</p></div>`,
-                            };
-                        }
-                    });
-                });
-            } else {
-                // regular format
-                groupedSheets = processedMarchers.map((marcher) => {
-                    const marcherPagesForMarcher = getByMarcherId(
-                        marcherPages,
-                        marcher.id,
-                    ).sort((a, b) => {
-                        const pageA = pages.find((p) => p.id === a.page_id);
-                        const pageB = pages.find((p) => p.id === b.page_id);
-                        return (pageA?.order ?? 0) - (pageB?.order ?? 0);
-                    });
-
-                    return {
-                        name: marcher.name,
-                        drillNumber: marcher.drill_number,
-                        section:
-                            marcher.section ||
-                            t("exportCoordinates.unsortedSection"),
-                        renderedPage: ReactDOMServer.renderToString(
-                            <StaticMarcherCoordinateSheet
-                                marcher={marcher}
-                                pages={pages}
-                                marcherPages={marcherPagesForMarcher}
-                                fieldProperties={fieldProperties}
-                                includeMeasures={includeMeasures}
-                                terse={isTerse}
-                                useXY={useXY}
-                                roundingDenominator={roundingDenominator}
-                            />,
-                        ),
-                    };
-                });
-            }
 
             // Continue with fun phrases during PDF generation
             setProgress(85);
@@ -454,7 +357,6 @@ function CoordinateSheetExport() {
     }, [
         t,
         fieldProperties,
-        marcherPagesLoaded,
         marchersLoaded,
         marchers,
         pages,
@@ -715,7 +617,7 @@ function DrillChartExport() {
     // Timeline mode drops the per-page appearance fields of marcher_pages (P7.14)
     const timelineMode = useTimelineMode();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
-    const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
+    const { data: marcherPages } = useQuery(
         allMarcherPagesQueryOptions({
             pinkyPromiseThatYouKnowWhatYouAreDoing: true,
         }),
@@ -742,7 +644,7 @@ function DrillChartExport() {
             !fieldProperties ||
             !marchers?.length ||
             !sectionAppearances ||
-            !marcherPages ||
+            (!timelineMode && !marcherPages) ||
             !marcherIdsByTagId ||
             !allTagAppearances ||
             !tagAppearanceIdsByPageId
@@ -905,10 +807,6 @@ function DrillChartExport() {
         setIsLoading(true);
         setProgress(0);
 
-        assert(
-            marcherPagesLoaded,
-            t("exportCoordinates.marcherPagesNotLoaded"),
-        );
         assert(marchersLoaded, t("exportCoordinates.marchersNotLoaded"));
         assert(
             fieldProperties,
@@ -924,11 +822,16 @@ function DrillChartExport() {
         let SVGs: string[][] = [];
         let coords: string[][] | null = null;
         try {
+            // Page mode reads marcher_pages; timeline mode samples the resolver at each
+            // page's end beat (P7.7)
+            const positions =
+                (await readTimelineExportPositions(db)) ?? marcherPages;
+            assert(positions, t("exportCoordinates.marcherPagesNotLoaded"));
             ({ SVGs, coords } = await generateDrillChartExportSVGs({
                 fieldProperties,
                 marchers,
                 sortedPages: pages,
-                marcherPagesMap: marcherPages,
+                marcherPagesMap: positions,
                 sectionAppearances: sectionAppearances,
                 marcherAppearancesByPageId,
                 backgroundImage,
@@ -1027,7 +930,6 @@ function DrillChartExport() {
             }, 1000);
         }
     }, [
-        marcherPagesLoaded,
         t,
         marchersLoaded,
         fieldProperties,

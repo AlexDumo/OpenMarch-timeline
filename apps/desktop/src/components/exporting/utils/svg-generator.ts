@@ -1,16 +1,15 @@
 import Marcher from "@/global/classes/Marcher";
 import Page from "@/global/classes/Page";
 import { FieldProperties, FieldTheme, rgbaToString } from "@openmarch/core";
-import MarcherPageMap from "@/global/classes/MarcherPageIndex";
 import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import { defaultSettings } from "@/stores/UiSettingsStore";
 import CanvasMarcher from "@/global/classes/canvasObjects/CanvasMarcher";
 import { ReadableCoords } from "@/global/classes/ReadableCoords";
-import MarcherPage from "@/global/classes/MarcherPage";
 import { fabric } from "fabric";
 import { NoControls } from "@/components/canvas/CanvasConstants";
 import { db } from "@/global/database/db";
 import { SectionAppearance } from "@/db-functions";
+import type { PagePosition, PagePositionMap } from "./exportPagePositions";
 import {
     applyMarcherAppearancesForPage,
     type MarcherAppearancesByPageId,
@@ -77,9 +76,9 @@ const addIndividualMarcherLines = ({
     fieldTheme,
 }: {
     canvas: OpenMarchCanvas;
-    currentCoordinate: Pick<MarcherPage, "x" | "y" | "marcher_id">;
-    previousCoordinate?: Pick<MarcherPage, "x" | "y">;
-    nextCoordinate?: Pick<MarcherPage, "x" | "y">;
+    currentCoordinate: Pick<PagePosition, "x" | "y" | "marcher_id">;
+    previousCoordinate?: Pick<PagePosition, "x" | "y">;
+    nextCoordinate?: Pick<PagePosition, "x" | "y">;
     fieldTheme: Pick<FieldTheme, "previousPath" | "nextPath">;
 }): { objectsToRemove: fabric.Object[]; readableCoords: ReadableCoords } => {
     const readableCoords = ReadableCoords.fromMarcherPage(currentCoordinate);
@@ -231,10 +230,10 @@ const renderIndividualMarcherChartsForPage = (args: {
     fieldProperties: FieldProperties;
     canvas: OpenMarchCanvas;
     marchers: Marcher[];
-    marcherPagesByMarcherForCurrentPage: Record<number, MarcherPage>;
+    marcherPagesByMarcherForCurrentPage: Record<number, PagePosition>;
     page: Page;
     pageIndex: number;
-    marcherPagesMap: MarcherPageMap;
+    marcherPagesMap: Pick<PagePositionMap, "marcherPagesByPage">;
     sortedPages: Page[];
 }) => {
     const {
@@ -303,8 +302,8 @@ const processDrillChartExportPage = (args: {
     canvas: OpenMarchCanvas;
     canvasMarchersById: Record<number, CanvasMarcher>;
     marchers: Marcher[];
-    marcherPagesByMarcherForCurrentPage: Record<number, MarcherPage>;
-    marcherPagesMap: MarcherPageMap;
+    marcherPagesByMarcherForCurrentPage: Record<number, PagePosition>;
+    marcherPagesMap: Pick<PagePositionMap, "marcherPagesByPage">;
     sortedPages: Page[];
     marcherAppearancesByPageId?: MarcherAppearancesByPageId;
     individualCharts: boolean;
@@ -378,7 +377,8 @@ export const generateDrillChartExportSVGs = async (args: {
     fieldProperties: FieldProperties;
     sortedPages: Page[];
     marchers: Marcher[];
-    marcherPagesMap: MarcherPageMap;
+    /** Positions by page: `marcher_pages` rows in page mode, resolver samples in timeline mode (P7.7) */
+    marcherPagesMap: Pick<PagePositionMap, "marcherPagesByPage">;
     sectionAppearances?: SectionAppearance[];
     marcherAppearancesByPageId?: MarcherAppearancesByPageId;
     backgroundImage?: HTMLImageElement;
