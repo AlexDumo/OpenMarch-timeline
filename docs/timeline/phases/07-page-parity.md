@@ -80,7 +80,7 @@ Beat insert and delete ripple timeline rows (same rules as P7.4).
 ### P7.6: Copy and paste
 
 - Owner: timeline-worker (timeline/p7-copy-paste)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/28
 - Parallel: yes
 - Depends on: P7.1
@@ -644,4 +644,21 @@ Facts that change how to read the PR #14 note above:
   - eslint, prettier and cspell: clean, apart from 3 warnings that are already on the base.
   - Skipped by policy: the full `test:history`, Playwright and `build:electron`.
 - **Next:** the lead re-reviews and merges PR #28.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.6
+
+- **Done:** reviewed PR #28 and squash-merged it at head 560510e1.
+  - The review found five items, all fixed in 560510e1:
+    - the action now waits for queued writes to settle before planning;
+    - planning errors go through `toastTimelineError`;
+    - refusals name marchers by drill number;
+    - the action is extracted to `setMarchersToNeighborPage` with real branch tests;
+    - the phase docs no longer mention `refuseInTimelineMode`.
+- **Checks** (run by the lead on 560510e1):
+  - `tsc --noEmit`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/`, `timelinePageCopy` and `timelineCoordinateWrites`: 25 files, 608 tests passed.
+  - `pnpm --dir apps/desktop run test`: 128 files and 1,878 tests passed, no errors.
+  - Skipped by policy: the full `test:history` suite and e2e.
+- **Next:** P7.2's tools still plan without waiting for writes to settle. That gap went to the P7.13 worker, either to fix or to log as a follow-up.
 - **Blockers:** none.
