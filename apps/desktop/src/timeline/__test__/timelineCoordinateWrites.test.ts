@@ -29,6 +29,12 @@ import {
     timelineResolverSettled,
     useTimelineResolverStore,
 } from "../timelineStore";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * The routed coordinate tools (docs/timeline/phases/07-page-parity.md P7.2), with the timeline

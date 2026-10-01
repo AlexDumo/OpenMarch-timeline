@@ -24,6 +24,12 @@ import {
     updateTimelineTransitionsInTransaction,
 } from "../timelineTransitions";
 import { moveMarchersOnPage } from "../timelineMoves";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * "Move a marcher on page N" as timeline writes (docs/timeline/phases/07-page-parity.md P7.2), on

@@ -31,6 +31,12 @@ import {
     ShowChangedDuringExportError,
 } from "../exportPagePositions";
 import { generateDrillChartExportSVGs } from "../svg-generator";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * Page positions for the coordinate sheet and drill chart exports in timeline mode

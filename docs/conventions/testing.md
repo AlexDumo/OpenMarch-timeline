@@ -20,3 +20,9 @@ Use `test:focused` rather than `test` for a single file: the `test` script ends 
 `--silent`, and Vitest 4 parses a trailing path as that flag's value and exits.
 Tests that use `getTestWithHistory` need `pnpm --dir apps/desktop run test:history
 <relative-test-file>` instead.
+
+`pnpm --dir apps/desktop run test:timeline` runs the desktop suite with timeline mode on in the
+fixtures (`VITEST_TIMELINE_MODE=true`, see `apps/desktop/src/test/timelineMode.ts`): data
+fixtures are converted to timeline rows and the workspace `timelineMode` flag is set. A file whose
+tests set up timeline mode themselves calls `keepFixturesInPageMode(reason)`; a test that asserts
+page-mode behavior that timeline mode drops uses `it.skipIf(skipInTimelineMode(reason))`.

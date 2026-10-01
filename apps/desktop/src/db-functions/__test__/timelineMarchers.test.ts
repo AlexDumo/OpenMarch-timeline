@@ -21,6 +21,12 @@ import {
     createTimelineTransitionsInTransaction,
     setTimelineTransitionDestinationInTransaction,
 } from "../timelineTransitions";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * Marcher add and delete in timeline mode (docs/timeline/phases/07-page-parity.md P7.3), on a

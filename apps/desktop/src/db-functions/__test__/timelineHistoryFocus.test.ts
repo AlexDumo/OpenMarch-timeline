@@ -25,6 +25,12 @@ import { deletePages } from "../page";
 import { createMarchers } from "../marcher";
 import { moveMarchersOnPage } from "../timelineMoves";
 import { pageForEndBeat, timelineHistoryFocus } from "../timelineHistoryFocus";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * Undo and redo in timeline mode (docs/timeline/phases/07-page-parity.md P7.13): the page to jump

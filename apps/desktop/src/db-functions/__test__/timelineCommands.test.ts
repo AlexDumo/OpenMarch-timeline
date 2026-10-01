@@ -21,6 +21,12 @@ import {
 import { createTimelineTransitionsInTransaction } from "../timelineTransitions";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import { createTrack, shiftTimeline } from "../timelineCommands";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+// P7.17: these tests set up timeline mode themselves
+keepFixturesInPageMode(
+    "its tests convert the show or write timeline rows, and set the flag, themselves",
+);
 
 /**
  * The timeline's commands (docs/timeline/phases/08-authoring-ui.md P8.9) on a converted
