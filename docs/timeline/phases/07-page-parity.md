@@ -150,7 +150,7 @@ The mobile app payload and the performer appearance export read every page row. 
 ### P7.13: Undo, redo and query invalidation in timeline mode
 
 - Owner: timeline-worker (timeline/p7-undo-redo)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -623,4 +623,12 @@ Facts that change how to read the PR #14 note above:
 - **Cross-phase note (stale-resolver plans), for P7.10 to P7.13:** any tool that reads `useTimelineResolverStore.getState().resolver` to plan a write can plan from stale positions while an earlier write is still in its transaction. Batches reach the resolver only on commit. Await `timelinePositionsSettled()` before planning; never call it inside a wrapped write. P7.2's tools still read the resolver synchronously (`getSelectedMarcherPages`, `transformMarchersOnPage`). Rapid nudges are serialized by `isUpdatingDirection`, but an align pressed right after a nudge can still miss the nudge. Left as a follow-up; no package owns it yet.
 - **Checks:** `tsc --noEmit` clean. `vitest run` on `timelinePageCopy.test.ts` and `timelineMoves.test.ts`: 25 passed. eslint, prettier and cspell on the changed files: clean, apart from the 3 warnings already on the base. The desktop suite and focused `test:history` are running.
 - **Resume from:** branch `timeline/p7-copy-paste` at `560510e1`. Read the suite log, rerun `pnpm --dir apps/desktop run test:history src/timeline/__test__/timelinePageCopy.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts src/db-functions/__test__/timelineMoves.test.ts` alone, then update the PR #28 body.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-undo-redo) · P7.13 checkpoint
+
+- **Done:** commit `5a935213` (wip). New `apps/desktop/src/db-functions/timelineHistoryFocus.ts`: in timeline mode, `performHistoryAction` picks the page to jump to and the marchers to select from the action's committed change batch (now returned as `HistoryResponse.timelineBatch`) instead of `marcher_pages` statements. Timeline table names map to no React Query keys. `useAnimation` and `StateInitializer` no longer fetch page-mode coordinate data in timeline mode. Tests in `src/db-functions/__test__/timelineHistoryFocus.test.ts`.
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` clean; `vitest run src/db-functions/__test__/timelineHistoryFocus.test.ts`: 10 passed.
+- **Next:** focused `test:history`, the regular desktop suite, lint, then the PR.
+- **Resume from:** branch `timeline/p7-undo-redo` at `5a935213`; run `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineHistoryFocus.test.ts src/db-functions/__test__/history.test.ts src/db-functions/__test__/timelineUndo.test.ts` and `pnpm --dir apps/desktop run test` (background), then open the PR.
 - **Blockers:** none.
