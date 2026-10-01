@@ -8,6 +8,7 @@ import { dropAllTriggers } from "../migrations/triggers";
 import {
     createAllTriggers,
     recreateChangeLogTriggers,
+    recreatePageEraFreezeTriggers,
 } from "../migrations/triggers";
 import { sql } from "drizzle-orm";
 import { DB } from "../db";
@@ -118,6 +119,8 @@ export class DrizzleMigrationService {
             // Runs on every open, after the file-version guard above: it must never write to a
             // file this build refuses.
             recreateChangeLogTriggers(this.rawDb);
+            // Likewise for the page-era freeze (P9.5), which files migrated before it lack
+            recreatePageEraFreezeTriggers(this.rawDb);
 
             console.log("Drizzle migrations applied successfully.");
         } catch (error) {

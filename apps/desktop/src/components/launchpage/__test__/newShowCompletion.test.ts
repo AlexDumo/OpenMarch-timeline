@@ -23,7 +23,7 @@ import { marcherPagesByPageId } from "@/db-functions/marcherPage";
 import { FIRST_PAGE_ID } from "@/db-functions/page";
 import { getSectionAppearances } from "@/db-functions/sectionAppearance";
 import { getMarcherTags, getTags } from "@/db-functions/tag";
-import { setTimelineModeFlag } from "@/test/timelineMode";
+import { setTimelineModeFlag, timelineFixtureMode } from "@/test/timelineMode";
 import { OPEN_STOPPED_STATUS } from "@om-electron/database/convertOnOpenGate";
 
 describe("newShowCompletion helpers", () => {
@@ -569,11 +569,17 @@ describeDbTests("completeNewShow", (it) => {
         const t2 = marcherByDrillNumber.get("T2");
         expect(t1).toBeDefined();
         expect(t2).toBeDefined();
-        expect(firstPageByMarcherId.get(t1!.id)).toMatchObject({
+        // In a timeline-mode file the first-page coordinates are the homes, and the frozen
+        // marcher pages aren't written (P9.5)
+        const firstPagePosition = (marcher: (typeof marchers)[number]) =>
+            timelineFixtureMode()
+                ? { x: marcher.home_x, y: marcher.home_y }
+                : firstPageByMarcherId.get(marcher.id);
+        expect(firstPagePosition(t1!)).toMatchObject({
             x: 321,
             y: 654,
         });
-        expect(firstPageByMarcherId.get(t2!.id)).toMatchObject({
+        expect(firstPagePosition(t2!)).toMatchObject({
             x: 987,
             y: 123,
         });
@@ -687,6 +693,10 @@ describeDbTests("completeNewShow", (it) => {
         expect(byDrill.get("T2")).toMatchObject({ home_x: 987, home_y: 123 });
         const settings = await getWorkspaceSettingsParsed({ db });
         expect(settings.timelineMode).toBe(true);
+        // Marcher pages are frozen in timeline mode (P9.5): none were written
+        expect(
+            await marcherPagesByPageId({ db, pageId: FIRST_PAGE_ID }),
+        ).toEqual([]);
     });
 
     it("in page mode, imported coordinates don't touch the homes", async ({

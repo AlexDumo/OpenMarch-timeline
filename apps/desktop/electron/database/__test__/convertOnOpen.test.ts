@@ -488,11 +488,20 @@ describe("convert on open", () => {
     );
 
     describe("a version-7 file with timeline rows", () => {
-        /** What a release without the version guard does: reset to 7 and edit the page rows. */
+        /**
+         * What a release without the version guard does: reset to 7 and edit the show. Its edits
+         * to the page-era tables are refused by the freeze triggers the file carries (P9.5), so
+         * the edit here is a page's notes.
+         */
         function reopenInOlderRelease() {
             withDb(showPath, (db) => {
                 db.exec("PRAGMA user_version = 7");
-                db.exec("UPDATE marcher_pages SET x = x + 10 WHERE id = 1");
+                expect(() =>
+                    db.exec("UPDATE marcher_pages SET x = x + 10 WHERE id = 1"),
+                ).toThrow(/read-only in timeline mode/);
+                db.exec(
+                    "UPDATE pages SET notes = 'edited by an older release' WHERE id = 1",
+                );
             });
         }
 

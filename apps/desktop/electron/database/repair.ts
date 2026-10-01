@@ -6,6 +6,7 @@ import * as path from "path";
 import { app } from "electron";
 import { getOrm } from "./db";
 import { DrizzleMigrationService } from "./services/DrizzleMigrationService";
+import { liftPageEraFreezeTriggers } from "./migrations/triggers";
 import {
     applyFileVersionDecision,
     fileTooNewMessage,
@@ -93,6 +94,10 @@ export const copyDataFromOriginalDatabase = (
         )
         .all() as Array<{ name: string }>;
 
+    // The workspace settings are copied first, so a timeline-mode file's flag is on before its
+    // frozen page-era rows are copied. The freeze (P9.5) is lifted for the copy.
+    const restoreFreeze = liftPageEraFreezeTriggers(newDb);
+
     // Attach the original database to the new database connection
     const attachName = "original_db";
     newDb.prepare(`ATTACH DATABASE ? AS ${attachName}`).run(originalDbPath);
@@ -151,6 +156,7 @@ export const copyDataFromOriginalDatabase = (
     } finally {
         // Detach the original database
         newDb.prepare(`DETACH DATABASE ${attachName}`).run();
+        restoreFreeze();
     }
 };
 
