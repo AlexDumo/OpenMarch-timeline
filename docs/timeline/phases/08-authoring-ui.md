@@ -72,7 +72,7 @@ Wire the UI's commands to the write path: moving a clip moves its whole timeline
 ### P8.2: Shapes
 
 - Owner: timeline-worker (timeline/p8-2-shapes)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/34
 - Parallel: yes
 - Depends on: P8.0
@@ -617,4 +617,23 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/34's body is updated for the review fixes in ace16e71. The branch was merged with `timeline-try-2`, not force-pushed.
 - **Checks:** `pnpm --dir apps/desktop run test` at ace16e71, run once and alone: 153 files (146 passed, 7 skipped), 2,150 tests passed. The other checks are in the previous entry. Not run (policy): full `test:history`, e2e, `build:electron`.
 - **Next:** re-review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P8.2
+
+- **Done:** reviewed PR #34 and squash-merged it at head ace16e71. The review found two significant issues and four smaller ones, all fixed:
+  - Closed shapes converted to freehand stacked the first and last slot. They are now open paths, with a distinctness test over every conversion.
+  - Deleting a shape in use gave a generic error. It now gives an E-ARGS refusal naming the transitions.
+  - A circle drawn from the selection now passes through marcher 1.
+  - A double-click guard is added.
+  - Unknown selected marchers are now refused.
+  - Tests are added for degenerate selections.
+- **Checks (lead, on ace16e71, includes #33):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history src/db-functions/__test__/`: 28 files, 647 tests passed.
+  - `pnpm --dir apps/desktop run test`: 146 files, 2,150 tests passed, no errors.
+  - Skipped by policy: the full `test:history` and e2e suites.
+- **Next:**
+  - P7.11 (page-era shape tools; canvas drawing of spec shapes) is now unblocked.
+  - The UI exit-gate item needs a manual app check.
 - **Blockers:** none.
