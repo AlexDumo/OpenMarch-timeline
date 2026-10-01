@@ -1675,7 +1675,8 @@ describeDbTests(
         // So a generator change can't silently stop exercising something. Skipped unless every
         // seed ran and passed (a `-t` filter, a failed seed) or the run is shorter than the default.
         it("the run exercised every kind of step", ({ skip }) => {
-            if (SEEDS === 0 || STEPS < 40 || stats.seeds < SEEDS) skip();
+            // Fewer total steps than the default (5 seeds x 80) can't reach every kind
+            if (SEEDS * STEPS < 5 * 80 || stats.seeds < SEEDS) skip();
             const counts = {
                 commits: stats.commits,
                 rejected: stats.rejected,
