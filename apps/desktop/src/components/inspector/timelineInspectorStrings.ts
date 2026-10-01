@@ -187,6 +187,69 @@ export const TIMELINE_INSPECTOR_STRINGS = {
         "Nobody founds this follow-the-leader move, so there's no trail: the marchers fill the shape from its far end.",
     "inspector.timeline.diagnostics.dOrderFallback":
         "This move couldn't inherit an order from a single earlier move, so it uses slot order.",
+
+    "inspector.timeline.shapes.title": "Shapes",
+    "inspector.timeline.shapes.help":
+        "Shapes are formations in field coordinates, with no time. A transition moves its marchers into one. A new shape is drawn through the selected marchers where they stand at the selected page, or in the middle of the field when nobody is selected.",
+    "inspector.timeline.shapes.newKind": "Kind of new shape",
+    "inspector.timeline.shapes.create": "New shape",
+    "inspector.timeline.shapes.none": "No shapes yet.",
+    "inspector.timeline.shapes.pick": "Shape to edit",
+    "inspector.timeline.shapes.named": "{name} ({kind})",
+    "inspector.timeline.shapes.unnamed": "Shape {id} ({kind})",
+    "inspector.timeline.shapes.name": "Name",
+    "inspector.timeline.shapes.usedBy": "Used by transitions {list}.",
+    "inspector.timeline.shapes.unused": "No transition uses this shape.",
+    "inspector.timeline.shapes.usedHelp":
+        "Changes move every marcher heading to this shape.",
+    "inspector.timeline.shapes.kindLabel": "Kind",
+    "inspector.timeline.shapes.kindHelp":
+        "Changing the kind redraws the shape over the same ground.",
+    "inspector.timeline.shapes.kindNoFtl":
+        "It can't become a block: transition {list} follows the leader into it, and a trail can't end on a block.",
+    "inspector.timeline.shapes.kinds.line": "Line",
+    "inspector.timeline.shapes.kinds.freehand": "Freehand",
+    "inspector.timeline.shapes.kinds.circle": "Circle",
+    "inspector.timeline.shapes.kinds.box": "Box",
+    "inspector.timeline.shapes.kinds.block": "Block",
+    "inspector.timeline.shapes.points": "Points",
+    "inspector.timeline.shapes.pointsHelp":
+        "Slots are spread evenly along the path, from the first point to the last.",
+    "inspector.timeline.shapes.pointX": "Point {n} x",
+    "inspector.timeline.shapes.pointY": "Point {n} y",
+    "inspector.timeline.shapes.pointUp": "Move point {n} up",
+    "inspector.timeline.shapes.pointDown": "Move point {n} down",
+    "inspector.timeline.shapes.pointRemove": "Remove point {n}",
+    "inspector.timeline.shapes.pointAdd": "Add point",
+    "inspector.timeline.shapes.pointsMin":
+        "A freehand path needs at least two points.",
+    "inspector.timeline.shapes.lineStart": "Start",
+    "inspector.timeline.shapes.lineEnd": "End",
+    "inspector.timeline.shapes.x": "{what} x",
+    "inspector.timeline.shapes.y": "{what} y",
+    "inspector.timeline.shapes.center": "Center",
+    "inspector.timeline.shapes.radius": "Radius",
+    "inspector.timeline.shapes.startAngle": "Start angle (degrees)",
+    "inspector.timeline.shapes.direction": "Direction",
+    "inspector.timeline.shapes.counterclockwise": "Counterclockwise",
+    "inspector.timeline.shapes.clockwise": "Clockwise",
+    "inspector.timeline.shapes.circleHelp":
+        "Slots are spread evenly around the circle from the start angle. Angles and directions are in field coordinates, measured from +x toward +y.",
+    "inspector.timeline.shapes.origin": "Origin",
+    "inspector.timeline.shapes.width": "Width",
+    "inspector.timeline.shapes.height": "Height",
+    "inspector.timeline.shapes.boxHelp":
+        "Slots are spread evenly around the outline, starting at the origin.",
+    "inspector.timeline.shapes.rows": "Rows",
+    "inspector.timeline.shapes.cols": "Columns",
+    "inspector.timeline.shapes.spacing": "Spacing",
+    "inspector.timeline.shapes.cells":
+        "{rows} × {cols} = {cells} places, filled row by row from the origin.",
+    "inspector.timeline.shapes.cellsNeeded":
+        "Transition {list} has {slots} slots, so the block needs at least {slots} places.",
+    "inspector.timeline.shapes.delete": "Delete shape",
+    "inspector.timeline.shapes.deleteInUse":
+        "It can't be deleted while transitions {list} use it. Give them another destination first.",
 } as const;
 
 export type TimelineInspectorStringKey =

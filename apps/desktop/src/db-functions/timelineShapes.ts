@@ -6,7 +6,8 @@ import {
     type ShapeKind,
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
-import { DbTransaction } from "./types";
+import { DbConnection, DbTransaction } from "./types";
+import { transactionWithHistory } from "./history";
 import {
     assertValid,
     mapDbErrors,
@@ -155,4 +156,66 @@ export const deleteTimelineShapesInTransaction = async ({
             .where(inArray(schema.timeline_shapes.id, [...shapeIds]))
             .returning(),
     );
+};
+
+/** `createTimelineShapesInTransaction` for one shape, as one undoable edit (P8.2). */
+export const createTimelineShape = async ({
+    db,
+    newShape,
+}: {
+    db: DbConnection;
+    newShape: NewTimelineShapeArgs;
+}): Promise<DatabaseTimelineShape> => {
+    const [row] = await transactionWithHistory(
+        db,
+        "createTimelineShape",
+        (tx) =>
+            createTimelineShapesInTransaction({ tx, newShapes: [newShape] }),
+    );
+    return row!;
+};
+
+/**
+ * `updateTimelineShapesInTransaction` for one shape, as one undoable edit (P8.2). An update that
+ * changes nothing still opens an edit, which `transactionWithHistory` refuses, so skip no-op
+ * changes before calling it. A change that would break a transition using the shape is refused
+ * by the database (E-T3/E-T4), and nothing is written.
+ */
+export const updateTimelineShape = async ({
+    db,
+    modified,
+}: {
+    db: DbConnection;
+    modified: ModifiedTimelineShapeArgs;
+}): Promise<DatabaseTimelineShape> => {
+    const [row] = await transactionWithHistory(
+        db,
+        "updateTimelineShape",
+        (tx) =>
+            updateTimelineShapesInTransaction({
+                tx,
+                modifiedShapes: [modified],
+            }),
+    );
+    return row!;
+};
+
+/**
+ * Deletes one shape as one undoable edit (P8.2). A shape that a transition uses is refused by the
+ * database (I-D1, the foreign key is RESTRICT), and nothing is written.
+ */
+export const deleteTimelineShape = async ({
+    db,
+    shapeId,
+}: {
+    db: DbConnection;
+    shapeId: number;
+}): Promise<void> => {
+    await transactionWithHistory(db, "deleteTimelineShape", async (tx) => {
+        const deleted = await deleteTimelineShapesInTransaction({
+            tx,
+            shapeIds: new Set([shapeId]),
+        });
+        if (deleted.length === 0) refuse(`shape ${shapeId} does not exist`);
+    });
 };

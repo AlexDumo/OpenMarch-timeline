@@ -22,6 +22,10 @@ import {
     buildAssignmentEditTarget,
     type AssignmentEditTarget,
 } from "./timelineAssignmentEditor";
+import {
+    buildShapeEditTargets,
+    type ShapeEditTarget,
+} from "./timelineShapeEditor";
 import { readVersionedTimelineViewTables } from "./useTimelineTracks";
 import type { TimelineViewTables } from "./timelineViewModel";
 
@@ -29,6 +33,15 @@ import type { TimelineViewTables } from "./timelineViewModel";
 export const MAX_INSPECTED_MARCHERS = 10;
 
 const NO_DIAGNOSTICS: Diagnostic[] = [];
+interface ShapeEdits {
+    /**
+     * The store and display versions the shapes were read at, summed (as the other editors'
+     * targets are); -1 before any read
+     */
+    readonly version: number;
+    readonly targets: readonly ShapeEditTarget[];
+}
+const NO_SHAPE_EDITS: ShapeEdits = { version: -1, targets: [] };
 
 interface Built {
     readonly inspections: readonly MarcherInspection[];
@@ -86,6 +99,11 @@ export function useTimelineInspections({
     shapeOptions: readonly TransitionShapeOption[];
     /** The slots and assignments of each of `transitionEdits` (P8.4), in the same order */
     assignmentEdits: readonly AssignmentEditTarget[];
+    /**
+     * Every shape, for the shape editor (P8.2), by id, and the version they were read at.
+     * Built whether or not a page is selected.
+     */
+    shapeEdits: ShapeEdits;
 } {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const { version, displayVersion } = useTimelineViewVersions();
@@ -195,6 +213,30 @@ export function useTimelineInspections({
         diagnostics,
     ]);
 
+    const shapes = useMemo(() => {
+        if (!active || !loaded) return NO_SHAPE_EDITS;
+        if (
+            loaded.version !== version ||
+            loaded.displayVersion !== displayVersion
+        )
+            return null;
+        // Moves on a display-only edit too, like the other editors' version (P7.15)
+        const shown = loaded.version + loaded.displayVersion;
+        const host = getTimelineHost();
+        if (!host) return NO_SHAPE_EDITS;
+        return {
+            version: shown,
+            targets: buildShapeEditTargets(
+                host.snapshot.shapes,
+                loaded.tables.shapes,
+                host.snapshot.transitions,
+                shown,
+            ),
+        };
+    }, [active, loaded, version, displayVersion]);
+    const lastShapes = useRef<ShapeEdits>(NO_SHAPE_EDITS);
+    if (shapes !== null) lastShapes.current = shapes;
+
     const last = useRef<Built>(EMPTY_BUILT);
     if (built !== null) last.current = built;
     const current = built ?? last.current;
@@ -203,6 +245,7 @@ export function useTimelineInspections({
         transitionEdits: current.transitionEdits,
         shapeOptions: current.shapeOptions,
         assignmentEdits: current.assignmentEdits,
+        shapeEdits: shapes ?? lastShapes.current,
         omitted: Math.max(0, known.ids.length - MAX_INSPECTED_MARCHERS),
         unknownMarcherIds: known.unknown,
         diagnostics,
