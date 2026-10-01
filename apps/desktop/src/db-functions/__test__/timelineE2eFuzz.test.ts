@@ -66,19 +66,22 @@ import type { DbTransaction } from "../types";
  *   and single undos, redos and bursts of both through `performUndo`/`performRedo`, with
  *   `group_limit` set low so pruning happens.
  * - The resolver host (`timelineHost.ts`, the one the app runs) is fed only by the batches
- *   delivered to `subscribeTimelineChanges`. After every committed edit, undo and redo, its
- *   mirror must equal a fresh read of the tables, its resolver must match a fresh cold build and
- *   the oracle at sampled beats, and its caches must be closed.
+ *   delivered to `subscribeTimelineChanges`. Every committed edit, undo and redo must deliver
+ *   exactly one batch if it changed data and none if it did not. After each, the host's mirror
+ *   must equal a fresh read of the tables, its resolver must match a fresh cold build and the
+ *   oracle at sampled beats, and its caches must be closed.
  * - After every undo and redo, the data must equal the snapshot recorded at that point in
  *   history, and the undo and redo stacks must hold the expected number of groups. No undo or
  *   redo may be rejected. A rejected edit must change nothing (data and history tables) and
- *   deliver no batch.
+ *   deliver no batch, and an `E-DB` rejection must be one of the expected database reasons.
+ * - Every generator must commit, and every invalid change must be applied, at least once in a
+ *   full run (the coverage test).
  * - Negative control (QA-UNDO-9, like `e2e.mjs --v06-anchor`): with the v0.6 row-rewriting range
  *   trigger restored, undo must break on at least one seed.
  *
  * Size, through environment variables (defaults keep it to a few seconds):
  *
- * - `TIMELINE_E2E_SEEDS` (3), `TIMELINE_E2E_FIRST_SEED` (1), `TIMELINE_E2E_STEPS` (40)
+ * - `TIMELINE_E2E_SEEDS` (5), `TIMELINE_E2E_FIRST_SEED` (1), `TIMELINE_E2E_STEPS` (80)
  * - `TIMELINE_E2E_V06_SEEDS` (12): the most seeds the negative control tries; it stops at the
  *   first that breaks. `0` skips it.
  * - `TIMELINE_E2E_TIMEOUT` (120000): per-seed timeout in ms
@@ -93,9 +96,9 @@ const envInt = (name: string, fallback: number) => {
     return Number.isInteger(value) && value >= 0 ? value : fallback;
 };
 
-const SEEDS = envInt("TIMELINE_E2E_SEEDS", 3);
+const SEEDS = envInt("TIMELINE_E2E_SEEDS", 5);
 const FIRST_SEED = envInt("TIMELINE_E2E_FIRST_SEED", 1);
-const STEPS = envInt("TIMELINE_E2E_STEPS", 40);
+const STEPS = envInt("TIMELINE_E2E_STEPS", 80);
 const V06_SEEDS = envInt("TIMELINE_E2E_V06_SEEDS", 12);
 const TIMEOUT = envInt("TIMELINE_E2E_TIMEOUT", 120_000);
 const REPORT = process.env.TIMELINE_E2E_REPORT;
@@ -135,17 +138,24 @@ const newStats = () => ({
     switchCommits: 0,
     rejected: 0,
     rejectReasons: {} as Record<string, number>,
-    /** Edits that ended with a deliberately invalid change */
+    /** Rejected edits whose deliberately invalid change was applied */
     invalidAttempts: 0,
+    /** Applied invalid changes, by name */
+    invalidApplied: {} as Partial<Record<InvalidName, number>>,
+    /** Committed edits in which each generator wrote something, by name */
+    opCommits: {} as Partial<Record<OpName, number>>,
     /** Edits in which no generator found anything to change */
     skipped: 0,
     undos: 0,
     redos: 0,
     undoEmpty: 0,
     redoEmpty: 0,
-    bursts: 0,
+    undoBursts: 0,
+    redoBursts: 0,
     /** Edits that committed with the undo stack already at `GROUP_LIMIT` (pruning) */
     commitsAtLimit: 0,
+    /** Commits that changed no data and delivered a batch of no-op changes */
+    noOpBatches: 0,
     verifications: 0,
     positionsCompared: 0,
     maxAssignments: 0,
@@ -155,6 +165,9 @@ type Stats = ReturnType<typeof newStats>;
 
 /** A fuzz finding: the seed and step, and what went wrong. */
 class FuzzFailure extends Error {
+    /** Thrown by an undo or redo step, rather than by an edit */
+    inHistoryStep = false;
+
     constructor(
         readonly kind:
             | "undo-rejected"
@@ -227,6 +240,43 @@ const dumpData = async (db: DbConnection) => {
     return JSON.stringify(out);
 };
 
+/**
+ * The columns the change-log triggers image (`triggers.ts`), so a commit delivers a batch with a
+ * real change exactly when this dump changes. Timelines and a marcher's other columns aren't
+ * logged (R-1, C-5).
+ */
+const LOGGED_QUERIES = [
+    "SELECT id, home_x, home_y FROM marchers ORDER BY id",
+    "SELECT id, kind, geometry FROM timeline_shapes ORDER BY id",
+    "SELECT id, dest_shape_id, path_style, path_params, order_mode, slot_count, start_beat, end_beat FROM timeline_transitions ORDER BY id",
+    "SELECT id, marcher_id, transition_id, slot_index, start_beat, end_beat, layer FROM timeline_assignments ORDER BY id",
+    "SELECT transition_id, slot_index, x, y FROM timeline_slot_destinations ORDER BY transition_id, slot_index",
+];
+const dumpLogged = async (db: DbConnection) => {
+    const out: unknown[] = [];
+    for (const query of LOGGED_QUERIES) out.push(await db.all(sql.raw(query)));
+    return JSON.stringify(out);
+};
+
+/**
+ * Whether a batch changes nothing overall: for each row, its first image before equals its last
+ * image after. Batches aren't coalesced, so an edit that sets a value and sets it back logs two
+ * changes. Destinations are logged under their transition id, so they are keyed by slot too.
+ */
+const isNetNoOp = (batch: ChangeBatch) => {
+    const net = new Map<string, { before: unknown; after: unknown }>();
+    for (const c of batch.changes) {
+        const image = (c.before ?? c.after) as { slot?: number } | null;
+        const key = `${c.table}:${c.rowId}:${c.table === "slot_destinations" ? image?.slot : ""}`;
+        const entry = net.get(key);
+        if (entry) entry.after = c.after;
+        else net.set(key, { before: c.before, after: c.after });
+    }
+    return [...net.values()].every(({ before, after }) =>
+        isDeepStrictEqual(before, after),
+    );
+};
+
 const dumpHistory = async (db: DbConnection) =>
     JSON.stringify([
         await db
@@ -274,6 +324,68 @@ const firstDifference = (expected: string, actual: string) => {
 // ---------------------------------------------------------------------------
 
 type Op = (tx: DbTransaction) => Promise<boolean>;
+
+/** The edit generators, by name; the coverage test requires each to commit at least once */
+const OP_NAMES = [
+    "add assignment",
+    "steal",
+    "delete assignment",
+    "update assignment",
+    "R-E1 range edit",
+    "R-E1 range shift",
+    "plain range update",
+    "raw range update",
+    "path style",
+    "order mode",
+    "slot count",
+    "set shape destination",
+    "shape to individual",
+    "move one point",
+    "replace every point",
+    "grow and place",
+    "child-first transition delete",
+    "add shaped transition",
+    "add individual transition",
+    "update shape",
+    "add shape",
+    "delete unused shape",
+    "home edit",
+    "add marcher",
+    "marcher delete",
+    "add timeline",
+    "update timeline",
+    "timeline delete",
+] as const;
+type OpName = (typeof OP_NAMES)[number];
+
+/** The deliberately invalid changes, by name; the coverage test requires each to be applied */
+const INVALID_NAMES = [
+    "E-S1 coincident line",
+    "E-P1 major arc",
+    "E-N2 home out of bounds",
+    "E-A1/E-A2 row after the end",
+    "E-A1/E-A2 slot past the count",
+    "E-A3 overlapping copy",
+    "E-T1 transition after its timeline",
+    "E-T3/E-T4 block followed by the leader",
+    "E-T6 unplaced point at commit",
+    "E-T6 shape on a transition with points",
+    "E-DB shape in use",
+    "E-A1 range strands a row",
+    "E-A2 slot count below an occupied slot",
+    "E-T1 timeline drops a transition",
+] as const;
+type InvalidName = (typeof INVALID_NAMES)[number];
+
+interface NamedOp<Name extends string> {
+    name: Name;
+    run: Op;
+}
+const op = (name: OpName, run: Op): NamedOp<OpName> => ({ name, run });
+const invalidOp = (name: InvalidName, run: Op): NamedOp<InvalidName> => ({
+    name,
+    run,
+});
 
 interface EditTags {
     rangeEdit: boolean;
@@ -497,11 +609,11 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
             return true;
         };
 
-    const ops: Op[] = [
-        addAssignment(),
-        addAssignment(), // weighted: assignments are most edits
-        async (tx) => addAssignment(ri(1, 3))(tx), // steal
-        async (tx) => {
+    const ops: NamedOp<OpName>[] = [
+        op("add assignment", addAssignment()),
+        op("add assignment", addAssignment()), // weighted: assignments are most edits
+        op("steal", async (tx) => addAssignment(ri(1, 3))(tx)), // steal
+        op("delete assignment", async (tx) => {
             const ids = await idsOf(tx, schema.timeline_assignments);
             if (!ids.length) return false;
             await deleteTimelineAssignmentsInTransaction({
@@ -509,8 +621,8 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
-        async (tx) => {
+        }),
+        op("update assignment", async (tx) => {
             const rows = await assignmentsOf(tx);
             if (!rows.length) return false;
             const a = pick(rows);
@@ -532,11 +644,11 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
-        rangeEdit(false),
-        rangeEdit(true),
+        }),
+        op("R-E1 range edit", rangeEdit(false)),
+        op("R-E1 range shift", rangeEdit(true)),
         // A plain range update: refused (E-A1) if it would strand a row
-        async (tx) => {
+        op("plain range update", async (tx) => {
             const t = await pickTransition(tx);
             if (!t) return false;
             const [ds, de] = [ri(-3, 3), ri(-3, 3)];
@@ -552,10 +664,10 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // A raw range UPDATE, as in e2e.mjs: tr_range_check rejects a stranded row. Under the
         // v0.6 trigger it moves the anchored rows instead.
-        async (tx) => {
+        op("raw range update", async (tx) => {
             const t = await pickTransition(tx);
             if (!t) return false;
             const [ds, de] = [ri(-3, 3), ri(-3, 3)];
@@ -565,8 +677,8 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 sql`UPDATE timeline_transitions SET start_beat = start_beat + ${ds}, end_beat = end_beat + ${de} WHERE id = ${t.id}`,
             );
             return true;
-        },
-        async (tx) => {
+        }),
+        op("path style", async (tx) => {
             const t = await pickTransition(tx);
             if (!t) return false;
             const style = pick<PathStyle>([
@@ -581,8 +693,8 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
-        async (tx) => {
+        }),
+        op("order mode", async (tx) => {
             const t = await pickTransition(tx);
             if (!t) return false;
             const order: OrderMode =
@@ -592,9 +704,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // Slot count: a shaped transition alone; a shapeless one with its new points
-        async (tx) => {
+        op("slot count", async (tx) => {
             const t = await pickTransition(tx);
             if (!t) return false;
             const n = ri(1, 6);
@@ -607,9 +719,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // A new destination shape; from individual points this is a switch
-        async (tx) => {
+        op("set shape destination", async (tx) => {
             const t = await pickTransition(tx);
             const shapes = await idsOf(tx, schema.timeline_shapes);
             if (!t || !shapes.length) return false;
@@ -620,10 +732,21 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
             });
             if (t.dest_shape_id === null) tags.switched = true;
             return true;
-        },
+        }),
         // Shape to individual points (E-T5 if it follows the leader)
-        async (tx) => {
-            const t = await pickTransition(tx, (x) => x.dest_shape_id !== null);
+        op("shape to individual", async (tx) => {
+            // Mostly one that doesn't follow the leader, so the switch usually commits
+            const shaped = (
+                x: typeof schema.timeline_transitions.$inferSelect,
+            ) => x.dest_shape_id !== null;
+            const t =
+                (R() < 0.7
+                    ? await pickTransition(
+                          tx,
+                          (x) =>
+                              shaped(x) && x.path_style !== "follow_the_leader",
+                      )
+                    : undefined) ?? (await pickTransition(tx, shaped));
             if (!t) return false;
             await setTimelineTransitionDestinationInTransaction({
                 transitionId: t.id,
@@ -635,9 +758,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
             });
             tags.switched = true;
             return true;
-        },
+        }),
         // Move one placed point
-        async (tx) => {
+        op("move one point", async (tx) => {
             const d = await tx
                 .select()
                 .from(schema.timeline_slot_destinations)
@@ -652,9 +775,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // Replace every point
-        async (tx) => {
+        op("replace every point", async (tx) => {
             const t = await pickTransition(tx, (x) => x.dest_shape_id === null);
             if (!t) return false;
             await setTimelineSlotDestinationsInTransaction({
@@ -663,9 +786,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // Grow and place (checked at commit, QA-UNDO-4)
-        async (tx) => {
+        op("grow and place", async (tx) => {
             const t = await pickTransition(tx, (x) => x.dest_shape_id === null);
             if (!t) return false;
             const current = (
@@ -692,9 +815,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // Child-first delete (C-1)
-        async (tx) => {
+        op("child-first transition delete", async (tx) => {
             const ids = await idsOf(tx, schema.timeline_transitions);
             if (ids.length <= 3) return false;
             await deleteTimelineTransitionsInTransaction({
@@ -702,10 +825,10 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
-        addShaped,
-        addIndividual,
-        async (tx) => {
+        }),
+        op("add shaped transition", addShaped),
+        op("add individual transition", addIndividual),
+        op("update shape", async (tx) => {
             const ids = await idsOf(tx, schema.timeline_shapes);
             if (!ids.length) return false;
             await updateTimelineShapesInTransaction({
@@ -713,16 +836,16 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
-        async (tx) => {
+        }),
+        op("add shape", async (tx) => {
             await createTimelineShapesInTransaction({
                 newShapes: [shape()],
                 tx,
             });
             return true;
-        },
+        }),
         // Delete a shape no transition uses
-        async (tx) => {
+        op("delete unused shape", async (tx) => {
             const used = new Set(
                 (await transitionsOf(tx)).map((t) => t.dest_shape_id),
             );
@@ -735,8 +858,8 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
-        async (tx) => {
+        }),
+        op("home edit", async (tx) => {
             const ids = await idsOf(tx, schema.marchers);
             if (!ids.length) return false;
             await updateMarcherHomesInTransaction({
@@ -744,13 +867,13 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
-        async (tx) => {
+        }),
+        op("add marcher", async (tx) => {
             await addMarcher(tx, pt());
             return true;
-        },
+        }),
         // Delete a marcher: its assignments cascade (the C-1 exception)
-        async (tx) => {
+        op("marcher delete", async (tx) => {
             const ids = await idsOf(tx, schema.marchers);
             if (ids.length <= 2) return false;
             await mapDbErrors(() =>
@@ -760,9 +883,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                     .run(),
             );
             return true;
-        },
+        }),
         // Timelines: add, change the range (E-T1 if it would drop a transition), delete
-        async (tx) => {
+        op("add timeline", async (tx) => {
             const s = ri(0, 8);
             await createTimelinesInTransaction({
                 newTimelines: [
@@ -775,8 +898,8 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
-        async (tx) => {
+        }),
+        op("update timeline", async (tx) => {
             const ids = await idsOf(tx, schema.timelines);
             if (!ids.length) return false;
             await updateTimelinesInTransaction({
@@ -790,8 +913,8 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
-        async (tx) => {
+        }),
+        op("timeline delete", async (tx) => {
             const ids = await idsOf(tx, schema.timelines);
             // Rare, and never the last timeline
             if (ids.length <= 1 || R() < 0.7) return false;
@@ -800,7 +923,7 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
     ];
 
     /**
@@ -808,18 +931,18 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
      * validators or a trigger reject it) or returns true when the commit-time check must reject
      * the edit; false means it found nothing to break.
      */
-    const invalid: Op[] = [
+    const invalid: NamedOp<InvalidName>[] = [
         // E-S1: a line whose endpoints coincide
-        async (tx) => {
+        invalidOp("E-S1 coincident line", async (tx) => {
             const a = pt();
             await createTimelineShapesInTransaction({
                 newShapes: [{ kind: "line", geometry: { points: [a, a] } }],
                 tx,
             });
             return true;
-        },
+        }),
         // E-P1: a major arc
-        async (tx) => {
+        invalidOp("E-P1 major arc", async (tx) => {
             const t = await pickTransition(tx);
             if (!t) return false;
             await updateTimelineTransitionsInTransaction({
@@ -833,9 +956,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-N2: a home outside the bound
-        async (tx) => {
+        invalidOp("E-N2 home out of bounds", async (tx) => {
             const ids = await idsOf(tx, schema.marchers);
             if (!ids.length) return false;
             await updateMarcherHomesInTransaction({
@@ -843,9 +966,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-A1/E-A2: a row after its transition's end
-        async (tx) => {
+        invalidOp("E-A1/E-A2 row after the end", async (tx) => {
             const t = await pickTransition(tx);
             const marchers = await idsOf(tx, schema.marchers);
             if (!t || !marchers.length) return false;
@@ -862,9 +985,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-A1/E-A2: a slot past the slot count
-        async (tx) => {
+        invalidOp("E-A1/E-A2 slot past the count", async (tx) => {
             const t = await pickTransition(tx);
             const marchers = await idsOf(tx, schema.marchers);
             if (!t || !marchers.length) return false;
@@ -881,9 +1004,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-A3: an exact copy of a row overlaps it
-        async (tx) => {
+        invalidOp("E-A3 overlapping copy", async (tx) => {
             const rows = await assignmentsOf(tx);
             if (!rows.length) return false;
             const a = pick(rows);
@@ -901,9 +1024,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-T1: a transition after its timeline's end
-        async (tx) => {
+        invalidOp("E-T1 transition after its timeline", async (tx) => {
             const timelines = await tx.select().from(schema.timelines).all();
             if (!timelines.length) return false;
             const tl = pick(timelines);
@@ -920,9 +1043,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-T3/E-T4: a block shape as a follow-the-leader destination
-        async (tx) => {
+        invalidOp("E-T3/E-T4 block followed by the leader", async (tx) => {
             const blocks = (
                 await tx.select().from(schema.timeline_shapes).all()
             ).filter((s) => s.kind === "block");
@@ -945,9 +1068,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-T6 at commit: unplace one point of a shapeless transition
-        async (tx) => {
+        invalidOp("E-T6 unplaced point at commit", async (tx) => {
             const d = await tx
                 .select()
                 .from(schema.timeline_slot_destinations)
@@ -959,9 +1082,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 sql`DELETE FROM timeline_slot_destinations WHERE id = ${pick(d).id}`,
             );
             return true;
-        },
+        }),
         // E-T6 (row trigger): a shape on a transition that still has points
-        async (tx) => {
+        invalidOp("E-T6 shape on a transition with points", async (tx) => {
             const t = await pickTransition(tx, (x) => x.dest_shape_id === null);
             const shapes = await idsOf(tx, schema.timeline_shapes);
             if (!t || !shapes.length) return false;
@@ -970,9 +1093,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 sql`UPDATE timeline_transitions SET dest_shape_id = ${pick(shapes)} WHERE id = ${t.id}`,
             );
             return true;
-        },
+        }),
         // E-DB (RESTRICT): delete a shape a transition uses
-        async (tx) => {
+        invalidOp("E-DB shape in use", async (tx) => {
             const used = [
                 ...new Set(
                     (await transitionsOf(tx))
@@ -986,9 +1109,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-A1: a plain range update that strands a row
-        async (tx) => {
+        invalidOp("E-A1 range strands a row", async (tx) => {
             const rows = await assignmentsOf(tx);
             if (!rows.length) return false;
             const a = pick(rows);
@@ -1003,9 +1126,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-A2: a slot count below an occupied slot
-        async (tx) => {
+        invalidOp("E-A2 slot count below an occupied slot", async (tx) => {
             const rows = (await assignmentsOf(tx)).filter(
                 (a) => a.slot_index > 0,
             );
@@ -1027,9 +1150,9 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
         // E-T1: a timeline that no longer contains its transitions
-        async (tx) => {
+        invalidOp("E-T1 timeline drops a transition", async (tx) => {
             const t = await pickTransition(tx);
             if (!t) return false;
             await updateTimelinesInTransaction({
@@ -1043,7 +1166,7 @@ function makeGenerators(rand: Rand, v06: boolean, tags: EditTags) {
                 tx,
             });
             return true;
-        },
+        }),
     ];
 
     return { ops, invalid, addShaped, addIndividual, addAssignment, shape };
@@ -1083,6 +1206,31 @@ const rejectReason = (error: unknown) => {
     for (let e: unknown = error; e instanceof Error; e = e.cause)
         if (e.message) reason = e.message;
     return `E-DB (${reason.replace(/\d+(\.\d+)?/g, "#").slice(0, 100)})`;
+};
+
+/**
+ * The database rejections the generators can cause, besides the spec's coded ones: a second
+ * marcher or a second row in one slot of a transition (UNIQUE), a slot index, assignment range
+ * or transition range out of bounds (CHECK, from the update and raw range generators). A
+ * FOREIGN KEY failure is expected only from deleting a shape in use (RESTRICT).
+ */
+const EXPECTED_DB_REASONS = [
+    "UNIQUE constraint failed: timeline_assignments.transition_id, timeline_assignments.slot_index",
+    "UNIQUE constraint failed: timeline_assignments.transition_id, timeline_assignments.marcher_id",
+    "CHECK constraint failed: timeline_assignments_slot_index_check",
+    "CHECK constraint failed: timeline_assignments_range_check",
+    "CHECK constraint failed: timeline_transitions_range_check",
+];
+const expectedDbRejection = (reason: string, invalid?: InvalidName) =>
+    EXPECTED_DB_REASONS.some((r) => reason === `E-DB (${r})`) ||
+    (reason === "E-DB (FOREIGN KEY constraint failed)" &&
+        invalid === "E-DB shape in use");
+
+const count = <K extends string>(
+    counts: Partial<Record<K, number>>,
+    key: K,
+) => {
+    counts[key] = (counts[key] ?? 0) + 1;
 };
 
 const isRejection = (error: unknown) =>
@@ -1125,7 +1273,19 @@ async function runSeed(
             tx,
         });
         await createTimelineShapesInTransaction({
-            newShapes: Array.from({ length: 6 }, gen.shape),
+            // At least one block, which the E-T3/E-T4 invalid change needs
+            newShapes: [
+                ...Array.from({ length: 5 }, gen.shape),
+                {
+                    kind: "block",
+                    geometry: {
+                        origin: pt(),
+                        rows: 2,
+                        cols: 2,
+                        spacing: [1, 1],
+                    },
+                },
+            ],
             tx,
         });
     });
@@ -1170,6 +1330,8 @@ async function runSeed(
 
     const undoSnaps: string[] = [];
     const redoSnaps: string[] = [];
+    /** The next invalid change to try */
+    const invalidTurn = { next: ri(0, gen.invalid.length - 1) };
     let step = 0;
     const where = (what: string) => `seed ${seed}, step ${step}, ${what}`;
 
@@ -1188,15 +1350,30 @@ async function runSeed(
     };
 
     /** After any commit: the host, fed only by batches, must match the tables and the oracle. */
-    const verify = async (what: string, deliveredBefore: number) => {
+    const verify = async (
+        what: string,
+        deliveredBefore: number,
+        loggedBefore: string,
+    ) => {
         stats.verifications++;
-        if (delivered - deliveredBefore > 1)
+        // Exactly one batch when the commit changed logged data. A commit that changed none (a
+        // timeline edit, or one that wrote the values already there, such as the path style a
+        // transition has) may still deliver one, as its UPDATE fired the log triggers, but then
+        // every change must be a no-op.
+        const batches = delivered - deliveredBefore;
+        const changed = (await dumpLogged(db)) !== loggedBefore;
+        if (
+            changed
+                ? batches !== 1
+                : batches > 1 || (batches === 1 && !isNetNoOp(lastBatch!))
+        )
             throw new FuzzFailure(
                 "batch",
                 where(
-                    `${what} delivered ${delivered - deliveredBefore} batches`,
+                    `${what} ${changed ? "changed" : "did not change"} logged data and delivered ${batches} batches${batches ? `; last batch ${JSON.stringify(lastBatch)}` : ""}`,
                 ),
             );
+        if (!changed && batches === 1) stats.noOpBatches++;
         if (listenerErrors.length)
             throw new FuzzFailure(
                 "listener",
@@ -1262,6 +1439,7 @@ async function runSeed(
             ? [undoSnaps, redoSnaps]
             : [redoSnaps, undoSnaps];
         const before = await dumpData(db);
+        const loggedBefore = await dumpLogged(db);
         const expected = from.at(-1);
         const deliveredBefore = delivered;
         const response = isUndo ? await performUndo(db) : await performRedo(db);
@@ -1305,7 +1483,7 @@ async function runSeed(
                 ),
             );
         await checkStacks(name);
-        await verify(name, deliveredBefore);
+        await verify(name, deliveredBefore, loggedBefore);
         return true;
     };
 
@@ -1317,26 +1495,55 @@ async function runSeed(
                 // Undo or redo; sometimes a burst, sometimes on an empty stack
                 const isUndo = u < 0.14;
                 const n = R() < 0.3 ? ri(2, 5) : 1;
-                if (n > 1) stats.bursts++;
-                for (let k = 0; k < n; k++)
-                    if (!(await historyStep(isUndo))) break;
+                if (n > 1) stats[isUndo ? "undoBursts" : "redoBursts"]++;
+                for (let k = 0; k < n; k++) {
+                    let replayed: boolean;
+                    try {
+                        replayed = await historyStep(isUndo);
+                    } catch (error) {
+                        if (error instanceof FuzzFailure)
+                            error.inHistoryStep = true;
+                        throw error;
+                    }
+                    if (!replayed) break;
+                }
                 continue;
             }
 
-            const ops: Op[] = [];
+            const chosen: NamedOp<OpName>[] = [];
             for (let i = R() < 0.7 ? 1 : ri(2, 3); i > 0; i--)
-                ops.push(pick(gen.ops));
-            const invalidOp = R() < 0.12 ? pick(gen.invalid) : undefined;
+                chosen.push(pick(gen.ops));
+            /** The generators that wrote something in this edit */
+            const wrote = new Set<OpName>();
+            const ops: Op[] = chosen.map(({ name, run }) => async (tx) => {
+                const changed = await run(tx);
+                if (changed) wrote.add(name);
+                return changed;
+            });
+            // The invalid changes take turns, from a random start, so a short run applies each
+            const invalid =
+                R() < 0.25
+                    ? gen.invalid[invalidTurn.next % gen.invalid.length]
+                    : undefined;
+            // Applied: the invalid change was made (true) or refused on the spot (it threw)
             let invalidApplied = false;
-            if (invalidOp)
+            if (invalid)
                 ops.push(async (tx) => {
-                    invalidApplied = await invalidOp(tx);
+                    // Its turn is used once it runs (an earlier change can reject the edit first)
+                    invalidTurn.next++;
+                    try {
+                        invalidApplied = await invalid.run(tx);
+                    } catch (error) {
+                        invalidApplied = true;
+                        throw error;
+                    }
                     return invalidApplied;
                 });
 
             tags.rangeEdit = false;
             tags.switched = false;
             const beforeData = await dumpData(db);
+            const loggedBefore = await dumpLogged(db);
             const beforeHistory = await dumpHistory(db);
             const deliveredBefore = delivered;
             const error = await tryEdit(ops);
@@ -1352,8 +1559,24 @@ async function runSeed(
                 if (error instanceof NothingToDo) stats.skipped++;
                 else {
                     stats.rejected++;
-                    if (invalidOp) stats.invalidAttempts++;
+                    if (invalidApplied) {
+                        stats.invalidAttempts++;
+                        count(stats.invalidApplied, invalid!.name);
+                    }
                     const reason = rejectReason(error);
+                    if (
+                        reason.startsWith("E-DB") &&
+                        !expectedDbRejection(
+                            reason,
+                            invalidApplied ? invalid!.name : undefined,
+                        )
+                    )
+                        throw new FuzzFailure(
+                            "unexpected-error",
+                            where(
+                                `the edit was rejected with an unexpected database error: ${reason}\n${String((error as Error)?.stack ?? error)}`,
+                            ),
+                        );
                     stats.rejectReasons[reason] =
                         (stats.rejectReasons[reason] ?? 0) + 1;
                 }
@@ -1379,6 +1602,7 @@ async function runSeed(
                     ),
                 );
             stats.commits++;
+            for (const name of wrote) count(stats.opCommits, name);
             if (undoSnaps.length === GROUP_LIMIT) stats.commitsAtLimit++;
             if (tags.rangeEdit) stats.rangeEditCommits++;
             if (tags.switched) stats.switchCommits++;
@@ -1391,7 +1615,7 @@ async function runSeed(
             undoSnaps.push(beforeData);
             if (undoSnaps.length > GROUP_LIMIT) undoSnaps.shift();
             await checkStacks("edit");
-            await verify("edit", deliveredBefore);
+            await verify("edit", deliveredBefore, loggedBefore);
         }
     } finally {
         unsubscribe();
@@ -1448,18 +1672,37 @@ describeDbTests(
             },
         );
 
-        it("the run exercised every kind of step", () => {
-            if (SEEDS === 0 || STEPS < 40) return;
-            expect(stats.seeds).toBe(SEEDS);
-            expect(stats.commits).toBeGreaterThan(0);
-            expect(stats.rejected).toBeGreaterThan(0);
-            expect(stats.invalidAttempts).toBeGreaterThan(0);
-            expect(stats.undos).toBeGreaterThan(0);
-            expect(stats.redos).toBeGreaterThan(0);
-            expect(stats.rangeEditCommits).toBeGreaterThan(0);
-            expect(stats.individualCommits).toBeGreaterThan(0);
-            expect(stats.switchCommits).toBeGreaterThan(0);
-            expect(stats.commitsAtLimit).toBeGreaterThan(0);
+        // So a generator change can't silently stop exercising something. Skipped unless every
+        // seed ran and passed (a `-t` filter, a failed seed) or the run is shorter than the default.
+        it("the run exercised every kind of step", ({ skip }) => {
+            if (SEEDS === 0 || STEPS < 40 || stats.seeds < SEEDS) skip();
+            const counts = {
+                commits: stats.commits,
+                rejected: stats.rejected,
+                invalidAttempts: stats.invalidAttempts,
+                undos: stats.undos,
+                redos: stats.redos,
+                undoBursts: stats.undoBursts,
+                redoBursts: stats.redoBursts,
+                undoEmpty: stats.undoEmpty,
+                redoEmpty: stats.redoEmpty,
+                rangeEditCommits: stats.rangeEditCommits,
+                individualCommits: stats.individualCommits,
+                switchCommits: stats.switchCommits,
+                commitsAtLimit: stats.commitsAtLimit,
+            };
+            const missing = [
+                ...Object.entries(counts)
+                    .filter(([, n]) => n === 0)
+                    .map(([name]) => name),
+                ...OP_NAMES.filter((name) => !stats.opCommits[name]).map(
+                    (name) => `generator "${name}"`,
+                ),
+                ...INVALID_NAMES.filter(
+                    (name) => !stats.invalidApplied[name],
+                ).map((name) => `invalid change "${name}"`),
+            ];
+            expect(missing, "never exercised").toEqual([]);
         });
 
         // Negative control: each seed runs until undo breaks; later seeds are skipped once one has
@@ -1473,7 +1716,9 @@ describeDbTests(
                 try {
                     await runSeed(db, seed, { v06: true, stats: newStats() });
                 } catch (error) {
-                    if (!(error instanceof FuzzFailure)) throw error;
+                    // Only an undo or redo step counts; an edit's failure is a bug in the test
+                    if (!(error instanceof FuzzFailure) || !error.inHistoryStep)
+                        throw error;
                     // How undo breaks: rejected, not restoring the snapshot, or leaving stacks
                     // that no longer match the history. The last is the usual one: the replay's
                     // UPDATE re-fires the v0.6 trigger, which rewrites assignment rows the
