@@ -1,12 +1,18 @@
 import { afterEach, expect } from "vitest";
-import { describeDbTests } from "@/test/base";
+import { and, asc, eq } from "drizzle-orm";
+import { describeDbTests, schema } from "@/test/base";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
-import { convertPagesToTimeline } from "../convert/writePageConversion";
+import {
+    convertPagesToTimeline,
+    readShowTiming,
+} from "../convert/writePageConversion";
 import {
     startTimelineResolver,
     stopTimelineResolver,
+    timelineMarcherIds,
     useTimelineResolverStore,
 } from "../timelineStore";
+import { pageEndBeat } from "../timelineCanvas";
 import { compareConversion, lossReportCounts } from "./conversionEquality";
 import { buildConversionShow } from "./conversionShow";
 
@@ -68,6 +74,29 @@ describeDbTests("conversion equality", (it) => {
         expect(equality.missingRow.samples, what).toBe(10);
         expect(equality.missingRow.max, what).toBeGreaterThan(1);
         expect(equality.beforeFirstRow, what).toBe(5);
+        // Those samples: the converted show holds the late marcher on its page-1 row (its home)
+        const { pages } = await readShowTiming(db);
+        const page1 = pages[1]!;
+        const lateRow = await db
+            .select()
+            .from(schema.marcher_pages)
+            .where(
+                and(
+                    eq(schema.marcher_pages.page_id, page1.id),
+                    eq(schema.marcher_pages.marcher_id, show.lateHomeMarcherId),
+                ),
+            )
+            .get();
+        const page1Start = page1.beats[0]!.index;
+        const page1End = pageEndBeat(page1);
+        for (let k = 1; k <= 5; k++) {
+            const beat = page1Start + ((page1End - page1Start) * k) / 6;
+            expect(
+                useTimelineResolverStore
+                    .getState()
+                    .resolver!.positionAt(show.lateHomeMarcherId, beat),
+            ).toEqual([lateRow!.x, lateRow!.y]);
+        }
 
         // Coincident marchers stay together, and the deleted marcher is gone
         const r = useTimelineResolverStore.getState().resolver!;
@@ -75,9 +104,18 @@ describeDbTests("conversion equality", (it) => {
         expect(r.positionAt(show.coincident[0], page4End)).toEqual(
             r.positionAt(show.coincident[1], page4End),
         );
-        expect(show.marcherIds).not.toContain(show.deletedMarcherId);
-        for (const id of show.addedMarcherIds)
-            expect(show.marcherIds).toContain(id);
+        const marchers = (
+            await db
+                .select({ id: schema.marchers.id })
+                .from(schema.marchers)
+                .all()
+        ).map((m) => m.id);
+        expect(marchers).not.toContain(show.deletedMarcherId);
+        expect(timelineMarcherIds()).not.toContain(show.deletedMarcherId);
+        for (const id of show.addedMarcherIds) {
+            expect(marchers).toContain(id);
+            expect(timelineMarcherIds()).toContain(id);
+        }
 
         // The loss report covers what the comparison saw
         expect(lossReportCounts(report)).toEqual({
@@ -100,5 +138,35 @@ describeDbTests("conversion equality", (it) => {
             expect(s.pageMode.length).toBe(s.marcherIds.length);
             expect(s.converted.length).toBe(s.marcherIds.length);
         }
+
+        // Negative control: move one stored destination (page 1, slot 0) by 50 px and rebuild.
+        // The comparison must see it at the page end and inside the pages it touches.
+        const [firstTransition] = await db
+            .select({ id: schema.timeline_transitions.id })
+            .from(schema.timeline_transitions)
+            .orderBy(asc(schema.timeline_transitions.start_beat))
+            .all();
+        const slot = await db
+            .select()
+            .from(schema.timeline_slot_destinations)
+            .where(
+                and(
+                    eq(
+                        schema.timeline_slot_destinations.transition_id,
+                        firstTransition!.id,
+                    ),
+                    eq(schema.timeline_slot_destinations.slot_index, 0),
+                ),
+            )
+            .get();
+        await db
+            .update(schema.timeline_slot_destinations)
+            .set({ x: slot!.x + 50 })
+            .where(eq(schema.timeline_slot_destinations.id, slot!.id))
+            .run();
+        await startTimelineResolver(db);
+        const broken = await compareConversion(db, { interiorSamples: 5 });
+        expect(broken.pageEnd.max).toBeGreaterThan(1);
+        expect(broken.plain.max).toBeGreaterThan(1);
     });
 });

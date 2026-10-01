@@ -1,4 +1,4 @@
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { Path } from "@openmarch/core";
 import { schema, type DbConnection } from "@/test/base";
 import { createBeats } from "@/db-functions/beat";
@@ -280,7 +280,6 @@ export async function buildConversionShow(
         await db
             .select({ id: schema.marchers.id })
             .from(schema.marchers)
-            .where(ne(schema.marchers.id, deletedMarcherId))
             .orderBy(asc(schema.marchers.id))
             .all()
     ).map((m) => m.id);

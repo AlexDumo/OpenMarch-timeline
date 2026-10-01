@@ -30,9 +30,11 @@ also sends perturbed controls (an identical copy, one marcher moved, two swapped
 shifted, the formation mirrored), so you can see that Jev tells them apart. It prints agreement
 rates with the numeric verdict and writes Jev's answers next to the report.
 
-Only coordinates are sent: no names, file names or ids. At most 48 marchers and 6 moments per
-show are sent (`--max-marchers`, `--samples`), to keep the cost small. If the SDK can't be
-reached, the script says so and lists the numeric verdicts instead.
+Only coordinates are sent: no names, file names or ids. By default at most 48 marchers and 6
+moments per show are sent (`--max-marchers`, `--samples`, capped at 64 and 12), to keep the
+cost small. If the SDK isn't installed, `TYPESAFE_API_KEY` isn't set, or the connection or
+authentication fails, the script says so, lists the numeric verdicts and exits 0. Any other
+error is raised and the script exits non-zero.
 
 Page mode is compared at the same beat position as the converted show (C-7), so the
 millisecond difference on uneven-tempo pages doesn't appear here; the report lists it.

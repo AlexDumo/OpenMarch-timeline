@@ -1,7 +1,8 @@
 /* eslint-disable no-console -- the opt-in runner reports to the terminal */
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -36,9 +37,10 @@ import { compareConversion, lossReportCounts } from "./conversionEquality";
  * checked before and after). The copy is opened the way the app opens a file (`setActiveDb`:
  * version check, pending migrations, then the renderer's undo triggers and change-log reset),
  * converted with the dev command's edit (`convertPagesToTimeline`), and compared with page-mode
- * playback by `compareConversion`. The JSON report (default: `conversion-corpus.json` in the OS
- * temporary directory) must be outside the repository, because real shows stay out of it. The
- * report holds coordinates; only aggregate numbers may be logged in the repository.
+ * playback by `compareConversion`. The JSON report (default: `conversion-corpus-<random>.json` in
+ * the OS temporary directory) must be outside any git checkout, because real shows stay out of
+ * the repository; it holds coordinates but not the source paths. Only aggregate numbers may be
+ * logged in the repository.
  */
 
 const CORPUS = (process.env.OPENMARCH_CONVERSION_CORPUS ?? "")
@@ -47,9 +49,8 @@ const CORPUS = (process.env.OPENMARCH_CONVERSION_CORPUS ?? "")
     .filter(Boolean);
 const REPORT_PATH = path.resolve(
     process.env.OPENMARCH_CONVERSION_REPORT ??
-        path.join(os.tmpdir(), "conversion-corpus.json"),
+        path.join(os.tmpdir(), `conversion-corpus-${randomUUID()}.json`),
 );
-const REPO_ROOT = path.resolve(__dirname, "../../../../..");
 const MIGRATIONS = path.resolve(
     __dirname,
     "../../../electron/database/migrations",
@@ -57,6 +58,22 @@ const MIGRATIONS = path.resolve(
 
 const sha256 = (file: string) =>
     createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+
+/**
+ * True when `file` would land inside a git checkout: its parent directory, with symlinks resolved,
+ * is in a work tree. Catches nested checkouts, symlinks and case variants.
+ */
+function insideGitCheckout(file: string): boolean {
+    const dir = fs.realpathSync(path.dirname(file));
+    try {
+        execFileSync("git", ["-C", dir, "rev-parse", "--show-toplevel"], {
+            stdio: "ignore",
+        });
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 /** The database steps of `setActiveDb` in `electron/main/index.ts`, on an existing file. */
 async function openLikeTheApp(file: string): Promise<void> {
@@ -78,11 +95,10 @@ afterEach(() => stopTimelineResolver());
 
 describe.skipIf(CORPUS.length === 0)("conversion corpus (opt-in)", () => {
     it("converts each show and compares it with page-mode playback", async () => {
-        const inside = path.relative(REPO_ROOT, REPORT_PATH);
         expect(
-            inside.startsWith("..") || path.isAbsolute(inside),
-            "the report must be written outside the repository",
-        ).toBe(true);
+            insideGitCheckout(REPORT_PATH),
+            "the report must be written outside any git checkout",
+        ).toBe(false);
 
         const shows = [];
         for (const [i, source] of CORPUS.entries()) {
@@ -90,8 +106,10 @@ describe.skipIf(CORPUS.length === 0)("conversion corpus (opt-in)", () => {
             const before = sha256(source);
             const dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-corpus-"));
             const copy = path.join(dir, `${label}.dots`);
-            fs.copyFileSync(source, copy);
+            let after: string | undefined;
             try {
+                fs.copyFileSync(source, copy);
+                expect(sha256(copy), `${label}: the copy matches`).toBe(before);
                 await openLikeTheApp(copy);
                 const sqlite = new DatabaseSync(copy);
                 try {
@@ -120,7 +138,6 @@ describe.skipIf(CORPUS.length === 0)("conversion corpus (opt-in)", () => {
                     });
                     shows.push({
                         label,
-                        source,
                         convertMs,
                         loss: lossReportCounts(report),
                         lossLines: describePageConversionReport(report),
@@ -135,10 +152,9 @@ describe.skipIf(CORPUS.length === 0)("conversion corpus (opt-in)", () => {
                 }
             } finally {
                 fs.rmSync(dir, { recursive: true, force: true });
+                after = sha256(source);
             }
-            expect(sha256(source), `${label}: the original is unchanged`).toBe(
-                before,
-            );
+            expect(after, `${label}: the original is unchanged`).toBe(before);
         }
 
         fs.writeFileSync(
@@ -150,8 +166,15 @@ describe.skipIf(CORPUS.length === 0)("conversion corpus (opt-in)", () => {
             ),
         );
         console.info(`wrote ${REPORT_PATH}`);
-        // Page ends are exact on every show
-        for (const show of shows)
+        // Page ends are exact, and straight moves inside pages match at the same beat and, on
+        // even-tempo pages, in milliseconds
+        for (const show of shows) {
             expect(show.equality.pageEnd.max, show.label).toBe(0);
+            expect(show.equality.plain.max, show.label).toBeLessThan(1e-9);
+            expect(
+                show.equality.maxMsDifferenceEvenTempo,
+                show.label,
+            ).toBeLessThan(1e-9);
+        }
     });
 });

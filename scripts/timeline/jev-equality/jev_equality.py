@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -32,6 +33,9 @@ COORDINATES = (
 SAME_TOLERANCE = 0.01
 #: Jev's verdict: "same" when the probability is at least this
 JEV_THRESHOLD = 0.5
+#: Hard limits on what one run sends, whatever the flags say, to keep the cost small
+MAX_MARCHERS = 64
+MAX_SAMPLES = 12
 
 
 def questions():
@@ -107,9 +111,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("report", type=Path, help="the corpus runner's JSON report")
     parser.add_argument("--out", type=Path, help="where to write Jev's answers (default: next to the report)")
-    parser.add_argument("--max-marchers", type=int, default=48, help="marchers sent per moment")
-    parser.add_argument("--samples", type=int, default=6, help="moments per show")
+    parser.add_argument("--max-marchers", type=int, default=48,
+                        help=f"marchers sent per moment (at most {MAX_MARCHERS})")
+    parser.add_argument("--samples", type=int, default=6, help=f"moments per show (at most {MAX_SAMPLES})")
     args = parser.parse_args()
+    args.max_marchers = max(2, min(args.max_marchers, MAX_MARCHERS))
+    args.samples = max(1, min(args.samples, MAX_SAMPLES))
 
     report = json.loads(args.report.read_text())
     items = []  # (show, kind, expected_same, numeric_max, page_mode, converted)
@@ -131,10 +138,27 @@ def main() -> int:
     print(f"{len(items)} judgments ({sum(1 for i in items if not i[1].startswith('control'))} samples, "
           f"{sum(1 for i in items if i[1].startswith('control'))} controls)")
 
+    def unreachable(reason: str) -> int:
+        print(f"Jev could not be reached ({reason}); the numeric comparison in the report stands on its own.")
+        for show, kind, expected, numeric, *_ in items:
+            print(f"  show {show} {kind}: numeric {'same' if expected else 'different'} (max {numeric:.3g} px)")
+        return 0
+
+    try:
+        from typesafe_sdk import (
+            TypeSafeAPIConnectionError,
+            TypeSafeAuthenticationError,
+            TypeSafeClient,
+            TypeSafePermissionDeniedError,
+        )
+    except ImportError as error:
+        return unreachable(f"the typesafe_sdk package is not installed: {error}")
+    if not os.environ.get("TYPESAFE_API_KEY"):
+        return unreachable("TYPESAFE_API_KEY is not set")
+
+    # Only connection and authentication failures fall back; anything else is a real error
     results = []
     try:
-        from typesafe_sdk import TypeSafeClient
-
         with TypeSafeClient() as client:
             for show, kind, expected, numeric, page_mode, converted in items:
                 answer = ask(client, page_mode, converted)
@@ -142,12 +166,8 @@ def main() -> int:
                     "show": show, "kind": kind, "numericSame": expected, "numericMax": numeric,
                     **answer, "agrees": (answer["same"] >= JEV_THRESHOLD) == expected,
                 })
-    except Exception as error:  # noqa: BLE001 - any SDK or network failure falls back to numbers
-        print(f"Jev could not be reached ({type(error).__name__}: {error}); "
-              "the numeric comparison in the report stands on its own.")
-        for show, kind, expected, numeric, *_ in items:
-            print(f"  show {show} {kind}: numeric {'same' if expected else 'different'} (max {numeric:.3g} px)")
-        return 0
+    except (TypeSafeAPIConnectionError, TypeSafeAuthenticationError, TypeSafePermissionDeniedError) as error:
+        return unreachable(f"{type(error).__name__}: {error}")
 
     out = args.out or args.report.with_suffix(".jev.json")
     out.write_text(json.dumps(results, indent=1))
