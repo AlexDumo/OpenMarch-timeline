@@ -116,6 +116,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - Converter follow-ups (from the PR #17 review): (1) a marcher with no row on a page in the MIDDLE of the show currently holds; page mode glides from its previous row to its next. Match page mode by giving it a slot on that page whose destination is the page-mode position at the page's end beat (linear in beats between its neighbors, C-7), reported as "interpolated"; keep "hold" only when no later row exists. Done in P6.7 (PR #43). Gaps only come from damaged files, since creating a marcher writes a row on every page. (2) Assignments are inserted one statement each (about 12,500 for 250 marchers × 50 pages, plus undo and change-log rows); before the open-time conversion (Phase 9) add a bulk path with chunked multi-row inserts (row triggers still run per row). (3) Add tests with uneven tempo and with a page that has no beats.
 - Precision (found in P6): the change-log triggers write marcher homes and slot-destination x/y into JSON with 15 significant digits, so a running resolver store is about 4e-12 off until it rebuilds. Being fixed separately (`printf('%!.17g', …)` in the trigger images).
 - Precision fix (2026-09-30): PR https://github.com/AlexDumo/OpenMarch-timeline/pull/18 renders those REAL values at full precision in the trigger images and refreshes the change-log triggers on every file open. Once it merges the live store is exact: the `1e-9` tolerance in `pageConversion.test.ts` is already removed there, so compare against the rows with `Object.is`.
+- P6.7 gap glides (PR #43):
+  - Timing: at a gap page, the boundary position follows beats (C-7). Only pages that have rows are exact at page mode's millisecond instant.
+  - Scope of the equivalence: it is checked against page mode's keyframes over all pages. Live page-mode playback loads only the selected page ±2, so on a long gap it can differ from both.
+  - No-beat neighbors: a gap whose next row is on a page with no beats (beyond the beat list) holds, because that row has no end beat to glide to. Page mode would glide toward it. Pinned in `planPageConversion.test.ts`; this is also the "page with no beats" test from follow-up (3).
+  - Damaged pathways: an unknown, unreadable or empty pathway on the next row makes the glide fall back to a straight line instead of failing the conversion. The report names it (`interpolated[].unusablePathwayId`).
 
 ## Progress log
 
@@ -315,4 +320,23 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Not run (policy): the full `test:history` suite, e2e and `build:electron`.
 - **Exit gate:** nothing ticked. "Three real shows" is still open: the corpus re-run used the same two shows.
 - **Next:** review and merge by the lead. The handoff note's follow-up (1) says "linear in time"; P6.7 implements linear in beats (C-7), so the phase lead may want to update that note.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p6-gap-glide) · P6.7 (review fixes)
+
+- **Done:** follow-up commit 976e2a17 on PR https://github.com/AlexDumo/OpenMarch-timeline/pull/43, after merging `timeline-try-2` in. No force-push.
+  - A damaged pathway (unknown id, invalid JSON, `{"segments":[]}`, or a non-finite point) no longer throws out of `planPageConversion`. The gap glide falls back to a straight line, and the loss report records it in `interpolated[].unusablePathwayId` and on the console line. Unit tests cover invalid JSON, an empty path, an unknown id and a non-finite point.
+  - A gap whose next row is on a page with no beats holds. This is pinned with a test and documented in the handoff notes.
+  - The generated show's pathway gap now uses `path_start_position` 0.2 on the previous row and `path_end_position` 0.8 on the pathway row. The `gapEnd` check covers page mode's `||` mapping: forcing the start to 0 fails it by 58 px.
+  - `pageEndBeat` moved to `apps/desktop/src/timeline/pageEndBeat.ts`, a pure module with no imports. `timelineCanvas` re-exports it, and the converter imports the pure module.
+  - Handoff notes: added a P6.7 entry (beat-timed gap boundaries, the all-pages keyframe scope, no-beat neighbors, damaged pathways). P6.7 is in-review with the PR link on `timeline-try-2`.
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - `test:focused` on `planPageConversion`, `pageConversion` and `conversionEquality`: 3 files, 27 passed.
+  - Focused `test:history` on the same three files: 3 files, 27 passed.
+  - `test:focused src/timeline`: 32 files passed, 1 skipped; 458 tests passed (the first attempt hit a vitest worker-start timeout, and the re-run passed).
+  - Mutation check: with `path_start_position` ignored, `gapEnd` fails by 58 px.
+  - eslint, prettier and cspell on the changed files: clean.
+  - Not run (policy): the full `test:history` suite, e2e and `build:electron`. The corpus runner was not re-run, because its shows have no gaps or pathways.
+- **Next:** re-review and merge by the lead.
 - **Blockers:** none.
