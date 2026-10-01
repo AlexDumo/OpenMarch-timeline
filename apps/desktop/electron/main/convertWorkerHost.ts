@@ -50,15 +50,93 @@ const running = new Set<Worker>();
 /** Workers stopped by `terminateConversionWorkers`. */
 const stopped = new WeakSet<Worker>();
 
-let quitting = false;
+/** Set by `before-quit`: no conversion starts from then on (P9.9). */
+let quitRequested = false;
+/** True once a quit stopped a conversion, or kept one from starting. */
+let stoppedByQuit = false;
+/** Open flows between showing "Preparing your file…" and its end (P9.9). */
+let preparing = 0;
+let idleWaiters: (() => void)[] = [];
 
 /**
- * True once `stopConversionWorkersOnQuit` stopped workers to quit: the open
- * flow then shows no "couldn't convert" dialog for the stopped conversion, and
- * keeps the file as the one to reopen. A conversion that starts afterwards
- * means the quit was cancelled, so it resets this.
+ * True once a quit stopped a conversion (a running worker, or one about to
+ * start): the open flow then shows no "couldn't convert" dialog for it, and
+ * keeps the file as the one to reopen on the next launch. Once the app is
+ * quitting it stays quitting (P9.9): the quit handler finishes the quit itself.
  */
-export const conversionWorkersStopped = () => quitting;
+export const conversionWorkersStopped = () => stoppedByQuit;
+
+/** True once the app started quitting: a new open or conversion must not start. */
+export const appQuitRequested = () => quitRequested;
+
+/**
+ * True while an open shows "Preparing your file…" or a conversion worker runs:
+ * a quit, or closing the main window, then stops the conversion first.
+ */
+export const conversionInProgress = () => preparing > 0 || running.size > 0;
+
+/**
+ * Marks the start of an open's "Preparing your file…" step, which may start a
+ * conversion worker. Call the returned function (once is enough) when the
+ * step ends, worker included.
+ */
+export function beginPreparing(): () => void {
+    preparing++;
+    let ended = false;
+    return () => {
+        if (ended) return;
+        ended = true;
+        preparing--;
+        wakeIfIdle();
+    };
+}
+
+function wakeIfIdle() {
+    if (conversionInProgress()) return;
+    const waiters = idleWaiters;
+    idleWaiters = [];
+    for (const wake of waiters) wake();
+}
+
+/** Resolves once no open is preparing and no conversion worker runs. */
+function whenConversionsEnd(): Promise<void> {
+    if (!conversionInProgress()) return Promise.resolve();
+    return new Promise((resolve) => idleWaiters.push(resolve));
+}
+
+/**
+ * Whether closing the file as the app quits keeps it as the file to reopen
+ * (`databasePath`): only when the quit stopped its conversion, so the next
+ * launch reopens, and converts, it (P9.8).
+ */
+export const keepFileToReopen = (isAppQuitting: boolean) =>
+    isAppQuitting && stoppedByQuit;
+
+/** The parts of a window `close` event and of `app` that `quitInsteadOfClosing` uses. */
+export interface CloseEvent {
+    preventDefault(): void;
+}
+
+/**
+ * For the main window's `close` handler: while a conversion is in progress,
+ * closing the window quits instead (P9.9), so the `before-quit` handler stops
+ * the conversion and then quits. Returns true when it handled the close.
+ */
+export function quitInsteadOfClosing(
+    event: CloseEvent,
+    app: Pick<QuittingApp, "quit">,
+): boolean {
+    if (!conversionInProgress()) return false;
+    event.preventDefault();
+    app.quit();
+    return true;
+}
+
+/** Forgets a quit; for tests only (a quit can't be cancelled once it reached a conversion). */
+export function resetConversionQuitForTests() {
+    quitRequested = false;
+    stoppedByQuit = false;
+}
 
 /** Number of conversion workers running; for tests. */
 export const runningConversionWorkers = () => running.size;
@@ -135,8 +213,6 @@ export function convertInWorker(
     filePath: string,
     options: ConvertInWorkerOptions,
 ): Promise<ConvertOnOpenResult> {
-    // A conversion starting means any earlier quit was cancelled.
-    quitting = false;
     const convertedAt = options.test?.now ?? new Date().toISOString();
     return new Promise<ConvertOnOpenResult>((resolve) => {
         const request: ConvertWorkerRequest = {
@@ -145,6 +221,12 @@ export function convertInWorker(
             convertedAt,
             test: options.test,
         };
+        if (quitRequested) {
+            // The app is quitting: don't start (the file stays as it is, and reopens next launch).
+            stoppedByQuit = true;
+            resolve(endedEarly(undefined, "the app quit"));
+            return;
+        }
         let worker: Worker;
         try {
             worker = new Worker(options.workerPath, { workerData: request });
@@ -188,6 +270,7 @@ export function convertInWorker(
         });
         worker.on("exit", (code) => {
             running.delete(worker);
+            wakeIfIdle();
             const outcome =
                 result ??
                 endedEarly(
@@ -235,15 +318,60 @@ export interface QuittingApp {
     quit(): void;
 }
 
+export interface QuitDuringConversionOptions {
+    /**
+     * Runs once the conversion has stopped and its open has ended, right
+     * before quitting again: the app lets its windows close without asking.
+     */
+    beforeQuitting?: () => void | Promise<void>;
+    log?: (message: string) => void;
+}
+
 /**
- * On quit, stops the running conversion workers first, then quits again, so
- * no conversion is left half-written by a thread killed with the process.
+ * Quitting while an open prepares or converts a file (P9.8, P9.9). The
+ * `before-quit` handler holds the quit, so no window is asked to close while
+ * the conversion runs, then:
+ *
+ * 1. stops the conversion worker (SQLite rolls its transaction back, so the
+ *    file keeps version 7), or keeps one from starting;
+ * 2. waits until the open has ended: it removes "Preparing your file…" and
+ *    keeps the file as the one to reopen, and convert, on the next launch;
+ * 3. runs `beforeQuitting`, then quits again, so no second Quit is needed.
+ *
+ * A quit with no conversion in progress isn't held up. Every quit stops any
+ * later conversion from starting.
  */
-export function stopConversionWorkersOnQuit(app: QuittingApp): void {
+export function stopConversionWorkersOnQuit(
+    app: QuittingApp,
+    options: QuitDuringConversionOptions = {},
+): void {
+    // eslint-disable-next-line no-console
+    const log = options.log ?? ((message: string) => console.log(message));
+    let stopping = false;
     app.on("before-quit", (event) => {
-        if (running.size === 0) return;
-        quitting = true;
+        const converting = conversionInProgress();
+        log(
+            `before-quit: ${converting ? (stopping ? "still stopping the conversion" : "stopping the conversion first") : "no conversion in progress"}`,
+        );
+        quitRequested = true;
+        if (!converting) return;
         event.preventDefault();
-        void terminateConversionWorkers().finally(() => app.quit());
+        if (stopping) return;
+        stopping = true;
+        if (running.size > 0) stoppedByQuit = true;
+        void (async () => {
+            try {
+                await terminateConversionWorkers();
+                await whenConversionsEnd();
+                await options.beforeQuitting?.();
+            } catch (error) {
+                log(
+                    `before-quit: stopping the conversion failed: ${String(error)}`,
+                );
+            } finally {
+                stopping = false;
+                app.quit();
+            }
+        })();
     });
 }

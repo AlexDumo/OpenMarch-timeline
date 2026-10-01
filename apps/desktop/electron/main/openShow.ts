@@ -26,7 +26,7 @@ import {
 } from "../database/convertOnOpenGate";
 import type { ConvertOnOpenHooks } from "../database/convertOnOpen";
 import type { ConvertOnOpenDialogs } from "./convertOnOpenFlow";
-import { convertInWorker } from "./convertWorkerHost";
+import { conversionWorkersStopped, convertInWorker } from "./convertWorkerHost";
 import type { ConvertWorkerTestHooks } from "../database/convertOnOpenProtocol";
 
 /** How long the conversion's connection waits for another connection's lock. */
@@ -218,6 +218,14 @@ async function openWithSuspension(
         if (!keepOpen && isOpen) db.close();
     }
 }
+
+/**
+ * True when an open ended with `status` because the app quit and stopped its
+ * conversion (rolled back): the app then keeps the file as the one to reopen,
+ * and convert, on the next launch (P9.8, P9.9).
+ */
+export const openStoppedByQuit = (status: number) =>
+    status === OPEN_STOPPED_STATUS && conversionWorkersStopped();
 
 /** `openShowDatabase`, serialized with every other open. */
 export function openShowFile(

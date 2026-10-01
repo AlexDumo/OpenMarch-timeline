@@ -1,38 +1,20 @@
 /* eslint-disable no-console */
 /**
- * The native dialogs and the "preparing your file" window for convert on open
- * (P9.3). All of them belong to the main process, so no IPC channel is added.
- * The text is English only, like the other main-process dialogs; translating
- * it is left for when P9.4 makes the step permanent.
+ * The native dialogs and the "Preparing your file…" overlay for convert on
+ * open (P9.3). All of them belong to the main process, so no IPC channel is
+ * added. The text is English only, like the other main-process dialogs;
+ * translating it is left for when P9.4 makes the step permanent.
  */
-import { BrowserWindow, dialog, shell } from "electron";
+import { dialog, shell, type BrowserWindow } from "electron";
 import { captureException } from "@sentry/electron/main";
 import type { ConvertOnOpenDialogs } from "./convertOnOpenFlow";
 import {
+    hidePreparingOverlay,
+    showPreparingOverlay,
     showPreparingProgress,
-    showPreparingWindow,
     throttleProgress,
-    type PreparingWindow,
-} from "./preparingWindow";
-import { conversionWorkersStopped } from "./convertWorkerHost";
-
-const createPreparingWindow = (parent: BrowserWindow): PreparingWindow =>
-    new BrowserWindow({
-        parent,
-        modal: true,
-        width: 440,
-        height: 150,
-        frame: false,
-        resizable: false,
-        closable: false,
-        skipTaskbar: true,
-        show: false,
-        webPreferences: {
-            sandbox: true,
-            contextIsolation: true,
-            nodeIntegration: false,
-        },
-    });
+} from "./preparingOverlay";
+import { beginPreparing, conversionWorkersStopped } from "./convertWorkerHost";
 
 function messageBox(
     win: BrowserWindow | null,
@@ -49,26 +31,21 @@ export function electronConvertOnOpenDialogs(
 ): ConvertOnOpenDialogs {
     return {
         async whilePreparing(fileName, work) {
-            // Without a main window (a file opened at startup) nothing is on screen yet, and a
-            // lone extra window would quit the app on Windows and Linux when it closes.
-            const parent = win && !win.isDestroyed() ? win : undefined;
-            const preparing = parent
-                ? await showPreparingWindow(
-                      parent,
-                      fileName,
-                      createPreparingWindow,
-                  )
-                : undefined;
+            // A quit or a main-window close from here on stops the conversion first (P9.9).
+            const endPreparing = beginPreparing();
+            // Without a main window (a file opened at startup) nothing is on screen yet.
+            const target = win && !win.isDestroyed() ? win : undefined;
             try {
+                // An overlay in the main window's page, not a native window: a native modal
+                // that can't be closed refused the close a macOS Quit asks for (P9.9).
+                if (target) await showPreparingOverlay(target, fileName);
                 // The worker converts off this thread (P9.8): show how far it has got.
                 return await work(
-                    throttleProgress((p) =>
-                        showPreparingProgress(preparing, parent, p),
-                    ),
+                    throttleProgress((p) => showPreparingProgress(target, p)),
                 );
             } finally {
-                if (preparing && !preparing.isDestroyed()) preparing.destroy();
-                if (parent && !parent.isDestroyed()) parent.setProgressBar(-1);
+                hidePreparingOverlay(target);
+                endPreparing();
             }
         },
 

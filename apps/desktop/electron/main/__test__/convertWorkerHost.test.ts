@@ -38,6 +38,7 @@ import {
     committedConversion,
     conversionWorkersStopped,
     convertInWorker,
+    resetConversionQuitForTests,
     runningConversionWorkers,
     stopConversionWorkersOnQuit,
     type ConvertInWorkerOptions,
@@ -107,6 +108,7 @@ describe("the conversion worker", () => {
     });
 
     afterEach(() => {
+        resetConversionQuitForTests();
         fs.rmSync(tempDir, { recursive: true, force: true });
         vi.restoreAllMocks();
     });
@@ -310,9 +312,11 @@ describe("the conversion worker", () => {
         app.emit("before-quit", { preventDefault: again });
         expect(again).not.toHaveBeenCalled();
 
-        // The quit was cancelled after all: the next conversion reports normally.
+        // Once the app is quitting, no conversion starts (P9.9): the file stays as it is.
         const next = await convertInWorker(showPath, options());
-        expect(conversionWorkersStopped()).toBe(false);
-        expect(next.status).toBe("converted");
+        expect(next.status).toBe("backup-failed");
+        expect(runningConversionWorkers()).toBe(0);
+        expect(stateOf(showPath)).toEqual(before);
+        expect(backupsIn(tempDir)).toHaveLength(1);
     }, 30_000);
 });
