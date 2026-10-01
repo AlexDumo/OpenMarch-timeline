@@ -33,6 +33,7 @@ import TimelineResolverHost from "@/timeline/TimelineResolverHost";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { timelinePositionsSettled } from "@/timeline/timelineCoordinateWrites";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
+import { isTimelineModeEnabled } from "@/settings/workspaceSettings";
 import { timelineFixtureMode } from "./timelineMode";
 
 /**
@@ -69,6 +70,8 @@ export interface FeatureProbe {
     setSelectedMarchers: (marchers: Marcher[]) => void;
     /** Settings, field properties and the selected page's rows have loaded */
     loaded: boolean;
+    /** The file's timeline flag, from the loaded workspace settings */
+    timelineMode: boolean;
 }
 
 const probe: { current: FeatureProbe | null } = { current: null };
@@ -90,6 +93,7 @@ function ProbeView() {
         selectedMarchers: selectedMarchersContext.selectedMarchers,
         setSelectedPage: selectedPageContext.setSelectedPage,
         setSelectedMarchers: selectedMarchersContext.setSelectedMarchers,
+        timelineMode: isTimelineModeEnabled(settings.data),
         loaded:
             settings.isSuccess &&
             fieldProperties.isSuccess &&
@@ -168,6 +172,12 @@ export const setUpFeature = async (
         expect(probed().marchers?.length).toBeGreaterThan(0);
     });
     await selectPageAndMarchers(probed().pages[pageIndex]!, marcherIds);
+    // `positionOn` and `expectWrittenWhereTheModeWrites` pick the mode from the test run; the
+    // app picks it from the file's flag. They must agree, or the checks read the wrong place.
+    expect(
+        probed().timelineMode,
+        "the file's timeline flag matches the test run's mode",
+    ).toBe(timelineFixtureMode());
     if (timelineFixtureMode())
         await waitFor(() =>
             expect(useTimelineResolverStore.getState().status).toBe("ready"),
