@@ -62,8 +62,8 @@ A pure adapter from the stored tables and the resolver to `TimelineViewModel`, f
 ### P8.9: Timeline commands
 
 - Owner: timeline-worker (timeline/p8-commands)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/24
 - Parallel: yes
 - Depends on: P8.8
 
@@ -289,3 +289,25 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the suite result; record UI-6 in `ui.md` and the handoff notes; cross-phase note for Phase 7 (structural moves still refused); tidy and open the PR.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-commands`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` (in the background); then the docs and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-commands) · P8.9
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/24 (one commit, 97a615ea, rebased on `timeline-try-2`).
+  - `src/db-functions/timelineCommands.ts`: `shiftTimeline` moves a spec timeline and all its transitions and assignments by `delta` in one edit (grow the timeline and transitions to the union, move assignments furthest-first, shrink), valid at every intermediate state in both directions. It refuses beat < 0, a non-integer delta and a missing timeline (E-ARGS) and a cross-timeline same-layer overlap (E-A3) before writing; delta 0 opens no edit. `createTrack` makes a timeline, one direct transition and its assignments in one edit: for a marcher, shapeless with one slot at its resolver position at the range start; for a shape, the selected marchers in id order, with too few block cells refused (E-T4).
+  - **Decision UI-6** (in `ui.md`): Create Track's assignments go one layer above the marchers' highest overlapping layer (0 if none), so the track steals the range (R-2, G2). At layer 0 it would always overlap a converted show's page moves and be refused (E-A3).
+  - `TimelineModePanel` uses `useTimelineCommands`: clip moves call `shiftTimeline(linkId, change.start − track.start)` and skip zero. Create Track's target is a shape picked by selecting its track (with the selected marchers), or else the one selected marcher. Refusals show the coded message as a toast (`conToastError`).
+- **For P8.6:** refusals are shown as `error.message`, which starts with the code; replace it with the friendly message when that mapping lands.
+- **Follow-ups:**
+  - Phase 7 has a cross-phase note: structural page moves are still refused, and Create Track over the page is a workaround.
+  - Picking a shape target needs its track to be visible (UI-3 shows every shape track), and there's no on-canvas shape selection yet (P8.2).
+- **Checks:**
+  - `pnpm install` and the build of the desktop's dependencies: pass.
+  - `tsc --noEmit`: pass.
+  - `test:history src/db-functions/__test__/timelineCommands.test.ts`: 11 passed. A mutation that moves assignments in the wrong order fails 4 of them.
+  - `vitest run src/components/timeline/__test__/TimelineCommands.test.tsx`: 8 passed.
+  - `pnpm --dir apps/desktop run test`: 116 files, 1,709 tests passed.
+  - eslint, prettier and cspell on the changed files: clean.
+  - Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Exit gate:** nothing ticked. The UI verification item needs a manual app check by a person.
+- **Next:** review and merge by the lead.
+- **Blockers:** none.
