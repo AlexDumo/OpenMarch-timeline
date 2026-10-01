@@ -1,7 +1,10 @@
-import type {
-    TimelineMarcherMove,
-    TimelineMovePage,
+import {
+    moveMarchersOnPage,
+    type TimelineMarcherMove,
+    type TimelineMovePage,
 } from "@/db-functions/timelineMoves";
+import type { DbConnection } from "@/db-functions/types";
+import type { CoordinateRecord } from "@/utilities/CoordinateActions";
 import { pageEndBeat } from "./timelineCanvas";
 import { useTimelineResolverStore } from "./timelineStore";
 
@@ -54,6 +57,73 @@ export function withTimelinePositions<T extends MarcherXY>(
             const [x, y] = resolver.positionAt(c.marcher_id, beat);
             return { ...c, x, y };
         });
+}
+
+/**
+ * The marchers as coordinate records on `page` at the resolver's positions, for the page-era
+ * helpers (`CoordinateActions`). Built from the marcher ids alone, so it doesn't need (or trust)
+ * `marcher_pages` rows. Marchers the resolver doesn't know are dropped.
+ *
+ * @throws TimelineNotReadyError when no resolver is ready
+ */
+export function timelineCoordinateRecords(
+    page: TimelineWritePage,
+    marcherIds: readonly number[],
+): CoordinateRecord[] {
+    return withTimelinePositions(
+        page,
+        marcherIds.map(
+            (id): CoordinateRecord => ({
+                marcher_id: id,
+                page_id: page.id,
+                x: 0,
+                y: 0,
+                notes: null,
+            }),
+        ),
+    );
+}
+
+/**
+ * Timeline mode's `useUpdateSelectedMarchers`: applies `transform` to the marchers' current
+ * positions on `page` (from the resolver, not `marcher_pages`) and writes the result as one
+ * `moveMarchersOnPage` edit.
+ *
+ * @returns the transformed coordinates
+ * @throws TimelineNotReadyError when no resolver is ready
+ */
+export async function transformMarchersOnPage<R extends MarcherXY>({
+    db,
+    page,
+    marcherIds,
+    transform,
+}: {
+    db: DbConnection;
+    page: TimelineWritePage;
+    marcherIds: readonly number[];
+    transform: (current: CoordinateRecord[]) => R[];
+}): Promise<R[]> {
+    const next = transform(timelineCoordinateRecords(page, marcherIds));
+    await moveMarchersOnPage({ db, page, moves: toTimelineMoves(next) });
+    return next;
+}
+
+/** Shown when a page-era tool has no timeline version yet. */
+export const NOT_IN_TIMELINE_MODE_MESSAGE =
+    "This isn't available in timeline mode yet.";
+
+/**
+ * For page-era tools that would read stale `marcher_pages` rows in timeline mode ("set marchers to
+ * the previous or next page", until P7.6): with the flag on, shows `NOT_IN_TIMELINE_MODE_MESSAGE`
+ * and returns true, and the caller writes nothing. With the flag off, returns false.
+ */
+export function refuseInTimelineMode(
+    timelineMode: boolean,
+    notify: (message: string) => unknown,
+): boolean {
+    if (!timelineMode) return false;
+    notify(NOT_IN_TIMELINE_MODE_MESSAGE);
+    return true;
 }
 
 /** The timeline move for each changed coordinate. Any `page_id` on them is ignored. */

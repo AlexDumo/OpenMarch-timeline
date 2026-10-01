@@ -35,8 +35,7 @@ import { fieldPropertiesQueryOptions } from "./useFieldProperties";
 import { appearanceModelRawToParsed } from "@/entity-components/appearance";
 import { moveMarchersOnPage } from "@/db-functions/timelineMoves";
 import {
-    toTimelineMoves,
-    withTimelinePositions,
+    transformMarchersOnPage,
     type TimelineMoveRequest,
     type TimelineWritePage,
 } from "@/timeline/timelineCoordinateWrites";
@@ -266,6 +265,30 @@ export const useUpdateSelectedMarchers = (
     return useMutation({
         mutationFn: async (transformFunction: MarcherTransformFunction) => {
             if (pageId == null) throw new Error("No page ID provided");
+            if (timelineMode) {
+                // Timeline mode: start from what the canvas draws (the resolver, not
+                // marcher_pages, whose rows can be stale or missing) and write slot destinations
+                if (!timelinePage || timelinePage.id !== pageId)
+                    throw new Error("No page provided for timeline mode");
+                if (!fieldPropertiesLoaded)
+                    throw new Error("Field properties not loaded");
+                if (selectedMarchers.length === 0) {
+                    toast.warning(t("actions.shape.noMarchersSelected"));
+                    return;
+                }
+                const newCoordinates = await transformMarchersOnPage({
+                    db,
+                    page: timelinePage,
+                    marcherIds: selectedMarchers.map((marcher) => marcher.id),
+                    transform: (currentCoordinates) =>
+                        transformFunction({
+                            currentCoordinates,
+                            fieldProperties,
+                            pageId,
+                        }),
+                });
+                return { newCoordinates };
+            }
             if (!marcherPagesLoaded)
                 throw new Error("Marcher pages not loaded");
             if (!fieldPropertiesLoaded)
@@ -273,31 +296,6 @@ export const useUpdateSelectedMarchers = (
             if (selectedMarchers.length === 0) {
                 toast.warning(t("actions.shape.noMarchersSelected"));
                 return;
-            }
-
-            if (timelineMode) {
-                // Timeline mode: start from what the canvas draws, write slot destinations
-                if (!timelinePage || timelinePage.id !== pageId)
-                    throw new Error("No page provided for timeline mode");
-                const currentCoordinates = withTimelinePositions(
-                    timelinePage,
-                    selectedMarchers.map((marcher) => ({
-                        marcher_id: marcher.id,
-                        x: 0,
-                        y: 0,
-                    })),
-                );
-                const newCoordinates = transformFunction({
-                    currentCoordinates,
-                    fieldProperties,
-                    pageId,
-                });
-                await moveMarchersOnPage({
-                    db,
-                    page: timelinePage,
-                    moves: toTimelineMoves(newCoordinates),
-                });
-                return { newCoordinates };
             }
 
             const currentCoordinates = selectedMarchers

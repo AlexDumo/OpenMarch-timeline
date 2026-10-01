@@ -8,10 +8,10 @@ import {
 } from "@/hooks/queries";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import type { ModifiedMarcherPageArgs } from "@/db-functions/marcherPage";
-import type MarcherPage from "@/global/classes/MarcherPage";
 import {
+    refuseInTimelineMode,
+    timelineCoordinateRecords,
     toTimelineMoves,
-    withTimelinePositions,
 } from "@/timeline/timelineCoordinateWrites";
 import { createCircle } from "@openmarch/core";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -626,6 +626,20 @@ function RegisteredActionsHandler() {
             console.error("No selected page");
             return [];
         }
+        if (timelineMode) {
+            // Timeline mode (P7.2): the tools start from what the canvas draws, the resolver's
+            // positions at the page's end beat, for every selected marcher. marcher_pages isn't
+            // read: its rows can be stale or missing in timeline mode.
+            try {
+                return timelineCoordinateRecords(
+                    selectedPage,
+                    selectedMarchers.map((marcher) => marcher.id),
+                );
+            } catch (e) {
+                conToastErrorMessage(e);
+                return [];
+            }
+        }
         if (!marcherPagesLoaded) {
             console.error("Marcher pages not loaded");
             return [];
@@ -634,19 +648,7 @@ function RegisteredActionsHandler() {
         const output = selectedMarchers.map(
             (marcher) => marcherPages[marcher.id],
         );
-        if (!timelineMode) return output;
-
-        // Timeline mode (P7.2): the tools start from what the canvas draws, the resolver's
-        // positions at the page's end beat
-        try {
-            return withTimelinePositions(
-                selectedPage,
-                output.filter((mp): mp is MarcherPage => mp != null),
-            );
-        } catch (e) {
-            conToastErrorMessage(e);
-            return [];
-        }
+        return output;
     }, [
         marcherPages,
         marcherPagesLoaded,
@@ -912,6 +914,8 @@ function RegisteredActionsHandler() {
 
                 /****************** Batch Editing ******************/
                 case RegisteredActionsEnum.setAllMarchersToPreviousPage: {
+                    // Reads page-era rows; not in timeline mode until P7.6
+                    if (refuseInTimelineMode(timelineMode, toast.error)) break;
                     if (!databaseReady || !pages || pages.length === 0) break;
                     const previousPage = getPreviousPage(selectedPage, pages);
                     if (!previousPage || !previousMarcherPages) {
@@ -942,6 +946,8 @@ function RegisteredActionsHandler() {
                     break;
                 }
                 case RegisteredActionsEnum.setSelectedMarchersToPreviousPage: {
+                    // Reads page-era rows; not in timeline mode until P7.6
+                    if (refuseInTimelineMode(timelineMode, toast.error)) break;
                     if (!databaseReady || !pages || pages.length === 0) break;
                     const previousPage = getPreviousPage(selectedPage, pages);
                     if (!previousPage || !previousMarcherPages) {
@@ -983,6 +989,8 @@ function RegisteredActionsHandler() {
                     break;
                 }
                 case RegisteredActionsEnum.setAllMarchersToNextPage: {
+                    // Reads page-era rows; not in timeline mode until P7.6
+                    if (refuseInTimelineMode(timelineMode, toast.error)) break;
                     if (!databaseReady || !pages || pages.length === 0) break;
                     const nextPage = getNextPage(selectedPage, pages);
                     if (!nextPage || !nextMarcherPages) {
@@ -1012,6 +1020,8 @@ function RegisteredActionsHandler() {
                     break;
                 }
                 case RegisteredActionsEnum.setSelectedMarchersToNextPage: {
+                    // Reads page-era rows; not in timeline mode until P7.6
+                    if (refuseInTimelineMode(timelineMode, toast.error)) break;
                     if (!databaseReady || !pages || pages.length === 0) break;
                     const nextPage = getNextPage(selectedPage, pages);
                     if (!nextPage || !nextMarcherPages) {

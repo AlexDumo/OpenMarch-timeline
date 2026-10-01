@@ -39,7 +39,9 @@ import { assertValid, refuse, TimelineWriteError } from "./timelineErrors";
  *   B, or its move's transition doesn't end at B) is refused (`E-ARGS`) with a message naming the
  *   marcher. Creating a transition or assignment for it is left to the timeline UI (P8.9).
  *
- * Everything is checked before the first write, so a refused move writes nothing.
+ * Every refusal is decided before the first write: the rows, shapes and shape samples are all read
+ * and checked first, so a refused move writes nothing. A database rejection during the writes
+ * (not expected once those checks pass) rolls back the whole edit.
  */
 
 /** One marcher's new position on a page, in canvas pixels (the same space as `marcher_pages`). */
@@ -154,9 +156,9 @@ export const moveMarchersOnPageInTransaction = async ({
         return result;
     }
 
-    const endBeat = pageEndBeat(page);
     if (page.beats.length === 0)
         refuse(`${pageLabel(page)} has no beats, so it has no end beat`);
+    const endBeat = pageEndBeat(page);
 
     // Every row of the moved marchers that covers the last moment before the end beat
     const a = schema.timeline_assignments;
@@ -215,28 +217,26 @@ export const moveMarchersOnPageInTransaction = async ({
         plans.push({ move, row });
     }
 
-    // Switch shape-backed transitions to individual points (Q-14), copying the shape's samples
-    const toConvert = new Map<number, { shapeId: number; slotCount: number }>();
-    for (const { row } of plans)
-        if (row.shapeId !== null)
-            toConvert.set(row.transitionId, {
-                shapeId: row.shapeId,
-                slotCount: row.slotCount,
-            });
-    for (const [transitionId, { shapeId, slotCount }] of toConvert) {
+    // Shape-backed transitions switch to individual points (Q-14), copying the shape's samples.
+    // Read and sample every shape before the first write.
+    const toConvert = new Map<number, XY[]>();
+    for (const { row } of plans) {
+        if (row.shapeId === null || toConvert.has(row.transitionId)) continue;
         const shape = await tx
             .select()
             .from(schema.timeline_shapes)
-            .where(eq(schema.timeline_shapes.id, shapeId))
+            .where(eq(schema.timeline_shapes.id, row.shapeId))
             .get();
-        if (!shape) refuse(`shape ${shapeId} does not exist`);
+        if (!shape) refuse(`shape ${row.shapeId} does not exist`);
+        toConvert.set(row.transitionId, sampleShape(shape, row.slotCount));
+    }
+
+    // Writes
+    for (const [transitionId, points] of toConvert) {
         await setTimelineTransitionDestinationInTransaction({
             tx,
             transitionId,
-            destination: {
-                kind: "individual",
-                points: sampleShape(shape, slotCount),
-            },
+            destination: { kind: "individual", points },
         });
         result.convertedTransitionIds.push(transitionId);
     }
