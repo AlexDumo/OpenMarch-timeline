@@ -632,3 +632,16 @@ Facts that change how to read the PR #14 note above:
 - **Next:** focused `test:history`, the regular desktop suite, lint, then the PR.
 - **Resume from:** branch `timeline/p7-undo-redo` at `5a935213`; run `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineHistoryFocus.test.ts src/db-functions/__test__/history.test.ts src/db-functions/__test__/timelineUndo.test.ts` and `pnpm --dir apps/desktop run test` (background), then open the PR.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-copy-paste) · P7.6 review fixes ready
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/28 is at head `560510e1`, and the PR body is updated with the review fixes listed in the checkpoint above. P7.6 stays in review; the Owner, Status, PR and inventory lines are confirmed on `timeline-try-2`.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - `vitest run` on `timelinePageCopy`, `timelineCoordinateWrites` and `timelineMoves`: 35 passed.
+  - `test:history` on the same three files: 35 passed.
+  - `pnpm --dir apps/desktop run test`, run once: 127 files passed, 1 failed; 1,870 tests passed, 8 failed. All 8 are in `timelinePageCopy.test.ts` ("attempt to write a readonly database"). I had run that file in history mode at the same time, from the same directory, and the test database path is `<cwd>/<task id>.tmp.dots`, so the two runs collided. Run alone afterwards, it passes in both modes (above).
+  - eslint, prettier and cspell: clean, apart from 3 warnings that are already on the base.
+  - Skipped by policy: the full `test:history`, Playwright and `build:electron`.
+- **Next:** the lead re-reviews and merges PR #28.
+- **Blockers:** none.
