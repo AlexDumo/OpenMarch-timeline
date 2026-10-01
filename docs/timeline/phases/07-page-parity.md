@@ -99,8 +99,8 @@ Coordinate sheets and PDF export sample the resolver at page beats.
 
 ### P7.8: Video export and appearances
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-exports)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -109,8 +109,8 @@ Video export and `exportAppearances` sample the resolver.
 
 ### P7.9: Keyframe export
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-exports)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: —
