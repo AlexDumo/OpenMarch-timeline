@@ -256,3 +256,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** pure generator tests and real-DB loader tests (P5.7, P5.8).
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (5f330e79); write `src/timeline/__test__/timelineFixtures.test.ts` (pure: SC-11 sizes and determinism) and `timelineFixtureLoad.test.ts` (real DB: each fixture loads, store resolver matches the oracle).
+
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.7, P5.8
+
+- **Done:** checkpoint 5d39a10f. Fixture tests: `src/timeline/__test__/timelineFixtures.test.ts` (pure: every fixture obeys the schema and trigger rules, the resolver matches the oracle on each, the golden fixtures hold spec positions, SC-11 has the spec's scale and mix and is reproducible from its seed) and `timelineFixtureLoad.test.ts` (real DB: every fixed fixture and a small SC-11 load and the store matches the oracle over the fixture's rows; a load is one undo step that the running store follows; beat offset; an invalid fixture writes nothing; the dev API).
+- **Checks:** `vitest run` on both files: 27 and 22 passed. `tsc --noEmit`: pass.
+- **Next:** P5.8 QA-SC-11 scale measurement (QA-PF-01 to -04) and the P5.3 test gaps.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (5d39a10f); write `src/timeline/__test__/timelineScale.test.ts` that loads `sc11(1)` into a real DB and prints QA-PF numbers, then record them in `findings.md`.
