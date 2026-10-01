@@ -434,12 +434,13 @@ const normalizeTriggerSql = (sql: string) =>
         .trim();
 
 /**
- * Brings the change-log triggers up to this build's bodies. Every trigger uses `CREATE TRIGGER IF
- * NOT EXISTS`, and `createAllTriggers` runs only when a migration is pending, so a file that was
- * migrated before a change to a trigger body keeps the old body. The migration service calls this
- * on every open, after the file-version guard. Only missing or changed triggers are recreated, so
- * an up-to-date file isn't written to (no schema or mtime change), and the recreation is one
- * transaction, so a failure can't leave a trigger dropped.
+ * Brings the change-log triggers up to this build's bodies. Drizzle's sqlite-proxy `migrate` calls
+ * the migration service's callback on every open, even with no migration pending, and that
+ * callback runs `dropAllTriggers` then `createAllTriggers`, so every trigger in the `triggers`
+ * map is normally rebuilt on open already. This check is a second line that doesn't depend on
+ * that drizzle behavior: it runs after the migrations, on every open, after the file-version
+ * guard. Only missing or changed triggers are recreated, so it writes nothing to an up-to-date
+ * file, and the recreation is one transaction, so a failure can't leave a trigger dropped.
  */
 export const recreateChangeLogTriggers = (dbConnection: DatabaseSync) =>
     recreateTriggersIfStale(dbConnection, timelineChangeLogTriggers());

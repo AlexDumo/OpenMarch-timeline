@@ -1097,6 +1097,53 @@ describe("DatabaseSync Repair", () => {
             }
         });
 
+        it("puts the freeze back even when detaching the original fails (P9.5)", async () => {
+            const originalDbPath = path.join(tempDir, "detach-original.dots");
+            const originalDb =
+                await createNewDatabaseWithMigrations(originalDbPath);
+            const newDb = await createNewDatabaseWithMigrations(
+                path.join(tempDir, "detach-new.dots"),
+            );
+            const freezeTriggers = () =>
+                (
+                    newDb
+                        .prepare(
+                            "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'page_era_frozen_%' ORDER BY name",
+                        )
+                        .all() as { name: string }[]
+                ).map((r) => r.name);
+            const before = freezeTriggers();
+            expect(before).toHaveLength(18);
+            // A connection whose DETACH throws
+            const failingDetach = new Proxy(newDb, {
+                get(target, prop) {
+                    if (prop === "prepare")
+                        return (statement: string) => {
+                            if (statement.startsWith("DETACH"))
+                                throw new Error("detach failed");
+                            return target.prepare(statement);
+                        };
+                    const value = Reflect.get(target, prop) as unknown;
+                    return typeof value === "function"
+                        ? (value as (...a: unknown[]) => unknown).bind(target)
+                        : value;
+                },
+            });
+            try {
+                expect(() =>
+                    copyDataFromOriginalDatabase(
+                        originalDb,
+                        failingDetach,
+                        originalDbPath,
+                    ),
+                ).toThrow("detach failed");
+                expect(freezeTriggers()).toEqual(before);
+            } finally {
+                originalDb.close();
+                newDb.close();
+            }
+        });
+
         it("orders dependent tables after the others, parents before children", () => {
             const names = [
                 "timeline_assignments",

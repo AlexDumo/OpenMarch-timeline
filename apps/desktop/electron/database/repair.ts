@@ -95,9 +95,33 @@ export const copyDataFromOriginalDatabase = (
         .all() as Array<{ name: string }>;
 
     // The workspace settings are copied first, so a timeline-mode file's flag is on before its
-    // frozen page-era rows are copied. The freeze (P9.5) is lifted for the copy.
-    const restoreFreeze = liftPageEraFreezeTriggers(newDb);
+    // frozen page-era rows are copied. The freeze (P9.5) is lifted for the copy and put back
+    // whatever happens, even if detaching fails.
+    let restoreFreeze: (() => void) | undefined;
+    try {
+        restoreFreeze = liftPageEraFreezeTriggers(newDb);
+        copyTablesFromAttachedOriginal(
+            originalDb,
+            newDb,
+            originalDbPath,
+            tables,
+            excludedTables,
+            singleRowTables,
+        );
+    } finally {
+        restoreFreeze?.();
+    }
+};
 
+/** Attaches the original file to `newDb`, copies its tables, and always detaches it. */
+const copyTablesFromAttachedOriginal = (
+    originalDb: DatabaseSync,
+    newDb: DatabaseSync,
+    originalDbPath: string,
+    tables: Array<{ name: string }>,
+    excludedTables: Set<string>,
+    singleRowTables: Set<string>,
+): void => {
     // Attach the original database to the new database connection
     const attachName = "original_db";
     newDb.prepare(`ATTACH DATABASE ? AS ${attachName}`).run(originalDbPath);
@@ -156,7 +180,6 @@ export const copyDataFromOriginalDatabase = (
     } finally {
         // Detach the original database
         newDb.prepare(`DETACH DATABASE ${attachName}`).run();
-        restoreFreeze();
     }
 };
 
