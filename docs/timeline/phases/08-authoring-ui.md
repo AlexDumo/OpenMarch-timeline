@@ -82,8 +82,8 @@ Shapes: draw and edit `line`, `freehand`, `circle`, `box` and `block` in absolut
 ### P8.3: Transitions
 
 - Owner: timeline-worker (timeline/p8-transitions)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/27
 - Parallel: yes
 - Depends on: P8.0
 
@@ -367,3 +367,23 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the suite result, squash, open the PR.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-transitions`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` (in the background); then squash the wip commits and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-transitions) · P8.3
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/27 (one commit, f24f0294, rebased on `timeline-try-2` after P7.4/P7.5).
+  - `TimelineTransitionEditor` in the inspector's timeline section edits the transition of each selected marcher at the page (or the move ending there): path style (FTL disabled with the reason when there's no shape or the shape is a block), bulge clamped to ±½ with the minor-arc note, FTL waypoints (add, remove, reorder, x/y), order mode with a one-line note, destination shape or individual points (copying the shape's samples), and slot count (at least the highest assigned slot + 1; new shapeless slots start at the last point).
+  - Each change is one undoable edit through the new `updateTimelineTransition` and `setTimelineTransitionDestination` wrappers. No-op changes are skipped, and refusals go through `toastTimelineError`.
+  - Shape samples come from a one-transition resolver (`shapeSlotPoints`), so there's no core API change. Exporting core's `sampleDestinations` is an optional follow-up (ADR 0001 §4).
+- **For the handoff notes:** the editor and its planner are `src/components/inspector/TimelineTransitionEditor.tsx` and `src/timeline/timelineTransitionEditor.ts`. `useTimelineInspections` returns `transitionEdits` and `shapeOptions`. Follow-ups:
+  - Timeline clip and track selections don't drive the editor yet.
+  - Waypoints can't be picked on the canvas yet.
+  - The shape list doesn't filter out blocks that are too small (picking one is refused with E-T4).
+- **Checks:**
+  - Build of the desktop's dependencies: pass.
+  - After the rebase: `tsc --noEmit` passes; `test:focused` on the inspector and timeline editor files passes (5 files, 95 tests); `test:history src/db-functions/__test__/timelineTransitionEdits.test.ts` passes (9 tests).
+  - `pnpm --dir apps/desktop run test`: 129 files, 1,889 tests passed (before the rebase, which touched none of these files).
+  - eslint: 0 errors. prettier and cspell: pass.
+  - Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Exit gate:** nothing ticked. The UI verification item needs a manual app check.
+- **Next:** review and merge by the lead.
+- **Blockers:** none.
