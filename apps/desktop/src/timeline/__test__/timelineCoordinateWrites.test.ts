@@ -16,6 +16,10 @@ import {
 import { pageEndBeat } from "../timelineCanvas";
 import {
     canvasCoordinateWriter,
+    NOT_IN_TIMELINE_MODE_MESSAGE,
+    refuseInTimelineMode,
+    timelineCoordinateRecords,
+    transformMarchersOnPage,
     TimelineNotReadyError,
     toTimelineMoves,
     withTimelinePositions,
@@ -250,12 +254,7 @@ describeDbTests("routed coordinate tools on a converted show", (it) => {
         });
 
         // RegisteredActionsHandler: getSelectedMarcherPages → alignVertically → updateCoordinates
-        const selected = withTimelinePositions(
-            page,
-            marcherPagesBefore.filter((mp) =>
-                [1, 2, 3].includes(mp.marcher_id),
-            ),
-        );
+        const selected = timelineCoordinateRecords(page, [1, 2, 3]);
         expect(selected.map((mp) => mp.marcher_id).sort()).toEqual([1, 2, 3]);
         for (const mp of selected)
             expect([mp.x, mp.y]).toEqual(positionAt(mp.marcher_id, endBeat));
@@ -278,5 +277,116 @@ describeDbTests("routed coordinate tools on a converted show", (it) => {
         expect(await marcherPagesByPageId({ db, pageId: page.id })).toEqual(
             marcherPagesBefore,
         );
+    });
+
+    it("nudge, flag on: moves a marcher that has no marcher_pages row on the page", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await startTimelineResolver(db);
+        const page = (await sortedPages(db))[3]!;
+        const endBeat = pageEndBeat(page);
+        await db
+            .delete(schema.marcher_pages)
+            .where(
+                and(
+                    eq(schema.marcher_pages.marcher_id, 6),
+                    eq(schema.marcher_pages.page_id, page.id),
+                ),
+            );
+        expect(await marcherPage(db, 6, page.id)).toBeUndefined();
+        const [x0, y0] = positionAt(6, endBeat);
+
+        // useUpdateSelectedMarchers' timeline branch, with a nudge as the transform
+        const result = await transformMarchersOnPage({
+            db,
+            page,
+            marcherIds: [5, 6],
+            transform: (current) => current.map((c) => ({ ...c, x: c.x + 10 })),
+        });
+        expect(result.map((c) => c.marcher_id)).toEqual([5, 6]);
+
+        await timelineResolverSettled();
+        expect(positionAt(6, endBeat)).toEqual([x0 + 10, y0]);
+    });
+
+    it("swap, flag on: the two marchers exchange positions on the page", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await startTimelineResolver(db);
+        const page = (await sortedPages(db))[2]!;
+        const endBeat = pageEndBeat(page);
+        const a = positionAt(8, endBeat);
+        const b = positionAt(9, endBeat);
+        const before = await marcherPagesByPageId({ db, pageId: page.id });
+
+        // RegisteredActionsHandler's swapMarchers case in timeline mode
+        const [p, q] = timelineCoordinateRecords(page, [8, 9]);
+        await moveMarchersOnPage({
+            db,
+            page,
+            moves: toTimelineMoves([
+                { ...p!, x: q!.x, y: q!.y },
+                { ...q!, x: p!.x, y: p!.y },
+            ]),
+        });
+
+        await timelineResolverSettled();
+        expect(positionAt(8, endBeat)).toEqual(b);
+        expect(positionAt(9, endBeat)).toEqual(a);
+        expect(await marcherPagesByPageId({ db, pageId: page.id })).toEqual(
+            before,
+        );
+    });
+
+    it("set to previous/next page, flag on: refused with a message, nothing written", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const pages = await sortedPages(db);
+        const page = pages[3]!;
+        const previous = await marcherPagesByPageId({
+            db,
+            pageId: pages[2]!.id,
+        });
+        const marcherPagesBefore = await db
+            .select()
+            .from(schema.marcher_pages)
+            .all();
+        const timelineBefore = await timelineRows(db);
+
+        // RegisteredActionsHandler's setAllMarchersToPreviousPage, flag on then off
+        const run = async (timelineMode: boolean) => {
+            const notify = vi.fn();
+            if (refuseInTimelineMode(timelineMode, notify)) return notify;
+            await updateMarcherPages({
+                db,
+                modifiedMarcherPages: previous.map((mp) => ({
+                    marcher_id: mp.marcher_id,
+                    page_id: page.id,
+                    x: mp.x,
+                    y: mp.y,
+                })),
+            });
+            return notify;
+        };
+
+        const notify = await run(true);
+        expect(notify).toHaveBeenCalledWith(NOT_IN_TIMELINE_MODE_MESSAGE);
+        expect(await db.select().from(schema.marcher_pages).all()).toEqual(
+            marcherPagesBefore,
+        );
+        expect(await timelineRows(db)).toEqual(timelineBefore);
+
+        // Flag off: the page-mode write happens as before
+        expect(await run(false)).not.toHaveBeenCalled();
+        expect(await marcherPage(db, 1, page.id)).toMatchObject({
+            x: previous.find((mp) => mp.marcher_id === 1)!.x,
+            y: previous.find((mp) => mp.marcher_id === 1)!.y,
+        });
     });
 });

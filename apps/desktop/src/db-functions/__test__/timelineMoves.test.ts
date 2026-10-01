@@ -17,7 +17,9 @@ import {
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { TimelineWriteError } from "../timelineErrors";
 import { createTimelineShapesInTransaction } from "../timelineShapes";
+import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import {
+    createTimelineTransitionsInTransaction,
     setTimelineTransitionDestinationInTransaction,
     updateTimelineTransitionsInTransaction,
 } from "../timelineTransitions";
@@ -74,11 +76,91 @@ const slotOf = async (db: DbConnection, marcherId: number, page: Page) => {
             and(
                 eq(schema.timeline_assignments.marcher_id, marcherId),
                 eq(schema.timeline_assignments.end_beat, pageEndBeat(page)),
+                // The converted (base) row, not a test's added steal
+                eq(schema.timeline_assignments.layer, 0),
             ),
         )
         .get();
     expect(row).toBeDefined();
     return row!;
+};
+
+const STEAL_POINT = [600, 700] as const;
+
+/**
+ * Adds a one-slot shapeless transition over [start, transitionEnd ?? end) with the marcher
+ * assigned over [start, end) at `layer`, as one edit. Returns the transition id.
+ */
+const addMove = async (
+    db: DbConnection,
+    {
+        marcherId,
+        start,
+        end,
+        transitionEnd,
+        layer,
+    }: {
+        marcherId: number;
+        start: number;
+        end: number;
+        transitionEnd?: number;
+        layer: number;
+    },
+): Promise<number> => {
+    const timeline = await db.select().from(schema.timelines).get();
+    return await transactionWithHistory(db, "addMove", async (tx) => {
+        const [transition] = await createTimelineTransitionsInTransaction({
+            tx,
+            newTransitions: [
+                {
+                    timelineId: timeline!.id,
+                    startBeat: start,
+                    endBeat: transitionEnd ?? end,
+                    slotCount: 1,
+                    destination: {
+                        kind: "individual",
+                        points: [[STEAL_POINT[0], STEAL_POINT[1]]],
+                    },
+                },
+            ],
+        });
+        await createTimelineAssignmentsInTransaction({
+            tx,
+            newAssignments: [
+                {
+                    marcherId,
+                    transitionId: transition!.id,
+                    slotIndex: 0,
+                    startBeat: start,
+                    endBeat: end,
+                    layer,
+                },
+            ],
+        });
+        return transition!.id;
+    });
+};
+
+/** A slot's individual destination, as [x, y]. */
+const pointOf = async (
+    db: DbConnection,
+    transitionId: number,
+    slotIndex: number,
+) => {
+    const row = await db
+        .select()
+        .from(schema.timeline_slot_destinations)
+        .where(
+            and(
+                eq(
+                    schema.timeline_slot_destinations.transition_id,
+                    transitionId,
+                ),
+                eq(schema.timeline_slot_destinations.slot_index, slotIndex),
+            ),
+        )
+        .get();
+    return [row!.x, row!.y];
 };
 
 const expectExactlyAt = (
@@ -307,7 +389,11 @@ describeDbTests("moving marchers on a page in timeline mode", (it) => {
         const ids = resolver().marcherIds();
         const movedIndex = pages.indexOf(page) * ids.length + ids.indexOf(7);
         allPageEnds(pages).forEach((p, i) => {
-            if (i !== movedIndex) expect(p).toEqual(endsBefore[i]);
+            if (i === movedIndex) return;
+            const [bx, by] = endsBefore[i]!;
+            expect(Object.is(p[0], bx) && Object.is(p[1], by), `end ${i}`).toBe(
+                true,
+            );
         });
 
         // One edit: undo puts the shape back
@@ -423,6 +509,105 @@ describeDbTests("moving marchers on a page in timeline mode", (it) => {
                 db,
                 page: pages[1]!,
                 moves: [{ marcherId: 2, x: 2e6, y: 0 }],
+            }),
+        );
+    });
+
+    it("with layers: a higher-layer steal ending at the page end wins; one ending earlier doesn't", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const page = pages[3]!;
+        const B = pageEndBeat(page);
+        // Marcher 2 is stolen for the last two beats of the page; marcher 3 for two beats
+        // that end before the page does
+        const steal = await addMove(db, {
+            marcherId: 2,
+            start: B - 2,
+            end: B,
+            layer: 1,
+        });
+        const early = await addMove(db, {
+            marcherId: 3,
+            start: B - 4,
+            end: B - 2,
+            layer: 1,
+        });
+        const base2 = await slotOf(db, 2, page);
+        const base3 = await slotOf(db, 3, page);
+        const base2Before = await pointOf(
+            db,
+            base2.transitionId,
+            base2.slotIndex,
+        );
+        await timelineResolverSettled();
+        expectExactlyAt(2, B, ...STEAL_POINT);
+
+        const result = await moveMarchersOnPage({
+            db,
+            page,
+            moves: [
+                { marcherId: 2, x: 31, y: 32 },
+                { marcherId: 3, x: 41, y: 42 },
+            ],
+        });
+        expect(result.slots).toEqual([
+            { marcherId: 2, transitionId: steal, slotIndex: 0 },
+            { marcherId: 3, ...base3 },
+        ]);
+        // The base row of marcher 2 and the early steal of marcher 3 are untouched
+        expect(await pointOf(db, base2.transitionId, base2.slotIndex)).toEqual(
+            base2Before,
+        );
+        expect(await pointOf(db, early, 0)).toEqual(STEAL_POINT);
+        await timelineResolverSettled();
+        expectExactlyAt(2, B, 31, 32);
+        expectExactlyAt(3, B, 41, 42);
+    });
+
+    it("refuses a move that spans several pages (ends after the page end)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const page = pages[3]!;
+        // A layer-1 move from page 3's start to page 4's end
+        await addMove(db, {
+            marcherId: 4,
+            start: page.beats[0]!.index,
+            end: pageEndBeat(pages[4]!),
+            layer: 1,
+        });
+        const error = await expectRefused(db, "E-ARGS", () =>
+            moveMarchersOnPage({
+                db,
+                page,
+                moves: [{ marcherId: 4, x: 1, y: 2 }],
+            }),
+        );
+        expect(error.message).toContain("marcher 4 has no move that ends");
+    });
+
+    it("refuses when the winning assignment ends at the page end but its transition ends later", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const page = pages[3]!;
+        const B = pageEndBeat(page);
+        await addMove(db, {
+            marcherId: 4,
+            start: B - 2,
+            end: B,
+            transitionEnd: B + 2,
+            layer: 1,
+        });
+        await expectRefused(db, "E-ARGS", () =>
+            moveMarchersOnPage({
+                db,
+                page,
+                moves: [{ marcherId: 4, x: 1, y: 2 }],
             }),
         );
     });
