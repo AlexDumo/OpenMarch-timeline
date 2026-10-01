@@ -818,3 +818,16 @@ Facts that change how to read the PR #14 note above:
 - **Note:** a shape rename does bump the resolver version too (the `shapes` change-log table fires on it), so the display bump is redundant for shapes but harmless; a `timelines`-only edit is the real gap. The package's "ripple that only moves a range" is covered by a direct range edit with undo and redo; no existing ripple in the converted fixture changes only a timeline range.
 - **Next:** review and merge.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-mobile-exports) · P7.12 review fixes checkpoint
+
+- **Done (lead review of PR #30):** merged `timeline-try-2` (with #29) as `3566f8a5`; fixes in `357f1e90`.
+  - All the payload's reads and the resolver build now run inside one `withTimelineWriteLock` (`fetchDotsData` in `dots-to-om.ts`), and sampling runs after the lock is released.
+  - Sampling (`sampleTimelinePagePositions`) makes one `positionsAt` call per page into a reused `Float64Array` and yields to the event loop every 8 ms.
+  - `timelinePositionsSettled()` is dropped. With only the lock, the in-flight test still passed, and the export's resolver is private. Both lock tests (a write in flight; a write queued mid-export) now fail when the lock is removed (checked by hand).
+  - The doc comments of `toOpenMarchSchema` and `toCompressedOpenMarchBytes` say they take the write lock in timeline mode.
+  - New tests: a dropped rotation; a page and a marcher created after conversion; a page-mode snapshot, written by the previous `dots-to-om.ts` and passing on the new one.
+- **Checks:** `tsc --noEmit` clean; `vitest run src/components/mobile`: 8 files, 88 passed. eslint, prettier and cspell: clean, apart from the `max-lines-per-function` warning that was already on the base.
+- **Next:** time a large seeded show, run focused `test:history` and the desktop suite, then update the PR body.
+- **Resume from:** branch `timeline/p7-mobile-exports` at `357f1e90`. Time the export with a scratch test (500 marchers × 200 pages, not committed). Then run `pnpm --dir apps/desktop run test:history src/components/mobile/utilities/__test__/dots-to-om.timeline.test.ts src/components/mobile/utilities/__test__/dots-to-om.test.ts` and, separately, `pnpm --dir apps/desktop run test`.
+- **Blockers:** none.
