@@ -16,6 +16,7 @@ import {
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { createMarchers, deleteMarchers, NewMarcherArgs } from "../marcher";
 import { createTimelineShapesInTransaction } from "../timelineShapes";
+import { createTimelinesInTransaction } from "../timelines";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import {
     createTimelineTransitionsInTransaction,
@@ -577,8 +578,14 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             const ts = await transitions(db);
             const last = ts[ts.length - 1]!;
             const [m0, m1, m2] = marchersAndPages.expectedMarchers;
-            const timeline = await db.select().from(schema.timelines).get();
             await transactionWithHistory(db, "addFtl", async (tx) => {
+                // A transition spans its own timeline (C-11)
+                const [timeline] = await createTimelinesInTransaction({
+                    tx,
+                    newTimelines: [
+                        { startBeat: last.start_beat, endBeat: last.end_beat },
+                    ],
+                });
                 const [shape] = await createTimelineShapesInTransaction({
                     tx,
                     newShapes: [

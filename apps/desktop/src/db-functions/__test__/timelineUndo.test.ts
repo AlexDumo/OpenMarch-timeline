@@ -144,7 +144,7 @@ const LINE = {
 } as const;
 
 /**
- * One edit: 3 marchers, a timeline [0, 64), a line shape, and two transitions:
+ * One edit: 3 marchers, a line shape, and two transitions, each spanning its own timeline (C-11):
  *
  * - T1 on the line over [8, 24), 3 slots: marcher 1 `[8, 24)` slot 0, marcher 2 `[8, 24)` slot 1,
  *   marcher 3 `[12, 20)` slot 2;
@@ -160,8 +160,11 @@ const seed = (db: DbConnection) =>
                 drill_order: id,
             })),
         );
-        const [timeline] = await createTimelinesInTransaction({
-            newTimelines: [{ name: "Opener", startBeat: 0, endBeat: 64 }],
+        const [timeline, timeline2] = await createTimelinesInTransaction({
+            newTimelines: [
+                { name: "Opener", startBeat: 8, endBeat: 24 },
+                { startBeat: 30, endBeat: 40 },
+            ],
             tx,
         });
         const [shape] = await createTimelineShapesInTransaction({
@@ -178,7 +181,7 @@ const seed = (db: DbConnection) =>
                     destination: { kind: "shape", shapeId: shape!.id },
                 },
                 {
-                    timelineId: timeline!.id,
+                    timelineId: timeline2!.id,
                     startBeat: 30,
                     endBeat: 40,
                     slotCount: 2,
@@ -246,11 +249,13 @@ describeDbTests("timeline undo round trips (P4.8)", (it) => {
             // DELETE and FKs are RESTRICT (C-1), so child-first deletes log each child's inverse
             // before its parent's, and undo re-inserts the parent first.
             expect((await performRedo(db)).success).toBe(true);
+            // Its timeline is left empty, so it goes last (C-11)
             expect(await newestUndoGroupTables(db)).toEqual([
                 "timeline_assignments",
                 "timeline_slot_destinations",
                 "timeline_slot_destinations",
                 "timeline_transitions",
+                "timelines",
             ]);
         });
 
@@ -281,7 +286,20 @@ describeDbTests("timeline undo round trips (P4.8)", (it) => {
         it("a timeline holding two transitions (two levels)", async ({
             db,
         }) => {
-            const { timelineId } = await seed(db);
+            const { timelineId, shapeId } = await seed(db);
+            // A second transition over the same counts (C-11)
+            await transactionWithHistory(db, "sibling", (tx) =>
+                createTimelineTransitionsInTransaction({
+                    newTransitions: [
+                        {
+                            timelineId,
+                            slotCount: 1,
+                            destination: { kind: "shape", shapeId },
+                        },
+                    ],
+                    tx,
+                }),
+            );
             await roundTrip(db, () =>
                 transactionWithHistory(db, "deleteTimeline", (tx) =>
                     deleteTimelinesInTransaction({

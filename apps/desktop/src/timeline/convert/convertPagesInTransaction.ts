@@ -13,7 +13,7 @@ import {
     deleteTimelinesInTransaction,
 } from "@/db-functions/timelines";
 import { deleteTimelineShapesInTransaction } from "@/db-functions/timelineShapesInTransaction";
-import { createTimelineTransitionsInTransaction } from "@/db-functions/timelineTransitionsInTransaction";
+import { createLegacyPageTransitionsInTransaction } from "@/db-functions/timelineTransitionsInTransaction";
 import { insertTimelineAssignmentsBulkInTransaction } from "@/db-functions/timelineAssignments";
 import { refuse } from "@/db-functions/timelineErrors";
 import type Page from "@/global/classes/Page";
@@ -216,8 +216,10 @@ export async function writePageConversionPlanInTransaction(
     const transitionIds = new Map<number, number>();
     let assignmentCount = 0;
     const total = plan.transitions.length;
+    // TODO(P9.10): one show-wide timeline with a transition per page breaks C-11 (a transition
+    // spans its timeline); write a timeline per page move instead.
     for (const [i, t] of plan.transitions.entries()) {
-        const [transition] = await createTimelineTransitionsInTransaction({
+        const [transition] = await createLegacyPageTransitionsInTransaction({
             tx,
             newTransitions: [
                 {

@@ -576,7 +576,7 @@ describeDbTests("page and beat ripple in timeline mode", (it) => {
             await roundTrip(db, before, await snapshot(db));
         });
 
-        it("adding a last page: a holding move after the last one, in the grown timeline", async ({
+        it("adding a last page: a holding move after the last one, in a timeline of its own (C-11)", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -590,9 +590,13 @@ describeDbTests("page and beat ripple in timeline mode", (it) => {
             const pagesAfter = await pagesInOrder(db);
             expect(await ranges(db)).toEqual(pageRanges(pagesAfter));
             expect((await ranges(db)).at(-1)).toEqual([49, 57]);
+            // The holding move spans a new timeline; the converted one is unchanged
             expect(await timeline(db)).toMatchObject([
-                { start_beat: 0, end_beat: 57 },
+                { start_beat: 0, end_beat: 49 },
+                { start_beat: 49, end_beat: 57 },
             ]);
+            const hold = (await transitions(db)).at(-1)!;
+            expect(hold.timeline_id).toBe((await timeline(db))[1]!.id);
             const endsAfter = pageEnds(pagesAfter);
             expectSamePageEnds(endsBefore, endsAfter);
             const page6 = endsBefore.get(6)!;
@@ -600,6 +604,26 @@ describeDbTests("page and beat ripple in timeline mode", (it) => {
                 expect(Object.is(x, page6.get(id)![0])).toBe(true);
                 expect(Object.is(y, page6.get(id)![1])).toBe(true);
             }
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("deleting an added page deletes its holding move's timeline with it (C-11)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const created = await createLastPage({ db, newPageCounts: 8 });
+            await timelineResolverSettled();
+            const before = await snapshot(db);
+            expect(await timeline(db)).toHaveLength(2);
+
+            await deletePages({ db, pageIds: new Set([created.id]) });
+            await timelineResolverSettled();
+
+            expect(await timeline(db)).toMatchObject([
+                { start_beat: 0, end_beat: 49 },
+            ]);
+            expect(await violations(db)).toEqual([]);
             await roundTrip(db, before, await snapshot(db));
         });
 

@@ -2,7 +2,10 @@ import { eq, inArray } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import { DbTransaction } from "./types";
 import { mapDbErrors, refuse } from "./timelineErrors";
-import { deleteTimelineTransitionsInTransaction } from "./timelineTransitionsInTransaction";
+import {
+    deleteTimelineTransitionRowsInTransaction,
+    setTimelineRangeInTransaction,
+} from "./timelineTransitionsInTransaction";
 
 /** A row of `timelines`. */
 export type DatabaseTimeline = typeof schema.timelines.$inferSelect;
@@ -17,8 +20,8 @@ export interface ModifiedTimelineArgs {
     id: number;
     name?: string | null;
     /**
-     * A range that no longer contains the timeline's transitions is rejected (E-T1). It never
-     * moves transitions.
+     * A new range moves every transition in the timeline with it, since each spans the timeline
+     * (C-11), and their anchored assignments follow (R-E1, `setTimelineRangeInTransaction`).
      */
     startBeat?: number;
     endBeat?: number;
@@ -55,10 +58,22 @@ export const updateTimelinesInTransaction = async ({
 }): Promise<DatabaseTimeline[]> => {
     const updated: DatabaseTimeline[] = [];
     for (const m of modifiedTimelines) {
+        if (m.startBeat !== undefined || m.endBeat !== undefined) {
+            const existing = await tx
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, m.id))
+                .get();
+            if (!existing) refuse(`timeline ${m.id} does not exist`);
+            await setTimelineRangeInTransaction({
+                tx,
+                timelineId: m.id,
+                start: m.startBeat ?? existing.start_beat,
+                end: m.endBeat ?? existing.end_beat,
+            });
+        }
         const set: Partial<typeof schema.timelines.$inferInsert> = {};
         if (m.name !== undefined) set.name = m.name;
-        if (m.startBeat !== undefined) set.start_beat = m.startBeat;
-        if (m.endBeat !== undefined) set.end_beat = m.endBeat;
         const row = await mapDbErrors(async () =>
             Object.keys(set).length === 0
                 ? await tx
@@ -99,7 +114,7 @@ export const deleteTimelinesInTransaction = async ({
         .from(schema.timeline_transitions)
         .where(inArray(schema.timeline_transitions.timeline_id, ids))
         .all();
-    await deleteTimelineTransitionsInTransaction({
+    await deleteTimelineTransitionRowsInTransaction({
         transitionIds: new Set(transitions.map((t) => t.id)),
         tx,
     });

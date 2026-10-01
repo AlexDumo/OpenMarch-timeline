@@ -114,6 +114,20 @@ hand-edited into two `ALTER TABLE marchers ADD COLUMN … CHECK (…)` statement
 that use the snapshot's constraint names; running `drizzle-kit generate` again
 reports no changes. `timeline_marcher_homes` was not created.
 
+**Transitions span their timeline (C-11, decided by the project owner on
+2026-10-01).** A timeline is the container for start and stop. It can own
+several transitions, but each one's `start_beat`/`end_beat` equals the
+timeline's, so no transition starts or stops partway through a timeline.
+Assignments keep their own ranges inside the transition. The transition's beat
+columns stay as a mirror of the timeline's range, so the resolver and `ref/`
+are unchanged (a timeline has no effect on resolution, R-1). The write
+functions enforce it (P8.10): a transition takes its timeline's range, and any
+other range is refused (`E-ARGS`); every range edit moves the timeline and all
+its transitions together, with anchored assignments (R-E1); and deleting a
+timeline's last transition deletes the timeline. The database check, an `E-T1`
+row in `timeline_commit_violations`, comes with P9.10, once the converter
+writes a timeline per page move instead of one show-wide timeline.
+
 **Coordinates and beats.** Resolver coordinates are the same units as
 `marcher_pages.x`/`y`, so the converter copies page-end positions exactly. The
 spec's `[−10⁶, 10⁶]` bound applies to those units. The spec's integer beats are
