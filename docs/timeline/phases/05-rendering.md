@@ -224,3 +224,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at the PR head: tsc (pass); `test:focused src/timeline/__test__/ src/components/canvas/__test__/` (5 files, 51 passed); the worker's regular desktop suite (92 files, 1,458 passed). After the fix: tsc, eslint and the same focused tests (51 passed).
 - **Next:** P5.6 (idle warming), P5.7 (fixture loader), P5.8 (tests and performance numbers).
 - **Blockers:** none.
+
+### 2026-09-30 · lead session · P5.6 to P5.8 (checkpoint after a usage-limit stop)
+
+- **Done:** the worker stopped on the account usage limit after drafting `apps/desktop/src/timeline/timelineWarm.ts` (182 lines) and edits to `timelineStore.ts`, uncommitted. The lead committed them as-is as e56cb6b3 (`wip:`, untested; only a cspell ignore line added) and pushed to `timeline/p5-warm-fixtures` on the fork. P5.7 and P5.8 weren't started.
+- **Checks:** pre-commit hook passed. Not run yet.
+- **Next:** the resumed worker reviews and finishes P5.6, then does P5.7 and P5.8.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (e56cb6b3), run tsc and the `src/timeline/__test__/` tests, then continue.

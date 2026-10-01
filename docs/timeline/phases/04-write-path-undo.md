@@ -263,3 +263,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at the PR head: tsc (pass); `test:history src/db-functions/__test__/ electron/database/__test__/repair.test.ts` (18 files, 560 passed); `pnpm --dir apps/desktop run test` (90 files passed, 1 failed: `Canvas.test.tsx` "renders" timed out on the loading spinner while another test run was going; re-run alone twice, it passed both times, so it's load-dependent, not caused by this PR, which doesn't touch the canvas).
 - **Next:** P4.9 (end-to-end fuzz with the real undo).
 - **Blockers:** none.
+
+### 2026-09-30 · lead session · P4.9 (checkpoint after a usage-limit stop)
+
+- **Done:** the worker stopped on the account usage limit after drafting `apps/desktop/src/db-functions/__test__/timelineE2eFuzz.test.ts` (1,466 lines), uncommitted. The lead committed it as-is as 0a884294 (`wip:`, untested; only a cspell ignore line added) and pushed it to `timeline/p4-e2e-fuzz` on the fork.
+- **Checks:** pre-commit hook (cspell, eslint, prettier) passed. Not run yet.
+- **Next:** the resumed worker runs and finishes the draft.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p4-e2e-fuzz` (0a884294), run `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` in the background, and fix what fails.
