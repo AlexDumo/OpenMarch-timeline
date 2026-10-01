@@ -1160,3 +1160,18 @@ Facts that change how to read the PR #14 note above:
 - **Next:** focused `test:history`, the desktop suite, the PR body, and the inventory notes for `shapes.ts` and `shapePageMarchers.ts`.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p7-shapes` at 6cb70b5e. Then run `pnpm --dir apps/desktop run test:history` on `src/db-functions/__test__/shapePagesTimelineMode.test.ts` and `marcherPage.test.ts`, followed by `pnpm --dir apps/desktop run test`, alone.
+
+### 2026-10-01 · timeline-worker (timeline/p7-shapes) · P7.11 review fixes ready
+
+- **Done:** the review fixes are pushed to PR https://github.com/AlexDumo/OpenMarch-timeline/pull/36, head 6cb70b5e, with no force-push. The PR body is updated. The inventory notes for `shapes.ts` and `shapePageMarchers.ts` now say those writers are gated. The P7.4 cascade item and the "refused rather than mapped" reason are recorded in the inventory notes.
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - The 8 new and changed test files: pass. This includes the real fabric mouse sequence through `useSelectionListeners`.
+  - Focused `test:history` on `shapePagesTimelineMode.test.ts`, `marcherPage.test.ts` and `timelineShapeEdits.test.ts`: 3 files, 79 passed.
+  - `pnpm --dir apps/desktop run test`, run once and alone at 6cb70b5e: 156 files passed, 7 skipped; 2,242 tests passed.
+  - Pre-commit (eslint, prettier, cspell): pass.
+- **Skipped:**
+  - By policy: the full `test:history` suite, e2e and `build:electron`.
+  - No manual run in the app.
+- **Next:** the lead re-reviews PR #36.
+- **Blockers:** none.
