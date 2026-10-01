@@ -14,6 +14,7 @@ import {
 import { validateTimelineViewModel } from "@/components/timeline/TimelineGeometry";
 import { planPageConversion } from "../convert/planPageConversion";
 import { GOLDEN_FIXTURES } from "../fixtures/goldenFixtures";
+import { sc11 } from "../fixtures/scenarioFixtures";
 import { resolverSpans } from "../timelineStore";
 import {
     buildTimelineTracks,
@@ -299,6 +300,32 @@ describe("buildTimelineTracks", () => {
         });
     });
 
+    describe("shape clips split around other shapes", () => {
+        it("a gap filled by another shape's move starts a new clip", () => {
+            const show = golden("G4");
+            // T1 [0, 8) and T2 [12, 20) both into shape 1; T3 [8, 12) into shape 2 fills the gap
+            show.transitions[2] = { ...show.transitions[2]!, dest: 1 };
+            show.transitions[3] = {
+                id: 3,
+                start: 8,
+                end: 12,
+                dest: 2,
+                slots: 1,
+                style: "direct",
+                order: "inherit",
+                params: null,
+            };
+            const tracks = build(show, selecting());
+            expect(tracks.map((t) => t.id)).toEqual([
+                shapeTrackId(1, 1),
+                `${shapeTrackId(1, 1)}-1`,
+                shapeTrackId(1, 2),
+            ]);
+            expect(legs(tracks[0]!)).toEqual([[0, 8, "move"]]);
+            expect(legs(tracks[1]!)).toEqual([[12, 20, "move"]]);
+        });
+    });
+
     describe("default track set (U-Q1)", () => {
         it("shows shape tracks, individually moved marchers and the selection", () => {
             const show = golden("G13");
@@ -338,12 +365,12 @@ describe("buildTimelineTracks", () => {
     });
 
     describe("diagnostics badges (§8.9)", () => {
-        it("G9: a vacant slot badges the shape track and the marchers of that transition", () => {
+        it("G9: a vacant slot badges the shape track, not every member's track", () => {
             const tracks = build(golden("G9"), selecting(2));
             const ftl = track(tracks, shapeTrackId(1, 2));
             expect(ftl.diagnostics?.level).toBe("warning");
             expect(codes(ftl)).toContain("D-VACANT");
-            expect(codes(track(tracks, marcherTrackId(1, 2)))).toContain(
+            expect(codes(track(tracks, marcherTrackId(1, 2)))).not.toContain(
                 "D-VACANT",
             );
             // G9 drops marcher 1 from both moves, so the line's transition has a vacancy too
@@ -363,6 +390,17 @@ describe("buildTimelineTracks", () => {
             expect(
                 track(tracks, marcherTrackId(1, 2)).diagnostics,
             ).toBeUndefined();
+        });
+
+        it("a vacancy in a transition without a shape badges one marcher track only", () => {
+            const show = golden("G13");
+            // T1 is shapeless with three slots; drop slot 1's marcher (2)
+            show.assignments = show.assignments.filter(
+                (r) => !(r.transition === 1 && r.marcher === 2),
+            );
+            const tracks = build(show, ALL);
+            const vacant = tracks.filter((t) => codes(t).includes("D-VACANT"));
+            expect(vacant.map((t) => t.id)).toEqual([marcherTrackId(1, 1)]);
         });
 
         it("G1 has no diagnostics and no badge", () => {
@@ -465,6 +503,39 @@ describe("buildTimelineTracks", () => {
             [0, 4],
             [4, 8],
         ]);
+    });
+
+    it("performance smoke: SC-11, the default set plus a 20-marcher selection", () => {
+        const fixture = sc11(1);
+        const timelines = Object.fromEntries(
+            (fixture.timelines ?? []).map((t) => [t.id, t.transitions]),
+        );
+        const resolver = createResolver(fixture.show);
+        const tables = tablesOf(fixture.show, timelines);
+        const selected = new Set(
+            fixture.show.marchers.slice(0, 20).map((m) => m.id),
+        );
+        const start = performance.now();
+        const tracks = buildTimelineTracks(
+            {
+                tables,
+                spansOf: (m) => resolverSpans(resolver, m),
+                diagnostics: resolver.diagnostics(),
+            },
+            { kind: "default", selectedMarcherIds: selected },
+        );
+        const elapsed = performance.now() - start;
+        // eslint-disable-next-line no-console
+        console.info(
+            `SC-11 tracks: ${tracks.length} built in ${elapsed.toFixed(1)} ms`,
+        );
+        expect(tracks.length).toBeGreaterThan(20);
+        // Generous: catches a regression to per-span explain() walks, not machine noise
+        expect(elapsed).toBeLessThan(250);
+        const end = Math.max(
+            ...Object.values(fixture.show.transitions).map((t) => t.end),
+        );
+        expect(validateTimelineViewModel(viewModelOf(tracks, end))).toEqual([]);
     });
 
     it("every golden fixture's tracks pass the view model's validator", () => {

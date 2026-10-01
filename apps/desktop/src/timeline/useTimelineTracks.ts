@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Diagnostic, SpanInfo } from "@openmarch/core";
 import { asc } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { withTimelineWriteLock } from "@/db-functions/history";
@@ -70,11 +71,35 @@ export async function readTimelineViewTables(
 
 const NO_TRACKS: readonly TimelineInput[] = [];
 
+/** Rows read under the write lock, with the resolver store version they match. */
+interface VersionedTables {
+    readonly version: number;
+    readonly tables: TimelineViewTables;
+}
+
+/**
+ * Reads the rows under the write lock, tagged with the store version at that moment. Batches are
+ * applied to the resolver before the lock is released, so the rows and that version's resolver
+ * describe the same commit.
+ */
+export const readVersionedTimelineViewTables = (
+    database: DbConnection,
+): Promise<VersionedTables> =>
+    withTimelineWriteLock(async () => {
+        const tables = await readTimelineViewTables(database);
+        return { version: useTimelineResolverStore.getState().version, tables };
+    });
+
 /**
  * The timeline's tracks for the open file (P8.8): the view-model adapter over the stored tables
  * and the resolver. It rebuilds whenever the resolver store's version changes, which every
  * committed timeline edit, undo, redo and cold build bumps. With `enabled` false (the timeline dev
  * flag off), or before the resolver is ready, it reads nothing and returns no tracks.
+ *
+ * - Tracks are only built from rows and a resolver of the same version. While the next version's
+ *   rows load, the last tracks stay, so nothing flickers and no mismatched pair is ever built.
+ * - Spans and diagnostics are cached per resolver version, so a selection change re-derives the
+ *   tracks without asking the resolver again.
  *
  * @param selectedMarcherIds the selection, whose marcher tracks show by default (U-Q1). Pass a
  *        stable set: a new one rebuilds the tracks.
@@ -92,18 +117,16 @@ export function useTimelineTracks({
     const version = useTimelineResolverStore((s) => s.version);
     const active = enabled && resolver !== null;
 
-    // The rows as of the latest version. The last ones stay while the next version's load, so the
-    // tracks don't flicker.
-    const [tables, setTables] = useState<TimelineViewTables | null>(null);
+    const [loaded, setLoaded] = useState<VersionedTables | null>(null);
     useEffect(() => {
         if (!active) {
-            setTables(null);
+            setLoaded(null);
             return;
         }
         let current = true;
-        withTimelineWriteLock(() => readTimelineViewTables(database)).then(
+        readVersionedTimelineViewTables(database).then(
             (read) => {
-                if (current) setTables(read);
+                if (current) setLoaded(read);
             },
             (error: unknown) =>
                 console.error("Couldn't read the timeline's tracks", error),
@@ -113,20 +136,44 @@ export function useTimelineTracks({
         };
     }, [active, database, version]);
 
-    return useMemo(() => {
+    // Per resolver version: the spans asked for so far, and the diagnostics
+    const cache = useMemo(() => {
         void version; // the resolver answers differently after each version
-        if (!active || !resolver || !tables) return NO_TRACKS;
+        const spans = new Map<number, readonly SpanInfo[]>();
+        let diagnostics: readonly Diagnostic[] | null = null;
+        return {
+            spansOf: (marcherId: number) => {
+                let found = spans.get(marcherId);
+                if (!found && resolver) {
+                    found = resolverSpans(resolver, marcherId);
+                    spans.set(marcherId, found);
+                }
+                return found ?? [];
+            },
+            diagnostics: () =>
+                (diagnostics ??= resolver ? resolver.diagnostics() : []),
+        };
+    }, [resolver, version]);
+
+    const built = useMemo(() => {
+        if (!active || !loaded) return NO_TRACKS;
+        // Rows of another version: wait for the matching read
+        if (loaded.version !== version) return null;
         const filter: TimelineTrackFilter = {
             kind: "default",
             selectedMarcherIds,
         };
         return buildTimelineTracks(
             {
-                tables,
-                spansOf: (marcherId) => resolverSpans(resolver, marcherId),
-                diagnostics: resolver.diagnostics(),
+                tables: loaded.tables,
+                spansOf: cache.spansOf,
+                diagnostics: cache.diagnostics(),
             },
             filter,
         );
-    }, [active, resolver, tables, version, selectedMarcherIds]);
+    }, [active, loaded, version, cache, selectedMarcherIds]);
+
+    const last = useRef<readonly TimelineInput[]>(NO_TRACKS);
+    if (built !== null) last.current = built;
+    return built ?? last.current;
 }

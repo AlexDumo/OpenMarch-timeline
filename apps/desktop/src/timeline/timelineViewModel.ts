@@ -21,14 +21,16 @@ import type {
  *   assignment here.
  * - **Shape track:** one per spec timeline and shape used as a destination in it, standing for the
  *   transitions into that shape. The clip spans those transitions; their ranges are `move` legs
- *   and any gap between them is a `hold` leg. A span is active where at least one member's
+ *   and any gap between them is a `hold` leg, unless another shape's transition occupies the gap,
+ *   which starts a new clip. A span is active where at least one member's
  *   winning span is in those transitions, and inactive where all are stolen or none is assigned
  *   (U-Q4, decided in ui.md).
  * - **Linked clips:** every track carries its spec timeline id as `linkId`, because moving a clip
  *   moves its whole timeline (ui.md, `TimelineRangeChange`).
  * - **Diagnostics (§8.9):** a track's badge lists the diagnostics of its transitions that concern
- *   its target: for a marcher, the ones about that marcher and the transition-wide ones (such as
- *   `D-VACANT`) of the transitions it is assigned to; for a shape, all of them.
+ *   its target: for a shape, all of them; for a marcher, the ones about that marcher. A
+ *   transition-wide one (such as `D-VACANT`) of a transition without a shape shows once, on the
+ *   first shown marcher track assigned to it.
  * - **Default track set (U-Q1, decided in ui.md):** every shape track, plus the marcher tracks of
  *   individually moved marchers (assigned to a one-slot transition without a shape in that
  *   timeline) and of the selected marchers. `"all"` shows every marcher track.
@@ -256,6 +258,40 @@ export function buildTimelineTracks(
         );
 }
 
+function shapeTracksOfTimeline(
+    context: BuildContext,
+    timelineId: number,
+    color: string,
+    transitions: readonly TimelineViewTransition[],
+): TimelineInput[] {
+    const tracks: TimelineInput[] = [];
+    const byShape = groupBy(
+        transitions.filter((t) => t.destShapeId != null),
+        (t) => t.destShapeId!,
+    );
+    for (const [shapeId, shapeTransitions] of [...byShape].sort(
+        ([a], [b]) => a - b,
+    ))
+        clipsOfShape(shapeTransitions, transitions).forEach((group, k) =>
+            tracks.push(
+                shapeTrack({
+                    context,
+                    id:
+                        k === 0
+                            ? shapeTrackId(timelineId, shapeId)
+                            : `${shapeTrackId(timelineId, shapeId)}-${k}`,
+                    timelineId,
+                    shapeId,
+                    label: context.shapeName.get(shapeId) ?? `Shape ${shapeId}`,
+                    color,
+                    transitions: group,
+                }),
+            ),
+        );
+
+    return tracks;
+}
+
 function tracksOfTimeline(
     context: BuildContext,
     timelineId: number,
@@ -265,29 +301,20 @@ function tracksOfTimeline(
     const transitions = context.transitionsByTimeline.get(timelineId) ?? [];
     const tracks: TimelineInput[] = [];
 
-    const byShape = groupBy(
-        transitions.filter((t) => t.destShapeId != null),
-        (t) => t.destShapeId!,
+    tracks.push(
+        ...shapeTracksOfTimeline(context, timelineId, color, transitions),
     );
-    for (const [shapeId, shapeTransitions] of [...byShape].sort(
-        ([a], [b]) => a - b,
-    ))
-        tracks.push(
-            shapeTrack({
-                context,
-                timelineId,
-                shapeId,
-                label: context.shapeName.get(shapeId) ?? `Shape ${shapeId}`,
-                color,
-                transitions: shapeTransitions,
-            }),
-        );
 
     const byMarcher = groupBy(
         transitions.flatMap((t) => rowsByTransition.get(t.id) ?? []),
         (r) => r.marcher,
     );
     const inTimeline = new Set(transitions.map((t) => t.id));
+    // Transition-wide diagnostics (such as D-VACANT) of a transition without a shape track go on
+    // one marcher track only: the first shown one assigned to it
+    const unclaimed = new Set(
+        transitions.filter((t) => t.destShapeId == null).map((t) => t.id),
+    );
     for (const [marcherId, rows] of [...byMarcher].sort(([a], [b]) => a - b)) {
         const individual = rows.some((row) => {
             const t = transitionById.get(row.transition)!;
@@ -302,9 +329,18 @@ function tracksOfTimeline(
         const spans = spansOf(marcherId);
         // Spans can lag the tables for a moment after a commit; skip until they catch up
         if (spans.length === 0) continue;
+        const diagnostics = [...new Set(rows.map((r) => r.transition))]
+            .sort((a, b) => a - b)
+            .flatMap((tid) => {
+                const wide = unclaimed.delete(tid);
+                return (context.diagnosticsByTransition.get(tid) ?? []).filter(
+                    (d) =>
+                        d.marcherId === marcherId ||
+                        (wide && d.marcherId === null),
+                );
+            });
         tracks.push(
             marcherTrack({
-                context,
                 timelineId,
                 marcherId,
                 label:
@@ -314,14 +350,44 @@ function tracksOfTimeline(
                 rows,
                 inTimeline,
                 spans,
+                diagnostics,
             }),
         );
     }
     return tracks;
 }
 
+/**
+ * Splits a shape's transitions into clips: a gap between two moves into the shape starts a new
+ * clip when another shape's transition in the timeline occupies it, so the shape doesn't seem to
+ * hold through another formation.
+ */
+function clipsOfShape(
+    shapeTransitions: readonly TimelineViewTransition[],
+    timelineTransitions: readonly TimelineViewTransition[],
+): TimelineViewTransition[][] {
+    const shapeId = shapeTransitions[0]!.destShapeId;
+    const others = timelineTransitions.filter(
+        (t) => t.destShapeId != null && t.destShapeId !== shapeId,
+    );
+    const sorted = [...shapeTransitions].sort(
+        (a, b) => a.start - b.start || a.id - b.id,
+    );
+    const groups: TimelineViewTransition[][] = [];
+    let end = -Infinity;
+    for (const t of sorted) {
+        const gapStart = end;
+        const occupied =
+            t.start > gapStart &&
+            others.some((o) => o.start < t.start && o.end > gapStart);
+        if (groups.length === 0 || occupied) groups.push([t]);
+        else groups[groups.length - 1]!.push(t);
+        end = Math.max(end, t.end);
+    }
+    return groups;
+}
+
 function marcherTrack({
-    context,
     timelineId,
     marcherId,
     label,
@@ -329,8 +395,8 @@ function marcherTrack({
     rows,
     inTimeline,
     spans,
+    diagnostics,
 }: {
-    context: BuildContext;
     timelineId: number;
     marcherId: number;
     label: string;
@@ -338,6 +404,8 @@ function marcherTrack({
     rows: readonly AssignmentRow[];
     inTimeline: ReadonlySet<number>;
     spans: readonly SpanInfo[];
+    /** The badge's diagnostics, chosen by the caller */
+    diagnostics: readonly Diagnostic[];
 }): TimelineInput {
     const id = marcherTrackId(timelineId, marcherId);
     const clip: Interval = {
@@ -360,15 +428,6 @@ function marcherTrack({
             active.push({ start, end });
     }
 
-    const assigned = new Set(rows.map((r) => r.transition));
-    const diagnostics = [...assigned]
-        .sort((a, b) => a - b)
-        .flatMap((tid) =>
-            (context.diagnosticsByTransition.get(tid) ?? []).filter(
-                (d) => d.marcherId === marcherId || d.marcherId === null,
-            ),
-        );
-
     return {
         id,
         linkId: timelineId,
@@ -386,6 +445,7 @@ function marcherTrack({
 
 function shapeTrack({
     context,
+    id,
     timelineId,
     shapeId,
     label,
@@ -393,13 +453,13 @@ function shapeTrack({
     transitions,
 }: {
     context: BuildContext;
+    id: string;
     timelineId: number;
     shapeId: number;
     label: string;
     color: string;
     transitions: readonly TimelineViewTransition[];
 }): TimelineInput {
-    const id = shapeTrackId(timelineId, shapeId);
     const ids = new Set(transitions.map((t) => t.id));
     const moves = union(
         transitions.map((t) => ({ start: t.start, end: t.end })),

@@ -1,8 +1,13 @@
-import { afterEach, expect } from "vitest";
+import { afterEach, expect, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { performUndo, transactionWithHistory } from "@/db-functions/history";
-import { startTimelineResolver, stopTimelineResolver } from "../timelineStore";
+import type { TimelineInput } from "@/components/timeline/Timeline";
+import {
+    startTimelineResolver,
+    stopTimelineResolver,
+    useTimelineResolverStore,
+} from "../timelineStore";
 import { marcherTrackId, shapeTrackId } from "../timelineViewModel";
 import { useTimelineTracks } from "../useTimelineTracks";
 
@@ -154,6 +159,64 @@ describeDbTests("useTimelineTracks", (it) => {
                 marcherTrackId(1, 2),
             ]),
         );
+    });
+
+    it("never builds rows of one version against another version's resolver", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const seen: (readonly TimelineInput[])[] = [];
+        const { result } = renderHook(() => {
+            const tracks = useTimelineTracks({
+                database: db,
+                enabled: true,
+                selectedMarcherIds: NONE,
+            });
+            seen.push(tracks);
+            return tracks;
+        });
+        await waitFor(() => expect(result.current).toHaveLength(1));
+        const before = result.current;
+        seen.length = 0;
+
+        await stealMarcher1(db);
+        await waitFor(() => expect(result.current).toHaveLength(2));
+        const after = result.current;
+        // Every render showed the old tracks (the same array) or the new ones: no build paired
+        // the old rows with the new resolver, which would be a third, new array
+        expect(
+            seen.every((tracks) => tracks === before || tracks === after),
+        ).toBe(true);
+    });
+
+    it("a selection change reuses the version's spans and diagnostics", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const { result, rerender } = renderHook(
+            ({ selected }: { selected: ReadonlySet<number> }) =>
+                useTimelineTracks({
+                    database: db,
+                    enabled: true,
+                    selectedMarcherIds: selected,
+                }),
+            { initialProps: { selected: NONE } },
+        );
+        await waitFor(() => expect(result.current).toHaveLength(1));
+        const resolver = useTimelineResolverStore.getState().resolver!;
+        const spanInfos = vi.spyOn(resolver, "spanInfos");
+        const diagnostics = vi.spyOn(resolver, "diagnostics");
+
+        // The shape track already asked for both members' spans
+        rerender({ selected: new Set([2]) });
+        expect(result.current.map((t) => t.id)).toEqual([
+            shapeTrackId(1, 1),
+            marcherTrackId(1, 2),
+        ]);
+        expect(spanInfos).not.toHaveBeenCalled();
+        expect(diagnostics).not.toHaveBeenCalled();
     });
 
     it("builds nothing while disabled", async ({ db }) => {
