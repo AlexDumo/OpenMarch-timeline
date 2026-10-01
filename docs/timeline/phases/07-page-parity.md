@@ -49,9 +49,9 @@ Selection, drag and alignment tools write slot destinations.
 
 ### P7.3: Marcher add and delete
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p7-marchers)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/22
 - Parallel: yes
 - Depends on: P7.1
 
@@ -225,15 +225,15 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.3 Marcher add and delete (home position plus slot rows)
 
-- [ ] `src/db-functions/marcher.ts` ~92 to 195 (`createMarchersInTransaction` inserts one `marcher_pages` row per marcher per page, starting at a free spot) · W · not handled for timeline rows (the P6 fixture loader calls it at `src/timeline/fixtures/loadTimelineFixture.ts` ~107) · add the home position and a vacant or filled slot in each transition
-- [ ] `src/db-functions/marcher.ts` ~290 to 315 (`deleteMarchers`; cascades to `marcher_pages` and `shape_page_marchers`) · W · not handled · also remove timeline assignments and slot rows
-- [ ] `src/db-functions/marcherHome.ts` ~7 to 30 (`updateMarcherHomesInTransaction`) · W of the marcher home · exists · confirm it is the right write for "move a marcher on page 0"
-- [ ] `src/hooks/queries/useMarchers.ts` ~84 to 150 (create and delete mutations; invalidate `marcher_pages` keys at ~94, 125, 144, and coordinate data at ~101, 148) · invalidation · not handled · add timeline query keys
-- [ ] `src/components/marcher/MarcherForm.tsx` ~178 and `src/components/marcher/MarcherList.tsx` ~74 · UI callers · not handled
-- [ ] `src/components/launchpage/newShowCompletion.ts` ~249 to 262 (delete, then create marchers on import) · W · new-show import · not handled
-- [ ] `src/components/launchpage/newShowCompletion.ts` ~276 to 318 (`applyPreviousDotsCoordinates` writes page 0 `marcher_pages`) · W · new show from previous dots · not handled · in timeline mode this is the home position
+- [x] `src/db-functions/marcher.ts` ~92 to 195 (`createMarchersInTransaction` inserts one `marcher_pages` row per marcher per page, starting at a free spot) · W · not handled for timeline rows (the P6 fixture loader calls it at `src/timeline/fixtures/loadTimelineFixture.ts` ~107) · add the home position and a vacant or filled slot in each transition (P7.3: `createMarchers({ timelineMode: true })` adds a home and a holding slot in each page move through `addMarchersToTimelineInTransaction`; `createMarchersInTransaction` is unchanged, so the fixture loader is unaffected)
+- [x] `src/db-functions/marcher.ts` ~290 to 315 (`deleteMarchers`; cascades to `marcher_pages` and `shape_page_marchers`) · W · not handled · also remove timeline assignments and slot rows (P7.3: `deleteMarchers({ timelineMode: true })` deletes the assignments first and compacts shapeless transitions through `removeMarchersFromTimelineInTransaction`)
+- [x] `src/db-functions/marcherHome.ts` ~7 to 30 (`updateMarcherHomesInTransaction`) · W of the marcher home · exists · confirm it is the right write for "move a marcher on page 0" (P7.3: confirmed; P7.2's page 0 move and P7.3's add both write homes through it)
+- [x] `src/hooks/queries/useMarchers.ts` ~84 to 150 (create and delete mutations; invalidate `marcher_pages` keys at ~94, 125, 144, and coordinate data at ~101, 148) · invalidation · not handled · add timeline query keys (P7.3: the mutations take the flag; no timeline React Query keys exist, and the resolver store follows each edit's change batch, which the tests check)
+- [x] `src/components/marcher/MarcherForm.tsx` ~178 and `src/components/marcher/MarcherList.tsx` ~74 · UI callers · not handled (P7.3: both pass `useTimelineMode()`; the new-show wizard reads no flag)
+- [x] `src/components/launchpage/newShowCompletion.ts` ~249 to 262 (delete, then create marchers on import) · W · new-show import · not handled (P7.3: no change; a new show starts with the flag off, so it is page mode, and conversion later takes homes from page 0)
+- [x] `src/components/launchpage/newShowCompletion.ts` ~276 to 318 (`applyPreviousDotsCoordinates` writes page 0 `marcher_pages`) · W · new show from previous dots · not handled · in timeline mode this is the home position (P7.3: no change, for the same reason: new shows are page mode until converted)
 - [ ] `electron/main/services/previous-dots-import-service.ts` ~85 to 114 · R of the source file's last-page `marcher_pages` · import of a previous show · not handled · if the source is a converted show its page-era rows are frozen and stale; read home or the resolver instead
-- [ ] `electron/database/repair.ts` ~235 to 241, ~303 (`removeOrphanMarcherPages`) · W cleanup · repair · likely no change until Phase 10, since the page-era tables stay; confirm it deletes nothing the converter relies on
+- [x] `electron/database/repair.ts` ~235 to 241, ~303 (`removeOrphanMarcherPages`) · W cleanup · repair · likely no change until Phase 10, since the page-era tables stay; confirm it deletes nothing the converter relies on (P7.3: confirmed; it deletes only page rows whose marcher or page no longer exists, which the converter never reads)
 
 #### P7.4 Page ripple procedures (insert, delete, resize pages)
 
@@ -398,4 +398,38 @@ Facts that change how to read the PR #14 note above:
 - **Done:** fork PR #20 reviewed by a sub-agent (APPROVE WITH NITS: page mode unchanged on every routed path with hooks unconditional; the page N rule picks the highest-layer assignment ending at N's end beat per R-2 and refuses structural moves; the shape → individual switch keeps every other marcher's position bit for bit; positions come from the resolver, so no stale `marcher_pages` reaches a timeline write). The worker fixed the nits: timeline-mode selections come from the selected marchers rather than `marcher_pages`; "set to previous/next page" is refused in timeline mode until P7.6; every refusal is decided before the first write; added layered, multi-page, transition-ends-later and swap tests. Squash-merged. P7.2 set to done.
 - **Checks:** at 483150f5: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on `timelineMoves.test.ts` and `timelineCoordinateWrites.test.ts` (21 passed); `pnpm --dir apps/desktop run test` (106 files, 1,597 passed).
 - **Next:** P7.3 onward.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p7-marchers) · P7.3 checkpoint
+
+- **Done:** `apps/desktop/src/db-functions/timelineMarchers.ts` (`addMarchersToTimelineInTransaction`, `removeMarchersFromTimelineInTransaction`), wired into `createMarchers` and `deleteMarchers` behind a `timelineMode` argument (default false, so page mode is unchanged), the mutation options in `useMarchers.ts`, and the UI callers (`MarcherForm.tsx`, `MarcherList.tsx`) through `useTimelineMode`. Add: home at a free spot (checked against homes), then each shapeless transition whose rows are all layer 0 over the whole transition grows by one slot per new marcher, with the destination at the home and a layer-0 assignment over the transition. Delete: assignments deleted first, then shapeless transitions compacted (drop the last slot if vacated, otherwise move the last slot's marcher and point into the vacated slot), skipping shape-backed transitions and ones sharing a marcher with an inheriting follow-the-leader transition. Commit `b9ea5b68` (wip, untested).
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` → clean. No tests yet.
+- **Next:** tests in `src/db-functions/__test__/timelineMarchers.test.ts` (converted show: add, delete, undo/redo, flag off).
+- **Resume from:** branch `timeline/p7-marchers` at `b9ea5b68`; write the tests modelled on `timelineMoves.test.ts`, run them with `pnpm --dir apps/desktop exec vitest run src/db-functions/__test__/timelineMarchers.test.ts` and with `test:history`.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p7-marchers) · P7.3 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/22 (commit `7c9d2809`). New `src/db-functions/timelineMarchers.ts` (`addMarchersToTimelineInTransaction`, `removeMarchersFromTimelineInTransaction`), run in the same edit as `createMarchers` / `deleteMarchers` when they get `timelineMode: true`; the mutation options and `MarcherForm` / `MarcherList` pass `useTimelineMode()`. Page mode is unchanged (flag default false; `createMarchersInTransaction` untouched). 8 P7.3 items ticked.
+- **Decisions (P7.3, recorded for the phase):**
+  - **Home of a new marcher:** the first free spot, found the way page mode places a new marcher on page 0 (8 steps in from the top left, down 2 steps until no marcher's home is there; several new marchers side by side 2 steps apart), checked against homes rather than frozen page rows.
+  - **Add joins page moves only:**
+    - The new marcher joins every shapeless transition whose rows are all layer 0 and span the whole transition (the converter's page moves). In each one, `slot_count` grows first, then the new slot's point is inserted at the home, then a layer-0 assignment covering the transition is added.
+    - Transitions are taken in start order; any that overlap one already taken are skipped (E-A3), and so are transitions that would go past 10,000 slots.
+    - Shape-backed transitions, steals and partial rows are not joined. The marcher holds through them.
+  - **Delete compacts without moving anyone:**
+    - The assignments are deleted first (children before the parent, C-1).
+    - In each shapeless transition, the vacated slot is removed. If it is the last slot, its point is deleted and the count shrinks; otherwise the last slot's marcher and point move into the vacated slot, then the last slot goes.
+    - Vacant slots stay (D-13, D-VACANT) in four cases: shape-backed transitions; a transition down to one slot; a last slot that was already vacant before the delete; and a transition that shares a marcher with a follow-the-leader transition using `order_mode = 'inherit'`, because R-12 orders that trail by slot index in the previous transition.
+- **Not ticked:** `electron/main/services/previous-dots-import-service.ts`. When the source file is a converted show, it still reads that file's frozen last-page `marcher_pages` rows. Fixing it needs homes or the resolver read from another file in the main process. Left for a follow-up or P7.12-style work.
+- **Checks:**
+  - `pnpm install`: ok.
+  - `pnpm exec turbo run build --filter=@openmarch/desktop^...`: 4 successful.
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
+  - `vitest run src/db-functions/__test__/timelineMarchers.test.ts`: 9 passed.
+  - `pnpm --dir apps/desktop run test:history` on `timelineMarchers`, `marcher`, `timelineUndo` and `timelineMoves` test files: 4 files, 70 passed.
+  - `pnpm --dir apps/desktop run test`: 112 files passed, 7 skipped, 1666 tests passed.
+  - eslint, prettier --check and cspell on the changed files: clean. The only warnings are `react/prop-types` warnings in `MarcherForm.tsx` that were already there.
+  - Skipped by policy: the full `test:history`, Playwright and `build:electron`. The app was not run by hand.
+- **Next:** review and merge PR #22. Exit-gate items unchanged.
 - **Blockers:** none.

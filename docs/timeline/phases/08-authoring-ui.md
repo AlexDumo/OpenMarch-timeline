@@ -52,8 +52,8 @@ Bring the timeline components and stories from `origin/0.2` (`568056aa`, `apps/d
 ### P8.8: View-model adapter
 
 - Owner: timeline-worker (timeline/p8-adapter)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/21
 - Parallel: yes
 - Depends on: P8.1
 
@@ -152,6 +152,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - **Still to do:** the waveform is empty until it's wired to the audio player.
   - **Still to do (follow-up):** with the flag on, the page timeline's pencil button (`focusTimeline`, which opens beat editing) isn't rendered. Beat editing is reachable only by its shortcut or menu. Add an entry point to the timeline's transport.
   - **Stories:** Storybook isn't configured; the stories run under Vitest (`TimelineStories.test.tsx`).
+  - **Follow-up (from P8.8):** a converted page show has only shapeless group moves, so with nothing selected the timeline shows no tracks (UI-3). Add an empty-state hint ("select marchers to see their tracks").
 
 ## Progress log
 
@@ -236,3 +237,32 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** unit tests (golden G2, G3, G12, shape track, diagnostics, converted show, validator), the hook test against a real DB, then U-Q1/U-Q4 in ui.md.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-adapter`; `pnpm install`; write `apps/desktop/src/timeline/__test__/timelineViewModel.test.ts` and `useTimelineTracks.test.tsx`; run `pnpm --dir apps/desktop run test:focused src/timeline/__test__/timelineViewModel.test.ts`.
+
+### 2026-09-30 · timeline-worker (timeline/p8-adapter) · P8.8
+
+- **Done:** tests on `timeline/p8-adapter` (caf5de2c, 36851fa5): adapter unit tests on the golden fixtures (G2, G3, G12 steals across timelines, G4 gap, G13 shape track and default set, G9 and G11 badges, a converted page show's linked clips, every golden fixture through `validateTimelineViewModel`), the beat axis, `resolverSpans` against R-2's worked example, the hook against a real DB (rebuilds after a committed edit and its undo), and the timeline's linked ring, badge and spec-beat commands. Decisions recorded in `ui.md`: UI-3 (U-Q1, default tracks), UI-4 (U-Q4, shape activity rule kept), UI-5 (beat 0 not drawn).
+- **Checks:** `vitest run src/components/timeline/__test__/ src/timeline/__test__/`: 26 files, 305 passed. The regular desktop suite is running.
+- **Next:** read the suite result, eslint/prettier/cspell, tidy the commits, open the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-adapter`; `pnpm --dir apps/desktop run test` (in the background); then squash the wip commits and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+
+### 2026-09-30 · timeline-worker (timeline/p8-adapter) · P8.8
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/21 (one commit, 9d200950, rebased on `timeline-try-2` at dd253109). The adapter, `resolverSpans`, `useTimelineTracks` wired into `TimelineModePanel`, the beat-0 view axis (UI-5), linked-clip ring and diagnostic badges. U-Q1 and U-Q4 decided in `ui.md` (UI-3, UI-4).
+- **For P8.9:** `onTimelineRangeCommit` and `onCreateTrack` now arrive in spec beats; a clip move carries the clip's spec range shifted by the drag, and the track's `linkId` is the spec timeline id. Dragging previews only the dragged clip.
+- **Checks:** build of desktop deps: pass. `tsc --noEmit`: pass (after rebase). `vitest run src/components/timeline/__test__/ src/timeline/__test__/`: 27 files, 316 passed (after rebase). `pnpm --dir apps/desktop run test`: 112 files, 1,664 passed (before the rebase, which touched no files of this PR). eslint 0 errors; prettier and cspell pass. Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Exit gate:** nothing ticked (the UI verification item needs a manual app check).
+- **Next:** review and merge by the lead; then P8.9.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p8-adapter) · P8.8 (review fixes)
+
+- **Done:** commit d301fb02 on PR #21 addresses the lead's review:
+  1. `Resolver.spanInfos(marcherId)` is public in `@openmarch/core` (types and `createResolver`), with a dated amendment in ADR 0001 §4; the oracle is unchanged. `resolverSpans` uses it instead of walking `explain()`.
+  2. `useTimelineTracks` tags each read with the store version taken under the write lock, and builds only when it matches the resolver's version; the previous tracks stay until then. A test fails if the guard is removed (checked by mutation).
+  3. Spans and diagnostics are cached per version; a selection change makes no resolver calls (tested with spies).
+  4. SC-11 smoke (default set plus 20 selected, seed 1): 276 tracks in about 15 ms (three runs: 15.2, 14.9, 15.1 ms); the bound is 250 ms. For comparison the old `explain()` walk took 25.8 ms here on a cold resolver, so the bound guards against large regressions only.
+  5. Nits: transition-wide diagnostics show on the shape track, or once for a shapeless transition; a gap filled by another shape's move splits a shape's clip; UI-5 notes that Create Track from view 0 sends spec beat 1; the empty-state hint is a handoff follow-up.
+- **Checks:** `pnpm --dir packages/core run build` and `run test`: 21 files, 456 passed. `tsc --noEmit`: pass. `test:focused src/timeline/__test__/ src/components/timeline/__test__/`: 27 files, 321 passed. `test:history src/timeline/__test__/useTimelineTracks.test.tsx`: 5 passed. eslint 0 errors; prettier and cspell pass. Not run (policy): full `test:history`, e2e, `build:electron`; the regular desktop suite wasn't re-run.
+- **Next:** re-review and merge by the lead.
+- **Blockers:** none.
