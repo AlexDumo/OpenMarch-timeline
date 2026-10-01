@@ -42,8 +42,8 @@ Confirm `docs/timeline/ui.md` (set its status to accepted), and answer U-Q1 to U
 ### P8.1: Port the 0.2 timeline
 
 - Owner: timeline-worker (timeline/p8-timeline-ui)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/19
 - Parallel: yes
 - Depends on: P8.0, P5.9
 
@@ -143,6 +143,14 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 
 - None yet.
 - Porting the 0.2 timeline (P8.1): 0.2's `TimelineContainer` computes the beat with its own `getBeatIndexAtTime(beats, timeMs)`, in milliseconds, returning 0 with no beats. Replace it with `beatIndexAtTime(beats, timeMs / 1000)` from `src/timeline/timeMap.ts`, so there is one tempo map, and don't pass its -1 (no beats) to `setCurrentBeatIndex`. Don't bring back 0.2's `getBeatIndexAtTime` or `getNearestBeatIndex`.
+- After P8.1 (PR #19), the timeline is in `apps/desktop/src/components/timeline/`:
+  - **Clock:** `Timeline` takes a `playback` prop and doesn't read the frame clock. `useTimelinePlayback` feeds it from the existing clock (`IsPlayingContext`, the selected page and `getLivePlaybackPosition`). While playing, the cursor is `beatIndexAtTime`; while paused, it's `pageEndBeat(selectedPage)`. Seeking selects the page containing the beat. Wiring the frame clock later means changing only that hook.
+  - **Data (P8.8):** `TimelineModePanel` passes real beats, pages and measures and `NO_TIMELINES`. Replace that with the adapter's `TimelineInput[]` (`TODO(P8.8)`). View beat indexes are real beat indexes (spec beat positions), so the fixed beat 0 is a one-beat-wide empty column before page 1.
+  - **Commands (P8.9):** `commitTimelineRange` and `createTrack` are no-ops, and `selectedTarget` is null, so Create Track is hidden (`TODO(P8.9)`).
+  - **Snapping:** `getPageSnapBeats`, `snapBoundary`, `snapRangeOffset` and `isPageSnapDisabled` in `TimelineGeometry.ts`. The snap distance is 24 px, and Alt turns snapping off.
+  - **Gating:** `TimelineContainer` shows the timeline instead of the page timeline when the flag is on, except while beats are being edited. The audio player stays mounted and hidden.
+  - **Still to do:** the waveform is empty until it's wired to the audio player.
+  - **Stories:** Storybook isn't configured; the stories run under Vitest (`TimelineStories.test.tsx`).
 
 ## Progress log
 
@@ -170,3 +178,23 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the suite result, rebase on `timeline-try-2`, open the PR.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-timeline-ui`; run `pnpm --dir apps/desktop run test` in the background; then rebase on `timeline/timeline-try-2` and open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+
+### 2026-09-30 · timeline-worker (timeline/p8-timeline-ui) · P8.1
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/19 (one commit, 41d22557, rebased on `timeline-try-2` at 3ea5a9b4).
+  - The 0.2 timeline (`568056aa`) is ported. `TimelineContainer` renders it instead of the page timeline when `useTimelineMode()` is on; page mode is unchanged.
+  - **Clock decision:** the existing clock, through `useTimelinePlayback` (`beatIndexAtTime`, never -1). The frame clock stays unwired.
+  - **UI-2:** page snapping within 24 px with an Alt override, and the page-boundary validator rule removed.
+  - **Data:** empty tracks until P8.8; clip-move and Create Track are no-ops until P8.9.
+  - **Stories:** Storybook isn't configured, so the stories typecheck without it and run under Vitest.
+  - The handoff notes have the details.
+- **Checks:**
+  - `pnpm install` and `turbo run build --filter=@openmarch/desktop^...`: pass.
+  - `tsc --noEmit`: pass.
+  - `test:focused src/components/timeline/__test__/`: 129 passed (11 files; 2 were already skipped).
+  - `pnpm --dir apps/desktop run test`: 105 files, 1,608 tests passed (run before the rebase, which touched no files in this PR).
+  - eslint: 0 errors. prettier and cspell: pass.
+  - Full `test:history`, e2e and `build:electron`: not run (policy). No history tests apply.
+- **Exit gate:** nothing ticked. The UI verification item needs a manual app check by a person.
+- **Next:** review and merge by the lead; then P8.8.
+- **Blockers:** none.
