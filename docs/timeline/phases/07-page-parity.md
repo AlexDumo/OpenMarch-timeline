@@ -149,8 +149,8 @@ The mobile app payload and the performer appearance export read every page row. 
 
 ### P7.13: Undo, redo and query invalidation in timeline mode
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-undo-redo)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
