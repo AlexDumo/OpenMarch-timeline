@@ -180,8 +180,8 @@ Two inventory items are still open. (1) In timeline mode the canvas still applie
 ### P7.17: Existing feature tests in timeline mode
 
 - Owner: timeline-worker (timeline/p7-feature-tests)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/38
 - Parallel: yes
 - Depends on: P7.2–P7.16
 
@@ -1274,4 +1274,42 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: full `test:history`, e2e and `build:electron`. No manual app run.
 - **Not ticked:** the two inventory items (`MarcherPage.ts`/`useMarcherAppearances.ts` under P7.14, and `previous-dots-import-service.ts` under P7.3). They become true only when PR #37 merges.
 - **Next:** the lead reviews PR #37.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-feature-tests) · P7.17 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/38 (one commit on `timeline-try-2`).
+  - **Timeline test mode:** `pnpm --dir apps/desktop run test:timeline` (`VITEST_TIMELINE_MODE=true`) puts every fixture database into timeline mode (`src/test/timelineMode.ts`, called from `src/test/base.tsx`).
+    - Data fixtures are converted with `convertPagesToTimelineInTransaction` (`replace: true`) and get the flag.
+    - The blank database gets only the flag.
+    - Undo triggers are dropped during the conversion, and `timeline_change_log` is cleared afterwards.
+  - **Default run:** unchanged.
+  - **Helpers:** `keepFixturesInPageMode(reason)` (files that set up timeline mode themselves) and `skipInTimelineMode(reason)`. Both are documented in `docs/conventions/testing.md`.
+- **Run command:** `pnpm --dir apps/desktop run test:timeline`, run alone.
+- **Before and after:**
+  - Run 1 (blank database converted too): 316 failed (30 files).
+  - Run 2 (blank database flag only, no test changes; the before count): 201 failed (19 files), 2,041 passed.
+  - Run 3 (after triage): 0 failed; 156 files passed, 7 skipped; 2,198 tests passed, 58 skipped (44 more than the default run), 15 todo.
+- **Triage of run 2:**
+
+  | Files                                                                                                                                                                                                                                | Failures | Class                                                                                                                        | Action                   |
+  | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+  | `timelineRipple`, `timelineCommands`, `timelineDisplay`, `timelineHistoryFocus`, `timelineMarchers`, `timelineMoves`, `pageConversion`, `timelineCoordinateWrites`, `timelinePageCopy`, `exportPagePositions`, `dots-to-om.timeline` | 115      | Timeline-native: the test converts the show itself (refused, `E-ARGS` already has timeline rows), or asserts flag-off output | `keepFixturesInPageMode` |
+  | `timelineAssignmentEdits`, `timelineShapeEdits`, `timelineTransitionEdits`                                                                                                                                                           | 41       | Timeline-native: its own timeline rows overlap the converted assignments (`E-A3`)                                            | `keepFixturesInPageMode` |
+  | `marcherPage.test.ts` › "Locked marcher pages", "One shape", "two shapes"                                                                                                                                                            | 41       | Page-mode internals: page shape writers refuse in timeline mode (P7.11)                                                      | skipped, with reason     |
+  | `dots-to-om.test.ts` › override from a `marcher_pages` appearance                                                                                                                                                                    | 1        | Page-mode internals: timeline exports drop per-page appearance (P7.14)                                                       | skipped, with reason     |
+  | `timelineRender` › "with the flag off…", `timelineStore` › "is off by default…"                                                                                                                                                      | 2        | Flag-off defaults                                                                                                            | skipped, with reason     |
+  | `marcher.test.ts` › `getMarchers`                                                                                                                                                                                                    | 1        | Page-era data: the conversion sets homes from page 0                                                                         | timeline-mode variant    |
+  - Real timeline-mode bugs: none found.
+  - Covered by P7.16: none (no existing test exercises canvas per-page appearance or previous-show import).
+
+- **Checks:**
+  - `pnpm --dir apps/desktop run test` (flag off), run alone: 156 files passed, 7 skipped; 2,242 tests passed. Unchanged from the base.
+  - Focused `test:history` on `marcher.test.ts` and `marcherPage.test.ts`: 94 passed. In timeline mode: 53 passed, 41 skipped.
+  - `tsc --noEmit`: pass.
+  - eslint on the changed files: 0 errors (4 pre-existing warnings).
+  - prettier and cspell: pass.
+- **Skipped:** by policy, the full `test:history` suite, e2e and `build:electron`. No db-functions were changed.
+- **Exit gate:** "each feature's existing tests pass in timeline mode" isn't ticked. It becomes true on the base only when this PR merges, so it waits for the merge.
+- **Next:** review and merge PR #38. Then tick the exit-gate item with the run 3 command and result.
 - **Blockers:** none.
