@@ -57,12 +57,14 @@ export function useTimelineDevApi(
 
 /**
  * Runs the timeline resolver for the open file while its timeline dev flag (`timelineMode` in
- * `workspace_settings`) is on, and installs the dev console API. With the flag off, nothing
- * subscribes, nothing is built and the console API is absent.
+ * `workspace_settings`) is on, and, in development builds only, installs the dev console API.
+ * With the flag off, nothing subscribes, nothing is built and the console API is absent.
  */
 export default function TimelineResolverHost() {
     const enabled = useTimelineMode();
     useTimelineResolverSession(db, enabled);
-    useTimelineDevApi(db, enabled);
+    // The console API can write fixtures into the file. The flag lives in the file itself, so it
+    // alone mustn't expose a write path in a release build: development builds only.
+    useTimelineDevApi(db, enabled && import.meta.env.DEV);
     return null;
 }
