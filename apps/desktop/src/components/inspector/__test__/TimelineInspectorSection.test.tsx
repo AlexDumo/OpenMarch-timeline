@@ -10,6 +10,7 @@ import {
     vi,
 } from "vitest";
 import { TolgeeProvider } from "@tolgee/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createResolver } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
 import type { MarcherInspection } from "@/timeline/timelineInspector";
@@ -250,9 +251,11 @@ describe("ShowDiagnosticsList", () => {
 
 const renderSection = () =>
     render(
-        <TolgeeProvider tolgee={tolgee} fallback="Loading...">
-            <TimelineInspectorSection />
-        </TolgeeProvider>,
+        <QueryClientProvider client={new QueryClient()}>
+            <TolgeeProvider tolgee={tolgee} fallback="Loading...">
+                <TimelineInspectorSection />
+            </TolgeeProvider>
+        </QueryClientProvider>,
     );
 
 describe("TimelineInspectorSection", () => {

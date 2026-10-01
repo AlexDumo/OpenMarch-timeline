@@ -1,11 +1,13 @@
 import { Fragment, useMemo, type ReactNode } from "react";
 import { useTranslate } from "@tolgee/react";
+import { useQuery } from "@tanstack/react-query";
 import { WarningIcon, InfoIcon } from "@phosphor-icons/react";
 import type { Diagnostic, SpanKind, XY } from "@openmarch/core";
 import { db } from "@/global/database/db";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
 import {
     groupDiagnosticsByTransition,
@@ -17,8 +19,10 @@ import type {
     TransitionShapeOption,
 } from "@/timeline/timelineTransitionEditor";
 import type { AssignmentEditTarget } from "@/timeline/timelineAssignmentEditor";
+import { shapeFrameFor } from "@/timeline/timelineShapeEditor";
 import { InspectorCollapsible } from "./InspectorCollapsible";
 import { TimelineAssignmentsEditor } from "./TimelineAssignmentsEditor";
+import { TimelineShapesEditor } from "./TimelineShapesEditor";
 import { TimelineTransitionEditor } from "./TimelineTransitionEditor";
 import {
     DIAGNOSTIC_STRING_KEYS,
@@ -31,6 +35,7 @@ type Params = Record<string, string | number>;
 const NO_EDITS: readonly TransitionEditTarget[] = [];
 const NO_SHAPES: readonly TransitionShapeOption[] = [];
 const NO_ASSIGNMENT_EDITS: readonly AssignmentEditTarget[] = [];
+const NO_SHAPE_EDITS = { version: -1, targets: [] } as const;
 
 /** Looks a string up by key, with its English text as the default. */
 export type InspectorTranslate = (
@@ -372,12 +377,18 @@ function TimelineInspectorContent() {
         transitionEdits = NO_EDITS,
         shapeOptions = NO_SHAPES,
         assignmentEdits = NO_ASSIGNMENT_EDITS,
+        shapeEdits = NO_SHAPE_EDITS,
     } = useTimelineInspections({
         database: db,
         enabled: true,
         marcherIds,
         beat,
     });
+    const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
+    const frame = useMemo(
+        () => shapeFrameFor(fieldProperties ?? null),
+        [fieldProperties],
+    );
     return (
         <InspectorCollapsible
             defaultOpen
@@ -432,6 +443,15 @@ function TimelineInspectorContent() {
                         })}
                     </p>
                 ))}
+            <TimelineShapesEditor
+                shapes={shapeEdits.targets}
+                version={shapeEdits.version}
+                selectedMarcherIds={marcherIds}
+                beat={beat}
+                frame={frame}
+                database={db}
+                t={t}
+            />
             <div>
                 <h5 className="text-body font-medium">
                     {t("inspector.timeline.diagnostics.showTitle", {

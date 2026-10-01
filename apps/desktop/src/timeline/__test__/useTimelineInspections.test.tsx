@@ -13,6 +13,7 @@ import {
     useTimelineResolverStore,
 } from "../timelineStore";
 import { useTimelineInspections } from "../useTimelineInspections";
+import { updateTimelineShape } from "@/db-functions/timelineShapes";
 
 /**
  * `useTimelineInspections` (P8.5) against a real database: the explanation joined with the rows
@@ -190,6 +191,70 @@ describeDbTests("useTimelineInspections", (it) => {
         await performUndo(db);
         await waitFor(() =>
             expect(result.current.inspections[0]!.layer).toBe(4),
+        );
+    });
+
+    it("lists every shape for the shape editor (P8.2) with no page, and follows a rename, a reshape and their undo", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const ids: number[] = [];
+        const { result } = renderHook(() =>
+            useTimelineInspections({
+                database: db,
+                enabled: true,
+                marcherIds: ids,
+                beat: null,
+            }),
+        );
+        await waitFor(() =>
+            expect(result.current.shapeEdits.targets).toHaveLength(1),
+        );
+        const first = result.current.shapeEdits;
+        expect(first.targets[0]).toMatchObject({
+            id: 1,
+            name: "Front line",
+            usedBy: [{ transitionId: 1, style: "direct", slotCount: 3 }],
+            minCells: 3,
+            version: first.version,
+        });
+
+        await updateTimelineShape({
+            db,
+            modified: {
+                id: 1,
+                name: "Company front",
+                geometry: {
+                    points: [
+                        [0, 20],
+                        [30, 20],
+                    ],
+                },
+            },
+        });
+        await waitFor(() =>
+            expect(result.current.shapeEdits.targets[0]!.name).toBe(
+                "Company front",
+            ),
+        );
+        const edited = result.current.shapeEdits;
+        expect(edited.version).toBeGreaterThan(first.version);
+        expect(edited.targets[0]!.shape.geometry).toEqual({
+            points: [
+                [0, 20],
+                [30, 20],
+            ],
+        });
+
+        await performUndo(db);
+        await waitFor(() =>
+            expect(result.current.shapeEdits.targets[0]!.name).toBe(
+                "Front line",
+            ),
+        );
+        expect(result.current.shapeEdits.version).toBeGreaterThan(
+            edited.version,
         );
     });
 
