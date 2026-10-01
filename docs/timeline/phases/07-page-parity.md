@@ -1101,3 +1101,14 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: full `test:history` and e2e.
 - **Next:** P7.11 (in progress) is the last open Phase 7 package. Three new export strings are English-only.
 - **Blockers:** none.
+
+### 2026-10-01 · lead · combined base check
+
+- **Done:** ran the checks on `timeline-try-2` at de97fa3a, which includes #30–#35. #34 and #35 had each been verified only on their own heads.
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/`, `src/components/exporting` and `src/components/mobile`: 47 files, 837 tests passed.
+  - `pnpm --dir apps/desktop run test`: 150 files, 2,181 tests passed, no errors.
+  - Skipped by policy: full `test:history` and e2e.
+- **Next:** P7.11.
+- **Blockers:** none.
