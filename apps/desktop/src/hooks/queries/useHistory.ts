@@ -76,14 +76,19 @@ export const usePerformHistoryAction = () => {
             // change batch instead.)
             void qc.invalidateQueries({ queryKey: coordinateDataKeys.all });
 
-            if (response.pageIdToGoTo && pages) {
-                setSelectedPage(
-                    pages.find((page) => page.id === response.pageIdToGoTo)!,
-                );
-            }
-            if (response.marcherIdsToSelect != null && marchers) {
+            // Page 0 has id 0, so compare with null. A page this render doesn't know yet (one
+            // the action just restored) is skipped rather than selected as undefined.
+            const pageToGoTo =
+                response.pageIdToGoTo != null
+                    ? pages?.find((page) => page.id === response.pageIdToGoTo)
+                    : undefined;
+            if (pageToGoTo) setSelectedPage(pageToGoTo);
+            // The marchers as fetched again above, so restored marchers can be selected
+            const currentMarchers =
+                qc.getQueryData(allMarchersQueryOptions().queryKey) ?? marchers;
+            if (response.marcherIdsToSelect != null && currentMarchers) {
                 setSelectedMarchers(
-                    marchers.filter((marcher) =>
+                    currentMarchers.filter((marcher) =>
                         response.marcherIdsToSelect?.has(marcher.id),
                     ),
                 );

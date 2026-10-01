@@ -68,107 +68,102 @@ export const pageForEndBeat = (
         ? pages[pages.length - 1]
         : pages[0]);
 
-/**
- * Works out the page and marchers to show after an undo or redo whose committed batch is `batch`.
- *
- * Reads the page grid and the timeline rows as they are now; call it after the action commits,
- * under `withTimelineWriteLock` so no other edit runs in between.
- *
- * @param currentPageId the page the user is on, kept when the action changed it
- */
-export async function timelineHistoryFocus(
-    db: DbConnection | DB | DbTransaction,
-    batch: ChangeBatch,
-    currentPageId?: number,
-): Promise<TimelineHistoryFocus> {
-    if (batch.changes.length === 0) return NO_FOCUS();
-    const reader = db as DbTransaction;
-    const { pages } = await readPageGrid(reader);
-    if (pages.length === 0) return NO_FOCUS();
-
-    // What the batch says about transitions and assignments, so deleted rows still count
-    const transitionEnd = new Map<number, number>();
-    const batchAssignments: RowImage[] = [];
-    const shapeIds = new Set<number>();
-    const transitionIds = new Set<number>();
+/** What the batch itself says, so rows the action deleted still count. */
+interface BatchScan {
+    /** End beat per transition: from the batch, then overwritten by the live rows */
+    transitionEnd: Map<number, number>;
+    /** Assignment images before and after the action */
+    assignments: RowImage[];
+    shapeIds: Set<number>;
+    /** Every transition the batch touches, directly or through its rows */
+    transitionIds: Set<number>;
     /** Transitions whose assignments or destinations changed: those name the marchers */
-    const transitionsWithSlotChanges = new Set<number>();
+    transitionsWithSlotChanges: Set<number>;
+}
+
+const scanBatch = (batch: ChangeBatch): BatchScan => {
+    const scan: BatchScan = {
+        transitionEnd: new Map(),
+        assignments: [],
+        shapeIds: new Set(),
+        transitionIds: new Set(),
+        transitionsWithSlotChanges: new Set(),
+    };
     for (const change of batch.changes) {
         const image = current(change);
         if (change.table === "transitions") {
             const end = num(image, "end");
-            if (end !== undefined) transitionEnd.set(change.rowId, end);
-            transitionIds.add(change.rowId);
+            if (end !== undefined) scan.transitionEnd.set(change.rowId, end);
+            scan.transitionIds.add(change.rowId);
         } else if (change.table === "assignments") {
-            if (change.before) batchAssignments.push(change.before);
-            if (change.after) batchAssignments.push(change.after);
+            if (change.before) scan.assignments.push(change.before);
+            if (change.after) scan.assignments.push(change.after);
             const transition = num(image, "transition");
             if (transition !== undefined) {
-                transitionIds.add(transition);
-                transitionsWithSlotChanges.add(transition);
+                scan.transitionIds.add(transition);
+                scan.transitionsWithSlotChanges.add(transition);
             }
         } else if (change.table === "slot_destinations") {
-            transitionIds.add(change.rowId);
-            transitionsWithSlotChanges.add(change.rowId);
+            scan.transitionIds.add(change.rowId);
+            scan.transitionsWithSlotChanges.add(change.rowId);
         } else if (change.table === "shapes") {
-            shapeIds.add(change.rowId);
+            scan.shapeIds.add(change.rowId);
         }
     }
+    return scan;
+};
 
-    // Transitions into a changed shape
+/** The rows as they are now: transitions into changed shapes, and the touched transitions' rows. */
+const readLiveRows = async (reader: DbTransaction, scan: BatchScan) => {
+    const t = schema.timeline_transitions;
+    const a = schema.timeline_assignments;
     const shapeTransitions =
-        shapeIds.size > 0
+        scan.shapeIds.size > 0
             ? await reader
-                  .select({ id: schema.timeline_transitions.id })
-                  .from(schema.timeline_transitions)
-                  .where(
-                      inArray(schema.timeline_transitions.dest_shape_id, [
-                          ...shapeIds,
-                      ]),
-                  )
+                  .select({ id: t.id })
+                  .from(t)
+                  .where(inArray(t.dest_shape_id, [...scan.shapeIds]))
                   .all()
             : [];
-    for (const { id } of shapeTransitions) transitionIds.add(id);
+    for (const { id } of shapeTransitions) scan.transitionIds.add(id);
 
-    // The rows as they are now, for transitions the batch only names
-    const ids = [...transitionIds];
-    const liveTransitions =
-        ids.length > 0
-            ? await reader
-                  .select({
-                      id: schema.timeline_transitions.id,
-                      end: schema.timeline_transitions.end_beat,
-                  })
-                  .from(schema.timeline_transitions)
-                  .where(inArray(schema.timeline_transitions.id, ids))
-                  .all()
-            : [];
-    for (const t of liveTransitions) transitionEnd.set(t.id, t.end);
-    const liveAssignments =
-        ids.length > 0
-            ? await reader
-                  .select({
-                      marcher: schema.timeline_assignments.marcher_id,
-                      transition: schema.timeline_assignments.transition_id,
-                      slot: schema.timeline_assignments.slot_index,
-                  })
-                  .from(schema.timeline_assignments)
-                  .where(
-                      inArray(schema.timeline_assignments.transition_id, ids),
-                  )
-                  .all()
-            : [];
+    const ids = [...scan.transitionIds];
+    if (ids.length === 0) return { shapeTransitions, assignments: [] };
+    const transitions = await reader
+        .select({ id: t.id, end: t.end_beat })
+        .from(t)
+        .where(inArray(t.id, ids))
+        .all();
+    for (const row of transitions) scan.transitionEnd.set(row.id, row.end);
+    const assignments = await reader
+        .select({
+            marcher: a.marcher_id,
+            transition: a.transition_id,
+            slot: a.slot_index,
+        })
+        .from(a)
+        .where(inArray(a.transition_id, ids))
+        .all();
+    return { shapeTransitions, assignments };
+};
 
+/** Each changed page with the marchers changed on it. */
+const changedPages = (
+    batch: ChangeBatch,
+    pages: readonly GridPage[],
+    scan: BatchScan,
+    live: Awaited<ReturnType<typeof readLiveRows>>,
+): Map<number, Set<number>> => {
     /** Marchers with an assignment in `transitionId` (in `slot`, if given), now or in the batch */
     const marchersIn = (transitionId: number, slot?: number): number[] => {
         const out: number[] = [];
-        for (const a of liveAssignments)
+        for (const a of live.assignments)
             if (
                 a.transition === transitionId &&
                 (slot === undefined || a.slot === slot)
             )
                 out.push(a.marcher);
-        for (const image of batchAssignments) {
+        for (const image of scan.assignments) {
             const marcher = num(image, "marcher");
             if (
                 marcher !== undefined &&
@@ -188,7 +183,7 @@ export async function timelineHistoryFocus(
         byPage.set(page.id, set);
     };
     const addForTransition = (transitionId: number, marchers: number[]) => {
-        const end = transitionEnd.get(transitionId);
+        const end = scan.transitionEnd.get(transitionId);
         if (end !== undefined) add(pageForEndBeat(pages, end), marchers);
     };
 
@@ -212,7 +207,7 @@ export async function timelineHistoryFocus(
                 // A slot count grown for a new marcher shouldn't select everyone in the move
                 addForTransition(
                     change.rowId,
-                    transitionsWithSlotChanges.has(change.rowId)
+                    scan.transitionsWithSlotChanges.has(change.rowId)
                         ? []
                         : marchersIn(change.rowId),
                 );
@@ -224,11 +219,35 @@ export async function timelineHistoryFocus(
                 );
                 break;
             case "shapes":
-                for (const { id } of shapeTransitions)
+                for (const { id } of live.shapeTransitions)
                     addForTransition(id, marchersIn(id));
                 break;
         }
     }
+    return byPage;
+};
+
+/**
+ * Works out the page and marchers to show after an undo or redo whose committed batch is `batch`.
+ *
+ * Reads the page grid and the timeline rows as they are now; call it after the action commits,
+ * under `withTimelineWriteLock` so no other edit runs in between.
+ *
+ * @param currentPageId the page the user is on, kept when the action changed it
+ */
+export async function timelineHistoryFocus(
+    db: DbConnection | DB | DbTransaction,
+    batch: ChangeBatch,
+    currentPageId?: number,
+): Promise<TimelineHistoryFocus> {
+    if (batch.changes.length === 0) return NO_FOCUS();
+    const reader = db as DbTransaction;
+    const { pages } = await readPageGrid(reader);
+    if (pages.length === 0) return NO_FOCUS();
+
+    const scan = scanBatch(batch);
+    const live = await readLiveRows(reader, scan);
+    const byPage = changedPages(batch, pages, scan, live);
     // A shape-only change (to a shape no transition uses) has no page
     if (byPage.size === 0) return NO_FOCUS();
 
