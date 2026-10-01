@@ -112,7 +112,7 @@ Tests through the real write path: QA-DB-11, -12, -13, -24, -25, -26 (26b inform
 ### P4.9: End-to-end fuzz with real undo
 
 - Owner: timeline-worker agent (timeline/p4-e2e-fuzz)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P4.8
@@ -271,3 +271,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** the resumed worker runs and finishes the draft.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p4-e2e-fuzz` (0a884294), run `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` in the background, and fix what fails.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-e2e-fuzz) · P4.9 (resumed)
+
+- **Done:** resumed from 0a884294 on `timeline/p4-e2e-fuzz`; status set to in-progress.
+- **Checks:** none yet.
+- **Next:** build the workspace packages, run the draft fuzz test and fix what fails.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p4-e2e-fuzz`, `pnpm install`, `pnpm exec turbo run build --filter=@openmarch/desktop^... --force`, then run `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` in the background and fix what fails.
