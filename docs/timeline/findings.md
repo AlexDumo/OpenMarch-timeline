@@ -154,3 +154,10 @@ Exit code 0. `run_all.sh` itself truncates each line to 90 characters. Environme
 - **Not reproduced:** the file passed 3 times alone, and the full suite passed on the next run.
 - **Likely cause:** a test database collision, either another vitest process in the same work tree or the history-trigger refresh racing within the file.
 - **Next time:** if it recurs, check for concurrent vitest processes first, then look at `createTriggers`/`recreateChangeLogTriggers` in the test setup.
+
+### 2026-10-01 · lead · flaky under load: `backup.test.ts` hook timeout
+
+- **What failed:** in a full desktop suite run on PR #43's head, `backup.test.ts > a folder whose name looks like an error > still backs up` failed with "Hook timed out in 10000ms" in `beforeEach`. A follow-on `afterEach` error came from `oddDir` being undefined.
+- **Conditions:** the run took 1,047 s against the usual ~130 s, while another worker's tests ran on the machine.
+- **Rerun:** the file alone passed 21 of 21 twice.
+- **Fix:** hardening the hook timeout and the `afterEach` guard was handed to the P9.3 worker, which is working in `electron/database`.

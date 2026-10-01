@@ -20,8 +20,11 @@ import { createShapePages } from "@/db-functions/shapePages";
  * - marchers added after the pages exist, and one marcher deleted mid-show;
  * - a page where every marcher holds, single marchers holding, and coincident marchers;
  * - a pathway (curved, kept only at its page end, C-8) and a midset (dropped);
- * - two damaged-file cases page mode can't create: a marcher with no row on one page in the middle,
- *   and a marcher with no page-0 row.
+ * - damaged-file cases page mode can't create (P6.7): a marcher with no row on one page in the
+ *   middle; one with no rows on two pages in a row, after the curved-shape page and across the
+ *   uneven ritardando page; one with no row on the page before its pathway row (it glides along
+ *   the pathway, between non-default path positions); one with no row on the last page (it
+ *   holds); and one with no page-0 row.
  */
 
 /** Beat lengths in seconds, after the fixed zero-length beat 0, and where each page starts. */
@@ -50,6 +53,12 @@ export interface ConversionShow {
     readonly pathwayMarcherId: number;
     /** The marcher with no row on page 5 (damaged file) */
     readonly gapMarcherId: number;
+    /** The marcher with no rows on pages 4 and 5, after its page-3 curved-shape row */
+    readonly doubleGapMarcherId: number;
+    /** The marcher with no row on page 6, whose page-7 row moves along a pathway */
+    readonly pathwayGapMarcherId: number;
+    /** The marcher with no row on the last page: no later row, so it holds */
+    readonly endGapMarcherId: number;
     /** The marcher with no page-0 row (damaged file) */
     readonly lateHomeMarcherId: number;
     /** Two marchers on the same point at the end of page 4 */
@@ -234,6 +243,47 @@ export async function buildConversionShow(
         ],
     });
 
+    // Page 7: a second marcher on a pathway, from its page-5 spot, with no page-6 row (below)
+    const pathwayGapMarcherId = all[9]!;
+    const [gx, gy] = layout(5, 9);
+    const [hx, hy] = layout(7, 9);
+    const [gapPathway] = await db
+        .insert(schema.pathways)
+        .values({
+            path_data: Path.fromSvgString(
+                `M ${gx} ${gy} Q ${(gx + hx) / 2 - 120} ${(gy + hy) / 2 + 160} ${hx} ${hy}`,
+            ).toJson(),
+        })
+        .returning();
+    await updateMarcherPages({
+        db,
+        modifiedMarcherPages: [
+            {
+                marcher_id: pathwayGapMarcherId,
+                page_id: pageIds[7]!,
+                x: hx,
+                y: hy,
+                path_data_id: gapPathway!.id,
+            },
+        ],
+    });
+    // Non-default path positions: page mode starts the glide at the PREVIOUS row's
+    // `path_start_position` and ends it at the pathway row's `path_end_position`, so the gap
+    // page's interpolated point checks that mapping
+    for (const [p, set] of [
+        [5, { path_start_position: 0.2 }],
+        [7, { path_end_position: 0.8 }],
+    ] as const)
+        await db
+            .update(schema.marcher_pages)
+            .set(set)
+            .where(
+                and(
+                    eq(schema.marcher_pages.page_id, pageIds[p]!),
+                    eq(schema.marcher_pages.marcher_id, pathwayGapMarcherId),
+                ),
+            );
+
     // Page 8: a midset (dropped; page mode ignores midsets too)
     const midsetRow = await db
         .select({ id: schema.marcher_pages.id })
@@ -267,14 +317,23 @@ export async function buildConversionShow(
             ),
         );
     const lateHomeMarcherId = all[7]!;
-    await db
-        .delete(schema.marcher_pages)
-        .where(
-            and(
-                eq(schema.marcher_pages.page_id, pageIds[0]!),
-                eq(schema.marcher_pages.marcher_id, lateHomeMarcherId),
-            ),
-        );
+    const doubleGapMarcherId = all[8]!;
+    const endGapMarcherId = all[10]!;
+    for (const [marcherId, p] of [
+        [lateHomeMarcherId, 0],
+        [doubleGapMarcherId, 4],
+        [doubleGapMarcherId, 5],
+        [pathwayGapMarcherId, 6],
+        [endGapMarcherId, 9],
+    ] as const)
+        await db
+            .delete(schema.marcher_pages)
+            .where(
+                and(
+                    eq(schema.marcher_pages.page_id, pageIds[p]!),
+                    eq(schema.marcher_pages.marcher_id, marcherId),
+                ),
+            );
 
     const marcherIds = (
         await db
@@ -290,6 +349,9 @@ export async function buildConversionShow(
         addedMarcherIds: added.map((m) => m.id),
         pathwayMarcherId,
         gapMarcherId,
+        doubleGapMarcherId,
+        pathwayGapMarcherId,
+        endGapMarcherId,
         lateHomeMarcherId,
         coincident,
         unevenPageOrders: [4, 7],
