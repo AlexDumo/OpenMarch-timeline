@@ -62,7 +62,7 @@ A pure adapter from the stored tables and the resolver to `TimelineViewModel`, f
 ### P8.9: Timeline commands
 
 - Owner: timeline-worker (timeline/p8-commands)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P8.8
@@ -273,3 +273,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at d301fb02, in the worker's own work tree (a lead scratch work tree that borrows another checkout's `node_modules` resolves `@openmarch/core` to that checkout's build, so core API changes must be tested in a full install): `pnpm --dir packages/core run build` and its tests (456 passed); `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `pnpm --dir apps/desktop run test` (114 files, 1,690 passed).
 - **Next:** P8.9 (timeline commands); P8.2 to P8.6.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-commands) · P8.9
+
+- **Done:** claimed P8.9. Branch `timeline/p8-commands` from `timeline-try-2`; wip commit a20a0f9f adds `apps/desktop/src/db-functions/timelineCommands.ts`: `shiftTimelineInTransaction`/`shiftTimeline` (grow the timeline and transitions to the union, move assignments furthest-first, shrink; refuses beat < 0 and cross-timeline E-A3 before writing; delta 0 opens no edit) and `createTrackInTransaction`/`createTrack` (marcher: shapeless one-slot direct transition at the marcher's resolver position at the range start; shape: slots filled in id order, block capacity refused as E-T4). Decision (to record as UI-6 in ui.md): Create Track's assignments go one layer above the highest overlapping layer of the marchers in the range (0 if none), so the track steals the range (R-2, G2) rather than always failing E-A3 over a converted show's layer-0 page moves.
+- **Checks:** `tsc --noEmit`: pass.
+- **Next:** history tests (`src/db-functions/__test__/timelineCommands.test.ts`), then wire `TimelineModePanel`.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-commands`; `pnpm install`; `pnpm exec turbo run build --filter=@openmarch/desktop^... --force`; write `apps/desktop/src/db-functions/__test__/timelineCommands.test.ts` and run `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineCommands.test.ts`.
