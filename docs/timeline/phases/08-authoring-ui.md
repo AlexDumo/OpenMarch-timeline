@@ -81,8 +81,8 @@ Shapes: draw and edit `line`, `freehand`, `circle`, `box` and `block` in absolut
 
 ### P8.3: Transitions
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p8-transitions)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P8.0
@@ -343,3 +343,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at ea037470, in the worker's work tree: tsc (pass); `test:focused src/timeline src/components/inspector` (22 files, 289 passed); `pnpm --dir apps/desktop run test` (126 files, 1,840 passed). An earlier run on this branch exited 1 from a flaky Tolgee timer after test teardown (recorded in findings.md); re-runs were clean. Not run (policy): full `test:history`, e2e, `build:electron`; the UI gate item needs a manual app check.
 - **Next:** P8.2 to P8.4 (shapes, transitions, assignments editors); P8.7 (scenarios, human).
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-transitions) · P8.3
+
+- **Done:** claimed P8.3. Branch `timeline/p8-transitions` from `timeline-try-2`.
+- **Checks:** none yet.
+- **Next:** read the transition db-functions and the inspector section; build the transition editor in the inspector's timeline section.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-transitions`; `pnpm install`; build the desktop's dependencies.
