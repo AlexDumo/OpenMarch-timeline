@@ -92,7 +92,7 @@ Transitions: destination, style, bulge clamped to ±½, waypoints, `slot_count`,
 ### P8.4: Assignments and layers
 
 - Owner: timeline-worker (timeline/p8-assignments)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/31
 - Parallel: yes
 - Depends on: P8.3
@@ -511,4 +511,26 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/31's body is updated for the review fixes in ed095df0. The branch was merged with `timeline-try-2`, not force-pushed.
 - **Checks:** `pnpm --dir apps/desktop run test` on ed095df0: 137 files, 2,011 passed (14 skipped, 15 todo). The other checks are in the previous entry.
 - **Next:** re-review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P8.4
+
+- **Done:** reviewed PR #31 and squash-merged it at head ed095df0.
+  - The review raised eight items, all fixed with tests. The main ones:
+    - follow the leader now casts into the lowest vacant slots, and recast is refused;
+    - recast measures from each row's first winning span;
+    - every member is listed past slot 64;
+    - cast steal notes;
+    - Create Track falls back past 500 marchers;
+    - the stale-plan guard is keyed on the store version.
+  - UI-7 is in `ui.md`.
+- **Checks (lead, on ed095df0):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history src/db-functions/__test__/`: 26 files, 621 tests passed.
+  - `pnpm --dir apps/desktop run test`: 137 files and 2,011 tests passed, with no errors.
+  - Skipped by policy: the full `test:history` and e2e suites.
+- **Next:**
+  - P8.2 (shapes).
+  - Follow-up: timeline clip and track selection doesn't drive the inspector editors yet.
+  - The UI exit-gate item needs a manual app check.
 - **Blockers:** none.
