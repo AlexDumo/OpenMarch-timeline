@@ -47,6 +47,13 @@ const PAGE_ERA_FROZEN_TABLES: {
 /** The prefix of every page-era freeze trigger's name. */
 export const PAGE_ERA_FROZEN_TRIGGER_PREFIX = "page_era_frozen_";
 
+/**
+ * How every freeze trigger's RAISE message ends, after the table name. Undo matches it to skip a
+ * history group the freeze refuses (`src/db-functions/pageEraFreezeMarker.ts` has the same text).
+ */
+export const PAGE_ERA_FROZEN_RAISE_SUFFIX =
+    "is read-only in timeline mode (page-era data, P9.5)";
+
 const triggers = {
     prevent_first_beat_modification: `
             CREATE TRIGGER IF NOT EXISTS prevent_first_beat_modification
@@ -392,7 +399,7 @@ function timelineChangeLogTriggers(): Record<string, string> {
 function pageEraFreezeTriggers(): Record<string, string> {
     const result: Record<string, string> = {};
     for (const { table, parents } of PAGE_ERA_FROZEN_TABLES) {
-        const message = `${table} is read-only in timeline mode (page-era data, P9.5)`;
+        const message = `${table} ${PAGE_ERA_FROZEN_RAISE_SUFFIX}`;
         const parentsPresent = (row: "NEW" | "OLD") =>
             parents
                 .map(

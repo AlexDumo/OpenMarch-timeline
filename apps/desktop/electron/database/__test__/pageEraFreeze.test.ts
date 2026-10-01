@@ -15,9 +15,14 @@ import { getOrm } from "../db";
 import { DrizzleMigrationService } from "../services/DrizzleMigrationService";
 import { convertFileOnOpen } from "../convertOnOpen";
 import {
+    PAGE_ERA_FROZEN_RAISE_SUFFIX,
     PAGE_ERA_FROZEN_TRIGGER_PREFIX,
     recreatePageEraFreezeTriggers,
 } from "../migrations/triggers";
+import {
+    isPageEraFrozenError,
+    PAGE_ERA_FROZEN_DB_MARKER,
+} from "@/db-functions/pageEraFreezeMarker";
 import {
     createBlankShow,
     createPageShow,
@@ -157,6 +162,27 @@ describe("page-era freeze triggers (P9.5)", () => {
                 expect(snapshot(db)).toEqual(before);
             },
         );
+
+        it("the refusal is the one undo recognizes and skips", () => {
+            expect(PAGE_ERA_FROZEN_DB_MARKER).toBe(
+                PAGE_ERA_FROZEN_RAISE_SUFFIX,
+            );
+            let caught: unknown;
+            try {
+                db.exec(UPDATES.marcher_pages);
+            } catch (e) {
+                caught = e;
+            }
+            expect(isPageEraFrozenError(caught)).toBe(true);
+            expect(
+                isPageEraFrozenError(
+                    new Error("wrapper", { cause: caught as Error }),
+                ),
+            ).toBe(true);
+            expect(isPageEraFrozenError(new Error("no such column"))).toBe(
+                false,
+            );
+        });
 
         it("reads still work", () => {
             expect(rows(db, "marcher_pages")).toHaveLength(4);

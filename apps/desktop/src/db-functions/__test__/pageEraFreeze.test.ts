@@ -1,14 +1,22 @@
 import { describe, expect } from "vitest";
 import { eq } from "drizzle-orm";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
+import { sql } from "drizzle-orm";
 import {
     keepFixturesInPageMode,
     setTimelineModeFlag,
+    withPageEraFreezeLifted,
 } from "@/test/timelineMode";
 import { swapMarchers, updateMarcherPages } from "../marcherPage";
 import { createMarchers, deleteMarchers } from "../marcher";
 import { createPages, deletePages } from "../page";
-import { performRedo, performUndo } from "../history";
+import {
+    getRedoStackLength,
+    getUndoStackLength,
+    performHistoryAction,
+    performRedo,
+    performUndo,
+} from "../history";
 import { PAGE_ERA_FROZEN_MESSAGE } from "../pageEraFreeze";
 import { TimelineWriteError } from "../timelineErrors";
 
@@ -49,6 +57,17 @@ const expectFrozenRefusal = async (write: () => Promise<unknown>) => {
     expect((error as TimelineWriteError).code).toBe("E-ARGS");
     expect((error as Error).message).toBe(`E-ARGS: ${PAGE_ERA_FROZEN_MESSAGE}`);
 };
+
+/** The undo group on top of the stack (0 when it's empty) */
+const topUndoGroup = async (db: DbConnection) =>
+    (
+        await db
+            .select({
+                g: sql<number>`max(${schema.history_undo.history_group})`,
+            })
+            .from(schema.history_undo)
+            .get()
+    )?.g ?? 0;
 
 const NEW_MARCHER = { section: "Brass", drill_prefix: "Z", drill_order: 1 };
 /** After the fixture's last page (page 6 starts on beat 41). */
@@ -159,6 +178,75 @@ describeDbTests("page-era writes (P9.5)", (it) => {
 
             await performRedo(db);
             expect(await marcherPagesOf(db, { pageId: 3 })).toEqual([]);
+        });
+    });
+
+    describe("undo and redo the freeze refuses", () => {
+        it("an undo that would delete frozen rows (a page created with marcher pages before P9.5) is skipped and dropped", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setTimelineModeFlag(db, true);
+            // What a timeline-mode file from before P9.5 can hold: a page created with marcher
+            // pages, whose undo deletes them while the page still exists
+            const [page] = await withPageEraFreezeLifted(db, () =>
+                createPages({ db, newPages: [NEW_PAGE] }),
+            );
+            const rows = await marcherPagesOf(db, { pageId: page!.id });
+            expect(rows.length).toBeGreaterThan(0);
+            const topGroup = await topUndoGroup(db);
+            const topGroupSize = (
+                await db
+                    .select()
+                    .from(schema.history_undo)
+                    .where(eq(schema.history_undo.history_group, topGroup))
+                    .all()
+            ).length;
+            expect(topGroupSize).toBeGreaterThan(0);
+            const undoBefore = await getUndoStackLength(db);
+            const redoBefore = await getRedoStackLength(db);
+
+            const response = await performHistoryAction("undo", db);
+
+            expect(response.failure).toEqual({ kind: "page-era-frozen" });
+            expect(await topUndoGroup(db)).toBeLessThan(topGroup);
+            // Nothing applied, and the step is gone from the undo stack, with no redo for it
+            expect(await marcherPagesOf(db, { pageId: page!.id })).toEqual(
+                rows,
+            );
+            expect(
+                await db.query.pages.findFirst({
+                    where: eq(schema.pages.id, page!.id),
+                }),
+            ).toBeDefined();
+            expect(await getUndoStackLength(db)).toBe(
+                undoBefore - topGroupSize,
+            );
+            expect(await getRedoStackLength(db)).toBe(redoBefore);
+
+            // The next undo isn't stuck behind it
+            const next = await performHistoryAction("undo", db);
+            expect(next.failure).not.toEqual({ kind: "page-era-frozen" });
+        });
+
+        it("any other failed undo is reported and leaves both stacks alone", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setTimelineModeFlag(db, true);
+            const group = (await topUndoGroup(db)) + 1;
+            await db.insert(schema.history_undo).values({
+                history_group: group,
+                sql: `UPDATE "marchers" SET "no_such_column" = 1 WHERE rowid = 1`,
+            });
+            const undoBefore = await getUndoStackLength(db);
+            const redoBefore = await getRedoStackLength(db);
+
+            const response = await performHistoryAction("undo", db);
+
+            expect(response.failure?.kind).toBe("error");
+            expect(await getUndoStackLength(db)).toBe(undoBefore);
+            expect(await getRedoStackLength(db)).toBe(redoBefore);
         });
     });
 
