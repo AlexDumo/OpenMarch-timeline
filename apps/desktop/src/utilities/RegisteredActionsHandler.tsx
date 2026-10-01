@@ -9,7 +9,7 @@ import {
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import type { ModifiedMarcherPageArgs } from "@/db-functions/marcherPage";
 import {
-    refuseInTimelineMode,
+    copyPagePositions,
     timelineCoordinateRecords,
     toTimelineMoves,
 } from "@/timeline/timelineCoordinateWrites";
@@ -19,6 +19,7 @@ import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useCallback, useEffect, useRef } from "react";
 import * as CoordinateActions from "./CoordinateActions";
+import type Page from "@/global/classes/Page";
 import { getNextPage, getPreviousPage } from "@/global/classes/Page";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useRegisteredActionsStore } from "@/stores/RegisteredActionsStore";
@@ -555,11 +556,18 @@ function RegisteredActionsHandler() {
     const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
         marcherPagesByPageQueryOptions(selectedPage?.id),
     );
+    const timelineMode = useTimelineMode();
+    // Only page mode's "set marchers to the previous or next page" reads these; timeline mode
+    // reads the resolver instead (P7.6), so they don't run there
     const { data: previousMarcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.previousPageId!),
+        marcherPagesByPageQueryOptions(
+            timelineMode ? null : selectedPage?.previousPageId,
+        ),
     );
     const { data: nextMarcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.nextPageId!),
+        marcherPagesByPageQueryOptions(
+            timelineMode ? null : selectedPage?.nextPageId,
+        ),
     );
     const { mutate: swapMarchers } = useMutation(
         swapMarchersMutationOptions(queryClient),
@@ -567,7 +575,6 @@ function RegisteredActionsHandler() {
     const { mutate: updateMarcherPages } = useMutation(
         updateMarcherPagesMutationOptions(queryClient),
     );
-    const timelineMode = useTimelineMode();
     const { mutate: moveMarchersOnPage } = useMutation(
         moveMarchersOnPageMutationOptions(),
     );
@@ -676,6 +683,46 @@ function RegisteredActionsHandler() {
             });
         },
         [timelineMode, updateMarcherPages, selectedPage, moveMarchersOnPage],
+    );
+
+    /**
+     * Timeline mode's "set all or selected marchers to the previous or next page" (P7.6): copies
+     * the marchers' positions on `source` (the resolver at its end beat) to the selected page as
+     * one `moveMarchersOnPage` edit. `marcher_pages` isn't read. `onSuccess` gets the number of
+     * marchers set, and runs only once the edit is written (or when nothing needed to move).
+     *
+     * @param marcherIds the marchers to copy; every marcher when undefined
+     */
+    const copyTimelinePagePositions = useCallback(
+        (
+            source: Page,
+            marcherIds: readonly number[] | undefined,
+            onSuccess: (count: number) => void,
+        ) => {
+            if (!selectedPage) return;
+            let copy: ReturnType<typeof copyPagePositions>;
+            try {
+                copy = copyPagePositions({
+                    page: selectedPage,
+                    source,
+                    marcherIds,
+                });
+            } catch (e) {
+                conToastErrorMessage(e);
+                return;
+            }
+            const count = copy.marcherIds.length;
+            if (count === 0) return;
+            if (copy.moves.length === 0) {
+                onSuccess(count);
+                return;
+            }
+            moveMarchersOnPage(
+                { page: selectedPage, moves: copy.moves },
+                { onSuccess: () => onSuccess(count) },
+            );
+        },
+        [selectedPage, moveMarchersOnPage],
     );
 
     // Arrow movement defaults
@@ -914,10 +961,30 @@ function RegisteredActionsHandler() {
 
                 /****************** Batch Editing ******************/
                 case RegisteredActionsEnum.setAllMarchersToPreviousPage: {
-                    // Reads page-era rows; not in timeline mode until P7.6
-                    if (refuseInTimelineMode(timelineMode, toast.error)) break;
                     if (!databaseReady || !pages || pages.length === 0) break;
                     const previousPage = getPreviousPage(selectedPage, pages);
+                    if (timelineMode) {
+                        if (!previousPage) {
+                            toast.error(t("actions.batchEdit.noPreviousPage"));
+                            return;
+                        }
+                        copyTimelinePagePositions(
+                            previousPage,
+                            undefined,
+                            (count) =>
+                                toast.success(
+                                    t(
+                                        "actions.batchEdit.setAllToPreviousSuccess",
+                                        {
+                                            count,
+                                            currentPage: selectedPage.name,
+                                            previousPage: previousPage.name,
+                                        },
+                                    ),
+                                ),
+                        );
+                        break;
+                    }
                     if (!previousPage || !previousMarcherPages) {
                         toast.error(t("actions.batchEdit.noPreviousPage"));
                         return;
@@ -946,18 +1013,37 @@ function RegisteredActionsHandler() {
                     break;
                 }
                 case RegisteredActionsEnum.setSelectedMarchersToPreviousPage: {
-                    // Reads page-era rows; not in timeline mode until P7.6
-                    if (refuseInTimelineMode(timelineMode, toast.error)) break;
                     if (!databaseReady || !pages || pages.length === 0) break;
                     const previousPage = getPreviousPage(selectedPage, pages);
+                    const selectedMarcherIds = selectedMarchers.map(
+                        (marcher) => marcher.id,
+                    );
+                    if (timelineMode) {
+                        if (!previousPage) {
+                            toast.error(t("actions.batchEdit.noPreviousPage"));
+                            return;
+                        }
+                        copyTimelinePagePositions(
+                            previousPage,
+                            selectedMarcherIds,
+                            (count) =>
+                                toast.success(
+                                    t(
+                                        "actions.batchEdit.setSelectedToPreviousSuccess",
+                                        {
+                                            count,
+                                            currentPage: selectedPage.name,
+                                            previousPage: previousPage.name,
+                                        },
+                                    ),
+                                ),
+                        );
+                        break;
+                    }
                     if (!previousPage || !previousMarcherPages) {
                         toast.error(t("actions.batchEdit.noPreviousPage"));
                         return;
                     }
-
-                    const selectedMarcherIds = selectedMarchers.map(
-                        (marcher) => marcher.id,
-                    );
 
                     const filteredPreviousMarcherPages = selectedMarcherIds
                         .map((marcherId) => previousMarcherPages[marcherId])
@@ -989,10 +1075,27 @@ function RegisteredActionsHandler() {
                     break;
                 }
                 case RegisteredActionsEnum.setAllMarchersToNextPage: {
-                    // Reads page-era rows; not in timeline mode until P7.6
-                    if (refuseInTimelineMode(timelineMode, toast.error)) break;
                     if (!databaseReady || !pages || pages.length === 0) break;
                     const nextPage = getNextPage(selectedPage, pages);
+                    if (timelineMode) {
+                        if (!nextPage) {
+                            toast.error(t("actions.batchEdit.noNextPage"));
+                            return;
+                        }
+                        copyTimelinePagePositions(
+                            nextPage,
+                            undefined,
+                            (count) =>
+                                toast.success(
+                                    t("actions.batchEdit.setAllToNextSuccess", {
+                                        count,
+                                        currentPage: selectedPage.name,
+                                        nextPage: nextPage.name,
+                                    }),
+                                ),
+                        );
+                        break;
+                    }
                     if (!nextPage || !nextMarcherPages) {
                         toast.error(t("actions.batchEdit.noNextPage"));
                         return;
@@ -1020,17 +1123,37 @@ function RegisteredActionsHandler() {
                     break;
                 }
                 case RegisteredActionsEnum.setSelectedMarchersToNextPage: {
-                    // Reads page-era rows; not in timeline mode until P7.6
-                    if (refuseInTimelineMode(timelineMode, toast.error)) break;
                     if (!databaseReady || !pages || pages.length === 0) break;
                     const nextPage = getNextPage(selectedPage, pages);
+                    const selectedMarcherIds = selectedMarchers.map(
+                        (marcher) => marcher.id,
+                    );
+                    if (timelineMode) {
+                        if (!nextPage) {
+                            toast.error(t("actions.batchEdit.noNextPage"));
+                            return;
+                        }
+                        copyTimelinePagePositions(
+                            nextPage,
+                            selectedMarcherIds,
+                            (count) =>
+                                toast.success(
+                                    t(
+                                        "actions.batchEdit.setSelectedToNextSuccess",
+                                        {
+                                            count,
+                                            currentPage: selectedPage.name,
+                                            nextPage: nextPage.name,
+                                        },
+                                    ),
+                                ),
+                        );
+                        break;
+                    }
                     if (!nextPage || !nextMarcherPages) {
                         toast.error(t("actions.batchEdit.noNextPage"));
                         return;
                     }
-                    const selectedMarcherIds = selectedMarchers.map(
-                        (marcher) => marcher.id,
-                    );
                     const nextPageMarcherPages = selectedMarcherIds
                         .map((marcherId) => nextMarcherPages[marcherId])
                         .filter(Boolean);
@@ -1408,6 +1531,7 @@ function RegisteredActionsHandler() {
             setAlignmentEventMarchers,
             updateSelectedMarchers,
             updateCoordinates,
+            copyTimelinePagePositions,
             timelineMode,
         ],
     );
