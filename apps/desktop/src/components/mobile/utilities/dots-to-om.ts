@@ -16,7 +16,11 @@ import { DB, schema } from "@/global/database/db";
 import { FieldPropertiesSchema } from "@/components/field/fieldPropertiesSchema";
 import { generatePageNames } from "@/global/classes/Page";
 import { getPagesInOrder } from "@/db-functions";
-import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
+import {
+    isTimelineModeEnabled,
+    workspaceSettingsSchema,
+} from "@/settings/workspaceSettings";
+import { readTimelinePagePositions } from "@/timeline/timelinePagePositions";
 import {
     buildPerformerAppearanceShowData,
     databaseMarcherPagesToMarcherPages,
@@ -36,6 +40,11 @@ type TimingRow = {
 type PageRow = typeof schema.pages.$inferSelect;
 type MeasureRow = typeof schema.measures.$inferSelect;
 type MarcherPageRow = typeof schema.marcher_pages.$inferSelect;
+/** A marcher's position on a page: a `marcher_pages` row, or in timeline mode a resolver sample */
+type PagePositionRow = Pick<
+    MarcherPageRow,
+    "marcher_id" | "page_id" | "x" | "y"
+> & { rotation_degrees?: number | null };
 
 // -----------------------------------------------------------------------------
 // Helpers: field properties → PerformanceArea, coordinates
@@ -165,12 +174,12 @@ function buildTempoSections(
 }
 
 function buildCoordinates({
-    marcherPagesRows,
+    positionRows,
     centerXPixels,
     fieldHeightSteps,
     pixelsPerStep,
 }: {
-    marcherPagesRows: MarcherPageRow[];
+    positionRows: readonly PagePositionRow[];
     centerXPixels: number;
     fieldHeightSteps: number;
     pixelsPerStep: number;
@@ -181,7 +190,7 @@ function buildCoordinates({
     ySteps: number;
     rotation_degrees?: number;
 }[] {
-    return marcherPagesRows.map((mp) => {
+    return positionRows.map((mp) => {
         const coord: {
             marcherId: string;
             pageId: string;
@@ -226,7 +235,40 @@ function buildMeasuresFromTiming({
 // Data fetch + schema build (keeps toOpenMarchSchema under max-lines)
 // -----------------------------------------------------------------------------
 
+/**
+ * In page mode, every `marcher_pages` row. In timeline mode those rows are frozen page-era data
+ * (docs/timeline/phases/07-page-parity.md P7.12), so the positions come from the resolver at each
+ * page's end beat instead. The per-page rotation and appearance fields have no timeline home
+ * (P7.14), so they are left out.
+ */
+async function fetchPagePositions(
+    db: DB,
+    timelineMode: boolean,
+): Promise<{
+    marcherPagesRows: MarcherPageRow[];
+    positionRows: readonly PagePositionRow[];
+}> {
+    if (timelineMode) {
+        const positionRows = await readTimelinePagePositions(db);
+        return { marcherPagesRows: [], positionRows };
+    }
+    const marcherPagesRows = await db.query.marcher_pages.findMany();
+    return { marcherPagesRows, positionRows: marcherPagesRows };
+}
+
+const parseWorkspaceSettings = (row: { json_data: string } | undefined) =>
+    row ? workspaceSettingsSchema.parse(JSON.parse(row.json_data)) : undefined;
+
 async function fetchDotsData(db: DB) {
+    const workspaceSettingsRow = await db.query.workspace_settings.findFirst({
+        columns: { json_data: true },
+    });
+    const workspaceSettings = parseWorkspaceSettings(workspaceSettingsRow);
+    const { marcherPagesRows, positionRows } = await fetchPagePositions(
+        db,
+        isTimelineModeEnabled(workspaceSettings),
+    );
+
     const timingRows = (await db
         .select()
         .from(schema.timing_objects)
@@ -239,8 +281,6 @@ async function fetchDotsData(db: DB) {
         marchersRows,
         pagesRows,
         measuresRows,
-        marcherPagesRows,
-        workspaceSettingsRow,
         performerAppearanceExportData,
     ] = await Promise.all([
         db.query.field_properties.findFirst({ columns: { json_data: true } }),
@@ -262,10 +302,6 @@ async function fetchDotsData(db: DB) {
         }),
         db.query.pages.findMany(),
         db.query.measures.findMany(),
-        db.query.marcher_pages.findMany(),
-        db.query.workspace_settings.findFirst({
-            columns: { json_data: true },
-        }),
         fetchPerformerAppearanceExportData(
             db,
             pagesInOrder.map((p) => ({ id: p.id })),
@@ -279,7 +315,8 @@ async function fetchDotsData(db: DB) {
         pagesRows,
         measuresRows,
         marcherPagesRows,
-        workspaceSettingsRow,
+        positionRows,
+        workspaceSettings,
         pagesInOrder,
         performerAppearanceExportData,
     };
@@ -295,7 +332,8 @@ function buildOpenMarchFromRows(
         pagesRows,
         measuresRows,
         marcherPagesRows,
-        workspaceSettingsRow,
+        positionRows,
+        workspaceSettings,
     } = data;
 
     if (!fieldPropsRow) {
@@ -310,12 +348,6 @@ function buildOpenMarchFromRows(
     const { fieldWidthSteps, fieldHeightSteps } =
         getFieldExtentsSteps(fieldProps);
     const centerXPixels = (fieldWidthSteps / 2) * pixelsPerStep;
-
-    const workspaceSettings = workspaceSettingsRow
-        ? workspaceSettingsSchema.parse(
-              JSON.parse(workspaceSettingsRow.json_data),
-          )
-        : undefined;
 
     const metadata = {
         performanceArea,
@@ -348,7 +380,7 @@ function buildOpenMarchFromRows(
     });
     const tempoSections = buildTempoSections(timingRows);
     const coordinates = buildCoordinates({
-        marcherPagesRows,
+        positionRows,
         centerXPixels,
         fieldHeightSteps,
         pixelsPerStep,
