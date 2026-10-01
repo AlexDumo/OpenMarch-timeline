@@ -182,6 +182,16 @@ const allPageEnds = (pages: readonly Page[]) => {
     );
 };
 
+/** A marcher's drill number, as refusal messages name it. */
+const drillNumber = async (db: DbConnection, marcherId: number) => {
+    const m = await db
+        .select()
+        .from(schema.marchers)
+        .where(eq(schema.marchers.id, marcherId))
+        .get();
+    return `${m!.drill_prefix}${m!.drill_order}`;
+};
+
 const expectRefused = async (
     db: DbConnection,
     code: string,
@@ -486,7 +496,10 @@ describeDbTests("moving marchers on a page in timeline mode", (it) => {
                 ],
             }),
         );
-        expect(error.message).toContain("marcher 3 has no move that ends");
+        // Named by drill number, not database id
+        expect(error.message).toContain(
+            `marcher ${await drillNumber(db, 3)} has no move that ends`,
+        );
     });
 
     it("refuses a marcher named twice and an out-of-bounds position", async ({
@@ -586,7 +599,9 @@ describeDbTests("moving marchers on a page in timeline mode", (it) => {
                 moves: [{ marcherId: 4, x: 1, y: 2 }],
             }),
         );
-        expect(error.message).toContain("marcher 4 has no move that ends");
+        expect(error.message).toContain(
+            `marcher ${await drillNumber(db, 4)} has no move that ends`,
+        );
     });
 
     it("refuses when the winning assignment ends at the page end but its transition ends later", async ({
