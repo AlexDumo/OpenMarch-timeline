@@ -82,7 +82,7 @@ Tests on fixture shows (including the e2e fixtures): resolver positions equal `m
 ### P6.6: Conversion equality corpus
 
 - Owner: timeline-worker (timeline/p6-equality-corpus)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P6.5
@@ -171,3 +171,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** at the PR head: tsc (pass); `test:history` on pageConversion, planPageConversion, timelineFixtureLoad and timelineDevApi (4 files, 43 passed); the worker's regular desktop suite (101 files, 1,564 passed, before its last small commit).
 - **Next:** the precision fix; then Phase 7.
 - **Blockers:** the exit-gate item "run on at least three real shows" needs real `.dots` files, which the workers don't have (a person, or files added to the repo for testing).
+
+### 2026-10-01 · timeline-worker (timeline/p6-equality-corpus) · P6.6
+
+- **Done:** checkpoint bd7f1a89 on `timeline/p6-equality-corpus`. `apps/desktop/src/timeline/__test__/conversionShow.ts` builds the synthetic show through the db-functions (varied counts, two tempo changes, two uneven-tempo pages, measures, a curved and a straight page shape, marchers added after the pages and one deleted, holds, coincident marchers, a pathway, a midset, and two damaged-file cases). `conversionEquality.ts` compares the resolver with page-mode playback using `getMarcherTimelines`/`getCoordinatesAtTime` (the `useAnimation` path), at the same beat (C-7) and in milliseconds. `conversionEquality.test.ts` runs it in the default suite.
+- **Checks:** `test:focused src/timeline/__test__/conversionEquality.test.ts`: 1 passed.
+- **Next:** the opt-in corpus runner, then the Jev script.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p6-equality-corpus` (bd7f1a89); write `apps/desktop/src/timeline/__test__/conversionCorpus.test.ts` (skipped unless `OPENMARCH_CONVERSION_CORPUS` is set).
