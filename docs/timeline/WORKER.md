@@ -135,7 +135,9 @@ Throughout:
    `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
    Always pass `--repo AlexDumo/OpenMarch-timeline` to `gh`; without it, `gh`
    can pick the public repo. The PR body names the work package IDs and the
-   checks you ran, with results.
+   checks you ran, with results. Workers can share one scratchpad, so name
+   temporary files after your package (`pr-P8.3.md`, not `pr.md`), and read a
+   body file back before passing it to `--body-file`.
 4. Through `coord.sh`: set `- Status: in-review` and `- PR: <url>`, tick only
    the exit-gate items you actually ran and whose outcome is already true on
    the base branch. An item that only becomes true when your PR merges (such
