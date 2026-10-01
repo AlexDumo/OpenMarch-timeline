@@ -130,7 +130,7 @@ Path, midpoint and endpoint drawing, step-size warnings, the inspector's step si
 ### P7.11: Shapes and shape pages in timeline mode
 
 - Owner: timeline-worker (timeline/p7-shapes)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -1072,3 +1072,13 @@ Facts that change how to read the PR #14 note above:
 - **Skipped by policy:** full `test:history` and e2e. Also not run: `build:electron`, and a manual run in the app. No db-functions changed.
 - **Next:** re-review and merge PR #35.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-shapes) · P7.11 checkpoint
+
+- **Done:** wip commit d14b305a on `timeline/p7-shapes` (untested).
+  - **Canvas drawing and dragging of spec shapes:** the shape picked in the inspector's shape editor is drawn on the canvas with handles (`src/timeline/timelineShapeCanvas.ts`, `src/global/classes/canvasObjects/TimelineShapeOverlay.ts`, `src/timeline/useTimelineShapeCanvas.ts`). A drag redraws locally and commits once, on release, through the editor's own `edit` (its stale-plan guard, `updateTimelineShape`, `toastTimelineError`).
+  - **Page-era shape tools gated off in timeline mode:** page shapes aren't drawn or read; `createShapePages`, `updateShapePages`, `deleteShapePages` and `copyShapePageToPage` refuse inside their transaction (`E-ARGS`); Create Shape on the line tool is disabled with the reason; no shape locks.
+- **Checks:** `tsc --noEmit`: pass. Pre-commit (eslint, prettier, cspell): pass.
+- **Next:** tests (planner, overlay, hook, db refusal under `test:history`), inventory ticks, `ui.md` notes.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p7-shapes`; `pnpm install`; build the desktop's dependencies; write `src/timeline/__test__/timelineShapeCanvas.test.ts`, an overlay and hook test, and `src/db-functions/__test__/shapePagesTimelineMode.test.ts`.
