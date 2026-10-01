@@ -505,3 +505,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the suite result, update the PR body, report back.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-assignments`; `pnpm --dir apps/desktop run test` (in the background); update PR #31's body from `pr-P8.4.md`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-assignments) · P8.4 (review fixes ready)
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/31's body is updated for the review fixes in ed095df0. The branch was merged with `timeline-try-2`, not force-pushed.
+- **Checks:** `pnpm --dir apps/desktop run test` on ed095df0: 137 files, 2,011 passed (14 skipped, 15 todo). The other checks are in the previous entry.
+- **Next:** re-review and merge by the lead.
+- **Blockers:** none.
