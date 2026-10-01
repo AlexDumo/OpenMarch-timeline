@@ -9,7 +9,6 @@ import {
     type TimelinePositionSource,
 } from "./timelineCanvas";
 import { readTimelineTables } from "./timelineRows";
-import { useTimelineResolverStore } from "./timelineStore";
 import {
     buildKeyframes,
     keyframesToJson,
@@ -23,16 +22,15 @@ import {
  */
 
 /**
- * The resolver for an export. The store's resolver is used when it is ready (the app keeps it
- * current while the file's timeline flag is on); otherwise one is cold-built from the tables,
- * the same way the store does it. A cold-built resolver is private to the export and not
- * subscribed to changes, which is fine: an export reads one moment.
+ * The resolver for an export: always a separate one, cold-built from the tables the way the store
+ * builds its own. The store's resolver is updated in place by every committed batch, so an edit
+ * during a long export would change later frames and stop matching the beats read at the start.
+ * The private resolver is not subscribed to changes, so an export reads one moment. (The live
+ * preview may use the store's resolver.)
  */
 export async function acquireExportResolver(
     db: DbConnection,
 ): Promise<Resolver> {
-    const { status, resolver } = useTimelineResolverStore.getState();
-    if (status === "ready" && resolver) return resolver;
     const { snapshot } = await readTimelineTables(db);
     return createResolver(snapshot);
 }

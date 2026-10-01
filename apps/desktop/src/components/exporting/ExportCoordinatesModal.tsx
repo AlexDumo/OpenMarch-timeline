@@ -72,6 +72,7 @@ import {
     workspaceSettingsQueryOptions,
 } from "@/hooks/queries/useWorkspaceSettings";
 import { db } from "@/global/database/db";
+import { showEndTime } from "@/timeline/timeMap";
 import {
     acquireExportResolver,
     ResolverFrameSampler,
@@ -711,6 +712,8 @@ function CoordinateSheetExport() {
 // eslint-disable-next-line max-lines-per-function
 function DrillChartExport() {
     const { pages } = useTimingObjects()!;
+    // Timeline mode drops the per-page appearance fields of marcher_pages (P7.14)
+    const timelineMode = useTimelineMode();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
         allMarcherPagesQueryOptions({
@@ -751,6 +754,7 @@ function DrillChartExport() {
             sortedPages: pages,
             marchers,
             marcherPagesMap: marcherPages,
+            timelineMode,
             sectionAppearances,
             marcherIdsByTagId,
             allTagAppearances,
@@ -758,6 +762,7 @@ function DrillChartExport() {
             fieldProperties,
         });
     }, [
+        timelineMode,
         fieldProperties,
         marchers,
         sectionAppearances,
@@ -1264,6 +1269,8 @@ function VideoExport() {
     // Timeline mode: positions come from the resolver, appearances ignore page rows (P7.8)
     const timelineMode = useTimelineMode();
     const storeResolver = useTimelineResolverStore((s) => s.resolver);
+    // The store's resolver is updated in place; a new version redraws the preview
+    const resolverVersion = useTimelineResolverStore((s) => s.version);
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const { data: marchers, isSuccess: marchersLoaded } = useQuery(
         allMarchersQueryOptions(),
@@ -1369,14 +1376,16 @@ function VideoExport() {
             timelineMode && storeResolver
                 ? new ResolverFrameSampler(storeResolver, beats)
                 : null,
-        [timelineMode, storeResolver, beats],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [timelineMode, storeResolver, resolverVersion, beats],
     );
 
     const durationSeconds = useMemo(() => {
+        if (timelineMode) return showEndTime(beats);
         if (pages.length === 0) return 0;
         const lastPage = pages[pages.length - 1];
         return lastPage.timestamp + lastPage.duration;
-    }, [pages]);
+    }, [pages, timelineMode, beats]);
 
     useEffect(() => {
         let cancelled = false;

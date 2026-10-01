@@ -16,7 +16,8 @@ import { beatAtTime, timeAtBeat, type BeatTiming } from "./timeMap";
  *    and the end of the show. The leading and trailing holds have no finite outer edge, so the
  *    show's start (beat 1, show time 0) and end (beat `beats.length`) stand in for it;
  * 2. extra keyframes inside every move span (anything but a hold), found by bisecting the span in
- *    show time until linear interpolation between adjacent keyframes stays within
+ *    show time until linear interpolation between adjacent keyframes stays, at 7 probe points
+ *    per piece (a sampled bound, not a proof between the probes), within
  *    {@link DEFAULT_KEYFRAME_TOLERANCE} of the resolver (or `options.tolerance`). Bisecting in
  *    time, not beats, accounts for tempo changes: the player interpolates in time.
  *
@@ -32,7 +33,11 @@ import { beatAtTime, timeAtBeat, type BeatTiming } from "./timeMap";
 /** The default chord-error tolerance, in field units (a fifth of a step is far under a pixel). */
 export const DEFAULT_KEYFRAME_TOLERANCE = 0.01;
 
-/** At most 2^MAX_DEPTH pieces per span; a guard for pathological input, not a quality knob. */
+/**
+ * At most 2^MAX_DEPTH pieces per span; a guard for pathological input, not a quality knob. When
+ * a piece hits it with error above the tolerance, the excess is reported as
+ * `maxErrorAboveTolerance` and logged.
+ */
 const MAX_DEPTH = 14;
 
 /** Where in a piece the chord error is probed (the ends are keyframes and exact). */
@@ -49,6 +54,11 @@ export interface MarcherKeyframes {
     marcherId: number;
     /** Ascending by `time`, strictly increasing */
     keyframes: ExportKeyframe[];
+    /**
+     * How far above the tolerance the worst probe is where bisection hit the depth cap. 0 when
+     * every piece met the tolerance (the normal case).
+     */
+    maxErrorAboveTolerance: number;
 }
 
 export interface KeyframeExportOptions {
@@ -56,6 +66,8 @@ export interface KeyframeExportOptions {
     tolerance?: number;
     /** Round coordinates to Float32. Defaults to true. */
     float32?: boolean;
+    /** Bisection depth cap, for tests; defaults to 14 (at most 2^14 pieces per span) */
+    maxDepth?: number;
 }
 
 /**
@@ -75,16 +87,24 @@ export function buildKeyframes(
     if (!(tolerance > 0)) throw new RangeError("tolerance must be positive");
     const round = options.float32 === false ? (n: number) => n : Math.fround;
 
-    return resolver.marcherIds().map((marcherId) => ({
-        marcherId,
-        keyframes: marcherKeyframes(
+    const maxDepth = options.maxDepth ?? MAX_DEPTH;
+    const result = resolver.marcherIds().map((marcherId) => {
+        const { keyframes, excess } = marcherKeyframes(
             resolver,
             beats,
             marcherId,
             tolerance,
             round,
-        ),
-    }));
+            maxDepth,
+        );
+        return { marcherId, keyframes, maxErrorAboveTolerance: excess };
+    });
+    const worst = Math.max(0, ...result.map((m) => m.maxErrorAboveTolerance));
+    if (worst > 0)
+        console.warn(
+            `Keyframe export: the depth cap was hit; chord error is up to ${worst} above the ${tolerance} tolerance`,
+        );
+    return result;
 }
 
 function marcherKeyframes(
@@ -93,7 +113,8 @@ function marcherKeyframes(
     marcherId: number,
     tolerance: number,
     round: (n: number) => number,
-): ExportKeyframe[] {
+    maxDepth: number,
+): { keyframes: ExportKeyframe[]; excess: number } {
     const firstBeat = Math.min(1, beats.length);
     const lastBeat = beats.length;
     const spans = resolver.spanInfos(marcherId);
@@ -116,6 +137,7 @@ function marcherKeyframes(
     });
 
     const out: ExportKeyframe[] = [];
+    let excess = 0;
     let prevBeat = sorted[0]!;
     let prevTime = timeAtBeat(beats, prevBeat);
     let prevPos = at(prevBeat);
@@ -132,7 +154,7 @@ function marcherKeyframes(
         const from = prevBeat;
         const span = spans.find((s) => s.start <= from && from < s.end);
         if (span && span.kind !== "hold") {
-            subdivide(
+            const over = subdivide(
                 (t) => at(beatAtTime(beats, t)),
                 prevTime,
                 prevPos,
@@ -140,15 +162,17 @@ function marcherKeyframes(
                 pos,
                 tolerance,
                 0,
+                maxDepth,
                 (t, p) => out.push(frame(t, p)),
             );
+            excess = Math.max(excess, over);
         }
         out.push(frame(time, pos));
         prevBeat = beat;
         prevTime = time;
         prevPos = pos;
     }
-    return out;
+    return { keyframes: out, excess };
 }
 
 /**
@@ -163,9 +187,9 @@ function subdivide(
     p1: [number, number],
     tolerance: number,
     depth: number,
+    maxDepth: number,
     emit: (time: number, p: [number, number]) => void,
-): void {
-    if (depth >= MAX_DEPTH) return;
+): number {
     let worst = 0;
     for (const f of PROBES) {
         const p = evalAt(t0 + f * (t1 - t0));
@@ -175,14 +199,35 @@ function subdivide(
         );
         if (error > worst) worst = error;
     }
-    if (worst <= tolerance) return;
+    if (worst <= tolerance) return 0;
 
     const tm = t0 + 0.5 * (t1 - t0);
-    if (!(tm > t0 && tm < t1)) return;
+    if (depth >= maxDepth || !(tm > t0 && tm < t1)) return worst - tolerance;
     const pm = evalAt(tm);
-    subdivide(evalAt, t0, p0, tm, pm, tolerance, depth + 1, emit);
+    const left = subdivide(
+        evalAt,
+        t0,
+        p0,
+        tm,
+        pm,
+        tolerance,
+        depth + 1,
+        maxDepth,
+        emit,
+    );
     emit(tm, pm);
-    subdivide(evalAt, tm, pm, t1, p1, tolerance, depth + 1, emit);
+    const right = subdivide(
+        evalAt,
+        tm,
+        pm,
+        t1,
+        p1,
+        tolerance,
+        depth + 1,
+        maxDepth,
+        emit,
+    );
+    return Math.max(left, right);
 }
 
 /**
@@ -214,7 +259,9 @@ const pick = (k: ExportKeyframe) => ({ x: k.x, y: k.y });
 
 /**
  * The keyframes in the page-mode `MarcherTimeline` shape (milliseconds, plain coordinates), for a
- * consumer that already reads that format, such as an exporter. Straight chords only: there are
+ * consumer that already reads that format, such as an exporter. Keys are rounded to whole
+ * milliseconds, so two keyframes less than 1 ms apart merge into one key (the later wins).
+ * Straight chords only: there are
  * no `path` entries. Export data only; never feed it back as state (D-2).
  */
 export function keyframesToMarcherTimelines(
@@ -242,6 +289,10 @@ export function keyframesToJson(
         format: "openmarch-keyframes",
         version: 1,
         tolerance,
+        maxErrorAboveTolerance: Math.max(
+            0,
+            ...marchers.map((m) => m.maxErrorAboveTolerance),
+        ),
         marchers: marchers.map((m) => ({
             marcherId: m.marcherId,
             keyframes: m.keyframes.map((k) => [k.time, k.x, k.y]),

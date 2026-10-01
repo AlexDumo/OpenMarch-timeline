@@ -12,6 +12,7 @@ import { beatAtTime, showEndTime } from "../timeMap";
 import {
     startTimelineResolver,
     stopTimelineResolver,
+    timelineResolverSettled,
     useTimelineResolverStore,
 } from "../timelineStore";
 
@@ -24,26 +25,42 @@ import {
 afterEach(() => stopTimelineResolver());
 
 describeDbTests("timeline export helpers", (it) => {
-    it("cold-builds a resolver when the store has none, and reuses the store's when ready", async ({
+    it("always builds a separate resolver, and an edit committed mid-export doesn't change it", async ({
         db,
     }) => {
-        const fixture = buildTimelineFixture("G8");
-        const loaded = await loadTimelineFixture(db, fixture, {
-            beatOffset: 1,
-        });
+        const loaded = await loadTimelineFixture(
+            db,
+            buildTimelineFixture("G8"),
+            {
+                beatOffset: 1,
+            },
+        );
         const id = loaded.marchers.get(1)!;
 
-        expect(useTimelineResolverStore.getState().resolver).toBeNull();
-        const cold = await acquireExportResolver(db);
-        expect(cold.marcherIds()).toEqual([id]);
-
         await startTimelineResolver(db);
-        const stored = useTimelineResolverStore.getState().resolver;
-        expect(await acquireExportResolver(db)).toBe(stored);
-        for (const beat of [1, 3.5, 6, 9])
-            expect(cold.positionAt(id, beat)).toEqual(
-                stored!.positionAt(id, beat),
-            );
+        const stored = useTimelineResolverStore.getState().resolver!;
+        const exportResolver = await acquireExportResolver(db);
+        expect(exportResolver).not.toBe(stored);
+        const beatsToSample = [1, 3.5, 6, 9];
+        const before = beatsToSample.map((b) =>
+            exportResolver.positionAt(id, b),
+        );
+        for (let i = 0; i < before.length; i++)
+            expect(before[i]).toEqual(stored.positionAt(id, beatsToSample[i]!));
+
+        // An edit commits while the export is running; the store follows it in place
+        await loadTimelineFixture(db, buildTimelineFixture("G1"), {
+            beatOffset: 1,
+        });
+        await timelineResolverSettled();
+        expect(
+            useTimelineResolverStore.getState().resolver!.marcherIds(),
+        ).toHaveLength(2);
+
+        expect(exportResolver.marcherIds()).toEqual([id]);
+        expect(
+            beatsToSample.map((b) => exportResolver.positionAt(id, b)),
+        ).toEqual(before);
     });
 
     it("reads the beats with cumulative timestamps and exports keyframes from them", async ({

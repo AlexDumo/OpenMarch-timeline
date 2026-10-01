@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createResolver, type Resolver } from "@openmarch/core";
 import { GOLDEN_FIXTURES } from "../fixtures/goldenFixtures";
 import {
@@ -185,5 +185,27 @@ describe("keyframe export details", () => {
         expect(json.marchers[0]!.keyframes.length).toBe(
             exported[0]!.keyframes.length,
         );
+    });
+
+    it("reports error above the tolerance when the depth cap is hit, and warns", () => {
+        const beats = makeBeats(30);
+        const resolver = createResolver(fixture("G8"));
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const capped = buildKeyframes(resolver, beats, {
+            tolerance: 1e-9,
+            maxDepth: 2,
+            float32: false,
+        });
+        expect(capped[0]!.maxErrorAboveTolerance).toBeGreaterThan(0);
+        expect(warn).toHaveBeenCalled();
+        expect(JSON.parse(keyframesToJson(capped)).maxErrorAboveTolerance).toBe(
+            capped[0]!.maxErrorAboveTolerance,
+        );
+
+        warn.mockClear();
+        const fine = buildKeyframes(resolver, beats);
+        expect(fine[0]!.maxErrorAboveTolerance).toBe(0);
+        expect(warn).not.toHaveBeenCalled();
+        warn.mockRestore();
     });
 });
