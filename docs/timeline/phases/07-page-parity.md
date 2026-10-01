@@ -170,7 +170,7 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 ### P7.16: Per-page appearance on the canvas and previous-show import
 
 - Owner: timeline-worker (timeline/p7-page-appearance)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.14
@@ -1235,3 +1235,11 @@ Facts that change how to read the PR #14 note above:
 - **Next:** the full desktop suite in timeline mode (running), then triage.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p7-feature-tests`; `pnpm install`; build the desktop's dependencies; run `pnpm --dir apps/desktop run test:timeline` alone, in the background, with `--reporter=json`, and triage the failures.
+
+### 2026-10-01 · timeline-worker (timeline/p7-page-appearance) · P7.16 checkpoint
+
+- **Done:** first pass pushed as a `wip:` commit on `timeline/p7-page-appearance`. The canvas appearance query (`useMarcherAppearances.ts`) reads the flag when it runs and skips the `marcher_pages` override in timeline mode; settings mutations invalidate appearances. The previous-show import reads positions from the source's resolver at the last page's end beat when the source is in timeline mode (`src/timeline/sourceTimelinePositions.ts`), and `marcher_pages` otherwise. Tests written, not yet run.
+- **Checks:** none yet.
+- **Next:** run the new tests, `tsc`, lint, then the desktop suite.
+- **Blockers:** none.
+- **Resume from:** in `apps/desktop`, run `pnpm exec vitest run src/hooks/queries/__test__/useMarcherAppearancesTimelineMode.test.ts electron/main/services/__test__/previous-dots-import-service.test.ts` and fix failures; then `pnpm exec tsc --noEmit`.
