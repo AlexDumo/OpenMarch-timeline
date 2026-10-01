@@ -68,9 +68,9 @@ Remove the dev flag. Timeline mode is the only mode.
 
 ### P9.5: Freeze page-era writes
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p9-5-freeze-page-writes)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/45
 - Parallel: yes
 - Depends on: P9.3
 
@@ -392,4 +392,19 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run.
 - **Not done:** a manual app run with `OPENMARCH_CONVERT_ON_OPEN=1` to see the window's progress and the quit path (human).
 - **Next:** review and merge by the lead; then P9.4 (both of its dependencies would then be done).
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P9.5 (recorded for the worker)
+
+- **Done:** the P9.5 worker opened PR #45, but couldn't write to the coordination checkout from its sandbox. With the project owner's approval, the lead recorded its status here.
+- **What the PR does:**
+  - adds 18 `page_era_frozen_*` triggers that refuse writes to `marcher_pages`, `midsets`, `pathways`, `shapes`, `shape_pages` and `shape_page_marchers` while the timeline flag is on; cascaded deletes are still allowed;
+  - adds app-level `E-ARGS` refusals;
+  - stops the marcher, page and new-show writers from writing `marcher_pages` in timeline mode.
+- **Checks (worker):**
+  - `pnpm run test`: 171 files, 2,402 tests passed.
+  - Electron `convertOnOpen`, `repair` and `pageEraFreeze` tests: 99 passed.
+  - Focused `test:history`: 262 passed.
+  - `test:timeline`: one failure, fixed afterwards; the full timeline run wasn't repeated.
+- **Next:** lead review. The C-10 note and the ADR 0001 line go in after review confirms the design.
 - **Blockers:** none.
