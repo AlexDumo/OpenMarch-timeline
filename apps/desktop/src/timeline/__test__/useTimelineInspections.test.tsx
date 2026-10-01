@@ -1,8 +1,17 @@
 import { afterEach, expect } from "vitest";
+import { eq } from "drizzle-orm";
 import { renderHook, waitFor } from "@testing-library/react";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
-import { performUndo, transactionWithHistory } from "@/db-functions/history";
-import { startTimelineResolver, stopTimelineResolver } from "../timelineStore";
+import {
+    performRedo,
+    performUndo,
+    transactionWithHistory,
+} from "@/db-functions/history";
+import {
+    startTimelineResolver,
+    stopTimelineResolver,
+    useTimelineResolverStore,
+} from "../timelineStore";
 import { useTimelineInspections } from "../useTimelineInspections";
 
 /**
@@ -247,5 +256,77 @@ describeDbTests("useTimelineInspections", (it) => {
         );
         expect(result.current.inspections).toEqual([]);
         expect(result.current.diagnostics).toEqual([]);
+    });
+
+    it("reloads after a timeline rename, which the change log doesn't carry (P7.15)", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const ids = [1, 2];
+        const { result } = renderHook(() =>
+            useTimelineInspections({
+                database: db,
+                enabled: true,
+                marcherIds: ids,
+                beat: 5,
+            }),
+        );
+        await waitFor(() =>
+            expect(
+                result.current.inspections[0]?.transition?.timelineName,
+            ).toBe("Opener"),
+        );
+        const name = () =>
+            result.current.inspections[0]?.transition?.timelineName;
+
+        await transactionWithHistory(db, "renameTimeline", (tx) =>
+            tx
+                .update(schema.timelines)
+                .set({ name: "Renamed" })
+                .where(eq(schema.timelines.id, 1)),
+        );
+        await waitFor(() => expect(name()).toBe("Renamed"));
+        await performUndo(db);
+        await waitFor(() => expect(name()).toBe("Opener"));
+        await performRedo(db);
+        await waitFor(() => expect(name()).toBe("Renamed"));
+    });
+
+    it("a display-only edit raises the assignment target's version, so an editor waiting on it re-enables (P7.15, P8.4)", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const ids = [1, 2];
+        const { result } = renderHook(() =>
+            useTimelineInspections({
+                database: db,
+                enabled: true,
+                marcherIds: ids,
+                beat: 5,
+            }),
+        );
+        await waitFor(() =>
+            expect(result.current.assignmentEdits).toHaveLength(1),
+        );
+        const before = result.current.assignmentEdits[0]!.version;
+        const resolverVersion = useTimelineResolverStore.getState().version;
+
+        // A timeline rename writes no change-log row: only the display version moves
+        await transactionWithHistory(db, "renameTimeline", (tx) =>
+            tx
+                .update(schema.timelines)
+                .set({ name: "Renamed" })
+                .where(eq(schema.timelines.id, 1)),
+        );
+        await waitFor(() =>
+            expect(result.current.assignmentEdits[0]!.version).toBeGreaterThan(
+                before,
+            ),
+        );
+        expect(useTimelineResolverStore.getState().version).toBe(
+            resolverVersion,
+        );
     });
 });

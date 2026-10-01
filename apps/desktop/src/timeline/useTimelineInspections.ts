@@ -17,6 +17,7 @@ import {
     type TransitionEditTarget,
     type TransitionShapeOption,
 } from "./timelineTransitionEditor";
+import { useTimelineViewVersions } from "./useTimelineViewVersions";
 import {
     buildAssignmentEditTarget,
     type AssignmentEditTarget,
@@ -45,6 +46,7 @@ const EMPTY_BUILT: Built = {
 
 interface VersionedTables {
     readonly version: number;
+    readonly displayVersion: number;
     readonly tables: TimelineViewTables;
 }
 
@@ -86,7 +88,7 @@ export function useTimelineInspections({
     assignmentEdits: readonly AssignmentEditTarget[];
 } {
     const resolver = useTimelineResolverStore((s) => s.resolver);
-    const version = useTimelineResolverStore((s) => s.version);
+    const { version, displayVersion } = useTimelineViewVersions();
     const active = enabled && resolver !== null;
 
     const [loaded, setLoaded] = useState<VersionedTables | null>(null);
@@ -106,7 +108,7 @@ export function useTimelineInspections({
         return () => {
             current = false;
         };
-    }, [active, database, version]);
+    }, [active, database, version, displayVersion]);
 
     const storeDiagnostics = useDiagnostics();
     const diagnostics = active ? storeDiagnostics : NO_DIAGNOSTICS;
@@ -126,7 +128,11 @@ export function useTimelineInspections({
         if (!active || !resolver || !loaded || beat === null)
             return EMPTY_BUILT;
         // Rows of another version: wait for the matching read
-        if (loaded.version !== version) return null;
+        if (
+            loaded.version !== version ||
+            loaded.displayVersion !== displayVersion
+        )
+            return null;
         const host = getTimelineHost();
         if (!host) return EMPTY_BUILT;
         const shapeKinds: Record<number, string> = {};
@@ -159,7 +165,9 @@ export function useTimelineInspections({
         const assignmentEdits = transitionEdits.map((target) =>
             buildAssignmentEditTarget(
                 host.snapshot.transitions[target.id]!,
-                loaded.version,
+                // Moves on a display-only edit too, so the editors' guard can't wait on a
+                // resolver version that never comes
+                loaded.version + loaded.displayVersion,
                 {
                     assignments: loaded.tables.assignments,
                     labels,
@@ -176,7 +184,16 @@ export function useTimelineInspections({
             ),
             assignmentEdits,
         };
-    }, [active, resolver, loaded, version, beat, known, diagnostics]);
+    }, [
+        active,
+        resolver,
+        loaded,
+        version,
+        displayVersion,
+        beat,
+        known,
+        diagnostics,
+    ]);
 
     const last = useRef<Built>(EMPTY_BUILT);
     if (built !== null) last.current = built;

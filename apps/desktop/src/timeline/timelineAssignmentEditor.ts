@@ -51,7 +51,10 @@ export interface AssignmentMember {
 
 /** A transition's slots and assignments, as the editor shows them. */
 export interface AssignmentEditTarget {
-    /** The resolver store version of the rows this target was built from */
+    /**
+     * The resolver store version plus the display version (P7.15) of the rows this target was
+     * built from: it rises with every commit that moves either
+     */
     version: number;
     transitionId: number;
     style: PathStyle;
