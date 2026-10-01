@@ -49,7 +49,7 @@ Back up the file before converting (next to the original, with a clear name).
 ### P9.3: Convert on open
 
 - Owner: timeline-worker (timeline/p9-3-convert-on-open)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P9.2
@@ -169,3 +169,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Skipped by policy: full `test:history` and e2e.
 - **Next:** P9.3 (convert on open) can start. See the handoff note on blocking the UI or moving off the main thread.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p9-3-convert-on-open) · P9.3
+
+- **Done:** checkpoint ef821e98 on `timeline/p9-3-convert-on-open`. `apps/desktop/electron/database/convertOnOpen.ts` (gate, check, backup then one-transaction conversion with the flag and `user_version = 8`, older-release warning decision) and `electron/database/__test__/convertOnOpen.test.ts` (node environment, real files). To let the main process load the converter, `fromDatabasePages` moved to `src/global/classes/Page.fromDatabase.ts` and the page/beat row mappers plus `FIRST_PAGE_ID` to `src/db-functions/rowMappers.ts`; the old modules re-export them, so no caller changes.
+- **Checks:** `vitest run electron/database/__test__/convertOnOpen.test.ts`: 11 passed.
+- **Next:** wire `runConvertOnOpen` into `setActiveDb` with the main-process dialogs and the "preparing your file" window.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p9-3-convert-on-open` (ef821e98); add `electron/main/convertOnOpenFlow.ts` and call it from `setActiveDb` in `electron/main/index.ts` after migrations.
