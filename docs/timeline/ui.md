@@ -217,9 +217,12 @@ selected or not.
   selected marchers where they stand at the selected page's end beat (homes
   with no page): a line between the two farthest apart, a freehand path
   through all of them in selection order, a circle about their middle through
-  the first, a box around them, or a block with a cell for each of them over
-  the same ground. With nobody selected it is 16 steps across at the field's
-  middle; marchers on one spot get a shape that size around them. The new
+  the first (its radius is the first marcher's distance from the middle), a
+  box around them, or a block with a cell for each of them over the box
+  around them. With nobody selected it is 16 steps across at the field's
+  middle; marchers on one spot get a shape that size around them. If marchers
+  are selected but none of them is in the timeline, it is refused with a
+  message rather than drawn somewhere else. The new
   shape is picked for editing.
 - **Editing:** pick a shape (by name, or "Shape N", and kind). It edits the
   name (empty clears it); the kind; and the geometry for that kind: a line's
@@ -228,17 +231,23 @@ selected or not.
   coordinates, from +x toward +y), a box's origin, width and height, and a
   block's origin, rows, columns and spacing. It names the transitions that use
   the shape, since a change moves every marcher heading to it.
-- **Changing the kind** redraws the shape over the same ground: a
+- **Changing the kind** redraws the shape in the area the old one covered: a
   line becomes a freehand path through its two ends, a freehand path becomes
-  a line between its two points farthest apart, a box or circle becomes a
-  closed freehand path along its outline, and anything else fills the old
-  shape's bounds. A new
-  block gets a cell for every slot of every transition using the shape (I-T4),
-  and at least 4 × 4.
+  a line between its two points farthest apart, a box or circle becomes an
+  open freehand path along its outline, and anything else fills the old
+  shape's bounds. The path is open because freehand slots run from the first
+  point to the last (R-13): a path that ended where it started would put the
+  first and last slots on one spot. A new block gets a cell for every slot of
+  every transition using the shape (I-T4), and at least 4 × 4. The slots of
+  the transitions using the shape are spread over the new one, so their
+  marchers end in new places, and the editor says so when the shape is in
+  use.
 - **Keeping transitions valid:** what the editor picks keeps them valid (the
   new block's cells). What the database would refuse is disabled with the
   reason: becoming a block while a follow-the-leader move ends in the shape
-  (I-T3), and deleting a shape a transition uses (I-D1). The block's rows and
+  (I-T3), and deleting a shape a transition uses (I-D1; the delete itself refuses
+  it with a message that names the transitions, with the foreign key as the
+  backstop). The block's rows and
   columns show the places it must hold and for which transition, but a smaller
   grid is sent as typed, and the database refuses it (E-T3/E-T4) with the
   P8.6 message. Bad geometry (E-S1) is refused before anything is written.

@@ -25,7 +25,10 @@ import {
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { TimelineWriteError } from "../timelineErrors";
 import { createTimelinesInTransaction } from "../timelines";
-import { createTimelineShapesInTransaction } from "../timelineShapes";
+import {
+    createTimelineShapesInTransaction,
+    deleteTimelineShapesInTransaction,
+} from "../timelineShapes";
 import { createTimelineTransitionsInTransaction } from "../timelineTransitions";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 
@@ -244,6 +247,7 @@ const expectRefused = async (
     expect(error).toBeInstanceOf(TimelineWriteError);
     expect((error as TimelineWriteError).code).toBe(code);
     expect(await dataOf(db)).toEqual(before);
+    return error as TimelineWriteError;
 };
 
 describeDbTests("timeline shape edits (P8.2)", (it) => {
@@ -422,6 +426,31 @@ describeDbTests("timeline shape edits (P8.2)", (it) => {
             );
         });
 
+        it("non-whole rows or columns are refused before writing (E-S1)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { blockId } = await setUp(db);
+            for (const [rows, cols] of [
+                [2.5, 2],
+                [2, 1.5],
+            ])
+                await expectRefused(
+                    db,
+                    () =>
+                        runEdit(db, blockId, {
+                            kind: "geometry",
+                            geometry: {
+                                origin: [10, 10],
+                                rows: rows!,
+                                cols: cols!,
+                                spacing: [4, 4],
+                            },
+                        }),
+                    "E-S1",
+                );
+        });
+
         it("bad geometry is refused before writing (E-S1)", async ({
             db,
             marchersAndPages: _,
@@ -460,14 +489,35 @@ describeDbTests("timeline shape edits (P8.2)", (it) => {
             );
         });
 
-        it("a shape in use is refused by the database (I-D1) and nothing is written", async ({
+        it("a shape in use is refused before writing, naming the transitions (I-D1)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { lineId, intoLineId } = await setUp(db);
+            const error = await expectRefused(
+                db,
+                () => runEdit(db, lineId, { kind: "delete" }),
+                "E-ARGS",
+            );
+            expect(error.message).toBe(
+                `E-ARGS: Shape ${lineId} can't be deleted while transition ${intoLineId} uses it. Give it another destination first.`,
+            );
+        });
+
+        it("the foreign key stays the backstop for a delete that skips the check (I-D1)", async ({
             db,
             marchersAndPages: _,
         }) => {
             const { lineId } = await setUp(db);
             await expectRefused(
                 db,
-                () => runEdit(db, lineId, { kind: "delete" }),
+                () =>
+                    transactionWithHistory(db, "rawDelete", (tx) =>
+                        deleteTimelineShapesInTransaction({
+                            tx,
+                            shapeIds: new Set([lineId]),
+                        }),
+                    ),
                 "E-DB",
             );
         });

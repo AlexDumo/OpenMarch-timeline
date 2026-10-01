@@ -204,7 +204,9 @@ export const TIMELINE_INSPECTOR_STRINGS = {
         "Changes move every marcher heading to this shape.",
     "inspector.timeline.shapes.kindLabel": "Kind",
     "inspector.timeline.shapes.kindHelp":
-        "Changing the kind redraws the shape over the same ground.",
+        "Changing the kind redraws the shape in the area the old one covered. A box or circle becomes an open freehand path along its outline, so its two ends are different places.",
+    "inspector.timeline.shapes.kindInUse":
+        "Transitions {list} use this shape. Changing its kind spreads their slots over the new shape, so their marchers end in new places.",
     "inspector.timeline.shapes.kindNoFtl":
         "It can't become a block: transition {list} follows the leader into it, and a trail can't end on a block.",
     "inspector.timeline.shapes.kinds.line": "Line",
@@ -247,6 +249,8 @@ export const TIMELINE_INSPECTOR_STRINGS = {
         "{rows} × {cols} = {cells} places, filled row by row from the origin.",
     "inspector.timeline.shapes.cellsNeeded":
         "Transition {list} has {slots} slots, so the block needs at least {slots} places.",
+    "inspector.timeline.shapes.noPositions":
+        "None of the selected marchers is in the timeline yet, so there is nowhere to draw the shape through. Select marchers that are, or nobody to draw it in the middle of the field.",
     "inspector.timeline.shapes.delete": "Delete shape",
     "inspector.timeline.shapes.deleteInUse":
         "It can't be deleted while transitions {list} use it. Give them another destination first.",

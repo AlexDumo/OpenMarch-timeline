@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import {
     normalizeStartAngle,
     validateShapeGeometry,
@@ -201,8 +201,9 @@ export const updateTimelineShape = async ({
 };
 
 /**
- * Deletes one shape as one undoable edit (P8.2). A shape that a transition uses is refused by the
- * database (I-D1, the foreign key is RESTRICT), and nothing is written.
+ * Deletes one shape as one undoable edit (P8.2). A shape that a transition uses is refused before
+ * anything is written (I-D1), with a message that names those transitions (`E-ARGS`). The
+ * foreign key (RESTRICT) stays the backstop.
  */
 export const deleteTimelineShape = async ({
     db,
@@ -212,6 +213,22 @@ export const deleteTimelineShape = async ({
     shapeId: number;
 }): Promise<void> => {
     await transactionWithHistory(db, "deleteTimelineShape", async (tx) => {
+        const users = await tx
+            .select({ id: schema.timeline_transitions.id })
+            .from(schema.timeline_transitions)
+            .where(eq(schema.timeline_transitions.dest_shape_id, shapeId))
+            .orderBy(asc(schema.timeline_transitions.id))
+            .all();
+        if (users.length > 0)
+            refuse(
+                `Shape ${shapeId} can't be deleted while ${
+                    users.length === 1 ? "transition" : "transitions"
+                } ${users.map((u) => u.id).join(", ")} ${
+                    users.length === 1 ? "uses" : "use"
+                } it. Give ${
+                    users.length === 1 ? "it" : "them"
+                } another destination first.`,
+            );
         const deleted = await deleteTimelineShapesInTransaction({
             tx,
             shapeIds: new Set([shapeId]),

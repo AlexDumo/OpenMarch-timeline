@@ -23,6 +23,7 @@ import {
 } from "@openmarch/ui";
 import type { ShapeKind, ShapeRow, XY } from "@openmarch/core";
 import type { DbConnection } from "@/db-functions/types";
+import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import {
     applyShapeEdit,
     blockNeeds,
@@ -74,21 +75,29 @@ export function shapeName(
  * Where the selected marchers stand at `beat` (their homes with no page), for drawing a new shape
  * through them. Waits for earlier writes to reach the resolver first, so a marcher moved just
  * before isn't read where it was.
+ *
+ * @throws TimelineWriteError (E-ARGS, worded by `t`) when marchers are selected but the resolver
+ * knows none of them, rather than drawing the shape somewhere they aren't
  */
 async function selectedPositions(
     marcherIds: readonly number[],
     beat: number | null,
+    t: Translate,
 ): Promise<XY[]> {
     await timelinePositionsSettled();
     const resolver = useTimelineResolverStore.getState().resolver;
     if (!resolver) throw new TimelineNotReadyError();
     const known = new Set(resolver.marcherIds());
-    return marcherIds
-        .filter((id) => known.has(id))
-        .map((id) => {
-            const [x, y] = resolver.positionAt(id, beat ?? 0);
-            return [x, y];
-        });
+    const ids = marcherIds.filter((id) => known.has(id));
+    if (marcherIds.length > 0 && ids.length === 0)
+        throw new TimelineWriteError(
+            "E-ARGS",
+            t("inspector.timeline.shapes.noPositions"),
+        );
+    return ids.map((id) => {
+        const [x, y] = resolver.positionAt(id, beat ?? 0);
+        return [x, y];
+    });
 }
 
 /** A text field that commits on Enter or blur, when its text changed. */
@@ -578,6 +587,13 @@ function ShapeEditor({
                 help={
                     <>
                         <Help>{t("inspector.timeline.shapes.kindHelp")}</Help>
+                        {target.usedBy.length > 0 && (
+                            <Help testId="timeline-shape-kind-in-use">
+                                {t("inspector.timeline.shapes.kindInUse", {
+                                    list: used,
+                                })}
+                            </Help>
+                        )}
                         {noBlock && (
                             <Help testId="timeline-shape-no-block">
                                 {t("inspector.timeline.shapes.kindNoFtl", {
@@ -675,13 +691,20 @@ export function TimelineShapesEditor({
      * shape before the first (P8.4's guard). The ref guards clicks before the next render.
      */
     const plannedAt = useRef<number | null>(null);
+    /**
+     * True for the whole of an edit, planning and writing. A second click while one is in flight
+     * (a double click on New shape) does nothing, even once the first edit's version arrives.
+     */
+    const inFlight = useRef(false);
     const [awaiting, setAwaiting] = useState<number | null>(null);
     const pending = awaiting !== null && awaiting >= version;
 
     const run = useCallback(
         async (plan: () => Promise<PlannedShapeEdit | null>) => {
+            if (inFlight.current) return;
             if (plannedAt.current !== null && plannedAt.current >= version)
                 return;
+            inFlight.current = true;
             const planned = version;
             plannedAt.current = planned;
             setAwaiting(planned);
@@ -700,6 +723,8 @@ export function TimelineShapesEditor({
                 setAwaiting(null);
                 toastTimelineError(error);
                 return;
+            } finally {
+                inFlight.current = false;
             }
             if (created !== null) setPicked(created);
         },
@@ -718,7 +743,7 @@ export function TimelineShapesEditor({
         void run(async () =>
             planNewShape(
                 newKind,
-                await selectedPositions(selectedMarcherIds, beat),
+                await selectedPositions(selectedMarcherIds, beat, t),
                 frame,
             ),
         );

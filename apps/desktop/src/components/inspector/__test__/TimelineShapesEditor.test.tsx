@@ -283,6 +283,55 @@ describe("create", () => {
         );
     });
 
+    it("a double click on New shape creates one shape", async () => {
+        let finish: (row: { id: number }) => void = () => {};
+        mocks.create.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finish = resolve;
+                }),
+        );
+        const { rerender } = show();
+        const button = () => screen.getByTestId("timeline-shape-create");
+        await act(async () => {
+            fireEvent.click(button());
+            fireEvent.click(button());
+        });
+        await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
+        // The store moves on (the create's batch, or another edit) before the call returns: a
+        // second click still does nothing while the first is in flight
+        rerender(editor({ version: 2 }));
+        await click(button());
+        expect(mocks.create).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            finish({ id: 9 });
+        });
+        // Once it has returned, the next version's shapes allow a new one
+        rerender(editor({ version: 3, shapes: { ...SHAPES, 9: BOX } }));
+        await click(button());
+        await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
+    });
+
+    it("refuses, with a toast, when the selected marchers aren't in the timeline", async () => {
+        mocks.positions = { 11: [0, 0] };
+        show({ selected: [21, 22] });
+        await click(screen.getByTestId("timeline-shape-create"));
+        await waitFor(() => expect(mocks.toast).toHaveBeenCalledTimes(1));
+        const error = mocks.toast.mock.calls[0]![0] as TimelineWriteError;
+        expect(error).toBeInstanceOf(TimelineWriteError);
+        expect(error.code).toBe("E-ARGS");
+        expect(error.message).toBe(
+            `E-ARGS: ${TIMELINE_INSPECTOR_STRINGS["inspector.timeline.shapes.noPositions"]}`,
+        );
+        expect(mocks.create).not.toHaveBeenCalled();
+        // Nothing was written, so it can be tried again
+        expect(
+            screen
+                .getByTestId("timeline-shape-create")
+                .hasAttribute("disabled"),
+        ).toBe(false);
+    });
+
     it("picks the new shape once it arrives", async () => {
         const { rerender } = show();
         await click(screen.getByTestId("timeline-shape-create"));
@@ -388,6 +437,18 @@ describe("editing", () => {
                 },
             },
         });
+    });
+
+    it("says a kind change re-spreads the slots of the transitions using the shape", async () => {
+        show();
+        await editShape("Shape 2 (Block)");
+        expect(
+            screen.getByTestId("timeline-shape-kind-in-use").textContent,
+        ).toBe(
+            "Transitions 8 use this shape. Changing its kind spreads their slots over the new shape, so their marchers end in new places.",
+        );
+        await editShape("Shape 3 (Box)");
+        expect(screen.queryByTestId("timeline-shape-kind-in-use")).toBeNull();
     });
 
     it("a shape a follow-the-leader move ends in can't become a block, and says why (I-T3)", async () => {

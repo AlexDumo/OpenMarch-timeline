@@ -776,7 +776,8 @@
                 "unused": "No transition uses this shape.",
                 "usedHelp": "Changes move every marcher heading to this shape.",
                 "kindLabel": "Kind",
-                "kindHelp": "Changing the kind redraws the shape over the same ground.",
+                "kindHelp": "Changing the kind redraws the shape in the area the old one covered. A box or circle becomes an open freehand path along its outline, so its two ends are different places.",
+                "kindInUse": "Transitions {list} use this shape. Changing its kind spreads their slots over the new shape, so their marchers end in new places.",
                 "kindNoFtl": "It can't become a block: transition {list} follows the leader into it, and a trail can't end on a block.",
                 "kinds": {
                     "line": "Line",
@@ -814,6 +815,7 @@
                 "spacing": "Spacing",
                 "cells": "{rows} × {cols} = {cells} places, filled row by row from the origin.",
                 "cellsNeeded": "Transition {list} has {slots} slots, so the block needs at least {slots} places.",
+                "noPositions": "None of the selected marchers is in the timeline yet, so there is nowhere to draw the shape through. Select marchers that are, or nobody to draw it in the middle of the field.",
                 "delete": "Delete shape",
                 "deleteInUse": "It can't be deleted while transitions {list} use it. Give them another destination first."
             },

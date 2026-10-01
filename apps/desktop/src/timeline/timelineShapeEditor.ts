@@ -114,7 +114,7 @@ export const SHAPE_KINDS: readonly ShapeKind[] = [
 
 /** The cells a new block has when no transition needs more: 4 × 4. */
 export const DEFAULT_BLOCK_CELLS = 16;
-/** Points a circle becomes when it turns into a freehand path (closed, so one more). */
+/** Points a circle becomes when it turns into a freehand path (open, so its ends differ). */
 const CIRCLE_TO_FREEHAND_SEGMENTS = 16;
 /** Past this many marchers, a new line is fitted to their bounds rather than their farthest pair. */
 const MAX_FARTHEST_PAIR = 2000;
@@ -204,13 +204,16 @@ const boundsOf = (points: readonly XY[]): Bounds => {
     return { minX, minY, maxX, maxY };
 };
 
-/** The box's corners in traversal order, closed (spec 5.2). */
-const boxLoop = (origin: XY, width: number, height: number): XY[] => [
+/**
+ * The box's corners in traversal order (spec 5.2), as an open path: it doesn't return to the
+ * origin. Freehand samples at `i/(n-1)` (R-13), so a path that ended where it started would put
+ * its first and last slots on the same spot.
+ */
+const boxOutline = (origin: XY, width: number, height: number): XY[] => [
     [origin[0], origin[1]],
     [origin[0] + width, origin[1]],
     [origin[0] + width, origin[1] + height],
     [origin[0], origin[1] + height],
-    [origin[0], origin[1]],
 ];
 
 /** The smallest axis-aligned box around a shape. */
@@ -313,7 +316,9 @@ function shapeInBounds(
         case "freehand":
             return {
                 kind,
-                geometry: { points: boxLoop([b.minX, b.minY], width, height) },
+                geometry: {
+                    points: boxOutline([b.minX, b.minY], width, height),
+                },
             };
         case "circle":
             return {
@@ -384,7 +389,8 @@ const copy = (p: XY): XY => [p[0], p[1]];
  *
  * - a line between the two that are farthest apart;
  * - a freehand path through all of them, in order;
- * - a circle about their middle, through the first, with their mean distance as the radius;
+ * - a circle about their middle, through the first (with their mean distance as the radius when
+ *   the first stands on the middle);
  * - a box around them;
  * - a block with a cell for each of them, spread over the box around them.
  *
@@ -432,19 +438,22 @@ export function newShapeThrough(
         case "circle": {
             const cx = points.reduce((s, p) => s + p[0], 0) / points.length;
             const cy = points.reduce((s, p) => s + p[1], 0) / points.length;
+            const first = points[0]!;
+            const toFirst = Math.hypot(first[0] - cx, first[1] - cy);
             const radius =
-                points.reduce(
-                    (s, p) => s + Math.hypot(p[0] - cx, p[1] - cy),
-                    0,
-                ) / points.length;
+                toFirst > 0
+                    ? toFirst
+                    : points.reduce(
+                          (s, p) => s + Math.hypot(p[0] - cx, p[1] - cy),
+                          0,
+                      ) / points.length;
             if (radius > 0) {
-                const first = points[0]!;
                 const angle =
-                    first[0] === cx && first[1] === cy
-                        ? 0
-                        : normalizeStartAngle(
+                    toFirst > 0
+                        ? normalizeStartAngle(
                               Math.atan2(first[1] - cy, first[0] - cx),
-                          );
+                          )
+                        : 0;
                 return {
                     kind,
                     geometry: {
@@ -465,11 +474,13 @@ export function newShapeThrough(
 }
 
 /**
- * `shape` as a shape of `kind`, covering about the same ground. Path kinds keep their path where
- * they can: a line becomes a freehand path through its two points, a freehand path becomes a line
- * between its two points farthest apart, and a box or circle becomes a closed freehand path along
- * its outline. Everything else fills the old shape's bounds. A new block has a cell for every
- * slot of the transitions using the shape (`minCells`, I-T4), and at least 4 × 4.
+ * `shape` as a shape of `kind`, drawn in the area the old one covered. Path kinds keep their path
+ * where they can: a line becomes a freehand path through its two points, a freehand path becomes
+ * a line between its two points farthest apart, and a box or circle becomes an open freehand path
+ * along its outline (its two ends are different places, so no two slots land together).
+ * Everything else fills the old shape's bounds. A new block has a cell for every slot of the
+ * transitions using the shape (`minCells`, I-T4), and at least 4 × 4. The slots of the
+ * transitions using the shape are spread over the new shape, so their marchers end in new places.
  */
 export function convertShape(
     shape: ShapeRow,
@@ -487,25 +498,22 @@ export function convertShape(
             const { origin, width, height } = shape.geometry;
             return {
                 kind,
-                geometry: { points: boxLoop(origin, width, height) },
+                geometry: { points: boxOutline(origin, width, height) },
             };
         }
         if (shape.kind === "circle") {
             const { center, radius, start_angle, clockwise } = shape.geometry;
             const sign = clockwise ? -1 : 1;
             const points: XY[] = [];
-            for (let i = 0; i <= CIRCLE_TO_FREEHAND_SEGMENTS; i++) {
+            // Open: the last point stops one segment short of the start
+            for (let i = 0; i < CIRCLE_TO_FREEHAND_SEGMENTS; i++) {
                 const theta =
                     start_angle +
                     (sign * 2 * Math.PI * i) / CIRCLE_TO_FREEHAND_SEGMENTS;
-                points.push(
-                    i === CIRCLE_TO_FREEHAND_SEGMENTS
-                        ? copy(points[0]!)
-                        : [
-                              center[0] + radius * Math.cos(theta),
-                              center[1] + radius * Math.sin(theta),
-                          ],
-                );
+                points.push([
+                    center[0] + radius * Math.cos(theta),
+                    center[1] + radius * Math.sin(theta),
+                ]);
             }
             return { kind, geometry: { points } };
         }
