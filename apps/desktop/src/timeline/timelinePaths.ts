@@ -23,6 +23,12 @@ import { sampleMarcherPath } from "./timelineKeyframes";
 /** The chord tolerance for drawn paths, in field units (canvas pixels): under a pixel. */
 export const PATH_DRAW_TOLERANCE = 0.25;
 
+/**
+ * The chord tolerance for measuring step sizes. Finer than drawing: a polyline is shorter than
+ * the curve it follows, and the step size is shown to a tenth of a step.
+ */
+export const STEP_SIZE_TOLERANCE = 0.01;
+
 export interface TimelinePath {
     /** From the position at the start beat to the one at the end beat; at least one point */
     points: { x: number; y: number }[];
@@ -155,7 +161,13 @@ export function timelineStepSize({
     previousPage: PathPage | null | undefined;
     fieldProperties: FieldProperties;
 }): StepSize | undefined {
-    const path = pathIntoPage(resolver, marcherId, page, previousPage);
+    const path = pathIntoPage(
+        resolver,
+        marcherId,
+        page,
+        previousPage,
+        STEP_SIZE_TOLERANCE,
+    );
     if (!path) return undefined;
     return StepSize.fromDistance({
         marcher_id: marcherId,
