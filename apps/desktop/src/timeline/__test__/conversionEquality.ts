@@ -36,11 +36,17 @@ import { useTimelineResolverStore } from "../timelineStore";
  *
  * Each interior sample is put in one bucket:
  * - `plain`: the marcher has a row on the page and moves in a straight line. Must match.
- * - `pathway`: the row moves along a pathway, which the converter keeps only at the page end (C-8).
+ * - `pathway`: the marcher's next row (on this page or, across a gap, a later one) moves along a
+ *   pathway, which the converter keeps only at the page end (C-8).
  * - `missingRow`: the marcher has no row on the page or on the page before it (only in damaged
- *   files). Page mode glides across the gap; the converter holds (a known follow-up in the Phase 6
- *   handoff notes).
+ *   files), and moves in a straight line. Page mode glides across the gap, and so does the
+ *   converter (P6.7), linear in beats; after its last row both hold. Must match at the same beat.
+ *   Page mode's millisecond glide spans pages of different tempos, so its millisecond difference is
+ *   reported on its own and never checked.
  * - `beforeFirstRow`: the marcher's first row is on a later page, so page mode has no position yet.
+ *
+ * At each page end, marchers without a row on that page (`gapEnd`) are compared with page mode at
+ * the same beat: the converter's interpolated destinations, along a pathway too, and holds.
  */
 
 /** Distances are in canvas pixels, like `marcher_pages.x` and `y`. */
@@ -63,6 +69,7 @@ export interface PageEquality {
     readonly plain: ErrorStats;
     readonly pathway: ErrorStats;
     readonly missingRow: ErrorStats;
+    readonly gapEnd: ErrorStats;
 }
 
 /** One sampled moment: the same marchers, in the same order, in both modes. */
@@ -85,12 +92,16 @@ export interface ConversionEqualityReport {
     readonly plain: ErrorStats;
     readonly pathway: ErrorStats;
     readonly missingRow: ErrorStats;
+    /** Page ends of marchers without a row on the page, against page mode at the same beat */
+    readonly gapEnd: ErrorStats;
     readonly beforeFirstRow: number;
     readonly unevenTempoPages: number;
     /** Largest millisecond-playback difference on pages with even tempo (should be ~0) */
     readonly maxMsDifferenceEvenTempo: number;
     /** Largest millisecond-playback difference on pages with uneven tempo (reported only) */
     readonly maxMsDifferenceUnevenTempo: number;
+    /** Largest millisecond-playback difference on `missingRow` samples (reported only) */
+    readonly maxMsDifferenceMissingRow: number;
     readonly perPage: PageEquality[];
     readonly samples: EqualitySample[];
 }
@@ -227,6 +238,14 @@ export async function compareConversion(
     }
     const rowOn = (pageId: number, marcherId: number) =>
         rowsByPage.get(pageId)?.find((r) => r.marcher_id === marcherId);
+    /** The marcher's first row on page `pageIndex` or a later one */
+    const nextRowFrom = (pageIndex: number, marcherId: number) => {
+        for (const page of pages.slice(pageIndex)) {
+            const row = rowOn(page.id, marcherId);
+            if (row) return row;
+        }
+        return undefined;
+    };
     const pathwaysById = pathwayMapFromArray(
         await db.select().from(schema.pathways).all(),
     );
@@ -251,8 +270,10 @@ export async function compareConversion(
         plain: new Stats(),
         pathway: new Stats(),
         missingRow: new Stats(),
+        gapEnd: new Stats(),
     };
     let beforeFirstRow = 0;
+    let maxMsMissingRow = 0;
     let maxMsEven = 0;
     let maxMsUneven = 0;
     let unevenTempoPages = 0;
@@ -302,6 +323,7 @@ export async function compareConversion(
             plain: new Stats(),
             pathway: new Stats(),
             missingRow: new Stats(),
+            gapEnd: new Stats(),
         };
         let maxMs = 0;
 
@@ -311,6 +333,15 @@ export async function compareConversion(
             const error = Math.hypot(x - mp.x, y - mp.y);
             stats.pageEnd.add(error);
             if (Object.is(x, mp.x) && Object.is(y, mp.y)) exact++;
+        }
+        // Page end of marchers without a row here: where page mode is at the same beat
+        for (const id of marcherIds) {
+            if (rowOn(page.id, id)) continue;
+            const expected = pageModeAt(beatKeyframes.get(id), endBeat);
+            if (!expected) continue;
+            stats.gapEnd.add(
+                distance(expected, resolver.positionAt(id, endBeat)),
+            );
         }
 
         // Interior: page mode at the same beat, and at that beat's show time
@@ -328,16 +359,21 @@ export async function compareConversion(
                 const row = rowOn(page.id, id);
                 // A gap also changes where page mode starts the next page's move
                 const bucket =
-                    !row || !rowOn(previousPageId, id)
-                        ? stats.missingRow
-                        : row.path_data_id !== null
-                          ? stats.pathway
+                    (nextRowFrom(pageIndex, id)?.path_data_id ?? null) !== null
+                        ? stats.pathway
+                        : !row || !rowOn(previousPageId, id)
+                          ? stats.missingRow
                           : stats.plain;
                 bucket.add(distance(atBeat, converted));
-                if (bucket === stats.plain) {
+                if (bucket === stats.plain || bucket === stats.missingRow) {
                     const atMs = pageModeAt(msKeyframes.get(id), ms);
-                    if (atMs)
+                    if (atMs && bucket === stats.plain)
                         maxMs = Math.max(maxMs, distance(atMs, converted));
+                    else if (atMs)
+                        maxMsMissingRow = Math.max(
+                            maxMsMissingRow,
+                            distance(atMs, converted),
+                        );
                 }
             }
         }
@@ -347,6 +383,7 @@ export async function compareConversion(
         totals.plain.merge(stats.plain);
         totals.pathway.merge(stats.pathway);
         totals.missingRow.merge(stats.missingRow);
+        totals.gapEnd.merge(stats.gapEnd);
         perPage.push({
             order: page.order,
             startBeat,
@@ -357,6 +394,7 @@ export async function compareConversion(
             plain: stats.plain.value,
             pathway: stats.pathway.value,
             missingRow: stats.missingRow.value,
+            gapEnd: stats.gapEnd.value,
         });
     }
 
@@ -377,10 +415,12 @@ export async function compareConversion(
         plain: totals.plain.value,
         pathway: totals.pathway.value,
         missingRow: totals.missingRow.value,
+        gapEnd: totals.gapEnd.value,
         beforeFirstRow,
         unevenTempoPages,
         maxMsDifferenceEvenTempo: maxMsEven,
         maxMsDifferenceUnevenTempo: maxMsUneven,
+        maxMsDifferenceMissingRow: maxMsMissingRow,
         perPage,
         samples: candidates,
     };
@@ -399,6 +439,10 @@ export function lossReportCounts(report: PageConversionReport) {
         droppedNotes: sum((p) => p.droppedFields.notes),
         droppedAppearance: sum((p) => p.droppedFields.appearance),
         missingMarcherRows: sum((p) => p.missingMarchers.length),
+        interpolatedMarcherRows: sum((p) => p.interpolated.length),
+        interpolatedAlongPathway: sum(
+            (p) => p.interpolated.filter((g) => g.pathwayId !== null).length,
+        ),
         skippedPages: report.pages.filter((p) => p.skipped !== null).length,
         homesFromLaterPage: report.homesFromLaterPage.length,
         marchersWithoutRows: report.marchersWithoutRows.length,

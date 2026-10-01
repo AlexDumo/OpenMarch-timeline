@@ -25,8 +25,8 @@ afterEach(() => stopTimelineResolver());
  * Conversion equality on the generated show (docs/timeline/phases/06-converter.md P6.6): the
  * converted show plays back like the page show. Exact at every page end; at sampled beats inside
  * each page it matches page-mode playback at the same beat position (C-7), and the millisecond
- * difference on pages with uneven tempo is only reported. Pathways (C-8) and the damaged-file gap
- * are reported in their own buckets.
+ * difference on pages with uneven tempo is only reported. Pathways (C-8) are reported in their own
+ * bucket. Damaged-file gaps glide like page mode (P6.7) and must match at the same beat too.
  */
 describeDbTests("conversion equality", (it) => {
     it("plays the generated show back like page mode", async ({ db }) => {
@@ -64,15 +64,26 @@ describeDbTests("conversion equality", (it) => {
                 0.1,
             );
 
-        // C-8: the pathway is kept only at its page end, so it differs inside the page
-        expect(equality.pathway.samples, what).toBe(5);
+        // C-8: the pathways are kept only at their page ends, so they differ inside the pages: one
+        // on page 7, and one on pages 6 (a gap glide along it) and 7
+        expect(equality.pathway.samples, what).toBe(15);
         expect(equality.pathway.max, what).toBeGreaterThan(1);
 
-        // Damaged file: no row on page 5 for one marcher, which changes pages 5 and 6 (page mode
-        // glides across the gap, the converter holds), and no page-0 row for another (page mode
-        // has no position before its first row)
-        expect(equality.missingRow.samples, what).toBe(10);
-        expect(equality.missingRow.max, what).toBeGreaterThan(1);
+        // Damaged file (P6.7): marchers without a row glide across the gap like page mode, linear
+        // in beats: one gap on page 5 (pages 5 and 6 differ from a plain move), two in a row on
+        // pages 4 (uneven tempo) and 5 after the curved-shape page 3 (pages 4 to 6), and one on the
+        // last page, which holds. They match at the same beat on even and uneven pages; page
+        // mode's millisecond glide is only reported.
+        expect(equality.missingRow.samples, what).toBe(30);
+        expect(equality.missingRow.max, what).toBeLessThan(1e-9);
+        const page4 = equality.perPage.find((p) => p.order === 4)!;
+        expect(page4.unevenTempo).toBe(true);
+        expect(page4.missingRow.samples).toBe(5);
+        expect(page4.missingRow.max).toBeLessThan(1e-9);
+        // Their page ends, the glide along a pathway and the end hold included
+        expect(equality.gapEnd.samples, what).toBe(5);
+        expect(equality.gapEnd.max, what).toBeLessThan(1e-9);
+        // No page-0 row for another marcher: page mode has no position before its first row
         expect(equality.beforeFirstRow, what).toBe(5);
         // Those samples: the converted show holds the late marcher on its page-1 row (its home)
         const { pages } = await readShowTiming(db);
@@ -120,13 +131,15 @@ describeDbTests("conversion equality", (it) => {
         // The loss report covers what the comparison saw
         expect(lossReportCounts(report)).toEqual({
             pagesWithPathways: 1,
-            pathways: 1,
+            pathways: 2,
             midsets: 1,
             curvedShapes: 1,
             droppedRotation: 0,
             droppedNotes: 0,
             droppedAppearance: 0,
-            missingMarcherRows: 2,
+            missingMarcherRows: 6,
+            interpolatedMarcherRows: 4,
+            interpolatedAlongPathway: 1,
             skippedPages: 0,
             homesFromLaterPage: 1,
             marchersWithoutRows: 0,

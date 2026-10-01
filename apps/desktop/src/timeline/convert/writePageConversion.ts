@@ -92,6 +92,8 @@ export async function readPageConversionInput(
             x: schema.marcher_pages.x,
             y: schema.marcher_pages.y,
             path_data_id: schema.marcher_pages.path_data_id,
+            path_start_position: schema.marcher_pages.path_start_position,
+            path_end_position: schema.marcher_pages.path_end_position,
             rotation_degrees: schema.marcher_pages.rotation_degrees,
             notes: schema.marcher_pages.notes,
             fill_color: schema.marcher_pages.fill_color,
@@ -121,6 +123,13 @@ export async function readPageConversionInput(
         })
         .from(schema.shape_pages)
         .all();
+    const pathways = await tx
+        .select({
+            id: schema.pathways.id,
+            path_data: schema.pathways.path_data,
+        })
+        .from(schema.pathways)
+        .all();
     return {
         pages: pages.map((p) => ({
             id: p.id,
@@ -132,6 +141,7 @@ export async function readPageConversionInput(
         marcherPages,
         midsets,
         shapePages,
+        pathways,
     };
 }
 

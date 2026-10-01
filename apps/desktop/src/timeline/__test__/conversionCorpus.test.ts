@@ -167,10 +167,13 @@ describe.skipIf(CORPUS.length === 0)("conversion corpus (opt-in)", () => {
         );
         console.info(`wrote ${REPORT_PATH}`);
         // Page ends are exact, and straight moves inside pages match at the same beat and, on
-        // even-tempo pages, in milliseconds
+        // even-tempo pages, in milliseconds. Marchers without a row glide or hold like page mode
+        // (P6.7)
         for (const show of shows) {
             expect(show.equality.pageEnd.max, show.label).toBe(0);
             expect(show.equality.plain.max, show.label).toBeLessThan(1e-9);
+            expect(show.equality.missingRow.max, show.label).toBeLessThan(1e-9);
+            expect(show.equality.gapEnd.max, show.label).toBeLessThan(1e-9);
             expect(
                 show.equality.maxMsDifferenceEvenTempo,
                 show.label,
