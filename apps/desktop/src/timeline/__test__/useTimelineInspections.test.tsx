@@ -106,6 +106,28 @@ describeDbTests("useTimelineInspections", (it) => {
         expect(result.current.shapeOptions).toEqual([
             { id: 1, name: "Front line", kind: "line", capacity: null },
         ]);
+        // P8.4: the same transition's slots, with drill numbers and the vacancy
+        expect(result.current.assignmentEdits).toEqual([
+            {
+                version: expect.any(Number),
+                transitionId: 1,
+                style: "direct",
+                start: 1,
+                end: 9,
+                slotCount: 3,
+                members: [1, 2].map((id, slot) => ({
+                    assignmentId: id,
+                    marcherId: id,
+                    label: `B${id}`,
+                    slot,
+                    start: 1,
+                    end: 9,
+                    layer: 4,
+                    stolen: [],
+                })),
+                vacantSlots: [2],
+            },
+        ]);
     });
 
     it("explains nobody while there is no beat, and ignores marchers the resolver lacks", async ({

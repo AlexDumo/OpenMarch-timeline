@@ -59,13 +59,13 @@ const ORDER_MODES: readonly OrderMode[] = ["inherit", "slot"];
 const BULGE_STEP = 0.05;
 
 /** A number for display, rounded for reading. */
-const shown = (value: number) => String(Math.round(value * 1000) / 1000);
+export const shown = (value: number) => String(Math.round(value * 1000) / 1000);
 
 /**
  * A numeric text field that commits on Enter or blur, and shows the current value again when
  * that value changes or the text isn't a number.
  */
-function NumberField({
+export function NumberField({
     value,
     onCommit,
     label,
@@ -119,7 +119,7 @@ function NumberField({
     );
 }
 
-function Field({
+export function Field({
     label,
     children,
     help,
@@ -137,7 +137,7 @@ function Field({
     );
 }
 
-const Help = ({
+export const Help = ({
     children,
     testId,
 }: {

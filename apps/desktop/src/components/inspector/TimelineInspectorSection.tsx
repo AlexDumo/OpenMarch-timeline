@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import { useTranslate } from "@tolgee/react";
 import { WarningIcon, InfoIcon } from "@phosphor-icons/react";
 import type { Diagnostic, SpanKind, XY } from "@openmarch/core";
@@ -16,7 +16,9 @@ import type {
     TransitionEditTarget,
     TransitionShapeOption,
 } from "@/timeline/timelineTransitionEditor";
+import type { AssignmentEditTarget } from "@/timeline/timelineAssignmentEditor";
 import { InspectorCollapsible } from "./InspectorCollapsible";
+import { TimelineAssignmentsEditor } from "./TimelineAssignmentsEditor";
 import { TimelineTransitionEditor } from "./TimelineTransitionEditor";
 import {
     DIAGNOSTIC_STRING_KEYS,
@@ -28,6 +30,7 @@ type Params = Record<string, string | number>;
 
 const NO_EDITS: readonly TransitionEditTarget[] = [];
 const NO_SHAPES: readonly TransitionShapeOption[] = [];
+const NO_ASSIGNMENT_EDITS: readonly AssignmentEditTarget[] = [];
 
 /** Looks a string up by key, with its English text as the default. */
 export type InspectorTranslate = (
@@ -368,6 +371,7 @@ function TimelineInspectorContent() {
         unknownMarcherIds,
         transitionEdits = NO_EDITS,
         shapeOptions = NO_SHAPES,
+        assignmentEdits = NO_ASSIGNMENT_EDITS,
     } = useTimelineInspections({
         database: db,
         enabled: true,
@@ -391,15 +395,30 @@ function TimelineInspectorContent() {
                     t={t}
                 />
             ))}
-            {transitionEdits.map((target) => (
-                <TimelineTransitionEditor
-                    key={target.id}
-                    target={target}
-                    shapes={shapeOptions}
-                    database={db}
-                    t={t}
-                />
-            ))}
+            {transitionEdits.map((target) => {
+                const slots = assignmentEdits.find(
+                    (a) => a.transitionId === target.id,
+                );
+                return (
+                    <Fragment key={target.id}>
+                        <TimelineTransitionEditor
+                            target={target}
+                            shapes={shapeOptions}
+                            database={db}
+                            t={t}
+                        />
+                        {slots && (
+                            <TimelineAssignmentsEditor
+                                target={slots}
+                                selectedMarcherIds={marcherIds}
+                                labels={labels}
+                                database={db}
+                                t={t}
+                            />
+                        )}
+                    </Fragment>
+                );
+            })}
             {omitted > 0 && (
                 <p className="text-sub text-text/60">
                     {t("inspector.timeline.omitted", { count: omitted })}
