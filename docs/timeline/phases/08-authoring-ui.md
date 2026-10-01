@@ -551,3 +551,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** planner unit tests, component tests, history tests on a real DB.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-2-shapes`; `pnpm install`; build the desktop's dependencies; write `apps/desktop/src/timeline/__test__/timelineShapeEditor.test.ts`, `apps/desktop/src/components/inspector/__test__/TimelineShapesEditor.test.tsx` and `apps/desktop/src/db-functions/__test__/timelineShapeEdits.test.ts`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2
+
+- **Done:** wip commit 5a8a5ab4 on `timeline/p8-2-shapes`: planner unit tests (`src/timeline/__test__/timelineShapeEditor.test.ts`), component tests (`src/components/inspector/__test__/TimelineShapesEditor.test.tsx`), history tests on a real DB (`src/db-functions/__test__/timelineShapeEdits.test.ts`), a hook case in `useTimelineInspections.test.tsx`, and the editor's notes in `ui.md` ("Shapes (P8.2)", on the code branch, as P8.3 and P8.4 did).
+- **Checks:** `tsc --noEmit`: pass. `test:focused` on the planner, inspector and error-message tests: 7 files, 160 passed. Focused `test:history` on every test file that uses `timelineShapes.ts` (`timelineShapeEdits`, `timelineMoves`, `timelineMarchers`, `timelineAssignmentEdits`, `timelineTransitionEdits`, `timelineCommands`, `useTimelineInspections`, `timelinePageCopy`): 8 files, 92 passed. Mutations: removing the version guard fails the stale-plan test; enabling the block kind for a follow-the-leader user fails the I-T3 test. eslint 0 errors; prettier and cspell pass. The regular desktop suite is running.
+- **Next:** read the suite result; squash; open the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-2-shapes`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` (in the background); then squash the wip commits and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2` with the body from `pr-P8.2.md`.
