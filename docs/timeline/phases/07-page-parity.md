@@ -187,6 +187,8 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 
 - Open item (from the P7.4/P7.5 review, PR #26): page and beat edits made while the timeline flag is OFF don't ripple the timeline rows (`withTimelinePageRipple` only runs in timeline mode). Turning the flag back on then shows rows over the wrong beats. Out of scope for P7.4/P7.5; it needs a policy before the flip (Phase 9), for example always ripple once a file has timeline rows, or re-convert on toggle.
 
+- Unowned follow-up (from the P7.13 review, PR #29): some edits don't advance the resolver store version, so `useTimelineTracks` (and anything else that reloads on that version) keeps showing stale rows until a later batch arrives. These are edits to `timelines` rows alone (name, range) and shape renames. Cause: the change log (`timeline_change_log`, spec §10.2) covers only five tables (marchers, shapes, transitions, assignments, slot destinations), and a shape's row image has no name. So these writes give an empty batch, `notifyTimelineBatch` delivers nothing, and the version stays put. Not caused by P7.13. The lead routes it.
+
 ### P7.1 inventory of page-coordinate code
 
 Written by P7.1 on 2026-09-30 against `timeline-try-2` at `e429b97c`. Paths are under `apps/desktop/` and line numbers are approximate. Tick an item when its owning package has either made it work in timeline mode or shown it needs no change. Legend: R reads page-era data, W writes it. "P5" means timeline mode already handles it. Re-run the searches in the P7.1 log entry before trusting this list after big merges.
@@ -714,4 +716,24 @@ Facts that change how to read the PR #14 note above:
 - **Checks:** `tsc --noEmit` clean; `vitest run src/components/mobile`: 8 files, 83 passed. The in-flight-write test fails when the wait is removed (checked by hand).
 - **Next:** the regular desktop suite, then the PR.
 - **Resume from:** branch `timeline/p7-mobile-exports` at `31e23071`; run `pnpm --dir apps/desktop run test` in the background, then open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-undo-redo) · P7.13 review fixes checkpoint
+
+- **Done (lead review of PR #29; merged `timeline-try-2` first, with #27 and #28, in a normal merge commit; review fixes in `61814b53`):**
+  - **One lock turn:** `performHistoryAction` now reads the timeline focus in the action's own lock turn, right after it commits and delivers its batch. Before, two quick undo actions queued as undo, undo, focus, focus, so the first focus saw the state after the second undo. Test: two queued undo actions; the first focus still sees the marcher that the second undo removes.
+  - **Waiting for the target page:** `useHistory` keeps the target page pending until the page list has it, then goes there and selects the marchers. The marchers are selected only together with that page; with no page, only the marchers are selected. New hook test `src/hooks/queries/__test__/useHistory.test.tsx` covers page 0, a page that appears after the page list is fetched again, restored marchers, and the no-page case.
+  - **Page 0 in page mode:** page mode now selects the marchers on page 0 too (`!== undefined`). Together with the earlier `!= null` fix in `useHistory`, page mode can now jump to page 0.
+  - **Deletes across beat changes:** when the action also changed `beats`, rows it deleted no longer place a page, because their beats are on the old grid. Rows that still exist decide. Tested on a crafted batch.
+  - **Handoff note added** (as the lead asked): the follow-up for `timelines`-only edits and shape renames that don't advance the store version.
+  - **Known limit for the PR:** turning the flag off while the app is running starts with an empty page-mode coordinate cache, because nothing was fetched in timeline mode. Playback can stop until those queries load.
+- **Checks:**
+  - `pnpm install` and `turbo run build --filter=@openmarch/desktop^...`: ok.
+  - `tsc --noEmit`: clean.
+  - `vitest run` on `timelineHistoryFocus.test.ts` and `useHistory.test.tsx`: 16 passed.
+  - `test:history` on timelineHistoryFocus, history, timelineUndo, timelineMoves, timelineMarchers and timelineRipple: 6 files, 121 passed.
+  - eslint and cspell on the changed files: clean.
+  - The regular desktop suite is running.
+- **Next:** read the suite's result, then update the PR body.
+- **Resume from:** branch `timeline/p7-undo-redo` at `61814b53`. Re-run `pnpm --dir apps/desktop run test` (background), then update PR #29's body from the scratch file `pr-P7.13.md`.
 - **Blockers:** none.
