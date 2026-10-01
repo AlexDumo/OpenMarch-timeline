@@ -20,6 +20,7 @@ import {
     golden,
     inspect,
 } from "@/timeline/__test__/inspectorFixtures";
+import { buildTransitionEditTarget } from "@/timeline/timelineTransitionEditor";
 import { TIMELINE_INSPECTOR_STRINGS } from "../timelineInspectorStrings";
 import {
     MarcherInspectionView,
@@ -38,6 +39,7 @@ const mocks = vi.hoisted(() => ({
     inspections: [] as unknown[],
     diagnostics: [] as unknown[],
     unknown: [] as number[],
+    transitionEdits: [] as unknown[],
     selectedMarchers: [] as Array<{ id: number; drill_number: string }>,
     selectedPage: null as unknown,
 }));
@@ -58,6 +60,8 @@ vi.mock("@/timeline/useTimelineInspections", () => ({
         omitted: 0,
         unknownMarcherIds: mocks.unknown,
         diagnostics: mocks.diagnostics,
+        transitionEdits: mocks.transitionEdits,
+        shapeOptions: [],
     })),
 }));
 
@@ -76,6 +80,7 @@ beforeEach(() => {
     mocks.inspections = [];
     mocks.diagnostics = [];
     mocks.unknown = [];
+    mocks.transitionEdits = [];
     mocks.selectedMarchers = [];
     mocks.selectedPage = null;
 });
@@ -286,6 +291,23 @@ describe("TimelineInspectorSection", () => {
         renderSection();
         expect(screen.getByText("T3 isn't in the timeline yet.")).toBeTruthy();
         expect(screen.queryByText(/T2 isn't/)).toBeNull();
+    });
+
+    it("shows an editor for each transition the hook offers (P8.3)", () => {
+        const show = golden("G1");
+        mocks.selectedMarchers = [{ id: 1, drill_number: "T1" }];
+        mocks.selectedPage = { id: 1, beats: [{ index: 7 }] };
+        mocks.inspections = [inspect(show, 1, 8)];
+        mocks.transitionEdits = [
+            buildTransitionEditTarget(1, {
+                transitions: show.transitions,
+                shapes: show.shapes,
+                assignments: show.assignments,
+            }),
+        ];
+        renderSection();
+        expect(screen.getByTestId("timeline-transition-editor-1")).toBeTruthy();
+        expect(screen.getByText("Edit transition 1")).toBeTruthy();
     });
 
     it("asks for a page when marchers are selected but no page is", () => {

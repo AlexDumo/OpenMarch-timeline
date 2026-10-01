@@ -94,6 +94,18 @@ describeDbTests("useTimelineInspections", (it) => {
             "D-VACANT",
         ]);
         expect(first!.diagnostics.map((d) => d.code)).toEqual(["D-VACANT"]);
+        // P8.3: both marchers are in transition 1, so it is offered once
+        expect(result.current.transitionEdits).toHaveLength(1);
+        expect(result.current.transitionEdits[0]).toMatchObject({
+            id: 1,
+            style: "direct",
+            slotCount: 3,
+            minSlotCount: 2,
+            destination: { kind: "shape", shapeId: 1 },
+        });
+        expect(result.current.shapeOptions).toEqual([
+            { id: 1, name: "Front line", kind: "line", capacity: null },
+        ]);
     });
 
     it("explains nobody while there is no beat, and ignores marchers the resolver lacks", async ({

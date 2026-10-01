@@ -77,6 +77,48 @@ export const TIMELINE_INSPECTOR_STRINGS = {
         "Slot order (no single upstream order to inherit)",
     "inspector.timeline.ftl.target": "({x}, {y})",
 
+    "inspector.timeline.edit.title": "Edit transition {id}",
+    "inspector.timeline.edit.range": "Beats {start} to {end}",
+    "inspector.timeline.edit.ftlNeedsShape":
+        "Follow the leader follows a path, so it needs a destination shape. Pick a shape first.",
+    "inspector.timeline.edit.ftlNotBlock":
+        "Follow the leader can't end in a block. Pick a line, freehand, circle or box shape first.",
+    "inspector.timeline.edit.bulgeInput": "Bulge value",
+    "inspector.timeline.edit.bulgeHelp":
+        "From -0.5 to 0.5: 0 is straight and ±0.5 is a half circle. Larger arcs aren't supported, because they could carry a marcher farther from its target than where it started.",
+    "inspector.timeline.edit.waypointsHelp":
+        "Points the trail passes through before it reaches the shape, in field coordinates.",
+    "inspector.timeline.edit.noWaypoints":
+        "No waypoints: the trail runs straight onto the shape.",
+    "inspector.timeline.edit.waypointX": "Waypoint {n} x",
+    "inspector.timeline.edit.waypointY": "Waypoint {n} y",
+    "inspector.timeline.edit.waypointUp": "Move waypoint {n} up",
+    "inspector.timeline.edit.waypointDown": "Move waypoint {n} down",
+    "inspector.timeline.edit.waypointRemove": "Remove waypoint {n}",
+    "inspector.timeline.edit.waypointAdd": "Add waypoint",
+    "inspector.timeline.edit.orderInheritHelp":
+        "Follow the leader keeps the order the marchers had in their previous move.",
+    "inspector.timeline.edit.orderSlotHelp":
+        "Follow the leader orders the trail by slot number.",
+    "inspector.timeline.edit.destinationShape": "Shape",
+    "inspector.timeline.edit.destinationIndividual": "Individual points",
+    "inspector.timeline.edit.pickShape": "Destination shape",
+    "inspector.timeline.edit.shapeNoFtl":
+        "{shape}: follow the leader can't end in a block",
+    "inspector.timeline.edit.shapeTooSmall":
+        "{shape}: holds only {capacity} of {slots} slots",
+    "inspector.timeline.edit.noShapes":
+        "There are no shapes yet. Draw one to use it as a destination.",
+    "inspector.timeline.edit.individualHelp":
+        "Each slot has its own point. Switching from a shape puts each point where the shape put that slot.",
+    "inspector.timeline.edit.individualFtl":
+        "Follow the leader needs a shape. Change the path style first to use individual points.",
+    "inspector.timeline.edit.slotCount": "Slots",
+    "inspector.timeline.edit.slotCountMin":
+        "At least {min}, because slot {slot} has a marcher assigned.",
+    "inspector.timeline.edit.slotCountPoints":
+        "New slots start at the last slot's point.",
+
     "inspector.timeline.diagnostics.title": "Diagnostics",
     "inspector.timeline.diagnostics.none": "No diagnostics.",
     "inspector.timeline.diagnostics.showTitle": "Show diagnostics ({count})",
