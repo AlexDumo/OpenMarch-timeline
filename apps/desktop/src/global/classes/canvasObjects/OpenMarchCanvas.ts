@@ -72,6 +72,20 @@ function applyPathwayWarningStyle(
     }
 }
 
+/** One side of a marcher's timeline path visuals (P7.10) and the objects that draw it. */
+interface TimelinePathSide {
+    path: TimelinePath | undefined;
+    /** Which end of the path the endpoint marks */
+    endpointAt: "start" | "end";
+    pathway: TimelinePathway;
+    midpoint: Midpoint;
+    endpoint: Endpoint;
+    counts: number | undefined;
+    pathEnabled: boolean;
+    allowForceShow: boolean;
+    color: RgbaColor;
+}
+
 /**
  * A custom class to extend the fabric.js canvas for OpenMarch.
  */
@@ -1463,6 +1477,50 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         });
     };
 
+    /** One side (previous or next) of a marcher's timeline path visuals; see below. */
+    private drawTimelinePathSide(
+        {
+            path,
+            endpointAt,
+            pathway,
+            midpoint,
+            endpoint,
+            counts,
+            pathEnabled,
+            allowForceShow,
+            color,
+        }: TimelinePathSide,
+        fieldProperties: FieldProperties,
+        warningsEnabled: boolean,
+    ) {
+        if (!pathway.canvas) this.add(pathway);
+        const { show, isWarning } = path
+            ? evaluatePathWarning({
+                  start: path.start,
+                  end: path.end,
+                  distance: path.length,
+                  counts,
+                  fieldProperties,
+                  pathEnabled,
+                  allowForceShow,
+                  warningsEnabled,
+              })
+            : { show: false, isWarning: false };
+        if (!path || !show) {
+            pathway.hide();
+            midpoint.hide();
+            endpoint.hide();
+            return;
+        }
+        pathway.updatePoints(path.points);
+        pathway.show();
+        midpoint.updateCoords(path.midpoint);
+        midpoint.show();
+        endpoint.updateCoords(path[endpointAt]);
+        endpoint.show();
+        applyPathwayWarningStyle(pathway, midpoint, isWarning, color);
+    }
+
     /**
      * Timeline mode's path visuals (P7.10): like `renderPathVisuals`, but each path is sampled from
      * the resolver (`pathsIntoPage`), so it is drawn as a polyline that follows arcs and
@@ -1498,54 +1556,12 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     }) => {
         if (!fieldProperties) return;
 
-        const drawSide = ({
-            path,
-            endpointAt,
-            pathway,
-            midpoint,
-            endpoint,
-            counts,
-            pathEnabled,
-            allowForceShow,
-            color,
-        }: {
-            path: TimelinePath | undefined;
-            endpointAt: "start" | "end";
-            pathway: TimelinePathway;
-            midpoint: Midpoint;
-            endpoint: Endpoint;
-            counts: number | undefined;
-            pathEnabled: boolean;
-            allowForceShow: boolean;
-            color: RgbaColor;
-        }) => {
-            if (!pathway.canvas) this.add(pathway);
-            const { show, isWarning } = path
-                ? evaluatePathWarning({
-                      start: path.start,
-                      end: path.end,
-                      distance: path.length,
-                      counts,
-                      fieldProperties,
-                      pathEnabled,
-                      allowForceShow,
-                      warningsEnabled: stepSizeWarningsEnabled,
-                  })
-                : { show: false, isWarning: false };
-            if (!path || !show) {
-                pathway.hide();
-                midpoint.hide();
-                endpoint.hide();
-                return;
-            }
-            pathway.updatePoints(path.points);
-            pathway.show();
-            midpoint.updateCoords(path.midpoint);
-            midpoint.show();
-            endpoint.updateCoords(path[endpointAt]);
-            endpoint.show();
-            applyPathwayWarningStyle(pathway, midpoint, isWarning, color);
-        };
+        const drawSide = (side: TimelinePathSide) =>
+            this.drawTimelinePathSide(
+                side,
+                fieldProperties,
+                stepSizeWarningsEnabled,
+            );
 
         marcherIds.forEach((marcherId: number) => {
             const visual = marcherVisuals[marcherId];

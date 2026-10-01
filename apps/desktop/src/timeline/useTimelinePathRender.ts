@@ -12,6 +12,11 @@ export interface PathRenderPage extends PathPage {
     readonly nextPageId: number | null;
 }
 
+const findPage = (
+    pages: readonly PathRenderPage[],
+    id: number | null,
+): PathRenderPage | null => pages.find((p) => p.id === id) ?? null;
+
 /**
  * Draws the selected page's path visuals from the resolver in timeline mode
  * (docs/timeline/phases/07-page-parity.md P7.10): the move into the selected page and the move
@@ -64,10 +69,8 @@ export function useTimelinePathRender({
         )
             return;
 
-        const previousPage =
-            pages.find((p) => p.id === selectedPage.previousPageId) ?? null;
-        const nextPage =
-            pages.find((p) => p.id === selectedPage.nextPageId) ?? null;
+        const previousPage = findPage(pages, selectedPage.previousPageId);
+        const nextPage = findPage(pages, selectedPage.nextPageId);
         canvas.renderTimelinePathVisuals({
             marcherVisuals,
             marcherIds: [...marcherIds],
