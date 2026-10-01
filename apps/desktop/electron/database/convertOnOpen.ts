@@ -1,7 +1,8 @@
 /**
  * Converts a page-era show to timelines the first time it is opened (Phase 9,
- * P9.3; ADR 0001 §6). Main process only. `electron/main/convertOnOpenFlow.ts`
- * adds the dialogs and the "preparing your file" window around it.
+ * P9.3; ADR 0001 §6). Main process only, and loaded only once the gate in
+ * `convertOnOpenGate.ts` is on, because the converter pulls in renderer
+ * modules. `electron/main/convertOnOpenFlow.ts` adds the dialogs around it.
  *
  * Runs after migrations, on a file whose `user_version` the guard in
  * `fileVersion.ts` already accepted:
@@ -9,18 +10,18 @@
  * - Version 8: a timeline file. Nothing to do.
  * - Version 7 with no timeline rows: a page-era file. Back it up with
  *   `backupBeforeConversion`; only when that succeeds, convert it in ONE
- *   transaction that also turns the workspace `timelineMode` flag on and sets
- *   `user_version = 8`. Any error rolls all of it back; the backup stays.
- * - Version 7 with timeline rows: a converted file that a release without the
- *   version guard reopened (it resets the version to 7), or a file made with
- *   the dev flag. Converting again would drop the timeline edits, so the caller
- *   warns and offers the backup instead.
- *
- * Until P9.4 removes the dev flag, this step only runs when the
- * `OPENMARCH_CONVERT_ON_OPEN` environment variable is `1` (or `true`). Off by
- * default, so the app behaves as before.
+ *   `BEGIN IMMEDIATE` transaction that rechecks the file, turns the workspace
+ *   `timelineMode` flag on and sets `user_version = 8`. Any error rolls all of
+ *   it back; the backup stays.
+ * - Version 7 with timeline rows and a conversion backup next to it: a
+ *   converted file that a release without the version guard reopened (it
+ *   resets the version to 7). Converting again would drop the timeline edits,
+ *   so the caller warns and offers the backup instead.
+ * - Version 7 with timeline rows and no conversion backup: a file made with
+ *   the timeline dev flag. It opens as it is, without a warning.
  */
 import * as fs from "fs";
+import * as path from "path";
 import type { DatabaseSync } from "node:sqlite";
 import { sql } from "drizzle-orm";
 import type { PageConversionReport } from "@/timeline/convert/planPageConversion";
@@ -36,6 +37,7 @@ import {
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import { getOrm, schema } from "./db";
 import {
+    BACKUP_NAME_SUFFIX,
     backupBeforeConversion,
     nextBackupPath,
     type BackupResult,
@@ -45,36 +47,21 @@ import {
     readUserVersion,
     TIMELINE_MODEL_USER_VERSION,
 } from "./fileVersion";
-
-/** Environment variable that turns convert-on-open on until P9.4 removes the dev flag. */
-export const CONVERT_ON_OPEN_ENV = "OPENMARCH_CONVERT_ON_OPEN";
-
-/** True when convert-on-open is turned on. Off unless the variable is `1` or `true`. */
-export function isConvertOnOpenEnabled(
-    env: Record<string, string | undefined> = process.env,
-): boolean {
-    const value = env[CONVERT_ON_OPEN_ENV]?.trim().toLowerCase();
-    return value === "1" || value === "true";
-}
-
-/**
- * Status `setActiveDb` returns when the open stopped and the person was
- * already told why in a main-process dialog (a failed backup or conversion, or
- * they chose not to open the file). Nothing is open. The main process doesn't
- * send it as a `load-file-response`, so the renderer shows no second dialog.
- */
-export const OPEN_STOPPED_STATUS = 499;
+import {
+    isConvertOnOpenEnabled,
+    withTimelineModeOn,
+} from "./convertOnOpenGate";
 
 export type ConvertOnOpenCheck =
-    /** A timeline file (version 8), or a version this step doesn't handle. */
-    | { action: "none"; userVersion: number }
+    /**
+     * Nothing to do: a timeline file (version 8), or a version-7 file with
+     * timeline rows and no conversion backup (made with the dev flag).
+     */
+    | { action: "none"; reason: "timeline-file" | "dev-timeline-file" }
     /** A page-era file: back it up and convert it. */
     | { action: "convert" }
-    /**
-     * Version 7 with timeline rows. Don't convert again; warn and offer the
-     * newest backup next to the file, when there is one.
-     */
-    | { action: "warn-older-release"; backupPath: string | undefined };
+    /** Converted, then reopened by an older release: warn and offer the backup. */
+    | { action: "warn-older-release"; backupPath: string };
 
 /** Number of timelines plus timeline shapes (transitions live under timelines). */
 export function countTimelineRows(db: DatabaseSync): number {
@@ -86,35 +73,56 @@ export function countTimelineRows(db: DatabaseSync): number {
     return Number(row.n);
 }
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /**
  * The newest `<name> (before timeline conversion[ n]).dots` next to
- * `filePath`, or undefined when there is none. Backups are numbered upward, so
- * the highest number that exists is the newest.
+ * `filePath` (the highest number), or undefined when there is none. Scans the
+ * folder, so a deleted backup in the middle of the numbers doesn't hide later
+ * ones.
  */
 export function findLatestBackup(filePath: string): string | undefined {
-    let latest: string | undefined;
-    // nextBackupPath with a predicate that is always false names backup `n` itself.
-    for (let n = 1; n <= 1000; n++) {
-        const candidate = nextBackupPath(filePath, () => false, n);
-        if (!fs.existsSync(candidate)) break;
-        latest = candidate;
+    const dir = path.dirname(path.resolve(filePath));
+    const ext = path.extname(filePath);
+    const numbered = new RegExp(
+        ` \\(${escapeRegExp(BACKUP_NAME_SUFFIX)}(?: (\\d+))?\\)${escapeRegExp(ext)}$`,
+    );
+    let entries: string[];
+    try {
+        entries = fs.readdirSync(dir);
+    } catch {
+        return undefined;
     }
-    return latest;
+    let latest: { n: number; file: string } | undefined;
+    for (const entry of entries) {
+        const match = numbered.exec(entry);
+        if (!match) continue;
+        const n = match[1] ? Number(match[1]) : 1;
+        // Must be exactly the name the backup of this file gets for `n` (names are cut to fit).
+        const expected = nextBackupPath(
+            path.join(dir, path.basename(filePath)),
+            () => false,
+            n,
+        );
+        if (path.basename(expected) !== entry) continue;
+        if (!latest || n > latest.n) latest = { n, file: expected };
+    }
+    return latest?.file;
 }
 
-/** Decides what convert-on-open does with the (migrated) file open on `db`. Reads only. */
+/** Decides what convert on open does with the (migrated) file open on `db`. Reads only. */
 export function checkConvertOnOpen(
     db: DatabaseSync,
     filePath: string,
 ): ConvertOnOpenCheck {
-    const userVersion = readUserVersion(db);
-    if (userVersion !== PAGE_MODEL_USER_VERSION)
-        return { action: "none", userVersion };
-    if (countTimelineRows(db) > 0)
-        return {
-            action: "warn-older-release",
-            backupPath: findLatestBackup(filePath),
-        };
+    if (readUserVersion(db) !== PAGE_MODEL_USER_VERSION)
+        return { action: "none", reason: "timeline-file" };
+    if (countTimelineRows(db) > 0) {
+        const backupPath = findLatestBackup(filePath);
+        return backupPath
+            ? { action: "warn-older-release", backupPath }
+            : { action: "none", reason: "dev-timeline-file" };
+    }
     return { action: "convert" };
 }
 
@@ -129,15 +137,7 @@ export async function turnTimelineModeOnInTransaction(
         })
         .from(schema.workspace_settings)
         .get();
-    let settings: Record<string, unknown> = {};
-    try {
-        const parsed: unknown = row ? JSON.parse(row.json) : {};
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
-            settings = parsed as Record<string, unknown>;
-    } catch {
-        settings = {};
-    }
-    const json_data = JSON.stringify({ ...settings, timelineMode: true });
+    const json_data = withTimelineModeOn(row?.json);
     if (row)
         await tx.update(schema.workspace_settings).set({ json_data }).run();
     else
@@ -168,6 +168,11 @@ export type ConvertOnOpenResult =
           /** Undefined when the show had no pages, so only the flag and version changed. */
           report: PageConversionReport | undefined;
       }
+    /**
+     * Inside the transaction the file was already converted (another app
+     * instance got there first). Nothing was written; the file opens as it is.
+     */
+    | { status: "already-converted"; backupPath: string }
     /** The backup failed, so nothing was converted and the file is unchanged. */
     | {
           status: "backup-failed";
@@ -176,22 +181,38 @@ export type ConvertOnOpenResult =
     /** The conversion failed and was rolled back. The backup is kept. */
     | { status: "conversion-failed"; backupPath: string; error: Error };
 
+/** The writes of the conversion transaction, in order. */
+export const CONVERSION_STEPS = [
+    "drop-undo-triggers",
+    "convert",
+    "flag",
+    "commit-check",
+    "drain-change-log",
+    "clear-history",
+    "create-undo-triggers",
+    "user-version",
+] as const;
+export type ConversionStep = (typeof CONVERSION_STEPS)[number];
+
 /** Test hooks. Production callers pass nothing. */
 export interface ConvertOnOpenHooks {
     /** Replaces `backupBeforeConversion`. */
     backup?: (filePath: string) => BackupResult;
-    /** Runs inside the transaction after every write, before the commit. Throw to test rollback. */
-    beforeCommit?: () => void | Promise<void>;
+    /** Runs inside the transaction after each step. Throw to test the rollback. */
+    afterStep?: (step: ConversionStep) => void | Promise<void>;
 }
+
+class AlreadyConverted extends Error {}
 
 /**
  * Backs up the file at `filePath`, then converts it in one transaction on
  * `db` (which must be open on that file, with migrations applied and no
- * transaction open). Call it only when `checkConvertOnOpen` returned
- * `convert`. Never throws for a failed backup or conversion; it returns them.
+ * transaction open). Never throws for a failed backup or conversion; it
+ * returns them.
  *
- * Synchronous work dominates (the backup takes 1 to 2 s on a 50 MB file), so
- * the caller shows a blocking state first.
+ * The transaction is `BEGIN IMMEDIATE` and rechecks the version and the
+ * timeline rows first, so a file another instance converted since the check is
+ * never converted twice.
  */
 export async function convertFileOnOpen(
     filePath: string,
@@ -202,34 +223,58 @@ export async function convertFileOnOpen(
     if (!backup.ok) return { status: "backup-failed", backup };
 
     const orm = getOrm(db) as unknown as DbConnection;
+    const step = async (name: ConversionStep) => hooks.afterStep?.(name);
     try {
-        const report = await orm.transaction(async (tx) => {
-            // The conversion is not an undoable edit (see clearHistoryInTransaction).
-            await dropAllUndoTriggers(tx as never);
-            const pages = await tx
-                .select({ n: sql<number>`count(*)` })
-                .from(schema.pages)
-                .get();
-            const converted =
-                (pages?.n ?? 0) > 0
-                    ? await convertPagesToTimelineInTransaction(tx)
-                    : undefined;
-            await turnTimelineModeOnInTransaction(tx);
-            await hooks.beforeCommit?.();
-            // The spec §6 commit check, as the write wrapper runs it; then drop the change-log
-            // rows the conversion wrote, since the renderer cold-builds its store on open.
-            await assertNoTimelineCommitViolationsInTransaction(tx);
-            await drainTimelineChangeLogInTransaction(tx);
-            await clearHistoryInTransaction(tx);
-            await createAllUndoTriggers(tx as never);
-            // Part of the same transaction: a rollback leaves the file at 7.
-            await tx.run(
-                sql.raw(`PRAGMA user_version = ${TIMELINE_MODEL_USER_VERSION}`),
-            );
-            return converted?.report;
-        });
+        const report = await orm.transaction(
+            async (tx) => {
+                // `db` is the transaction's connection, so these see the locked file.
+                if (
+                    readUserVersion(db) !== PAGE_MODEL_USER_VERSION ||
+                    countTimelineRows(db) > 0
+                )
+                    throw new AlreadyConverted();
+                // The conversion is not an undoable edit (see clearHistoryInTransaction).
+                await dropAllUndoTriggers(tx as never);
+                await step("drop-undo-triggers");
+                const pages = await tx
+                    .select({ n: sql<number>`count(*)` })
+                    .from(schema.pages)
+                    .get();
+                const converted =
+                    (pages?.n ?? 0) > 0
+                        ? await convertPagesToTimelineInTransaction(tx)
+                        : undefined;
+                await step("convert");
+                await turnTimelineModeOnInTransaction(tx);
+                await step("flag");
+                // The spec §6 commit check, as the write wrapper runs it; then drop the change-log
+                // rows the conversion wrote, since the renderer cold-builds its store on open.
+                await assertNoTimelineCommitViolationsInTransaction(tx);
+                await step("commit-check");
+                await drainTimelineChangeLogInTransaction(tx);
+                await step("drain-change-log");
+                await clearHistoryInTransaction(tx);
+                await step("clear-history");
+                await createAllUndoTriggers(tx as never);
+                await step("create-undo-triggers");
+                // Part of the same transaction: a rollback leaves the file at 7.
+                await tx.run(
+                    sql.raw(
+                        `PRAGMA user_version = ${TIMELINE_MODEL_USER_VERSION}`,
+                    ),
+                );
+                await step("user-version");
+                return converted?.report;
+            },
+            { behavior: "immediate" },
+        );
         return { status: "converted", backupPath: backup.backupPath, report };
     } catch (error) {
+        if (error instanceof AlreadyConverted)
+            return {
+                status: "already-converted",
+                backupPath: backup.backupPath,
+            };
         return {
             status: "conversion-failed",
             backupPath: backup.backupPath,
@@ -238,35 +283,30 @@ export async function convertFileOnOpen(
     }
 }
 
-/** What the open flow asks the person, or shows them, during convert-on-open. */
+/** What the open flow asks the person, or shows them, during convert on open. */
 export interface ConvertOnOpenUi {
     /**
-     * The file is at 7 but has timeline rows. Resolve `open` to open it as it
-     * is (no conversion, nothing written), or `stop` to open nothing.
+     * The file was converted, then saved by an older release. Resolve `open` to
+     * open it as it is (no conversion, nothing written), or `stop` to open nothing.
      */
-    warnOlderRelease: (
-        backupPath: string | undefined,
-    ) => Promise<"open" | "stop">;
+    warnOlderRelease: (backupPath: string) => Promise<"open" | "stop">;
     /** Runs the backup and conversion while a blocking "preparing your file" state shows. */
     whilePreparing: <T>(work: () => Promise<T>) => Promise<T>;
+    /** Called right before the backup, so the caller can stop other writers. */
+    beforeConvert?: () => void;
 }
 
 export type ConvertOnOpenOutcome =
     /** The gate is off. Nothing was read or written. */
     | { kind: "disabled" }
-    /** Nothing to convert (a timeline file). */
-    | { kind: "none" }
-    | {
-          kind: "older-release";
-          backupPath: string | undefined;
-          choice: "open" | "stop";
-      }
+    /** Nothing to convert. */
+    | { kind: "none"; reason: "timeline-file" | "dev-timeline-file" }
+    | { kind: "older-release"; backupPath: string; choice: "open" | "stop" }
     | ({ kind: "conversion" } & ConvertOnOpenResult);
 
 /**
  * The convert-on-open step of opening a file: checks the gate and the file,
- * asks or converts, and reports what happened. `setActiveDb` calls it after
- * migrations; the caller turns the outcome into dialogs and a status code.
+ * asks or converts, and reports what happened.
  */
 export async function runConvertOnOpen(
     filePath: string,
@@ -284,7 +324,7 @@ export async function runConvertOnOpen(
     const check = checkConvertOnOpen(db, filePath);
     switch (check.action) {
         case "none":
-            return { kind: "none" };
+            return { kind: "none", reason: check.reason };
         case "warn-older-release":
             return {
                 kind: "older-release",
@@ -292,6 +332,7 @@ export async function runConvertOnOpen(
                 choice: await ui.warnOlderRelease(check.backupPath),
             };
         case "convert": {
+            ui.beforeConvert?.();
             const result = await ui.whilePreparing(() =>
                 convertFileOnOpen(filePath, db, hooks),
             );

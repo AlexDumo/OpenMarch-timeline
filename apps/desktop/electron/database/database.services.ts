@@ -294,12 +294,41 @@ export const getOrmConnection = () => {
     return getOrm(persistentConnection);
 };
 
+/** Why the renderer's SQL is refused right now, or null when it isn't. */
+let sqlProxySuspendedReason: string | null = null;
+
+/**
+ * Refuses the renderer's SQL (`sql:proxy`, `unsafeSql:proxy`) until
+ * `resumeSqlProxy`. Convert on open (P9.3) calls it before converting a file,
+ * so the page still showing the previous file can't write into the new one
+ * while it is converted; the window reloads afterwards.
+ */
+export function suspendSqlProxy(reason: string) {
+    sqlProxySuspendedReason = reason;
+}
+
+export function resumeSqlProxy() {
+    sqlProxySuspendedReason = null;
+}
+
+export function isSqlProxySuspended() {
+    return sqlProxySuspendedReason !== null;
+}
+
+function assertSqlProxyNotSuspended() {
+    if (sqlProxySuspendedReason !== null)
+        throw new Error(
+            `The database is not available: ${sqlProxySuspendedReason}`,
+        );
+}
+
 export async function handleSqlProxy(
     _: any,
     sql: string,
     params: any[],
     method: "all" | "run" | "get" | "values",
 ) {
+    assertSqlProxyNotSuspended();
     try {
         if (persistentConnectionPath !== DB_PATH) {
             closePersistentConnection();
@@ -324,7 +353,8 @@ export async function handleSqlProxy(
 }
 
 /** Directly executes the SQL query without any parameters */
-async function handleUnsafeSqlProxy(_: any, sql: string) {
+export async function handleUnsafeSqlProxy(_: any, sql: string) {
+    assertSqlProxyNotSuspended();
     const db = connect();
     try {
         return await handleUnsafeSqlProxyWithDb(db, sql);
