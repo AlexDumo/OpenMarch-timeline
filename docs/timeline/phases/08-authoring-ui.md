@@ -72,7 +72,7 @@ Wire the UI's commands to the write path: moving a clip moves its whole timeline
 ### P8.2: Shapes
 
 - Owner: timeline-worker (timeline/p8-2-shapes)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P8.0
@@ -542,3 +542,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the shape rules in the spec and P7.11; split the work with P7.11; build the shape editor.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-2-shapes`; `pnpm install`; build the desktop's dependencies.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2
+
+- **Done:** wip commit b4c09aa0 on `timeline/p8-2-shapes`: `TimelineShapesEditor` in the inspector's timeline section (new shape of any kind drawn through the selected marchers, or at the field's middle; pick a shape; name, kind, geometry per kind, delete), planned by `src/timeline/timelineShapeEditor.ts` and run as one undoable edit each through the new `createTimelineShape`, `updateTimelineShape` and `deleteTimelineShape` wrappers in `timelineShapes.ts`. Converting a shape in use to a block gives it a cell for every slot of the transitions using it (I-T4); a block for a follow-the-leader user (I-T3) and deleting a shape in use (I-D1) are disabled with the reason; fewer rows or columns than a user's slots go to the database, which refuses them (E-T3/E-T4).
+- **Split with P7.11:** P8.2 is the spec-shape model's editor (create, geometry, kind, rename, delete of `timeline_shapes`, keeping the transitions that use a shape valid). P7.11 keeps the page-era shape tools: canvas shape objects and control-point drags (`MarcherShape`, `StaticMarcherShape`), the old `ShapeEditor`, shape pages and copy to page, the lock rules, and shape rendering on the canvas. Drawing a spec shape on the canvas (outline and handles) needs those canvas objects, so it is P7.11's, or a follow-up after it; P8.2 draws a shape through the selected marchers instead.
+- **Checks:** `tsc --noEmit`: pass.
+- **Next:** planner unit tests, component tests, history tests on a real DB.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-2-shapes`; `pnpm install`; build the desktop's dependencies; write `apps/desktop/src/timeline/__test__/timelineShapeEditor.test.ts`, `apps/desktop/src/components/inspector/__test__/TimelineShapesEditor.test.tsx` and `apps/desktop/src/db-functions/__test__/timelineShapeEdits.test.ts`.
