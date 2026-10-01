@@ -30,7 +30,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P6.1: Confirm page semantics
 
 - Owner: timeline-worker (timeline/p6-converter)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: —
@@ -40,7 +40,7 @@ Confirm the page semantics in code: which beat range each page's move covers, an
 ### P6.2: Converter
 
 - Owner: timeline-worker (timeline/p6-converter)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P6.1
@@ -50,7 +50,7 @@ Pure converter (desktop-side, reading via Drizzle): homes from page 0; one timel
 ### P6.3: Loss report
 
 - Owner: timeline-worker (timeline/p6-converter)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P6.2
@@ -60,7 +60,7 @@ Loss report per page: pathways, midsets and curved SVG shapes, which are kept on
 ### P6.4: Dev command
 
 - Owner: timeline-worker (timeline/p6-converter)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P6.2
@@ -70,7 +70,7 @@ Dev command that runs the converter as one `transactionWithHistory` edit, so it 
 ### P6.5: Converter tests
 
 - Owner: timeline-worker (timeline/p6-converter)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P6.4
@@ -94,3 +94,16 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 ## Progress log
 
 <!-- Append entries below, newest last, using the format in ../README.md. Never edit earlier entries. -->
+
+### 2026-09-30 · timeline-worker (timeline/p6-converter) · P6.1
+
+- **Done:** P6.1 page semantics confirmed in code, reusing P5.5's mapping (`pageEndBeat` in `apps/desktop/src/timeline/timelineCanvas.ts`):
+  - Beats: `fromDatabasePages` (`apps/desktop/src/global/classes/Page.ts`) sorts `beats` by `position` and gives each its 0-based index in that order. ADR 0001 §2 makes that index the timeline beat ("beat `n` is the start of the `n`th row of `beats` ordered by `position`").
+  - Page 0 (`FIRST_PAGE_ID`, `src/db-functions/page.ts`) holds only beat 0, which has zero length; its `marcher_pages` rows are the start positions, at show time 0. The converter seeds `marchers.home_x/home_y` from them (C-5).
+  - Page N ≥ 1 covers the sorted beats from its start beat up to the next page's start beat (the last page: `utility.last_page_counts` beats, clamped to the beat count). Its `marcher_pages` row is the position when those beats are done: `getMarcherTimelines` (`src/hooks/queries/useCoordinateData.ts`) puts the keyframe at `(page.timestamp + page.duration) * 1000`, and `getCoordinatesAtTime` (`src/utilities/Keyframes.ts`) interpolates linearly in milliseconds from the previous page's keyframe (or along the pathway of the destination row, `path_data_id`).
+  - So page N's move is the beat range `[beats[0].index, pageEndBeat(page))` = `[start beat of N, last.index + 1)`, and its end beat is the next page's start beat (the show end for the last page; page 0 → 1). This equals `beatAtTime(beats, page.timestamp + page.duration)`, which P5.5's tests check.
+  - Midsets are already ignored by page-mode playback (the midset code in `getMarcherTimelines` is commented out); pathways are not.
+- **Checks:** reading only.
+- **Next:** P6.2 converter in `apps/desktop/src/timeline/convert/`.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p6-converter` on the fork; write the pure planner `src/timeline/convert/planPageConversion.ts`, then the reader/writer.
