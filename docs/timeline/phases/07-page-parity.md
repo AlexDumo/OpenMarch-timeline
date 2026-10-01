@@ -140,8 +140,8 @@ Shape create, edit, delete, copy to another page and the shape lock rules. Today
 ### P7.12: Mobile and performer exports
 
 - Owner: timeline-worker (timeline/p7-mobile-exports)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/30
 - Parallel: yes
 - Depends on: P7.1
 
@@ -314,9 +314,9 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.12 (new) Mobile and performer exports
 
-- [ ] `src/components/mobile/utilities/dots-to-om.ts` ~165 to 205 (`buildCoordinates` converts every page row to steps), ~265 (reads all `marcher_pages`), ~372 · R · mobile app payload · not handled · build the same payload from the resolver at page end beats (or from the P7.9 keyframes if the mobile format changes; that format change is a decision)
+- [x] `src/components/mobile/utilities/dots-to-om.ts` ~165 to 205 (`buildCoordinates` converts every page row to steps), ~265 (reads all `marcher_pages`), ~372 · R · mobile app payload · not handled · build the same payload from the resolver at page end beats (or from the P7.9 keyframes if the mobile format changes; that format change is a decision) (P7.12, PR #30: timeline mode samples a cold-built resolver at each page end beat through `readTimelinePagePositions`; page format kept)
 - [x] `src/components/mobile/utilities/performer-appearance-export.ts` ~99 to 170, ~219 to 290 (appearance data per page, built from page rows) · R · not handled · depends on the P7.14 decision (dropped: never implemented, owner decision 2026-09-30)
-- [ ] `src/components/mobile/utilities/upload-service.ts` ~2 · caller of the export · no change expected
+- [x] `src/components/mobile/utilities/upload-service.ts` ~2 · caller of the export · no change expected (P7.12: confirmed, no change)
 
 #### P7.13 (new) Undo, redo and query invalidation in timeline mode
 
@@ -330,7 +330,7 @@ Facts that change how to read the PR #14 note above:
 
 - [ ] `electron/database/migrations/schema.ts` ~185 to 226 (`marcher_pages` columns: appearance columns, `rotation_degrees`, `notes`, path columns) · data with no timeline home · the converter copies only x and y · decision needed: drop, keep in the frozen page-era table, or add timeline fields. Record it as a blocker for a person before building anything
 - [ ] `src/global/classes/MarcherPage.ts` ~1 to 40 and `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 · R · the per-page appearance override sits first in the appearance stack · see P7.8
-- [ ] `src/components/mobile/utilities/dots-to-om.ts` ~184 to 200 (`rotation_degrees` exported per coordinate) · R · see P7.12
+- [x] `src/components/mobile/utilities/dots-to-om.ts` ~184 to 200 (`rotation_degrees` exported per coordinate) · R · see P7.12 (P7.12: left out in timeline mode, dropped per the P7.14 decision; page mode unchanged)
 
 #### Checked: no timeline work needed
 
@@ -750,4 +750,27 @@ Facts that change how to read the PR #14 note above:
     - eslint and cspell on the changed files: clean.
   - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`.
 - **Next:** the lead re-reviews and merges PR #29.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-mobile-exports) · P7.12 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/30 (head `31e23071`, one commit). In timeline mode the mobile app payload (`dots-to-om.ts`) takes each marcher's position on each page from the resolver at the page's end beat, through the new `readTimelinePagePositions` (`src/timeline/timelinePagePositions.ts`). That function awaits `timelinePositionsSettled()`, then, under the write lock, cold-builds a private resolver (`acquireExportResolver`, P7.8) and reads the pages (`readShowTiming`). It never reads `marcher_pages`. Page mode is unchanged. Ticked the 2 open P7.12 inventory items and the P7.14 `rotation_degrees` item that points here.
+- **Decisions (P7.12, recorded for the phase):**
+  - **Payload format kept:** one position per marcher per page, as page mode sends. P7.9's keyframes are not used, because that would change the mobile format.
+  - **Per-page fields left out:** in timeline mode the payload has no per-page `rotation_degrees` and no per-page appearance overrides, following the P7.14 decision. Section and tag appearances are unchanged.
+  - **Snapshot:** the export uses its own cold-built resolver, so an edit made during the upload can't change it halfway. A write still in flight when the export starts is included.
+  - `sampleTimelinePagePositions` is a pure helper that P7.7 (coordinate sheets) can reuse for "positions by page" from the resolver.
+- **Open question for a person (not a blocker):** the mobile app sees only page-end positions. Timeline motion that a page-end sample can't show (shape paths, or steals and holds that end mid-page) is flattened to straight moves between pages. Carrying it would mean adding keyframes (`buildKeyframes`, P7.9) to the mobile payload, which is a format change for the mobile app and server.
+- **Not in scope:** `electron/main/services/previous-dots-import-service.ts` (P7.3's open item) still reads a converted source file's frozen `marcher_pages`.
+- **Checks:**
+  - `pnpm install`: ok.
+  - `pnpm exec turbo run build --filter=@openmarch/desktop^...`: 4 successful.
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
+  - `vitest run src/components/mobile`: 8 files, 83 passed.
+  - `test:history` on `dots-to-om.timeline.test.ts` and `dots-to-om.test.ts`, run alone after the suite: 2 files, 20 passed.
+  - `pnpm --dir apps/desktop run test`: 132 files passed, 7 skipped; 1,944 tests passed, no errors.
+  - eslint, prettier `--check` and cspell on the 3 changed files: clean. The only warning (`max-lines-per-function` on `buildOpenMarchFromRows`) was already on the base.
+  - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`. No db-functions changed. I didn't run the app by hand.
+- **Exit gate:** unchanged.
+- **Next:** review and merge PR #30.
 - **Blockers:** none.
