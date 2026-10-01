@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdtempSync, renameSync, rmSync } from "fs";
 import { tmpdir } from "os";
@@ -8,12 +8,15 @@ import {
     closePersistentConnection,
     getSelectedAudioFile,
     handleSqlProxy,
+    handleSqlProxyIpc,
     handleSqlProxyWithDb,
+    handleUnsafeSqlProxyIpc,
     insertAudioFile,
     resumeSqlProxy,
     setDbPath,
     suspendSqlProxy,
 } from "../database.services";
+import { isSqlProxyRefusal, unwrapSqlProxyResult } from "../sqlProxyRefusal";
 
 describe("Database Services", () => {
     describe("sql proxy", () => {
@@ -224,6 +227,74 @@ describe("Database Services", () => {
                 (await insertAudioFile({ path: "/tmp/b.mp3" })).success,
             ).toBe(true);
             await exited;
+        });
+    });
+
+    describe("the renderer's SQL while an open suspends it (P9.9)", () => {
+        let tempDir: string;
+
+        beforeEach(() => {
+            tempDir = mkdtempSync(join(tmpdir(), "openmarch-sql-refusal-"));
+            const dbPath = join(tempDir, "test.dots");
+            const db = new DatabaseSync(dbPath);
+            db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY)");
+            db.close();
+            setDbPath(dbPath);
+        });
+
+        afterEach(() => {
+            closePersistentConnection();
+            setDbPath("", false);
+            rmSync(tempDir, { recursive: true, force: true });
+            vi.restoreAllMocks();
+        });
+
+        it("is refused with a marker, not thrown, so Electron logs no handler error; logged once per open at debug", async () => {
+            const debug = vi
+                .spyOn(console, "debug")
+                .mockImplementation(() => {});
+            const error = vi
+                .spyOn(console, "error")
+                .mockImplementation(() => {});
+
+            const first = suspendSqlProxy("a file is being opened");
+            const refused = await Promise.all([
+                handleSqlProxyIpc(null, "SELECT 1", [], "get"),
+                handleSqlProxyIpc(null, "SELECT 1", [], "all"),
+                handleUnsafeSqlProxyIpc(null, "SELECT 1"),
+            ]);
+            expect(refused.every(isSqlProxyRefusal)).toBe(true);
+            // The preload turns it back into the rejection the renderer saw before.
+            expect(() => unwrapSqlProxyResult(refused[0])).toThrow(
+                "The database is not available: a file is being opened",
+            );
+            expect(debug).toHaveBeenCalledOnce();
+            expect(error).not.toHaveBeenCalled();
+            resumeSqlProxy(first);
+
+            // Works again once resumed.
+            const result = await handleSqlProxyIpc(null, "SELECT 1", [], "get");
+            expect(isSqlProxyRefusal(result)).toBe(false);
+            expect(unwrapSqlProxyResult(result)).toEqual({ rows: [1] });
+
+            // The next open logs once more.
+            const second = suspendSqlProxy("a file is being opened");
+            await handleSqlProxyIpc(null, "SELECT 1", [], "get");
+            await handleUnsafeSqlProxyIpc(null, "SELECT 1");
+            resumeSqlProxy(second);
+            expect(debug).toHaveBeenCalledTimes(2);
+            expect(error).not.toHaveBeenCalled();
+        });
+
+        it("the handlers called directly still throw (main-process callers)", async () => {
+            const token = suspendSqlProxy("a file is being opened");
+            try {
+                await expect(
+                    handleSqlProxy(null, "SELECT 1", [], "get"),
+                ).rejects.toThrow(/not available: a file is being opened/);
+            } finally {
+                resumeSqlProxy(token);
+            }
         });
     });
 });

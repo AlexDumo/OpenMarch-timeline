@@ -47,6 +47,11 @@ export interface ConvertWorkerTestHooks {
     crashAfterCommit?: boolean;
     /** Busy-wait this long after each page, so tests can watch a long conversion. */
     blockPerPageMs?: number;
+    /**
+     * After the first page, run a SQLite query that counts this many rows: a
+     * native call that `worker.terminate()` can't interrupt (like `VACUUM INTO`).
+     */
+    nativeBlockRows?: number;
 }
 
 /** What the worker is started with (`workerData`). */
