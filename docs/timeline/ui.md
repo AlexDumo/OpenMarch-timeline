@@ -77,7 +77,11 @@ from it. The spec still wins on the model; this file decides presentation.
   none), so the new track steals the range (R-2) the way a breakaway does
   (G2). Why: at layer 0 it would overlap a converted show's page moves and
   always be refused (E-A3). A block with fewer cells than marchers is refused
-  (E-T4).
+  (E-T4). A marcher's new track starts at its position at the range start, so
+  it doesn't jump there, but it holds still over the range. If the track steals
+  a move in progress, the marcher stops for the range and the stolen move then
+  resumes with a catch-up, a visible change of speed, because progress is
+  measured against that transition's own end (D-7).
 
 ## Mapping the spec onto the view model
 

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     createTrack,
     shiftTimeline,
@@ -36,14 +36,15 @@ export function timelineShiftFor(
 }
 
 /**
- * Create Track's target: a shape picked by selecting its track, which takes the selected marchers;
- * otherwise the one selected marcher. With several marchers selected and no shape, there's none.
+ * Create Track's target: a shape picked by selecting its track, which takes the selected marchers
+ * (none when no marcher is selected, since there would be nobody to move into it); otherwise the
+ * one selected marcher. With several marchers selected and no shape, there's none.
  */
 export function selectedTimelineTarget(
     shape: TimelineTarget | null,
     selectedMarcherIds: ReadonlySet<number>,
 ): TimelineTarget | null {
-    if (shape) return shape;
+    if (shape) return selectedMarcherIds.size > 0 ? shape : null;
     if (selectedMarcherIds.size !== 1) return null;
     const [id] = selectedMarcherIds;
     return { type: "marcher", id: id! };
@@ -71,8 +72,11 @@ const toastRefusal = (fallback: string) => (error: unknown) =>
  * run each command as one undoable edit and show a refusal's message (with its error code) as a
  * toast.
  *
- * @param noteSelection call it with every selection change: selecting a shape's track picks that
- *        shape as the target, and selecting a marcher's track drops it.
+ * `noteSelection`: call it with every selection change. Selecting a shape's track picks that shape
+ * as the target. A range selection keeps it, because Create Track is offered on a range, so the
+ * shape is picked first and the range selected next. Any other selection (a marcher's track, a
+ * page, or nothing) drops it, and so does its track disappearing (the shape was deleted, or no
+ * longer has a move).
  */
 export function useTimelineCommands({
     database,
@@ -87,11 +91,13 @@ export function useTimelineCommands({
 
     const noteSelection = useCallback(
         (next: TimelineSelection) => {
-            if (next?.kind !== "track") return;
-            const track = timelines.find((t) => t.id === next.trackId);
-            if (!track) return;
+            if (next?.kind === "range") return;
+            const track =
+                next?.kind === "track"
+                    ? timelines.find((t) => t.id === next.trackId)
+                    : undefined;
             setShape(
-                track.targetType === "shape"
+                track?.targetType === "shape"
                     ? { type: "shape", id: track.targetId }
                     : null,
             );
@@ -99,9 +105,23 @@ export function useTimelineCommands({
         [timelines],
     );
 
+    // Drop a picked shape whose track is gone
+    const shapeShown =
+        shape !== null &&
+        timelines.some(
+            (t) => t.targetType === "shape" && t.targetId === shape.id,
+        );
+    useEffect(() => {
+        if (shape !== null && !shapeShown) setShape(null);
+    }, [shape, shapeShown]);
+
     const selectedTarget = useMemo(
-        () => selectedTimelineTarget(shape, selectedMarcherIds),
-        [shape, selectedMarcherIds],
+        () =>
+            selectedTimelineTarget(
+                shapeShown ? shape : null,
+                selectedMarcherIds,
+            ),
+        [shape, shapeShown, selectedMarcherIds],
     );
 
     const commitTimelineRange = useCallback(

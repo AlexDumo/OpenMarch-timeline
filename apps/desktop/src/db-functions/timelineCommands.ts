@@ -304,8 +304,11 @@ const shapeCapacity = (shape: typeof schema.timeline_shapes.$inferSelect) => {
  * endBeat)` with one `direct` transition over the same range, and its assignments.
  *
  * - **A marcher:** the transition has no shape and one slot, whose destination is the marcher's
- *   position at `startBeat` (read from a resolver over the rows this edit sees), so nothing moves
- *   until the destination is edited.
+ *   position at `startBeat` (read from a resolver over the rows this edit sees), so the marcher
+ *   doesn't jump at the range start: it holds still there until the destination is edited. That
+ *   still changes the show when the track steals a move in progress: the marcher stops for the
+ *   range, and since progress is measured against the stolen transition's own end (D-7), that
+ *   move resumes afterwards with a catch-up, a visible change of speed.
  * - **A shape:** the transition goes into the shape with one slot per marcher, and the marchers fill
  *   the slots in id order. A block with fewer cells than marchers is refused (`E-T4`).
  *

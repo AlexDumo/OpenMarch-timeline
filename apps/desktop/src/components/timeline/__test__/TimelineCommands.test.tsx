@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    renderHook,
+    screen,
+} from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Beat from "@/global/classes/Beat";
@@ -320,5 +327,104 @@ describe("the commands' pure parts", () => {
         expect(
             selectedTimelineTarget({ type: "shape", id: 9 }, new Set([1, 2])),
         ).toEqual({ type: "shape", id: 9 });
+        // A shape with nobody to move into it is no target
+        expect(
+            selectedTimelineTarget({ type: "shape", id: 9 }, new Set()),
+        ).toBeNull();
+    });
+});
+
+describe("the picked shape", () => {
+    const shapeTrack = input("S", 3, 1, 9, {
+        targetId: 11,
+        targetType: "shape",
+    });
+    const marcherTrack = input("M", 3, 1, 9, { targetId: 5 });
+    const range: TimelineSelection = {
+        kind: "range",
+        range: { startBeatIndex: 0, endBeatIndex: 4 },
+    };
+    const SHAPE = { type: "shape", id: 11 };
+
+    const renderCommands = (selected: ReadonlySet<number> = new Set([4])) =>
+        renderHook(
+            ({ timelines }: { timelines: TimelineInput[] }) =>
+                useTimelineCommands({
+                    database: DB,
+                    timelines,
+                    selectedMarcherIds: selected,
+                }),
+            { initialProps: { timelines: [shapeTrack, marcherTrack] } },
+        );
+    const pick = (result: { current: { noteSelection: Noter } }) =>
+        act(() =>
+            result.current.noteSelection({ kind: "track", trackId: "S" }),
+        );
+    type Noter = (next: TimelineSelection) => void;
+
+    it("stays through a range selection, which is where Create Track is offered", () => {
+        const { result } = renderCommands();
+        pick(result);
+        expect(result.current.selectedTarget).toEqual(SHAPE);
+        act(() => result.current.noteSelection(range));
+        expect(result.current.selectedTarget).toEqual(SHAPE);
+    });
+
+    it.each<[string, TimelineSelection]>([
+        ["a page", { kind: "page", pageId: 2 }],
+        ["nothing", null],
+        ["a marcher's track", { kind: "track", trackId: "M" }],
+    ])("is dropped when %s is selected", (_, next) => {
+        const { result } = renderCommands();
+        pick(result);
+        act(() => result.current.noteSelection(next));
+        // Back to the one selected marcher, and a later range doesn't bring the shape back
+        expect(result.current.selectedTarget).toEqual({
+            type: "marcher",
+            id: 4,
+        });
+        act(() => result.current.noteSelection(range));
+        expect(result.current.selectedTarget).toEqual({
+            type: "marcher",
+            id: 4,
+        });
+    });
+
+    it("is dropped when its track disappears, and doesn't come back with it", () => {
+        const { result, rerender } = renderCommands();
+        pick(result);
+        rerender({ timelines: [marcherTrack] });
+        expect(result.current.selectedTarget).toEqual({
+            type: "marcher",
+            id: 4,
+        });
+        // An undo that brings the shape's track back doesn't pick it again
+        rerender({ timelines: [shapeTrack, marcherTrack] });
+        expect(result.current.selectedTarget).toEqual({
+            type: "marcher",
+            id: 4,
+        });
+    });
+
+    it("hides Create Track while no marcher is selected", () => {
+        const { result } = renderCommands(new Set());
+        pick(result);
+        expect(result.current.selectedTarget).toBeNull();
+        render(
+            <Timeline
+                mode="expanded"
+                beats={appBeats(16)}
+                pages={[]}
+                measures={[]}
+                timelines={[shapeTrack]}
+                showTransport={false}
+                selection={range}
+                selectedTarget={result.current.selectedTarget}
+                onCreateTrack={result.current.createTrack}
+            />,
+        );
+        expect(
+            screen.queryByRole("button", { name: "Create Track" }),
+        ).toBeNull();
     });
 });
