@@ -40,7 +40,7 @@ Inventory every reader and writer of `marcher_pages`, `shape_pages` and the path
 ### P7.2: Selection, drag and alignment
 
 - Owner: timeline-worker (timeline/p7-drag-align)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/20
 - Parallel: yes
 - Depends on: P7.1
@@ -391,4 +391,11 @@ Facts that change how to read the PR #14 note above:
   - New tests: a layered steal that wins and an earlier steal that doesn't; refusals for a multi-page move and for a transition that ends after its assignment; `Object.is` in the shape-switch test; a nudge on a marcher with no `marcher_pages` row; a swap with the flag on; set to previous with the flag on (no writes) and off.
 - **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` → clean. `vitest run src/db-functions/__test__/timelineMoves.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts` → 21 passed. eslint, prettier and cspell on the changed files → clean (the only warnings were already there). `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineMoves.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts` → 21 passed. Branch head `483150f5`.
 - **Next:** the lead re-reviews and merges PR #20.
+- **Blockers:** none.
+
+### 2026-09-30 · lead session · P7.2 (reviewed and merged)
+
+- **Done:** fork PR #20 reviewed by a sub-agent (APPROVE WITH NITS: page mode unchanged on every routed path with hooks unconditional; the page N rule picks the highest-layer assignment ending at N's end beat per R-2 and refuses structural moves; the shape → individual switch keeps every other marcher's position bit for bit; positions come from the resolver, so no stale `marcher_pages` reaches a timeline write). The worker fixed the nits: timeline-mode selections come from the selected marchers rather than `marcher_pages`; "set to previous/next page" is refused in timeline mode until P7.6; every refusal is decided before the first write; added layered, multi-page, transition-ends-later and swap tests. Squash-merged. P7.2 set to done.
+- **Checks:** at 483150f5: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on `timelineMoves.test.ts` and `timelineCoordinateWrites.test.ts` (21 passed); `pnpm --dir apps/desktop run test` (106 files, 1,597 passed).
+- **Next:** P7.3 onward.
 - **Blockers:** none.
