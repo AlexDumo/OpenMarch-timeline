@@ -150,7 +150,7 @@ The mobile app payload and the performer appearance export read every page row. 
 ### P7.13: Undo, redo and query invalidation in timeline mode
 
 - Owner: timeline-worker (timeline/p7-undo-redo)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/29
 - Parallel: yes
 - Depends on: P7.1
@@ -773,4 +773,22 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: the full `test:history` suite, Playwright and `build:electron`. No db-functions changed. I didn't run the app by hand.
 - **Exit gate:** unchanged.
 - **Next:** review and merge PR #30.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.13
+
+- **Done:** reviewed PR #29 and squash-merged it at head 61814b53.
+  - The review found two medium issues, both fixed:
+    - The focus was read in a second lock turn, so a quick double undo saw the later state.
+    - `useHistory` searched the page list from before the action, so a restored or added page was dropped.
+  - Also fixed:
+    - page-mode marcher selection on page 0;
+    - deleted rows across beat changes no longer decide the page.
+  - The branch merged #27 and #28 before verification.
+- **Checks (lead, on 61814b53):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history src/db-functions/__test__/`: 25 files, 604 tests passed.
+  - `pnpm --dir apps/desktop run test`: 133 files, 1,953 tests passed, no errors.
+  - Skipped by policy: the full `test:history` and e2e suites.
+- **Next:** route the stale `useTimelineTracks` follow-up. It is caused by edits to `timelines` rows and shape names, which the change log doesn't cover.
 - **Blockers:** none.
