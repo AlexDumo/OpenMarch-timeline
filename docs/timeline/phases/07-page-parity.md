@@ -897,3 +897,11 @@ Facts that change how to read the PR #14 note above:
 - **Exit gate:** unchanged. "Each feature's existing tests pass in timeline mode" is a phase-wide item, not ticked here.
 - **Next:** review and merge PR #33.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-15-refresh-views) · P7.15 review fixes
+
+- **Done:** PR #32 review fixes, merged `timeline-try-2` first. The display check is one SQL `LIKE ... LIMIT 1` over the edit's undo group and can't abort the edit; the display tables now include `marchers`; hooks read both versions together (`useTimelineViewVersions`) for one load per write; undo and redo share `historyStatementTable`. New tests: a real range-only ripple (beat inside a transition-less timeline after the last page; display moves, resolver doesn't, through undo and redo), rollbacks, failed undo and redo, drill numbers, the inspector hook, and a load count.
+- **Checks:** `tsc --noEmit`: clean. `test:history` on timelineDisplay, timelineHistoryFocus and history: 72 passed. `pnpm --dir apps/desktop run test`: 134 files, 1966 tests passed. Skipped per policy: full `test:history`, e2e.
+- **Note:** a drill number edit doesn't move the resolver version (the change log's marcher image doesn't carry it), so the display signal is what refreshes labels; a new marcher moves both.
+- **Next:** re-review and merge.
+- **Blockers:** none.
