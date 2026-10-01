@@ -169,8 +169,8 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 
 ### P7.16: Per-page appearance on the canvas and previous-show import
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-page-appearance)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.14
