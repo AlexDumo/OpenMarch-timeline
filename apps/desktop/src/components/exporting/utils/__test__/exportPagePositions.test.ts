@@ -324,7 +324,6 @@ describeDbTests("readTimelineExportPositions", (it) => {
             newMarchers: [
                 { section: "Flute", drill_prefix: "N", drill_order: 1 },
             ],
-            timelineMode: true,
         });
         await expect(
             readExportPositions({

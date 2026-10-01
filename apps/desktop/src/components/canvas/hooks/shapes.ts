@@ -20,12 +20,13 @@ export const useRenderMarcherShapes = ({
     canvas,
     selectedPage,
     isPlaying,
-    timelineMode = false,
+    timelineMode,
 }: {
     canvas: Pick<OpenMarchCanvas, "renderMarcherShapes"> | null;
     selectedPage: Page | null;
     isPlaying: boolean;
-    timelineMode?: boolean;
+    /** The file's timeline flag. Required, so no caller falls back to page mode by omission. */
+    timelineMode: boolean;
 }) => {
     const pageId = timelineMode ? null : (selectedPage?.id ?? null);
     const { data: shapePagesOnSelectedPage } = useQuery(
