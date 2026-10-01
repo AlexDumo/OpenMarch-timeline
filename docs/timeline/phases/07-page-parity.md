@@ -40,8 +40,8 @@ Inventory every reader and writer of `marcher_pages`, `shape_pages` and the path
 ### P7.2: Selection, drag and alignment
 
 - Owner: timeline-worker (timeline/p7-drag-align)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/20
 - Parallel: yes
 - Depends on: P7.1
 
@@ -199,27 +199,27 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.2 Selection, drag and alignment (writers of positions on the selected page)
 
-- [ ] `src/components/canvas/listeners/DefaultListeners.ts` ~144 to 159 · W · canvas drag and rotate; reads the stale `coordinate.page_id` · P5 blocked it (`Canvas.tsx` ~238 to 244 snaps back) · re-enable by writing the slot destination of the transition ending at the selected page's end beat (D-16)
-- [ ] `src/components/canvas/Canvas.tsx` ~238 to 244 · W gate · the drag callback is swapped for a refresh in timeline mode · replace with the timeline write path
-- [ ] `src/global/classes/canvasObjects/OpenMarchCanvas.ts` ~125 (the drag callback type), ~1150 (`renderMarcherPositions` copies the last page render's `coordinate`, so `page_id` is stale) · W plumbing · P5 partial · give timeline-mode marchers a real page id, or drop `page_id` from the drag path
-- [ ] `src/hooks/queries/useMarcherPages.ts` ~133 to 146 (`updateMarcherPagesMutationOptions`), ~222 to 312 (`useUpdateSelectedMarchers`, call at ~281, and the selected-page wrapper) · W · the one mutation behind nudges, align, distribute, flip, circle and the inspector · not handled · route to timeline slot edits; this is the main seam for the whole package
-- [ ] `src/db-functions/marcherPage.ts` ~141 to 228 (`updateMarcherPagesInTransaction`, `updateMarcherPages`) · W `marcher_pages`, and W `pathways` through `updateEndPoint` (~170 to 196) · not handled · the timeline equivalent edits a destination, with no pathway fix-up
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~995 to 1070 (nudge up, down, left, right via `updateSelectedMarchersAsync` at ~1007, 1026, 1045, 1064) · W · not handled
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~1073 to 1097 (snap to nearest fraction, `updateMarcherPages` at ~1096) · W · not handled
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~1111 to 1141 (align and evenly distribute; `updateMarcherPages` at ~1115, 1122, 1131, 1140) · W · not handled
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~1143 to 1156 (flip horizontal and vertical; ~1147, 1154) · W · not handled
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~1271 to 1291 (create circle through `updateSelectedMarchers`) · W · not handled
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~541 to 554, ~604 to 620 (`getSelectedMarcherPages`) · R · selected-page coordinates feed the actions above · not handled · read from `positionsAt(end beat)`
-- [ ] `src/utilities/RegisteredActionsHandler.tsx` ~1157 to 1170 with `src/db-functions/marcherPage.ts` ~230 to 365 (`swapMarchers`, `swapMarchersInTransaction`, `_swapSpms`) and `src/hooks/queries/useMarcherPages.ts` ~148 to 165 · W `marcher_pages` and `shape_page_marchers` · swap two marchers' positions on a page · not handled · in timeline terms, swap slot assignments or destinations
-- [ ] `src/utilities/CoordinateActions.ts` (rounding ~58, vertical and horizontal align ~184 and ~217, distribute ~252, flip ~317) · pure helpers typed on `MarcherPage` and `ModifiedMarcherPageArgs` · not handled · loosen the input and output types so timeline code can reuse them
-- [ ] `src/components/canvas/listeners/LineListeners.ts` ~150 to 262 (`setGlobalNewMarcherPages` at ~262) → `src/components/canvas/Canvas.tsx` ~360 → `src/stores/AlignmentEventStore.ts` ~12 to 67 → `src/components/inspector/AlignmentEditor.tsx` ~12 to 23 → the apply-quick-shape action at `RegisteredActionsHandler.tsx` ~1212 to 1223 · W (preview, then apply) · line and alignment tool · not handled · the apply step is the write
-- [ ] `src/components/inspector/MarcherEditor.tsx` ~171 to 246 (horizontal and vertical distribute buttons) · W through the shared mutation · not handled
+- [x] `src/components/canvas/listeners/DefaultListeners.ts` ~144 to 159 · W · canvas drag and rotate; reads the stale `coordinate.page_id` · P5 blocked it (`Canvas.tsx` ~238 to 244 snaps back) · re-enable by writing the slot destination of the transition ending at the selected page's end beat (D-16) (P7.2: drag routed through `canvasCoordinateWriter`, which ignores `page_id` in timeline mode)
+- [x] `src/components/canvas/Canvas.tsx` ~238 to 244 · W gate · the drag callback is swapped for a refresh in timeline mode · replace with the timeline write path (P7.2: replaced by the timeline write path)
+- [x] `src/global/classes/canvasObjects/OpenMarchCanvas.ts` ~125 (the drag callback type), ~1150 (`renderMarcherPositions` copies the last page render's `coordinate`, so `page_id` is stale) · W plumbing · P5 partial · give timeline-mode marchers a real page id, or drop `page_id` from the drag path (P7.2: drag path drops `page_id`; `renderMarcherPositions` stamps the drawn page id)
+- [x] `src/hooks/queries/useMarcherPages.ts` ~133 to 146 (`updateMarcherPagesMutationOptions`), ~222 to 312 (`useUpdateSelectedMarchers`, call at ~281, and the selected-page wrapper) · W · the one mutation behind nudges, align, distribute, flip, circle and the inspector · not handled · route to timeline slot edits; this is the main seam for the whole package (P7.2: `useUpdateSelectedMarchers` has a timeline branch; `moveMarchersOnPageMutationOptions` added. `updateMarcherPagesMutationOptions` is unchanged; its remaining timeline-mode callers are set-to-previous/next (P7.6) and the dormant `editablePath` (P7.10))
+- [x] `src/db-functions/marcherPage.ts` ~141 to 228 (`updateMarcherPagesInTransaction`, `updateMarcherPages`) · W `marcher_pages`, and W `pathways` through `updateEndPoint` (~170 to 196) · not handled · the timeline equivalent edits a destination, with no pathway fix-up (P7.2: the timeline equivalent is `moveMarchersOnPage` in `src/db-functions/timelineMoves.ts`; the page function stays for page mode)
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~995 to 1070 (nudge up, down, left, right via `updateSelectedMarchersAsync` at ~1007, 1026, 1045, 1064) · W · not handled (P7.2)
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~1073 to 1097 (snap to nearest fraction, `updateMarcherPages` at ~1096) · W · not handled (P7.2)
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~1111 to 1141 (align and evenly distribute; `updateMarcherPages` at ~1115, 1122, 1131, 1140) · W · not handled (P7.2)
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~1143 to 1156 (flip horizontal and vertical; ~1147, 1154) · W · not handled (P7.2)
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~1271 to 1291 (create circle through `updateSelectedMarchers`) · W · not handled (P7.2)
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~541 to 554, ~604 to 620 (`getSelectedMarcherPages`) · R · selected-page coordinates feed the actions above · not handled · read from `positionsAt(end beat)` (P7.2: `withTimelinePositions`)
+- [x] `src/utilities/RegisteredActionsHandler.tsx` ~1157 to 1170 with `src/db-functions/marcherPage.ts` ~230 to 365 (`swapMarchers`, `swapMarchersInTransaction`, `_swapSpms`) and `src/hooks/queries/useMarcherPages.ts` ~148 to 165 · W `marcher_pages` and `shape_page_marchers` · swap two marchers' positions on a page · not handled · in timeline terms, swap slot assignments or destinations (P7.2: swaps the two marchers' positions on the page through `moveMarchersOnPage`; slot assignments are not swapped)
+- [x] `src/utilities/CoordinateActions.ts` (rounding ~58, vertical and horizontal align ~184 and ~217, distribute ~252, flip ~317) · pure helpers typed on `MarcherPage` and `ModifiedMarcherPageArgs` · not handled · loosen the input and output types so timeline code can reuse them (P7.2: no change needed; timeline code passes `MarcherPage` objects with resolver x/y)
+- [x] `src/components/canvas/listeners/LineListeners.ts` ~150 to 262 (`setGlobalNewMarcherPages` at ~262) → `src/components/canvas/Canvas.tsx` ~360 → `src/stores/AlignmentEventStore.ts` ~12 to 67 → `src/components/inspector/AlignmentEditor.tsx` ~12 to 23 → the apply-quick-shape action at `RegisteredActionsHandler.tsx` ~1212 to 1223 · W (preview, then apply) · line and alignment tool · not handled · the apply step is the write (P7.2: preview reads the drawn positions; the apply step is routed)
+- [x] `src/components/inspector/MarcherEditor.tsx` ~171 to 246 (horizontal and vertical distribute buttons) · W through the shared mutation · not handled (P7.2)
 - [ ] `src/components/inspector/MarcherEditor.tsx` ~433 to 452 and `src/components/inspector/ShapeSelector.tsx` ~19 to 31 · R of the `isLocked` flag, which comes from shape membership · not handled · lock rules must come from timeline shapes
-- [ ] `src/components/inspector/MarcherEditor.tsx` ~487 to 500 (the x/y display from `ReadableCoords.fromMarcherPage`) and `src/global/classes/ReadableCoords.ts` ~94 · R · not handled · display from the resolver
-- [ ] `src/components/canvas/hooks/canvasListeners.selection.ts` ~29 to 30, ~263 · R · selection reads the page's marcher pages · not handled
-- [ ] `src/components/canvas/Canvas.tsx` ~70 to 78, ~364 to 400, ~566 to 596 · R · page-mode static render, skipped once the resolver is ready · P5 (`drawFromResolver`, `useTimelineStaticRender`); the queries still run
-- [ ] `src/hooks/useAnimation.ts` ~44 to 52, ~140 to 200 · R · page-mode playback from `useManyCoordinateData`; the timeline branch (~210 to 227) bypasses it · P5 · the page-mode queries still run in timeline mode (see P7.13)
-- [ ] `src/timeline/timelineCanvas.ts` ~115 to 135 and `src/timeline/useTimelineStaticRender.ts` · R of the resolver at the page end beat · P5 done · keep as the model for "marchers on page N"
+- [x] `src/components/inspector/MarcherEditor.tsx` ~487 to 500 (the x/y display from `ReadableCoords.fromMarcherPage`) and `src/global/classes/ReadableCoords.ts` ~94 · R · not handled · display from the resolver (P7.2: the display uses `usePositionAt` at the page's end beat in timeline mode)
+- [x] `src/components/canvas/hooks/canvasListeners.selection.ts` ~29 to 30, ~263 · R · selection reads the page's marcher pages · not handled (P7.2: no change needed; the page query is only an effect dependency, no coordinates are read)
+- [x] `src/components/canvas/Canvas.tsx` ~70 to 78, ~364 to 400, ~566 to 596 · R · page-mode static render, skipped once the resolver is ready · P5 (`drawFromResolver`, `useTimelineStaticRender`); the queries still run (P5; gating the queries is P7.13)
+- [x] `src/hooks/useAnimation.ts` ~44 to 52, ~140 to 200 · R · page-mode playback from `useManyCoordinateData`; the timeline branch (~210 to 227) bypasses it · P5 · the page-mode queries still run in timeline mode (see P7.13) (P5; gating the queries is P7.13)
+- [x] `src/timeline/timelineCanvas.ts` ~115 to 135 and `src/timeline/useTimelineStaticRender.ts` · R of the resolver at the page end beat · P5 done · keep as the model for "marchers on page N" (P5)
 
 #### P7.3 Marcher add and delete (home position plus slot rows)
 
@@ -365,4 +365,12 @@ Facts that change how to read the PR #14 note above:
 - **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` → clean; `vitest run` on the two new test files → 15 passed; `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineMoves.test.ts` → 7 passed.
 - **Next:** the regular desktop suite (running), then the PR and the checklist ticks.
 - **Resume from:** branch `timeline/p7-drag-align` at `fcd54872`. Re-run `pnpm --dir apps/desktop run test` in the background, then open the PR and tick the P7.2 items.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p7-drag-align) · P7.2 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/20. `moveMarchersOnPage` (`src/db-functions/timelineMoves.ts`) writes homes (page 0) or slot destinations (page N ≥ 1) in one undoable edit. Every P7.2 writer is routed through it in timeline mode: drag (re-enabled), nudges, snap, align, distribute, flip, swap, circle, the line tool and the inspector's distribute buttons. Current positions are read from the resolver, and the inspector x/y display shows them too. The stale `coordinate.page_id` is no longer read on the drag path. Decisions: a shape-backed transition is switched to individual points copying the shape's exact samples, then updated (Q-14 workaround). Follow-the-leader into a shape is refused (E-T5). A marcher with no move ending at the page's end beat is refused (E-ARGS); creating one is for P8.9. Swap exchanges positions, not slot assignments. 20 P7.2 items ticked (3 of them already handled by P5).
+- **Not ticked:** `MarcherEditor.tsx` ~433 to 452 and `ShapeSelector.tsx` (`isLocked` from shape membership; belongs with P7.11's timeline shapes). Also untouched: set-to-previous/next page still writes `marcher_pages` from page rows in timeline mode (P7.6).
+- **Checks:** `pnpm install` ok; `pnpm exec turbo run build --filter=@openmarch/desktop^...` → 4 successful; `pnpm --dir apps/desktop exec tsc --noEmit` → clean; `vitest run src/db-functions/__test__/timelineMoves.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts` → 15 passed; `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineMoves.test.ts` → 7 passed; `pnpm --dir apps/desktop run test` → 106 files passed, 7 skipped, 1591 tests passed (at `fcd54872`, before the inspector display commit, which has no tests; tsc, eslint and prettier cover it); cspell, prettier --check and eslint on the changed files → clean (only warnings that already existed). Skipped by policy: full `test:history`, Playwright, `build:electron`. The app was not run by hand.
+- **Next:** review and merge. Exit-gate items unchanged.
 - **Blockers:** none.
