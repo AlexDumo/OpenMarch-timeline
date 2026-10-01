@@ -82,7 +82,7 @@ Shapes: draw and edit `line`, `freehand`, `circle`, `box` and `block` in absolut
 ### P8.3: Transitions
 
 - Owner: timeline-worker (timeline/p8-transitions)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P8.0
@@ -351,3 +351,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the transition db-functions and the inspector section; build the transition editor in the inspector's timeline section.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-transitions`; `pnpm install`; build the desktop's dependencies.
+
+### 2026-10-01 · timeline-worker (timeline/p8-transitions) · P8.3
+
+- **Done:** wip commit 03d633b0 on `timeline/p8-transitions`: `TimelineTransitionEditor` in the inspector's timeline section (path style, bulge clamped to ±½, FTL waypoints, order mode, destination shape or individual points, slot count), planned by `src/timeline/timelineTransitionEditor.ts` (no-op changes skipped) and run as one undoable edit each through the new `updateTimelineTransition` and `setTimelineTransitionDestination` wrappers in `timelineTransitions.ts`. Switching to individual points copies the shape's slot samples, read through a one-transition resolver (no core API change). Strings are Tolgee keys under `inspector.timeline.edit`.
+- **Checks:** `tsc --noEmit`: pass.
+- **Next:** unit tests for the planner, component tests for each control, history tests on a real DB.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-transitions`; `pnpm install`; `pnpm exec turbo run build --filter=@openmarch/desktop^... --force`; write `apps/desktop/src/timeline/__test__/timelineTransitionEditor.test.ts`, `apps/desktop/src/components/inspector/__test__/TimelineTransitionEditor.test.tsx` and `apps/desktop/src/db-functions/__test__/timelineTransitionEdits.test.ts`.
