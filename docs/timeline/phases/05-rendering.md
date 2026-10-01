@@ -81,8 +81,8 @@ Static render: in timeline mode, draw positions at the selected page's end beat 
 ### P5.6: Idle warming
 
 - Owner: timeline-worker (timeline/p5-warm-fixtures)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/16
 - Parallel: yes
 - Depends on: P5.4
 
@@ -91,8 +91,8 @@ Idle warming outward from the playback position.
 ### P5.7: Fixture loader
 
 - Owner: timeline-worker (timeline/p5-warm-fixtures)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/16
 - Parallel: yes
 - Depends on: P5.3
 
@@ -101,8 +101,8 @@ Dev fixture loader that builds G1 to G13 and the QA-SC scenarios into a show.
 ### P5.8: Tests and performance numbers
 
 - Owner: timeline-worker (timeline/p5-warm-fixtures)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/16
 - Parallel: yes
 - Depends on: P5.5, P5.7
 
@@ -272,3 +272,24 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** suite result, focused `test:history` on the store test, eslint/prettier/cspell, then the PR.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (818fa51b); run `pnpm --dir apps/desktop run test` in the background and `pnpm --dir apps/desktop run test:history src/timeline/__test__/timelineStore.test.tsx`, then open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.6, P5.7, P5.8
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/16 (818fa51b, plus 8c88b1ad, a lint-only refactor of the SC-11 generator that gives identical output for the same seed).
+  - P5.6: `src/timeline/timelineWarm.ts` and its wiring in `timelineStore.ts`.
+  - P5.7: `src/timeline/fixtures/` (G1 to G13 and G8b, QA-SC-01, -03, -05, and the seeded QA-SC-11 generator), loaded as one `transactionWithHistory` edit through the db-functions. `window.openmarchTimeline` exists only while the flag is on.
+  - P5.8: real-DB fixture tests (the store over each loaded fixture matches the oracle), `timelineScale.test.ts` with the QA-PF numbers in `findings.md`, and the P5.3 store test gaps.
+- **Findings:** every QA-PF budget is met, except one of three QA-PF-03 walk samples (3.51 ms against ≤ 2 ms), probably JIT warm-up in a single-sample measurement. Re-measure with repeated edits before acting on it.
+- **Deferred by policy:** P5.8's Playwright spec (rendered positions at several beats) isn't written, because the current policy bans Playwright/e2e and `build:electron` runs. It is still owed before the exit gate can close.
+- **Checks:**
+  - `turbo run build --filter=@openmarch/desktop^...`: pass.
+  - `tsc --noEmit`: pass.
+  - `test:focused src/timeline/__test__/ src/components/canvas/__test__/`: 121 passed.
+  - `test:history` on `timelineStore.test.tsx`, `timelineStoreWarm.test.ts` and `timelineFixtureLoad.test.ts`: 40 passed.
+  - `pnpm --dir apps/desktop run test`: 98 files passed, 7 skipped; 1,544 tests passed.
+  - Scale test three times: pass.
+  - eslint `--max-warnings 0`, prettier and cspell on `src/timeline/`: pass.
+  - Full `test:history`, e2e and `build:electron`: not run (policy).
+- **Exit gate:** nothing ticked. The P5.8 tests and the `findings.md` numbers become true on the base only when this merges, and the Playwright spec is still missing. The regular suite passes with the flag off on this branch.
+- **Next:** review and merge by the lead. Then a follow-up for the Playwright spec once the policy allows e2e runs.
+- **Blockers:** none.
