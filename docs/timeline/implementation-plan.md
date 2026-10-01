@@ -117,6 +117,23 @@ Phase 0. Record outcomes in the ADR (`docs/adr/0001-timeline-motion-model.md`).
   that saves the workspace settings drops unknown keys, so the backup next to
   the file remains a second signal. To be added to ADR 0001 §6 (text in the
   Phase 9 log).
+- **C-10: Freezing the page-era tables (P9.5).** In timeline mode, `marcher_pages`,
+  `midsets`, `pathways`, `shapes`, `shape_pages` and `shape_page_marchers` refuse
+  INSERT, UPDATE and DELETE through BEFORE triggers named
+  `page_era_frozen_<table>_<ins|upd|del>`. They fire only while
+  `workspace_settings.json_data` has `timelineMode` set to JSON `true`. They live
+  in the `triggers.ts` map, are rebuilt on every open and are checked again for
+  staleness. Exception: a row whose parent (marcher, page, marcher page, shape or
+  shape page) is already gone may be deleted, and inserted while foreign keys are
+  off. That keeps marcher and page deletes cascading, lets repair remove orphans,
+  and lets undo and redo of those deletes replay. The app refuses the same writes
+  first with `E-ARGS`. An undo or redo the freeze refuses (dev-flag history, or
+  timeline-mode history from before P9.5) is removed from its stack, and the user
+  is told it was skipped; any other failed undo or redo is reported and leaves the
+  stacks alone. Repair lifts the freeze while it copies. Consequence: a release
+  without the version guard that opens a converted file can't edit its page-era
+  tables. Phase 10 must remove these triggers from the map before dropping the
+  tables.
 
 ## 3. Phases
 

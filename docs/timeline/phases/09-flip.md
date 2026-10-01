@@ -69,7 +69,7 @@ Remove the dev flag. Timeline mode is the only mode. Prerequisites (from the P9.
 ### P9.5: Freeze page-era writes
 
 - Owner: timeline-worker (timeline/p9-5-freeze-page-writes)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/45
 - Parallel: yes
 - Depends on: P9.3
@@ -430,4 +430,31 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - `pnpm run test`: 171 files passed, 9 skipped; 2,440 tests passed.
   - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run (now a P9.4 prerequisite).
 - **Next:** re-review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P9.5
+
+- **Done:** reviewed PR #45 and squash-merged it at head c5fbf966.
+  - **Review result:** the trigger design was confirmed correct. It covers:
+    - the flag check;
+    - the orphan exception, which is backed by foreign keys;
+    - the order of undo and redo;
+    - ordering with P9.3;
+    - the stale-trigger refresh;
+    - `_blank.dots`.
+  - **Fixes made after review:**
+    - The inspector read `marcher_pages` before checking timeline mode, so new marchers and pages showed "error loading coordinates". It now reads the timeline first.
+    - An undo or redo the freeze refuses is now dropped from its stack, with a notice.
+    - Repair always restores the freeze.
+    - Release-note text was added to the PR.
+  - **Recorded (owner-approved):** C-10 in `implementation-plan.md` and the ADR 0001 §1 line (983ef06f).
+- **Checks (lead, on c5fbf966):**
+  - `tsc --noEmit`: pass.
+  - `test:focused electron`: 20 files, 303 tests passed.
+  - Focused `test:history src/db-functions/__test__/`: 30 files, 661 tests passed.
+  - `pnpm --dir apps/desktop run test`: 172 files, 2,411 tests passed.
+  - `test:timeline`: 172 files, 2,365 tests passed, 0 failed.
+  - Skipped by policy: full `test:history` and e2e.
+- **For P9.7 (release notes):** name the minimum version. Older releases that open a converted file get generic errors when dragging, creating, or deleting a page.
+- **Next:** P9.8 (PR #44) checks are in progress.
 - **Blockers:** none.
