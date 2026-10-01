@@ -112,7 +112,7 @@ Tests through the real write path: QA-DB-11, -12, -13, -24, -25, -26 (26b inform
 ### P4.9: End-to-end fuzz with real undo
 
 - Owner: timeline-worker agent (timeline/p4-e2e-fuzz)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/15
 - Parallel: yes
 - Depends on: P4.8
@@ -123,10 +123,10 @@ QA-INV-09 and QA-UNDO-9: port `e2e.mjs` to drive the real wrapper and `performHi
 
 Tick an item only after running its check, and paste the command and result into the log.
 
-- [ ] P4.7 and P4.8 pass: `pnpm --dir apps/desktop run test:history <file> --silent`
-- [ ] P4.9 passes with its CI seed count, and a longer local run is logged
+- [x] P4.7 and P4.8 pass: `pnpm --dir apps/desktop run test:history <file> --silent`
+- [x] P4.9 passes with its CI seed count, and a longer local run is logged
 - [ ] The full existing desktop suite passes, with no change in page mode
-- [ ] `pnpm --dir apps/desktop exec tsc --noEmit` passes
+- [x] `pnpm --dir apps/desktop exec tsc --noEmit` passes
 
 ## Handoff notes
 
@@ -141,6 +141,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - R-E1 no-op: `setTimelineTransitionRangeInTransaction` writes nothing when the target equals the current range, and `transactionWithHistory` then fails its "no changes" assertion with a plain Error. Callers (P8.9: dragging a clip back where it started) must skip a no-op edit. An emptied row (I-A6) surfaces as `E-DB`, since the spec gives that CHECK no code.
 - Follow-up (pre-existing, from the PR #13 review): if switching the history triggers back to undo mode in `executeHistoryAction`'s finally block throws after a successful commit, the drained batch is never delivered and the response reports failure.
 - `executeHistoryAction` switches only the replayed group's tables to redo mode, so a future trigger that writes another tracked table during a replay would log onto the wrong stack (the P4.9 v0.6 control breaks undo this way). No current trigger does this: the validation triggers only RAISE, the change-log triggers write `timeline_change_log`, and FKs are off during the replay.
+- Fuzz follow-up (from the PR #15 re-review): an invalid op that throws counts as "applied" whatever the reason; giving each invalid op its expected error code(s) and asserting the rejection reason would make coverage stricter. The E-T5 path in "shape to individual" has no coverage counter.
 
 ## Progress log
 
@@ -341,3 +342,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Skipped per policy: the full `test:history` suite, the full desktop suite and e2e.
 - **Next:** re-review and merge PR #15.
 - **Blockers:** none.
+
+### 2026-09-30 · lead session · P4.9 (reviewed and merged); Phase 4 code complete
+
+- **Done:** fork PR #15's first review asked for changes (unexpected E-DB reasons passed silently; a missing batch could pass; coverage counted invalid ops that never ran). The worker fixed them; the batch rule now keys on the columns the change-log triggers record (exactly one batch when they change; otherwise at most one, and only if every row's net change is a no-op), which the re-review checked against `triggers.ts` and approved. The lead fixed one re-review nit before merging (runs smaller than the default skip the coverage check instead of failing it). Merged as e429b97c. P4.9 set to done. Every Phase 4 package is done.
+- **Checks:** at the PR head: tsc (pass); default fuzz (8 passed, 11 skipped); with `TIMELINE_E2E_SEEDS=1` (3 passed, coverage skipped). The worker's medium run (100 seeds × 80 steps): 3,407 commits, 2,856 rejections (1,135 with an applied invalid change), 1,786 undo steps and 360 redo steps, 1,874,570 positions compared, no failures; the v0.6 negative control broke undo on seed 1. On the merged base: tsc (pass); `test:history` on timelineRangeEdit, timelineWrites, timelineUndo, timelineE2eFuzz, timelineChanges and timelineHistory (6 files, 85 passed, 11 skipped). Exit-gate items for P4.7/P4.8, P4.9 and tsc ticked. Not ticked: "the full existing desktop suite passes", because the full `test:history` suite is skipped under the current policy (the regular suite has passed on every Phase 4 PR).
+- **Next:** Phase 4 stays in-progress only for that gate item.
+- **Blockers:** the full `test:history` run waits on the policy.
