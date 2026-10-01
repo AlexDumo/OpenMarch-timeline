@@ -16,6 +16,11 @@ import {
     notifyTimelineBatch,
 } from "./timelineChanges";
 import { timelineHistoryFocus, timelineModeOn } from "./timelineHistoryFocus";
+import {
+    bumpTimelineDisplayVersion,
+    historyStatementTable,
+    touchesTimelineDisplayTables,
+} from "./timelineDisplay";
 
 const tablesWithHistory = [
     schema.beats,
@@ -90,6 +95,7 @@ export const transactionWithHistory = async <T>(
     // eslint-disable-next-line max-lines-per-function
     async function runLockedTransactionWithHistory(): Promise<T> {
         let drained: ChangeBatch | undefined;
+        let touchedDisplayTables = false;
         // eslint-disable-next-line max-lines-per-function
         const output = await db.transaction(async (tx) => {
             const startMessage = `=========== start ${funcName} ============`;
@@ -186,6 +192,19 @@ export const transactionWithHistory = async <T>(
 
                 // Spec §6: commit-time invariants, then drain the change log
                 drained = await checkAndDrainTimelineChangesInTransaction(tx);
+
+                // P7.15: edits the change log doesn't carry still refresh the views that read rows
+                const written = await tx
+                    .select({ sql: schema.history_undo.sql })
+                    .from(schema.history_undo)
+                    .where(eq(schema.history_undo.history_group, groupBefore))
+                    .all();
+                touchedDisplayTables = touchesTimelineDisplayTables(
+                    written.flatMap((row) => {
+                        const name = historyStatementTable(row.sql);
+                        return name ? [name] : [];
+                    }),
+                );
             } catch (err: any) {
                 // Remove the items from the history tables that were added by the transaction
                 error = err as Error;
@@ -200,6 +219,7 @@ export const transactionWithHistory = async <T>(
         });
         // Only reached once the transaction has committed
         notifyTimelineBatch(drained);
+        if (touchedDisplayTables) bumpTimelineDisplayVersion();
         return output;
     }
 
@@ -921,6 +941,8 @@ async function executeHistoryActionUnlocked(
 
         // The action has committed; deliver its batch
         notifyTimelineBatch(committedBatch);
+        if (touchesTimelineDisplayTables(tableNames))
+            bumpTimelineDisplayVersion();
 
         response = {
             success: true,

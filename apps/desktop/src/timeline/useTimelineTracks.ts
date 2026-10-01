@@ -3,6 +3,10 @@ import type { Diagnostic, SpanInfo } from "@openmarch/core";
 import { asc } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { withTimelineWriteLock } from "@/db-functions/history";
+import {
+    timelineDisplayVersion,
+    useTimelineDisplayStore,
+} from "@/db-functions/timelineDisplay";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import type { TimelineInput } from "@/components/timeline/Timeline";
 import { assignmentFromRow } from "./timelineRows";
@@ -74,6 +78,8 @@ const NO_TRACKS: readonly TimelineInput[] = [];
 /** Rows read under the write lock, with the resolver store version they match. */
 interface VersionedTables {
     readonly version: number;
+    /** The display version (P7.15) at the same moment */
+    readonly displayVersion: number;
     readonly tables: TimelineViewTables;
 }
 
@@ -87,7 +93,11 @@ export const readVersionedTimelineViewTables = (
 ): Promise<VersionedTables> =>
     withTimelineWriteLock(async () => {
         const tables = await readTimelineViewTables(database);
-        return { version: useTimelineResolverStore.getState().version, tables };
+        return {
+            version: useTimelineResolverStore.getState().version,
+            displayVersion: timelineDisplayVersion(),
+            tables,
+        };
     });
 
 /**
@@ -115,6 +125,7 @@ export function useTimelineTracks({
 }): readonly TimelineInput[] {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
+    const displayVersion = useTimelineDisplayStore((s) => s.version);
     const active = enabled && resolver !== null;
 
     const [loaded, setLoaded] = useState<VersionedTables | null>(null);
@@ -134,7 +145,7 @@ export function useTimelineTracks({
         return () => {
             current = false;
         };
-    }, [active, database, version]);
+    }, [active, database, version, displayVersion]);
 
     // Per resolver version: the spans asked for so far, and the diagnostics
     const cache = useMemo(() => {
@@ -158,7 +169,11 @@ export function useTimelineTracks({
     const built = useMemo(() => {
         if (!active || !loaded) return NO_TRACKS;
         // Rows of another version: wait for the matching read
-        if (loaded.version !== version) return null;
+        if (
+            loaded.version !== version ||
+            loaded.displayVersion !== displayVersion
+        )
+            return null;
         const filter: TimelineTrackFilter = {
             kind: "default",
             selectedMarcherIds,
@@ -171,7 +186,7 @@ export function useTimelineTracks({
             },
             filter,
         );
-    }, [active, loaded, version, cache, selectedMarcherIds]);
+    }, [active, loaded, version, displayVersion, cache, selectedMarcherIds]);
 
     const last = useRef<readonly TimelineInput[]>(NO_TRACKS);
     if (built !== null) last.current = built;

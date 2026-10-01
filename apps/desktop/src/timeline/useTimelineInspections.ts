@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Diagnostic } from "@openmarch/core";
+import { useTimelineDisplayStore } from "@/db-functions/timelineDisplay";
 import type { DbConnection } from "@/db-functions/types";
 import {
     getTimelineHost,
@@ -38,6 +39,7 @@ const EMPTY_BUILT: Built = {
 
 interface VersionedTables {
     readonly version: number;
+    readonly displayVersion: number;
     readonly tables: TimelineViewTables;
 }
 
@@ -78,6 +80,7 @@ export function useTimelineInspections({
 } {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
+    const displayVersion = useTimelineDisplayStore((s) => s.version);
     const active = enabled && resolver !== null;
 
     const [loaded, setLoaded] = useState<VersionedTables | null>(null);
@@ -97,7 +100,7 @@ export function useTimelineInspections({
         return () => {
             current = false;
         };
-    }, [active, database, version]);
+    }, [active, database, version, displayVersion]);
 
     const storeDiagnostics = useDiagnostics();
     const diagnostics = active ? storeDiagnostics : NO_DIAGNOSTICS;
@@ -117,7 +120,11 @@ export function useTimelineInspections({
         if (!active || !resolver || !loaded || beat === null)
             return EMPTY_BUILT;
         // Rows of another version: wait for the matching read
-        if (loaded.version !== version) return null;
+        if (
+            loaded.version !== version ||
+            loaded.displayVersion !== displayVersion
+        )
+            return null;
         const host = getTimelineHost();
         if (!host) return EMPTY_BUILT;
         const shapeKinds: Record<number, string> = {};
@@ -151,7 +158,16 @@ export function useTimelineInspections({
                 loaded.tables.shapes,
             ),
         };
-    }, [active, resolver, loaded, version, beat, known, diagnostics]);
+    }, [
+        active,
+        resolver,
+        loaded,
+        version,
+        displayVersion,
+        beat,
+        known,
+        diagnostics,
+    ]);
 
     const last = useRef<Built>(EMPTY_BUILT);
     if (built !== null) last.current = built;

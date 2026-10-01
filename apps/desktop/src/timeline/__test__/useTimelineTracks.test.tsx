@@ -1,7 +1,12 @@
 import { afterEach, expect, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
-import { performUndo, transactionWithHistory } from "@/db-functions/history";
+import { eq } from "drizzle-orm";
+import {
+    performRedo,
+    performUndo,
+    transactionWithHistory,
+} from "@/db-functions/history";
 import type { TimelineInput } from "@/components/timeline/Timeline";
 import {
     startTimelineResolver,
@@ -141,6 +146,37 @@ describeDbTests("useTimelineTracks", (it) => {
                 shapeTrackId(1, 1),
             ]),
         );
+    });
+
+    it("refreshes after a shape rename and its undo and redo, which the change log doesn't carry (P7.15)", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const { result } = renderHook(() =>
+            useTimelineTracks({
+                database: db,
+                enabled: true,
+                selectedMarcherIds: NONE,
+            }),
+        );
+        await waitFor(() =>
+            expect(result.current[0]?.label).toBe("Front line"),
+        );
+
+        await transactionWithHistory(db, "renameShape", (tx) =>
+            tx
+                .update(schema.timeline_shapes)
+                .set({ name: "Back line" })
+                .where(eq(schema.timeline_shapes.id, 1)),
+        );
+        await waitFor(() => expect(result.current[0]?.label).toBe("Back line"));
+        await performUndo(db);
+        await waitFor(() =>
+            expect(result.current[0]?.label).toBe("Front line"),
+        );
+        await performRedo(db);
+        await waitFor(() => expect(result.current[0]?.label).toBe("Back line"));
     });
 
     it("shows the selected marchers' tracks", async ({ db }) => {
