@@ -169,8 +169,8 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 
 ### P7.15: Refresh views on edits outside the change log
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-15-refresh-views)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.13
