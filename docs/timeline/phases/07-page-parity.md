@@ -189,8 +189,8 @@ For the exit-gate item "each feature's existing tests pass in timeline mode". Ad
 
 ### P7.18: Feature tests that reach the timeline path
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-timeline-path-tests)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P7.17
