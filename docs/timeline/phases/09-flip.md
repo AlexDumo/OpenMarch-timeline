@@ -48,8 +48,8 @@ Back up the file before converting (next to the original, with a clear name).
 
 ### P9.3: Convert on open
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p9-3-convert-on-open)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P9.2
