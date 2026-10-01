@@ -500,3 +500,11 @@ Facts that change how to read the PR #14 note above:
 - **Next:** tests in `src/db-functions/__test__/timelineRipple.test.ts`.
 - **Resume from:** branch `timeline/p7-ripple` at `f9ea01bf`; write the tests (converted `marchersAndPages` show with the flag set in `workspace_settings`): beat insert before, inside and after a move; beat delete inside a move and refusals; page resize; page insert and delete; undo/redo round trips; flag off. Run with `pnpm --dir apps/desktop exec vitest run src/db-functions/__test__/timelineRipple.test.ts` and `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineRipple.test.ts`.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-ripple) · P7.4, P7.5 checkpoint 2
+
+- **Done:** tests `src/db-functions/__test__/timelineRipple.test.ts` (17, converted show, flag in `workspace_settings`) pass; commit `5e7217e9`.
+- **Checks:** `tsc --noEmit` clean; `vitest run` on the new test file: 17 passed; `test:history` on timelineRipple, beat, page, measures, timelineCommands and timelineRangeEdit: 6 files, 265 passed. Regular desktop suite running.
+- **Next:** read the regular suite's result, write the decisions into the log, open the PR.
+- **Resume from:** branch `timeline/p7-ripple` at `5e7217e9`; re-run `pnpm --dir apps/desktop run test` (background), then open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+- **Blockers:** none.
