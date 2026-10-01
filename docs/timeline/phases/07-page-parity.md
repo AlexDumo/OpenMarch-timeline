@@ -170,8 +170,8 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 ### P7.16: Per-page appearance on the canvas and previous-show import
 
 - Owner: timeline-worker (timeline/p7-page-appearance)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/37
 - Parallel: yes
 - Depends on: P7.14
 
@@ -1257,3 +1257,21 @@ Facts that change how to read the PR #14 note above:
 - **Next:** full timeline-mode run 3 (running), then the default run, the PR and the triage table.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p7-feature-tests` at 564e5fcd; `pnpm install`; build the desktop's dependencies; run `pnpm --dir apps/desktop run test:timeline` alone in the background, then `pnpm --dir apps/desktop run test` alone.
+
+### 2026-10-01 · timeline-worker (timeline/p7-page-appearance) · P7.16 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/37, one commit, `6e4b367d`.
+  - Canvas: `marcherAppearancesQueryOptions` reads the flag with `readTimelineMode` when it runs. In timeline mode it skips the page's `marcher_pages` rows and passes `{}` to `_combineMarcherAppearances`, as P7.12 passes `marcherPagesRows: []`. Both workspace settings mutations now invalidate `marcherAppearancesKeys.all()`, so turning the flag on or off recomputes. Page mode is unchanged, with a guard test.
+  - Import: `readPreviousDotsFile` takes positions from the source's resolver at the last page's end beat (homes where nothing is assigned), through the new `src/timeline/sourceTimelinePositions.ts`. Otherwise it keeps the old `marcher_pages` read.
+  - Decision for the reviewer: the source counts as timeline mode only when its flag is on **and** it has the timeline tables, not when it merely has the tables. Every file migrated to 0017 has those tables, so a tables-only test would import page-mode shows at their homes.
+  - `lastPageEndBeat` mirrors `fromDatabasePages` plus `pageEndBeat`, so `Page` isn't loaded in the main process. A table test checks it against the renderer functions.
+- **Checks:** all from `apps/desktop`.
+  - `tsc --noEmit`: pass.
+  - The 2 new test files (`useMarcherAppearancesTimelineMode.test.ts`, `previous-dots-import-service.test.ts`): 14 passed, under both `vitest run` and focused `test:history`.
+  - `pnpm run build`: pass.
+  - `pnpm run test`, run once and alone: 158 files passed, 7 skipped; 2,256 tests passed.
+  - prettier, eslint and cspell, plus the pre-commit hook: pass.
+  - Skipped by policy: full `test:history`, e2e and `build:electron`. No manual app run.
+- **Not ticked:** the two inventory items (`MarcherPage.ts`/`useMarcherAppearances.ts` under P7.14, and `previous-dots-import-service.ts` under P7.3). They become true only when PR #37 merges.
+- **Next:** the lead reviews PR #37.
+- **Blockers:** none.
