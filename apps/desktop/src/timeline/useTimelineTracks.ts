@@ -3,14 +3,12 @@ import type { Diagnostic, SpanInfo } from "@openmarch/core";
 import { asc } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { withTimelineWriteLock } from "@/db-functions/history";
-import {
-    timelineDisplayVersion,
-    useTimelineDisplayStore,
-} from "@/db-functions/timelineDisplay";
+import { timelineDisplayVersion } from "@/db-functions/timelineDisplay";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import type { TimelineInput } from "@/components/timeline/Timeline";
 import { assignmentFromRow } from "./timelineRows";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
+import { useTimelineViewVersions } from "./useTimelineViewVersions";
 import {
     buildTimelineTracks,
     type TimelineTrackFilter,
@@ -124,8 +122,7 @@ export function useTimelineTracks({
     selectedMarcherIds: ReadonlySet<number>;
 }): readonly TimelineInput[] {
     const resolver = useTimelineResolverStore((s) => s.resolver);
-    const version = useTimelineResolverStore((s) => s.version);
-    const displayVersion = useTimelineDisplayStore((s) => s.version);
+    const { version, displayVersion } = useTimelineViewVersions();
     const active = enabled && resolver !== null;
 
     const [loaded, setLoaded] = useState<VersionedTables | null>(null);

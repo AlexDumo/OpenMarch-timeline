@@ -1,7 +1,12 @@
 import { afterEach, expect } from "vitest";
+import { eq } from "drizzle-orm";
 import { renderHook, waitFor } from "@testing-library/react";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
-import { performUndo, transactionWithHistory } from "@/db-functions/history";
+import {
+    performRedo,
+    performUndo,
+    transactionWithHistory,
+} from "@/db-functions/history";
 import { startTimelineResolver, stopTimelineResolver } from "../timelineStore";
 import { useTimelineInspections } from "../useTimelineInspections";
 
@@ -225,5 +230,40 @@ describeDbTests("useTimelineInspections", (it) => {
         );
         expect(result.current.inspections).toEqual([]);
         expect(result.current.diagnostics).toEqual([]);
+    });
+
+    it("reloads after a timeline rename, which the change log doesn't carry (P7.15)", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const ids = [1, 2];
+        const { result } = renderHook(() =>
+            useTimelineInspections({
+                database: db,
+                enabled: true,
+                marcherIds: ids,
+                beat: 5,
+            }),
+        );
+        await waitFor(() =>
+            expect(
+                result.current.inspections[0]?.transition?.timelineName,
+            ).toBe("Opener"),
+        );
+        const name = () =>
+            result.current.inspections[0]?.transition?.timelineName;
+
+        await transactionWithHistory(db, "renameTimeline", (tx) =>
+            tx
+                .update(schema.timelines)
+                .set({ name: "Renamed" })
+                .where(eq(schema.timelines.id, 1)),
+        );
+        await waitFor(() => expect(name()).toBe("Renamed"));
+        await performUndo(db);
+        await waitFor(() => expect(name()).toBe("Opener"));
+        await performRedo(db);
+        await waitFor(() => expect(name()).toBe("Renamed"));
     });
 });

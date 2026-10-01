@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Diagnostic } from "@openmarch/core";
-import { useTimelineDisplayStore } from "@/db-functions/timelineDisplay";
 import type { DbConnection } from "@/db-functions/types";
 import {
     getTimelineHost,
@@ -17,6 +16,7 @@ import {
     type TransitionEditTarget,
     type TransitionShapeOption,
 } from "./timelineTransitionEditor";
+import { useTimelineViewVersions } from "./useTimelineViewVersions";
 import { readVersionedTimelineViewTables } from "./useTimelineTracks";
 import type { TimelineViewTables } from "./timelineViewModel";
 
@@ -79,8 +79,7 @@ export function useTimelineInspections({
     shapeOptions: readonly TransitionShapeOption[];
 } {
     const resolver = useTimelineResolverStore((s) => s.resolver);
-    const version = useTimelineResolverStore((s) => s.version);
-    const displayVersion = useTimelineDisplayStore((s) => s.version);
+    const { version, displayVersion } = useTimelineViewVersions();
     const active = enabled && resolver !== null;
 
     const [loaded, setLoaded] = useState<VersionedTables | null>(null);

@@ -20,6 +20,7 @@ import {
     bumpTimelineDisplayVersion,
     historyStatementTable,
     touchesTimelineDisplayTables,
+    undoGroupTouchesDisplayTables,
 } from "./timelineDisplay";
 
 const tablesWithHistory = [
@@ -194,16 +195,9 @@ export const transactionWithHistory = async <T>(
                 drained = await checkAndDrainTimelineChangesInTransaction(tx);
 
                 // P7.15: edits the change log doesn't carry still refresh the views that read rows
-                const written = await tx
-                    .select({ sql: schema.history_undo.sql })
-                    .from(schema.history_undo)
-                    .where(eq(schema.history_undo.history_group, groupBefore))
-                    .all();
-                touchedDisplayTables = touchesTimelineDisplayTables(
-                    written.flatMap((row) => {
-                        const name = historyStatementTable(row.sql);
-                        return name ? [name] : [];
-                    }),
+                touchedDisplayTables = await undoGroupTouchesDisplayTables(
+                    tx,
+                    groupBefore,
                 );
             } catch (err: any) {
                 // Remove the items from the history tables that were added by the transaction
@@ -883,7 +877,7 @@ async function executeHistoryActionUnlocked(
 
         const tableNames = new Set<string>();
         for (const sql of sqlStatements) {
-            const tableName = sql.match(/"(.*?)"/)?.[0].replaceAll('"', "");
+            const tableName = historyStatementTable(sql);
             if (tableName) {
                 tableNames.add(tableName);
             }
