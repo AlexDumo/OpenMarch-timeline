@@ -293,3 +293,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** `tsc --noEmit` pass; `test:focused electron/database` 10 files, 173 tests pass; `test:history` on the new and touched files plus `pageConversion`, `timelineStore.test.tsx`, `timelineChanges`, `marcher.test.ts` 6 files, 70 pass; `test:history src/timeline` 12 files, 141 pass; eslint, prettier, cspell clean. Skipped per policy: full `test:history`, e2e.
 - **Next:** reviewer re-runs the checks and merges.
 - **Blockers:** none.
+
+### 2026-09-30 · lead session · change-log precision (reviewed and merged)
+
+- **Done:** fork PR #18 reviewed by a sub-agent (APPROVE WITH NITS: the change-log images for marcher homes and slot-destination x/y now use `json(printf('%!.17g', …))`, which yields JSON numbers that round-trip exactly; the refresh runs after the file-version guard, so a refused file is never written). Before merging, the lead made `recreateChangeLogTriggers` compare each stored trigger body (normalized the way `sqlite_master` stores it: no `IF NOT EXISTS`, no trailing semicolon) and recreate only missing or changed ones inside one `BEGIN IMMEDIATE` transaction, with a test that a second refresh doesn't change `schema_version`. Merged. The live resolver now matches stored coordinates exactly (spec §10.2); `pageConversion.test.ts` compares exactly.
+- **Checks:** at the PR head: tsc (pass); `test:focused electron/database` (10 files, 173 passed); the regular desktop suite (104 files, 1,576 passed). After the lead's changes: tsc, eslint, `test:focused electron/database` (173 passed); `test:history` on the precision, page-conversion and change tests (20 passed).
+- **Next:** none for this fix.
+- **Blockers:** none.
