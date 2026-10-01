@@ -91,8 +91,8 @@ Verify that a converted show plays back like the original. (1) A purpose-built t
 
 ### P6.7: Glide across missing rows
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p6-gap-glide)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P6.5
