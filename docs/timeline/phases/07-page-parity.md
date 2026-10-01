@@ -185,6 +185,8 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 
 - From the P7.2 review (PR #20): in timeline mode, "set all/selected marchers to the previous/next page" is refused with a toast ("This isn't available in timeline mode yet.") and writes nothing, because it would copy stale `marcher_pages` rows. P7.6 replaces the refusal (`refuseInTimelineMode` in `src/timeline/timelineCoordinateWrites.ts`) with a resolver-based version. The P7.2 coordinate tools read only the resolver in timeline mode, never `marcher_pages`, so they keep working once P7.3 stops writing those rows.
 
+- Open item (from the P7.4/P7.5 review, PR #26): page and beat edits made while the timeline flag is OFF don't ripple the timeline rows (`withTimelinePageRipple` only runs in timeline mode). Turning the flag back on then shows rows over the wrong beats. Out of scope for P7.4/P7.5; it needs a policy before the flip (Phase 9), for example always ripple once a file has timeline rows, or re-convert on toggle.
+
 ### P7.1 inventory of page-coordinate code
 
 Written by P7.1 on 2026-09-30 against `timeline-try-2` at `e429b97c`. Paths are under `apps/desktop/` and line numbers are approximate. Tick an item when its owning package has either made it work in timeline mode or shown it needs no change. Legend: R reads page-era data, W writes it. "P5" means timeline mode already handles it. Re-run the searches in the P7.1 log entry before trusting this list after big merges.
@@ -532,4 +534,24 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: the full `test:history`, Playwright and `build:electron`. The app was not run by hand.
 - **Exit gate:** "`test:history` passes for every ripple procedure" is not ticked; it becomes true when PR #26 merges, and the full suite is skipped by policy.
 - **Next:** review and merge PR #26.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-ripple) · P7.4, P7.5 review fixes
+
+- **Done (lead review of PR #26, commit `e3ddff2c`, after merging the current `timeline-try-2`):**
+  - Page delete now removes only the page's **page moves**: shapeless transitions over exactly the page's beats whose assignments are all layer 0 and cover them (what the converter writes). Other tracks are never deleted by a page edit. If one would lose all its beats, the edit is refused with `E-ARGS` naming the move and its timeline, and nothing is written. Tests: a layer-1 track over exactly the deleted page is kept; deleting page 3 with its beats removes its page move and shifts the rest; the same delete with a track inside the page is refused and writes nothing.
+  - The audio player's "replace all beats" is one edit: create the beats, point the pages at the new beats, replace the measures and delete the old beats, all under one ripple wrapper. A refusal therefore leaves nothing, not even the new beats. The audio mutations show timeline refusals through `toastTimelineError` and keep `audio.beats.*.error` for other errors. Tests: the replace is one edit that one undo restores; a refusal writes nothing.
+  - New tests: a non-page track ending on a page boundary grows with the page when beats go in there; nested wrappers in one edit ripple once.
+  - The module comment no longer says every refusal comes before the first write: the holding moves' out-of-bounds refusal runs after the ripple's writes, and the transaction rolls back.
+- **Corrections to my in-review entry above:**
+  - **Row edges:** any row's edge on a page boundary follows the page, not only page moves. So a track ending where a page ends grows when beats are inserted there, as the page's own move does. Only edges off page boundaries use the beat rule: a row ending at p stays when beats go in at p.
+  - **MusicXML import** is one transaction and refuses cleanly. The known limit I gave for it was wrong. The audio player's two-edit replace was the real case, and it is fixed above.
+- **Checks:**
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
+  - `vitest run src/db-functions/__test__/timelineRipple.test.ts`: 24 passed.
+  - `test:history` on timelineRipple, beat, page, measures and EditableAudioPlayerUtils: 5 files, 281 passed, 1 skipped, 1 todo.
+  - `pnpm --dir apps/desktop run test`: 127 files passed, 7 skipped; 1,864 tests passed.
+  - eslint, prettier --check and cspell on the changed files: clean.
+  - Skipped by policy: the full `test:history`, Playwright and `build:electron`.
+- **Next:** the lead re-reviews and merges PR #26.
 - **Blockers:** none.
