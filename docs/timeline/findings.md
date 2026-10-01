@@ -110,3 +110,10 @@ Exit code 0. `run_all.sh` itself truncates each line to 90 characters. Environme
 ### 2026-09-30 · lead session · `Canvas.test.tsx` is load-sensitive
 
 - `src/components/canvas/__test__/Canvas.test.tsx` ("renders") can time out waiting for `fieldCanvas` while the canvas still shows its loading spinner, when another test run shares the machine. It passed alone twice on the same code. Treat a lone failure there as load, and re-run it alone before blaming a PR.
+
+### 2026-09-30 · timeline-worker (timeline/p6-converter) · P6.5 · change-log images round REAL columns
+
+- **What:** the timeline change-log triggers (`apps/desktop/electron/database/migrations/triggers.ts`) build their row images with `json_object`/`json_array`, and SQLite renders a REAL in JSON with 15 significant digits. Homes (`marchers.home_x/home_y`) and slot destinations (`timeline_slot_destinations.x/y`) therefore reach the running resolver store rounded: `81.30704416322351` arrives as `81.3070441632235`.
+- **Effect:** after any edit, the live store's mirror (`timelineHost.ts`, updated from batch images) differs from the rows by up to about 4e-12 field units on the `marchersAndPages` mock show, until the next cold build. The rows are exact, a cold build is exact, and undo/redo replay (`quote()`) round-trips exactly. So spec P-7 (arrivals equal the model's points bit for bit) and the Phase 6 goal (page ends exactly equal to `marcher_pages`) hold for a cold build but not for the store that followed the edit, for example right after `window.openmarchTimeline.convertPages()`.
+- **Evidence:** `apps/desktop/src/timeline/__test__/pageConversion.test.ts` ("is one undoable edit"): with the store running during the conversion, page ends match within 1e-9 but not bit for bit; after a restart they match bit for bit. Check: `node -e "…select json_array(81.30704416322351)"` gives `[81.3070441632235]`.
+- **Possible fix (not made in P6):** emit the REAL columns as `json(printf('%!.17g', x))` in the image builders, or read homes and destinations back from the tables when a batch names them. Either touches the Phase 3/4 change-log contract, so it is for the lead to route.
