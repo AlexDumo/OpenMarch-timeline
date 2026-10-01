@@ -19,6 +19,14 @@ import {
     type TimelineHost,
 } from "./timelineHost";
 import { readTimelineTables } from "./timelineRows";
+import {
+    defaultWarmScheduler,
+    startIdleWarming,
+    transitionBoundaries,
+    warmOrder,
+    type WarmHandle,
+    type WarmScheduler,
+} from "./timelineWarm";
 
 /**
  * The resolver store for the open file (docs/timeline/phases/05-rendering.md P5.3, ADR 0001 §4
@@ -26,8 +34,9 @@ import { readTimelineTables } from "./timelineRows";
  *
  * While started, it cold-builds the resolver from the tables, applies each committed batch from
  * `subscribeTimelineChanges` (mirror first, then `resolver.notify`), and cold-builds again on
- * `reset` or when applying a batch fails. It runs only while the file's timeline dev flag is on;
- * see `TimelineResolverHost`.
+ * `reset` or when applying a batch fails. After each cold build and batch it warms the caches in
+ * idle time, outward from the beat last drawn (P5.6, `timelineWarm.ts`). It runs only while the
+ * file's timeline dev flag is on; see `TimelineResolverHost`.
  */
 
 export type TimelineResolverStatus = "off" | "loading" | "ready" | "error";
@@ -66,9 +75,55 @@ interface Session {
     build: number;
     /** Settles when the most recently requested cold build has finished */
     pending: Promise<void>;
+    /** The idle warm pass over the current resolver, if one is running or finished */
+    warm: WarmHandle | null;
 }
 
 let session: Session | null = null;
+
+/**
+ * The beat the canvas last asked for through `positionsAt`: where idle warming starts. A new
+ * session starts at beat 1, where the show starts (beat 0 has no time; see `timeMap.ts`).
+ */
+let focusBeat = 1;
+
+let warmScheduler: WarmScheduler | null = null;
+
+/** Replaces the idle-warming scheduler (null restores the default), for tests. */
+export function setTimelineWarmSchedulerForTesting(
+    scheduler: WarmScheduler | null,
+): void {
+    warmScheduler = scheduler;
+}
+
+/** The current idle warm pass, for tests and debug checks. */
+export function getTimelineWarming(): WarmHandle | null {
+    return session?.warm ?? null;
+}
+
+/** Where the next idle warm pass starts: the beat last passed to `positionsAt`. */
+export function timelineWarmFocus(): number {
+    return focusBeat;
+}
+
+function cancelWarming(s: Session): void {
+    s.warm?.cancel();
+    s.warm = null;
+}
+
+/** Restarts idle warming over the session's current resolver, outward from `focusBeat`. */
+function restartWarming(s: Session): void {
+    cancelWarming(s);
+    if (!s.host) return;
+    s.warm = startIdleWarming({
+        resolver: s.host.resolver,
+        beats: warmOrder(
+            transitionBoundaries(s.host.snapshot.transitions),
+            focusBeat,
+        ),
+        scheduler: warmScheduler ?? defaultWarmScheduler(),
+    });
+}
 
 /** The host of the running session, for tests and debug checks. */
 export function getTimelineHost(): TimelineHost | null {
@@ -89,8 +144,10 @@ export function startTimelineResolver(db: DbConnection): Promise<void> {
         host: null,
         build: 0,
         pending: Promise.resolve(),
+        warm: null,
     };
     session = s;
+    focusBeat = 1;
     s.unsubscribe = subscribeTimelineChanges((event) => onChange(s, event));
     useTimelineResolverStore.setState({ ...initialState, status: "loading" });
     return coldBuild(s);
@@ -99,6 +156,7 @@ export function startTimelineResolver(db: DbConnection): Promise<void> {
 /** Stops the resolver and clears the store. Does nothing when it isn't running. */
 export function stopTimelineResolver(): void {
     if (!session) return;
+    cancelWarming(session);
     session.unsubscribe();
     session = null;
     useTimelineResolverStore.setState(initialState);
@@ -120,6 +178,8 @@ export async function timelineResolverSettled(): Promise<void> {
 
 function onChange(s: Session, event: TimelineChangeEvent): void {
     if (session !== s) return;
+    // The resolver's inputs are about to change; warming restarts once they have
+    cancelWarming(s);
     if (event.kind === "reset") {
         void coldBuild(s);
         return;
@@ -136,6 +196,7 @@ function onChange(s: Session, event: TimelineChangeEvent): void {
         return;
     }
     bumpVersion();
+    restartWarming(s);
 }
 
 function bumpVersion(): void {
@@ -149,6 +210,7 @@ function bumpVersion(): void {
  * it holds every batch delivered before it and none after (the batches after it are applied).
  */
 function coldBuild(s: Session): Promise<void> {
+    cancelWarming(s);
     const build = ++s.build;
     s.pending = runColdBuild(s, build);
     return s.pending;
@@ -174,6 +236,7 @@ async function runColdBuild(s: Session, build: number): Promise<void> {
             version: state.version + 1,
             error: null,
         }));
+        restartWarming(s);
     } catch (error) {
         if (session !== s || build !== s.build) return;
         console.error("The timeline resolver failed to build", error);
@@ -207,7 +270,8 @@ function hasMarcher(resolver: Resolver, marcherId: number): boolean {
 
 /**
  * For the render loop: fills `out` with every marcher's position at `beat`, as x, y pairs in
- * `timelineMarcherIds()` order, without allocating.
+ * `timelineMarcherIds()` order, without allocating. The beat becomes the focus of the next idle
+ * warm pass.
  *
  * @returns false, leaving `out` untouched, when no resolver is ready
  */
@@ -218,6 +282,7 @@ export function positionsAt(beat: Beat, out: Float64Array): boolean {
     // old count; the resolver would throw. Report "not drawn" instead, and let the caller resize
     // from timelineMarcherIds().length.
     if (out.length !== 2 * resolver.marcherIds().length) return false;
+    focusBeat = beat;
     resolver.positionsAt(beat, out);
     return true;
 }

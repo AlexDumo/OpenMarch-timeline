@@ -16,6 +16,7 @@ import {
     transactionWithHistory,
 } from "@/db-functions/history";
 import { timelineChangeListenerCount } from "@/db-functions/timelineChanges";
+import { setTimelineTransitionDestinationInTransaction } from "@/db-functions/timelineTransitions";
 import {
     getWorkspaceSettingsParsed,
     updateWorkspaceSettingsParsed,
@@ -421,6 +422,122 @@ describeDbTests("timeline resolver store", (it) => {
                     ),
                 );
             }
+        });
+
+        it("a transition switches between a shape and individual destinations", async ({
+            db,
+        }) => {
+            await seedShow(db);
+            await startTimelineResolver(db);
+            const firstResolver = useTimelineResolverStore.getState().resolver;
+
+            // Shapeless → shape
+            await edit(db, "toShape", (tx) =>
+                setTimelineTransitionDestinationInTransaction({
+                    tx,
+                    transitionId: 4,
+                    destination: { kind: "shape", shapeId: 1 },
+                }),
+            );
+            await expectStoreMatchesTables(db);
+            expect(
+                getTimelineHost()!.snapshot.transitions[4],
+            ).not.toHaveProperty("points");
+            expect(getTimelineHost()!.destinations.has(4)).toBe(false);
+
+            // Shape → individual destinations
+            await edit(db, "toPoints", (tx) =>
+                setTimelineTransitionDestinationInTransaction({
+                    tx,
+                    transitionId: 1,
+                    destination: {
+                        kind: "individual",
+                        points: [
+                            [1, 1],
+                            [3, 1],
+                            [5, 1],
+                            [7, 1],
+                        ],
+                    },
+                }),
+            );
+            await expectStoreMatchesTables(db);
+            expect(getTimelineHost()!.snapshot.transitions[1]!.dest).toBeNull();
+            expect(getTimelineHost()!.snapshot.transitions[1]!.points).toEqual([
+                [1, 1],
+                [3, 1],
+                [5, 1],
+                [7, 1],
+            ]);
+            expect(useTimelineResolverStore.getState().resolver).toBe(
+                firstResolver,
+            );
+        });
+
+        it("a destination update that changes slot_index", async ({ db }) => {
+            await seedShow(db);
+            await startTimelineResolver(db);
+            // Rotate transition 4's destinations up one slot, into a new third slot
+            await edit(db, "rotateSlots", async (tx) => {
+                await tx
+                    .update(schema.timeline_transitions)
+                    .set({ slot_count: 3 })
+                    .where(eq(schema.timeline_transitions.id, 4));
+                await tx
+                    .update(schema.timeline_slot_destinations)
+                    .set({ slot_index: 2 })
+                    .where(eq(schema.timeline_slot_destinations.id, 2));
+                await tx
+                    .update(schema.timeline_slot_destinations)
+                    .set({ slot_index: 1 })
+                    .where(eq(schema.timeline_slot_destinations.id, 1));
+                await tx.insert(schema.timeline_slot_destinations).values({
+                    id: 3,
+                    transition_id: 4,
+                    slot_index: 0,
+                    x: -4,
+                    y: 9,
+                });
+            });
+            await expectStoreMatchesTables(db);
+            expect(getTimelineHost()!.snapshot.transitions[4]!.points).toEqual([
+                [-4, 9],
+                [5, 5],
+                [7, 5],
+            ]);
+        });
+
+        it("an edit committed while the cold build is pending", async ({
+            db,
+        }) => {
+            await seedShow(db);
+            const started = startTimelineResolver(db);
+            expect(useTimelineResolverStore.getState().status).toBe("loading");
+            const edited = edit(db, "moveHome", async (tx) => {
+                await tx
+                    .update(schema.marchers)
+                    .set({ home_x: 11, home_y: -7 })
+                    .where(eq(schema.marchers.id, 3));
+            });
+            await Promise.all([started, edited]);
+            await expectStoreMatchesTables(db);
+            expect(
+                useTimelineResolverStore.getState().resolver!.positionAt(3, -1),
+            ).toEqual([11, -7]);
+
+            // And a reset while a rebuild is pending, followed by an edit
+            const reset = resetTimelineChangeLog(db);
+            const again = edit(db, "moveHomeAgain", async (tx) => {
+                await tx
+                    .update(schema.marchers)
+                    .set({ home_x: 12 })
+                    .where(eq(schema.marchers.id, 3));
+            });
+            await Promise.all([reset, again]);
+            await expectStoreMatchesTables(db);
+            expect(
+                useTimelineResolverStore.getState().resolver!.positionAt(3, -1),
+            ).toEqual([12, -7]);
         });
 
         it("each applied batch bumps the version", async ({ db }) => {
