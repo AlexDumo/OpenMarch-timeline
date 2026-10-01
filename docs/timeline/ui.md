@@ -65,6 +65,23 @@ from it. The spec still wins on the model; this file decides presentation.
   Track) stay in spec beats, and a clip move sends the clip's spec range
   shifted by the dragged beats. A Create Track range from view 0 sends spec
   beat 1, which is the same show time as beat 0.
+- **UI-6: the timeline's commands (P8.9).** A clip move shifts its whole spec
+  timeline, every transition and assignment in it, by the dragged beats
+  (`shiftTimeline`); shapes and destinations stay put, so every position moves
+  in time only. A shift that would leave beat 0 or overlap the same marcher's
+  row at the same layer in another timeline is refused (E-ARGS, E-A3), and a
+  clip dropped where it started writes nothing. Create Track's target is a
+  shape picked by selecting its track, which takes the selected marchers, or
+  else the one selected marcher. Its assignments go one layer above the
+  highest layer the marchers already have in the range (0 where they have
+  none), so the new track steals the range (R-2) the way a breakaway does
+  (G2). Why: at layer 0 it would overlap a converted show's page moves and
+  always be refused (E-A3). A block with fewer cells than marchers is refused
+  (E-T4). A marcher's new track starts at its position at the range start, so
+  it doesn't jump there, but it holds still over the range. If the track steals
+  a move in progress, the marcher stops for the range and the stolen move then
+  resumes with a catch-up, a visible change of speed, because progress is
+  measured against that transition's own end (D-7).
 
 ## Mapping the spec onto the view model
 
