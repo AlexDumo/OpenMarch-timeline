@@ -33,6 +33,13 @@ import { useTolgee } from "@tolgee/react";
 import { FieldProperties } from "@openmarch/core";
 import { fieldPropertiesQueryOptions } from "./useFieldProperties";
 import { appearanceModelRawToParsed } from "@/entity-components/appearance";
+import { moveMarchersOnPage } from "@/db-functions/timelineMoves";
+import {
+    transformMarchersOnPage,
+    type TimelineMoveRequest,
+    type TimelineWritePage,
+} from "@/timeline/timelineCoordinateWrites";
+import { useTimelineMode } from "./useWorkspaceSettings";
 
 const KEY_BASE = "marcher_pages";
 
@@ -145,6 +152,26 @@ export const updateMarcherPagesMutationOptions = (queryClient: QueryClient) => {
     });
 };
 
+/**
+ * Timeline mode's write for "move these marchers on this page" (P7.2): one undoable edit through
+ * `moveMarchersOnPage`. The resolver store picks the change up from the change log, so there is
+ * nothing to invalidate. A refused move (for example a marcher with no move ending on the page)
+ * shows its message.
+ */
+export const moveMarchersOnPageMutationOptions = () => {
+    return mutationOptions({
+        mutationFn: ({ page, moves }: TimelineMoveRequest) =>
+            moveMarchersOnPage({ db, page, moves }),
+        onError: (e, variables) => {
+            conToastError(
+                e instanceof Error ? e.message : `Error moving marchers`,
+                e,
+                variables,
+            );
+        },
+    });
+};
+
 export const swapMarchersMutationOptions = (queryClient: QueryClient) => {
     return mutationOptions({
         mutationFn: ({
@@ -219,9 +246,13 @@ export type MarcherTransformFunction = (args: {
  * @param pageId - The ID of the page to update the selected marchers on.
  * @returns A mutation function that takes a marcher transform function and updates the selected marchers on the selected page.
  */
+// eslint-disable-next-line max-lines-per-function
 export const useUpdateSelectedMarchers = (
     pageId: number | null | undefined,
+    /** The page itself, for timeline mode; page mode only uses `pageId` */
+    timelinePage?: TimelineWritePage | null,
 ) => {
+    const timelineMode = useTimelineMode();
     const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
         marcherPagesByPageQueryOptions(pageId),
     );
@@ -234,6 +265,30 @@ export const useUpdateSelectedMarchers = (
     return useMutation({
         mutationFn: async (transformFunction: MarcherTransformFunction) => {
             if (pageId == null) throw new Error("No page ID provided");
+            if (timelineMode) {
+                // Timeline mode: start from what the canvas draws (the resolver, not
+                // marcher_pages, whose rows can be stale or missing) and write slot destinations
+                if (!timelinePage || timelinePage.id !== pageId)
+                    throw new Error("No page provided for timeline mode");
+                if (!fieldPropertiesLoaded)
+                    throw new Error("Field properties not loaded");
+                if (selectedMarchers.length === 0) {
+                    toast.warning(t("actions.shape.noMarchersSelected"));
+                    return;
+                }
+                const newCoordinates = await transformMarchersOnPage({
+                    db,
+                    page: timelinePage,
+                    marcherIds: selectedMarchers.map((marcher) => marcher.id),
+                    transform: (currentCoordinates) =>
+                        transformFunction({
+                            currentCoordinates,
+                            fieldProperties,
+                            pageId,
+                        }),
+                });
+                return { newCoordinates };
+            }
             if (!marcherPagesLoaded)
                 throw new Error("Marcher pages not loaded");
             if (!fieldPropertiesLoaded)
@@ -285,6 +340,8 @@ export const useUpdateSelectedMarchers = (
             return { newCoordinates };
         },
         onSuccess: () => {
+            // Timeline mode: the resolver store follows the change log
+            if (timelineMode) return;
             if (pageId != null)
                 void invalidateByPage(queryClient, new Set([pageId]));
             else
@@ -293,7 +350,13 @@ export const useUpdateSelectedMarchers = (
                 );
         },
         onError: (e, variables) => {
-            conToastError(`Error updating selected marchers`, e, variables);
+            conToastError(
+                timelineMode && e instanceof Error
+                    ? e.message
+                    : `Error updating selected marchers`,
+                e,
+                variables,
+            );
         },
     });
 };
@@ -308,5 +371,5 @@ export const useUpdateSelectedMarchers = (
 export const useUpdateSelectedMarchersOnSelectedPage = () => {
     const selectedPageContext = useSelectedPage();
     const selectedPage = selectedPageContext?.selectedPage ?? null;
-    return useUpdateSelectedMarchers(selectedPage?.id);
+    return useUpdateSelectedMarchers(selectedPage?.id, selectedPage);
 };
