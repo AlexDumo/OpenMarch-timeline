@@ -8,34 +8,53 @@ import {
     type PathPage,
 } from "./timelinePaths";
 
+export interface TimelineStepSizes {
+    /**
+     * Whether these values replace page mode's: timeline mode is on and the resolver is ready,
+     * the same condition under which the canvas draws from the resolver. While false, the
+     * inspector keeps its page-mode values, as the canvas keeps its page-mode drawing.
+     */
+    active: boolean;
+    stepSize: StepSize | undefined;
+    minMax: MinMaxStepSizes | undefined;
+}
+
+const INACTIVE: TimelineStepSizes = {
+    active: false,
+    stepSize: undefined,
+    minMax: undefined,
+};
+
 /**
  * The inspector's step sizes in timeline mode (docs/timeline/phases/07-page-parity.md P7.10),
  * from the resolver between the previous page's end beat and the selected page's: one marcher's
  * step size when one is selected, the smallest and largest when several are. Both are undefined
- * when `enabled` is false, so page mode keeps its own values, and where page mode has none (the
- * first page, or no resolver yet).
+ * where page mode has none (the first page).
  */
 export function useTimelineStepSizes({
-    enabled,
+    timelineMode,
     marcherIds,
     page,
     previousPage,
     fieldProperties,
 }: {
-    enabled: boolean;
+    timelineMode: boolean;
     marcherIds: readonly number[];
     page: PathPage | null | undefined;
     previousPage: PathPage | null | undefined;
     fieldProperties: FieldProperties | undefined;
-}): { stepSize: StepSize | undefined; minMax: MinMaxStepSizes | undefined } {
+}): TimelineStepSizes {
+    const ready = useTimelineResolverStore((s) => s.status === "ready");
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
 
     return useMemo(() => {
-        if (!enabled || !resolver || !page || !fieldProperties)
-            return { stepSize: undefined, minMax: undefined };
+        if (!timelineMode || !ready || !resolver) return INACTIVE;
+        const none = { active: true, stepSize: undefined, minMax: undefined };
+        if (!page || !fieldProperties) return none;
         if (marcherIds.length === 1)
             return {
+                ...none,
                 stepSize: timelineStepSize({
                     resolver,
                     marcherId: marcherIds[0]!,
@@ -43,11 +62,10 @@ export function useTimelineStepSizes({
                     previousPage,
                     fieldProperties,
                 }),
-                minMax: undefined,
             };
         if (marcherIds.length > 1 && previousPage)
             return {
-                stepSize: undefined,
+                ...none,
                 minMax: timelineMinMaxStepSizes({
                     resolver,
                     marcherIds,
@@ -56,11 +74,12 @@ export function useTimelineStepSizes({
                     fieldProperties,
                 }),
             };
-        return { stepSize: undefined, minMax: undefined };
+        return none;
         // `version` changes whenever the resolver's answers may have
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
-        enabled,
+        timelineMode,
+        ready,
         resolver,
         version,
         marcherIds,

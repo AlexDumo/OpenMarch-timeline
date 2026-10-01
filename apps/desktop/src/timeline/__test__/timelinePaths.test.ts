@@ -259,15 +259,12 @@ describe("step sizes from the resolver", () => {
         expect(stepSize.stepsPerFiveYards).toBeLessThan(
             chord.stepsPerFiveYards,
         );
-        expect(stepSize.stepsPerFiveYards).toBeCloseTo(
-            StepSize.fromDistance({
-                marcher_id: 1,
-                distance: 4 * Math.PI,
-                counts: 8,
-                fieldProperties,
-            }).stepsPerFiveYards,
-            1,
-        );
+        // The stride is the drawn path's length per count. G8's arc is tiny (radius 4 field
+        // units), so the 0.25 tolerance costs about 1% here; at field scale it is far less.
+        const path = sampleTimelinePath(resolver, 1, 0, 8)!;
+        expect(path.stride).toBeCloseTo(path.length / 8, 12);
+        expect(path.stride).toBeGreaterThan((4 * Math.PI * 0.99) / 8);
+        expect(path.stride).toBeLessThanOrEqual((4 * Math.PI) / 8 + 1e-12);
     });
 
     it("is undefined on the first page and holds show as a hold", () => {
@@ -390,8 +387,6 @@ describe("renderTimelinePathVisuals", () => {
             marcherIds: [1],
             previousPaths: into,
             nextPaths: out,
-            currentPageCounts: 4,
-            nextPageCounts: 4,
             previousPathsEnabled: true,
             nextPathsEnabled: true,
             stepSizeWarningsEnabled: false,
@@ -405,8 +400,22 @@ describe("renderTimelinePathVisuals", () => {
         expect(canvas.getObjectsByType(TimelinePathway)).toHaveLength(2);
         expect(previous.visible).toBe(true);
         expect(next.visible).toBe(true);
+        // Offset by half a grid line, like the dots, so the path runs through them
+        const offset = TimelinePathway.gridOffset;
+        expect(offset).toBeGreaterThan(0);
         expect(previous.points!.map((p) => ({ x: p.x, y: p.y }))).toEqual(
-            into.get(1)!.points,
+            into.get(1)!.points.map((p) => ({
+                x: p.x + offset,
+                y: p.y + offset,
+            })),
+        );
+        // Stacked under the dots, where the straight line it replaces sits
+        const objects = canvas.getObjects();
+        expect(objects.indexOf(previous)).toBeLessThan(
+            objects.indexOf(visual.getPreviousMidpoint()),
+        );
+        expect(objects.indexOf(next)).toBeLessThan(
+            objects.indexOf(visual.getNextEndpoint()),
         );
         expect(next.points!.length).toBeGreaterThan(2);
 
@@ -450,8 +459,6 @@ describe("renderTimelinePathVisuals", () => {
             marcherIds: [1],
             previousPaths: new Map(),
             nextPaths: pathsIntoPage(resolver, [1], page(8), page(0)),
-            currentPageCounts: undefined,
-            nextPageCounts: 8,
             previousPathsEnabled: true,
             nextPathsEnabled: false,
             stepSizeWarningsEnabled: false,
@@ -473,8 +480,6 @@ describe("renderTimelinePathVisuals", () => {
             marcherIds: [1],
             previousPaths: new Map(),
             nextPaths: new Map(),
-            currentPageCounts: 8,
-            nextPageCounts: 8,
             previousPathsEnabled: true,
             nextPathsEnabled: true,
             stepSizeWarningsEnabled: true,

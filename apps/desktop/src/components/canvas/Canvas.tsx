@@ -637,6 +637,7 @@ export default function Canvas({
     useTimelinePathRender({
         canvas,
         enabled: drawFromResolver,
+        isPlaying,
         selectedPage,
         pages,
         marcherIds,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-import { createResolver } from "@openmarch/core";
+import { createResolver, type Resolver } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import type { MarcherVisualMap } from "@/hooks/queries";
@@ -69,11 +69,17 @@ const VISUALS = {} as MarcherVisualMap;
 const props = (
     canvas: OpenMarchCanvas,
     enabled: boolean,
-    selectedPage: PathRenderPage = PAGES[1]!,
+    overrides: Partial<{
+        isPlaying: boolean;
+        previousPathsEnabled: boolean;
+        nextPathsEnabled: boolean;
+        stepSizeWarningsEnabled: boolean;
+    }> = {},
 ) => ({
     canvas,
     enabled,
-    selectedPage,
+    isPlaying: false,
+    selectedPage: PAGES[1]!,
     pages: PAGES,
     marcherIds: MARCHER_IDS,
     marcherVisuals: VISUALS,
@@ -81,16 +87,21 @@ const props = (
     previousPathsEnabled: true,
     nextPathsEnabled: true,
     stepSizeWarningsEnabled: true,
+    ...overrides,
 });
+
+const ready = (r: Resolver = resolver()) => {
+    useTimelineResolverStore.setState({
+        status: "ready",
+        resolver: r,
+        version: 1,
+    });
+    return r;
+};
 
 describe("useTimelinePathRender", () => {
     it("draws the moves into and out of the selected page from the resolver", () => {
-        const r = resolver();
-        useTimelineResolverStore.setState({
-            status: "ready",
-            resolver: r,
-            version: 1,
-        });
+        const r = ready();
         const canvas = stubCanvas();
         renderHook(() => useTimelinePathRender(props(canvas, true)));
 
@@ -102,17 +113,11 @@ describe("useTimelinePathRender", () => {
         expect(args.nextPaths).toEqual(
             pathsIntoPage(r, [1], PAGES[2], PAGES[1]),
         );
-        expect(args.currentPageCounts).toBe(4);
-        expect(args.nextPageCounts).toBe(4);
         expect(canvas.removeTimelinePathways).not.toHaveBeenCalled();
     });
 
     it("redraws when the resolver's version changes", () => {
-        useTimelineResolverStore.setState({
-            status: "ready",
-            resolver: resolver(),
-            version: 1,
-        });
+        ready();
         const canvas = stubCanvas();
         renderHook(() => useTimelinePathRender(props(canvas, true)));
         act(() => useTimelineResolverStore.setState({ version: 2 }));
@@ -120,11 +125,7 @@ describe("useTimelinePathRender", () => {
     });
 
     it("removes the curved paths and draws nothing when disabled", () => {
-        useTimelineResolverStore.setState({
-            status: "ready",
-            resolver: resolver(),
-            version: 1,
-        });
+        ready();
         const canvas = stubCanvas();
         const { rerender } = renderHook(
             ({ enabled }) => useTimelinePathRender(props(canvas, enabled)),
@@ -134,67 +135,129 @@ describe("useTimelinePathRender", () => {
         expect(canvas.removeTimelinePathways).toHaveBeenCalledTimes(1);
         expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(1);
     });
+
+    it("neither samples nor draws while playing, and draws once playback stops", () => {
+        const r = ready();
+        const spy = vi.spyOn(r, "positionAt");
+        const canvas = stubCanvas();
+        const { rerender } = renderHook(
+            ({ isPlaying }) =>
+                useTimelinePathRender(props(canvas, true, { isPlaying })),
+            { initialProps: { isPlaying: true } },
+        );
+        act(() => useTimelineResolverStore.setState({ version: 2 }));
+        expect(spy).not.toHaveBeenCalled();
+        expect(canvas.renderTimelinePathVisuals).not.toHaveBeenCalled();
+        expect(canvas.removeTimelinePathways).not.toHaveBeenCalled();
+
+        rerender({ isPlaying: false });
+        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't sample a side that can't show", () => {
+        const r = ready();
+        const canvas = stubCanvas();
+        // Previous paths off (never forced); next paths off and warnings off (nothing forces them)
+        renderHook(() =>
+            useTimelinePathRender(
+                props(canvas, true, {
+                    previousPathsEnabled: false,
+                    nextPathsEnabled: false,
+                    stepSizeWarningsEnabled: false,
+                }),
+            ),
+        );
+        const args = canvas.renderTimelinePathVisuals.mock.calls[0]![0];
+        expect(args.previousPaths.size).toBe(0);
+        expect(args.nextPaths.size).toBe(0);
+
+        // With warnings on, the next side may be forced on, so it is sampled
+        const forced = stubCanvas();
+        renderHook(() =>
+            useTimelinePathRender(
+                props(forced, true, {
+                    previousPathsEnabled: false,
+                    nextPathsEnabled: false,
+                    stepSizeWarningsEnabled: true,
+                }),
+            ),
+        );
+        const forcedArgs = forced.renderTimelinePathVisuals.mock.calls[0]![0];
+        expect(forcedArgs.previousPaths.size).toBe(0);
+        expect(forcedArgs.nextPaths).toEqual(
+            pathsIntoPage(r, [1], PAGES[2], PAGES[1]),
+        );
+    });
+
+    it("redraws a toggle change without resampling the other side", () => {
+        const r = ready();
+        const canvas = stubCanvas();
+        const { rerender } = renderHook(
+            ({ stepSizeWarningsEnabled }) =>
+                useTimelinePathRender(
+                    props(canvas, true, { stepSizeWarningsEnabled }),
+                ),
+            { initialProps: { stepSizeWarningsEnabled: true } },
+        );
+        const spy = vi.spyOn(r, "positionAt");
+        rerender({ stepSizeWarningsEnabled: false });
+        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(2);
+        const [first, second] = canvas.renderTimelinePathVisuals.mock.calls;
+        expect(second![0].previousPaths).toBe(first![0].previousPaths);
+        expect(second![0].nextPaths).toBe(first![0].nextPaths);
+        expect(spy).not.toHaveBeenCalled();
+    });
 });
 
 describe("useTimelineStepSizes", () => {
-    it("is undefined when disabled, so page mode keeps its own", () => {
-        useTimelineResolverStore.setState({
-            status: "ready",
-            resolver: resolver(),
-            version: 1,
-        });
-        const { result } = renderHook(() =>
+    const stepSizes = (timelineMode: boolean, page = PAGES[1]) =>
+        renderHook(() =>
             useTimelineStepSizes({
-                enabled: false,
+                timelineMode,
                 marcherIds: [1],
-                page: PAGES[1],
-                previousPage: PAGES[0],
+                page,
+                previousPage: page === PAGES[0] ? null : PAGES[0],
                 fieldProperties,
             }),
-        );
-        expect(result.current).toEqual({
+        ).result.current;
+
+    it("is inactive with the flag off, so page mode keeps its own", () => {
+        ready();
+        expect(stepSizes(false)).toEqual({
+            active: false,
             stepSize: undefined,
             minMax: undefined,
         });
     });
 
-    it("gives one marcher's step size from the resolver", () => {
+    it("is inactive until the resolver is ready, so the page-mode values stand in", () => {
         useTimelineResolverStore.setState({
-            status: "ready",
-            resolver: resolver(),
-            version: 1,
+            status: "loading",
+            resolver: null,
+            version: 0,
         });
-        const { result } = renderHook(() =>
-            useTimelineStepSizes({
-                enabled: true,
-                marcherIds: [1],
-                page: PAGES[1],
-                previousPage: PAGES[0],
-                fieldProperties,
-            }),
-        );
-        expect(result.current.stepSize?.marcher_id).toBe(1);
-        expect(
-            Number.isFinite(result.current.stepSize!.stepsPerFiveYards),
-        ).toBe(true);
-        expect(result.current.minMax).toBeUndefined();
+        expect(stepSizes(true).active).toBe(false);
+        // A resolver left over from an earlier build doesn't count while the store isn't ready
+        useTimelineResolverStore.setState({
+            status: "error",
+            resolver: resolver(),
+        });
+        expect(stepSizes(true).active).toBe(false);
+    });
+
+    it("gives one marcher's step size from the resolver", () => {
+        ready();
+        const result = stepSizes(true);
+        expect(result.active).toBe(true);
+        expect(result.stepSize?.marcher_id).toBe(1);
+        expect(Number.isFinite(result.stepSize!.stepsPerFiveYards)).toBe(true);
+        expect(result.minMax).toBeUndefined();
     });
 
     it("has nothing on the first page", () => {
-        useTimelineResolverStore.setState({
-            status: "ready",
-            resolver: resolver(),
-            version: 1,
-        });
-        const { result } = renderHook(() =>
-            useTimelineStepSizes({
-                enabled: true,
-                marcherIds: [1],
-                page: PAGES[0],
-                previousPage: null,
-                fieldProperties,
-            }),
-        );
-        expect(result.current.stepSize).toBeUndefined();
+        ready();
+        const result = stepSizes(true, PAGES[0]);
+        expect(result.active).toBe(true);
+        expect(result.stepSize).toBeUndefined();
     });
 });

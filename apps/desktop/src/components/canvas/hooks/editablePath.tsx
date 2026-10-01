@@ -27,7 +27,11 @@ export default function useEditablePath() {
 
     useEffect(() => {
         const refuseInTimelineMode = async (): Promise<boolean> => {
-            if (!(await readTimelineMode(queryClient))) return false;
+            // A failed settings read keeps the page-mode write: page mode must never lose one
+            const timelineMode = await readTimelineMode(queryClient).catch(
+                () => false,
+            );
+            if (!timelineMode) return false;
             console.warn(
                 "Editable pathways are page-mode only; nothing was written in timeline mode",
             );

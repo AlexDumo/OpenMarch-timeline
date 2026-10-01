@@ -1,9 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { FieldProperties } from "@openmarch/core";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
+import { canShowPath } from "@/global/classes/canvasObjects/stepSizeWarning";
 import type { MarcherVisualMap } from "@/hooks/queries";
 import { useTimelineResolverStore } from "./timelineStore";
-import { pathsIntoPage, type PathPage } from "./timelinePaths";
+import {
+    pathsIntoPage,
+    type PathPage,
+    type TimelinePath,
+} from "./timelinePaths";
 
 /** The page fields this hook reads. `Page` satisfies it. */
 export interface PathRenderPage extends PathPage {
@@ -17,20 +22,28 @@ const findPage = (
     id: number | null,
 ): PathRenderPage | null => pages.find((p) => p.id === id) ?? null;
 
+const NO_PATHS: ReadonlyMap<number, TimelinePath> = new Map();
+
 /**
  * Draws the selected page's path visuals from the resolver in timeline mode
  * (docs/timeline/phases/07-page-parity.md P7.10): the move into the selected page and the move
  * out of it, as curves sampled between page end beats, with midsets and step-size warnings from
- * the same samples. Redraws when the resolver's answers change. Replaces the page-mode effect in
- * `Canvas.tsx`, which draws straight lines from `marcher_pages`.
+ * the same samples. Replaces the page-mode effect in `Canvas.tsx`, which draws straight lines
+ * from `marcher_pages`.
+ *
+ * Cost: the samples are kept per resolver version and page pair, so toggles and visual changes
+ * redraw without resampling; a side that can't show (its toggle off and no forced warning) isn't
+ * sampled; nothing is sampled or drawn while playing, as with `useTimelineStaticRender`.
  *
  * Does nothing while `enabled` is false (the flag is off, or the resolver isn't ready yet, when
  * the page-mode paths stand in, as the marchers do). When it turns false, the curved paths are
  * removed so the page-mode effect's straight paths are the only ones left.
  */
+// eslint-disable-next-line max-lines-per-function
 export function useTimelinePathRender({
     canvas,
     enabled,
+    isPlaying,
     selectedPage,
     pages,
     marcherIds,
@@ -42,6 +55,7 @@ export function useTimelinePathRender({
 }: {
     canvas: OpenMarchCanvas | null;
     enabled: boolean;
+    isPlaying: boolean;
     selectedPage: PathRenderPage | null;
     pages: readonly PathRenderPage[];
     marcherIds: readonly number[] | undefined;
@@ -53,6 +67,63 @@ export function useTimelinePathRender({
 }): void {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
+    const active = enabled && !isPlaying && resolver !== null;
+
+    const previousPage = selectedPage
+        ? findPage(pages, selectedPage.previousPageId)
+        : null;
+    const nextPage = selectedPage
+        ? findPage(pages, selectedPage.nextPageId)
+        : null;
+    const sampleInto = canShowPath({
+        pathEnabled: previousPathsEnabled,
+        allowForceShow: false,
+        warningsEnabled: stepSizeWarningsEnabled,
+    });
+    const sampleOut = canShowPath({
+        pathEnabled: nextPathsEnabled,
+        allowForceShow: true,
+        warningsEnabled: stepSizeWarningsEnabled,
+    });
+
+    const previousPaths = useMemo(
+        () =>
+            active && sampleInto && marcherIds
+                ? pathsIntoPage(
+                      resolver!,
+                      marcherIds,
+                      selectedPage,
+                      previousPage,
+                  )
+                : NO_PATHS,
+        // `version` changes whenever the resolver's answers may have
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [
+            active,
+            sampleInto,
+            resolver,
+            version,
+            marcherIds,
+            selectedPage,
+            previousPage,
+        ],
+    );
+    const nextPaths = useMemo(
+        () =>
+            active && sampleOut && marcherIds
+                ? pathsIntoPage(resolver!, marcherIds, nextPage, selectedPage)
+                : NO_PATHS,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [
+            active,
+            sampleOut,
+            resolver,
+            version,
+            marcherIds,
+            selectedPage,
+            nextPage,
+        ],
+    );
 
     useEffect(() => {
         if (!canvas) return;
@@ -61,7 +132,7 @@ export function useTimelinePathRender({
             return;
         }
         if (
-            !resolver ||
+            !active ||
             !selectedPage ||
             !marcherIds ||
             marcherVisuals == null ||
@@ -69,25 +140,11 @@ export function useTimelinePathRender({
         )
             return;
 
-        const previousPage = findPage(pages, selectedPage.previousPageId);
-        const nextPage = findPage(pages, selectedPage.nextPageId);
         canvas.renderTimelinePathVisuals({
             marcherVisuals,
-            marcherIds: [...marcherIds],
-            previousPaths: pathsIntoPage(
-                resolver,
-                marcherIds,
-                selectedPage,
-                previousPage,
-            ),
-            nextPaths: pathsIntoPage(
-                resolver,
-                marcherIds,
-                nextPage,
-                selectedPage,
-            ),
-            currentPageCounts: selectedPage.counts,
-            nextPageCounts: nextPage?.counts,
+            marcherIds,
+            previousPaths,
+            nextPaths,
             previousPathsEnabled,
             nextPathsEnabled,
             stepSizeWarningsEnabled,
@@ -98,13 +155,13 @@ export function useTimelinePathRender({
     }, [
         canvas,
         enabled,
-        resolver,
-        version,
+        active,
         selectedPage,
-        pages,
         marcherIds,
         marcherVisuals,
         fieldProperties,
+        previousPaths,
+        nextPaths,
         previousPathsEnabled,
         nextPathsEnabled,
         stepSizeWarningsEnabled,

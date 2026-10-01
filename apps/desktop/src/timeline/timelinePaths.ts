@@ -16,18 +16,18 @@ import { sampleMarcherPath } from "./timelineKeyframes";
  *   marchers on those pages.
  * - **The midpoint** is the position halfway through the move in counts (the midset), so it lies
  *   on the drawn path. For a straight move at a constant pace it is the page-mode midpoint.
- * - **Step size** uses the length along the sampled path over the page's counts. For a straight
- *   move this is page mode's straight-line distance; for a curve it is the distance walked.
+ * - **Step size** is the stride of the marcher's fastest moving stretch within the page: the
+ *   largest length per count over the non-hold spans clipped to the page (lead decision on PR
+ *   #33). Holds, moves that end mid-page and breakaway holds don't dilute it. For a straight move
+ *   over the whole page it is page mode's step size.
  */
-
-/** The chord tolerance for drawn paths, in field units (canvas pixels): under a pixel. */
-export const PATH_DRAW_TOLERANCE = 0.25;
 
 /**
- * The chord tolerance for measuring step sizes. Finer than drawing: a polyline is shorter than
- * the curve it follows, and the step size is shown to a tenth of a step.
+ * The chord tolerance for drawn paths and for step sizes, in field units (canvas pixels): under a
+ * pixel. A polyline is shorter than its curve by roughly the tolerance squared over the radius
+ * per chord, a few thousandths of a step at this tolerance, far under the tenth of a step shown.
  */
-export const STEP_SIZE_TOLERANCE = 0.01;
+export const PATH_DRAW_TOLERANCE = 0.25;
 
 export interface TimelinePath {
     /** From the position at the start beat to the one at the end beat; at least one point */
@@ -38,6 +38,11 @@ export interface TimelinePath {
     midpoint: { x: number; y: number };
     /** The length of `points` as a polyline, in field units */
     length: number;
+    /**
+     * Field units per count of the fastest moving stretch (see the module comment); 0 for a
+     * marcher that holds throughout
+     */
+    stride: number;
 }
 
 type PathResolver = Pick<Resolver, "positionAt" | "spanInfos" | "marcherIds">;
@@ -74,28 +79,25 @@ export function sampleTimelinePath(
     tolerance = PATH_DRAW_TOLERANCE,
 ): TimelinePath | null {
     if (!(fromBeat < toBeat) || !hasMarcher(resolver, marcherId)) return null;
-    const { points } = sampleMarcherPath(
+    const { points, stride } = sampleMarcherPath(
         resolver,
         marcherId,
         fromBeat,
         toBeat,
-        {
-            tolerance,
-        },
+        { tolerance },
     );
     const xy = points.map(([x, y]) => ({ x, y }));
     let length = 0;
     for (let i = 1; i < xy.length; i++)
         length += Math.hypot(xy[i]!.x - xy[i - 1]!.x, xy[i]!.y - xy[i - 1]!.y);
     const [mx, my] = resolver.positionAt(marcherId, (fromBeat + toBeat) / 2);
-    const [sx, sy] = resolver.positionAt(marcherId, fromBeat);
-    const [ex, ey] = resolver.positionAt(marcherId, toBeat);
     return {
         points: xy,
-        start: { x: sx, y: sy },
-        end: { x: ex, y: ey },
+        start: xy[0]!,
+        end: xy[xy.length - 1]!,
         midpoint: { x: mx, y: my },
         length,
+        stride,
     };
 }
 
@@ -143,10 +145,24 @@ export function pathsIntoPage(
     return paths;
 }
 
+/** The step size of a sampled path: its stride as the distance covered in one count. */
+export function stepSizeOfPath(
+    marcherId: number,
+    path: Pick<TimelinePath, "stride">,
+    fieldProperties: FieldProperties,
+): StepSize {
+    return StepSize.fromDistance({
+        marcher_id: marcherId,
+        distance: path.stride,
+        counts: 1,
+        fieldProperties,
+    });
+}
+
 /**
- * The step size of a marcher's move into `page` from `previousPage`, from the resolver: the
- * length along the path over the page's counts. Undefined where page mode has none (no previous
- * page) or the resolver doesn't know the marcher.
+ * The step size of a marcher's move into `page` from `previousPage`, from the resolver (see the
+ * module comment). Undefined where page mode has none (no previous page) or the resolver doesn't
+ * know the marcher.
  */
 export function timelineStepSize({
     resolver,
@@ -161,20 +177,8 @@ export function timelineStepSize({
     previousPage: PathPage | null | undefined;
     fieldProperties: FieldProperties;
 }): StepSize | undefined {
-    const path = pathIntoPage(
-        resolver,
-        marcherId,
-        page,
-        previousPage,
-        STEP_SIZE_TOLERANCE,
-    );
-    if (!path) return undefined;
-    return StepSize.fromDistance({
-        marcher_id: marcherId,
-        distance: path.length,
-        counts: page.counts,
-        fieldProperties,
-    });
+    const path = pathIntoPage(resolver, marcherId, page, previousPage);
+    return path ? stepSizeOfPath(marcherId, path, fieldProperties) : undefined;
 }
 
 /**

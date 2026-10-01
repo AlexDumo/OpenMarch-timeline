@@ -19,6 +19,25 @@ export const WARNING_PATHWAY_DASH = [5, 3];
 // When true, over-threshold paths may be shown even if the visibility toggle is off
 export const FORCE_SHOW_OVER_THRESHOLD_PATHS = true;
 
+/**
+ * Whether `evaluatePathWarning` could show a path with these settings, whatever its step size.
+ * Timeline mode (P7.10) skips sampling a side that can't show.
+ */
+export function canShowPath({
+    pathEnabled,
+    allowForceShow,
+    warningsEnabled,
+}: {
+    pathEnabled: boolean;
+    allowForceShow: boolean;
+    warningsEnabled: boolean;
+}): boolean {
+    return (
+        pathEnabled ||
+        (allowForceShow && warningsEnabled && FORCE_SHOW_OVER_THRESHOLD_PATHS)
+    );
+}
+
 // Decide whether a pathway should be shown and whether it is a step-size warning
 // allowForceShow gates the over-threshold override so only the next path (the current move)
 // reappears past a hidden toggle, previous paths stay hidden when toggled off

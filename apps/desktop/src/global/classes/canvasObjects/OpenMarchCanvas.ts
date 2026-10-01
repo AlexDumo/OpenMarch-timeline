@@ -78,9 +78,10 @@ interface TimelinePathSide {
     /** Which end of the path the endpoint marks */
     endpointAt: "start" | "end";
     pathway: TimelinePathway;
+    /** The page-mode line this side replaces: hidden, and the curve is stacked at its place */
+    straightPathway: Pathway;
     midpoint: Midpoint;
     endpoint: Endpoint;
-    counts: number | undefined;
     pathEnabled: boolean;
     allowForceShow: boolean;
     color: RgbaColor;
@@ -1483,9 +1484,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             path,
             endpointAt,
             pathway,
+            straightPathway,
             midpoint,
             endpoint,
-            counts,
             pathEnabled,
             allowForceShow,
             color,
@@ -1493,13 +1494,20 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         fieldProperties: FieldProperties,
         warningsEnabled: boolean,
     ) {
-        if (!pathway.canvas) this.add(pathway);
+        // Stack the curve where the straight line sits, under the midpoint and endpoint dots
+        if (!pathway.canvas) {
+            const index = this.getObjects().indexOf(straightPathway);
+            if (index >= 0) this.insertAt(pathway, index, false);
+            else this.add(pathway);
+        }
+        straightPathway.hide();
+        // The step size is the stride of the fastest stretch: its distance in one count
         const { show, isWarning } = path
             ? evaluatePathWarning({
                   start: path.start,
                   end: path.end,
-                  distance: path.length,
-                  counts,
+                  distance: path.stride,
+                  counts: 1,
                   fieldProperties,
                   pathEnabled,
                   allowForceShow,
@@ -1512,21 +1520,23 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             endpoint.hide();
             return;
         }
+        // Style first: the stroke width changes the polyline's bounds, which updatePoints computes
+        applyPathwayWarningStyle(pathway, midpoint, isWarning, color);
         pathway.updatePoints(path.points);
         pathway.show();
         midpoint.updateCoords(path.midpoint);
         midpoint.show();
         endpoint.updateCoords(path[endpointAt]);
         endpoint.show();
-        applyPathwayWarningStyle(pathway, midpoint, isWarning, color);
     }
 
     /**
      * Timeline mode's path visuals (P7.10): like `renderPathVisuals`, but each path is sampled from
      * the resolver (`pathsIntoPage`), so it is drawn as a polyline that follows arcs and
-     * follow-the-leader moves, the midpoint is the midset on that path, and the step-size warning
-     * uses the distance along it. The straight page-mode lines are hidden. A marcher with no path
-     * on one side (the first or last page, or unknown to the resolver) has that side hidden.
+     * follow-the-leader moves, and the midpoint is the midset on that path. The step-size warning
+     * uses the path's stride (its fastest stretch per count). The straight page-mode lines are
+     * hidden. A marcher with no path on one side (the first or last page, a side that can't show,
+     * or a marcher unknown to the resolver) has that side hidden.
      *
      * @param previousPaths each marcher's move into the selected page (endpoint: where it starts)
      * @param nextPaths each marcher's move into the next page (endpoint: where it ends)
@@ -1536,19 +1546,15 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         marcherIds,
         previousPaths,
         nextPaths,
-        currentPageCounts,
-        nextPageCounts,
         previousPathsEnabled,
         nextPathsEnabled,
         stepSizeWarningsEnabled,
         fieldProperties,
     }: {
         marcherVisuals: MarcherVisualMap;
-        marcherIds: number[];
+        marcherIds: readonly number[];
         previousPaths: ReadonlyMap<number, TimelinePath>;
         nextPaths: ReadonlyMap<number, TimelinePath>;
-        currentPageCounts: number | undefined;
-        nextPageCounts: number | undefined;
         previousPathsEnabled: boolean;
         nextPathsEnabled: boolean;
         stepSizeWarningsEnabled: boolean;
@@ -1566,16 +1572,14 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         marcherIds.forEach((marcherId: number) => {
             const visual = marcherVisuals[marcherId];
             if (!visual) return;
-            visual.getPreviousPathway().hide();
-            visual.getNextPathway().hide();
 
             drawSide({
                 path: previousPaths.get(marcherId),
                 endpointAt: "start",
                 pathway: visual.getPreviousTimelinePathway(),
+                straightPathway: visual.getPreviousPathway(),
                 midpoint: visual.getPreviousMidpoint(),
                 endpoint: visual.getPreviousEndpoint(),
-                counts: currentPageCounts,
                 pathEnabled: previousPathsEnabled,
                 // previous paths stay hidden when toggled off, even over threshold
                 allowForceShow: false,
@@ -1585,9 +1589,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                 path: nextPaths.get(marcherId),
                 endpointAt: "end",
                 pathway: visual.getNextTimelinePathway(),
+                straightPathway: visual.getNextPathway(),
                 midpoint: visual.getNextMidpoint(),
                 endpoint: visual.getNextEndpoint(),
-                counts: nextPageCounts,
                 pathEnabled: nextPathsEnabled,
                 // next path is the current move, force-show it over threshold
                 allowForceShow: true,

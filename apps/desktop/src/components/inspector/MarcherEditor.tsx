@@ -534,7 +534,7 @@ function MarcherEditor() {
         [pages, selectedPage?.previousPageId],
     );
     const timelineStepSizes = useTimelineStepSizes({
-        enabled: timelineMode,
+        timelineMode,
         marcherIds: selectedMarcherIdList,
         page: selectedPage,
         previousPage,
@@ -542,7 +542,7 @@ function MarcherEditor() {
     });
 
     const stepSize = useMemo(() => {
-        if (timelineMode) return timelineStepSizes.stepSize;
+        if (timelineStepSizes.active) return timelineStepSizes.stepSize;
         if (
             selectedMarchers.length !== 1 ||
             !marcherPagesLoaded ||
@@ -571,7 +571,7 @@ function MarcherEditor() {
             fieldProperties,
         });
     }, [
-        timelineMode,
+        timelineStepSizes.active,
         timelineStepSizes.stepSize,
         selectedMarchers,
         marcherPagesLoaded,
@@ -582,7 +582,7 @@ function MarcherEditor() {
     ]);
 
     const minMaxStepSize = useMemo(() => {
-        if (timelineMode) return timelineStepSizes.minMax;
+        if (timelineStepSizes.active) return timelineStepSizes.minMax;
         if (
             selectedMarchers.length <= 1 ||
             !marcherPagesLoaded ||
@@ -600,7 +600,7 @@ function MarcherEditor() {
             fieldProperties,
         });
     }, [
-        timelineMode,
+        timelineStepSizes.active,
         timelineStepSizes.minMax,
         selectedMarchers,
         marcherPagesLoaded,
