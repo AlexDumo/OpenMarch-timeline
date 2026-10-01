@@ -56,7 +56,10 @@ export const usePerformHistoryAction = () => {
     const setSelectedPage = selectedPageContext?.setSelectedPage ?? (() => {});
 
     return useMutation({
-        mutationFn: (type: "undo" | "redo") => performHistoryAction(type, db),
+        mutationFn: (type: "undo" | "redo") =>
+            performHistoryAction(type, db, {
+                currentPageId: selectedPageContext?.selectedPage?.id,
+            }),
         onSuccess: async (response) => {
             // Invalidate history query
             void qc.invalidateQueries({
@@ -69,6 +72,8 @@ export const usePerformHistoryAction = () => {
 
             // Greedily invalidate all coordinate data queries
             // The better thing to do would be to check the pages that were modified
+            // (In timeline mode these queries don't run; the resolver store follows the action's
+            // change batch instead.)
             void qc.invalidateQueries({ queryKey: coordinateDataKeys.all });
 
             if (response.pageIdToGoTo && pages) {
