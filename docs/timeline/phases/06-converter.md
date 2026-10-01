@@ -1,7 +1,4 @@
-<!-- cspell:ignore typesafe TYPESAFE -->
-
 ---
-
 phase: 6
 title: Page→timeline converter
 status: in-progress
@@ -10,8 +7,9 @@ branch: timeline/p6-converter
 pr: none
 depends_on: [5]
 updated: 2026-09-29
-
 ---
+
+<!-- cspell:ignore typesafe TYPESAFE -->
 
 # Phase 6: Page→timeline converter
 
