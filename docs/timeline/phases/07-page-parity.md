@@ -183,6 +183,8 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - This is the long pole. Split P7.1's inventory into more work packages if it's large.
 - From the PR #14 review, the `marcher_pages` writers still reachable in timeline mode (only canvas drag is blocked), a head start for P7.1's inventory: keyboard nudges, snap/round, align, distribute and flip (`RegisteredActionsHandler.tsx` ~876 to 1213); the transform mutation in `useMarcherPages.ts` (~281); the alignment and line tools (`LineListeners.ts` ~262 → `setGlobalNewMarcherPages` → `AlignmentEditor.tsx`); the inspector x/y fields (`MarcherEditor.tsx`); `editablePath.tsx` and shape edits. Canvas drag (`DefaultListeners.ts` ~159, `updateMarcherPagesFunction`) reads `coordinate.page_id`, which is stale in timeline mode.
 
+- From the P7.2 review (PR #20): in timeline mode, "set all/selected marchers to the previous/next page" is refused with a toast ("This isn't available in timeline mode yet.") and writes nothing, because it would copy stale `marcher_pages` rows. P7.6 replaces the refusal (`refuseInTimelineMode` in `src/timeline/timelineCoordinateWrites.ts`) with a resolver-based version. The P7.2 coordinate tools read only the resolver in timeline mode, never `marcher_pages`, so they keep working once P7.3 stops writing those rows.
+
 ### P7.1 inventory of page-coordinate code
 
 Written by P7.1 on 2026-09-30 against `timeline-try-2` at `e429b97c`. Paths are under `apps/desktop/` and line numbers are approximate. Tick an item when its owning package has either made it work in timeline mode or shown it needs no change. Legend: R reads page-era data, W writes it. "P5" means timeline mode already handles it. Re-run the searches in the P7.1 log entry before trusting this list after big merges.
@@ -373,4 +375,20 @@ Facts that change how to read the PR #14 note above:
 - **Not ticked:** `MarcherEditor.tsx` ~433 to 452 and `ShapeSelector.tsx` (`isLocked` from shape membership; belongs with P7.11's timeline shapes). Also untouched: set-to-previous/next page still writes `marcher_pages` from page rows in timeline mode (P7.6).
 - **Checks:** `pnpm install` ok; `pnpm exec turbo run build --filter=@openmarch/desktop^...` → 4 successful; `pnpm --dir apps/desktop exec tsc --noEmit` → clean; `vitest run src/db-functions/__test__/timelineMoves.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts` → 15 passed; `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineMoves.test.ts` → 7 passed; `pnpm --dir apps/desktop run test` → 106 files passed, 7 skipped, 1591 tests passed (at `fcd54872`, before the inspector display commit, which has no tests; tsc, eslint and prettier cover it); cspell, prettier --check and eslint on the changed files → clean (only warnings that already existed). Skipped by policy: full `test:history`, Playwright, `build:electron`. The app was not run by hand.
 - **Next:** review and merge. Exit-gate items unchanged.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p7-drag-align) · P7.2 review fixes
+
+- **Decisions (P7.2, recorded for the phase):**
+  - **Shape-backed transitions:** moving a marcher whose slot is in a shape-backed transition switches that transition to individual points in the same edit. Every slot is copied from the shape's exact samples, then the moved slots are updated (the Q-14 workaround). Follow-the-leader into a shape is refused (E-T5).
+  - **Structural moves are refused and left to P8.9** (E-ARGS, naming the marcher). These are marchers with no move ending at the page's end beat: a hold, a winning assignment that spans several pages, or an assignment whose transition ends later.
+  - **Swap** exchanges the two marchers' positions on the page and not their slot assignments. When a marcher's slot is in a shape-backed transition, the swap switches that transition to individual points, as any move does.
+  - **Set to previous/next page** is refused in timeline mode until P7.6 (handoff note added).
+- **Done (from the lead review of PR #20):**
+  - In timeline mode, `getSelectedMarcherPages` and `useUpdateSelectedMarchers` build the selection from `selectedMarchers` and the resolver (`timelineCoordinateRecords`, `transformMarchersOnPage`). They no longer depend on `marcher_pages`, and `CoordinateActions` now accepts a `CoordinateRecord` (a `Pick` of `MarcherPage`).
+  - Set to previous/next page is refused in timeline mode.
+  - `timelineMoves.ts`: the empty-beats check now comes before `pageEndBeat`, shapes are read and sampled before the first write, and the comment says what a later DB rejection does.
+  - New tests: a layered steal that wins and an earlier steal that doesn't; refusals for a multi-page move and for a transition that ends after its assignment; `Object.is` in the shape-switch test; a nudge on a marcher with no `marcher_pages` row; a swap with the flag on; set to previous with the flag on (no writes) and off.
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` → clean. `vitest run src/db-functions/__test__/timelineMoves.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts` → 21 passed. eslint, prettier and cspell on the changed files → clean (the only warnings were already there). `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineMoves.test.ts src/timeline/__test__/timelineCoordinateWrites.test.ts` → 21 passed. Branch head `483150f5`.
+- **Next:** the lead re-reviews and merges PR #20.
 - **Blockers:** none.
