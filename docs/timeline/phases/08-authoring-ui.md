@@ -162,3 +162,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** decouple `Timeline.tsx` from the frame clock (playback passed in as props, fed from the existing `IsPlayingContext` and `getLivePlaybackPosition` path), page snapping with an Alt override, drop the page-boundary validator rule, render behind `useTimelineMode()` in `TimelineContainer`.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-timeline-ui`; `pnpm install`; adapt `apps/desktop/src/components/timeline/Timeline*.ts(x)`; then `pnpm --dir apps/desktop exec tsc --noEmit`.
+
+### 2026-09-30 · timeline-worker (timeline/p8-timeline-ui) · P8.1
+
+- **Done:** code and tests on `timeline/p8-timeline-ui` (91067a37): playback passed into `Timeline` as props and fed by `useTimelinePlayback` from the existing clock; page snapping (24 px, Alt turns it off) for clip moves and selection flags; page-boundary validator rule removed; `TimelineContainer` renders the new timeline instead of the page timeline when `useTimelineMode()` is on (not while editing beats), with the audio player kept mounted and hidden. Stories compile without Storybook and run under Vitest.
+- **Checks:** `tsc --noEmit`: pass. `test:focused src/components/timeline/__test__/`: 129 passed. eslint on `src/components/timeline`: 0 errors. The regular desktop suite is running.
+- **Next:** read the suite result, rebase on `timeline-try-2`, open the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-timeline-ui`; run `pnpm --dir apps/desktop run test` in the background; then rebase on `timeline/timeline-try-2` and open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
