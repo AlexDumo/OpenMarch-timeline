@@ -37,6 +37,8 @@ import {
 } from "./update";
 import { repairDatabase } from "../database/repair";
 import { applyFileVersionDecision } from "../database/fileVersion";
+import { OPEN_STOPPED_STATUS } from "../database/convertOnOpen";
+import { convertOnOpenInMain } from "./convertOnOpenFlow";
 import { choosePreviousDotsFile } from "./services/previous-dots-import-service";
 import {
     initAuthBeforeReady,
@@ -331,13 +333,22 @@ async function showSaveDialogHandler(options: Electron.SaveDialogOptions) {
     return await dialog.showSaveDialog(win, options);
 }
 
+/**
+ * Lets the renderer explain a refused file (for example one from a newer release). Skips an open
+ * that a main-process dialog already explained (convert on open), so no second dialog shows.
+ */
+function sendLoadFileResponse(resCode: number) {
+    if (resCode === OPEN_STOPPED_STATUS) return;
+    win?.webContents.send("load-file-response", resCode);
+}
+
 async function openRecentFile(filePath: string) {
     store.set("databasePath", filePath);
     addRecentFile(filePath);
 
     const resCode = await setActiveDb(filePath);
 
-    win?.webContents.send("load-file-response", resCode);
+    sendLoadFileResponse(resCode);
 
     return resCode;
 }
@@ -515,8 +526,7 @@ app.on("window-all-closed", async () => {
 app.on("open-file", async (event, path) => {
     event.preventDefault();
     const resCode = await setActiveDb(path);
-    // Lets the renderer explain a refused file (for example one from a newer release).
-    win?.webContents.send("load-file-response", resCode);
+    sendLoadFileResponse(resCode);
 });
 
 // Handle instances where the app is already running and a file is opened
@@ -1138,7 +1148,7 @@ export async function loadDatabaseFile() {
             const resCode = await setActiveDb(path.filePaths[0]);
 
             // Handle alert dialogs in frontend
-            win?.webContents.send("load-file-response", resCode);
+            sendLoadFileResponse(resCode);
 
             return resCode;
         })
@@ -1409,6 +1419,14 @@ async function setActiveDb(path: string, isNewFile = false) {
 
         if (isNewFile) {
             await DrizzleMigrationService.initializeDatabase(drizzleDb, db);
+        } else if ((await convertOnOpenInMain(path, db, win)) === "stop") {
+            // Convert on open (P9.3, behind OPENMARCH_CONVERT_ON_OPEN until P9.4): a dialog
+            // already told the person why the file didn't open. Open nothing.
+            store.delete("databasePath");
+            DatabaseServices.setDbPath("", false);
+            win?.setTitle("OpenMarch");
+            win?.webContents.reload();
+            return OPEN_STOPPED_STATUS;
         }
 
         store.set("databasePath", path); // Save current db path

@@ -2,8 +2,12 @@ import { asc, count } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import { transactionWithHistory } from "@/db-functions/history";
-import { realDatabasePageToDatabasePage } from "@/db-functions/page";
-import { realDatabaseBeatToDatabaseBeat } from "@/db-functions/beat";
+// Light modules, not `@/db-functions/page`, `beat` or `Page`, so the main process can load the
+// converter (convert on open, P9.3).
+import {
+    realDatabaseBeatToDatabaseBeat,
+    realDatabasePageToDatabasePage,
+} from "@/db-functions/rowMappers";
 import { updateMarcherHomesInTransaction } from "@/db-functions/marcherHome";
 import {
     createTimelinesInTransaction,
@@ -14,7 +18,7 @@ import { createTimelineTransitionsInTransaction } from "@/db-functions/timelineT
 import { createTimelineAssignmentsInTransaction } from "@/db-functions/timelineAssignments";
 import { refuse } from "@/db-functions/timelineErrors";
 import type Page from "@/global/classes/Page";
-import { fromDatabasePages } from "@/global/classes/Page";
+import { fromDatabasePages } from "@/global/classes/Page.fromDatabase";
 import type Beat from "@/global/classes/Beat";
 import { calculateTimestamps, fromDatabaseBeat } from "@/global/classes/Beat";
 import {

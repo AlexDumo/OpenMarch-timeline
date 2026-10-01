@@ -29,8 +29,9 @@ import {
     _createFromTempoGroupInTransaction,
     tempoGroupFromWorkspaceSettings,
 } from "@/components/music/TempoGroup/TempoGroup";
+import { FIRST_PAGE_ID, realDatabasePageToDatabasePage } from "./rowMappers";
 
-export const FIRST_PAGE_ID = 0;
+export { FIRST_PAGE_ID, realDatabasePageToDatabasePage };
 
 /** How a page is represented in the database */
 /** Represents a page in the database */
@@ -45,15 +46,6 @@ export interface DatabasePage {
     start_beat: number;
 }
 type RealDatabasePage = typeof schema.pages.$inferSelect;
-
-export const realDatabasePageToDatabasePage = (
-    page: RealDatabasePage,
-): DatabasePage => {
-    return {
-        ...page,
-        is_subset: page.is_subset === 1,
-    };
-};
 
 export interface NewPageArgs {
     start_beat: number;
