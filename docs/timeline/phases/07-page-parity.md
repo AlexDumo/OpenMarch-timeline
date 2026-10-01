@@ -358,3 +358,11 @@ Facts that change how to read the PR #14 note above:
 - **Next:** route canvas drag, nudges, snap, align, distribute, flip, swap, circle, line tool and the inspector distribute buttons through it in timeline mode; read current positions from the resolver; fix the stale `coordinate.page_id`.
 - **Resume from:** branch `timeline/p7-drag-align` at `5ff9f67b`. Add the timeline branch to `useUpdateSelectedMarchers` (`src/hooks/queries/useMarcherPages.ts`) and an `updateCoordinates` wrapper in `RegisteredActionsHandler.tsx`; replace the drag gate in `Canvas.tsx` ~238.
 - **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p7-drag-align) · P7.2 checkpoint 2
+
+- **Done:** routing in timeline mode. `src/timeline/timelineCoordinateWrites.ts` (`withTimelinePositions` reads current x/y from the resolver at the page's end beat; `canvasCoordinateWriter` is the drag callback, and is the page-mode writer itself when the flag is off). Canvas drag is re-enabled (`Canvas.tsx`) and ignores the stale `coordinate.page_id`; `renderMarcherPositions` now stamps the drawn page's id too. `useUpdateSelectedMarchers` (nudges, circle, inspector distribute buttons) and `RegisteredActionsHandler` (snap, align, distribute, flip, swap, apply line tool) write through `moveMarchersOnPage` with the flag on; page mode calls are unchanged. Tests in `src/timeline/__test__/timelineCoordinateWrites.test.ts` (drag and align vertically, flag on and off).
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` → clean; `vitest run` on the two new test files → 15 passed; `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineMoves.test.ts` → 7 passed.
+- **Next:** the regular desktop suite (running), then the PR and the checklist ticks.
+- **Resume from:** branch `timeline/p7-drag-align` at `fcd54872`. Re-run `pnpm --dir apps/desktop run test` in the background, then open the PR and tick the P7.2 items.
+- **Blockers:** none.
