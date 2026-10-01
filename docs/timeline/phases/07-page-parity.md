@@ -170,7 +170,7 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 ### P7.16: Per-page appearance on the canvas and previous-show import
 
 - Owner: timeline-worker (timeline/p7-page-appearance)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/37
 - Parallel: yes
 - Depends on: P7.14
@@ -180,12 +180,22 @@ Two inventory items are still open. (1) In timeline mode the canvas still applie
 ### P7.17: Existing feature tests in timeline mode
 
 - Owner: timeline-worker (timeline/p7-feature-tests)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/38
 - Parallel: yes
 - Depends on: P7.2–P7.16
 
 For the exit-gate item "each feature's existing tests pass in timeline mode". Add a way to run the desktop suite with timeline mode on in the test fixtures (for example an env var the fixture setup reads), run it, and triage every failure: a real timeline-mode bug (fix it, or file it as a package), or a test that asserts page-mode internals (`marcher_pages` rows) and needs a timeline-mode variant or an explicit skip with a reason. Record the run command and its result in the log. Don't change the default (flag off) run.
+
+### P7.18: Feature tests that reach the timeline path
+
+- Owner: unassigned
+- Status: open
+- PR: none
+- Parallel: no
+- Depends on: P7.17
+
+The PR #38 review showed that `test:timeline` passes mostly without reaching timeline code. Two causes. (1) Several write paths take `timelineMode` as a parameter that defaults to `false` (`createMarchers`, `deleteMarchers`, `setMarchersToNeighborPage`, `canvasCoordinateWriter`, `buildMarcherAppearancesByPageId`, and any others you find); tests call them without it, so on a converted file they write page rows, which the app never does (`marcher.ts` ~222 and ~334 had 0 hits). The default is also a trap for future callers. When the parameter is omitted, read the flag from the database inside the transaction (`timelineModeInTransaction`), or remove the parameter if every caller can rely on that. (2) Feature tests that matter for the inventory (marcher add and delete, swap, nudges and align, set to previous/next page, the inspector, coordinate and drill-chart exports, undo focus) aren't on the `base.tsx` fixtures or mock the flag. Move or add tests so that under `test:timeline` each one takes the timeline branch; prove it with a coverage run (`--coverage`, hit counts on the timeline branches) recorded in the log. Fix real bugs that turn up, or file them as packages. Page mode stays unchanged. Only after this can the "each feature's existing tests pass in timeline mode" exit-gate item be ticked.
 
 ### P7.15: Refresh views on edits outside the change log
 
@@ -266,7 +276,7 @@ Facts that change how to read the PR #14 note above:
 - [x] `src/components/marcher/MarcherForm.tsx` ~178 and `src/components/marcher/MarcherList.tsx` ~74 · UI callers · not handled (P7.3: no change needed; the mutations read the flag themselves when they run, waiting for the settings if they are still loading)
 - [x] `src/components/launchpage/newShowCompletion.ts` ~249 to 262 (delete, then create marchers on import) · W · new-show import · not handled (P7.3: no change; a new show starts with the flag off, so it is page mode, and conversion later takes homes from page 0)
 - [x] `src/components/launchpage/newShowCompletion.ts` ~276 to 318 (`applyPreviousDotsCoordinates` writes page 0 `marcher_pages`) · W · new show from previous dots · not handled · in timeline mode this is the home position (P7.3: no change, for the same reason: new shows are page mode until converted)
-- [ ] `electron/main/services/previous-dots-import-service.ts` ~85 to 114 · R of the source file's last-page `marcher_pages` · import of a previous show · not handled · if the source is a converted show its page-era rows are frozen and stale; read home or the resolver instead
+- [x] `electron/main/services/previous-dots-import-service.ts` ~85 to 114 · R of the source file's last-page `marcher_pages` · import of a previous show · not handled · if the source is a converted show its page-era rows are frozen and stale; read home or the resolver instead · done in P7.16 (#37): a timeline-mode source is read through its own resolver
 - [x] `electron/database/repair.ts` ~235 to 241, ~303 (`removeOrphanMarcherPages`) · W cleanup · repair · likely no change until Phase 10, since the page-era tables stay; confirm it deletes nothing the converter relies on (P7.3: confirmed; it deletes only page rows whose marcher or page no longer exists, which the converter never reads)
 
 #### P7.4 Page ripple procedures (insert, delete, resize pages)
@@ -359,7 +369,7 @@ Facts that change how to read the PR #14 note above:
 #### P7.14 (new) Per-marcher-per-page appearance, rotation and notes (decision first)
 
 - [x] `electron/database/migrations/schema.ts` ~185 to 226 (`marcher_pages` columns: appearance columns, `rotation_degrees`, `notes`, path columns) · data with no timeline home · the converter copies only x and y · decision needed: drop, keep in the frozen page-era table, or add timeline fields. Record it as a blocker for a person before building anything · decided in P7.14: dropped, never implemented (owner, 2026-09-30)
-- [ ] `src/global/classes/MarcherPage.ts` ~1 to 40 and `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 · R · the per-page appearance override sits first in the appearance stack · see P7.8
+- [x] `src/global/classes/MarcherPage.ts` ~1 to 40 and `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 · R · the per-page appearance override sits first in the appearance stack · see P7.8 · done in P7.16 (#37): dropped on the canvas in timeline mode
 - [x] `src/components/mobile/utilities/dots-to-om.ts` ~184 to 200 (`rotation_degrees` exported per coordinate) · R · see P7.12 (P7.12: left out in timeline mode, dropped per the P7.14 decision; page mode unchanged)
 
 #### Checked: no timeline work needed
@@ -1274,4 +1284,91 @@ Facts that change how to read the PR #14 note above:
   - Skipped by policy: full `test:history`, e2e and `build:electron`. No manual app run.
 - **Not ticked:** the two inventory items (`MarcherPage.ts`/`useMarcherAppearances.ts` under P7.14, and `previous-dots-import-service.ts` under P7.3). They become true only when PR #37 merges.
 - **Next:** the lead reviews PR #37.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-feature-tests) · P7.17 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/38 (one commit on `timeline-try-2`).
+  - **Timeline test mode:** `pnpm --dir apps/desktop run test:timeline` (`VITEST_TIMELINE_MODE=true`) puts every fixture database into timeline mode (`src/test/timelineMode.ts`, called from `src/test/base.tsx`).
+    - Data fixtures are converted with `convertPagesToTimelineInTransaction` (`replace: true`) and get the flag.
+    - The blank database gets only the flag.
+    - Undo triggers are dropped during the conversion, and `timeline_change_log` is cleared afterwards.
+  - **Default run:** unchanged.
+  - **Helpers:** `keepFixturesInPageMode(reason)` (files that set up timeline mode themselves) and `skipInTimelineMode(reason)`. Both are documented in `docs/conventions/testing.md`.
+- **Run command:** `pnpm --dir apps/desktop run test:timeline`, run alone.
+- **Before and after:**
+  - Run 1 (blank database converted too): 316 failed (30 files).
+  - Run 2 (blank database flag only, no test changes; the before count): 201 failed (19 files), 2,041 passed.
+  - Run 3 (after triage): 0 failed; 156 files passed, 7 skipped; 2,198 tests passed, 58 skipped (44 more than the default run), 15 todo.
+- **Triage of run 2:**
+
+  | Files                                                                                                                                                                                                                                | Failures | Class                                                                                                                        | Action                   |
+  | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+  | `timelineRipple`, `timelineCommands`, `timelineDisplay`, `timelineHistoryFocus`, `timelineMarchers`, `timelineMoves`, `pageConversion`, `timelineCoordinateWrites`, `timelinePageCopy`, `exportPagePositions`, `dots-to-om.timeline` | 115      | Timeline-native: the test converts the show itself (refused, `E-ARGS` already has timeline rows), or asserts flag-off output | `keepFixturesInPageMode` |
+  | `timelineAssignmentEdits`, `timelineShapeEdits`, `timelineTransitionEdits`                                                                                                                                                           | 41       | Timeline-native: its own timeline rows overlap the converted assignments (`E-A3`)                                            | `keepFixturesInPageMode` |
+  | `marcherPage.test.ts` › "Locked marcher pages", "One shape", "two shapes"                                                                                                                                                            | 41       | Page-mode internals: page shape writers refuse in timeline mode (P7.11)                                                      | skipped, with reason     |
+  | `dots-to-om.test.ts` › override from a `marcher_pages` appearance                                                                                                                                                                    | 1        | Page-mode internals: timeline exports drop per-page appearance (P7.14)                                                       | skipped, with reason     |
+  | `timelineRender` › "with the flag off…", `timelineStore` › "is off by default…"                                                                                                                                                      | 2        | Flag-off defaults                                                                                                            | skipped, with reason     |
+  | `marcher.test.ts` › `getMarchers`                                                                                                                                                                                                    | 1        | Page-era data: the conversion sets homes from page 0                                                                         | timeline-mode variant    |
+  - Real timeline-mode bugs: none found.
+  - Covered by P7.16: none (no existing test exercises canvas per-page appearance or previous-show import).
+
+- **Checks:**
+  - `pnpm --dir apps/desktop run test` (flag off), run alone: 156 files passed, 7 skipped; 2,242 tests passed. Unchanged from the base.
+  - Focused `test:history` on `marcher.test.ts` and `marcherPage.test.ts`: 94 passed. In timeline mode: 53 passed, 41 skipped.
+  - `tsc --noEmit`: pass.
+  - eslint on the changed files: 0 errors (4 pre-existing warnings).
+  - prettier and cspell: pass.
+- **Skipped:** by policy, the full `test:history` suite, e2e and `build:electron`. No db-functions were changed.
+- **Exit gate:** "each feature's existing tests pass in timeline mode" isn't ticked. It becomes true on the base only when this PR merges, so it waits for the merge.
+- **Next:** review and merge PR #38. Then tick the exit-gate item with the run 3 command and result.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-page-appearance) · P7.16 review fixes checkpoint
+
+- **Done:** pushed `46fa7373` to PR #37, on top of `bb33dd9b` (the earlier entry's `6e4b367d` was the hash before an amend; `bb33dd9b` is the pushed commit).
+  - Fix 1: the import selects only the marcher columns it uses, so a source from before 0017 reads, and `home_x`/`home_y` no longer leak into the result.
+  - Fix 2: a timeline read or resolve failure throws `SourceTimelineReadError` ("Couldn't read the timeline of this file"), with no fallback to frozen rows.
+  - Fix 3: `sourceTimelinePositions.ts` imports `schema` from `@om-electron/database/migrations/schema`, the leaf behind `@om-electron/database/db`, which avoids pulling electron into tests.
+  - Fix 4: the appearance query starts `readTimelineMode(...).catch(() => false)` alongside the other reads.
+  - Fix 5: `marcherAppearancesKeys` moved to the leaf `src/hooks/queries/marcherAppearancesKeys.ts`.
+  - Fix 6: new tests for a pre-0017 source, marcher fields, a timeline read failure that closes the handle, holding at the last span's end, a flagged source with no pages, the source file unchanged, a settings read failure, the JSON mutation, and tags in timeline mode.
+- **Follow-up (not done):** `src/timeline/timelineRows.ts` still imports `schema` from the renderer module `@/global/database/db`, so the main bundle still pulls in that module through `readTimelineTables`. Changing it touches shared code; the lead can route it.
+- **Checks:** `tsc --noEmit` pass; the 2 test files pass with 23 tests; eslint has no new warnings. Build, focused `test:history` and the suite are running.
+- **Next:** finish the checks, then update the PR body.
+- **Blockers:** none.
+- **Resume from:** on `timeline/p7-page-appearance` at `46fa7373`, run `pnpm --dir apps/desktop run build`, focused `test:history` on the 2 test files, then `pnpm --dir apps/desktop run test` alone. Then update the PR #37 body and log "review fixes ready".
+
+### 2026-10-01 · timeline-worker (timeline/p7-page-appearance) · P7.16 review fixes ready
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/37 is at `46fa7373`, and its body is updated. The fixes are listed in the checkpoint above.
+- **Checks:** all from `apps/desktop`, on `46fa7373`.
+  - `tsc --noEmit`: pass.
+  - `pnpm run build`: pass.
+  - The 2 test files: 23 passed, under both `vitest run` and focused `test:history`.
+  - `pnpm run test`, run once and alone: 158 files passed, 7 skipped; 2,265 tests passed.
+  - eslint, prettier and cspell, plus the pre-commit hook: pass.
+  - Skipped by policy: full `test:history`, e2e and `build:electron`.
+- **Follow-up for the lead:** `timelineRows.ts` imports the renderer `@/global/database/db`, so the main bundle still pulls it in.
+- **Next:** the lead re-reviews PR #37.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.16
+
+- **Done:** reviewed PR #37 and squash-merged it at head 46fa7373.
+  - **Review fixes:**
+    - The import selects only the marcher columns it uses. This fixes imports from files older than 0017, a bug that predates P7.16 (from #1037).
+    - A clear error when a source timeline can't be read.
+    - The appearance query survives a failed settings read.
+    - The import cycle between modules is gone.
+    - Added tests: hold-versus-home, an unchanged source file, the handle closed on error, and tag appearances.
+  - Two inventory items ticked.
+- **Checks (lead, on 46fa7373):**
+  - `tsc --noEmit`: pass.
+  - `pnpm run build`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/`, `electron/main/services` and `src/hooks/queries`: 35 files, 699 tests passed.
+  - `pnpm --dir apps/desktop run test`: 158 files, 2,265 tests passed, no errors.
+  - Skipped by policy: the full `test:history` and e2e suites.
+- **Follow-up (unowned, low):** `src/timeline/timelineRows.ts` imports the renderer's `@/global/database/db`, so the main bundle pulls that module in through `readTimelineTables`. It's harmless today, because `window` is only touched inside callbacks. It's fragile if anything top-level touches `window` later. Fix: import `schema` from `@om-electron/database/migrations/schema`.
+- **Next:** P7.17 (PR #38) under review. Then only the human manual pass remains in the Phase 7 exit gate.
 - **Blockers:** none.

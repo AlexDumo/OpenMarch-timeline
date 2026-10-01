@@ -449,6 +449,7 @@ const describeDbTests = (
 };
 
 export {
+    getTempDotsPath,
     sqlJsTest,
     betterSqliteTestWithProxy,
     describeDbTests,
