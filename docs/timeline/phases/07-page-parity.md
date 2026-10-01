@@ -59,9 +59,9 @@ Marcher add and delete: the home position, plus a vacant or filled slot in each 
 
 ### P7.4: Page ripple procedures
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p7-ripple)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/26
 - Parallel: yes
 - Depends on: P7.1
 
@@ -69,9 +69,9 @@ Page insert, delete and resize as **ripple procedures** in app code, ordered so 
 
 ### P7.5: Beat ripple procedures
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p7-ripple)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/26
 - Parallel: yes
 - Depends on: P7.4
 
@@ -237,20 +237,20 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.4 Page ripple procedures (insert, delete, resize pages)
 
-- [ ] `src/db-functions/page.ts` ~196 to 250 (`_createMarcherPages` copies the previous page's rows to each new page), called at ~302 · W · page insert · not handled · pages stop owning coordinates; a new page means a new time label plus valid timeline rows
-- [ ] `src/db-functions/page.ts` ~264 to 335 (`createPagesInTransaction`, `createPages`), ~694 to 1065 (`createLastPage`, `_fillAndGetBeatToStartOn`, `canCreateLastPage`, `createLastPageInTransaction`, `getNextBeatToStartPageOn`), ~1112 (`createTempoGroupAndPageFromWorkspaceSettings`) · W · page and last-page creation · not handled
-- [ ] `src/db-functions/page.ts` ~299 to 302, ~522 to 600 (`deletePagesInTransaction`, deletes `marcher_pages` at ~545), ~629 (`deletePageYank`) · W · page delete and delete-with-shift · not handled · must not leave timeline rows outside valid ranges (U-1 to U-3)
-- [ ] `src/db-functions/page.ts` ~340 to 425 (`updatePagesInTransaction`), ~178 (`updateLastPageCounts`), ~471 (`ensureSecondBeatHasPage`) · W · page resize and rename · not handled · resize is a ripple
-- [ ] `src/hooks/queries/usePages.ts` ~56 to 62 (invalidates `marcher_pages` keys), ~176 to 260 (mutations) and `src/hooks/queries/sharedInvalidators.ts` ~15 to 37 (`invalidateByPage`) · invalidation · add timeline keys
-- [ ] `src/components/timeline/PageTimeline.tsx` ~35 to 45; `src/components/timeline/PageTimeline.utils.ts` ~103; `src/components/inspector/PageEditor.tsx` ~16; `src/components/inspector/PageNotesSection.tsx` ~17 · UI callers of the page mutations · not handled (PageNotesSection edits notes only and likely needs no change)
+- [x] `src/db-functions/page.ts` ~196 to 250 (`_createMarcherPages` copies the previous page's rows to each new page), called at ~302 · W · page insert · not handled · pages stop owning coordinates; a new page means a new time label plus valid timeline rows (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
+- [x] `src/db-functions/page.ts` ~264 to 335 (`createPagesInTransaction`, `createPages`), ~694 to 1065 (`createLastPage`, `_fillAndGetBeatToStartOn`, `canCreateLastPage`, `createLastPageInTransaction`, `getNextBeatToStartPageOn`), ~1112 (`createTempoGroupAndPageFromWorkspaceSettings`) · W · page and last-page creation · not handled (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
+- [x] `src/db-functions/page.ts` ~299 to 302, ~522 to 600 (`deletePagesInTransaction`, deletes `marcher_pages` at ~545), ~629 (`deletePageYank`) · W · page delete and delete-with-shift · not handled · must not leave timeline rows outside valid ranges (U-1 to U-3) (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
+- [x] `src/db-functions/page.ts` ~340 to 425 (`updatePagesInTransaction`), ~178 (`updateLastPageCounts`), ~471 (`ensureSecondBeatHasPage`) · W · page resize and rename · not handled · resize is a ripple (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
+- [x] `src/hooks/queries/usePages.ts` ~56 to 62 (invalidates `marcher_pages` keys), ~176 to 260 (mutations) and `src/hooks/queries/sharedInvalidators.ts` ~15 to 37 (`invalidateByPage`) · invalidation · add timeline keys (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
+- [x] `src/components/timeline/PageTimeline.tsx` ~35 to 45; `src/components/timeline/PageTimeline.utils.ts` ~103; `src/components/inspector/PageEditor.tsx` ~16; `src/components/inspector/PageNotesSection.tsx` ~17 · UI callers of the page mutations · not handled (PageNotesSection edits notes only and likely needs no change) (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
 - [ ] `src/db-functions/shapePages.ts` ~347 to 372 and the foreign key on `shape_pages.page_id` · W cascade · deleting a page deletes its shape pages · see P7.11
 
 #### P7.5 Beat ripple procedures (insert, delete, change the timing of beats)
 
-- [ ] `src/db-functions/beat.ts` ~178 (`shiftBeats`), ~259 (`flattenOrder`), ~345 (`createBeatsInTransaction`), ~440 (`updateBeatsInTransaction`), ~508 (`deleteBeatsInTransaction`) · W beats (they do not touch coordinates today) · not handled · timeline rows hold beat indexes, so each of these must ripple them
-- [ ] `src/db-functions/measures.ts` ~152 to 270 (create, update, delete measures), ~284 (`createMeasuresAndBeatsInTransaction`), ~387 (`deleteMeasuresAndBeatsInTransaction`) · W beats and measures · music and measure tools · not handled
-- [ ] `src/hooks/queries/useBeats.ts` ~69 to 150 and `src/hooks/queries/useMeasures.ts` ~59 to 215 · mutation wrappers and invalidation · add timeline keys
-- [ ] `src/components/timeline/audio/BeatOrMeasureContextMenu.tsx` ~140, ~229, ~335 to 341, ~470 to 477 · UI callers: add, remove and change the timing of beats and measures · not handled
+- [x] `src/db-functions/beat.ts` ~178 (`shiftBeats`), ~259 (`flattenOrder`), ~345 (`createBeatsInTransaction`), ~440 (`updateBeatsInTransaction`), ~508 (`deleteBeatsInTransaction`) · W beats (they do not touch coordinates today) · not handled · timeline rows hold beat indexes, so each of these must ripple them (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
+- [x] `src/db-functions/measures.ts` ~152 to 270 (create, update, delete measures), ~284 (`createMeasuresAndBeatsInTransaction`), ~387 (`deleteMeasuresAndBeatsInTransaction`) · W beats and measures · music and measure tools · not handled (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
+- [x] `src/hooks/queries/useBeats.ts` ~69 to 150 and `src/hooks/queries/useMeasures.ts` ~59 to 215 · mutation wrappers and invalidation · add timeline keys (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
+- [x] `src/components/timeline/audio/BeatOrMeasureContextMenu.tsx` ~140, ~229, ~335 to 341, ~470 to 477 · UI callers: add, remove and change the timing of beats and measures · not handled (P7.4/P7.5: handled by `withTimelinePageRipple`, `src/db-functions/timelineRipple.ts`, PR #26)
 
 #### P7.6 Copy and paste of positions
 
@@ -491,4 +491,45 @@ Facts that change how to read the PR #14 note above:
 - **Done:** fork PR #23 reviewed by a sub-agent (APPROVE WITH NITS: page mode unchanged on every export path; frame sampling and keyframe boundaries correct, including beat 0 and tempo changes). The worker fixed the nits: video export always cold-builds its own resolver (an edit mid-export no longer changes later frames; tested); the keyframe export reports the worst error left when the subdivision depth cap is hit and warns; the other two appearance callers ignore the dropped per-page fields; the preview redraws on store version changes and takes its duration from the beats. Squash-merged. P7.8 and P7.9 set to done.
 - **Checks:** at 88fcbfb6, in the worker's work tree: tsc (pass); `test:focused src/timeline src/components/exporting` (25 files, 287 passed); the worker's regular desktop suite (119 files, 1,735 passed). It merged cleanly onto the base after PR #24.
 - **Next:** P7.4 and P7.5 (page and beat ripple), now that P8.9's timeline shift exists.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-ripple) · P7.4, P7.5 checkpoint
+
+- **Done:** `apps/desktop/src/db-functions/timelineRipple.ts` (commit `f9ea01bf`, wip, untested): `withTimelinePageRipple(tx, edit)` reads the page grid (beat ids in order, each page's ordinal range, as `fromDatabasePages` builds it) before a page or beat edit, runs the edit, reads it again and rewrites timelines, transitions and assignments to match in the same transaction. The flag is read inside the transaction from `workspace_settings`, so page mode is unchanged and no caller threads a flag. Wrapped: `createBeats`, `updateBeats`, `deleteBeats`, `shiftBeats`, `flattenOrder`, `createPages`, `updatePages`, `deletePages`, `deletePageYank`, `createLastPage`, `createTempoGroupAndPageFromWorkspaceSettings`, `updateUtility`, the page update and measures-and-beats mutations, split page, tempo group create and update, cascade measure delete, MusicXML import and the audio player's beat edits.
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` clean. No tests yet.
+- **Next:** tests in `src/db-functions/__test__/timelineRipple.test.ts`.
+- **Resume from:** branch `timeline/p7-ripple` at `f9ea01bf`; write the tests (converted `marchersAndPages` show with the flag set in `workspace_settings`): beat insert before, inside and after a move; beat delete inside a move and refusals; page resize; page insert and delete; undo/redo round trips; flag off. Run with `pnpm --dir apps/desktop exec vitest run src/db-functions/__test__/timelineRipple.test.ts` and `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineRipple.test.ts`.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-ripple) · P7.4, P7.5 checkpoint 2
+
+- **Done:** tests `src/db-functions/__test__/timelineRipple.test.ts` (17, converted show, flag in `workspace_settings`) pass; commit `5e7217e9`.
+- **Checks:** `tsc --noEmit` clean; `vitest run` on the new test file: 17 passed; `test:history` on timelineRipple, beat, page, measures, timelineCommands and timelineRangeEdit: 6 files, 265 passed. Regular desktop suite running.
+- **Next:** read the regular suite's result, write the decisions into the log, open the PR.
+- **Resume from:** branch `timeline/p7-ripple` at `5e7217e9`; re-run `pnpm --dir apps/desktop run test` (background), then open the PR with `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2`.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-ripple) · P7.4, P7.5 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/26 (head `5e7217e9`). New `apps/desktop/src/db-functions/timelineRipple.ts`: `withTimelinePageRipple(tx, edit)` reads the page grid before a page or beat edit, runs it, reads the grid again and rewrites timelines, transitions and assignments in the same transaction (one undo restores everything). The flag is read inside the transaction from `workspace_settings`; flag off runs only the page-mode edit. Every `transactionWithHistory` that changes beats, pages or `last_page_counts` is wrapped (beat.ts, page.ts, utility.ts, usePages, useMeasures, split page, tempo groups, cascade measure delete, MusicXML import, the audio player's beat edits). Ticked the P7.4 and P7.5 inventory items except `shapePages.ts` (P7.11). Query invalidation needed no timeline keys: timeline views rebuild on the resolver store version, which every committed batch bumps.
+- **Decisions (recorded for the phase):**
+  - **Row edges:** an edge on a page boundary follows its page, unless that empties the row; any other edge follows its beat (a start stays at its beat's start, an end at the end of the beat before it). Inserting k beats at ordinal p shifts rows starting at or after p by k and grows rows strictly containing p; a non-page row ending at p stays; a page move ending at p grows, because page mode gives beats inserted after a page's last beat to that page. Deleting beats shrinks the rows holding them and shifts later rows. Inserting right after beat 0 grows page 1's move (page mode's `ensureSecondBeatHasPage`).
+  - **Q-1, page-scoped:** a page resize changes beat membership, not beat count. It edits the move ending at the moved boundary and the move starting there (R-E1 style, anchored assignments follow) and nothing else. Beat insert and delete ripple every later row.
+  - **Q-2, page-scoped:** beats stay absolute; the procedure rewrites each later row explicitly, one logged statement each.
+  - **Page delete:** the page's moves (transitions ending at its end and starting inside it) are deleted, children first; the previous page's move stretches over its beats, as page mode does. Yank also shifts later moves earlier. Deleting the last page leaves the previous page's range unchanged (page mode sets `last_page_counts`).
+  - **Page insert, split and add last page:** each transition ending at the new page's start gets a holding transition over the page (same timeline, grown if needed; one slot per assignment ending there, at its layer; destination = position at the page start). With none, one hold for every marcher at layer 0 in the timeline containing the page start. Marchers busy at that layer over the page are left out.
+  - **Refusals before any timeline write** (the page-mode statements roll back too): empty row `E-ARGS`, stranded assignment `E-A1`, transition outside its timeline `E-T1`, overlap or reorder at one layer `E-A3`.
+  - **Order (U-3):** delete removed pages' transitions; grow timelines, then transitions, to the union; move assignments in dependency order per marcher and layer; shrink transitions, then timelines; add holds.
+- **Known limits:** the audio player's "replace all beats" and MusicXML import create new beats in one edit and delete the old ones in another, so non-page tracks lose their beats in the second edit and it is refused (page moves follow their pages). One UPDATE per moved assignment, as in `shiftTimeline`.
+- **Checks:**
+  - `pnpm install`: ok.
+  - `pnpm exec turbo run build --filter=@openmarch/desktop^...`: 4 successful.
+  - `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
+  - `vitest run src/db-functions/__test__/timelineRipple.test.ts`: 17 passed.
+  - `test:history` on timelineRipple, beat, page, measures, timelineCommands and timelineRangeEdit: 6 files, 265 passed, 1 todo.
+  - `pnpm --dir apps/desktop run test`: 122 files passed, 7 skipped; 1,777 tests passed.
+  - eslint, prettier --check and cspell on the changed files: clean.
+  - Skipped by policy: the full `test:history`, Playwright and `build:electron`. The app was not run by hand.
+- **Exit gate:** "`test:history` passes for every ripple procedure" is not ticked; it becomes true when PR #26 merges, and the full suite is skipped by policy.
+- **Next:** review and merge PR #26.
 - **Blockers:** none.
