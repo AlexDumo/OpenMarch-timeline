@@ -72,7 +72,6 @@ const resolver = () => {
 const expectPageEndsExact = async (
     db: DbConnection,
     skip: (marcherId: number, pageId: number) => boolean = () => false,
-    tolerance = 0,
 ) => {
     const { pages } = await readShowTiming(db);
     const rows = await db.select().from(schema.marcher_pages).all();
@@ -86,23 +85,12 @@ const expectPageEndsExact = async (
             for (const beat of beats) {
                 const [x, y] = r.positionAt(mp.marcher_id, beat);
                 const what = `marcher ${mp.marcher_id}, page ${page.name}, beat ${beat}`;
-                if (tolerance > 0) {
-                    expect(Math.abs(x - mp.x), what).toBeLessThanOrEqual(
-                        tolerance,
-                    );
-                    expect(Math.abs(y - mp.y), what).toBeLessThanOrEqual(
-                        tolerance,
-                    );
-                } else {
-                    expect(
-                        Object.is(x, mp.x),
-                        `${what}: x ${x} vs ${mp.x}`,
-                    ).toBe(true);
-                    expect(
-                        Object.is(y, mp.y),
-                        `${what}: y ${y} vs ${mp.y}`,
-                    ).toBe(true);
-                }
+                expect(Object.is(x, mp.x), `${what}: x ${x} vs ${mp.x}`).toBe(
+                    true,
+                );
+                expect(Object.is(y, mp.y), `${what}: y ${y} vs ${mp.y}`).toBe(
+                    true,
+                );
                 checked++;
             }
         }
@@ -226,12 +214,9 @@ describeDbTests("page → timeline converter", (it) => {
         await startTimelineResolver(db);
         await convertPagesToTimeline(db);
         await timelineResolverSettled();
-        // The running store follows the edit through the change log, whose JSON images keep only
-        // 15 significant digits of REAL columns (homes, slot destinations), so its mirror is off by
-        // up to an ulp or two until a cold build. The rows themselves are exact.
-        expect(await expectPageEndsExact(db, undefined, 1e-9)).toBeGreaterThan(
-            0,
-        );
+        // The running store follows the edit through the change log, whose JSON images carry
+        // REAL columns at full precision, so it is exact without a cold build.
+        expect(await expectPageEndsExact(db)).toBeGreaterThan(0);
         await startTimelineResolver(db);
         expect(await expectPageEndsExact(db)).toBeGreaterThan(0);
 
@@ -245,9 +230,7 @@ describeDbTests("page → timeline converter", (it) => {
         const redo = await performRedo(db);
         expect(redo.success, redo.error?.message).toBe(true);
         await timelineResolverSettled();
-        expect(await expectPageEndsExact(db, undefined, 1e-9)).toBeGreaterThan(
-            0,
-        );
+        expect(await expectPageEndsExact(db)).toBeGreaterThan(0);
         // Redo restores the exact rows
         await startTimelineResolver(db);
         expect(await expectPageEndsExact(db)).toBeGreaterThan(0);
