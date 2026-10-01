@@ -99,9 +99,9 @@ Coordinate sheets and PDF export sample the resolver at page beats.
 
 ### P7.8: Video export and appearances
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p7-exports)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/23
 - Parallel: yes
 - Depends on: P7.1
 
@@ -109,9 +109,9 @@ Video export and `exportAppearances` sample the resolver.
 
 ### P7.9: Keyframe export
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p7-exports)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/23
 - Parallel: yes
 - Depends on: —
 
@@ -273,17 +273,17 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.8 Video export and appearances
 
-- [ ] `src/components/exporting/ExportCoordinatesModal.tsx` ~1253 to 1950 (video export; `useManyCoordinateData` at ~1350, `coordinateDataQueryOptions` and `combineMarcherTimelines` at ~1521 to 1534, page rows for appearances at ~1262 to 1317) · R · not handled · sample the resolver per frame
-- [ ] `src/components/exporting/video/videoRenderer.ts` ~19, ~46 and `src/components/exporting/video/videoFrameRenderer.ts` ~9 to 16, ~92, ~106 (take per-marcher page-mode timelines and call the keyframe interpolator) · R · not handled
+- [x] `src/components/exporting/ExportCoordinatesModal.tsx` ~1253 to 1950 (video export; `useManyCoordinateData` at ~1350, `coordinateDataQueryOptions` and `combineMarcherTimelines` at ~1521 to 1534, page rows for appearances at ~1262 to 1317) · R · not handled · sample the resolver per frame (done in PR https://github.com/AlexDumo/OpenMarch-timeline/pull/23: timeline mode samples the resolver per frame; appearances ignore page rows)
+- [x] `src/components/exporting/video/videoRenderer.ts` ~19, ~46 and `src/components/exporting/video/videoFrameRenderer.ts` ~9 to 16, ~92, ~106 (take per-marcher page-mode timelines and call the keyframe interpolator) · R · not handled (done: `frameSampler` replaces the page keyframes in timeline mode, page mode unchanged)
 - [x] `src/components/exporting/utils/exportAppearances.ts` ~31 to 70 (`buildMarcherAppearancesByPageId` reads each page's rows for per-marcher-page appearances) · R · not handled · depends on the P7.14 decision (dropped: never implemented, owner decision 2026-09-30)
 - [x] `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 (`_combineMarcherAppearances` puts the page row's appearance first in the stack; the query fetches marcher pages by page) · R · canvas appearances as well as exports · not handled · depends on the P7.14 decision (dropped: never implemented, owner decision 2026-09-30)
 - [ ] `src/components/singletons/StateInitializer.tsx` ~41 to 70 (prefetch of appearances and coordinate data for the selected, next and previous pages) · R · not handled · see P7.13
-- [ ] `electron/main/services/video-export-service.ts` · no direct reads (it receives encoded chunks) · no change expected; confirm
+- [x] `electron/main/services/video-export-service.ts` · no direct reads (it receives encoded chunks) · no change expected; confirm (confirmed: no marcher, page or coordinate reads; no change)
 
 #### P7.9 Keyframe export
 
-- [ ] `src/utilities/Keyframes.ts` (`MarcherTimeline`, `getCoordinatesAtTime` ~32, `findSurroundingTimestamps` ~118) · R · the page-mode keyframe interpolator, used by `useAnimation.ts` ~174, `CollisionDetection.ts`, video export and `useCoordinateData.ts` · P5 bypasses it for playback · the spec §11 generator (keyframes from the resolver, chord error within tolerance) does not exist yet; build it here and let P7.8, P7.10 and P7.12 reuse it
-- [ ] `src/hooks/queries/useCoordinateData.ts` ~15 to 31, ~41 to 152 (`getMarcherTimelines`, `coordinateDataQueryOptions`; reads marcher pages and pathways), ~154 to 212 (`combineMarcherTimelines`, `useManyCoordinateData`) · R · page-mode keyframes built from page rows and pathways · not handled · stays until Phase 10 and must never be fed back as state (D-2)
+- [x] `src/utilities/Keyframes.ts` (`MarcherTimeline`, `getCoordinatesAtTime` ~32, `findSurroundingTimestamps` ~118) · R · the page-mode keyframe interpolator, used by `useAnimation.ts` ~174, `CollisionDetection.ts`, video export and `useCoordinateData.ts` · P5 bypasses it for playback · the spec §11 generator (keyframes from the resolver, chord error within tolerance) does not exist yet; build it here and let P7.8, P7.10 and P7.12 reuse it (done: `src/timeline/timelineKeyframes.ts` builds spec 11 keyframes from the resolver)
+- [x] `src/hooks/queries/useCoordinateData.ts` ~15 to 31, ~41 to 152 (`getMarcherTimelines`, `coordinateDataQueryOptions`; reads marcher pages and pathways), ~154 to 212 (`combineMarcherTimelines`, `useManyCoordinateData`) · R · page-mode keyframes built from page rows and pathways · not handled · stays until Phase 10 and must never be fed back as state (D-2) (unchanged; the export never reads it in timeline mode and never feeds keyframes back)
 
 #### P7.10 (new) Pathways, midpoints, step size and collisions in timeline mode
 
@@ -455,4 +455,22 @@ Facts that change how to read the PR #14 note above:
 - **Done:** fork PR #22 reviewed by a sub-agent (APPROVE WITH NITS: the add order grow slot_count → point → assignment and the delete compaction (update the vacated point, re-key the last slot's assignment, delete the last point, shrink once) are valid at every intermediate state in both directions; the follow-the-leader guard is complete because FTL transitions always have a shape and only `inherit` FTLs read another transition's slot order). The worker fixed the nits: the timeline flag is read when the mutation runs, waiting for workspace settings if they're loading, so an add or delete can't fall back to page mode in that window; the mid-order delete test now proves the move-into-vacated-slot path and checks mid-transition positions. Squash-merged. P7.3 set to done.
 - **Checks:** at d0024fbe, in the worker's work tree: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on timelineMarchers, marcher and useMarchersTimelineMode (47 passed); `pnpm --dir apps/desktop run test` (113 files, 1,669 passed).
 - **Next:** P7.4 onward. Open from P7.3: `previous-dots-import-service.ts` still reads a converted source file's frozen page rows (main process).
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-commands) · Cross-phase note from P8.9
+
+- **Done:** P8.9 adds `shiftTimeline` (a clip move moves its whole spec timeline) and `createTrack` (`apps/desktop/src/db-functions/timelineCommands.ts`). It does **not** add a structural "move marcher on page N": the cases P7.2 refuses with E-ARGS (a hold through the page end, a winning assignment spanning several pages, a transition that ends later) are still refused. A workaround exists in timeline mode: Create Track for that marcher over the page makes a steal (one layer up) whose single destination can then be moved with `moveMarchersOnPage`, since that track's move ends at the page's end beat.
+- **Remains:** a structural page move (split the spanning assignment and transition at the page end, or insert a steal automatically) is unowned; it needs a package in Phase 7 or 8.
+- **Checks:** none for this note.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-exports) · P7.8, P7.9 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/23. Timeline mode only; page mode is unchanged (the new `frameSampler` is null with the flag off).
+  - **P7.8:** `src/timeline/timelineExport.ts` adds `ResolverFrameSampler` (seconds to a beat with `beatAtTime`, `positionsAt` into one reused `Float64Array` through `TimelinePositionBuffer`, applied by marcher id), `acquireExportResolver` (the store's resolver when ready, otherwise a cold build with `readTimelineTables`, as the store does) and `readExportBeats`. `videoFrameRenderer.ts` (`setMarcherPositionsAtTime`, now exported) and `videoRenderer.ts` use the sampler when `frameSampler` is set. `ExportCoordinatesModal.tsx` (video export only) builds a preview sampler from the store resolver and the export's sampler from `acquireExportResolver`, skips the page keyframe queries and the marcher_pages dependency in timeline mode. `buildMarcherAppearancesByPageId` takes `timelineMode` and ignores marcher page rows (the dropped per-page fields, P7.14); `marcherPagesMap` is optional.
+  - **P7.9:** `src/timeline/timelineKeyframes.ts`: `buildKeyframes(resolver, beats, { tolerance, float32 })`. Per marcher, one keyframe at every span edge and at the show's start (beat 1, show time 0) and end; inside every non-hold span, the interval is bisected in show time until 7 probes per piece (at 1/8 steps) are within the tolerance of the resolver (depth cap 14). Time-domain bisection also handles tempo changes. Default tolerance 0.01 field units; coordinates are rounded to Float32 by default (extra error at most 2^-24 of the coordinate; the resolver stays Float64). Helpers: `interpolateKeyframes`, `keyframesToMarcherTimelines` (page-mode shape in ms, for consumers of that format) and `keyframesToJson`. Exposure: `window.openmarchTimeline.exportKeyframes(options?)` returns the JSON text (dev console, no UI); nothing reads it back as state. Left as a follow-up for P7.10 / P7.12 to call `buildKeyframes` or `keyframesToMarcherTimelines`.
+- **Decisions (recorded for the phase):** the export starts at beat 1 because beat 0 shares show time 0 with beat 1 (the app's tempo map); positions are continuous at span boundaries (P-1), so one keyframe per boundary is exact; the probe-based tolerance is checked against dense samples in the tests. The keyframe JSON shape (`format: openmarch-keyframes`, version 1, `[time, x, y]` triples) is a dev export and not a file-format commitment; the mobile payload format change stays a decision for a person (P7.12).
+- **Not ticked:** `StateInitializer.tsx` prefetch (belongs to P7.13). The coordinate-sheet `useMarcherAppearances` and mobile items are other packages.
+- **Checks:** `pnpm install` ok; `pnpm exec turbo run build --filter=@openmarch/desktop^...` ok; `pnpm --dir apps/desktop exec tsc --noEmit` clean; `vitest run src/timeline/__test__/timelineKeyframes.test.ts src/timeline/__test__/timelineExport.test.ts src/components/exporting` passed (keyframes on G1, G8, G8b, G6 and G12: boundaries present, dense chord error within tolerance for 0.01 and 1e-4, Float32 rounding, determinism, tempo change; frame sampling equals `positionAt` at `beatAtTime`, page mode unchanged; appearances ignore page rows; cold-built and store resolvers on a real DB); `pnpm --dir apps/desktop run test` (full regular suite) 119 files passed, 7 skipped, 1734 tests passed; eslint, prettier and cspell on `src/timeline` and `src/components/exporting` clean (one existing warning in `MarcherCoordinateSheet.tsx`). Skipped per policy: `test:history`, Playwright, `build:electron`.
+- **Next:** review and merge.
 - **Blockers:** none.
