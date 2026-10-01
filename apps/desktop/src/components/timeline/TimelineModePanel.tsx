@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
 import { useTimingObjects } from "@/hooks";
 import { useIsPlaying } from "@/context/IsPlayingContext";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
+import { db } from "@/global/database/db";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { AudioClock } from "./Clock";
 import {
@@ -12,20 +16,13 @@ import {
 import {
     Timeline,
     type TimelineCreateTrackRequest,
-    type TimelineInput,
     type TimelineSelection,
 } from "./Timeline";
 import type { TimelineRangeChange } from "./TimelineViewModel";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 
-/**
- * No tracks until the view-model adapter (P8.8) builds them from the stored tables and the
- * resolver. Nothing here is fixture data.
- */
-// TODO(P8.8): replace with the adapter's tracks for the open file.
-const NO_TIMELINES: readonly TimelineInput[] = [];
-
 // TODO(P8.9): move the whole spec timeline through the write path (ui.md: TimelineRangeChange).
+// The change arrives in spec beats; its track's `linkId` is the spec timeline.
 const commitTimelineRange = (_change: TimelineRangeChange) => {};
 
 // TODO(P8.9): create a timeline, transition and assignments in one edit, and pass the selected
@@ -61,6 +58,22 @@ export default function TimelineModePanel() {
     const [selection, setSelection] = useState<TimelineSelection>(null);
     const { isPlaying } = useIsPlaying()!;
     const { setSelectedPage } = useSelectedPage()!;
+    const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
+    const selectedIdsKey = (selectedMarchers ?? []).map((m) => m.id).join(",");
+    const selectedMarcherIds = useMemo(
+        () =>
+            new Set(
+                selectedIdsKey === ""
+                    ? []
+                    : selectedIdsKey.split(",").map(Number),
+            ),
+        [selectedIdsKey],
+    );
+    const timelines = useTimelineTracks({
+        database: db,
+        enabled: useTimelineMode(),
+        selectedMarcherIds,
+    });
     const changeSelection = (next: TimelineSelection) => {
         setSelection(next);
         // Clicking a page in the ruler also seeks to its first beat, which `pageForSeek` reads as
@@ -76,7 +89,7 @@ export default function TimelineModePanel() {
             beats={beats}
             pages={pages}
             measures={measures}
-            timelines={NO_TIMELINES}
+            timelines={timelines}
             playback={playback}
             transportClock={<AudioClock />}
             transportAccessories={

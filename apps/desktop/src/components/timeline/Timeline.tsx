@@ -8,6 +8,11 @@ import {
     useMemo,
     useState,
 } from "react";
+import {
+    createTimelineBeatAxis,
+    timelineInputToView,
+    type TimelineBeatAxis,
+} from "@/timeline/timelineViewModel";
 import { clamp } from "./TimelineGeometry";
 import { CollapsedTimeline, ExpandedTimeline } from "./TimelineVariants";
 import type {
@@ -18,6 +23,7 @@ import type {
     TimelineSelection,
     TimelineTarget,
     TimelineTrack,
+    TimelineTrackDiagnostics,
     TimelineViewModel,
     TimelineWaveform,
 } from "./TimelineViewModel";
@@ -31,9 +37,14 @@ export interface TimelineLegInput {
     readonly texture: "move" | "hold";
 }
 
-/** Renderer-ready aggregate assembled outside the visual component. */
+/**
+ * Renderer-ready aggregate assembled outside the visual component, by the view-model adapter
+ * (`src/timeline/timelineViewModel.ts`). Its ranges are spec beat positions.
+ */
 export interface TimelineInput {
     readonly id: string | number;
+    /** The spec timeline: clips with the same link id move together */
+    readonly linkId?: string | number;
     readonly targetId: string | number;
     readonly targetType: TimelineTarget["type"];
     readonly label: string;
@@ -42,6 +53,7 @@ export interface TimelineInput {
     readonly endBeatIndex: number;
     readonly legs: readonly TimelineLegInput[];
     readonly activitySpans: readonly TimelineActivitySpan[];
+    readonly diagnostics?: TimelineTrackDiagnostics;
 }
 
 /**
@@ -67,6 +79,11 @@ const STOPPED_AT_START: TimelinePlayback = {
     isPlaying: false,
 };
 
+/**
+ * Every beat in these props, and in the commands the timeline sends, is a spec beat position
+ * (`beats` indexes). The timeline draws them on a view axis that hides the zero-length beat 0
+ * (`createTimelineBeatAxis`); its selection is in view beats and is only passed back to it.
+ */
 export interface TimelineProps {
     readonly mode: TimelineMode;
     readonly beats: readonly Beat[];
@@ -116,6 +133,7 @@ const useTimelineWaveform = (beatCount: number): TimelineWaveform => {
 
 const toTrack = (timeline: TimelineInput): TimelineTrack => ({
     id: timeline.id,
+    linkId: timeline.linkId,
     targetId: String(timeline.targetId),
     targetType: timeline.targetType,
     label: timeline.label,
@@ -127,29 +145,34 @@ const toTrack = (timeline: TimelineInput): TimelineTrack => ({
         texture: leg.texture,
     })),
     activitySpans: timeline.activitySpans,
+    diagnostics: timeline.diagnostics,
 });
 
-// TODO(P8.8): the fixed zero-length beat 0 takes one beat of width before page 1, an empty column in
-// the ruler. Compress it in the view-model adapter rather than here.
+/**
+ * The view model on the view's beat axis: the fixed zero-length beat 0 would be a one-beat empty
+ * column before the first timed page, so the axis hides it (`createTimelineBeatAxis`).
+ */
 export const createTimelineViewModel = ({
     beats,
     pages,
     measures,
     timelines,
     waveform,
+    axis = createTimelineBeatAxis(beats),
 }: Pick<TimelineProps, "beats" | "pages" | "measures" | "timelines"> & {
     waveform: TimelineWaveform;
+    axis?: TimelineBeatAxis;
 }): TimelineViewModel => ({
-    beatCount: beats.length,
+    beatCount: axis.beatCount,
     pages: pages.flatMap((page) => {
-        const atBeat = page.beats[0]?.index;
-        return atBeat == null
+        const first = page.beats[0]?.index;
+        return first == null
             ? []
             : [
                   {
                       id: page.id,
                       label: page.name,
-                      atBeat,
+                      atBeat: axis.toView(first),
                       isInitial:
                           page.previousPageId === null && page.counts === 0,
                   },
@@ -158,15 +181,22 @@ export const createTimelineViewModel = ({
     measures: measures.map((measure) => ({
         id: measure.id,
         label: `M${measure.number}`,
-        atBeat: measure.startBeat.index,
+        atBeat: axis.toView(measure.startBeat.index),
         rehearsalMark: measure.rehearsalMark,
     })),
-    tracks: timelines.map(toTrack),
+    tracks: timelines.flatMap((timeline) => {
+        const view = timelineInputToView(timeline, axis);
+        return view ? [toTrack(view)] : [];
+    }),
     waveform,
 });
 
 export function Timeline(props: TimelineProps) {
-    const waveform = useTimelineWaveform(props.beats.length);
+    const axis = useMemo(
+        () => createTimelineBeatAxis(props.beats),
+        [props.beats],
+    );
+    const waveform = useTimelineWaveform(axis.beatCount);
     const model = useMemo(
         () =>
             createTimelineViewModel({
@@ -175,27 +205,63 @@ export function Timeline(props: TimelineProps) {
                 measures: props.measures,
                 timelines: props.timelines,
                 waveform,
+                axis,
             }),
-        [props.beats, props.measures, props.pages, props.timelines, waveform],
+        [
+            axis,
+            props.beats,
+            props.measures,
+            props.pages,
+            props.timelines,
+            waveform,
+        ],
     );
     const playback = props.playback ?? STOPPED_AT_START;
     const [pixelsPerBeat, setPixelsPerBeat] = useState(16);
 
     const positionBeat = clamp(
-        playback.positionBeat,
+        axis.toView(playback.positionBeat),
         0,
         Math.max(model.beatCount - 1, 0),
     );
     const seekToBeat = playback.onSeek
-        ? (beatIndex: number) => {
+        ? (viewBeat: number) => {
               const nextIndex = clamp(
-                  Math.round(beatIndex),
+                  axis.toSpec(Math.round(viewBeat)),
                   0,
                   Math.max(props.beats.length - 1, 0),
               );
               if (!props.beats[nextIndex]) return;
               playback.onSeek?.(nextIndex);
           }
+        : undefined;
+    const { onTimelineRangeCommit, onCreateTrack, timelines } = props;
+    // A clip move keeps its length: send the spec range shifted by the move, so a clip whose start
+    // was hidden with beat 0 moves by exactly the beats it was dragged
+    const commitRange = onTimelineRangeCommit
+        ? (change: TimelineRangeChange) => {
+              const input = timelines.find(
+                  (timeline) => timeline.id === change.timelineId,
+              );
+              if (!input) return;
+              const shift =
+                  change.startBeatIndex - axis.toView(input.startBeatIndex);
+              onTimelineRangeCommit({
+                  timelineId: change.timelineId,
+                  startBeatIndex: input.startBeatIndex + shift,
+                  endBeatIndex: input.endBeatIndex + shift,
+              });
+          }
+        : undefined;
+    const createTrack = onCreateTrack
+        ? (request: TimelineCreateTrackRequest) =>
+              onCreateTrack({
+                  target: request.target,
+                  range: {
+                      startBeatIndex: axis.toSpec(request.range.startBeatIndex),
+                      endBeatIndex: axis.toSpec(request.range.endBeatIndex),
+                  },
+              })
         : undefined;
     const commonProps = {
         model,
@@ -211,8 +277,8 @@ export function Timeline(props: TimelineProps) {
         onNavigate: playback.onNavigate,
         onPixelsPerBeatChange: setPixelsPerBeat,
         onSelectionChange: props.onSelectionChange,
-        onCreateTrack: props.onCreateTrack,
-        onTimelineRangeCommit: props.onTimelineRangeCommit,
+        onCreateTrack: createTrack,
+        onTimelineRangeCommit: commitRange,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,

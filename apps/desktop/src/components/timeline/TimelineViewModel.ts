@@ -48,8 +48,20 @@ export interface TimelineTarget {
     readonly type: "marcher" | "shape";
 }
 
+/** The diagnostics (spec §8.9) in a track's range, shown as a badge on its clip */
+export interface TimelineTrackDiagnostics {
+    readonly level: "warning" | "info";
+    /** One line per diagnostic, for the badge's tooltip */
+    readonly messages: readonly string[];
+}
+
 export interface TimelineTrack {
     readonly id: TimelineTrackId;
+    /**
+     * Tracks with the same link id move together (ui.md: a clip move moves its whole spec
+     * timeline), so selecting one highlights the others.
+     */
+    readonly linkId?: string | number;
     readonly targetId: string;
     readonly targetType: TimelineTarget["type"];
     readonly label: string;
@@ -57,6 +69,7 @@ export interface TimelineTrack {
     readonly legs: readonly TimelineLeg[];
     /** A gap-free, non-overlapping partition of the track's complete range. */
     readonly activitySpans: readonly TimelineActivitySpan[];
+    readonly diagnostics?: TimelineTrackDiagnostics;
 }
 
 export interface TimelineWaveform {

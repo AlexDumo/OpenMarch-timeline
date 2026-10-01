@@ -8,6 +8,7 @@ import {
     RewindIcon,
     SkipBackIcon,
     SkipForwardIcon,
+    WarningIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import {
@@ -367,6 +368,7 @@ export const TimelineTrackClip = ({
     top,
     height,
     selected,
+    linked = false,
     onSelect,
     onRangeCommit,
     beatCount,
@@ -378,6 +380,8 @@ export const TimelineTrackClip = ({
     top: number;
     height: number;
     selected: boolean;
+    /** Another clip of the same spec timeline is selected; this one moves with it */
+    linked?: boolean;
     onSelect?: (trackId: TimelineTrackId) => void;
     onRangeCommit?: (change: TimelineRangeChange) => void;
     beatCount?: number;
@@ -422,9 +426,18 @@ export const TimelineTrackClip = ({
         <button
             type="button"
             data-timeline-interactive="true"
-            aria-label={`${track.label} timeline, beats ${range.startBeatIndex + 1} through ${range.endBeatIndex}`}
+            aria-label={`${track.label} timeline, beats ${range.startBeatIndex + 1} through ${range.endBeatIndex}${
+                track.diagnostics
+                    ? `, ${track.diagnostics.messages.length} ${track.diagnostics.messages.length === 1 ? "diagnostic" : "diagnostics"}`
+                    : ""
+            }`}
             aria-pressed={selected}
-            title={track.label}
+            data-linked={linked || undefined}
+            title={
+                track.diagnostics
+                    ? [track.label, ...track.diagnostics.messages].join("\n")
+                    : track.label
+            }
             onClick={() => onSelect?.(track.id)}
             onPointerDown={(event) => {
                 if (!canMove || event.button !== 0) return;
@@ -482,7 +495,9 @@ export const TimelineTrackClip = ({
                 height,
                 boxShadow: selected
                     ? "0 0 0 2px var(--color-accent)"
-                    : undefined,
+                    : linked
+                      ? "0 0 0 1px var(--color-accent)"
+                      : undefined,
             }}
         >
             {track.activitySpans.map((span) => {
@@ -520,6 +535,24 @@ export const TimelineTrackClip = ({
                     />
                 );
             })}
+            {track.diagnostics && (
+                <span
+                    data-testid="timeline-track-diagnostics"
+                    data-level={track.diagnostics.level}
+                    className={clsx(
+                        "pointer-events-none absolute top-1/2 right-2 flex -translate-y-1/2 items-center",
+                        track.diagnostics.level === "warning"
+                            ? "text-yellow"
+                            : "text-text-subtitle",
+                    )}
+                >
+                    {micro ? (
+                        <span className="block size-[5px] rounded-full bg-current" />
+                    ) : (
+                        <WarningIcon size={12} weight="fill" />
+                    )}
+                </span>
+            )}
         </button>
     );
 };
