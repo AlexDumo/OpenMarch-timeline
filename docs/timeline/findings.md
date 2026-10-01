@@ -161,3 +161,17 @@ Exit code 0. `run_all.sh` itself truncates each line to 90 characters. Environme
 - **Conditions:** the run took 1,047 s against the usual ~130 s, while another worker's tests ran on the machine.
 - **Rerun:** the file alone passed 21 of 21 twice.
 - **Fix:** hardening the hook timeout and the `afterEach` guard was handed to the P9.3 worker, which is working in `electron/database`.
+
+### 2026-10-01 · timeline-worker (timeline/p9-8-convert-worker) · P9.8 · convert-on-open timing and the bulk-insert path
+
+- **Setup:** `electron/database/__test__/convertOnOpenPerf.test.ts` (opt-in: `OPENMARCH_PERF=1 pnpm exec vitest run electron/database/__test__/convertOnOpenPerf.test.ts`). It seeds a version-7 show with 400 marchers on 100 pages, every marcher on every page and the undo triggers (4.7 MB), then times `backupBeforeConversion` and `convertFileOnOpen` on the test's thread. Apple Silicon Mac, Node 24.14, vitest 4, one vitest process.
+- **Before (base `timeline-try-2` 5644fe10, one INSERT … RETURNING per assignment):** backup 52 ms, conversion 3,791 ms. That matches P9.3's 3.9 s.
+- **After (chunked multi-row inserts, 500 rows a statement; the row triggers still run per row):** backup 49–62 ms, conversion 1,430–1,486 ms (2.6 times faster).
+  - Steps after: convert 1,327 ms, drain the change log 87 ms, the others under 5 ms each.
+  - The rest of the convert step is the per-row change-log trigger work and the planner.
+- **Off the main thread:** since P9.8 both run in a worker thread. In `convertWorkerHost.test.ts`, a 10 ms timer on the main thread kept firing through a conversion slowed to more than 1.2 s, and its longest gap stayed under 500 ms.
+- **Not measured:** a 50 MB file. P9.2 measured 1–2 s for its backup, which now also runs in the worker.
+
+### 2026-10-01 · timeline-worker (timeline/p9-8-convert-worker) · P9.8 · `vite.config.mjs` is the config Vite uses
+
+`apps/desktop/vite.config.mjs` is checked in. It is tsc's output of `vite.config.mts`, and Vite loads `.mjs` before `.mts`. An edit to `vite.config.mts` alone doesn't change the app build: the P9.8 worker entry was missing from `dist-electron` until the `.mjs` was regenerated (`pnpm exec tsc -p tsconfig.node.json`, which also prints existing type errors and leaves a `tsconfig.node.tsbuildinfo` to delete; then prettier). `mainBundle.test.ts` now checks that both files build the worker.

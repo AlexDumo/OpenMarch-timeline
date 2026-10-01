@@ -99,8 +99,8 @@ User-facing docs in `apps/website` and release notes.
 ### P9.8: Convert off the main process
 
 - Owner: timeline-worker (timeline/p9-8-convert-worker)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/44
 - Parallel: yes
 - Depends on: P9.3
 
@@ -365,3 +365,31 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** tests (P9.3 tests through the worker, crash and failure rollback, a timer keeps firing during a large conversion, terminate on quit, worker bundle), then the focused suites.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p9-8-convert-worker` (8da15a6c), run `pnpm install` and the package build, then write the worker tests in `electron/database/__test__/` and `electron/main/__test__/`.
+
+### 2026-10-01 · timeline-worker (timeline/p9-8-convert-worker) · P9.8
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/44 (one commit, b82a8cb0). The previous entry has the design.
+  - The worker: `electron/database/convertOnOpenWorker.ts`, `convertOnOpenProtocol.ts` and `electron/main/convertWorkerHost.ts`. A crash after the backup becomes `conversion-failed` and keeps the backup; a crash before it becomes `backup-failed` (`unknown`). On quit, workers are terminated and rolled back, and no dialog is shown.
+  - The progress window: `showPreparingProgress` in `preparingWindow.ts` (status line, bar and taskbar).
+  - The bulk insert: `insertTimelineAssignmentsBulkInTransaction`, plus chunked destinations.
+  - **Build:** Vite loads the checked-in `vite.config.mjs` (tsc's output of the `.mts`) before `vite.config.mts`, so both now build the worker. `mainBundle.test.ts` checks both. Recorded in `findings.md`.
+  - **Timing (400 × 100):** the conversion takes 1,430 ms instead of 3,791 ms; recorded in `findings.md`.
+- **Decisions (lead to confirm):**
+  - `worker_threads` over `utilityProcess` (reasons in the previous entry).
+  - The open's own connection is closed before the worker starts and reopened after, rather than kept open idle.
+  - Progress reaches the preparing window through `executeJavaScript`, from the main process. No IPC contract changed, so there is no C-n note.
+  - Without `deps.convertWorker`, `openShowDatabase` still converts on its own thread. The app always passes the worker; tests of the dialog flow don't.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - eslint, prettier, cspell and the pre-commit hook: clean.
+  - `convertOnOpen.test.ts`: 74 passed (every P9.3 test in-thread and through the worker).
+  - `convertWorkerHost.test.ts`: 14 passed (bundle, crash per step, timer responsiveness, quit).
+  - `openShow` with `openShowImports`: 21 passed.
+  - `preparingWindow`: 6 passed. `mainBundle`: 3 passed. `timelineWrites`: 19 passed. `historyTriggers`: 1 passed.
+  - `test:focused electron src/db-functions src/timeline src/components/inspector src/global src/utilities src/hooks`: 116 files passed, 6 skipped; 1,885 tests passed.
+  - Focused `test:history` on 12 history and converter files: 11 passed, 1 skipped; 159 tests passed.
+  - `vite build`: passed, with `dist-electron/worker/convertOnOpenWorker.js` built. That file converted a show in a one-off test.
+  - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run.
+- **Not done:** a manual app run with `OPENMARCH_CONVERT_ON_OPEN=1` to see the window's progress and the quit path (human).
+- **Next:** review and merge by the lead; then P9.4 (both of its dependencies would then be done).
+- **Blockers:** none.
