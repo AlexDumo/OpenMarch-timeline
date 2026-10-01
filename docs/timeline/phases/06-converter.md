@@ -97,7 +97,7 @@ Verify that a converted show plays back like the original. (1) A purpose-built t
 - Parallel: yes
 - Depends on: P6.5
 
-Handoff follow-up (1), filed by P6.6. A marcher with no `marcher_pages` row on a page in the middle of the show holds there after conversion, where page mode glides from its previous row to its next one, so the two differ on the gap page and on the page after it. Give that marcher a slot on the gap page whose destination is the page-mode position at the page's end beat (linear in time between its neighbors, or along the next row's pathway), report it as "interpolated", and keep "hold" only when no later row exists. Repro: `apps/desktop/src/timeline/__test__/conversionShow.ts` deletes one marcher's page-5 row (`gapMarcherId`); `conversionEquality.test.ts` currently expects `missingRow` to differ (10 samples, max > 1 px). After the fix that bucket should match page mode within 1e-9, and the test's expectation should flip. Neither real show in the P6.6 corpus has such a gap; only damaged files do.
+Handoff follow-up (1), filed by P6.6. A marcher with no `marcher_pages` row on a page in the middle of the show holds there after conversion, where page mode glides from its previous row to its next one, so the two differ on the gap page and on the page after it. Give that marcher a slot on the gap page whose destination is linear in **beats** between its neighboring rows (C-7: the point that fraction of the beats from the previous row's end beat to the next row's end beat; along the next row's pathway if it has one), report it as "interpolated", and keep "hold" only when no later row exists. Repro: `apps/desktop/src/timeline/__test__/conversionShow.ts` deletes one marcher's page-5 row (`gapMarcherId`); `conversionEquality.test.ts` currently expects `missingRow` to differ (10 samples, max > 1 px). `missingRow` compares at the same beat on the beat-axis keyframes, so after the fix it should match within 1e-9 (on even-tempo pages and uneven ones alike), and the test's expectation should flip; the millisecond difference on uneven pages stays reported only. Neither real show in the P6.6 corpus has such a gap; only damaged files do.
 
 ## Exit gate
 
@@ -203,12 +203,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
     - Page ends: 151 of 151 exact.
     - Plain samples inside pages: max error below 1e-9.
     - Millisecond difference on even-tempo pages: below 1e-9. On the 2 uneven pages it is over 0.1 px, and only reported.
-  - Real show A (large): 44 marchers, 69 pages.
+  - Show A: 44 marchers, 69 pages.
     - Page ends: 3,080 of 3,080 exact (max 0, mean 0).
     - Inside pages: 11,968 samples, max 0, mean 0.
     - 14 uneven-tempo pages, with a millisecond difference up to 5.0 px; 1.5e-10 on the even ones.
     - Loss report: 1 curved shape. No pathways, midsets, dropped fields, missing rows or skipped pages.
-  - Real show B (demo): 95 marchers, 23 pages.
+  - Show B: 95 marchers, 23 pages.
     - Page ends: 2,280 of 2,280 exact.
     - Inside pages: 8,360 samples, max 0, mean 0.
     - 4 uneven-tempo pages, with a millisecond difference up to 35.1 px; 3.7e-12 on the even ones.
@@ -228,3 +228,28 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Exit gate:** "run on at least three real shows" stays open. Only two real shows were available (A and B); one more is needed.
 - **Next:** review and merge by the lead; a third real show for the exit gate; P6.7.
 - **Blockers:** none for P6.6. The exit gate needs a third real `.dots` file from the project owner.
+
+### 2026-10-01 · timeline-worker (timeline/p6-equality-corpus) · P6.6 (review fixes)
+
+- **Done:** follow-up commit fad4a770 on PR https://github.com/AlexDumo/OpenMarch-timeline/pull/41, pushed without a force-push.
+  - Show labels are now just "show A" and "show B", in `findings.md`, this log and the PR body.
+  - The corpus report no longer stores source paths, and its default name has a random suffix.
+  - The runner refuses a report path inside any git checkout: it resolves the parent directory with symlinks resolved, then runs `git rev-parse --show-toplevel`.
+  - The runner copies inside the `try`, checks the copy's hash, and hashes the original in a `finally`.
+  - The runner also requires straight moves and even-tempo millisecond playback within 1e-9 on every show.
+  - The equality test gained a negative control: a slot destination moved by 50 px must show more than 1 px at a page end and inside pages.
+  - The equality test now checks the deleted marcher directly (absent from `marchers` and from the resolver) and the late-home marcher's page-1 positions.
+  - The Jev script caps its flags (64 marchers, 12 moments). It falls back only on a missing SDK or key, or a connection or authentication failure, and exits non-zero on other errors.
+  - P6.7 now says the gap-page destination is linear in beats (C-7).
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - `test:focused` on `conversionEquality.test.ts`: 1 passed.
+  - `test:timeline-history` on the same file: 1 passed.
+  - `test:history` on `conversionEquality`, `pageConversion` and `planPageConversion`: 3 files, 19 passed.
+  - Corpus runner on both shows: passed; the report has no source paths.
+  - Runner with the report path inside the work tree: refused, nothing written.
+  - Jev: 12 of 12 samples and 10 of 10 controls agree. Oversized flags were clamped. An invalid key exits 0; a missing report exits 1.
+  - eslint: clean.
+  - Not run (policy): the full `test:history` suite, e2e and `build:electron`.
+- **Next:** review and merge by the lead.
+- **Blockers:** none. The exit gate still needs a third real show.

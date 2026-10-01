@@ -133,12 +133,12 @@ Exit code 0. `run_all.sh` itself truncates each line to 90 characters. Environme
   - Page ends: 151 of 151 exact.
   - Straight moves inside pages: within 1e-9.
   - The pathway and the damaged-file gap differ as expected (C-8; P6.7).
-- **Real show A (large):** 44 marchers, 69 pages.
+- **Show A:** 44 marchers, 69 pages.
   - Page ends: 3,080 of 3,080 exact (max 0, mean 0).
   - Inside pages: 11,968 samples, max 0, mean 0.
   - 14 pages with uneven tempo, where millisecond playback differs by up to 5.0 px (1.5e-10 on even pages).
   - Loss report: 1 curved shape; 0 pathways, midsets, dropped fields, missing rows, skipped pages or homes from a later page.
-- **Real show B (demo):** 95 marchers, 23 pages.
+- **Show B:** 95 marchers, 23 pages.
   - Page ends: 2,280 of 2,280 exact.
   - Inside pages: 8,360 samples, max 0, mean 0.
   - 4 pages with uneven tempo, up to 35.1 px in milliseconds (3.7e-12 on even pages).
