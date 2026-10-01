@@ -167,6 +167,16 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 
 `marcher_pages` carries appearance overrides, rotation and notes with no timeline home, and the converter copies only x and y. First log a blocker asking a person to choose: drop them, keep them in the frozen page-era table, or add timeline fields (a schema and file format decision). Then P7.8 and P7.12 can finish their appearance work.
 
+### P7.15: Refresh views on edits outside the change log
+
+- Owner: unassigned
+- Status: open
+- PR: none
+- Parallel: yes
+- Depends on: P7.13
+
+Edits to `timelines` rows alone (name, range) and shape renames produce an empty change batch, so the resolver store version doesn't move and `useTimelineTracks` (and anything else keyed on that version) shows stale rows. See the handoff note from the P7.13 review. Spec 10.2 fixes the change log at five tables, and these edits don't affect resolution, so don't add tables to the change log or bump the resolver version for them. Instead, add a separate view signal: after any `transactionWithHistory`, undo or redo that touched `timelines` or `timeline_shapes`, bump a display version that the tracks and inspector views also follow. Cover undo and redo of a ripple that only moves a timeline's range, and a shape rename.
+
 ## Exit gate
 
 Tick an item only after running its check, and paste the command and result into the log.
