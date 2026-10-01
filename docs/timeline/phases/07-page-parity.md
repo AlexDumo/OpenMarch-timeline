@@ -90,7 +90,7 @@ Copy and paste of positions.
 ### P7.7: Coordinate sheets and PDF
 
 - Owner: timeline-worker (timeline/p7-coordinate-sheets)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -988,4 +988,11 @@ Facts that change how to read the PR #14 note above:
   - Pre-commit hook (cspell, eslint, prettier): passed. eslint on the changed files shows only warnings that were already on the base.
   - Skipped by policy: the full `test:history` suite and Playwright. No db-functions changed.
 - **Next:** the lead re-reviews PR #33 (body updated).
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-coordinate-sheets) · P7.7 checkpoint
+
+- **Done:** commit `257aed4a` on `timeline/p7-coordinate-sheets` (wip). New `src/components/exporting/utils/exportPagePositions.ts`: `readTimelineExportPositions(db)` returns `null` in page mode and, in timeline mode, reads the flag, the timeline tables and the pages under one `withTimelineWriteLock` (P7.12's `readTimelinePageSnapshot`), then samples with `sampleTimelinePagePositions` into a `PagePositionMap` (same shape as `MarcherPageMap`). Coordinate sheet building moved to `utils/coordinateSheets.tsx` (`buildCoordinateSheets`); the sheet export and the drill chart export use the sampled map in timeline mode and the `marcher_pages` query in page mode. `svg-generator.ts` and the sheet components take a plain position type (`PagePosition`). `SvgPreviewHandler` samples the store resolver for the first page in timeline mode.
+- **Finding on the IPC question:** `electron/main/services/export-utility-process.ts` is unreachable: nothing imports or forks it, and it is not a Vite entry. The live PDF calls (`export:pdf`, `export:generateDocForMarcher`) take sheets and SVGs the renderer already rendered, and the main process never reads `marcher_pages` for them. So the resolver already runs in the renderer and no IPC payload has to change.
+- **Resume from:** write tests (`src/components/exporting/utils/__test__/coordinateSheets.test.tsx`: page-mode deep-equal guard against the old inline rendering, timeline-mode rows equal the resolver at page end beats; `exportPagePositions` db tests with `describeDbTests`), then tsc, focused vitest and lint. Re-run `pnpm install` and `pnpm exec turbo run build --filter=@openmarch/desktop^...` first in a fresh work tree.
 - **Blockers:** none.
