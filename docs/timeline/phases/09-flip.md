@@ -49,7 +49,7 @@ Back up the file before converting (next to the original, with a clear name).
 ### P9.3: Convert on open
 
 - Owner: timeline-worker (timeline/p9-3-convert-on-open)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/42
 - Parallel: no
 - Depends on: P9.2
@@ -319,4 +319,35 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - `pnpm run test`, run alone: 169 files passed, 8 skipped; 2,373 tests passed.
   - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run either.
 - **Next:** re-review and merge by the lead; then apply the ADR §6 text.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P9.3
+
+- **Done:** squash-merged PR #42 at head 08f73fc0, after two review rounds.
+  - **First round:**
+    - 499 handling in every caller;
+    - a serialized open lock with a `BEGIN IMMEDIATE` recheck;
+    - new shows created already converted;
+    - paint-before-block;
+    - the conversion code loaded only after the gate check;
+    - a rollback test for each transaction step.
+  - **Second round:**
+    - an owner token on the SQL suspension;
+    - the `timelineConvertedAt` marker (C-9);
+    - the preparing window always destroyed;
+    - `timelineRows.ts` moved off the renderer db module, with a main-bundle test;
+    - the misleading backup removed;
+    - fresh and converted files made equivalent;
+    - the connection leak fixed;
+    - duplicate opens deduplicated.
+  - The lead applied the ADR 0001 §6 marker text (ccb8c772).
+- **Checks (lead, on 08f73fc0):**
+  - `tsc --noEmit`: pass.
+  - `vite build`: pass. Only the dynamically loaded `convertOnOpenFlow` chunk requires react, zustand and sonner.
+  - `test:focused electron`: 19 files, 280 tests passed.
+  - Focused `test:history`: 30 files, 652 tests passed.
+  - `pnpm --dir apps/desktop run test`: 169 files, 2,373 tests passed.
+  - Skipped by policy: full `test:history` and e2e.
+- **Still open:** a manual app run with `OPENMARCH_CONVERT_ON_OPEN=1` (dialogs and the preparing window). This is human.
+- **Next:** P9.8 (convert off the main process) and P9.5 (freeze page-era writes).
 - **Blockers:** none.
