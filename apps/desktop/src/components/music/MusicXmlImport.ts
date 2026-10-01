@@ -68,6 +68,7 @@ export const _importMusicXmlFile = async ({
         "importMusicXmlFile",
         // eslint-disable-next-line max-lines-per-function
         async (tx) =>
+            // eslint-disable-next-line max-lines-per-function
             await withTimelinePageRipple(tx, async () => {
                 const { file, allPages, measures, allBeats } = data;
 
