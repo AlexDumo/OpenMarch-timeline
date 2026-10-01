@@ -135,6 +135,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - **Performance:** it runs on the calling thread and takes roughly 1 to 2 s for a 50 MB file. P9.3 must either show a blocking "preparing your file" state or run it off the main thread. `export-utility-process.ts` is dead code (P7.7), not a pattern to reuse.
   - `nextBackupPath` and `BACKUP_NAME_SUFFIX` are exported too; the second argument of `backupBeforeConversion` is for tests only. Nothing calls the backup yet. It needs no IPC or ADR change; if P9.3 wants the renderer to trigger or show it, that goes through the usual IPC rules.
 - **P9.4 prerequisite (from the P9.8 review).** Before removing the flag, run a packaged smoke test: `pnpm --dir apps/desktop run build:electron`, then open a page-era show with `OPENMARCH_CONVERT_ON_OPEN=1`. Confirm that the worker loads from `app.asar` (`dist-electron/worker/convertOnOpenWorker.js`), that the "Preparing your file…" window shows progress, and that quitting mid-conversion leaves the file at version 7 and reopens it on the next launch. P9.8 checked the asar loading only with a small test app.
+- **P9.4 packaged quit re-run (from P9.9).** Judge the quit by the process exiting and the file staying at version 7, not by the AppleScript command's exit code.
+  - AppleScript `quit` returns `User canceled (-128)` even when the quit works. The first quit is always cancelled, by the main window's `close` handler or, during a conversion, by the held `before-quit`. The app then quits by itself.
+  - Check that the process is gone (for example with `ps`) within a few seconds.
+  - Check that `user_version` is 7 with no timeline rows.
+  - Check that the main-process log has a `before-quit:` line.
+  - If the worker can't be stopped within 15 s, the log says `didn't stop within 15000 ms; exiting`, and the process ends through `app.exit()`.
 
 ## Progress log
 
@@ -551,4 +557,33 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Skipped per the policy: the full `test:history` suite (no history files touched) and e2e. `build:electron` wasn't run.
 - **Not done:** the packaged re-run of the quit check (needs the owner's go-ahead; no app was launched).
 - **Next:** review and merge by the lead, then the packaged quit re-run and the owner's manual pass for P9.4.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p9-9-quit-during-conversion) · P9.9
+
+- **Done:** review fixes for PR #46 in follow-up commit 5b27e166 (no force-push). `timeline-try-2` had moved only in `docs/timeline`, so I didn't merge it.
+  1. **Time limit.** A held quit ends the process with `app.exit(0)` after 15 s, and logs it. Further Quits meanwhile are held.
+  2. **The overlay is modal.**
+     - A capturing key listener keeps every key from the page; keys with Cmd, Ctrl or Alt keep their default, so menu shortcuts like Quit still work.
+     - Reload and Force Reload are blocked while a file converts, in the View menu and through `before-input-event` (`reloadGuard.ts`).
+     - The overlay's top strip drags the window. On Windows and Linux it has its own Minimize and Close, through the preload's existing calls; Close takes the quit path.
+  3. **No dialogs once quitting.** `converted()` and the failure dialogs are skipped once a quit has been requested.
+  4. **Quits before the conversion starts.**
+     - The main window's `close` handler calls `markQuitRequested()`, so a conversion that hasn't started is refused.
+     - The open flow's message boxes get an `AbortSignal` that fires when a quit starts, so the older-release warning closes as Cancel and the failure dialogs close.
+  5. **Tests.**
+     - `closeCurrentFile`'s body is now `closeShowFile.ts`, tested with the real open lock.
+     - The fake app models `window-all-closed` and `app.exit()`.
+     - The reset helper also resets `preparing`, the waiters and the listeners.
+     - New tests: the time limit (worker hook `nativeBlockRows`), the dialog quit timings, the gap between the worker's exit and the end of the preparing step, Windows and Linux, thumbnails, keys and the reload guard.
+  6. Added the P9.4 packaged quit re-run note to the handoff notes.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - eslint: 0 errors.
+  - cspell, prettier and the pre-commit hook: clean.
+  - `electron/main` with `convertOnOpen` and `database.services`: 12 files, 184 tests passed.
+  - `test:focused electron`: 23 files passed, 1 skipped; 395 tests passed.
+  - `pnpm --dir apps/desktop run build`: passed.
+  - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run.
+- **Next:** re-review and merge by the lead.
 - **Blockers:** none.
