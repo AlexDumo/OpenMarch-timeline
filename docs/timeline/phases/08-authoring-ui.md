@@ -420,3 +420,9 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Optional follow-ups: timeline clip/track selection driving the editor, picking waypoints on the canvas, exporting `sampleDestinations` from core (ADR 0001 §4).
   - The UI exit-gate item still needs a manual app check.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-copy-paste) · Cross-phase note from P7.6
+
+- **Done:** found in the PR #28 review. Code that reads `useTimelineResolverStore.getState().resolver` to plan a write can start from stale positions while an earlier write is still in its transaction, because change batches reach the resolver only on commit. P7.6 adds `timelinePositionsSettled()` (`apps/desktop/src/timeline/timelineCoordinateWrites.ts`), which waits for `withTimelineWriteLock` and then `timelineResolverSettled()`. Await it before planning a write from resolver positions. Never call it inside a wrapped write: it would wait for itself.
+- **Checks:** none for this note.
+- **Blockers:** none.
