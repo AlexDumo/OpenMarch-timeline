@@ -4,8 +4,22 @@
  * `.dots` files opened through the same steps as `setActiveDb`. Runs in the
  * node environment, as the main process does, so a converter dependency that
  * needs `window` (or `import.meta.env`) fails here.
+ *
+ * Every test runs twice (P9.8): with the backup and conversion on the test's
+ * thread, and in the worker thread the app uses (built with Vite, as the app
+ * build does). Worker crashes, responsiveness and quitting are in
+ * `electron/main/__test__/convertWorkerHost.test.ts`.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+} from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -17,7 +31,11 @@ import {
 import { getOrm } from "../db";
 import { DrizzleMigrationService } from "../services/DrizzleMigrationService";
 import { applyFileVersionDecision } from "../fileVersion";
-import { BACKUP_NAME_SUFFIX } from "../backup";
+import {
+    BACKUP_NAME_SUFFIX,
+    backupBeforeConversion,
+    type BackupResult,
+} from "../backup";
 import {
     CONVERT_ON_OPEN_ENV,
     isConvertOnOpenEnabled,
@@ -29,10 +47,16 @@ import {
     CONVERSION_STEPS,
     findLatestBackup,
     runConvertOnOpen,
-    type ConvertOnOpenHooks,
+    type ConversionStep,
     type ConvertOnOpenOutcome,
     type ConvertOnOpenUi,
+    type ConvertProgress,
 } from "../convertOnOpen";
+import { convertInWorker } from "@om-electron/main/convertWorkerHost";
+import {
+    buildConvertWorker,
+    type BuiltConvertWorker,
+} from "./buildConvertWorker";
 import {
     backupsIn,
     createBlankShow,
@@ -44,6 +68,14 @@ import {
     withDb,
 } from "./convertOnOpenFixtures";
 
+/** Where the backup and conversion run: on this thread, or in the app's worker (P9.8). */
+type Mode = "in-thread" | "worker";
+let mode: Mode = "in-thread";
+let worker: BuiltConvertWorker | undefined;
+
+/** Progress the last open reported to its preparing state. */
+let progress: ConvertProgress[] = [];
+
 /** Records what the flow asked; answers the older-release warning with `choice`. */
 function testUi(choice: "open" | "stop" = "stop") {
     const calls = { warned: [] as (string | undefined)[], prepared: 0 };
@@ -54,10 +86,20 @@ function testUi(choice: "open" | "stop" = "stop") {
         },
         whilePreparing: async (work) => {
             calls.prepared++;
-            return work();
+            return work((p) => progress.push(p));
         },
     };
     return { ui, calls };
+}
+
+/** Test hooks both modes support. */
+interface TestHooks {
+    /** Runs just before the backup. */
+    beforeBackup?: () => void;
+    /** Returned instead of backing up. */
+    backupFailure?: Extract<BackupResult, { ok: false }>;
+    /** Throws `disk vanished after <step>` inside the transaction after this step. */
+    failAfterStep?: ConversionStep;
 }
 
 const CONVERTED_AT = "2026-10-01T12:00:00.000Z";
@@ -66,9 +108,43 @@ const fixedNow = () => new Date(CONVERTED_AT);
 /** The file's hash just before the convert-on-open step (opening itself writes to the file). */
 let hashBeforeStep = "";
 
+/** `runConvertOnOpen`'s options that run the conversion in the current `mode`. */
+function conversionOptions(filePath: string, hooks: TestHooks = {}) {
+    if (mode === "in-thread")
+        return {
+            hooks: {
+                now: fixedNow,
+                backup: (path: string) => {
+                    hooks.beforeBackup?.();
+                    return hooks.backupFailure ?? backupBeforeConversion(path);
+                },
+                afterStep: (step: ConversionStep) => {
+                    if (step === hooks.failAfterStep)
+                        throw new Error(`disk vanished after ${step}`);
+                },
+            },
+        };
+    return {
+        convert: async (onProgress: (p: ConvertProgress) => void) => {
+            hooks.beforeBackup?.();
+            return convertInWorker(filePath, {
+                workerPath: worker!.workerPath,
+                busyTimeoutMs: 5000,
+                onProgress,
+                test: {
+                    now: CONVERTED_AT,
+                    backupFailure: hooks.backupFailure,
+                    failAfterStep: hooks.failAfterStep,
+                },
+            });
+        },
+    };
+}
+
 /**
  * The database steps of `setActiveDb`, including the convert-on-open step. Sets
  * `hashBeforeStep`, and runs `beforeStep` after migrations, right before the step.
+ * The test's connection stays open, idle, while a worker converts.
  */
 async function openLikeSetActiveDb(
     filePath: string,
@@ -80,7 +156,7 @@ async function openLikeSetActiveDb(
     }: {
         env?: Record<string, string | undefined>;
         ui?: ConvertOnOpenUi;
-        hooks?: ConvertOnOpenHooks;
+        hooks?: TestHooks;
         beforeStep?: () => void;
     } = {},
 ): Promise<ConvertOnOpenOutcome> {
@@ -93,20 +169,28 @@ async function openLikeSetActiveDb(
         await migrator.applyPendingMigrations(migrationsFolder);
         hashBeforeStep = sha256(filePath);
         beforeStep?.();
+        progress = [];
         return await runConvertOnOpen(filePath, db, ui, {
             env,
-            hooks: { now: fixedNow, ...hooks },
+            ...conversionOptions(filePath, hooks),
         });
     } finally {
         db.close();
     }
 }
 
-describe("convert on open", () => {
+beforeAll(async () => {
+    worker = await buildConvertWorker();
+}, 120_000);
+
+afterAll(() => worker?.remove());
+
+describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
     let tempDir: string;
     let showPath: string;
 
     beforeEach(async () => {
+        mode = m;
         tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openmarch-convert-"));
         showPath = path.join(tempDir, "show.dots");
         vi.spyOn(console, "log").mockImplementation(() => {});
@@ -207,6 +291,16 @@ describe("convert on open", () => {
         expect(after.changeLog).toBe(0);
         expect(after.triggers).toEqual(before.triggers);
         expect(outcome.report?.pages.length).toBeGreaterThan(0);
+
+        // Progress: the backup, then each converted page.
+        expect(progress).toEqual([
+            { phase: "backup" },
+            ...[1, 2, 3, 4, 5, 6].map((pagesDone) => ({
+                phase: "convert",
+                pagesDone,
+                pagesTotal: 6,
+            })),
+        ]);
 
         // Other workspace settings are kept; the conversion marker is written.
         expect(JSON.parse(after.settingsJson!)).toMatchObject({
@@ -372,18 +466,11 @@ describe("convert on open", () => {
             `show (${BACKUP_NAME_SUFFIX}).dots`,
         );
 
+        // The snapshot this open takes then holds the converted content under a "before" name.
         const outcome = await openLikeSetActiveDb(showPath, {
             hooks: {
-                backup: (filePath) => {
-                    fs.writeFileSync(filePath, convertedElsewhere);
-                    // The snapshot would hold the converted content under a "before" name.
-                    fs.writeFileSync(thisOpensBackup, convertedElsewhere);
-                    return {
-                        ok: true,
-                        backupPath: thisOpensBackup,
-                        userVersion: 8,
-                    };
-                },
+                beforeBackup: () =>
+                    fs.writeFileSync(showPath, convertedElsewhere),
             },
         });
 
@@ -406,11 +493,11 @@ describe("convert on open", () => {
 
             const outcome = await openLikeSetActiveDb(showPath, {
                 hooks: {
-                    backup: () => ({
+                    backupFailure: {
                         ok: false,
                         code: "disk-full",
                         message: "There isn't enough space.",
-                    }),
+                    },
                 },
             });
 
@@ -453,12 +540,7 @@ describe("convert on open", () => {
             expect(before.history).toHaveLength(2);
 
             const outcome = await openLikeSetActiveDb(showPath, {
-                hooks: {
-                    afterStep: (step) => {
-                        if (step === failAfter)
-                            throw new Error(`disk vanished after ${step}`);
-                    },
-                },
+                hooks: { failAfterStep: failAfter },
             });
 
             if (

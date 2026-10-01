@@ -8,14 +8,20 @@
 import { BrowserWindow, dialog, shell } from "electron";
 import { captureException } from "@sentry/electron/main";
 import type { ConvertOnOpenDialogs } from "./convertOnOpenFlow";
-import { showPreparingWindow, type PreparingWindow } from "./preparingWindow";
+import {
+    showPreparingProgress,
+    showPreparingWindow,
+    throttleProgress,
+    type PreparingWindow,
+} from "./preparingWindow";
+import { conversionWorkersStopped } from "./convertWorkerHost";
 
 const createPreparingWindow = (parent: BrowserWindow): PreparingWindow =>
     new BrowserWindow({
         parent,
         modal: true,
         width: 440,
-        height: 120,
+        height: 150,
         frame: false,
         resizable: false,
         closable: false,
@@ -45,7 +51,7 @@ export function electronConvertOnOpenDialogs(
         async whilePreparing(fileName, work) {
             // Without a main window (a file opened at startup) nothing is on screen yet, and a
             // lone extra window would quit the app on Windows and Linux when it closes.
-            const parent = win && !win.isDestroyed() ? win : null;
+            const parent = win && !win.isDestroyed() ? win : undefined;
             const preparing = parent
                 ? await showPreparingWindow(
                       parent,
@@ -54,7 +60,12 @@ export function electronConvertOnOpenDialogs(
                   )
                 : undefined;
             try {
-                return await work();
+                // The worker converts off this thread (P9.8): show how far it has got.
+                return await work(
+                    throttleProgress((p) =>
+                        showPreparingProgress(preparing, parent, p),
+                    ),
+                );
             } finally {
                 if (preparing && !preparing.isDestroyed()) preparing.destroy();
                 if (parent && !parent.isDestroyed()) parent.setProgressBar(-1);
@@ -97,6 +108,8 @@ export function electronConvertOnOpenDialogs(
         },
 
         async backupFailed(fileName, message) {
+            // The app is quitting and stopped the worker: nothing to tell.
+            if (conversionWorkersStopped()) return;
             await messageBox(win, {
                 type: "error",
                 title: "Couldn't back up your file",
@@ -107,6 +120,7 @@ export function electronConvertOnOpenDialogs(
         },
 
         async conversionFailed(fileName, error, backupPath) {
+            if (conversionWorkersStopped()) return;
             captureException(error);
             await messageBox(win, {
                 type: "error",

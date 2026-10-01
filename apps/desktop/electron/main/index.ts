@@ -37,6 +37,11 @@ import { repairDatabase } from "../database/repair";
 import { OPEN_STOPPED_STATUS } from "../database/convertOnOpenGate";
 import { electronConvertOnOpenDialogs } from "./convertOnOpenDialogs";
 import {
+    conversionWorkersStopped,
+    defaultConvertWorkerPath,
+    stopConversionWorkersOnQuit,
+} from "./convertWorkerHost";
+import {
     openOnce,
     openShowDatabase,
     openShowFile,
@@ -232,7 +237,7 @@ async function createWindow(title?: string) {
         "did-start-navigation",
         (_event, _url, _isInPlace, isMainFrame) => {
             if (!isMainFrame || !currentNewShowDraftPath) return;
-            void discardNewShowDraft().catch((error) => {
+            void withOpenLock(discardNewShowDraft).catch((error) => {
                 console.error(
                     "Error discarding new show draft on navigation:",
                     error,
@@ -392,7 +397,10 @@ function initDatabaseIpcHandlers() {
         async (_, targetPath: string, projectName: string) =>
             finalizeNewShowDraft(targetPath, projectName),
     );
-    ipcMain.handle("newShow:discardDraft", async () => discardNewShowDraft());
+    // Changes the active file, so it waits for any open (P9.8: a conversion no longer blocks).
+    ipcMain.handle("newShow:discardDraft", async () =>
+        withOpenLock(discardNewShowDraft),
+    );
     ipcMain.handle("newShow:getDraftPath", () => currentNewShowDraftPath);
     ipcMain.handle("newShow:choosePreviousDotsFile", async () =>
         choosePreviousDotsFile(win),
@@ -527,6 +535,9 @@ function initGetters() {
     //       await exportCanvas(dataUrl)
     //);
 }
+
+// A conversion running in its worker (P9.8) is stopped, and so rolled back, before the app quits.
+stopConversionWorkersOnQuit(app);
 
 app.on("window-all-closed", async () => {
     win = null;
@@ -1187,7 +1198,13 @@ function requestSvgBeforeClose(win: BrowserWindow): Promise<string> {
  *
  * @returns 200 for success, -1 for failure
  */
-export async function closeCurrentFile(isAppQuitting = false) {
+export function closeCurrentFile(isAppQuitting = false): Promise<number> {
+    // Closing changes the active file, so it waits for an open that is running (P9.8: the main
+    // process stays responsive while a file converts, so "Close File" can arrive meanwhile).
+    return withOpenLock(() => closeCurrentFileNow(isAppQuitting));
+}
+
+async function closeCurrentFileNow(isAppQuitting: boolean) {
     console.log("closeCurrentFile called. isAppQuitting:", isAppQuitting);
     // console.trace();
 
@@ -1210,7 +1227,9 @@ export async function closeCurrentFile(isAppQuitting = false) {
 
     // Close the current file
     DatabaseServices.setDbPath("", false);
-    store.set("databasePath", "");
+    // A conversion the quit stopped keeps its file as the one to reopen on the next launch.
+    if (!(isAppQuitting && conversionWorkersStopped()))
+        store.set("databasePath", "");
 
     // Only reload if we're NOT quitting the app
     if (!isAppQuitting) {
@@ -1363,6 +1382,8 @@ const openShowDeps = (): OpenShowDeps => ({
     migrationsFolder: migrationsFolderPath(),
     beforeMigrations: backupBeforeMigrations,
     dialogs: () => electronConvertOnOpenDialogs(win),
+    // The backup and conversion run in a worker thread, off this event loop (P9.8).
+    convertWorker: { workerPath: defaultConvertWorkerPath(__dirname) },
 });
 
 /** The window's navigation events, for resuming the renderer's SQL after a reload. */
@@ -1396,6 +1417,15 @@ async function setActiveDbNow(path: string, isNewFile: boolean) {
 
         if (result.status !== 200) {
             if (token !== undefined) DatabaseServices.resumeSqlProxy(token);
+            if (
+                result.status === OPEN_STOPPED_STATUS &&
+                conversionWorkersStopped()
+            ) {
+                // The app is quitting and stopped this file's conversion (rolled back): reopen,
+                // and so convert, it on the next launch.
+                store.set("databasePath", path);
+                return result.status;
+            }
             store.delete("databasePath");
             if (result.status === OPEN_STOPPED_STATUS) {
                 // Convert on open (P9.3, behind OPENMARCH_CONVERT_ON_OPEN until P9.4): a dialog

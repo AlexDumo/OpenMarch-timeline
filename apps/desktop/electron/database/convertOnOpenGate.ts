@@ -71,9 +71,17 @@ export function withTimelineModeOn(
     });
 }
 
+/** The conversion marker's time in the settings JSON, or undefined when there is none. */
+export function conversionMarkerOf(
+    json: string | null | undefined,
+): string | undefined {
+    const marker = parseSettings(json)[TIMELINE_CONVERTED_AT_KEY];
+    return typeof marker === "string" ? marker : undefined;
+}
+
 /** True when the settings JSON carries the conversion marker. */
 export function hasConversionMarker(json: string | null | undefined): boolean {
-    return typeof parseSettings(json)[TIMELINE_CONVERTED_AT_KEY] === "string";
+    return conversionMarkerOf(json) !== undefined;
 }
 
 /** Reads `workspace_settings.json_data` (the first row), or undefined when there is none. */

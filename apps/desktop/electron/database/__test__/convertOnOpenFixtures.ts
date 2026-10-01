@@ -151,6 +151,58 @@ export async function createPageShow(
     }
 }
 
+/**
+ * A version-7 show with `marchers` marchers on pages 0 to `pages` (8 beats a
+ * page), every marcher on every page, and the undo triggers. For the
+ * performance checks (P9.8): 400 by 100 is the size the phase file names.
+ */
+export async function createLargePageShow(
+    filePath: string,
+    { marchers, pages }: { marchers: number; pages: number },
+) {
+    await createBlankShow(filePath);
+    const db = new DatabaseSync(filePath);
+    try {
+        db.exec("BEGIN");
+        const beat = db.prepare(
+            "INSERT INTO beats (duration, position, include_in_measure) VALUES (0.5, ?, 1) RETURNING id",
+        );
+        const page = db.prepare(
+            "INSERT INTO pages (id, is_subset, start_beat) VALUES (?, 0, ?)",
+        );
+        for (let p = 1; p <= pages; p++) {
+            let first = 0;
+            for (let b = 0; b < 8; b++) {
+                const row = beat.get((p - 1) * 8 + b + 1) as { id: number };
+                if (b === 0) first = row.id;
+            }
+            page.run(p, first);
+        }
+        const marcher = db.prepare(
+            "INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (?, 'Trumpet', 'T', ?)",
+        );
+        const position = db.prepare(
+            "INSERT INTO marcher_pages (marcher_id, page_id, x, y) VALUES (?, ?, ?, ?) ON CONFLICT (marcher_id, page_id) DO UPDATE SET x = excluded.x, y = excluded.y",
+        );
+        for (let m = 1; m <= marchers; m++) {
+            marcher.run(m, m);
+            for (let p = 0; p <= pages; p++)
+                position.run(
+                    m,
+                    p,
+                    (m * 7 + p * 13) % 1000,
+                    (m * 3 + p * 5) % 500,
+                );
+        }
+        db.exec("COMMIT");
+        const { createAllUndoTriggers } =
+            await import("@/db-functions/history");
+        await createAllUndoTriggers(getOrm(db) as never);
+    } finally {
+        db.close();
+    }
+}
+
 export const backupsIn = (dir: string) =>
     fs
         .readdirSync(dir)
