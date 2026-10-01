@@ -82,7 +82,7 @@ Tests on fixture shows (including the e2e fixtures): resolver positions equal `m
 ### P6.6: Conversion equality corpus
 
 - Owner: timeline-worker (timeline/p6-equality-corpus)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/41
 - Parallel: yes
 - Depends on: P6.5
@@ -253,3 +253,28 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Not run (policy): the full `test:history` suite, e2e and `build:electron`.
 - **Next:** review and merge by the lead.
 - **Blockers:** none. The exit gate still needs a third real show.
+
+### 2026-10-01 · lead · P6.6
+
+- **Done:** reviewed PR #41 and squash-merged it at head fad4a770.
+  - The review found no privacy leaks.
+  - Fixes made:
+    - neutral show labels;
+    - no source path in the report;
+    - a committed negative control;
+    - interior and even-tempo assertions in the corpus runner;
+    - the work-tree check for the report path;
+    - P6.7 reworded to "linear in beats";
+    - copy and hash hardening;
+    - stronger assertions;
+    - Jev flag caps and narrower error handling.
+  - Results (owner's two shows, anonymized): exact at every page end and at the same beat inside pages. Jev agreed on 12 of 12 samples and 10 of 10 controls.
+- **Checks (lead, on fad4a770):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/` plus `conversionEquality`: 30 files, 652 tests passed.
+  - `pnpm --dir apps/desktop run test`: 162 files, 2,275 tests passed.
+  - Privacy scan of the PR diff, body, commits, `findings.md` and this phase file: no show names or paths.
+  - Skipped by policy: full `test:history` and e2e.
+- **Exit gate:** "three real shows" is still open (two run); it needs one more show from the owner.
+- **Next:** P6.7 (gap glide, linear in beats) is open.
+- **Blockers:** none.
