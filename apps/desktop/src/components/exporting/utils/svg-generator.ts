@@ -246,8 +246,10 @@ const renderIndividualMarcherChartsForPage = (args: {
         marcherPagesMap,
         sortedPages,
     } = args;
-    const marcherSvgs: string[] = [];
-    const marcherReadableCoordStrings: string[] = [];
+    // One entry per marcher, in `marchers` order, so index i is always marchers[i]; null marks a
+    // marcher with no position on this page
+    const marcherSvgs: (string | null)[] = [];
+    const marcherReadableCoordStrings: (string | null)[] = [];
 
     for (const marcher of marchers) {
         const currentCoordinate =
@@ -256,6 +258,8 @@ const renderIndividualMarcherChartsForPage = (args: {
             console.error(
                 `No marcherPage found for marcher id: ${marcher.id} on page: ${page.id}`,
             );
+            marcherSvgs.push(null);
+            marcherReadableCoordStrings.push(null);
             continue;
         }
 
@@ -263,13 +267,13 @@ const renderIndividualMarcherChartsForPage = (args: {
             pageIndex > 0
                 ? marcherPagesMap.marcherPagesByPage[
                       sortedPages[pageIndex - 1].id
-                  ][marcher.id]
+                  ]?.[marcher.id]
                 : undefined;
         const nextCoordinate =
             pageIndex < sortedPages.length - 1
                 ? marcherPagesMap.marcherPagesByPage[
-                      sortedPages[pageIndex + 1]?.id
-                  ][marcher.id]
+                      sortedPages[pageIndex + 1].id
+                  ]?.[marcher.id]
                 : undefined;
 
         const { objectsToRemove, readableCoords } = addIndividualMarcherLines({
@@ -309,8 +313,8 @@ const processDrillChartExportPage = (args: {
     individualCharts: boolean;
     useImagePlaceholder: boolean;
 }): {
-    marcherSvgs?: string[];
-    marcherReadableCoordStrings?: string[];
+    marcherSvgs?: (string | null)[];
+    marcherReadableCoordStrings?: (string | null)[];
     mainSvg?: string;
 } => {
     const {
@@ -357,8 +361,10 @@ const processDrillChartExportPage = (args: {
                 marcherPagesMap,
                 sortedPages,
             });
-        const formatSvg = (svg: string) =>
-            useImagePlaceholder ? replaceImageDataWithPlaceholder(svg) : svg;
+        const formatSvg = (svg: string | null) =>
+            svg !== null && useImagePlaceholder
+                ? replaceImageDataWithPlaceholder(svg)
+                : svg;
         return {
             marcherSvgs: marcherSvgs.map(formatSvg),
             marcherReadableCoordStrings,
@@ -410,6 +416,8 @@ export const generateDrillChartExportSVGs = async (args: {
     // Otherwise, initialize the output SVGs for the main chart
     if (individualCharts) marchers.forEach(() => outputSVGs.push([]));
     else outputSVGs.push([]);
+    // Individual charts: indexes of marchers with no position on some page
+    const incompleteMarchers = new Set<number>();
 
     // Loop through each page and generate an SVG for it
     for (const [pageIndex, page] of sortedPages.entries()) {
@@ -432,16 +440,24 @@ export const generateDrillChartExportSVGs = async (args: {
         });
 
         if (pageResult.marcherSvgs) {
-            pageResult.marcherSvgs.forEach((svg, index) =>
-                outputSVGs[index].push(svg),
-            );
-            pageResult.marcherReadableCoordStrings!.forEach((coord, index) =>
-                readableCoordsStrings![index].push(coord),
-            );
+            pageResult.marcherSvgs.forEach((svg, index) => {
+                if (svg === null) incompleteMarchers.add(index);
+                else outputSVGs[index].push(svg);
+            });
+            pageResult.marcherReadableCoordStrings!.forEach((coord, index) => {
+                if (coord !== null) readableCoordsStrings![index].push(coord);
+            });
         } else if (pageResult.mainSvg) {
             if (outputSVGs.length === 0) outputSVGs.push([]);
             outputSVGs[0].push(pageResult.mainSvg);
         }
+    }
+
+    // A marcher missing on any page gets no pages at all, never a partial chart, and the arrays
+    // stay aligned with `marchers` (the caller skips that marcher's PDF)
+    for (const index of incompleteMarchers) {
+        outputSVGs[index] = [];
+        readableCoordsStrings[index] = [];
     }
 
     return { SVGs: outputSVGs, coords: readableCoordsStrings };

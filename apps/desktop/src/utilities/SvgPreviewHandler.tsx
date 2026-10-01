@@ -13,10 +13,7 @@ import {
     marcherIdsForAllTagIdsQueryOptions,
     tagAppearanceByPageIdMapQueryOptions,
 } from "@/hooks/queries";
-import {
-    pagePositionMapFromRows,
-    type PagePositionMap,
-} from "@/components/exporting/utils/exportPagePositions";
+import type { PagePositionMap } from "@/components/exporting/utils/exportPagePositions";
 import type Page from "@/global/classes/Page";
 import type Marcher from "@/global/classes/Marcher";
 import type { FieldProperties } from "@openmarch/core";
@@ -24,24 +21,9 @@ import { useTimingObjects } from "@/hooks";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useQuery } from "@tanstack/react-query";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { sampleTimelinePagePositions } from "@/timeline/timelinePagePositions";
+import { timelinePreviewPositions } from "./svgPreviewPositions";
 
 const SVG_GENERATION_ERROR = "ERROR: Failed to generate SVG";
-
-/**
- * Timeline mode: the page's positions from the live resolver at its end beat
- * (docs/timeline/phases/07-page-parity.md P7.7), or undefined while no resolver is ready. A
- * preview may use the store's resolver; exports build a private one.
- */
-async function timelinePositionsForPage(
-    page: Page,
-): Promise<PagePositionMap | undefined> {
-    const { resolver } = useTimelineResolverStore.getState();
-    if (!resolver) return undefined;
-    return pagePositionMapFromRows(
-        await sampleTimelinePagePositions({ resolver, pages: [page] }),
-    );
-}
 
 /**
  * Handler for generating canvas preview SVGs on app close for launch page
@@ -211,10 +193,18 @@ const SvgPreviewHandler: React.FC = () => {
                 return SVG_GENERATION_ERROR;
             }
 
-            // Timeline mode: marcher_pages is frozen page-era data, so sample the resolver
-            const currentMarcherPages = timelineModeRef.current
-                ? await timelinePositionsForPage(firstPage)
-                : marcherPagesRef.current;
+            // Timeline mode: marcher_pages is frozen page-era data, so sample the live
+            // resolver, only when it is ready and without the write lock (P7.7)
+            let currentMarcherPages: PagePositionMap | undefined;
+            if (timelineModeRef.current) {
+                currentMarcherPages = await timelinePreviewPositions(
+                    useTimelineResolverStore.getState(),
+                    firstPage,
+                );
+                if (!currentMarcherPages) return SVG_GENERATION_ERROR;
+            } else {
+                currentMarcherPages = marcherPagesRef.current;
+            }
 
             const svg = await generateSvgPreview(
                 currentFieldProps,

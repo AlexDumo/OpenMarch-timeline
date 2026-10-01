@@ -11,7 +11,11 @@ import {
 } from "@/hooks/queries";
 import { buildMarcherAppearancesByPageId } from "./utils/exportAppearances";
 import { buildCoordinateSheets } from "./utils/coordinateSheets";
-import { readTimelineExportPositions } from "./utils/exportPagePositions";
+import {
+    marchersWithoutPositions,
+    readExportPositions,
+    type PagePositionMap,
+} from "./utils/exportPagePositions";
 import {
     Dialog,
     DialogClose,
@@ -100,6 +104,31 @@ import { useTheme } from "@/context/ThemeContext";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { MobileExportModalContents } from "@/components/mobile/MobileExportModal";
 
+/** Error messages for `readExportPositions` (P7.7). */
+const exportPositionMessages = () => ({
+    notLoaded: tolgee.t("exportCoordinates.marcherPagesNotLoaded"),
+    showChanged: tolgee.t("exportCoordinates.showChangedDuringExport"),
+});
+
+/**
+ * Warns when a marcher has no positions at all: its quarter sheets are left out and its full
+ * sheet is empty (before P7.7 a quarter-sheet export aborted instead).
+ */
+function warnMarchersWithoutPositions(
+    marchers: readonly { id: number; drill_number: string }[],
+    positions: Pick<PagePositionMap, "marcherPagesByMarcher">,
+) {
+    const missing = marchersWithoutPositions(marchers, positions);
+    if (missing.length === 0) return;
+    const drillNumbers = missing.map((m) => m.drill_number).join(", ");
+    console.warn(`Coordinate sheets: no positions for ${drillNumbers}`);
+    toast.warning(
+        tolgee.t("exportCoordinates.marchersWithoutPositions", {
+            drillNumbers,
+        }),
+    );
+}
+
 const mobileExportScreenshotUrls = [2, 3, 4, 5].map(
     (index) => `https://assets.openmarch.com/desktop/mobile-wipe/${index}.webp`,
 );
@@ -178,6 +207,16 @@ function CoordinateSheetExport() {
             startPhraseRotation();
             setProgress(5);
 
+            // Read positions first, before the pauses below: page mode reads marcher_pages,
+            // timeline mode samples the resolver at each page's end beat and checks that
+            // `pages` and `marchers` match that snapshot (P7.7)
+            const positions = await readExportPositions({
+                db,
+                rendered: { pages, marchers },
+                pageModePositions: marcherPages,
+                messages: exportPositionMessages(),
+            });
+
             // Simulate more granular progress updates
             await new Promise((resolve) => setTimeout(resolve, 500));
             if (isCancelled.current)
@@ -223,12 +262,7 @@ function CoordinateSheetExport() {
             if (isCancelled.current)
                 throw new Error(t("exportCoordinates.cancelledByUser"));
 
-            // Page mode reads marcher_pages; timeline mode samples the resolver at each
-            // page's end beat (P7.7)
-            const positions =
-                (await readTimelineExportPositions(db)) ?? marcherPages;
-            if (!positions)
-                throw new Error(t("exportCoordinates.marcherPagesNotLoaded"));
+            warnMarchersWithoutPositions(processedMarchers, positions);
 
             const groupedSheets = buildCoordinateSheets({
                 marchers: processedMarchers,
@@ -735,6 +769,23 @@ function DrillChartExport() {
 
             // Generate PDFs for each marcher or MAIN if individual charts are not selected
             for (let marcher = 0; marcher < svgPages.length; marcher++) {
+                // Index i is always marchers[i]. A marcher missing a position on some page
+                // has no pages here: skip its PDF rather than draw an incomplete one
+                if (individualCharts && svgPages[marcher].length === 0) {
+                    const drillNumber = marchers[marcher]?.drill_number ?? "";
+                    console.warn(
+                        `Drill charts: no positions for ${drillNumber} on every page; skipped`,
+                    );
+                    toast.error(
+                        t("exportCoordinates.svgExportFailed", {
+                            drillNumber,
+                            error: t(
+                                "exportCoordinates.marcherPositionsMissing",
+                            ),
+                        }),
+                    );
+                    continue;
+                }
                 const result =
                     await window.electron.export.generateDocForMarcher({
                         svgPages: svgPages[marcher],
@@ -817,16 +868,19 @@ function DrillChartExport() {
             t("exportCoordinates.sectionAppearancesNotLoaded"),
         );
 
-        const backgroundImage = await getFieldPropertiesImageElement();
         // Generate SVGs from the canvas
         let SVGs: string[][] = [];
         let coords: string[][] | null = null;
         try {
             // Page mode reads marcher_pages; timeline mode samples the resolver at each
-            // page's end beat (P7.7)
-            const positions =
-                (await readTimelineExportPositions(db)) ?? marcherPages;
-            assert(positions, t("exportCoordinates.marcherPagesNotLoaded"));
+            // page's end beat and checks that `pages` and `marchers` match that snapshot (P7.7)
+            const positions = await readExportPositions({
+                db,
+                rendered: { pages, marchers },
+                pageModePositions: marcherPages,
+                messages: exportPositionMessages(),
+            });
+            const backgroundImage = await getFieldPropertiesImageElement();
             ({ SVGs, coords } = await generateDrillChartExportSVGs({
                 fieldProperties,
                 marchers,

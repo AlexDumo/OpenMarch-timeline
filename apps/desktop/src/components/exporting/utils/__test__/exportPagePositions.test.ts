@@ -5,7 +5,9 @@ import {
     getAllMarcherPages,
     updateMarcherPages,
 } from "@/db-functions/marcherPage";
-import { getMarchers } from "@/db-functions/marcher";
+import { createMarchers, getMarchers } from "@/db-functions/marcher";
+import { deletePages } from "@/db-functions/page";
+import { schema } from "@/global/database/db";
 import { dbMarcherToMarcher } from "@/global/classes/Marcher";
 import { moveMarchersOnPage } from "@/db-functions/timelineMoves";
 import { updateWorkspaceSettingsParsed } from "@/db-functions/workspaceSettings";
@@ -20,9 +22,13 @@ import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { acquireExportResolver } from "@/timeline/timelineExport";
 import { stopTimelineResolver } from "@/timeline/timelineStore";
 import {
+    assertExportMatchesSnapshot,
+    marchersWithoutPositions,
     pagePositionMapFromRows,
     positionsForMarcherInPageOrder,
+    readExportPositions,
     readTimelineExportPositions,
+    ShowChangedDuringExportError,
 } from "../exportPagePositions";
 import { generateDrillChartExportSVGs } from "../svg-generator";
 
@@ -44,6 +50,8 @@ const sortedPages = async (db: DbConnection): Promise<Page[]> => {
     const { pages } = await readShowTiming(db);
     return [...pages].sort((a, b) => a.order - b.order);
 };
+
+const messages = { notLoaded: "not loaded", showChanged: "show changed" };
 
 const pageModeMap = async (db: DbConnection) =>
     marcherPageMapFromArray(
@@ -79,6 +87,45 @@ describe("pagePositionMapFromRows and positionsForMarcherInPageOrder", () => {
     );
 });
 
+describe("assertExportMatchesSnapshot", () => {
+    const snapshot = { pageIds: [0, 4, 7], marcherIds: [1, 2] };
+    const ids = (list: number[]) => list.map((id) => ({ id }));
+
+    plainIt("accepts the same pages and marchers in any order", () => {
+        expect(() =>
+            assertExportMatchesSnapshot(snapshot, {
+                pages: ids([7, 0, 4]),
+                marchers: ids([2, 1]),
+            }),
+        ).not.toThrow();
+    });
+
+    plainIt.each([
+        ["a page deleted from the snapshot", [0, 4, 7, 9], [1, 2]],
+        ["a page added to the snapshot", [0, 4], [1, 2]],
+        ["a marcher added to the snapshot", [0, 4, 7], [1]],
+        ["a marcher deleted from the snapshot", [0, 4, 7], [1, 2, 3]],
+        ["a page swapped for another", [0, 4, 8], [1, 2]],
+    ])("rejects %s", (_name, pages, marchers) => {
+        expect(() =>
+            assertExportMatchesSnapshot(
+                snapshot,
+                { pages: ids(pages), marchers: ids(marchers) },
+                "show changed",
+            ),
+        ).toThrow(new ShowChangedDuringExportError("show changed"));
+    });
+
+    plainIt("lists marchers with no positions at all", () => {
+        const map = pagePositionMapFromRows([
+            { marcher_id: 1, page_id: 0, x: 0, y: 0 },
+        ]);
+        expect(marchersWithoutPositions([{ id: 1 }, { id: 2 }], map)).toEqual([
+            { id: 2 },
+        ]);
+    });
+});
+
 describeDbTests("readTimelineExportPositions", (it) => {
     it("returns null in page mode, so the exports read marcher_pages", async ({
         db,
@@ -97,21 +144,29 @@ describeDbTests("readTimelineExportPositions", (it) => {
         await convertPagesToTimeline(db);
         await setTimelineMode(db, true);
 
-        const timeline = await readTimelineExportPositions(db);
+        const read = await readTimelineExportPositions(db);
 
-        expect(timeline).not.toBeNull();
+        expect(read).not.toBeNull();
+        const timeline = read!.positions;
         const pages = await sortedPages(db);
         const marchers = await getMarchers({ db });
+        expect([...read!.pageIds].sort()).toEqual(
+            pages.map((p) => p.id).sort(),
+        );
+        expect([...read!.marcherIds].sort()).toEqual(
+            marchers.map((m) => m.id).sort(),
+        );
         expect(pages.length).toBeGreaterThan(1);
         for (const page of pages) {
             for (const marcher of marchers) {
                 const want = pageMode.marcherPagesByPage[page.id]![marcher.id]!;
-                const got = timeline!.marcherPagesByPage[page.id]![marcher.id]!;
+                const got = timeline.marcherPagesByPage[page.id]![marcher.id]!;
+                // The resolver returns the converted destinations exactly at page end beats
                 expect(got).toEqual({
                     marcher_id: marcher.id,
                     page_id: page.id,
-                    x: expect.closeTo(want.x, 9),
-                    y: expect.closeTo(want.y, 9),
+                    x: want.x,
+                    y: want.y,
                 });
             }
         }
@@ -140,7 +195,7 @@ describeDbTests("readTimelineExportPositions", (it) => {
             ],
         });
 
-        const positions = (await readTimelineExportPositions(db))!;
+        const { positions } = (await readTimelineExportPositions(db))!;
 
         const resolver = await acquireExportResolver(db);
         for (const p of pages) {
@@ -170,7 +225,7 @@ describeDbTests("readTimelineExportPositions", (it) => {
         const pageMode = await pageModeMap(db);
         await convertPagesToTimeline(db);
         await setTimelineMode(db, true);
-        const timeline = (await readTimelineExportPositions(db))!;
+        const timeline = (await readTimelineExportPositions(db))!.positions;
         const pages = await sortedPages(db);
         // Two marchers keep the individual charts quick; each draws every page
         const marchers = (await getMarchers({ db }))
@@ -192,5 +247,101 @@ describeDbTests("readTimelineExportPositions", (it) => {
         expect(fromTimeline.coords).toEqual(fromPages.coords);
         expect(fromTimeline.SVGs).toHaveLength(marchers.length);
         expect(fromTimeline.SVGs[0]).toHaveLength(pages.length);
+    });
+
+    it("treats settings that fail to parse as page mode", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await setTimelineMode(db, true);
+        expect(await readTimelineExportPositions(db)).not.toBeNull();
+
+        await db
+            .update(schema.workspace_settings)
+            .set({ json_data: "{not json" });
+        expect(await readTimelineExportPositions(db)).toBeNull();
+
+        await db
+            .update(schema.workspace_settings)
+            .set({ json_data: JSON.stringify({ timelineMode: "yes" }) });
+        expect(await readTimelineExportPositions(db)).toBeNull();
+    });
+
+    it("readExportPositions uses the marcher_pages map in page mode", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pageMode = await pageModeMap(db);
+        const rendered = { pages: [], marchers: [] };
+        // Page mode doesn't compare the lists; the query's map is used as is
+        expect(
+            await readExportPositions({
+                db,
+                rendered,
+                pageModePositions: pageMode,
+                messages,
+            }),
+        ).toBe(pageMode);
+        await expect(
+            readExportPositions({
+                db,
+                rendered,
+                pageModePositions: undefined,
+                messages,
+            }),
+        ).rejects.toThrow("not loaded");
+    });
+
+    it("readExportPositions rejects lists from before the show changed", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await setTimelineMode(db, true);
+        const pages = await sortedPages(db);
+        const marchers = await getMarchers({ db });
+
+        const positions = await readExportPositions({
+            db,
+            rendered: { pages, marchers },
+            pageModePositions: undefined,
+            messages,
+        });
+        expect(Object.keys(positions.marcherPagesByPage)).toHaveLength(
+            pages.length,
+        );
+
+        // A marcher added after React read its lists
+        await createMarchers({
+            db,
+            newMarchers: [
+                { section: "Flute", drill_prefix: "N", drill_order: 1 },
+            ],
+            timelineMode: true,
+        });
+        await expect(
+            readExportPositions({
+                db,
+                rendered: { pages, marchers },
+                pageModePositions: undefined,
+                messages,
+            }),
+        ).rejects.toThrow(new ShowChangedDuringExportError("show changed"));
+
+        // A page deleted after React read its lists
+        const marchersNow = await getMarchers({ db });
+        await deletePages({
+            db,
+            pageIds: new Set([pages[pages.length - 1]!.id]),
+        });
+        await expect(
+            readExportPositions({
+                db,
+                rendered: { pages, marchers: marchersNow },
+                pageModePositions: undefined,
+                messages,
+            }),
+        ).rejects.toThrow(ShowChangedDuringExportError);
     });
 });
