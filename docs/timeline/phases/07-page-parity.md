@@ -50,7 +50,7 @@ Selection, drag and alignment tools write slot destinations.
 ### P7.3: Marcher add and delete
 
 - Owner: timeline-worker (timeline/p7-marchers)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/22
 - Parallel: yes
 - Depends on: P7.1
@@ -448,4 +448,11 @@ Facts that change how to read the PR #14 note above:
   - eslint, prettier --check and cspell on the changed files: clean. The only eslint warnings are two unused imports in `useWorkspaceSettings.ts` that were already there.
   - Skipped by policy: the full `test:history`, Playwright and `build:electron`. I didn't rerun the regular desktop suite after these fixes.
 - **Next:** the lead re-reviews and merges PR #22.
+- **Blockers:** none.
+
+### 2026-10-01 · lead session · P7.3 (reviewed and merged)
+
+- **Done:** fork PR #22 reviewed by a sub-agent (APPROVE WITH NITS: the add order grow slot_count → point → assignment and the delete compaction (update the vacated point, re-key the last slot's assignment, delete the last point, shrink once) are valid at every intermediate state in both directions; the follow-the-leader guard is complete because FTL transitions always have a shape and only `inherit` FTLs read another transition's slot order). The worker fixed the nits: the timeline flag is read when the mutation runs, waiting for workspace settings if they're loading, so an add or delete can't fall back to page mode in that window; the mid-order delete test now proves the move-into-vacated-slot path and checks mid-transition positions. Squash-merged. P7.3 set to done.
+- **Checks:** at d0024fbe, in the worker's work tree: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on timelineMarchers, marcher and useMarchersTimelineMode (47 passed); `pnpm --dir apps/desktop run test` (113 files, 1,669 passed).
+- **Next:** P7.4 onward. Open from P7.3: `previous-dots-import-service.ts` still reads a converted source file's frozen page rows (main process).
 - **Blockers:** none.
