@@ -159,8 +159,8 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 
 ### P7.14: Per-marcher-per-page appearance, rotation and notes
 
-- Owner: unassigned
-- Status: open
+- Owner: project owner (decision)
+- Status: done
 - PR: none
 - Parallel: no
 - Depends on: P7.1
@@ -171,7 +171,7 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 
 Tick an item only after running its check, and paste the command and result into the log.
 
-- [ ] Every item in the P7.1 inventory is checked off (handoff notes, grouped by P7.2 to P7.14)
+- [x] Every item in the P7.1 inventory is checked off (handoff notes, grouped by P7.2 to P7.14) (dropped: never implemented, owner decision 2026-09-30)
 - [ ] Each feature's existing tests pass in timeline mode
 - [ ] `test:history` passes for every ripple procedure
 - [ ] Manual pass over editing, playback and export on a converted real show (human)
@@ -273,8 +273,8 @@ Facts that change how to read the PR #14 note above:
 
 - [ ] `src/components/exporting/ExportCoordinatesModal.tsx` ~1253 to 1950 (video export; `useManyCoordinateData` at ~1350, `coordinateDataQueryOptions` and `combineMarcherTimelines` at ~1521 to 1534, page rows for appearances at ~1262 to 1317) · R · not handled · sample the resolver per frame
 - [ ] `src/components/exporting/video/videoRenderer.ts` ~19, ~46 and `src/components/exporting/video/videoFrameRenderer.ts` ~9 to 16, ~92, ~106 (take per-marcher page-mode timelines and call the keyframe interpolator) · R · not handled
-- [ ] `src/components/exporting/utils/exportAppearances.ts` ~31 to 70 (`buildMarcherAppearancesByPageId` reads each page's rows for per-marcher-page appearances) · R · not handled · depends on the P7.14 decision
-- [ ] `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 (`_combineMarcherAppearances` puts the page row's appearance first in the stack; the query fetches marcher pages by page) · R · canvas appearances as well as exports · not handled · depends on the P7.14 decision
+- [x] `src/components/exporting/utils/exportAppearances.ts` ~31 to 70 (`buildMarcherAppearancesByPageId` reads each page's rows for per-marcher-page appearances) · R · not handled · depends on the P7.14 decision (dropped: never implemented, owner decision 2026-09-30)
+- [x] `src/hooks/queries/useMarcherAppearances.ts` ~98 to 190 (`_combineMarcherAppearances` puts the page row's appearance first in the stack; the query fetches marcher pages by page) · R · canvas appearances as well as exports · not handled · depends on the P7.14 decision (dropped: never implemented, owner decision 2026-09-30)
 - [ ] `src/components/singletons/StateInitializer.tsx` ~41 to 70 (prefetch of appearances and coordinate data for the selected, next and previous pages) · R · not handled · see P7.13
 - [ ] `electron/main/services/video-export-service.ts` · no direct reads (it receives encoded chunks) · no change expected; confirm
 
@@ -309,7 +309,7 @@ Facts that change how to read the PR #14 note above:
 #### P7.12 (new) Mobile and performer exports
 
 - [ ] `src/components/mobile/utilities/dots-to-om.ts` ~165 to 205 (`buildCoordinates` converts every page row to steps), ~265 (reads all `marcher_pages`), ~372 · R · mobile app payload · not handled · build the same payload from the resolver at page end beats (or from the P7.9 keyframes if the mobile format changes; that format change is a decision)
-- [ ] `src/components/mobile/utilities/performer-appearance-export.ts` ~99 to 170, ~219 to 290 (appearance data per page, built from page rows) · R · not handled · depends on the P7.14 decision
+- [x] `src/components/mobile/utilities/performer-appearance-export.ts` ~99 to 170, ~219 to 290 (appearance data per page, built from page rows) · R · not handled · depends on the P7.14 decision (dropped: never implemented, owner decision 2026-09-30)
 - [ ] `src/components/mobile/utilities/upload-service.ts` ~2 · caller of the export · no change expected
 
 #### P7.13 (new) Undo, redo and query invalidation in timeline mode
@@ -343,3 +343,10 @@ Facts that change how to read the PR #14 note above:
 - **Checks:** read-only searches, no code run. Searches (from `apps/desktop`, files only, then read by hand): `grep -rlE "marcher_pages|shape_pages|shape_page_marchers|pathways|midsets|schema\.shapes|marcherPages|MarcherPage|marcherPageKeys|ShapePage|shapePage|Midset|Pathway|midset|pathway" src electron ../../packages --include='*.ts' --include='*.tsx'` (74 non-test files); `grep -rlE "useCoordinateData|getMarcherTimelines|Keyframe|keyframe|videoExport|useMarcherPages|CoordinateActions|setGlobalNewMarcherPages|updateMarcherPages|ShapePageMarcher|getByMarcherAndPage" src electron` ; callers of the mutations: `grep -rnE "useUpdateSelectedMarchers|updateMarcherPagesMutationOptions|swapMarchersMutationOptions|updateMarcherPagesInTransaction|useCreatePathway|useUpdatePathway|copyShapePageToPage|createShapePages|updateShapePages|deleteShapePages" src`; beat, measure and page callers: `grep -rnE "(create|update|delete|shift|flatten)(Beats|Measures|MeasuresAndBeats|Pages|PageYank|LastPage)MutationOptions" src`; midset use: `grep -rnE "midsets|schema\.pathways" src electron`; copy and paste: `grep -rniE "clipboard|paste" src`; other packages: the same table-name search over `packages`, the website and the CMS found nothing. Test files, mocks and migrations were excluded.
 - **Next:** the lead assigns P7.2 to P7.14. P7.14 starts with a blocker for a person. P7.4 and P7.5 are the riskiest (ripple procedures with `test:history`).
 - **Blockers:** none for P7.1. P7.14 needs a person's decision on where per-page appearance, rotation and notes live.
+
+### 2026-09-30 · lead session · P7.14 (decided)
+
+- **Done:** the project owner decided that `marcher_pages`' per-page appearance overrides, `rotation_degrees` and `notes` are dropped in timeline mode: they were never implemented as features. The converter copies only x and y, and its loss report should list any non-empty values it finds so nothing disappears silently. 4 P7.14 checklist items ticked as dropped. P7.14 set to done; P7.8 and P7.12 no longer wait on it.
+- **Checks:** none (decision only).
+- **Next:** P7.2 onward after Phase 6 merges.
+- **Blockers:** none.

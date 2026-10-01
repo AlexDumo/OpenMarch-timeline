@@ -32,7 +32,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P8.0: Confirm ui.md
 
 - Owner: human
-- Status: open
+- Status: done
 - PR: none
 - Parallel: no
 - Depends on: —
@@ -147,3 +147,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 ## Progress log
 
 <!-- Append entries below, newest last, using the format in ../README.md. Never edit earlier entries. -->
+
+### 2026-09-30 · lead session · P8.0 (decided)
+
+- **Done:** the project owner accepted `docs/timeline/ui.md` as written (UI-1: dashed spans mean stolen; UI-2: any beat, snap to pages as an aid). U-Q1 to U-Q4 are deferred to the packages that meet them (P8.1, P8.8, P8.9), decided from the spec where possible and recorded in `ui.md`. P8.0 set to done; P8.1 is unblocked (P5.9 is merged).
+- **Checks:** none (decision only).
+- **Next:** P8.1 (port the 0.2 timeline).
+- **Blockers:** none.

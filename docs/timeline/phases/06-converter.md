@@ -90,6 +90,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 
 - None yet.
 - Page and beat positions: the fixed beat at position 0 has zero length (see the Phase 5 handoff notes). Map page N's transition range from beat positions as ADR 0001 says, and remember that positions in [0, 1) never play.
+- Decided 2026-09-30 (P7.14): `marcher_pages`' appearance overrides, `rotation_degrees` and `notes` are dropped (never implemented). The converter copies only x and y; its loss report should list any non-empty values it finds.
 
 ## Progress log
 
