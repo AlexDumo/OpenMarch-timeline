@@ -1,3 +1,4 @@
+import { withTimelinePageRipple } from "@/db-functions/timelineRipple";
 import Beat, {
     assertValidTempoBpm,
     fromDatabaseBeat,
@@ -363,39 +364,44 @@ export const _performDatabaseOperations = async ({
             .map((beat) => beat.id),
     );
 
-    await transactionWithHistory(db, "replaceAllBeatObjects", async (tx) => {
-        // Update pages
-        if (pagesToUpdate.length > 0) {
-            await updatePagesInTransaction({
-                tx,
-                modifiedPages: pagesToUpdate,
-            });
-        }
+    await transactionWithHistory(
+        db,
+        "replaceAllBeatObjects",
+        async (tx) =>
+            await withTimelinePageRipple(tx, async () => {
+                // Update pages
+                if (pagesToUpdate.length > 0) {
+                    await updatePagesInTransaction({
+                        tx,
+                        modifiedPages: pagesToUpdate,
+                    });
+                }
 
-        // Create new measures
-        if (measuresToCreate.length > 0) {
-            await createMeasuresInTransaction({
-                tx,
-                newItems: measuresToCreate,
-            });
-        }
+                // Create new measures
+                if (measuresToCreate.length > 0) {
+                    await createMeasuresInTransaction({
+                        tx,
+                        newItems: measuresToCreate,
+                    });
+                }
 
-        // Delete old measures
-        if (measureIdsToDelete.size > 0) {
-            await deleteMeasuresInTransaction({
-                tx,
-                itemIds: measureIdsToDelete,
-            });
-        }
+                // Delete old measures
+                if (measureIdsToDelete.size > 0) {
+                    await deleteMeasuresInTransaction({
+                        tx,
+                        itemIds: measureIdsToDelete,
+                    });
+                }
 
-        // Delete old beats
-        if (beatIdsToDelete.size > 0) {
-            await deleteBeatsInTransaction({
-                tx,
-                beatIds: beatIdsToDelete,
-            });
-        }
-    });
+                // Delete old beats
+                if (beatIdsToDelete.size > 0) {
+                    await deleteBeatsInTransaction({
+                        tx,
+                        beatIds: beatIdsToDelete,
+                    });
+                }
+            }),
+    );
 };
 
 /**
@@ -437,12 +443,17 @@ export const _createBeatsWithResult = async ({
 }: {
     newBeats: NewBeatArgs[];
 }): Promise<DatabaseBeat[]> => {
-    return await transactionWithHistory(db, "createBeats", async (tx) => {
-        return await createBeatsInTransaction({
-            tx,
-            newBeats,
-        });
-    });
+    return await transactionWithHistory(
+        db,
+        "createBeats",
+        async (tx) =>
+            await withTimelinePageRipple(tx, async () => {
+                return await createBeatsInTransaction({
+                    tx,
+                    newBeats,
+                });
+            }),
+    );
 };
 
 /**
