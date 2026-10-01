@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { queryClient } from "@/App";
 import { conToastError } from "@/utilities/utils";
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import {
     DbConnection,
     createMarchers,
@@ -112,7 +113,7 @@ export const createMarchersMutationOptions = (qc: QueryClient) => {
             });
         },
         onError: (e, variables) => {
-            conToastError(`Error creating marchers`, e, variables);
+            toastTimelineError(e, `Error creating marchers`, variables);
         },
     });
 };
@@ -168,7 +169,7 @@ export const deleteMarchersMutationOptions = (qc: QueryClient) => {
             });
         },
         onError: (e, variables) => {
-            conToastError(`Error deleting marchers`, e, variables);
+            toastTimelineError(e, `Error deleting marchers`, variables);
         },
     });
 };

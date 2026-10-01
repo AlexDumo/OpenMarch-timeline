@@ -5,7 +5,7 @@ import {
     type CreateTrackTarget,
 } from "@/db-functions/timelineCommands";
 import type { DbConnection } from "@/db-functions/types";
-import { conToastError } from "@/utilities/utils";
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import type { TimelineInput } from "./Timeline";
 import type {
     TimelineCreateTrackRequest,
@@ -64,13 +64,9 @@ export function createTrackTargetFor(
         : { kind: "marcher", marcherId: Number(target.id) };
 }
 
-const toastRefusal = (fallback: string) => (error: unknown) =>
-    conToastError(error instanceof Error ? error.message : fallback, error);
-
 /**
  * The panel's side of the commands: the selected target for Create Track, and the callbacks that
- * run each command as one undoable edit and show a refusal's message (with its error code) as a
- * toast.
+ * run each command as one undoable edit and show a refusal's friendly message (P8.6) as a toast.
  *
  * `noteSelection`: call it with every selection change. Selecting a shape's track picks that shape
  * as the target. A range selection keeps it, because Create Track is offered on a range, so the
@@ -128,8 +124,8 @@ export function useTimelineCommands({
         (change: TimelineRangeChange) => {
             const shift = timelineShiftFor(change, timelines);
             if (!shift) return;
-            shiftTimeline({ db: database, ...shift }).catch(
-                toastRefusal("Couldn't move the timeline"),
+            shiftTimeline({ db: database, ...shift }).catch((error: unknown) =>
+                toastTimelineError(error),
             );
         },
         [database, timelines],
@@ -145,7 +141,7 @@ export function useTimelineCommands({
                 ),
                 startBeat: request.range.startBeatIndex,
                 endBeat: request.range.endBeatIndex,
-            }).catch(toastRefusal("Couldn't create the track"));
+            }).catch((error: unknown) => toastTimelineError(error));
         },
         [database, selectedMarcherIds],
     );

@@ -33,6 +33,7 @@ import { useTolgee } from "@tolgee/react";
 import { FieldProperties } from "@openmarch/core";
 import { fieldPropertiesQueryOptions } from "./useFieldProperties";
 import { appearanceModelRawToParsed } from "@/entity-components/appearance";
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { moveMarchersOnPage } from "@/db-functions/timelineMoves";
 import {
     transformMarchersOnPage,
@@ -156,18 +157,14 @@ export const updateMarcherPagesMutationOptions = (queryClient: QueryClient) => {
  * Timeline mode's write for "move these marchers on this page" (P7.2): one undoable edit through
  * `moveMarchersOnPage`. The resolver store picks the change up from the change log, so there is
  * nothing to invalidate. A refused move (for example a marcher with no move ending on the page)
- * shows its message.
+ * shows its friendly message (P8.6).
  */
 export const moveMarchersOnPageMutationOptions = () => {
     return mutationOptions({
         mutationFn: ({ page, moves }: TimelineMoveRequest) =>
             moveMarchersOnPage({ db, page, moves }),
         onError: (e, variables) => {
-            conToastError(
-                e instanceof Error ? e.message : `Error moving marchers`,
-                e,
-                variables,
-            );
+            toastTimelineError(e, `Error moving marchers`, variables);
         },
     });
 };
@@ -350,13 +347,14 @@ export const useUpdateSelectedMarchers = (
                 );
         },
         onError: (e, variables) => {
-            conToastError(
-                timelineMode && e instanceof Error
-                    ? e.message
-                    : `Error updating selected marchers`,
-                e,
-                variables,
-            );
+            if (timelineMode)
+                toastTimelineError(
+                    e,
+                    `Error updating selected marchers`,
+                    variables,
+                );
+            else
+                conToastError(`Error updating selected marchers`, e, variables);
         },
     });
 };
