@@ -24,8 +24,10 @@ import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
  *
  * **How a row's beats move.** Every row edge is mapped from the old grid to the new one:
  *
- * - An edge on a page boundary follows that page. A row ending where page N ends ends where page N
- *   ends now; a row starting where page N starts starts where page N starts now. That is what
+ * - Any row's edge on a page boundary follows that page, whether or not the row is a page move:
+ *   a row ending where page N ends ends where page N ends now; a row starting where page N
+ *   starts starts where page N starts now. So a track ending on a page boundary grows with that
+ *   page when beats are inserted at the boundary, as the page's own move does. That is what
  *   makes the converted show (one transition per page) behave as page mode does: inserting beats
  *   inside a page, or right after it, lengthens its move; resizing a page moves the boundary it
  *   shares with the next page, so the move ending there and the move starting there both change
@@ -34,15 +36,18 @@ import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
  *   page that ends at the page end, when the page is split before it).
  * - Any other edge follows its beat. A start stays at the start of its beat; an end stays at the
  *   end of the beat before it. So inserting k beats at ordinal p shifts every row starting at or
- *   after p by k, grows every row that strictly contains p, and leaves rows ending at p alone;
+ *   after p by k, grows every row that strictly contains p, and leaves rows ending at p alone
+ *   (unless p is a page boundary, above);
  *   deleting beats shrinks the rows that held them and shifts the rows after them. An edge whose
  *   beat was deleted moves to the next surviving beat (a start) or the previous one (an end).
  *
- * **When a page goes away** (deleted, or its start beat is deleted), its moves go with it: every
- * transition that ends at the page's end and starts inside the page is deleted with its
- * assignments and destinations. The page before it then ends where the deleted page ended, so its
- * move stretches over the deleted page's beats, as in page mode (where those coordinates are lost
- * and the earlier page's move runs until the next page starts).
+ * **When a page goes away** (deleted, or its start beat is deleted), its page moves go with it:
+ * each shapeless transition over exactly the page's beats whose assignments are all layer 0 and
+ * cover it (what the converter writes, `isPageMove`) is deleted with its assignments and
+ * destinations. Any other transition is never deleted here; one that would lose all its beats
+ * refuses the edit instead (`E-ARGS`, naming it and its timeline). The page before then ends where
+ * the deleted page ended, so its move stretches over the deleted page's beats, as in page mode
+ * (where those coordinates are lost and the earlier page's move runs until the next page starts).
  *
  * **When a page is added** (inserted, split off, or added at the end), page mode copies the
  * previous page's coordinates onto it, so marchers hold through it. Here every transition that
@@ -54,11 +59,13 @@ import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
  * over the new page is left out (it moves there anyway). The holding transition is what "move the
  * marchers on the new page" edits (D-16, P7.2).
  *
- * **Refusals.** Everything is planned from the rows before the first timeline write, and the edit
- * is refused (the whole edit rolls back, page-mode statements included) when a row would end up
- * with no beats (`E-ARGS`), an assignment would leave its transition (`E-A1`), a transition would
- * leave its timeline (`E-T1`), or two of a marcher's rows at one layer would overlap or swap order
- * (`E-A3`).
+ * **Refusals.** The ripple of existing rows is planned before its first timeline write, and the
+ * edit is refused when a row would end up with no beats (`E-ARGS`), an assignment would leave its
+ * transition (`E-A1`), a transition would leave its timeline (`E-T1`), or two of a marcher's rows
+ * at one layer would overlap or swap order (`E-A3`). The holding moves are planned after the
+ * ripple has been written, so their one refusal (a marcher outside the field's bounds at the new
+ * page's start, `E-ARGS`) comes after earlier writes. Either way the whole edit rolls back,
+ * page-mode statements included, so nothing is written.
  *
  * **Statement order** (U-3: every intermediate state passes the row triggers, so undo can replay
  * the edit backwards):
@@ -272,6 +279,27 @@ const checkBeats = (r: Range, what: string) => {
 };
 
 /**
+ * A page move of `page`: what the converter writes for a page, and what a holding move for an
+ * added page looks like. A shapeless transition over exactly the page's beats whose assignments
+ * are all at layer 0 and cover the whole transition. Only these go when their page goes; any other
+ * transition (a track the user made) stays, and the edit is refused if it would lose its beats.
+ */
+const isPageMove = (
+    t: { start_beat: number; end_beat: number; dest_shape_id: number | null },
+    rows: readonly { start_beat: number; end_beat: number; layer: number }[],
+    page: GridPage,
+) =>
+    t.start_beat === page.start &&
+    t.end_beat === page.end &&
+    t.dest_shape_id === null &&
+    rows.every(
+        (a) =>
+            a.layer === 0 &&
+            a.start_beat === t.start_beat &&
+            a.end_beat === t.end_beat,
+    );
+
+/**
  * Rewrites the timeline rows after a page or beat edit that changed the grid from `before` to the
  * grid now in the database. Does nothing when the grid didn't change. See the module comment for
  * the rules, the refusals and the statement order.
@@ -298,41 +326,58 @@ export async function rippleTimelineToPageGridInTransaction({
         .from(schema.timeline_assignments)
         .all();
 
-    // Removed pages take their moves with them
+    // Removed pages take their page moves with them, and nothing else (see `isPageMove`)
     const afterIds = new Set(after.pages.map((p) => p.id));
     const removedPages = before.pages.filter(
         (p) => p.id !== 0 && !afterIds.has(p.id),
     );
+    const rowsOf = new Map<number, typeof assignments>();
+    for (const a of assignments) {
+        const rows = rowsOf.get(a.transition_id);
+        if (rows) rows.push(a);
+        else rowsOf.set(a.transition_id, [a]);
+    }
     const removed = new Set(
         transitions
             .filter((t) =>
-                removedPages.some(
-                    (p) => t.end_beat === p.end && t.start_beat >= p.start,
+                removedPages.some((p) =>
+                    isPageMove(t, rowsOf.get(t.id) ?? [], p),
                 ),
             )
             .map((t) => t.id),
     );
+    const timelineName = new Map(
+        timelines.map((l) => [
+            l.id,
+            l.name ? `timeline "${l.name}"` : `timeline ${l.id}`,
+        ]),
+    );
+    const moveName = (t: (typeof transitions)[number]) =>
+        `the move over beats ${describe(t)} in ${timelineName.get(t.timeline_id)}`;
 
     // Plan every new range
     const newTimeline = new Map<number, Range>();
-    for (const l of timelines) {
-        const r = map.range(l.start_beat, l.end_beat);
-        checkBeats(r, `the timeline over beats ${describe(l)}`);
-        newTimeline.set(l.id, r);
-    }
+    for (const l of timelines)
+        newTimeline.set(l.id, map.range(l.start_beat, l.end_beat));
     const newTransition = new Map<number, Range>();
     for (const t of transitions) {
         if (removed.has(t.id)) continue;
         const r = map.range(t.start_beat, t.end_beat);
-        checkBeats(r, `the move over beats ${describe(t)}`);
+        checkBeats(r, moveName(t));
         const l = newTimeline.get(t.timeline_id)!;
         if (r[0] < l[0] || r[1] > l[1])
             throw new TimelineWriteError(
                 "E-T1",
-                `this change would move the move over beats ${describe(t)} outside its timeline`,
+                `this change would put ${moveName(t)} outside its timeline`,
             );
         newTransition.set(t.id, r);
     }
+    // Checked after the transitions, so a refusal names the move rather than its timeline
+    for (const l of timelines)
+        checkBeats(
+            newTimeline.get(l.id)!,
+            `${timelineName.get(l.id)} (beats ${describe(l)})`,
+        );
     const kept = assignments.filter((a) => !removed.has(a.transition_id));
     const newAssignment = new Map<number, Range>();
     for (const a of kept) {

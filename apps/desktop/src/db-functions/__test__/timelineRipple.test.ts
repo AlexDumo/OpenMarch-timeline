@@ -15,17 +15,27 @@ import {
 } from "@/timeline/timelineStore";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { updateTimelineAssignmentsInTransaction } from "../timelineAssignments";
-import { createBeats, deleteBeats, NewBeatArgs } from "../beat";
+import {
+    createBeats,
+    createBeatsInTransaction,
+    deleteBeats,
+    deleteBeatsInTransaction,
+    NewBeatArgs,
+} from "../beat";
+import { deleteMeasuresInTransaction } from "../measures";
+import { _replaceAllBeatObjects } from "@/components/timeline/audio/EditableAudioPlayerUtils";
 import {
     createLastPage,
     createPages,
     deletePages,
+    deletePagesInTransaction,
     deletePageYank,
+    ensureSecondBeatHasPage,
     updatePages,
 } from "../page";
 import { updateUtility } from "../utility";
 import { createTrack } from "../timelineCommands";
-import { readPageGrid } from "../timelineRipple";
+import { readPageGrid, withTimelinePageRipple } from "../timelineRipple";
 import { TimelineWriteError } from "../timelineErrors";
 
 /**
@@ -658,6 +668,225 @@ describeDbTests("page and beat ripple in timeline mode", (it) => {
             expect(await ranges(db)).toEqual(pageRanges(pagesAfter));
             expectSamePageEnds(endsBefore, pageEnds(pagesAfter));
             await roundTrip(db, before, await snapshot(db));
+        });
+    });
+
+    describe("tracks that aren't page moves", () => {
+        it("a track ending on a page boundary grows with the page when beats go in there", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            // Inside page 2, ending where page 2 ends (beat 17)
+            const track = await createTrack({
+                db,
+                target: { kind: "marcher", marcherId: 1 },
+                startBeat: 12,
+                endBeat: 17,
+            });
+            const before = await snapshot(db);
+            // One beat after beat 16: page mode gives it to page 2, which now ends on beat 18
+            await createBeats({ db, newBeats: [BEAT], startingPosition: 16 });
+            const t = (await transitions(db)).find(
+                (r) => r.id === track.transitionId,
+            )!;
+            expect([t.start_beat, t.end_beat]).toEqual([12, 18]);
+            expect((await ranges(db)).slice(0, 3)).toEqual([
+                [1, 9],
+                [9, 18],
+                [12, 18],
+            ]);
+            expect(await violations(db)).toEqual([]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("deleting a page keeps a track over exactly its beats; only the page move goes", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const pageMove = (await transitions(db))[2]!;
+            const track = await createTrack({
+                db,
+                target: { kind: "marcher", marcherId: 1 },
+                startBeat: 17,
+                endBeat: 25,
+            });
+            expect(track.layer).toBe(1);
+            const before = await snapshot(db);
+
+            await deletePages({ db, pageIds: new Set([3]) });
+
+            const after = await transitions(db);
+            expect(after.find((t) => t.id === pageMove.id)).toBeUndefined();
+            expect(
+                after.find((t) => t.id === track.transitionId),
+            ).toMatchObject({ start_beat: 17, end_beat: 25 });
+            expect(
+                await db
+                    .select()
+                    .from(schema.timeline_assignments)
+                    .where(
+                        eq(
+                            schema.timeline_assignments.transition_id,
+                            track.transitionId,
+                        ),
+                    )
+                    .all(),
+            ).toHaveLength(1);
+            expect(await violations(db)).toEqual([]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        /** Page 3 and its beats [17, 25) go in one edit, as the cascade measure delete does. */
+        const deletePage3AndItsBeats = (db: DbConnection) =>
+            transactionWithHistory(db, "cascadeDeleteMeasures", (tx) =>
+                withTimelinePageRipple(tx, async () => {
+                    await deleteMeasuresInTransaction({
+                        tx,
+                        itemIds: new Set([5, 6]),
+                    });
+                    await deletePagesInTransaction({
+                        tx,
+                        pageIds: new Set([3]),
+                    });
+                    await deleteBeatsInTransaction({
+                        tx,
+                        beatIds: new Set([17, 18, 19, 20, 21, 22, 23, 24]),
+                    });
+                    await ensureSecondBeatHasPage({ tx });
+                }),
+            );
+
+        it("deleting a page with its beats removes its page move and shifts the rest", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const pages = await setUp(db);
+            const endsBefore = pageEnds(pages);
+            const before = await snapshot(db);
+            await deletePage3AndItsBeats(db);
+            await timelineResolverSettled();
+            const pagesAfter = await pagesInOrder(db);
+            expect(await ranges(db)).toEqual([
+                [1, 9],
+                [9, 17],
+                [17, 25],
+                [25, 33],
+                [33, 41],
+            ]);
+            expect(await ranges(db)).toEqual(pageRanges(pagesAfter));
+            expectSamePageEnds(endsBefore, pageEnds(pagesAfter));
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("refuses a page delete that would empty a track, naming it, and writes nothing", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            await createTrack({
+                db,
+                target: { kind: "marcher", marcherId: 1 },
+                startBeat: 18,
+                endBeat: 22,
+            });
+            const before = await snapshot(db);
+            const error = await deletePage3AndItsBeats(db).catch(
+                (e: unknown) => e,
+            );
+            expect(error).toBeInstanceOf(TimelineWriteError);
+            expect((error as TimelineWriteError).code).toBe("E-ARGS");
+            expect((error as Error).message).toMatch(
+                /the move over beats \[18, 22\) in timeline/,
+            );
+            expect(await snapshot(db)).toEqual(before);
+        });
+    });
+
+    it("nested wrappers in one edit ripple once", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await setUp(db);
+        const before = await snapshot(db);
+        await transactionWithHistory(db, "nested", (tx) =>
+            withTimelinePageRipple(tx, async () => {
+                await withTimelinePageRipple(tx, () =>
+                    createBeatsInTransaction({
+                        tx,
+                        newBeats: [BEAT],
+                        startingPosition: 12,
+                    }),
+                );
+                await withTimelinePageRipple(tx, () =>
+                    createBeatsInTransaction({
+                        tx,
+                        newBeats: [BEAT],
+                        startingPosition: 12,
+                    }),
+                );
+            }),
+        );
+        // Two beats inside page 2, rippled once: page 2's move grows by 2, not 4
+        expect(await ranges(db)).toEqual([
+            [1, 9],
+            [9, 19],
+            [19, 27],
+            [27, 35],
+            [35, 43],
+            [43, 51],
+        ]);
+        expect(await ranges(db)).toEqual(pageRanges(await pagesInOrder(db)));
+        await roundTrip(db, before, await snapshot(db));
+    });
+
+    describe("audio player: replace all beats", () => {
+        const replaceAllBeats = async (db: DbConnection) => {
+            const { beats, pages } = await readShowTiming(db);
+            const measures = await db.select().from(schema.measures).all();
+            await _replaceAllBeatObjects({
+                newBeats: beats.map((b) => ({ ...b, id: -1 - b.id })),
+                oldBeats: [...beats],
+                newMeasures: [],
+                oldMeasures: measures.map((m) => ({ id: m.id }) as never),
+                pages: [...pages],
+            });
+        };
+
+        it("is one edit: page moves follow their pages and one undo restores everything", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const before = await snapshot(db);
+            await replaceAllBeats(db);
+            await timelineResolverSettled();
+            expect(await ranges(db)).toEqual(
+                pageRanges(await pagesInOrder(db)),
+            );
+            await expectAssignmentsCoverTransitions(db);
+            expect(await violations(db)).toEqual([]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("a refusal writes nothing, not even the new beats", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            // A track that isn't a page move loses its beats when the old beats go
+            await createTrack({
+                db,
+                target: { kind: "marcher", marcherId: 1 },
+                startBeat: 11,
+                endBeat: 13,
+            });
+            const before = await snapshot(db);
+            const error = await replaceAllBeats(db).catch((e: unknown) => e);
+            expect(error).toBeInstanceOf(TimelineWriteError);
+            expect((error as TimelineWriteError).code).toBe("E-ARGS");
+            expect(await snapshot(db)).toEqual(before);
         });
     });
 
