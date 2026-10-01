@@ -3,6 +3,7 @@ import CanvasMarcher from "./CanvasMarcher";
 import Endpoint from "./Endpoint";
 import Pathway, { DEFAULT_PATHWAY_STROKE_WIDTH } from "./Pathway";
 import Midpoint from "./Midpoint";
+import TimelinePathway from "./TimelinePathway";
 import { FieldProperties } from "@openmarch/core";
 import CanvasListeners from "../../../components/canvas/listeners/CanvasListeners";
 import Marcher from "@/global/classes/Marcher";
@@ -26,6 +27,7 @@ import { getFieldPropertiesImage } from "@/global/classes/FieldProperties";
 import { ModifiedMarcherPageArgs, ShapePage } from "@/db-functions";
 import { MarcherVisualMap } from "@/hooks/queries";
 import type { TimelinePositionBuffer } from "@/timeline/timelineCanvas";
+import type { TimelinePath } from "@/timeline/timelinePaths";
 import { RgbaColor } from "@uiw/react-color";
 import {
     evaluatePathWarning,
@@ -41,7 +43,8 @@ const STEP_SIZE_WARNING_STROKE = rgbaToString(STEP_SIZE_WARNING_COLOR);
 // Apply or clear the step-size warning style, skipping fabric mutations when the pathway already matches
 // Compares against the live fabric state so it stays correct even after the theme effect recolors paths
 function applyPathwayWarningStyle(
-    pathway: Pathway,
+    // A straight Pathway in page mode, a TimelinePathway in timeline mode (P7.10)
+    pathway: fabric.Object,
     midpoint: Midpoint,
     isWarning: boolean,
     normalColor: RgbaColor,
@@ -1461,6 +1464,123 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     };
 
     /**
+     * Timeline mode's path visuals (P7.10): like `renderPathVisuals`, but each path is sampled from
+     * the resolver (`pathsIntoPage`), so it is drawn as a polyline that follows arcs and
+     * follow-the-leader moves, the midpoint is the midset on that path, and the step-size warning
+     * uses the distance along it. The straight page-mode lines are hidden. A marcher with no path
+     * on one side (the first or last page, or unknown to the resolver) has that side hidden.
+     *
+     * @param previousPaths each marcher's move into the selected page (endpoint: where it starts)
+     * @param nextPaths each marcher's move into the next page (endpoint: where it ends)
+     */
+    renderTimelinePathVisuals = ({
+        marcherVisuals,
+        marcherIds,
+        previousPaths,
+        nextPaths,
+        currentPageCounts,
+        nextPageCounts,
+        previousPathsEnabled,
+        nextPathsEnabled,
+        stepSizeWarningsEnabled,
+        fieldProperties,
+    }: {
+        marcherVisuals: MarcherVisualMap;
+        marcherIds: number[];
+        previousPaths: ReadonlyMap<number, TimelinePath>;
+        nextPaths: ReadonlyMap<number, TimelinePath>;
+        currentPageCounts: number | undefined;
+        nextPageCounts: number | undefined;
+        previousPathsEnabled: boolean;
+        nextPathsEnabled: boolean;
+        stepSizeWarningsEnabled: boolean;
+        fieldProperties: FieldProperties;
+    }) => {
+        if (!fieldProperties) return;
+
+        const drawSide = ({
+            path,
+            endpointAt,
+            pathway,
+            midpoint,
+            endpoint,
+            counts,
+            pathEnabled,
+            allowForceShow,
+            color,
+        }: {
+            path: TimelinePath | undefined;
+            endpointAt: "start" | "end";
+            pathway: TimelinePathway;
+            midpoint: Midpoint;
+            endpoint: Endpoint;
+            counts: number | undefined;
+            pathEnabled: boolean;
+            allowForceShow: boolean;
+            color: RgbaColor;
+        }) => {
+            if (!pathway.canvas) this.add(pathway);
+            const { show, isWarning } = path
+                ? evaluatePathWarning({
+                      start: path.start,
+                      end: path.end,
+                      distance: path.length,
+                      counts,
+                      fieldProperties,
+                      pathEnabled,
+                      allowForceShow,
+                      warningsEnabled: stepSizeWarningsEnabled,
+                  })
+                : { show: false, isWarning: false };
+            if (!path || !show) {
+                pathway.hide();
+                midpoint.hide();
+                endpoint.hide();
+                return;
+            }
+            pathway.updatePoints(path.points);
+            pathway.show();
+            midpoint.updateCoords(path.midpoint);
+            midpoint.show();
+            endpoint.updateCoords(path[endpointAt]);
+            endpoint.show();
+            applyPathwayWarningStyle(pathway, midpoint, isWarning, color);
+        };
+
+        marcherIds.forEach((marcherId: number) => {
+            const visual = marcherVisuals[marcherId];
+            if (!visual) return;
+            visual.getPreviousPathway().hide();
+            visual.getNextPathway().hide();
+
+            drawSide({
+                path: previousPaths.get(marcherId),
+                endpointAt: "start",
+                pathway: visual.getPreviousTimelinePathway(),
+                midpoint: visual.getPreviousMidpoint(),
+                endpoint: visual.getPreviousEndpoint(),
+                counts: currentPageCounts,
+                pathEnabled: previousPathsEnabled,
+                // previous paths stay hidden when toggled off, even over threshold
+                allowForceShow: false,
+                color: fieldProperties.theme.previousPath,
+            });
+            drawSide({
+                path: nextPaths.get(marcherId),
+                endpointAt: "end",
+                pathway: visual.getNextTimelinePathway(),
+                midpoint: visual.getNextMidpoint(),
+                endpoint: visual.getNextEndpoint(),
+                counts: nextPageCounts,
+                pathEnabled: nextPathsEnabled,
+                // next path is the current move, force-show it over threshold
+                allowForceShow: true,
+                color: fieldProperties.theme.nextPath,
+            });
+        });
+    };
+
+    /**
      * Hides all pathway visuals for all marchers.
      *
      * @param marcherVisuals The marcher visual map
@@ -2215,6 +2335,17 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         return active
             ? this.getActiveObjectsByType(Pathway)
             : this.getObjectsByType(Pathway);
+    }
+
+    /**
+     * Removes timeline mode's curved paths (P7.10) from the canvas. `renderTimelinePathVisuals`
+     * adds them back as it needs them. Does nothing in page mode, which never adds any.
+     */
+    removeTimelinePathways(): void {
+        const pathways = this.getObjectsByType(TimelinePathway);
+        if (pathways.length === 0) return;
+        for (const pathway of pathways) this.remove(pathway);
+        this.requestRenderAll();
     }
 
     /**

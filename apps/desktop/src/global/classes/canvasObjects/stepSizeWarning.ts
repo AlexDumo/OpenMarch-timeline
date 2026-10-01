@@ -30,6 +30,7 @@ export function evaluatePathWarning({
     pathEnabled,
     allowForceShow,
     warningsEnabled = true,
+    distance,
 }: {
     start: { x: number; y: number };
     end: { x: number; y: number };
@@ -38,6 +39,11 @@ export function evaluatePathWarning({
     pathEnabled: boolean;
     allowForceShow: boolean;
     warningsEnabled?: boolean;
+    /**
+     * The distance walked, when it isn't the straight line from start to end (a curved path in
+     * timeline mode). Page mode leaves it out.
+     */
+    distance?: number;
 }): { show: boolean; isWarning: boolean } {
     // a path that cannot show skips the StepSize computation entirely
     if (!pathEnabled && !allowForceShow)
@@ -46,15 +52,23 @@ export function evaluatePathWarning({
     // warnings off: no force-show and no warning styling, path follows its own toggle
     if (!warningsEnabled) return { show: pathEnabled, isWarning: false };
 
-    const stepSize = new StepSize({
-        marcher_id: -1,
-        startingX: start.x,
-        startingY: start.y,
-        endingX: end.x,
-        endingY: end.y,
-        counts,
-        fieldProperties,
-    });
+    const stepSize =
+        distance === undefined
+            ? new StepSize({
+                  marcher_id: -1,
+                  startingX: start.x,
+                  startingY: start.y,
+                  endingX: end.x,
+                  endingY: end.y,
+                  counts,
+                  fieldProperties,
+              })
+            : StepSize.fromDistance({
+                  marcher_id: -1,
+                  distance,
+                  counts,
+                  fieldProperties,
+              });
     const isWarning = stepSize.exceedsThreshold(
         fieldProperties.stepSizeWarningThresholdInches,
     );

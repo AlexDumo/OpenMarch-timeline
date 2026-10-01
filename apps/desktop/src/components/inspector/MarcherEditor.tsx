@@ -31,6 +31,8 @@ import type { FieldProperties } from "@openmarch/core";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { usePositionAt } from "@/timeline/timelineStore";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
+import { useTimelineStepSizes } from "@/timeline/useTimelineStepSizes";
+import { useTimingObjects } from "@/hooks";
 import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
@@ -521,7 +523,26 @@ function MarcherEditor() {
         timelinePosition,
     ]);
 
+    // Timeline mode (P7.10): step sizes from the resolver between page end beats, along the path
+    const { pages } = useTimingObjects()!;
+    const selectedMarcherIdList = useMemo(
+        () => selectedMarchers.map((marcher) => marcher.id),
+        [selectedMarchers],
+    );
+    const previousPage = useMemo(
+        () => pages.find((p) => p.id === selectedPage?.previousPageId) ?? null,
+        [pages, selectedPage?.previousPageId],
+    );
+    const timelineStepSizes = useTimelineStepSizes({
+        enabled: timelineMode,
+        marcherIds: selectedMarcherIdList,
+        page: selectedPage,
+        previousPage,
+        fieldProperties,
+    });
+
     const stepSize = useMemo(() => {
+        if (timelineMode) return timelineStepSizes.stepSize;
         if (
             selectedMarchers.length !== 1 ||
             !marcherPagesLoaded ||
@@ -550,6 +571,8 @@ function MarcherEditor() {
             fieldProperties,
         });
     }, [
+        timelineMode,
+        timelineStepSizes.stepSize,
         selectedMarchers,
         marcherPagesLoaded,
         previousMarcherPages,
@@ -559,6 +582,7 @@ function MarcherEditor() {
     ]);
 
     const minMaxStepSize = useMemo(() => {
+        if (timelineMode) return timelineStepSizes.minMax;
         if (
             selectedMarchers.length <= 1 ||
             !marcherPagesLoaded ||
@@ -576,6 +600,8 @@ function MarcherEditor() {
             fieldProperties,
         });
     }, [
+        timelineMode,
+        timelineStepSizes.minMax,
         selectedMarchers,
         marcherPagesLoaded,
         previousMarcherPages,

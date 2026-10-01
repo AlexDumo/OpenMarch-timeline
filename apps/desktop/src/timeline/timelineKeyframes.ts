@@ -175,6 +175,91 @@ function marcherKeyframes(
     return { keyframes: out, excess };
 }
 
+/** One marcher's path between two beats, as a polyline (see {@link sampleMarcherPath}). */
+export interface MarcherPathSample {
+    /**
+     * The polyline, from the position at `fromBeat` to the one at `toBeat`, with consecutive
+     * repeats (holds) removed; a single point when the marcher doesn't move
+     */
+    points: [number, number][];
+    /** As in {@link MarcherKeyframes}: 0 unless the depth cap left a piece above the tolerance */
+    maxErrorAboveTolerance: number;
+}
+
+/**
+ * Samples one marcher's path between two beats as a polyline whose chords stay within
+ * `tolerance` of the resolver's path (the same span-edge keyframes and probe-based bisection as
+ * {@link buildKeyframes}, but in beats rather than show time, since a drawn path has no time
+ * axis). Arcs and follow-the-leader moves come back curved; a direct move is just its two ends.
+ *
+ * @param fromBeat the start beat; must be below `toBeat`
+ */
+export function sampleMarcherPath(
+    resolver: Pick<Resolver, "positionAt" | "spanInfos">,
+    marcherId: number,
+    fromBeat: number,
+    toBeat: number,
+    options: Pick<KeyframeExportOptions, "tolerance" | "maxDepth"> = {},
+): MarcherPathSample {
+    if (!(fromBeat < toBeat))
+        throw new RangeError("fromBeat must be below toBeat");
+    const tolerance = options.tolerance ?? DEFAULT_KEYFRAME_TOLERANCE;
+    if (!(tolerance > 0)) throw new RangeError("tolerance must be positive");
+    const maxDepth = options.maxDepth ?? MAX_DEPTH;
+
+    const spans = resolver.spanInfos(marcherId);
+    const edges = new Set<number>([fromBeat, toBeat]);
+    for (const span of spans)
+        for (const edge of [span.start, span.end])
+            if (edge > fromBeat && edge < toBeat) edges.add(edge);
+    const sorted = [...edges].sort((a, b) => a - b);
+
+    const at = (beat: number): [number, number] => {
+        const [x, y] = resolver.positionAt(marcherId, beat);
+        return [x, y];
+    };
+    const all: [number, number][] = [];
+    const emit = (_beat: number, p: [number, number]) => {
+        all.push(p);
+    };
+
+    let excess = 0;
+    let prevBeat = sorted[0]!;
+    let prevPos = at(prevBeat);
+    emit(prevBeat, prevPos);
+    for (let i = 1; i < sorted.length; i++) {
+        const beat = sorted[i]!;
+        const pos = at(beat);
+        const from = prevBeat;
+        const span = spans.find((s) => s.start <= from && from < s.end);
+        if (span && span.kind !== "hold")
+            excess = Math.max(
+                excess,
+                subdivide(
+                    at,
+                    prevBeat,
+                    prevPos,
+                    beat,
+                    pos,
+                    tolerance,
+                    0,
+                    maxDepth,
+                    emit,
+                ),
+            );
+        emit(beat, pos);
+        prevBeat = beat;
+        prevPos = pos;
+    }
+
+    const points: [number, number][] = [];
+    for (const p of all) {
+        const last = points[points.length - 1];
+        if (!last || last[0] !== p[0] || last[1] !== p[1]) points.push(p);
+    }
+    return { points, maxErrorAboveTolerance: excess };
+}
+
 /**
  * Emits the keyframes strictly between `t0` and `t1` (in order) that bring the chord error of the
  * piece within `tolerance`, by bisecting at the midpoint while any probe is too far off.
