@@ -456,3 +456,10 @@ Facts that change how to read the PR #14 note above:
 - **Checks:** at d0024fbe, in the worker's work tree: `pnpm --dir apps/desktop exec tsc --noEmit` (pass); `test:history` on timelineMarchers, marcher and useMarchersTimelineMode (47 passed); `pnpm --dir apps/desktop run test` (113 files, 1,669 passed).
 - **Next:** P7.4 onward. Open from P7.3: `previous-dots-import-service.ts` still reads a converted source file's frozen page rows (main process).
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-commands) · Cross-phase note from P8.9
+
+- **Done:** P8.9 adds `shiftTimeline` (a clip move moves its whole spec timeline) and `createTrack` (`apps/desktop/src/db-functions/timelineCommands.ts`). It does **not** add a structural "move marcher on page N": the cases P7.2 refuses with E-ARGS (a hold through the page end, a winning assignment spanning several pages, a transition that ends later) are still refused. A workaround exists in timeline mode: Create Track for that marcher over the page makes a steal (one layer up) whose single destination can then be moved with `moveMarchersOnPage`, since that track's move ends at the page's end beat.
+- **Remains:** a structural page move (split the spanning assignment and transition at the page end, or insert a steal automatically) is unowned; it needs a package in Phase 7 or 8.
+- **Checks:** none for this note.
+- **Blockers:** none.
