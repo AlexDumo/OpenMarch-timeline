@@ -611,3 +611,10 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** read the suite result, update the PR body, report back.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-2-shapes`; `pnpm --dir apps/desktop run test` (in the background); update PR #34's body from `pr-P8.2.md`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2 (review fixes ready)
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/34's body is updated for the review fixes in ace16e71. The branch was merged with `timeline-try-2`, not force-pushed.
+- **Checks:** `pnpm --dir apps/desktop run test` at ace16e71, run once and alone: 153 files (146 passed, 7 skipped), 2,150 tests passed. The other checks are in the previous entry. Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Next:** re-review and merge by the lead.
+- **Blockers:** none.
