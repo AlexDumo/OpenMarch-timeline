@@ -1372,3 +1372,30 @@ Facts that change how to read the PR #14 note above:
 - **Follow-up (unowned, low):** `src/timeline/timelineRows.ts` imports the renderer's `@/global/database/db`, so the main bundle pulls that module in through `readTimelineTables`. It's harmless today, because `window` is only touched inside callbacks. It's fragile if anything top-level touches `window` later. Fix: import `schema` from `@om-electron/database/migrations/schema`.
 - **Next:** P7.17 (PR #38) under review. Then only the human manual pass remains in the Phase 7 exit gate.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-feature-tests) · P7.17 review fixes ready
+
+- **Done:** follow-up commits on PR https://github.com/AlexDumo/OpenMarch-timeline/pull/38, not force-pushed: merge 85c9d1c4 (`timeline-try-2` with #37), 8c778f5d and a12e954b.
+  - **History in the timeline run:**
+    - `timelineHistoryTables()` (the five timeline data tables in timeline test mode, empty otherwise) is added to `tablesToCheck` in the page, beat, measures, marcher and utility history tests.
+    - New script: `test:timeline-history` (`VITEST_ENABLE_HISTORY=true VITEST_TIMELINE_MODE=true`).
+    - The other history test files are timeline-native and already check those tables.
+  - **`keepFixturesInPageMode`:** a comment explains that it relies on vitest's per-file isolation, and it throws under `--no-isolate`.
+  - **Docs:** `testing.md` and the PR body say what `test:timeline` doesn't cover:
+    - tests that don't use the `base.tsx` fixtures;
+    - functions whose `timelineMode` parameter defaults to false;
+    - history checks, unless the history variable is also set.
+  - **The claim is now:** every existing test passes with converted fixtures and the flag on. Timeline behavior is really exercised only for page, beat and measure ripple and the mobile export.
+  - **P7.16's new `previous-dots-import-service.test.ts`:** it failed after the merge (6 tests: it converts the source itself). It is now timeline-native, opted out with `keepFixturesInPageMode`.
+- **Checks (head a12e954b):**
+  - `pnpm --dir apps/desktop run test:timeline`, run alone: 158 files passed, 7 skipped; 2,221 passed, 58 skipped. Run 4, before the opt-out, had 6 failed in that 1 file.
+  - `pnpm --dir apps/desktop run test`, run alone: 158 files passed; 2,265 passed, 14 skipped.
+  - `pnpm --dir apps/desktop run test:timeline-history` on `page`, `beat`, `measures`, `marcher` and `utility` tests: 5 files, 257 passed, 1 todo.
+  - `test:history` on the same five files: 257 passed.
+  - The `--no-isolate` guard throws as intended.
+  - `tsc --noEmit`: pass.
+  - Pre-commit (eslint, prettier, cspell): pass.
+- **Skipped:** by policy, the full `test:history` suite, e2e and `build:electron`.
+- **Exit gate:** not ticked; P7.18 covers the remaining coverage.
+- **Next:** the lead re-reviews PR #38.
+- **Blockers:** none.
