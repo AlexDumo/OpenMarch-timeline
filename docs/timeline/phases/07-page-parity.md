@@ -170,8 +170,8 @@ After undo or redo the app jumps to a page and selects marchers based on page-ro
 ### P7.15: Refresh views on edits outside the change log
 
 - Owner: timeline-worker (timeline/p7-15-refresh-views)
-- Status: claimed
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/32
 - Parallel: yes
 - Depends on: P7.13
 
@@ -809,4 +809,12 @@ Facts that change how to read the PR #14 note above:
 - **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit`: clean.
 - **Next:** tests for the sampler, paths, step sizes and the canvas renderer; then the suite and the PR.
 - **Resume from:** branch `timeline/p7-pathways` at `cb984e71`; write `src/timeline/__test__/timelinePaths.test.ts` (golden fixtures with arcs and follow-the-leader), run `pnpm --dir apps/desktop exec vitest run src/timeline/__test__/timelinePaths.test.ts`.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-15-refresh-views) · P7.15 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/32. A display version in `apps/desktop/src/db-functions/timelineDisplay.ts` bumps after a `transactionWithHistory` commit, undo or redo that touched `timelines` or `timeline_shapes`; `useTimelineTracks` and `useTimelineInspections` reload on it and tag reads with it. No change-log tables added, resolver version untouched.
+- **Checks:** `test:history` on `timelineDisplay.test.ts` and `timelineHistoryFocus.test.ts`: 18 passed. `pnpm --dir apps/desktop run test`: 134 files, 1960 tests passed. `tsc --noEmit`: clean. eslint on changed files: no errors. Skipped per policy: full `test:history`, e2e.
+- **Note:** a shape rename does bump the resolver version too (the `shapes` change-log table fires on it), so the display bump is redundant for shapes but harmless; a `timelines`-only edit is the real gap. The package's "ripple that only moves a range" is covered by a direct range edit with undo and redo; no existing ripple in the converted fixture changes only a timeline range.
+- **Next:** review and merge.
 - **Blockers:** none.
