@@ -166,9 +166,15 @@ const latestMarkerAt = (
         .filter((marker) => marker.atBeat <= beat)
         .sort((a, b) => b.atBeat - a.atBeat)[0];
 
+/**
+ * The page and measure.count under a beat. `pageLabel`, when given, names the page instead: the
+ * app passes the selected page while paused, because the paused cursor sits on that page's end
+ * beat, which is also the next page's first beat.
+ */
 export const getFrameContext = (
     model: Pick<TimelineViewModel, "pages" | "measures" | "beatCount">,
     positionBeat: BeatPosition,
+    pageLabel?: string,
 ) => {
     const beat = clamp(
         Math.floor(positionBeat),
@@ -184,7 +190,7 @@ export const getFrameContext = (
     const count = measure ? beat - measure.atBeat + 1 : beat + 1;
     const measureLabel = measure?.label.replace(/^m/i, "") ?? "—";
     return {
-        pageLabel: page?.label ?? "—",
+        pageLabel: pageLabel ?? page?.label ?? "—",
         measureAndCount: `m${measureLabel}.${count}`,
     };
 };
@@ -192,8 +198,9 @@ export const getFrameContext = (
 export const getPlayheadLabel = (
     model: Pick<TimelineViewModel, "pages" | "measures" | "beatCount">,
     positionBeat: BeatPosition,
+    pageLabel?: string,
 ) => {
-    const context = getFrameContext(model, positionBeat);
+    const context = getFrameContext(model, positionBeat, pageLabel);
     return `Pg ${context.pageLabel} · ${context.measureAndCount}`;
 };
 

@@ -88,6 +88,7 @@ export function TimelineTransport({
     model,
     clock,
     positionBeat,
+    pageLabel,
     isPlaying,
     onPlayingChange,
     onNavigate,
@@ -101,6 +102,8 @@ export function TimelineTransport({
     /** The playback clock; the app passes its audio clock */
     clock?: ReactNode;
     positionBeat: BeatPosition;
+    /** Overrides the page under the cursor in the label */
+    pageLabel?: string;
     isPlaying: boolean;
     onPlayingChange?: (isPlaying: boolean) => void;
     onNavigate?: (direction: TimelineNavigation) => void;
@@ -111,7 +114,7 @@ export function TimelineTransport({
     /** Extra controls at the end of the zoom row, such as volume and the metronome */
     accessories?: ReactNode;
 }) {
-    const frame = getFrameContext(model, positionBeat);
+    const frame = getFrameContext(model, positionBeat, pageLabel);
     return (
         <aside className="border-stroke bg-fg-1 rounded-6 flex w-[244px] shrink-0 flex-col justify-center gap-12 border px-16 py-12">
             <div className="text-text-subtitle flex items-start justify-between gap-12">
@@ -449,7 +452,12 @@ export const TimelineTrackClip = ({
                 if (!drag || drag.pointerId !== event.pointerId) return;
                 dragRef.current = null;
                 event.currentTarget.releasePointerCapture?.(event.pointerId);
-                const offset = drag.offset;
+                // Recompute with the release's modifier state, as the selection flags do
+                const offset = getOffset(
+                    event.clientX,
+                    drag.startClientX,
+                    isPageSnapDisabled(event),
+                );
                 setPreviewOffset(0);
                 if (offset === 0) return;
                 onRangeCommit?.({
@@ -770,6 +778,7 @@ export const TimelineRehearsalMarkers = ({
 export const TimelinePlayheadDetail = ({
     model,
     positionBeat,
+    pageLabel,
     pixelsPerBeat,
     height,
     anchorRef,
@@ -777,6 +786,7 @@ export const TimelinePlayheadDetail = ({
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
+    pageLabel?: string;
     pixelsPerBeat: number;
     height: number;
     anchorRef: RefObject<HTMLButtonElement | null>;
@@ -855,7 +865,7 @@ export const TimelinePlayheadDetail = ({
                 visibility: position ? "visible" : "hidden",
             }}
         >
-            {getPlayheadLabel(model, positionBeat)}
+            {getPlayheadLabel(model, positionBeat, pageLabel)}
         </div>,
         document.body,
     );
@@ -864,6 +874,7 @@ export const TimelinePlayheadDetail = ({
 export const TimelinePlayhead = ({
     model,
     positionBeat,
+    pageLabel,
     pixelsPerBeat,
     height,
     beatCount,
@@ -874,6 +885,7 @@ export const TimelinePlayhead = ({
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
+    pageLabel?: string;
     pixelsPerBeat: number;
     height: number;
     beatCount: number;
@@ -886,7 +898,7 @@ export const TimelinePlayhead = ({
         ref={anchorRef}
         type="button"
         data-testid="timeline-playhead"
-        aria-label={`Playback position: ${getPlayheadLabel(model, positionBeat)}`}
+        aria-label={`Playback position: ${getPlayheadLabel(model, positionBeat, pageLabel)}`}
         onPointerDown={(event) => event.preventDefault()}
         onPointerEnter={() => onHoverChange(true)}
         onPointerLeave={() => onHoverChange(false)}

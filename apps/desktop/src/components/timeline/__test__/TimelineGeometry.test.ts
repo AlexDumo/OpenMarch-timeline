@@ -76,6 +76,10 @@ describe("timeline geometry", () => {
     it("formats the playhead as page, measure, and count", () => {
         expect(getPlayheadLabel(timelineStoryModel, 0)).toBe("Pg 1 · m1.1");
         expect(getPlayheadLabel(timelineStoryModel, 11)).toBe("Pg 2 · m3.4");
+        // A caller-named page (the selected page while paused) wins over the page under the beat
+        expect(getPlayheadLabel(timelineStoryModel, 16, "2")).toBe(
+            "Pg 2 · m5.1",
+        );
     });
 
     it("accepts normalized activity partitions", () => {

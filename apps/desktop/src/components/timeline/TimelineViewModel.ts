@@ -86,6 +86,8 @@ export type TimelineNavigation =
 
 export interface TimelineInteractionProps {
     readonly positionBeat: BeatPosition;
+    /** Names the page in the transport and playhead labels instead of the page under the cursor */
+    readonly pageLabel?: string;
     readonly isPlaying: boolean;
     readonly selection?: TimelineSelection;
     readonly selectedTarget?: TimelineTarget | null;

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
 import { useTimingObjects } from "@/hooks";
+import { useIsPlaying } from "@/context/IsPlayingContext";
+import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { AudioClock } from "./Clock";
 import {
@@ -57,6 +59,15 @@ export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
     const playback = useTimelinePlayback({ beats, pages });
     const [selection, setSelection] = useState<TimelineSelection>(null);
+    const { isPlaying } = useIsPlaying()!;
+    const { setSelectedPage } = useSelectedPage()!;
+    const changeSelection = (next: TimelineSelection) => {
+        setSelection(next);
+        // Clicking a page in the ruler also seeks to its first beat, which `pageForSeek` reads as
+        // the end of the page before it. Select the clicked page itself.
+        if (next?.kind === "page" && !isPlaying)
+            setSelectedPage({ id: Number(next.pageId) });
+    };
 
     return (
         <Timeline
@@ -77,7 +88,7 @@ export default function TimelineModePanel() {
             }
             selection={selection}
             selectedTarget={null}
-            onSelectionChange={setSelection}
+            onSelectionChange={changeSelection}
             onTimelineRangeCommit={commitTimelineRange}
             onCreateTrack={createTrack}
         />

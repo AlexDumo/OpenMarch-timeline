@@ -52,6 +52,8 @@ export interface TimelineInput {
 export interface TimelinePlayback {
     /** The beat under the playback cursor, a beat index in `[0, beats.length)` */
     readonly positionBeat: number;
+    /** Names the page in the transport and playhead labels, such as the selected page while paused */
+    readonly pageLabel?: string;
     readonly isPlaying: boolean;
     /** Seek to a whole beat index, already clamped to the show */
     readonly onSeek?: (beatIndex: number) => void;
@@ -127,6 +129,8 @@ const toTrack = (timeline: TimelineInput): TimelineTrack => ({
     activitySpans: timeline.activitySpans,
 });
 
+// TODO(P8.8): the fixed zero-length beat 0 takes one beat of width before page 1, an empty column in
+// the ruler. Compress it in the view-model adapter rather than here.
 export const createTimelineViewModel = ({
     beats,
     pages,
@@ -196,6 +200,7 @@ export function Timeline(props: TimelineProps) {
     const commonProps = {
         model,
         positionBeat,
+        pageLabel: playback.pageLabel,
         isPlaying: playback.isPlaying,
         pixelsPerBeat,
         selection: props.selection,

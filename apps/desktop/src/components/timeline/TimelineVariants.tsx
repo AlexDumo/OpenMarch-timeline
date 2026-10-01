@@ -243,6 +243,7 @@ function TimelineSurface({
                         clock={props.transportClock}
                         accessories={props.transportAccessories}
                         positionBeat={positionBeat}
+                        pageLabel={props.pageLabel}
                         isPlaying={transportProps.isPlaying}
                         onPlayingChange={transportProps.onPlayingChange}
                         onNavigate={transportProps.onNavigate}
@@ -353,6 +354,7 @@ function TimelineSurface({
                     <TimelinePlayhead
                         model={model}
                         positionBeat={positionBeat}
+                        pageLabel={props.pageLabel}
                         pixelsPerBeat={pixelsPerBeat}
                         height={timelineHeight}
                         beatCount={model.beatCount}
@@ -364,6 +366,7 @@ function TimelineSurface({
                     <TimelinePlayheadDetail
                         model={model}
                         positionBeat={positionBeat}
+                        pageLabel={props.pageLabel}
                         pixelsPerBeat={pixelsPerBeat}
                         height={timelineHeight}
                         anchorRef={playheadRef}

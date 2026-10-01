@@ -1,8 +1,15 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+} from "@testing-library/react";
 import { TolgeeProvider } from "@tolgee/react";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
-import { describeDbTests, type DbConnection } from "@/test/base";
+import { describeDbTests, type DbConnection, schema } from "@/test/base";
+import { transactionWithHistory } from "@/db-functions/history";
 import {
     getWorkspaceSettingsParsed,
     updateWorkspaceSettingsParsed,
@@ -18,15 +25,16 @@ import TimelineContainer from "../TimelineContainer";
 
 afterEach(cleanup);
 
-// The Electron bridge calls the container's theme and audio file providers make; the database
-// proxy the test harness installs on window.electron stays as it is.
+// The Electron bridge calls that the container's theme and audio providers and the history log
+// make.
 beforeEach(() => {
-    window.electron = {
-        ...window.electron,
+    // The db fixture adds sqlProxy to this object when the test starts
+    window.electron = Object.assign(window.electron ?? {}, {
+        log: vi.fn(),
         getTheme: vi.fn().mockResolvedValue(null),
         setTheme: vi.fn(),
         getSelectedAudioFile: vi.fn().mockResolvedValue(null),
-    };
+    });
     window.matchMedia ??= vi.fn().mockImplementation((query: string) => ({
         matches: false,
         media: query,
@@ -102,6 +110,40 @@ describeDbTests("TimelineContainer and the timeline flag", (it) => {
                     name: "Toggle timeline fullscreen",
                 }),
             ).toBeInTheDocument();
+        });
+
+        it("selects the page clicked in the ruler", async ({ db, wrapper }) => {
+            // Beats 1..16 after the fixed beat 0; page 1 starts at beat 1 and page 2 at beat 9
+            await transactionWithHistory(db, "seedShow", async (tx) => {
+                await tx.insert(schema.beats).values(
+                    Array.from({ length: 16 }, (_, i) => ({
+                        id: i + 1,
+                        position: i + 1,
+                        duration: 0.5,
+                    })),
+                );
+                await tx.insert(schema.pages).values([
+                    { id: 1, start_beat: 1 },
+                    { id: 2, start_beat: 9 },
+                ]);
+            });
+            await setTimelineMode(db, true);
+            renderContainer(wrapper);
+
+            const page2 = await screen.findByRole(
+                "button",
+                { name: "Page 2" },
+                { timeout: 5000 },
+            );
+            fireEvent.click(page2);
+
+            // The ruler also seeks to beat 9, which alone would select page 1 (it ends there)
+            await waitFor(() =>
+                expect(screen.getByRole("complementary")).toHaveTextContent(
+                    "Pg 2",
+                ),
+            );
+            expect(page2).toHaveAttribute("aria-pressed", "true");
         });
     });
 });

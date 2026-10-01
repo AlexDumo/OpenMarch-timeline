@@ -27,6 +27,18 @@ export function pageAtBeat(
     return found;
 }
 
+/**
+ * The page a seek to a beat line selects: the page whose move contains or ends at that line, so
+ * seeking to the paused cursor (the selected page's end beat) keeps the selection. Line 0 selects
+ * the first page.
+ */
+export function pageForSeek(
+    pages: readonly Page[],
+    beatIndex: number,
+): Page | null {
+    return pageAtBeat(pages, Math.max(beatIndex - 1, 0));
+}
+
 /** The page a transport navigation button lands on, or null to stay put. */
 export function pageForNavigation(
     pages: readonly Page[],
@@ -53,8 +65,9 @@ export function pageForNavigation(
  *   used as a position.
  * - While paused, the cursor is the selected page's end beat (`pageEndBeat`), where the canvas
  *   draws the page.
- * - Seeking and page navigation select a page, the only paused position the clock has; they do
- *   nothing while playing, as the page navigation actions do.
+ * - Seeking (`pageForSeek`) and page navigation select a page, the only paused position the
+ *   clock has; they do nothing while playing, as the page navigation actions do.
+ * - While paused, `pageLabel` names the selected page.
  */
 export function useTimelinePlayback({
     beats,
@@ -86,10 +99,13 @@ export function useTimelinePlayback({
         const pausedBeat = selectedPage ? pageEndBeat(selectedPage) : 0;
         return {
             positionBeat: isPlaying && liveBeat != null ? liveBeat : pausedBeat,
+            // The paused cursor is on the selected page's end beat, which is also the next page's
+            // first beat, so name the selected page
+            pageLabel: isPlaying ? undefined : selectedPage?.name,
             isPlaying,
             onSeek: (beatIndex) => {
                 if (isPlaying) return;
-                const page = pageAtBeat(pages, beatIndex);
+                const page = pageForSeek(pages, beatIndex);
                 if (page) setSelectedPage(page);
             },
             onNavigate: (direction) => {

@@ -687,3 +687,68 @@ describe("page snapping in drags (UI-2)", () => {
         });
     });
 });
+
+describe("review follow-ups", () => {
+    it("commits a clip move with the modifier state at release", () => {
+        const onTimelineRangeCommit = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onTimelineRangeCommit={onTimelineRangeCommit}
+            />,
+        );
+        const track = screen.getByLabelText(/M1 timeline/);
+        const pointer = (
+            type: "pointerdown" | "pointermove" | "pointerup",
+            altKey: boolean,
+        ) =>
+            fireEvent(
+                track,
+                new MouseEvent(type, {
+                    bubbles: true,
+                    button: 0,
+                    clientX: type === "pointerdown" ? 0 : 112,
+                    altKey,
+                }),
+            );
+
+        // Alt held through the last move, released before the button comes up: snaps to 8
+        pointer("pointerdown", true);
+        pointer("pointermove", true);
+        pointer("pointerup", false);
+        expect(onTimelineRangeCommit).toHaveBeenLastCalledWith({
+            timelineId: "m1",
+            startBeatIndex: 8,
+            endBeatIndex: 24,
+        });
+
+        // Alt pressed only at release: lands on beat 7
+        pointer("pointerdown", false);
+        pointer("pointermove", false);
+        pointer("pointerup", true);
+        expect(onTimelineRangeCommit).toHaveBeenLastCalledWith({
+            timelineId: "m1",
+            startBeatIndex: 7,
+            endBeatIndex: 23,
+        });
+    });
+
+    it("names the given page in the transport and playhead labels", () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                positionBeat={16}
+                pageLabel="2"
+                showTransport
+            />,
+        );
+        // Beat 16 is page 2A's first beat, but the caller names page 2
+        const transport = screen.getByRole("complementary");
+        expect(transport).toHaveTextContent("Pg 2");
+        expect(transport).not.toHaveTextContent("Pg 2A");
+        expect(
+            screen.getByRole("button", { name: /^Playback position:/ }),
+        ).toHaveAccessibleName("Playback position: Pg 2 · m5.1");
+    });
+});
