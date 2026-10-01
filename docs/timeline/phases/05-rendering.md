@@ -240,3 +240,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** review and test the P5.6 draft (`src/timeline/timelineWarm.ts`, `timelineStore.ts`), then P5.7 and P5.8.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p5-warm-fixtures`; run `tsc --noEmit` and `test:focused src/timeline/__test__/`, then write `src/timeline/__test__/timelineWarm.test.ts` with fake timers.
+
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.6
+
+- **Done:** checkpoint 0aa6a48b on `timeline/p5-warm-fixtures`. Reviewed the draft; kept its design (the core's only warming API is the all-at-once `warmAll`, so warming queries `positionsAt` at every transition boundary, nearest the last drawn beat first, then alternating outward). A new session now starts warming at beat 1. Tests: `src/timeline/__test__/timelineWarm.test.ts` (order, slicing, cancel, errors, the timeout scheduler under fake timers, `requestIdleCallback` when present) and `timelineStoreWarm.test.ts` (real DB: a pass after the cold build leaves nothing to compile; a batch cancels it and restarts from the beat last drawn; reset and stop cancel it).
+- **Checks:** `test:focused src/timeline/__test__/timelineWarm.test.ts` (13 passed), `timelineStoreWarm.test.ts` (4 passed), the existing timeline tests (50 passed), `tsc --noEmit` (pass), eslint and prettier on `src/timeline/` (pass).
+- **Next:** P5.7 fixture generators and loader.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (0aa6a48b); write pure generators in `apps/desktop/src/timeline/fixtures/` (golden vectors G1–G13, SC-01, SC-03, SC-05, seeded SC-11) returning core-shaped rows, then the loader that writes one through the timeline db-functions in one `transactionWithHistory`.
