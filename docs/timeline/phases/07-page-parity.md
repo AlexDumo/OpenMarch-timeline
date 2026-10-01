@@ -129,8 +129,8 @@ Path, midpoint and endpoint drawing, step-size warnings, the inspector's step si
 
 ### P7.11: Shapes and shape pages in timeline mode
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-shapes)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
@@ -1037,3 +1037,11 @@ Facts that change how to read the PR #14 note above:
 - **Exit gate:** unchanged.
 - **Next:** review and merge PR #35.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-shapes) · P7.11
+
+- **Done:** claimed P7.11. Branch `timeline/p7-shapes` from `timeline-try-2` (at 01a8a8cd, after P8.2).
+- **Checks:** none yet.
+- **Next:** decide, per page-era shape tool, derive or gate in timeline mode; then canvas drawing and dragging of spec shapes on P8.2's db-functions.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p7-shapes`; `pnpm install`; build the desktop's dependencies.
