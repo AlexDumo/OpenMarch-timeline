@@ -135,6 +135,22 @@ Phase 0. Record outcomes in the ADR (`docs/adr/0001-timeline-motion-model.md`).
   tables. Phase 10 must remove these triggers from the map before dropping the
   tables.
 
+- **C-11: Transitions span their timeline.** **Decided (project owner,
+  2026-10-01):** a timeline is the container for start and stop. It can own
+  several transitions, but every one of them starts and ends exactly when the
+  timeline does; no transition starts or stops partway through a timeline.
+  Assignments keep their own ranges inside the transition, so marchers still
+  join late, leave early, and are stolen through layers (R-2). The transition
+  keeps its `start_beat`/`end_beat` columns as a mirror of the timeline's
+  range, so the resolver, `ref/` and the golden vectors are unchanged (a
+  timeline has no effect on resolution, R-1). Enforcement: the write functions
+  refuse a transition whose range differs from its timeline's (E-ARGS), and
+  every range edit moves the timeline and all its transitions together
+  (P8.10). The database check, an `E-T1` row in `timeline_commit_violations`,
+  waits for P9.10, because the converter still writes one show-wide timeline
+  with a transition per page; until then a function that would have to resize
+  such a legacy timeline refuses. Recorded in ADR 0001.
+
 ## 3. Phases
 
 | Phase                                  | Title                                       | Depends on |

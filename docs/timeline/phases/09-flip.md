@@ -62,7 +62,7 @@ A post-migration step in the main process runs the converter in one transaction,
 - Status: blocked
 - PR: none
 - Parallel: no
-- Depends on: P9.3, P9.8, P9.9
+- Depends on: P9.3, P9.8, P9.9, P9.10
 
 Remove the dev flag. Timeline mode is the only mode. Prerequisites (from the P9.8 review): a packaged smoke run (`build:electron`, then open a page-era show with `OPENMARCH_CONVERT_ON_OPEN=1` and confirm the worker loads from `app.asar`), and a manual app pass by the owner on a copy of a real show.
 
@@ -115,6 +115,21 @@ Before P9.4 turns convert-on-open on for everyone, move the backup (P9.2) and th
 - Depends on: P9.8
 
 From the P9.4 packaged smoke run: on macOS a Quit sent while the "Preparing your file" window is up is cancelled (`User canceled (-128)`), so the conversion runs to completion and the app keeps running until a second Quit. Make a quit during conversion stop the worker (rollback, file stays at 7, reopens next launch, per P9.8) and then quit. Likely cause: the `modal: true, closable: false` preparing window in `convertOnOpenDialogs.ts`. Also quiet the expected `sql:proxy` "a file is being opened" handler errors (log once at debug level, not as errors). Verify with automated tests only; the packaged re-run needs the owner's go-ahead.
+
+### P9.10: Convert to range-aligned timelines, then enforce C-11
+
+- Owner: unassigned
+- Status: open
+- PR: none
+- Parallel: no
+- Depends on: P8.10
+
+TODO from the owner (C-11). The converter still writes one show-wide timeline holding a differently ranged transition per page, so converted shows (and every test built through `applyTimelineModeToFile`) break the rule that a transition spans its timeline.
+
+- Plan one timeline per page move in `timeline/convert/planPageConversion.ts` and write it in `convertPagesInTransaction.ts`; drop the converter's guard bypass (`TODO(P9.10)`).
+- Check `addMarchersToTimelineInTransaction`, the page ripple and P7.3's page moves against the new shape, and remove the legacy branches marked `TODO(P9.10)` (refusals for multi-range timelines, shape-clip gap splitting).
+- Add an `E-T1` row to `timeline_commit_violations` (`triggers.ts`) for a transition whose range differs from its timeline's. It must be commit-time: shift, ripple and R-E1 pass through unequal intermediate states (D-17).
+- Re-run conversion equality (P6.6) and the convert-on-open tests.
 
 ## Exit gate
 
