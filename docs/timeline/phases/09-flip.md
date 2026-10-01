@@ -99,7 +99,7 @@ User-facing docs in `apps/website` and release notes.
 ### P9.8: Convert off the main process
 
 - Owner: timeline-worker (timeline/p9-8-convert-worker)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/44
 - Parallel: yes
 - Depends on: P9.3
@@ -458,3 +458,30 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **For P9.7 (release notes):** name the minimum version. Older releases that open a converted file get generic errors when dragging, creating, or deleting a page.
 - **Next:** P9.8 (PR #44) checks are in progress.
 - **Blockers:** none.
+
+### 2026-10-01 · lead · P9.8, combined base check
+
+- **Done:** reviewed PR #44 and squash-merged it at head 4cdc7cfb.
+  - The review found no data-safety bugs.
+  - **Fixes made in review:**
+    - the open reconnects to its own path, not to `DB_PATH`;
+    - Close File and the audio handlers wait for an open in progress;
+    - the outcome is read back from the file (version plus marker);
+    - progress is throttled;
+    - quit handling;
+    - the timer test is more robust;
+    - the generated `vite.config.mjs` and `.d.mts` that shadowed `vite.config.mts` are removed.
+  - The PR also fixed a P9.3 bug: history-trigger creation went through the renderer proxy in the main process, so every real-app conversion would have rolled back.
+- **Combined check (lead, `timeline-try-2` at fe4b032e, with #44 and #45):**
+  - `pnpm install`: pass.
+  - `tsc --noEmit`: pass.
+  - `pnpm --dir apps/desktop run build`: pass.
+  - `test:focused electron`: 21 files, 368 tests passed.
+  - Focused `test:history src/db-functions/__test__/`: 31 files, 663 tests passed.
+  - `pnpm --dir apps/desktop run test`: 174 files, 2,478 tests passed.
+  - `test:timeline`: 174 files, 2,432 tests passed, 0 failed.
+  - Skipped by policy: full `test:history` and e2e. `build:electron` not run.
+- **Next:** P9.4 prerequisites need a person:
+  - a packaged smoke run (`build:electron`, then open a page-era show with `OPENMARCH_CONVERT_ON_OPEN=1`);
+  - the owner's manual pass on a copy of a real show.
+- **Blockers:** P9.4 waits on those.
