@@ -89,8 +89,8 @@ Copy and paste of positions.
 
 ### P7.7: Coordinate sheets and PDF
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-coordinate-sheets)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
