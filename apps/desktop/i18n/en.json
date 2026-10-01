@@ -566,6 +566,7 @@
             "applyCoordinates": "Apply coordinates",
             "cancelUpdates": "Cancel",
             "createShape": "Create Shape",
+            "createShapeTimeline": "Create Shape makes a page shape, which timeline mode doesn't use. Apply the coordinates to move these marchers onto the line, or draw a shape in the Shapes part of the Timeline section.",
             "drawLine": "Draw a line."
         },
         "marcher": {
@@ -768,6 +769,8 @@
             "shapes": {
                 "title": "Shapes",
                 "help": "Shapes are formations in field coordinates, with no time. A transition moves its marchers into one. A new shape is drawn through the selected marchers where they stand at the selected page, or in the middle of the field when nobody is selected.",
+                "canvasHelp": "The picked shape is drawn on the field. Drag a round handle to reshape it, or the square handle to move it. Each drag is saved as one change when you let go.",
+                "dragDropped": "That drag wasn't saved, because another shape change was still being saved. Drag it again.",
                 "newKind": "Kind of new shape",
                 "create": "New shape",
                 "none": "No shapes yet.",

@@ -43,6 +43,11 @@ import {
     TimelineNotReadyError,
 } from "@/timeline/timelineCoordinateWrites";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import {
+    useTimelineShapeCanvasStore,
+    type ShapeCommitResult,
+} from "@/timeline/timelineShapeCanvas";
+import { toast } from "sonner";
 import { Field, Help, NumberField } from "./TimelineTransitionEditor";
 import type { TimelineInspectorStringKey } from "./timelineInspectorStrings";
 
@@ -739,6 +744,41 @@ export function TimelineShapesEditor({
         },
         [run, target, frame],
     );
+    // The canvas draws the picked shape with handles; a drag commits through `run` (P7.11).
+    // The commit says synchronously whether an edit started, so the canvas can put back a drag
+    // that saved nothing.
+    const commitDrag = useCallback(
+        (shape: ShapeRow): ShapeCommitResult => {
+            if (!target) return "unchanged";
+            if (
+                inFlight.current ||
+                (plannedAt.current !== null && plannedAt.current >= version)
+            ) {
+                toast.warning(t("inspector.timeline.shapes.dragDropped"));
+                return "busy";
+            }
+            // Drawn from an older kind: plan nothing rather than a geometry it can't take
+            if (shape.kind !== target.shape.kind) return "unchanged";
+            const plan = planShapeEdit(
+                target,
+                { kind: "geometry", geometry: shape.geometry },
+                frame,
+            );
+            if (plan === null) return "unchanged";
+            void run(async () => plan);
+            return "started";
+        },
+        [target, version, frame, run, t],
+    );
+    const publish = useTimelineShapeCanvasStore((s) => s.set);
+    useEffect(() => {
+        publish({ target, pending, commit: target ? commitDrag : null });
+    }, [publish, target, pending, commitDrag]);
+    useEffect(
+        () => () => publish({ target: null, pending: false, commit: null }),
+        [publish],
+    );
+
     const create = () =>
         void run(async () =>
             planNewShape(
@@ -795,6 +835,7 @@ export function TimelineShapesEditor({
             ) : (
                 <Select
                     value={target ? String(target.id) : ""}
+                    disabled={pending}
                     onValueChange={(value) => {
                         if (value) setPicked(Number(value));
                     }}
@@ -810,6 +851,11 @@ export function TimelineShapesEditor({
                         ))}
                     </SelectContent>
                 </Select>
+            )}
+            {target && (
+                <Help testId="timeline-shape-canvas-help">
+                    {t("inspector.timeline.shapes.canvasHelp")}
+                </Help>
             )}
             {target && (
                 <ShapeEditor
