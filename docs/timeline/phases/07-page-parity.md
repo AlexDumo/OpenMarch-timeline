@@ -90,7 +90,7 @@ Copy and paste of positions.
 ### P7.7: Coordinate sheets and PDF
 
 - Owner: timeline-worker (timeline/p7-coordinate-sheets)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/35
 - Parallel: yes
 - Depends on: P7.1
@@ -1082,3 +1082,22 @@ Facts that change how to read the PR #14 note above:
 - **Next:** tests (planner, overlay, hook, db refusal under `test:history`), inventory ticks, `ui.md` notes.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p7-shapes`; `pnpm install`; build the desktop's dependencies; write `src/timeline/__test__/timelineShapeCanvas.test.ts`, an overlay and hook test, and `src/db-functions/__test__/shapePagesTimelineMode.test.ts`.
+
+### 2026-10-01 · lead · P7.7
+
+- **Done:** reviewed PR #35 and squash-merged it at head a30857a3.
+  - **IPC:** no contract change. The lead confirmed that nothing references `export-utility-process.ts`, so no ADR is needed. The file is logged for Phase 10 cleanup.
+  - **Review fixes:**
+    - The export now validates the snapshot against the React lists, so a skewed export stops with a retry message.
+    - Per-marcher drill charts stay aligned when a marcher is missing (page mode too).
+    - The close-time preview samples only when the resolver is `ready` and catches errors.
+    - A settings parse failure falls back to page mode.
+    - Exact rounding is asserted.
+- **Checks (lead, on a30857a3):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history` on `src/db-functions/__test__/` and `src/components/exporting`: 38 files, 733 tests passed.
+  - `pnpm --dir apps/desktop run test`: 147 files, 2,112 tests passed, no errors.
+  - The head predates #34. The only shared file is `en.json`, and the merged file parses as valid JSON.
+  - Skipped by policy: full `test:history` and e2e.
+- **Next:** P7.11 (in progress) is the last open Phase 7 package. Three new export strings are English-only.
+- **Blockers:** none.
