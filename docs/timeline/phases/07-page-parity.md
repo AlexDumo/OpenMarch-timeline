@@ -303,8 +303,8 @@ Facts that change how to read the PR #14 note above:
 
 - [x] `src/global/classes/canvasObjects/OpenMarchCanvas.ts` ~1253 to 1303 (`renderPathVisual`), ~1307 to 1455 (`renderPathVisuals` reads the previous, current and next page rows), ~1457 to 1476 (hide), with `MarcherVisualGroup.ts`, `Pathway.ts`, `Midpoint.ts`, `Endpoint.ts` and `stepSizeWarning.ts` in `src/global/classes/` · R · P5 left these drawing from page data, so they can disagree with the drawn marchers (P7.10, PR #33: `renderTimelinePathVisuals` draws `TimelinePathway` polylines sampled from the resolver between page end beats; midpoint = midset; straight lines hidden)
 - [x] `src/components/canvas/Canvas.tsx` ~70 to 78, ~258 to 295, ~402 to 450 and `src/components/canvas/hooks/canvasListeners.movement.ts` ~32 to 107 · R · path render effects fed by page queries · not handled (P7.10: `useTimelinePathRender` replaces the page path effect once the resolver draws; the drag redraw is skipped then; the queries stay for the fallback, per P7.13)
-- [x] `src/components/canvas/listeners/LineListeners.ts` ~75 to 262 · R and preview-only draw of temporary pathways from marchers to the line · not handled (the apply step is P7.2) (P7.10: positions already come from the drawn marchers; the marcher id now comes from the canvas marcher, since a resolver-drawn `coordinate` has no `marcher_id`)
-- [x] `src/global/classes/StepSize.ts` ~143 to 240 and `src/components/inspector/MarcherEditor.tsx` ~502 to 562, ~658 to 715 · R · step sizes between the previous and current page rows · not handled · compute step size between page end beats from the resolver (P7.10: `useTimelineStepSizes`, length along the resolver path over the page's counts; `StepSize.fromDistance`)
+- [x] `src/components/canvas/listeners/LineListeners.ts` ~75 to 262 · R and preview-only draw of temporary pathways from marchers to the line · not handled (the apply step is P7.2) (P7.10: positions already come from the drawn marchers; the marcher id now comes from the canvas marcher, since a resolver-drawn `coordinate` has no `marcher_id`. The preview paths stay straight from each marcher's current position to its new spot on the line: they preview a destination change, not a walked path)
+- [x] `src/global/classes/StepSize.ts` ~143 to 240 and `src/components/inspector/MarcherEditor.tsx` ~502 to 562, ~658 to 715 · R · step sizes between the previous and current page rows · not handled · compute step size between page end beats from the resolver (P7.10: `useTimelineStepSizes`; after the PR #33 review the step size is the stride of the fastest moving stretch, the largest length per count over the non-hold spans clipped to the page; `StepSize.fromDistance`. The inspector keeps page mode's values until the resolver is ready)
 - [x] `src/global/classes/CollisionDetection.ts` ~26 to 70, ~149 to 153, ~215 to 300, `src/stores/CollisionStore.ts` ~11 to 45, `src/hooks/useAnimation.ts` ~38, ~140 to 164, `src/components/canvas/Canvas.tsx` ~604 to 640 (markers), `src/components/toolbar/Toolbar.tsx` ~19, `src/components/toolbar/tabs/CollisionsTab.tsx` ~13 · R · collisions from page-mode timelines and the page-row hash; currently not computed in either mode (see the facts above) · decide whether to revive on the resolver or leave dormant (P7.10: left dormant in both modes; nothing feeds the store in timeline mode. Reviving it is a feature, not parity; it should sample `positionsAt` per beat)
 - [x] `src/hooks/queries/usePathways.ts` ~48 to 290 (reads at ~81 and ~90; creates and updates `pathways` and sets `marcher_pages.path_data_id` at ~147 to 154; deletes at ~200), `src/db-functions/pathways.ts` ~16 to 90 (`updateEndPoint`, `findPageIdsForPathway`), `src/components/canvas/hooks/editablePath.tsx` ~14 to 45, `src/global/classes/canvasObjects/EditablePath.ts` ~15 to 125 · W `pathways` and `marcher_pages` · dormant (no reachable UI) · decide: leave frozen until Phase 10, or gate off in timeline mode. C-8: curved paths are a spec decision for Phase 9, not here (P7.10: gated off; `useEditablePath` writes nothing in timeline mode, reading the flag when it runs; page-era data left frozen until Phase 10)
 - [x] `midsets` table · no reader or writer · confirm there is no work and close (mocks only) (P7.10: confirmed, no reader or writer outside mocks)
@@ -950,4 +950,42 @@ Facts that change how to read the PR #14 note above:
   - This run is also the combined check of #30 + #31 owed from P7.12.
   - Skipped by policy: full `test:history` and e2e.
 - **Next:** P7.10 fixes (PR #33), P8.2 in progress; P7.11 and P7.7 remain.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-pathways) · P7.10 review fixes checkpoint
+
+- **Done (lead review of PR #33):** merged `timeline-try-2`, which now has #30 and #31, with a normal merge commit (`adba1f40`). Review fixes are in `88b764ed`, pushed with no force-push.
+  - **Step size:** the stride of the fastest moving stretch (below).
+  - **Cost:**
+    - Paths use 3 probes per piece instead of the export's 7, and the 0.5 probe is reused as the bisection point.
+    - Samples are kept per resolver version and page pair.
+    - A side that can't show isn't sampled (`canShowPath`).
+    - Nothing is sampled or drawn while playing.
+    - Step sizes reuse the drawn path's 0.25 tolerance; the 0.01 tolerance is gone.
+    - Budget test: 300 marchers on arcs about 10 steps across take about 180 positions per marcher, bounded at 250. Before this change it was 426.
+  - **Zig-zags:** a moving span is cut at every whole count when any count leaves its chord.
+  - **Drawing:** the curved path is stacked under the dots, at the straight line's index, and offset by half a grid line like the dots. Its bounds are computed after the warning style sets the stroke width.
+  - **Inspector:** step sizes come from the resolver only once it is ready (`active`). Until then the inspector keeps page mode's values.
+  - **Editable path:** a failed settings read counts as page mode, so a page-mode write is never dropped.
+  - **New tests:**
+    - in `timelinePathStride.test.ts`: the stride with a hold, the warning, the midpoint at a hold, page-mode equality, the first and last page shapes, a corner where a steal takes over mid-page, a zig-zag, the budget, warning styling and the forced next path, and the line tool's marcher ids;
+    - in the hook tests: playback, side skipping, memoization and the inspector fallback;
+    - in `editablePath.test.tsx`: the failed settings read.
+- **Decisions (P7.10, from the lead review, recorded for the phase):**
+  - **Step size in timeline mode is the stride of the marcher's fastest moving stretch within the page:** the largest length per count over the non-hold spans clipped to the page.
+    - Holds, moves that end mid-page and breakaway holds don't dilute it.
+    - The canvas warning and the inspector both use it.
+    - For a straight move over the whole page it equals page mode's value.
+    - Note: at the default 45-inch threshold (0.5-inch tolerance), 8 steps in 4 counts is exactly 45 inches and doesn't warn. The warning test therefore uses 9 steps.
+  - **Collisions stay dormant in both modes.**
+  - **`midsets`:** no reader or writer outside mocks.
+  - **Line tool preview paths stay straight** from each marcher's current position to its new spot. They preview a destination change, not a walked path.
+  - The inventory notes for step size and the line tool are updated to match. All 7 P7.10 items were already ticked.
+- **Checks:**
+  - `tsc --noEmit`: clean, after the merge.
+  - The 4 P7.10 test files: 44 passed. The keyframe tests also pass (70 tests across the 5 files).
+  - `pnpm --dir apps/desktop run test`, run once at `88b764ed`: 142 files passed, 7 skipped; 2,067 tests passed, no errors. A focused run of 5 test files overlapped with it from the same directory; none of them opens a test database.
+  - Pre-commit hook (cspell, eslint, prettier): passed. eslint on the changed files shows only warnings that were already on the base.
+  - Skipped by policy: the full `test:history` suite and Playwright. No db-functions changed.
+- **Next:** the lead re-reviews PR #33 (body updated).
 - **Blockers:** none.
