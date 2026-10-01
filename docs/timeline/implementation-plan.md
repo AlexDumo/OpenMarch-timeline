@@ -106,6 +106,18 @@ Phase 0. Record outcomes in the ADR (`docs/adr/0001-timeline-motion-model.md`).
   editable curve is lost. See ADR 0001. P6.6 verifies conversion equality on
   real shows.
 
+- **C-9: Recognizing a converted file at version 7.** Releases without the
+  version guard reset `user_version` to 7, so the version alone can't show
+  that a file was converted. **Decided (lead, 2026-10-01, P9.3):** the
+  conversion transaction, and the creation of a new file with convert on open
+  on, write `timelineConvertedAt` (an ISO time) into the workspace settings
+  JSON. A version-7 file with that key always gets the "saved by an older
+  version" warning; one with timeline rows and neither the key nor a
+  conversion backup is a dev-flag file and opens silently. An older release
+  that saves the workspace settings drops unknown keys, so the backup next to
+  the file remains a second signal. To be added to ADR 0001 §6 (text in the
+  Phase 9 log).
+
 ## 3. Phases
 
 | Phase                                  | Title                                       | Depends on |

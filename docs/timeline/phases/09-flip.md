@@ -271,3 +271,37 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run either.
 - **Next:** re-review and merge by the lead.
 - **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p9-3-convert-on-open) · P9.3
+
+- **Done:** second-review fixes for PR https://github.com/AlexDumo/OpenMarch-timeline/pull/42 in commit 08f73fc0 (follow-up commit, no force-push).
+  1. **Renderer-SQL suspension:**
+     - Each suspension now has a token, and only its own open's token lifts it.
+     - With the gate on, the suspension covers the whole open of an existing file.
+     - `resumeSqlProxyAfterReload` lives in `electron/main/openShow.ts` and is tested, including A's resume arriving during B's preparing wait.
+     - The conversion connection has a 5 s `busy_timeout`.
+  2. **Conversion marker:** `timelineConvertedAt` in the workspace settings, plus the zod field so the renderer keeps it. See C-9 in `implementation-plan.md` and the ADR text below.
+  3. **Preparing window:** it moved to `electron/main/preparingWindow.ts` and is destroyed when showing it fails. It is tested with a fake window.
+  4. **Import chain:**
+     - `src/timeline/timelineRows.ts` now imports the schema module instead of the renderer db.
+     - `electron/main/__test__/mainBundle.test.ts` bundles `index.ts` with Vite. It fails if the startup chunks hold a renderer module; checked by reverting the fix.
+  5. **Backup on `already-converted`:** an open that finds the file already converted deletes the backup it just wrote.
+  6. **Fresh vs converted:** a converted show with only page 0 drops its empty timeline, so it matches a new gate-on file. An equivalence test covers it.
+  7. **Connection leak:** `openShowDatabase` closes its connection when an open throws.
+  8. **Repeated opens:** `openOnce` returns the pending open's result for the same path. The preload `repairDatabase` is typed as `Promise<string | null>`.
+- **ADR 0001 §6 addition (for the lead to apply; `coord.sh` doesn't stage `docs/adr`):**
+  > - **Conversion marker (P9.3, C-9).** The conversion transaction, and the creation of a new file while convert on open is on, write `timelineConvertedAt` (an ISO time) into the workspace settings JSON. A version-7 file with the marker was converted and then saved by a release without the version guard: the app warns and offers the backup instead of converting again, even when no backup is found. A version-7 file with timeline rows but neither the marker nor a conversion backup was made with the dev flag and opens without a warning. An older release that saves the workspace settings drops unknown keys, so the backup next to the file is kept as a second signal.
+- **Checks:**
+  - Test files, one vitest process each:
+    - `convertOnOpen`: 37 passed.
+    - `openShow` with `openShowImports`: 18 passed.
+    - `preparingWindow`: 4 passed.
+    - `mainBundle`: 1 passed.
+  - `tsc --noEmit`: clean.
+  - eslint, prettier and cspell: clean.
+- **Next:**
+  - Rerun `vite build` and check the main bundle.
+  - Run `test:focused electron` and the desktop suite (alone).
+  - Update the PR body.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p9-3-convert-on-open` (08f73fc0). From `apps/desktop`, run `pnpm exec vite build`, then `pnpm run test:focused electron`, then `pnpm run test`.
