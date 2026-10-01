@@ -92,8 +92,8 @@ Verify that a converted show plays back like the original. (1) A purpose-built t
 ### P6.7: Glide across missing rows
 
 - Owner: timeline-worker (timeline/p6-gap-glide)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/43
 - Parallel: yes
 - Depends on: P6.5
 
@@ -286,3 +286,33 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** tsc, lint, mutation check, focused `test:history`, the corpus runner, then the PR.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p6-gap-glide` (baf75054), run `pnpm install` and the workspace build, then the checks above.
+
+### 2026-10-01 · timeline-worker (timeline/p6-gap-glide) · P6.7
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/43 (commit d0193578, squashed on `timeline-try-2`).
+  - `planPageConversion.ts`: a marcher with no row on a middle page gets a slot there, linear in beats between its neighboring rows (C-7). When the next row has a pathway, the point is on it (same arithmetic as `getCoordinatesAtTime`, `interpolateGap`). It still holds after its last row and, as before, waits at its home before its first row. A page with beats but no rows now gets a transition when marchers glide across it.
+  - Loss report: the new `PageLossReport.interpolated` lists the gliders and the pathway they follow. `missingMarchers` keeps its meaning, and the console lines say "glide" or "hold".
+  - `writePageConversion.ts` reads the pathway positions and the `pathways` table.
+  - The generated show adds a two-page gap after the curved-shape page and across the uneven page 4, a gap before a pathway row, and a gap on the last page.
+  - The harness gains a `gapEnd` bucket and `maxMsDifferenceMissingRow` (reported only). Pathway gaps go to the `pathway` bucket.
+  - The `missingRow` expectation flipped to < 1e-9. The corpus runner also requires `missingRow` and `gapEnd` < 1e-9.
+- **Checks:**
+  - `pnpm install` and the workspace build: pass.
+  - `tsc --noEmit`: pass.
+  - `test:focused` on `conversionEquality`: passed.
+    - `missingRow`: 30 samples, max 1.1e-13.
+    - `gapEnd`: 5 samples, max 0.
+    - Page ends: 147 of 147 exact.
+    - Gap millisecond difference: about 26 px, reported only.
+  - `test:focused` on `planPageConversion` and `pageConversion`: 24 passed.
+  - `test:focused src/timeline`: 32 files passed, 1 skipped; 456 tests passed.
+  - Focused `test:history` on `conversionEquality`, `pageConversion`, `planPageConversion` and `conversionCorpus`: 3 passed, 1 skipped; 25 tests passed.
+  - Mutation check: with glides disabled, the equality test fails (271 px).
+  - Corpus runner on show A and show B: passed, and both originals were unchanged.
+    - Same numbers as P6.6: page ends 3,080 of 3,080 and 2,280 of 2,280 exact, inside max 0.
+    - No missing rows in either show, and 0 interpolated rows.
+  - eslint, prettier and cspell on the changed files: clean.
+  - Not run (policy): the full `test:history` suite, e2e and `build:electron`.
+- **Exit gate:** nothing ticked. "Three real shows" is still open: the corpus re-run used the same two shows.
+- **Next:** review and merge by the lead. The handoff note's follow-up (1) says "linear in time"; P6.7 implements linear in beats (C-7), so the phase lead may want to update that note.
+- **Blockers:** none.
