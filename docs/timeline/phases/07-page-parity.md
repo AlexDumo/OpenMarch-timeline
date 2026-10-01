@@ -89,9 +89,9 @@ Copy and paste of positions.
 
 ### P7.7: Coordinate sheets and PDF
 
-- Owner: unassigned
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p7-coordinate-sheets)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/35
 - Parallel: yes
 - Depends on: P7.1
 
@@ -120,7 +120,7 @@ Video export and `exportAppearances` sample the resolver.
 ### P7.10: Pathways, midpoints, step size and collisions in timeline mode
 
 - Owner: timeline-worker (timeline/p7-pathways)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/33
 - Parallel: yes
 - Depends on: P7.1
@@ -274,16 +274,16 @@ Facts that change how to read the PR #14 note above:
 
 #### P7.7 Coordinate sheets, drill charts and PDF
 
-- [ ] `src/components/exporting/ExportCoordinatesModal.tsx` ~110 to 450 (coordinate sheet export; reads all marcher pages at ~122, builds rows at ~240 to 323, calls the PDF export at ~357) · R · not handled · sample the resolver at each page's end beat
-- [ ] `src/components/exporting/MarcherCoordinateSheet.tsx` ~52 to 53, ~182 to 233, ~528, ~860 · R (per-marcher sheet preview and print) · not handled
-- [ ] `src/components/exporting/CoordinateSheetTemplates.tsx` ~13 to 48, ~117 to 130, ~165 to 305 · R (templates take page rows) · not handled · change the row type to a plain position
-- [ ] `electron/main/services/export-utility-process.ts` ~185 (reads `marcher_pages` straight from the file), ~20 to 131, ~250 · R · PDF layout in a separate process · not handled · the resolver lives in the renderer, so either pass sampled rows in or run the resolver in that process (decide in P7.7)
-- [ ] `electron/main/index.ts` ~449 and `electron/preload/index.ts` ~238 to 261 (the PDF export and per-marcher document contracts) · IPC · changing the payload is an IPC contract change, so log it as a decision first
-- [ ] `src/components/exporting/ExportCoordinatesModal.tsx` ~703 to 1000 (drill chart export; marcher pages at ~706, appearances at ~741, `generateDrillChartExportSVGs` at ~913) · R · not handled
-- [ ] `src/components/exporting/utils/svg-generator.ts` ~80 to 430 (per-page SVGs read the current, previous and next page rows to draw positions and pathways) · R · not handled
-- [ ] `src/utilities/SvgPreviewHandler.tsx` ~32 to 36, ~66, ~129 to 136 (launch page preview SVGs on close) · R · not handled
-- [ ] `src/global/classes/MarcherPage.ts` ~41 to 90 and `src/global/classes/MarcherPageIndex.ts` · R helpers (lookup by marcher and page, nested maps) used by the exports above · not handled · replace or adapt with a position-by-page map built from the resolver
-- [ ] `src/hooks/queries/useMarcherPages.ts` ~58 to 125 (`allMarcherPagesQueryOptions` and the by-page and by-marcher queries) and `src/db-functions/marcherPage.ts` ~411 to 470 · R · the page-era query layer all of the above use · stays until Phase 10; add a sibling query that samples the resolver
+- [x] `src/components/exporting/ExportCoordinatesModal.tsx` ~110 to 450 (coordinate sheet export; reads all marcher pages at ~122, builds rows at ~240 to 323, calls the PDF export at ~357) · R · not handled · sample the resolver at each page's end beat (P7.7, PR #35: `buildCoordinateSheets` with `readTimelineExportPositions`, the resolver at each page end beat)
+- [x] `src/components/exporting/MarcherCoordinateSheet.tsx` ~52 to 53, ~182 to 233, ~528, ~860 · R (per-marcher sheet preview and print) · not handled (P7.7: rows are a plain `PagePosition`; the modal's preview always shows example data)
+- [x] `src/components/exporting/CoordinateSheetTemplates.tsx` ~13 to 48, ~117 to 130, ~165 to 305 · R (templates take page rows) · not handled · change the row type to a plain position (P7.7: row type is `PagePosition`; the file has no importer in the app)
+- [x] `electron/main/services/export-utility-process.ts` ~185 (reads `marcher_pages` straight from the file), ~20 to 131, ~250 · R · PDF layout in a separate process · not handled · the resolver lives in the renderer, so either pass sampled rows in or run the resolver in that process (decide in P7.7) (P7.7: no change; the file is unreachable: nothing imports or forks it and it is not a Vite entry. Follow-up: delete it)
+- [x] `electron/main/index.ts` ~449 and `electron/preload/index.ts` ~238 to 261 (the PDF export and per-marcher document contracts) · IPC · changing the payload is an IPC contract change, so log it as a decision first (P7.7: no change; `export:pdf` and `export:generateDocForMarcher` take HTML and SVG rendered in the renderer, so no contract change)
+- [x] `src/components/exporting/ExportCoordinatesModal.tsx` ~703 to 1000 (drill chart export; marcher pages at ~706, appearances at ~741, `generateDrillChartExportSVGs` at ~913) · R · not handled (P7.7: the drill chart export passes the sampled map in timeline mode)
+- [x] `src/components/exporting/utils/svg-generator.ts` ~80 to 430 (per-page SVGs read the current, previous and next page rows to draw positions and pathways) · R · not handled (P7.7: takes a `PagePositionMap`)
+- [x] `src/utilities/SvgPreviewHandler.tsx` ~32 to 36, ~66, ~129 to 136 (launch page preview SVGs on close) · R · not handled (P7.7: samples the store resolver for the first page in timeline mode)
+- [x] `src/global/classes/MarcherPage.ts` ~41 to 90 and `src/global/classes/MarcherPageIndex.ts` · R helpers (lookup by marcher and page, nested maps) used by the exports above · not handled · replace or adapt with a position-by-page map built from the resolver (P7.7: the exports use `PagePositionMap`, built from the resolver in timeline mode; page mode still uses these helpers)
+- [x] `src/hooks/queries/useMarcherPages.ts` ~58 to 125 (`allMarcherPagesQueryOptions` and the by-page and by-marcher queries) and `src/db-functions/marcherPage.ts` ~411 to 470 · R · the page-era query layer all of the above use · stays until Phase 10; add a sibling query that samples the resolver (P7.7: kept for page mode until Phase 10; instead of a sibling query, the exports read once under the write lock with `readTimelineExportPositions`, as P7.12 does)
 
 #### P7.8 Video export and appearances
 
@@ -303,8 +303,8 @@ Facts that change how to read the PR #14 note above:
 
 - [x] `src/global/classes/canvasObjects/OpenMarchCanvas.ts` ~1253 to 1303 (`renderPathVisual`), ~1307 to 1455 (`renderPathVisuals` reads the previous, current and next page rows), ~1457 to 1476 (hide), with `MarcherVisualGroup.ts`, `Pathway.ts`, `Midpoint.ts`, `Endpoint.ts` and `stepSizeWarning.ts` in `src/global/classes/` · R · P5 left these drawing from page data, so they can disagree with the drawn marchers (P7.10, PR #33: `renderTimelinePathVisuals` draws `TimelinePathway` polylines sampled from the resolver between page end beats; midpoint = midset; straight lines hidden)
 - [x] `src/components/canvas/Canvas.tsx` ~70 to 78, ~258 to 295, ~402 to 450 and `src/components/canvas/hooks/canvasListeners.movement.ts` ~32 to 107 · R · path render effects fed by page queries · not handled (P7.10: `useTimelinePathRender` replaces the page path effect once the resolver draws; the drag redraw is skipped then; the queries stay for the fallback, per P7.13)
-- [x] `src/components/canvas/listeners/LineListeners.ts` ~75 to 262 · R and preview-only draw of temporary pathways from marchers to the line · not handled (the apply step is P7.2) (P7.10: positions already come from the drawn marchers; the marcher id now comes from the canvas marcher, since a resolver-drawn `coordinate` has no `marcher_id`)
-- [x] `src/global/classes/StepSize.ts` ~143 to 240 and `src/components/inspector/MarcherEditor.tsx` ~502 to 562, ~658 to 715 · R · step sizes between the previous and current page rows · not handled · compute step size between page end beats from the resolver (P7.10: `useTimelineStepSizes`, length along the resolver path over the page's counts; `StepSize.fromDistance`)
+- [x] `src/components/canvas/listeners/LineListeners.ts` ~75 to 262 · R and preview-only draw of temporary pathways from marchers to the line · not handled (the apply step is P7.2) (P7.10: positions already come from the drawn marchers; the marcher id now comes from the canvas marcher, since a resolver-drawn `coordinate` has no `marcher_id`. The preview paths stay straight from each marcher's current position to its new spot on the line: they preview a destination change, not a walked path)
+- [x] `src/global/classes/StepSize.ts` ~143 to 240 and `src/components/inspector/MarcherEditor.tsx` ~502 to 562, ~658 to 715 · R · step sizes between the previous and current page rows · not handled · compute step size between page end beats from the resolver (P7.10: `useTimelineStepSizes`; after the PR #33 review the step size is the stride of the fastest moving stretch, the largest length per count over the non-hold spans clipped to the page; `StepSize.fromDistance`. The inspector keeps page mode's values until the resolver is ready)
 - [x] `src/global/classes/CollisionDetection.ts` ~26 to 70, ~149 to 153, ~215 to 300, `src/stores/CollisionStore.ts` ~11 to 45, `src/hooks/useAnimation.ts` ~38, ~140 to 164, `src/components/canvas/Canvas.tsx` ~604 to 640 (markers), `src/components/toolbar/Toolbar.tsx` ~19, `src/components/toolbar/tabs/CollisionsTab.tsx` ~13 · R · collisions from page-mode timelines and the page-row hash; currently not computed in either mode (see the facts above) · decide whether to revive on the resolver or leave dormant (P7.10: left dormant in both modes; nothing feeds the store in timeline mode. Reviving it is a feature, not parity; it should sample `positionsAt` per beat)
 - [x] `src/hooks/queries/usePathways.ts` ~48 to 290 (reads at ~81 and ~90; creates and updates `pathways` and sets `marcher_pages.path_data_id` at ~147 to 154; deletes at ~200), `src/db-functions/pathways.ts` ~16 to 90 (`updateEndPoint`, `findPageIdsForPathway`), `src/components/canvas/hooks/editablePath.tsx` ~14 to 45, `src/global/classes/canvasObjects/EditablePath.ts` ~15 to 125 · W `pathways` and `marcher_pages` · dormant (no reachable UI) · decide: leave frozen until Phase 10, or gate off in timeline mode. C-8: curved paths are a spec decision for Phase 9, not here (P7.10: gated off; `useEditablePath` writes nothing in timeline mode, reading the flag when it runs; page-era data left frozen until Phase 10)
 - [x] `midsets` table · no reader or writer · confirm there is no work and close (mocks only) (P7.10: confirmed, no reader or writer outside mocks)
@@ -950,4 +950,90 @@ Facts that change how to read the PR #14 note above:
   - This run is also the combined check of #30 + #31 owed from P7.12.
   - Skipped by policy: full `test:history` and e2e.
 - **Next:** P7.10 fixes (PR #33), P8.2 in progress; P7.11 and P7.7 remain.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-pathways) · P7.10 review fixes checkpoint
+
+- **Done (lead review of PR #33):** merged `timeline-try-2`, which now has #30 and #31, with a normal merge commit (`adba1f40`). Review fixes are in `88b764ed`, pushed with no force-push.
+  - **Step size:** the stride of the fastest moving stretch (below).
+  - **Cost:**
+    - Paths use 3 probes per piece instead of the export's 7, and the 0.5 probe is reused as the bisection point.
+    - Samples are kept per resolver version and page pair.
+    - A side that can't show isn't sampled (`canShowPath`).
+    - Nothing is sampled or drawn while playing.
+    - Step sizes reuse the drawn path's 0.25 tolerance; the 0.01 tolerance is gone.
+    - Budget test: 300 marchers on arcs about 10 steps across take about 180 positions per marcher, bounded at 250. Before this change it was 426.
+  - **Zig-zags:** a moving span is cut at every whole count when any count leaves its chord.
+  - **Drawing:** the curved path is stacked under the dots, at the straight line's index, and offset by half a grid line like the dots. Its bounds are computed after the warning style sets the stroke width.
+  - **Inspector:** step sizes come from the resolver only once it is ready (`active`). Until then the inspector keeps page mode's values.
+  - **Editable path:** a failed settings read counts as page mode, so a page-mode write is never dropped.
+  - **New tests:**
+    - in `timelinePathStride.test.ts`: the stride with a hold, the warning, the midpoint at a hold, page-mode equality, the first and last page shapes, a corner where a steal takes over mid-page, a zig-zag, the budget, warning styling and the forced next path, and the line tool's marcher ids;
+    - in the hook tests: playback, side skipping, memoization and the inspector fallback;
+    - in `editablePath.test.tsx`: the failed settings read.
+- **Decisions (P7.10, from the lead review, recorded for the phase):**
+  - **Step size in timeline mode is the stride of the marcher's fastest moving stretch within the page:** the largest length per count over the non-hold spans clipped to the page.
+    - Holds, moves that end mid-page and breakaway holds don't dilute it.
+    - The canvas warning and the inspector both use it.
+    - For a straight move over the whole page it equals page mode's value.
+    - Note: at the default 45-inch threshold (0.5-inch tolerance), 8 steps in 4 counts is exactly 45 inches and doesn't warn. The warning test therefore uses 9 steps.
+  - **Collisions stay dormant in both modes.**
+  - **`midsets`:** no reader or writer outside mocks.
+  - **Line tool preview paths stay straight** from each marcher's current position to its new spot. They preview a destination change, not a walked path.
+  - The inventory notes for step size and the line tool are updated to match. All 7 P7.10 items were already ticked.
+- **Checks:**
+  - `tsc --noEmit`: clean, after the merge.
+  - The 4 P7.10 test files: 44 passed. The keyframe tests also pass (70 tests across the 5 files).
+  - `pnpm --dir apps/desktop run test`, run once at `88b764ed`: 142 files passed, 7 skipped; 2,067 tests passed, no errors. A focused run of 5 test files overlapped with it from the same directory; none of them opens a test database.
+  - Pre-commit hook (cspell, eslint, prettier): passed. eslint on the changed files shows only warnings that were already on the base.
+  - Skipped by policy: the full `test:history` suite and Playwright. No db-functions changed.
+- **Next:** the lead re-reviews PR #33 (body updated).
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-coordinate-sheets) · P7.7 checkpoint
+
+- **Done:** commit `257aed4a` on `timeline/p7-coordinate-sheets` (wip). New `src/components/exporting/utils/exportPagePositions.ts`: `readTimelineExportPositions(db)` returns `null` in page mode and, in timeline mode, reads the flag, the timeline tables and the pages under one `withTimelineWriteLock` (P7.12's `readTimelinePageSnapshot`), then samples with `sampleTimelinePagePositions` into a `PagePositionMap` (same shape as `MarcherPageMap`). Coordinate sheet building moved to `utils/coordinateSheets.tsx` (`buildCoordinateSheets`); the sheet export and the drill chart export use the sampled map in timeline mode and the `marcher_pages` query in page mode. `svg-generator.ts` and the sheet components take a plain position type (`PagePosition`). `SvgPreviewHandler` samples the store resolver for the first page in timeline mode.
+- **Finding on the IPC question:** `electron/main/services/export-utility-process.ts` is unreachable: nothing imports or forks it, and it is not a Vite entry. The live PDF calls (`export:pdf`, `export:generateDocForMarcher`) take sheets and SVGs the renderer already rendered, and the main process never reads `marcher_pages` for them. So the resolver already runs in the renderer and no IPC payload has to change.
+- **Resume from:** write tests (`src/components/exporting/utils/__test__/coordinateSheets.test.tsx`: page-mode deep-equal guard against the old inline rendering, timeline-mode rows equal the resolver at page end beats; `exportPagePositions` db tests with `describeDbTests`), then tsc, focused vitest and lint. Re-run `pnpm install` and `pnpm exec turbo run build --filter=@openmarch/desktop^...` first in a fresh work tree.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.10
+
+- **Done:** reviewed PR #33 and squash-merged it at head 88b764ed.
+  - Review fixes:
+    - Step size is now the stride of the fastest non-hold span clipped to the page. This is the lead's decision: holds no longer dilute the warning.
+    - Sampling cost dropped from about 426 to about 180 `positionAt` calls per marcher on arcs. Hidden sides are skipped, nothing is sampled during playback, and results are memoized.
+    - The polyline now sits below the dots, aligned to the grid.
+    - The inspector falls back to page mode until the resolver is ready.
+    - The flag read no longer drops page-mode writes.
+    - Zig-zag seeding is fixed.
+- **Checks (lead, on 88b764ed; no file overlap with #32, merges cleanly):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history src/db-functions/__test__/`: 26 files, 621 tests passed.
+  - `pnpm --dir apps/desktop run test`: 142 files and 2,067 tests passed, no errors.
+  - Skipped by policy: full `test:history` and e2e.
+- **Next:** P7.11 after P8.2 (PR #34) merges, and P7.7 in progress.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p7-coordinate-sheets) · P7.7 in review
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/35 (head `a9de7bea`, one commit). In timeline mode the coordinate sheet export, the drill chart export and the launch-page preview take positions from the resolver at each page's end beat, never from `marcher_pages`. `readTimelineExportPositions(db)` (`src/components/exporting/utils/exportPagePositions.ts`) returns `null` in page mode and otherwise reads the flag, tables and pages under one `withTimelineWriteLock` (P7.12's `readTimelinePageSnapshot`), then samples a private resolver. Sheet rendering moved to `buildCoordinateSheets` (`utils/coordinateSheets.tsx`). Ticked all 10 P7.7 inventory items.
+- **Decisions (P7.7, for the lead):**
+  - **No IPC change, so no `C-n` or ADR amendment.** The lead's direction assumed the utility process reads `marcher_pages` for the PDF. It doesn't run: `export-utility-process.ts` has no importer, no fork and no Vite entry. The live calls (`export:pdf`, `export:generateDocForMarcher`) already carry HTML and SVG rendered in the renderer, so the resolver stays in the renderer with no contract change. If the lead still wants that recorded, it would be a Proposed ADR 0001 amendment needing human acceptance; I didn't write one for a contract that doesn't change.
+  - Per-page appearance, rotation and notes stay out (P7.14).
+  - The close-time preview samples the store's resolver, since previews may and exports build a private one (P7.8).
+- **Follow-up (unowned):** delete the dead `export-utility-process.ts`, or leave it for Phase 10.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - `vitest run` on `coordinateSheets.test.tsx` and `exportPagePositions.test.ts`: 11 passed. This includes the page-mode deep-equal guard against the pre-P7.7 rendering.
+  - `pnpm --dir apps/desktop run test`: 141 files passed, 7 skipped; 2,048 tests passed.
+  - `test:history src/components/exporting`, run alone after the suite: 10 files, 88 passed.
+  - eslint, prettier and cspell on the 9 changed files: clean. The only eslint warning was already on the base.
+- **Skipped:**
+  - By policy: full `test:history` and e2e.
+  - `build:electron`.
+  - A manual run in the app.
+  - No db-functions changed.
+- **Exit gate:** unchanged.
+- **Next:** review and merge PR #35.
 - **Blockers:** none.

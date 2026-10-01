@@ -72,8 +72,8 @@ Wire the UI's commands to the write path: moving a clip moves its whole timeline
 ### P8.2: Shapes
 
 - Owner: timeline-worker (timeline/p8-2-shapes)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/34
 - Parallel: yes
 - Depends on: P8.0
 
@@ -551,3 +551,70 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** planner unit tests, component tests, history tests on a real DB.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/p8-2-shapes`; `pnpm install`; build the desktop's dependencies; write `apps/desktop/src/timeline/__test__/timelineShapeEditor.test.ts`, `apps/desktop/src/components/inspector/__test__/TimelineShapesEditor.test.tsx` and `apps/desktop/src/db-functions/__test__/timelineShapeEdits.test.ts`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2
+
+- **Done:** wip commit 5a8a5ab4 on `timeline/p8-2-shapes`: planner unit tests (`src/timeline/__test__/timelineShapeEditor.test.ts`), component tests (`src/components/inspector/__test__/TimelineShapesEditor.test.tsx`), history tests on a real DB (`src/db-functions/__test__/timelineShapeEdits.test.ts`), a hook case in `useTimelineInspections.test.tsx`, and the editor's notes in `ui.md` ("Shapes (P8.2)", on the code branch, as P8.3 and P8.4 did).
+- **Checks:** `tsc --noEmit`: pass. `test:focused` on the planner, inspector and error-message tests: 7 files, 160 passed. Focused `test:history` on every test file that uses `timelineShapes.ts` (`timelineShapeEdits`, `timelineMoves`, `timelineMarchers`, `timelineAssignmentEdits`, `timelineTransitionEdits`, `timelineCommands`, `useTimelineInspections`, `timelinePageCopy`): 8 files, 92 passed. Mutations: removing the version guard fails the stale-plan test; enabling the block kind for a follow-the-leader user fails the I-T3 test. eslint 0 errors; prettier and cspell pass. The regular desktop suite is running.
+- **Next:** read the suite result; squash; open the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-2-shapes`; `pnpm install`; build the desktop's dependencies; `pnpm --dir apps/desktop run test` (in the background); then squash the wip commits and `gh pr create --repo AlexDumo/OpenMarch-timeline --base timeline-try-2` with the body from `pr-P8.2.md`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/34 (one commit, 715e6dce, rebased on `timeline-try-2` after P7.12 and P7.15).
+  - `TimelineShapesEditor` sits in the inspector's timeline section and shows with or without a page.
+    - **New shape:** a shape of any kind is drawn through the selected marchers where they stand at the page's end beat, or at the field's middle when nobody is selected.
+    - **Edit:** pick a shape to change its name, its kind and its geometry for that kind.
+    - **Delete:** only unused shapes.
+  - Each change is one undoable edit through the new `createTimelineShape`, `updateTimelineShape` and `deleteTimelineShape`. The planner is `src/timeline/timelineShapeEditor.ts`.
+  - **Keeping the transitions that use a shape valid:**
+    - a kind change to a block gets a cell for every slot of the transitions using the shape (I-T4);
+    - a block for a follow-the-leader user (I-T3) and deleting a shape in use (I-D1) are disabled, with the reason;
+    - a smaller block grid is sent as typed, and the database refuses it (E-T3/E-T4) through `toastTimelineError`.
+  - **After the P7.15 rebase:** shape targets match both the resolver version and the display version, and their guard version is the sum, as the other editors' is.
+  - `ui.md` has "Shapes (P8.2)" on the code branch.
+- **Split with P7.11:** see the first P8.2 entry. In short, P7.11 keeps the page-era canvas shape tools and on-canvas drawing; P8.2 is the `timeline_shapes` editor.
+- **For the handoff notes:**
+  - Files: the editor is `src/components/inspector/TimelineShapesEditor.tsx`; the planner is `src/timeline/timelineShapeEditor.ts`; the db-functions are in `src/db-functions/timelineShapes.ts`. `useTimelineInspections` returns `shapeEdits` (`{ version, targets }`).
+  - Follow-ups:
+    - drawing and dragging spec shapes on the canvas (with P7.11);
+    - picking the shape to edit from a timeline shape track;
+    - a friendlier message for the combined E-T3/E-T4 code when the change is to a shape, not a transition's destination.
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - `test:focused` on the planner, inspector, error-message and transition-planner tests: 7 files, 160 passed.
+  - Focused `test:history` on every test file that uses `timelineShapes.ts`: 8 files, 94 passed (after the rebase).
+  - `pnpm --dir apps/desktop run test` on the rebased head: 149 files (142 passed, 7 skipped), 2,095 tests passed.
+  - Mutation checks: removing the version guard fails the stale-plan test; enabling the block kind for a follow-the-leader user fails the I-T3 test.
+  - eslint: 0 errors. prettier and cspell: pass.
+  - Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Exit gate:** nothing ticked. The UI verification item needs a manual app check.
+- **Next:** review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2 (review fixes)
+
+- **Done:** merged `timeline-try-2` (81c94cdd, with #33, P7.10). Commit ace16e71 on PR https://github.com/AlexDumo/OpenMarch-timeline/pull/34 fixes the lead's review:
+  1. **Open paths:** a box, circle or block converted to freehand is now an open path, so its first and last slots no longer stack (freehand samples at `i/(n-1)`). A kind change on a shape in use says that its users' slots are re-spread. The "same ground" wording is fixed in `ui.md` and the help text. Test: for every source shape and target kind, at 2, 3, 5, 16, 17 and 40 slots, every slot point is distinct. Putting the closing point back fails 3 tests.
+  2. **Delete in use:** `deleteTimelineShape` checks `dest_shape_id` inside the edit and refuses with an `E-ARGS` message that names the transitions. The foreign key stays the backstop, with its own test (E-DB through `deleteTimelineShapesInTransaction`).
+  3. **Circle from a selection:** the radius is the first marcher's distance from the middle (the mean when that is 0), so the circle passes through marcher 1. Tested with marchers at unequal distances.
+  4. **Double click:** an in-flight ref covers the whole edit. Test: a second click while the create is in flight, even after the version moves, creates nothing. Removing the ref fails it.
+  5. **Unknown marchers:** selected marchers that aren't in the timeline are refused with a toast (E-ARGS) instead of drawing at the field's middle.
+  6. **New tests:** circle and block through collinear marchers; freehand through coincident marchers; non-whole rows and columns (planner, and E-S1 on a real DB).
+- **Checks:**
+  - `tsc --noEmit`: pass.
+  - `test:focused` (planner, inspector, error-message and transition-planner tests): 7 files, 169 passed.
+  - Focused `test:history` on the shape test files (`timelineShapeEdits`, `timelineMoves`, `timelineMarchers`, `timelineAssignmentEdits`, `timelineTransitionEdits`, `timelineCommands`, `useTimelineInspections`, `timelinePageCopy`): 8 files, 96 passed.
+  - eslint: 0 errors. prettier and cspell: pass.
+  - The desktop suite is running.
+- **Next:** read the suite result, update the PR body, report back.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/p8-2-shapes`; `pnpm --dir apps/desktop run test` (in the background); update PR #34's body from `pr-P8.2.md`.
+
+### 2026-10-01 · timeline-worker (timeline/p8-2-shapes) · P8.2 (review fixes ready)
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/34's body is updated for the review fixes in ace16e71. The branch was merged with `timeline-try-2`, not force-pushed.
+- **Checks:** `pnpm --dir apps/desktop run test` at ace16e71, run once and alone: 153 files (146 passed, 7 skipped), 2,150 tests passed. The other checks are in the previous entry. Not run (policy): full `test:history`, e2e, `build:electron`.
+- **Next:** re-review and merge by the lead.
+- **Blockers:** none.
