@@ -248,3 +248,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** P5.7 fixture generators and loader.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (0aa6a48b); write pure generators in `apps/desktop/src/timeline/fixtures/` (golden vectors G1–G13, SC-01, SC-03, SC-05, seeded SC-11) returning core-shaped rows, then the loader that writes one through the timeline db-functions in one `transactionWithHistory`.
+
+### 2026-09-30 · timeline-worker (timeline/p5-warm-fixtures) · P5.7
+
+- **Done:** checkpoint 5f330e79 (untested draft). `apps/desktop/src/timeline/fixtures/`: `goldenFixtures.ts` (G1 to G13 plus G8b, same ids as the core golden tests), `scenarioFixtures.ts` (QA-SC-01, -03, -05 and the seeded QA-SC-11 generator), `loadTimelineFixture.ts` (one `transactionWithHistory` edit through the marcher, home, timeline, shape, transition and assignment db-functions; returns id maps; optional beat offset), `timelineFixtures.ts` (registry and the dev console API). `TimelineResolverHost` installs `window.openmarchTimeline` only while the flag is on.
+- **Checks:** `tsc --noEmit` (pass). Tests not written yet.
+- **Next:** pure generator tests and real-DB loader tests (P5.7, P5.8).
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p5-warm-fixtures` (5f330e79); write `src/timeline/__test__/timelineFixtures.test.ts` (pure: SC-11 sizes and determinism) and `timelineFixtureLoad.test.ts` (real DB: each fixture loads, store resolver matches the oracle).
