@@ -79,8 +79,8 @@ Beat insert and delete ripple timeline rows (same rules as P7.4).
 
 ### P7.6: Copy and paste
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p7-copy-paste)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P7.1
