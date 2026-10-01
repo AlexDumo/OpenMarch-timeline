@@ -120,7 +120,7 @@ Video export and `exportAppearances` sample the resolver.
 ### P7.10: Pathways, midpoints, step size and collisions in timeline mode
 
 - Owner: timeline-worker (timeline/p7-pathways)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/33
 - Parallel: yes
 - Depends on: P7.1
@@ -995,4 +995,22 @@ Facts that change how to read the PR #14 note above:
 - **Done:** commit `257aed4a` on `timeline/p7-coordinate-sheets` (wip). New `src/components/exporting/utils/exportPagePositions.ts`: `readTimelineExportPositions(db)` returns `null` in page mode and, in timeline mode, reads the flag, the timeline tables and the pages under one `withTimelineWriteLock` (P7.12's `readTimelinePageSnapshot`), then samples with `sampleTimelinePagePositions` into a `PagePositionMap` (same shape as `MarcherPageMap`). Coordinate sheet building moved to `utils/coordinateSheets.tsx` (`buildCoordinateSheets`); the sheet export and the drill chart export use the sampled map in timeline mode and the `marcher_pages` query in page mode. `svg-generator.ts` and the sheet components take a plain position type (`PagePosition`). `SvgPreviewHandler` samples the store resolver for the first page in timeline mode.
 - **Finding on the IPC question:** `electron/main/services/export-utility-process.ts` is unreachable: nothing imports or forks it, and it is not a Vite entry. The live PDF calls (`export:pdf`, `export:generateDocForMarcher`) take sheets and SVGs the renderer already rendered, and the main process never reads `marcher_pages` for them. So the resolver already runs in the renderer and no IPC payload has to change.
 - **Resume from:** write tests (`src/components/exporting/utils/__test__/coordinateSheets.test.tsx`: page-mode deep-equal guard against the old inline rendering, timeline-mode rows equal the resolver at page end beats; `exportPagePositions` db tests with `describeDbTests`), then tsc, focused vitest and lint. Re-run `pnpm install` and `pnpm exec turbo run build --filter=@openmarch/desktop^...` first in a fresh work tree.
+- **Blockers:** none.
+
+### 2026-10-01 · lead · P7.10
+
+- **Done:** reviewed PR #33 and squash-merged it at head 88b764ed.
+  - Review fixes:
+    - Step size is now the stride of the fastest non-hold span clipped to the page. This is the lead's decision: holds no longer dilute the warning.
+    - Sampling cost dropped from about 426 to about 180 `positionAt` calls per marcher on arcs. Hidden sides are skipped, nothing is sampled during playback, and results are memoized.
+    - The polyline now sits below the dots, aligned to the grid.
+    - The inspector falls back to page mode until the resolver is ready.
+    - The flag read no longer drops page-mode writes.
+    - Zig-zag seeding is fixed.
+- **Checks (lead, on 88b764ed; no file overlap with #32, merges cleanly):**
+  - `tsc --noEmit`: pass.
+  - Focused `test:history src/db-functions/__test__/`: 26 files, 621 tests passed.
+  - `pnpm --dir apps/desktop run test`: 142 files and 2,067 tests passed, no errors.
+  - Skipped by policy: full `test:history` and e2e.
+- **Next:** P7.11 after P8.2 (PR #34) merges, and P7.7 in progress.
 - **Blockers:** none.
