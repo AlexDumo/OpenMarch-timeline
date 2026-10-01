@@ -100,7 +100,7 @@ Coordinate sheets and PDF export sample the resolver at page beats.
 ### P7.8: Video export and appearances
 
 - Owner: timeline-worker (timeline/p7-exports)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/23
 - Parallel: yes
 - Depends on: P7.1
@@ -110,7 +110,7 @@ Video export and `exportAppearances` sample the resolver.
 ### P7.9: Keyframe export
 
 - Owner: timeline-worker (timeline/p7-exports)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/23
 - Parallel: yes
 - Depends on: —
@@ -484,4 +484,11 @@ Facts that change how to read the PR #14 note above:
   - In timeline mode the video preview's duration comes from `showEndTime(beats)`.
 - **Checks:** `tsc --noEmit` clean; `vitest run src/timeline src/components/exporting` 287 passed; `pnpm --dir apps/desktop run test` 119 files passed, 7 skipped, 1735 tests passed; eslint, prettier and cspell clean (one existing warning in `MarcherCoordinateSheet.tsx`). Merged `timeline-try-2` first.
 - **Next:** re-review and merge.
+- **Blockers:** none.
+
+### 2026-10-01 · lead session · P7.8, P7.9 (reviewed and merged)
+
+- **Done:** fork PR #23 reviewed by a sub-agent (APPROVE WITH NITS: page mode unchanged on every export path; frame sampling and keyframe boundaries correct, including beat 0 and tempo changes). The worker fixed the nits: video export always cold-builds its own resolver (an edit mid-export no longer changes later frames; tested); the keyframe export reports the worst error left when the subdivision depth cap is hit and warns; the other two appearance callers ignore the dropped per-page fields; the preview redraws on store version changes and takes its duration from the beats. Squash-merged. P7.8 and P7.9 set to done.
+- **Checks:** at 88fcbfb6, in the worker's work tree: tsc (pass); `test:focused src/timeline src/components/exporting` (25 files, 287 passed); the worker's regular desktop suite (119 files, 1,735 passed). It merged cleanly onto the base after PR #24.
+- **Next:** P7.4 and P7.5 (page and beat ripple), now that P8.9's timeline shift exists.
 - **Blockers:** none.

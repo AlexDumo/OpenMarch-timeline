@@ -62,7 +62,7 @@ A pure adapter from the stored tables and the resolver to `TimelineViewModel`, f
 ### P8.9: Timeline commands
 
 - Owner: timeline-worker (timeline/p8-commands)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/24
 - Parallel: yes
 - Depends on: P8.8
@@ -327,4 +327,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - eslint, prettier and cspell on the changed files: clean.
   - Not re-run: the regular desktop suite. Not run (policy): full `test:history`, e2e, `build:electron`.
 - **Next:** re-review and merge by the lead.
+- **Blockers:** none.
+
+### 2026-10-01 · lead session · P8.9 (reviewed and merged)
+
+- **Done:** fork PR #24 reviewed by a sub-agent (APPROVE WITH NITS: the shift's statement order keeps every intermediate state valid under the row triggers in both directions, with refusals decided before any write; Create Track reads the rows through the edit's transaction). UI-6 (Create Track's assignments steal one layer above the marchers' existing ones) accepted as consistent with D-6, R-2 and golden vector G2. The worker fixed the nits: UI-6 and the docstring now say a stolen move resumes afterwards with a catch-up; the picked shape clears when the selection becomes a marcher track, a page or nothing, or the track disappears (a range keeps it, since Create Track appears only on a range); Create Track is hidden with a shape picked and no marchers. Squash-merged as b8b63052. P8.9 set to done.
+- **Checks:** at f86164e6 (with the base merged in), in the worker's work tree: tsc (pass); `test:history src/db-functions/__test__/timelineCommands.test.ts` (11 passed); `pnpm --dir apps/desktop run test` (118 files, 1,727 passed).
+- **Next:** P8.2 to P8.6 (shapes, transitions, assignments, inspector, error messages).
 - **Blockers:** none.
