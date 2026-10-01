@@ -1328,3 +1328,17 @@ Facts that change how to read the PR #14 note above:
 - **Next:** finish the checks, then update the PR body.
 - **Blockers:** none.
 - **Resume from:** on `timeline/p7-page-appearance` at `46fa7373`, run `pnpm --dir apps/desktop run build`, focused `test:history` on the 2 test files, then `pnpm --dir apps/desktop run test` alone. Then update the PR #37 body and log "review fixes ready".
+
+### 2026-10-01 · timeline-worker (timeline/p7-page-appearance) · P7.16 review fixes ready
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/37 is at `46fa7373`, and its body is updated. The fixes are listed in the checkpoint above.
+- **Checks:** all from `apps/desktop`, on `46fa7373`.
+  - `tsc --noEmit`: pass.
+  - `pnpm run build`: pass.
+  - The 2 test files: 23 passed, under both `vitest run` and focused `test:history`.
+  - `pnpm run test`, run once and alone: 158 files passed, 7 skipped; 2,265 tests passed.
+  - eslint, prettier and cspell, plus the pre-commit hook: pass.
+  - Skipped by policy: full `test:history`, e2e and `build:electron`.
+- **Follow-up for the lead:** `timelineRows.ts` imports the renderer `@/global/database/db`, so the main bundle still pulls it in.
+- **Next:** the lead re-reviews PR #37.
+- **Blockers:** none.
