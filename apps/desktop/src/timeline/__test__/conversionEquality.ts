@@ -443,6 +443,11 @@ export function lossReportCounts(report: PageConversionReport) {
         interpolatedAlongPathway: sum(
             (p) => p.interpolated.filter((g) => g.pathwayId !== null).length,
         ),
+        interpolatedUnusablePathway: sum(
+            (p) =>
+                p.interpolated.filter((g) => g.unusablePathwayId !== null)
+                    .length,
+        ),
         skippedPages: report.pages.filter((p) => p.skipped !== null).length,
         homesFromLaterPage: report.homesFromLaterPage.length,
         marchersWithoutRows: report.marchersWithoutRows.length,

@@ -1,5 +1,5 @@
 import { Path, type XY } from "@openmarch/core";
-import { pageEndBeat } from "../timelineCanvas";
+import { pageEndBeat } from "../pageEndBeat";
 
 /**
  * Plans the conversion of a page show into timeline rows (docs/timeline/phases/06-converter.md
@@ -148,9 +148,11 @@ export interface PageLossReport {
      * Marchers with no row on this page that glide across the gap like page mode: their slot's
      * destination is interpolated in beats between their neighboring rows (P6.7). `pathwayId` is
      * the next row's pathway when the glide follows it; then the destination is on the pathway,
-     * but the move inside the page is straight (C-8), as for `pathways`.
+     * but the move inside the page is straight (C-8), as for `pathways`. `unusablePathwayId` is the
+     * next row's pathway when it couldn't be followed (missing, unreadable, or giving no finite
+     * point); then the glide is a straight line, as if the row had no pathway.
      */
-    readonly interpolated: { marcherId: number; pathwayId: number | null }[];
+    readonly interpolated: GapGlideReport[];
     /** Set when the page got no transition */
     readonly skipped: SkippedPageReason | null;
 }
@@ -207,6 +209,22 @@ export function droppedFieldsOf(mp: ConversionMarcherPage): {
     };
 }
 
+/** How a marcher without a row glides across a page (P6.7). */
+export interface GapGlideReport {
+    readonly marcherId: number;
+    /** The pathway the glide follows, or null for a straight line */
+    readonly pathwayId: number | null;
+    /** The next row's pathway when it couldn't be used, so the glide fell back to a straight line */
+    readonly unusablePathwayId: number | null;
+}
+
+/** Where a gap glide ends, and how it got there. */
+export interface GapGlide {
+    readonly point: XY;
+    readonly pathwayId: number | null;
+    readonly unusablePathwayId: number | null;
+}
+
 /** A marcher's row on a page that has an end beat: a neighbor a gap glide is anchored to. */
 interface RowAnchor {
     readonly pageIndex: number;
@@ -219,22 +237,40 @@ interface RowAnchor {
  * arithmetic as `getCoordinatesAtTime` on keyframes at the rows' end beats (C-7). Along `next`'s
  * pathway when it has one, from `prev.path_start_position` to `next.path_end_position` (both read
  * with `||`, as `getMarcherTimelines` does); otherwise in a straight line.
+ *
+ * Never throws on a damaged pathway, so a damaged file still converts (and opens, once conversion
+ * runs on open): when `pathOf` returns nothing or throws (unknown id, unreadable JSON), or the
+ * path gives no finite point (an empty path), the glide falls back to the straight line and
+ * `unusablePathwayId` names the pathway.
  */
 export function interpolateGap(
     prev: { endBeat: number; row: ConversionMarcherPage },
     next: { endBeat: number; row: ConversionMarcherPage },
     beat: number,
     pathOf: (pathwayId: number) => Path | undefined = () => undefined,
-): { point: XY; pathwayId: number | null } {
+): GapGlide {
     const progress = (beat - prev.endBeat) / (next.endBeat - prev.endBeat);
     const pathwayId = next.row.path_data_id;
-    const path = pathwayId !== null ? pathOf(pathwayId) : undefined;
-    if (pathwayId !== null && path) {
+    if (pathwayId !== null) {
         const from = prev.row.path_start_position || 0;
         const to = next.row.path_end_position || 1;
         const position = (to - from) * progress + from;
-        const point = path.getPointAtLength(path.getTotalLength() * position);
-        return { point: [point.x, point.y], pathwayId };
+        try {
+            const path = pathOf(pathwayId);
+            if (path) {
+                const point = path.getPointAtLength(
+                    path.getTotalLength() * position,
+                );
+                if (Number.isFinite(point.x) && Number.isFinite(point.y))
+                    return {
+                        point: [point.x, point.y],
+                        pathwayId,
+                        unusablePathwayId: null,
+                    };
+            }
+        } catch {
+            // A damaged pathway: fall back to the straight line below
+        }
     }
     return {
         point: [
@@ -242,6 +278,7 @@ export function interpolateGap(
             prev.row.y + progress * (next.row.y - prev.row.y),
         ],
         pathwayId: null,
+        unusablePathwayId: pathwayId,
     };
 }
 
@@ -329,27 +366,31 @@ export function planPageConversion(
                 .get(marcherId)!
                 .push({ pageIndex, endBeat: range.endBeat, row });
     }
-    const pathsById = new Map<number, Path | undefined>();
+    // Parsed once per pathway; a parse error is kept and rethrown for `interpolateGap` to catch
+    const pathsById = new Map<number, Path | undefined | Error>();
     const pathways = new Map((input.pathways ?? []).map((p) => [p.id, p]));
-    const pathOf = (id: number) => {
+    const pathOf = (id: number): Path | undefined => {
         if (!pathsById.has(id)) {
             const pathway = pathways.get(id);
-            pathsById.set(
-                id,
-                pathway
+            let parsed: Path | undefined | Error;
+            try {
+                parsed = pathway
                     ? Path.fromJson(pathway.path_data, undefined, undefined, id)
-                    : undefined,
-            );
+                    : undefined;
+            } catch (error) {
+                parsed =
+                    error instanceof Error ? error : new Error(String(error));
+            }
+            pathsById.set(id, parsed);
         }
-        return pathsById.get(id);
+        const path = pathsById.get(id);
+        if (path instanceof Error) throw path;
+        return path;
     };
     /** Marchers without a row on page `i` that have a row before and after it glide (P6.7). */
     const gapGlides = (i: number, endBeat: number) => {
         const rows = rowOf.get(input.pages[i]!.id)!;
-        const glides = new Map<
-            number,
-            { point: XY; pathwayId: number | null }
-        >();
+        const glides = new Map<number, GapGlide>();
         for (const id of marcherIds) {
             if (rows.has(id)) continue;
             const anchors = anchorsOf.get(id)!;
@@ -368,7 +409,7 @@ export function planPageConversion(
         const glides =
             i > 0 && range
                 ? gapGlides(i, range.endBeat)
-                : new Map<number, { point: XY; pathwayId: number | null }>();
+                : new Map<number, GapGlide>();
         const slotted = marcherIds.filter(
             (id) => rows.has(id) || glides.has(id),
         );
@@ -434,6 +475,7 @@ export function planPageConversion(
             interpolated: [...glides].map(([marcherId, g]) => ({
                 marcherId,
                 pathwayId: g.pathwayId,
+                unusablePathwayId: g.unusablePathwayId,
             })),
             skipped,
         };
@@ -499,6 +541,13 @@ export function describePageConversionReport(
                         ? ` (along a pathway, kept only at the page end: ${ids(along.map((g) => g.marcherId))})`
                         : ""),
             );
+            const unusable = page.interpolated.filter(
+                (g) => g.unusablePathwayId !== null,
+            );
+            if (unusable.length)
+                parts.push(
+                    `unusable pathway(s), glided in a straight line instead (marchers ${ids(unusable.map((g) => g.marcherId))}; pathways ${ids(unusable.map((g) => g.unusablePathwayId!))})`,
+                );
         }
         const glided = new Set(page.interpolated.map((g) => g.marcherId));
         const held = page.missingMarchers.filter((id) => !glided.has(id));

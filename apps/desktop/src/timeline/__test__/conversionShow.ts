@@ -23,7 +23,8 @@ import { createShapePages } from "@/db-functions/shapePages";
  * - damaged-file cases page mode can't create (P6.7): a marcher with no row on one page in the
  *   middle; one with no rows on two pages in a row, after the curved-shape page and across the
  *   uneven ritardando page; one with no row on the page before its pathway row (it glides along
- *   the pathway); one with no row on the last page (it holds); and one with no page-0 row.
+ *   the pathway, between non-default path positions); one with no row on the last page (it
+ *   holds); and one with no page-0 row.
  */
 
 /** Beat lengths in seconds, after the fixed zero-length beat 0, and where each page starts. */
@@ -266,6 +267,22 @@ export async function buildConversionShow(
             },
         ],
     });
+    // Non-default path positions: page mode starts the glide at the PREVIOUS row's
+    // `path_start_position` and ends it at the pathway row's `path_end_position`, so the gap
+    // page's interpolated point checks that mapping
+    for (const [p, set] of [
+        [5, { path_start_position: 0.2 }],
+        [7, { path_end_position: 0.8 }],
+    ] as const)
+        await db
+            .update(schema.marcher_pages)
+            .set(set)
+            .where(
+                and(
+                    eq(schema.marcher_pages.page_id, pageIds[p]!),
+                    eq(schema.marcher_pages.marcher_id, pathwayGapMarcherId),
+                ),
+            );
 
     // Page 8: a midset (dropped; page mode ignores midsets too)
     const midsetRow = await db

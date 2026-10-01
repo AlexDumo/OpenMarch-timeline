@@ -395,7 +395,7 @@ describeDbTests("page → timeline converter", (it) => {
         const page3Report = report.pages.find((p) => p.pageId === 3)!;
         expect(page3Report.missingMarchers).toEqual([2]);
         expect(page3Report.interpolated).toEqual([
-            { marcherId: 2, pathwayId: null },
+            { marcherId: 2, pathwayId: null, unusablePathwayId: null },
         ]);
         expect(assignmentCount).toBe(6 * 76);
 

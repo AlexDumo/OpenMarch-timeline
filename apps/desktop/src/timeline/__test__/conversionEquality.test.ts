@@ -140,6 +140,7 @@ describeDbTests("conversion equality", (it) => {
             missingMarcherRows: 6,
             interpolatedMarcherRows: 4,
             interpolatedAlongPathway: 1,
+            interpolatedUnusablePathway: 0,
             skippedPages: 0,
             homesFromLaterPage: 1,
             marchersWithoutRows: 0,
