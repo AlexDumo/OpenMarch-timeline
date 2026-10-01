@@ -175,3 +175,7 @@ Exit code 0. `run_all.sh` itself truncates each line to 90 characters. Environme
 ### 2026-10-01 · timeline-worker (timeline/p9-8-convert-worker) · P9.8 · `vite.config.mjs` is the config Vite uses
 
 `apps/desktop/vite.config.mjs` is checked in. It is tsc's output of `vite.config.mts`, and Vite loads `.mjs` before `.mts`. An edit to `vite.config.mts` alone doesn't change the app build: the P9.8 worker entry was missing from `dist-electron` until the `.mjs` was regenerated (`pnpm exec tsc -p tsconfig.node.json`, which also prints existing type errors and leaves a `tsconfig.node.tsbuildinfo` to delete; then prettier). `mainBundle.test.ts` now checks that both files build the worker.
+
+### 2026-10-01 · timeline-worker (timeline/p9-8-convert-worker) · P9.8 · `vite.config.mjs` removed
+
+Follow-up to the `vite.config.mjs` entry above. PR #44 removes the checked-in `vite.config.mjs` and `vite.config.d.mts`, so `vite.config.mts` is the config Vite uses again. `tsconfig.node.json` emits under `node_modules/.tmp`, `apps/desktop/.gitignore` lists the generated names, and `mainBundle.test.ts` fails if another Vite config shadows the `.mts`.

@@ -124,6 +124,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - It is a `VACUUM INTO` snapshot from a read-only connection (5 s busy timeout), verified (integrity check, `user_version`, schema) before it gets its final name, so it is consistent even if another connection has the file open or commits meanwhile. It never writes to the original's main file; on a WAL file SQLite may touch the `-wal`/`-shm` side files. If P9.3 needs the version check first, run `decideFileVersion` before calling this, so a too-new file isn't backed up.
   - **Performance:** it runs on the calling thread and takes roughly 1 to 2 s for a 50 MB file. P9.3 must either show a blocking "preparing your file" state or run it off the main thread. `export-utility-process.ts` is dead code (P7.7), not a pattern to reuse.
   - `nextBackupPath` and `BACKUP_NAME_SUFFIX` are exported too; the second argument of `backupBeforeConversion` is for tests only. Nothing calls the backup yet. It needs no IPC or ADR change; if P9.3 wants the renderer to trigger or show it, that goes through the usual IPC rules.
+- **P9.4 prerequisite (from the P9.8 review).** Before removing the flag, run a packaged smoke test: `pnpm --dir apps/desktop run build:electron`, then open a page-era show with `OPENMARCH_CONVERT_ON_OPEN=1`. Confirm that the worker loads from `app.asar` (`dist-electron/worker/convertOnOpenWorker.js`), that the "Preparing your file…" window shows progress, and that quitting mid-conversion leaves the file at version 7 and reopens it on the next launch. P9.8 checked the asar loading only with a small test app.
 
 ## Progress log
 
@@ -407,4 +408,26 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Focused `test:history`: 262 passed.
   - `test:timeline`: one failure, fixed afterwards; the full timeline run wasn't repeated.
 - **Next:** lead review. The C-10 note and the ADR 0001 line go in after review confirms the design.
+- **Blockers:** none.
+
+### 2026-10-01 · timeline-worker (timeline/p9-8-convert-worker) · P9.8
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/44 review fixes in follow-up commits: a merge of `timeline-try-2` (90dc5be4), then 4cdc7cfb. No force-push.
+  1. **Reopen and close:** the open reconnects to its own `filePath` (`connectToPath`, 5 s busy timeout). `closeCurrentFile` and the external `discardNewShowDraft` entry points wait on `withOpenLock`.
+  2. **Classification:** the host picks the marker time. A worker that ends without a result, or reports a failure, while the file has version 8 and that marker is reported as `converted`.
+  3. **Audio:** the `audio:*` handlers are refused while the SQL is suspended, and their connections wait 5 s for a lock.
+  4. **Progress:** throttled to 10 updates a second; a new phase and the final page always show.
+  5. **Quit:** a new conversion resets the quit flag. A conversion stopped by quitting stores its file as `databasePath`, and the quit's `closeCurrentFile` keeps it.
+  6. **Timer test:** thresholds are relative to the conversion's length.
+  7. **Build config:** removed the generated `vite.config.mjs` and `vite.config.d.mts`; `tsconfig.node.json` now emits under `node_modules/.tmp`, and the names are gitignored. `mainBundle.test.ts` asserts that nothing shadows `vite.config.mts`.
+  - Added the P9.4 packaged-smoke-run prerequisite to the handoff notes.
+- **Checks:**
+  - `tsc --noEmit`: clean.
+  - eslint, prettier, cspell and the pre-commit hook: clean.
+  - `pnpm --dir apps/desktop run build` (includes `vite build`): passed, with the worker built.
+  - The 8 worker and open test files: 132 passed.
+  - `test:focused electron`: 20 files passed, 1 skipped; 345 tests passed.
+  - `pnpm run test`: 171 files passed, 9 skipped; 2,440 tests passed.
+  - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run (now a P9.4 prerequisite).
+- **Next:** re-review and merge by the lead.
 - **Blockers:** none.
