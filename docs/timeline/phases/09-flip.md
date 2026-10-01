@@ -29,7 +29,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### P9.1: C-8 decided
 
 - Owner: human
-- Status: open
+- Status: done
 - PR: none
 - Parallel: no
 - Depends on: —
@@ -120,3 +120,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** read the open path in `main/index.ts` and `DrizzleMigrationService.ts`; no code run.
 - **Next:** if the ADR is accepted as drafted, a release before Phase 9 must read `user_version`, refuse versions above the supported one, and stop overwriting it; P9.3 then sets 8 on conversion and warns when a converted file comes back at 7. Which phase ships the check is for the phase leads to agree.
 - **Blockers:** none yet; depends on P0.4.
+
+### 2026-10-01 · lead · P9.1
+
+- **Done:** the project owner decided C-8 on 2026-10-01: pathways and midsets were never implemented and are dropped. The lead recorded the outcome in ADR 0001 and `implementation-plan.md`.
+  - SVG page shapes become individual destinations. Page-mode motion between pages is straight, so only the editable curve object is lost.
+  - P6.6 (conversion equality corpus) verifies the result on real shows.
+- **Checks:** none (a decision record).
+- **Next:** P9.2. The phase still formally depends on Phase 8, where P8.7's human verdicts are open.
+- **Blockers:** none for P9.2.
