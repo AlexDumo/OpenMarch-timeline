@@ -64,7 +64,7 @@ A post-migration step in the main process runs the converter in one transaction,
 - Parallel: no
 - Depends on: P9.3, P9.8
 
-Remove the dev flag. Timeline mode is the only mode.
+Remove the dev flag. Timeline mode is the only mode. Prerequisites (from the P9.8 review): a packaged smoke run (`build:electron`, then open a page-era show with `OPENMARCH_CONVERT_ON_OPEN=1` and confirm the worker loads from `app.asar`), and a manual app pass by the owner on a copy of a real show.
 
 ### P9.5: Freeze page-era writes
 
