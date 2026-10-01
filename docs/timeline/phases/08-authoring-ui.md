@@ -152,6 +152,7 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - **Still to do:** the waveform is empty until it's wired to the audio player.
   - **Still to do (follow-up):** with the flag on, the page timeline's pencil button (`focusTimeline`, which opens beat editing) isn't rendered. Beat editing is reachable only by its shortcut or menu. Add an entry point to the timeline's transport.
   - **Stories:** Storybook isn't configured; the stories run under Vitest (`TimelineStories.test.tsx`).
+  - **Follow-up (from P8.8):** a converted page show has only shapeless group moves, so with nothing selected the timeline shows no tracks (UI-3). Add an empty-state hint ("select marchers to see their tracks").
 
 ## Progress log
 
@@ -252,4 +253,16 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** build of desktop deps: pass. `tsc --noEmit`: pass (after rebase). `vitest run src/components/timeline/__test__/ src/timeline/__test__/`: 27 files, 316 passed (after rebase). `pnpm --dir apps/desktop run test`: 112 files, 1,664 passed (before the rebase, which touched no files of this PR). eslint 0 errors; prettier and cspell pass. Not run (policy): full `test:history`, e2e, `build:electron`.
 - **Exit gate:** nothing ticked (the UI verification item needs a manual app check).
 - **Next:** review and merge by the lead; then P8.9.
+- **Blockers:** none.
+
+### 2026-09-30 · timeline-worker (timeline/p8-adapter) · P8.8 (review fixes)
+
+- **Done:** commit d301fb02 on PR #21 addresses the lead's review:
+  1. `Resolver.spanInfos(marcherId)` is public in `@openmarch/core` (types and `createResolver`), with a dated amendment in ADR 0001 §4; the oracle is unchanged. `resolverSpans` uses it instead of walking `explain()`.
+  2. `useTimelineTracks` tags each read with the store version taken under the write lock, and builds only when it matches the resolver's version; the previous tracks stay until then. A test fails if the guard is removed (checked by mutation).
+  3. Spans and diagnostics are cached per version; a selection change makes no resolver calls (tested with spies).
+  4. SC-11 smoke (default set plus 20 selected, seed 1): 276 tracks in about 15 ms (three runs: 15.2, 14.9, 15.1 ms); the bound is 250 ms. For comparison the old `explain()` walk took 25.8 ms here on a cold resolver, so the bound guards against large regressions only.
+  5. Nits: transition-wide diagnostics show on the shape track, or once for a shapeless transition; a gap filled by another shape's move splits a shape's clip; UI-5 notes that Create Track from view 0 sends spec beat 1; the empty-state hint is a handoff follow-up.
+- **Checks:** `pnpm --dir packages/core run build` and `run test`: 21 files, 456 passed. `tsc --noEmit`: pass. `test:focused src/timeline/__test__/ src/components/timeline/__test__/`: 27 files, 321 passed. `test:history src/timeline/__test__/useTimelineTracks.test.tsx`: 5 passed. eslint 0 errors; prettier and cspell pass. Not run (policy): full `test:history`, e2e, `build:electron`; the regular desktop suite wasn't re-run.
+- **Next:** re-review and merge by the lead.
 - **Blockers:** none.

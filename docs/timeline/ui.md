@@ -63,7 +63,8 @@ from it. The spec still wins on the model; this file decides presentation.
   initial page's inset. `Timeline` converts at its boundary: its props
   (tracks, playback position) and its commands (seek, clip move, Create
   Track) stay in spec beats, and a clip move sends the clip's spec range
-  shifted by the dragged beats.
+  shifted by the dragged beats. A Create Track range from view 0 sends spec
+  beat 1, which is the same show time as beat 0.
 
 ## Mapping the spec onto the view model
 
@@ -76,7 +77,7 @@ from the stored tables and the resolver, and nothing in it is stored.
 | Marcher track                                | one per spec timeline in which the marcher has an assignment. Clip range: the marcher's first assignment start to last assignment end in that timeline                                                                                                                     |
 | Marcher track `legs`                         | the marcher's resolver spans (R-2) inside the clip: a hold span is `hold`; any other span is `move`                                                                                                                                                                        |
 | Marcher track `activitySpans`                | active where the marcher's winning span belongs to an assignment in this timeline; inactive otherwise (UI-1)                                                                                                                                                               |
-| Shape track                                  | one per spec timeline and shape used as a destination in it: the transitions whose `dest_shape_id` is that shape (a group move). Spec shapes have no time; the track shows the moves into them                                                                             |
+| Shape track                                  | one per spec timeline and shape used as a destination in it: the transitions whose `dest_shape_id` is that shape (a group move). Spec shapes have no time; the track shows the moves into them. A gap filled by another shape's move splits it into two clips (P8.8)       |
 | Shape track `activitySpans`                  | active where at least one member's winning span is in those transitions; inactive where all are stolen (UI-4)                                                                                                                                                              |
 | `TimelineRangeChange {timelineId, range}`    | moves the whole spec timeline. Clips from the same timeline move together, so the UI highlights linked clips                                                                                                                                                               |
 | `TimelineCreateTrackRequest {target, range}` | one edit: a new timeline over the range with one transition. For a marcher, a shapeless one-slot `direct` transition whose destination starts at the marcher's position at the range start; for a shape, a transition into it with the selected marchers assigned to slots |
@@ -89,11 +90,11 @@ These belong in the inspector (P8.5), not the timeline:
   and slot casting;
 - the layer of each assignment (spec Q-8 stays open for anything richer);
 - diagnostics (§8.9 requires them). The timeline adds a warning badge on any
-  clip whose range has a diagnostic; the inspector lists them. A marcher
-  track's badge counts the diagnostics about that marcher and the
-  transition-wide ones (such as `D-VACANT`) of the transitions it is assigned
-  to in that timeline; a shape track's counts all of its transitions'
-  diagnostics. The badge's tooltip lists them.
+  clip whose range has a diagnostic; the inspector lists them. A shape track's
+  badge counts all of its transitions' diagnostics; a marcher track's counts
+  the ones about that marcher. A transition-wide one (such as `D-VACANT`) of a
+  transition without a shape shows once, on the first shown marcher track
+  assigned to it. The badge's tooltip lists them.
 
 ## Porting notes
 
