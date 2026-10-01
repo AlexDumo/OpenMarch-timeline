@@ -279,3 +279,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** build the workspace packages, run the draft fuzz test and fix what fails.
 - **Blockers:** none.
 - **Resume from:** check out `timeline/timeline/p4-e2e-fuzz`, `pnpm install`, `pnpm exec turbo run build --filter=@openmarch/desktop^... --force`, then run `pnpm --dir apps/desktop run test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` in the background and fix what fails.
+
+### 2026-09-30 · timeline-worker agent (timeline/p4-e2e-fuzz) · P4.9 (checkpoint)
+
+- **Done:** checkpoint `b5cc1d21` on `timeline/p4-e2e-fuzz`. The draft passes at its default size (3 seeds × 40 steps: 62 commits, 33 rejected edits, 16 undo and 5 redo steps, pruning reached). The v0.6 negative control breaks undo on seed 1. The usual break is the stack count: `executeHistoryAction` switches only the replayed group's tables to redo mode, so the assignment rows the v0.6 trigger rewrites during the replay are logged on the undo stack, and the redo stack is cleared. The control now accepts that kind. `E-DB` rejections are counted with the database's reason.
+- **Checks:** `pnpm --dir apps/desktop exec tsc --noEmit` pass; `test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` pass (6 passed, 11 skipped: the remaining control seeds after the first break).
+- **Next:** the large run (`TIMELINE_E2E_SEEDS=600 TIMELINE_E2E_STEPS=80`) in the background, then squash and open the PR.
+- **Blockers:** none.
+- **Resume from:** check out `timeline/timeline/p4-e2e-fuzz` (b5cc1d21), then in `apps/desktop` run `TIMELINE_E2E_SEEDS=600 TIMELINE_E2E_STEPS=80 TIMELINE_E2E_REPORT=<file> pnpm run test:history src/db-functions/__test__/timelineE2eFuzz.test.ts` in the background; then squash the wip commits into one and open the PR.
