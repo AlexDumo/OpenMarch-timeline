@@ -98,8 +98,8 @@ User-facing docs in `apps/website` and release notes.
 
 ### P9.8: Convert off the main process
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p9-8-convert-worker)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: P9.3
