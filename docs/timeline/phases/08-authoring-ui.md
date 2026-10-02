@@ -152,7 +152,7 @@ The selection state and what it draws (`ui.md` UI-9: Pages, Home, Playhead, Play
 ### P8.13: UI-9 page flags
 
 - Owner: timeline-worker (timeline/p8-13-page-flags)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes (with P8.11 and P8.14)
 - Depends on: P8.10
@@ -747,3 +747,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** wire the timeline (page boxes, home, dragged range, one track per timeline), playhead and play/loop, navigation, opening on home, dimming on the canvas, harness.
 - **Blockers:** none.
 - **Resume from:** `apps/desktop/src/components/timeline/TimelineViewModel.ts` (`TimelineSelection` to home/range in spec beats), then `TimelinePrimitives.tsx`, `TimelineVariants.tsx`, `TimelineModePanel.tsx`, `useTimelinePlayback.ts`. Run `pnpm install` first in a fresh work tree.
+
+### 2026-10-02 · timeline-worker (timeline/p8-13-page-flags) · P8.13
+
+- **Done:** `apps/desktop/src/db-functions/pageFlags.ts`: `planPageFlagInsertion` (pure: split inside a page, append past the last flag, nothing on a flag, at home or past the beats), `pageFlagGrid` (renderer pages to the plan's grid), `addPageFlag` and `deletePageFlags` (one undoable edit each, page rows and `last_page_counts` only, no `withTimelinePageRipple`, refused outside timeline mode). `hooks/queries/usePageFlags.ts` has mutation options. Tests in `db-functions/__test__/pageFlags.test.ts`. Pushed as a `wip:` commit on `timeline/p8-13-page-flags`.
+- **Checks:** `pnpm run test:focused src/db-functions/__test__/pageFlags.test.ts`: 15 passed. `pnpm run test:history` on the same file: 15 passed. `pnpm tsc --noEmit`: pass.
+- **Next:** desktop verification, tidy commits, PR.
+- **Blockers:** none.
+- **Resume from:** `timeline/p8-13-page-flags`; run `pnpm --filter "./packages/*" build` in a fresh work tree, then the focused test above; then finish (WORKER.md step 6).
