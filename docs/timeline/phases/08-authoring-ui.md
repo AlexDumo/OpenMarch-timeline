@@ -902,3 +902,14 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** `pnpm tsc --noEmit`: pass. Whole `pnpm run test:focused`: 2625 passed. Whole `pnpm run test:timeline`: 2579 passed. `pnpm run test:history` on 9 touched test files: 81 passed. eslint: 0 errors; prettier: pass. Not run (policy): the full `test:history` suite and Playwright. No exit-gate items ticked.
 - **Next:** review and merge. Run the whole suite on the combined branch if P8.12 merges first.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-12-no-selected-page) · P8.12 (checkpoint)
+
+- **Done:** pushed `4eeb237b`.
+  - **Feature test:** `src/timeline/__test__/NoSelectedPageModes.test.tsx` mounts the inspector parts, toolbar, clock, page timeline, action handler, state initializer and the canvas and playback hooks. It drives navigation, set to previous page and undo, and checks that `useSelectedPage`'s warning never fires under `test:timeline`. A canary checks that the warning does fire.
+  - **Dead code:** `buildTimelineTracks`, `clipsOfShape` and the per-marcher and per-shape track builders are removed. Their tests are ported to `buildTimelineClipTracks`.
+  - **Appearance by time:** `src/services/appearance/` (`type.ts`, `db-to-timeline.ts`, `get-appearance-at-time.ts`) and `src/hooks/useAppearanceAnimation.ts`. Each page's tag and section stack (`_combineMarcherAppearances` with no `marcher_pages` overrides) is keyed by its flag time. It is sampled at the paused playhead or the live playback time and applied only when a marcher's stack changes. `Canvas.tsx` skips its per-page appearance query in timeline mode.
+- **Split:** one PR, with commits kept per step (reads and tools, feature test, dead code, appearance), since appearance is about 300 lines.
+- **Checks:** whole `test:focused` passed at `257a3943` (186 files, 2598 tests); `tsc` passes. Whole `test:focused` and `test:timeline` are now running at `4eeb237b`.
+- **Blockers:** none.
+- **Resume from:** read the scratchpad logs (`p812-focused2.log`, `p812-timeline.log`) or rerun both suites one after the other. Then run focused `test:history` on `timelinePageCopy`, `useHistory`, `useTimelinePlayback` and `NoSelectedPageModes`, squash the wip commits into one per step, and open the PR.
