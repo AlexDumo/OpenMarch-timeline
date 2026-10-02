@@ -152,8 +152,8 @@ The selection state and what it draws (`ui.md` UI-9: Pages, Home, Playhead, Play
 ### P8.13: UI-9 page flags
 
 - Owner: timeline-worker (timeline/p8-13-page-flags)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/48
 - Parallel: yes (with P8.11 and P8.14)
 - Depends on: P8.10
 
@@ -755,3 +755,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** desktop verification, tidy commits, PR.
 - **Blockers:** none.
 - **Resume from:** `timeline/p8-13-page-flags`; run `pnpm --filter "./packages/*" build` in a fresh work tree, then the focused test above; then finish (WORKER.md step 6).
+
+### 2026-10-02 · timeline-worker (timeline/p8-13-page-flags) · P8.13
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/48. `db-functions/pageFlags.ts`: `addPageFlag` (**+**: split keeps the split page's flag, id and data with a new row at its old start; splitting the last page keeps the last flag through `last_page_counts`; past the last flag it appends a page ending at the beat) and `deletePageFlags`, each one undoable edit that writes only page rows and `last_page_counts`, with no ripple, refused outside timeline mode. `planPageFlagInsertion`/`pageFlagGrid` decide where **+** shows; `hooks/queries/usePageFlags.ts` has mutation options and `useAddPageFlag`, whose `onAdded` returns the new page's range.
+- **Interpretation for review:** deleting page N's flag deletes N's row and moves the next page's `start_beat` back to N's start, so only N's flag goes and the next page keeps its flag, id and data (the inverse of **+**). Deleting the row alone would remove page N−1's flag instead. Existing `deletePages` and its P7.4 ripple are unchanged.
+- **Checks:** `pnpm run test:focused src/db-functions/__test__/pageFlags.test.ts`: 15 passed; `pnpm run test:history` on it: 15 passed; with `VITEST_TIMELINE_MODE=true`: 15 passed; `test:focused` on `timelineRipple.test.ts` and `page.test.ts`: 147 passed, 1 todo; `pnpm tsc --noEmit`: pass; eslint, prettier --check and cspell on the changed files: pass. Not run (worker policy): full `test:history`, full `test:timeline`, Playwright e2e, `pnpm check:quick`. No exit-gate items ticked.
+- **Next (follow-ups after P8.11 merges):** wire `useAddPageFlag`'s `onAdded` to `useTimelineSelectionStore.getState().selectRange(startBeat, endBeat)`. Render the **+** button after the free paused playhead, in P8.11's `Timeline.tsx`/`TimelinePrimitives.tsx`; it never shows while the playhead sits on a selected page's flag. Give delete an entry point, such as a page-box context menu shared with P8.14, calling `deletePageFlagsMutationOptions`; `PageTimeline` in beat-edit mode still calls the ripple `deletePages`.
+- **Blockers:** none.
