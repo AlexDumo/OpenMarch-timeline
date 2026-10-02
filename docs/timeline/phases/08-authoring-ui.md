@@ -181,8 +181,8 @@ Canvas moves against the selection (UI-9: Editing, Editing off the end, More tha
 
 ### P8.12: No selected page in timeline mode
 
-- Owner: none
-- Status: open
+- Owner: timeline-worker (timeline/p8-12-no-selected-page)
+- Status: claimed
 - PR: none
 - Parallel: yes (with P8.13–P8.15 once P8.11's selection store exists)
 - Depends on: P8.11
