@@ -159,6 +159,26 @@ from it. The spec still wins on the model; this file decides presentation.
     flag's timestamp and sampled at the playhead, as on the `coordinates-v2`
     branch (`dbToMarcherAppearanceTimeline`, `getAppearanceAtTime`), without
     the dropped per-marcher-page overrides (P7.14).
+  - **Page-relative tools (project owner, 2026-10-02).** Features built on
+    "the selected page" keep working, relative to flags and the selection:
+    - Next, previous, first and last page (shortcuts and transport) move the
+      playhead to that flag and select that page's timeline (home for the
+      first flag).
+    - Set all or selected marchers to the previous page sets each marcher's
+      ending in the selected timeline to its position at the timeline's
+      start (a hold); to the next page, to its position at the next flag.
+      Refused with no timeline selected.
+    - Previous and next page paths show positions at the selected timeline's
+      start and at the next flag; with no timeline selected, nothing.
+    - Opening a show selects home.
+    - Undo and redo move the playhead but leave the selection alone, until
+      the backlog item on undo's selection is decided.
+  - **Deprecating page selection.** Page selection stays in page mode until
+    the flip; `SelectedPageContext` goes with page mode in Phase 10. In
+    timeline mode nothing reads it, and a dev-mode warning when
+    `useSelectedPage` is read in timeline mode keeps new code from bringing
+    it back. Coordinate sheets and drill-chart exports loop over every page
+    and don't read the selection, so they stay.
   - **+.** When the paused playhead isn't on a flag (and there is a beat
     there), a **+** shows just after it. It adds a page whose flag is at the
     playhead in one edit. The page that was split keeps its flag, id and
@@ -474,6 +494,6 @@ points (P7.2).
     is a chord, so it changes the path there.
   - Moving marchers between timelines ("Move to timeline", or add then
     remove, where order matters).
-  - Undo's selection and playhead (replacing P7.13's page jump), the
-    selection's identity (timeline id or range), and what a converted show
-    offers before P9.10.
+  - Undo's selection (replacing P7.13's page jump; until then undo moves only
+    the playhead, UI-9 Page-relative tools), and what a converted show offers
+    before P9.10.

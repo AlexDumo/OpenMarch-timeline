@@ -197,7 +197,10 @@ Phase 0. Record outcomes in the ADR (`docs/adr/0001-timeline-motion-model.md`).
     that belongs to a page reads the page containing (or ending at) the
     playhead. Marcher appearance stays by page but is sampled by time: a step
     function keyed by each flag's timestamp, as on the `coordinates-v2`
-    branch. P8.12 removes the selected page.
+    branch. Page navigation, set to previous/next page and page paths work
+    relative to flags and the selected timeline (UI-9 Page-relative tools).
+    P8.11 and P8.12 remove the selected page; `SelectedPageContext` goes with
+    page mode in Phase 10.
   - **Supersedes, in timeline mode:**
     - P7.4's page-edge rule and holding moves, for adding or deleting a
       page.
