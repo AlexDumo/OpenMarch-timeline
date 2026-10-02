@@ -13,6 +13,7 @@ import {
     timelineResolverSettled,
     useTimelineResolverStore,
 } from "@/timeline/timelineStore";
+import { addMarchersToTimeline } from "../timelineMembership";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { updateTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import {
@@ -603,6 +604,45 @@ describeDbTests("page and beat ripple in timeline mode", (it) => {
             for (const [id, [x, y]] of endsAfter.get(created.id)!) {
                 expect(Object.is(x, page6.get(id)![0])).toBe(true);
                 expect(Object.is(y, page6.get(id)![1])).toBe(true);
+            }
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("adding a last page over a stored timeline puts the holds in it, not a second timeline over that range (C-12)", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            const pages = await setUp(db);
+            const endsBefore = pageEnds(pages);
+            // A timeline over the page to come, made by Add selected marchers (UI-9)
+            const a = marchersAndPages.expectedMarchers[0]!.id;
+            const stored = await addMarchersToTimeline({
+                db,
+                range: { start: 49, end: 57 },
+                marcherIds: [a],
+            });
+            await timelineResolverSettled();
+            const before = await snapshot(db);
+
+            const created = await createLastPage({ db, newPageCounts: 8 });
+            await timelineResolverSettled();
+
+            expect(await timeline(db)).toMatchObject([
+                { start_beat: 0, end_beat: 49 },
+                { id: stored.timelineId, start_beat: 49, end_beat: 57 },
+            ]);
+            // The holds went into the stored timeline; the marcher already there has its own move
+            const inStored = (await transitions(db)).filter(
+                (t) => t.timeline_id === stored.timelineId,
+            );
+            expect(inStored.length).toBe(2);
+            expect(await violations(db)).toEqual([]);
+            const endsAfter = pageEnds(await pagesInOrder(db));
+            expectSamePageEnds(endsBefore, endsAfter);
+            const page6 = endsBefore.get(6)!;
+            for (const [id, [x, y]] of endsAfter.get(created.id)!) {
+                expect(x).toBeCloseTo(page6.get(id)![0], 9);
+                expect(y).toBeCloseTo(page6.get(id)![1], 9);
             }
             await roundTrip(db, before, await snapshot(db));
         });

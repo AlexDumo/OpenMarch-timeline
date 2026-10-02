@@ -35,6 +35,7 @@ import {
     snapBoundary,
     snapRangeOffset,
 } from "./TimelineGeometry";
+import { timelineRangeTargetProps } from "./TimelineRangeMenu";
 import type {
     BeatPosition,
     TimelineBeatRange,
@@ -300,9 +301,13 @@ export const TimelineRuler = ({
                             key={page.id}
                             type="button"
                             data-timeline-interactive="true"
+                            {...timelineRangeTargetProps(range)}
                             aria-label={`Page ${page.label}`}
                             aria-pressed={selected}
-                            onClick={() => selectPage(page)}
+                            onClick={(event) => {
+                                // macOS ctrl+click opens the context menu (UI-9: no selection change)
+                                if (!event.ctrlKey) selectPage(page);
+                            }}
                             className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
                             style={{
                                 left:
@@ -426,6 +431,7 @@ export const TimelineTrackClip = ({
         <button
             type="button"
             data-timeline-interactive="true"
+            {...timelineRangeTargetProps(range, track.id)}
             aria-label={`${track.label} timeline, beats ${range.startBeatIndex + 1} through ${range.endBeatIndex}${
                 track.diagnostics
                     ? `, ${track.diagnostics.messages.length} ${track.diagnostics.messages.length === 1 ? "diagnostic" : "diagnostics"}`
@@ -438,9 +444,12 @@ export const TimelineTrackClip = ({
                     ? [track.label, ...track.diagnostics.messages].join("\n")
                     : track.label
             }
-            onClick={() => onSelect?.(track.id)}
+            onClick={(event) => {
+                // macOS ctrl+click opens the context menu (UI-9: no selection change)
+                if (!event.ctrlKey) onSelect?.(track.id);
+            }}
             onPointerDown={(event) => {
-                if (!canMove || event.button !== 0) return;
+                if (!canMove || event.button !== 0 || event.ctrlKey) return;
                 event.stopPropagation();
                 dragRef.current = {
                     pointerId: event.pointerId,
@@ -1003,6 +1012,8 @@ export const useTimelinePointer = ({
             onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
                 if (
                     (event.button !== undefined && event.button !== 0) ||
+                    // macOS ctrl+click is a right-click: it opens the context menu, not a seek
+                    event.ctrlKey ||
                     (event.target instanceof Element &&
                         event.target.closest("[data-timeline-interactive]"))
                 )

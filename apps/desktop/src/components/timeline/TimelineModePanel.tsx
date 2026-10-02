@@ -98,6 +98,7 @@ export default function TimelineModePanel() {
             onSelectionChange={changeSelection}
             onTimelineRangeCommit={commands.commitTimelineRange}
             onCreateTrack={commands.createTrack}
+            addSelectedMarchers={commands.addSelectedMarchers}
         />
     );
 }

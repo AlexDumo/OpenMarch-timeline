@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import { DbTransaction } from "./types";
 import { mapDbErrors, refuse } from "./timelineErrors";
@@ -27,14 +27,72 @@ export interface ModifiedTimelineArgs {
     endBeat?: number;
 }
 
+/** Every stored timeline with exactly the range `[start, end)`, oldest first. */
+export const timelinesWithRange = async (
+    tx: DbTransaction,
+    { start, end }: { start: number; end: number },
+): Promise<DatabaseTimeline[]> =>
+    await tx
+        .select()
+        .from(schema.timelines)
+        .where(
+            and(
+                eq(schema.timelines.start_beat, start),
+                eq(schema.timelines.end_beat, end),
+            ),
+        )
+        .orderBy(asc(schema.timelines.id))
+        .all();
+
+/**
+ * The stored timeline with exactly this range, or undefined. There is at most one (UI-9 One
+ * timeline per range); a file from before that rule could hold two, and then the oldest wins.
+ */
+export const findTimelineByRange = async (
+    tx: DbTransaction,
+    range: { start: number; end: number },
+): Promise<DatabaseTimeline | undefined> =>
+    (await timelinesWithRange(tx, range))[0];
+
+/**
+ * Creates timelines. At most one timeline has a given range (C-12, UI-9 One timeline per range),
+ * so a range that a stored timeline or another new one already has is refused (E-ARGS) before
+ * anything is written. Range edits can still make two share a range (the `ui.md` backlog).
+ *
+ * `allowSharedRanges` skips that check, for loading a spec scenario as written (`ref/` scenarios
+ * and golden vectors predate C-12, and the spec itself allows shared ranges).
+ */
 export const createTimelinesInTransaction = async ({
     newTimelines,
     tx,
+    allowSharedRanges = false,
 }: {
     newTimelines: NewTimelineArgs[];
     tx: DbTransaction;
+    allowSharedRanges?: boolean;
 }): Promise<DatabaseTimeline[]> => {
     if (newTimelines.length === 0) return [];
+    const seen = new Set<string>();
+    for (const t of allowSharedRanges ? [] : newTimelines) {
+        const key = `${t.startBeat},${t.endBeat}`;
+        const stored = await tx
+            .select({ id: schema.timelines.id })
+            .from(schema.timelines)
+            .where(
+                and(
+                    eq(schema.timelines.start_beat, t.startBeat),
+                    eq(schema.timelines.end_beat, t.endBeat),
+                ),
+            )
+            .get();
+        if (stored || seen.has(key))
+            refuse(
+                `a timeline over beats [${t.startBeat}, ${t.endBeat}) already exists${
+                    stored ? ` (timeline ${stored.id})` : ""
+                }; there is one timeline per range`,
+            );
+        seen.add(key);
+    }
     return await mapDbErrors(() =>
         tx
             .insert(schema.timelines)
