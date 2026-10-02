@@ -1,5 +1,8 @@
 import { useEffect } from "react";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import {
+    useCurrentPage,
+    usePageNavigation,
+} from "@/context/SelectedPageContext";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
 import AudioFile from "@/global/classes/AudioFile";
 import { useTimingObjects } from "@/hooks";
@@ -24,9 +27,9 @@ import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 function StateInitializer() {
     const queryClient = useQueryClient();
     const { pages } = useTimingObjects();
-    const selectedPageContext = useSelectedPage();
-    const selectedPage = selectedPageContext?.selectedPage ?? null;
-    const setSelectedPage = selectedPageContext?.setSelectedPage ?? (() => {});
+    // Timeline mode: the page at the playhead (UI-9 No selected page)
+    const currentPage = useCurrentPage();
+    const { goToPage } = usePageNavigation();
     const selectedAudioFileContext = useSelectedAudioFile();
     const selectedAudioFile =
         selectedAudioFileContext?.selectedAudioFile ?? null;
@@ -50,14 +53,14 @@ function StateInitializer() {
             );
     };
 
-    if (selectedPage) {
-        prefetchCoordinates(selectedPage);
+    if (currentPage) {
+        prefetchCoordinates(currentPage);
         void queryClient.prefetchQuery(
-            marcherAppearancesQueryOptions(selectedPage.id, queryClient),
+            marcherAppearancesQueryOptions(currentPage.id, queryClient),
         );
-        if (selectedPage.nextPageId != null) {
+        if (currentPage.nextPageId != null) {
             const nextPage = pages.find(
-                (page) => page.id === selectedPage.nextPageId,
+                (page) => page.id === currentPage.nextPageId,
             );
             if (nextPage) {
                 prefetchCoordinates(nextPage);
@@ -66,9 +69,9 @@ function StateInitializer() {
                 );
             }
         }
-        if (selectedPage.previousPageId != null) {
+        if (currentPage.previousPageId != null) {
             const previousPage = pages.find(
-                (page) => page.id === selectedPage.previousPageId,
+                (page) => page.id === currentPage.previousPageId,
             );
             if (previousPage) {
                 prefetchCoordinates(previousPage);
@@ -84,12 +87,13 @@ function StateInitializer() {
 
     /*******************************************************************/
 
-    // Select page 0 (first page in show order) when none are selected (e.g. app load / refresh)
+    // Select page 0 (first page in show order) when none are selected (e.g. app load / refresh).
+    // Timeline mode always has a page at the playhead once pages load, and opens on home below.
     useEffect(() => {
-        if (selectedPage == null && pages.length > 0) {
-            setSelectedPage(pages[0]);
+        if (currentPage == null && pages.length > 0) {
+            goToPage(pages[0]);
         }
-    }, [pages, selectedPage, setSelectedPage]);
+    }, [pages, currentPage, goToPage]);
 
     // Timeline mode (UI-9): opening a show selects home, with the playhead at beat 0
     useEffect(() => {
@@ -108,7 +112,7 @@ function StateInitializer() {
     // Clear the selected marcher shapes when the page changes
     useEffect(() => {
         setSelectedShapePageIds([]);
-    }, [selectedPage, setSelectedShapePageIds]);
+    }, [currentPage, setSelectedShapePageIds]);
 
     useEffect(() => {
         MarcherShape.updateMarcherShapeFn = async (

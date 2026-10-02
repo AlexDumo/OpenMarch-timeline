@@ -5,10 +5,9 @@ import { WarningIcon, InfoIcon } from "@phosphor-icons/react";
 import type { Diagnostic, SpanKind, XY } from "@openmarch/core";
 import { db } from "@/global/database/db";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
-import { pageEndBeat } from "@/timeline/timelineCanvas";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     groupDiagnosticsByTransition,
     type MarcherInspection,
@@ -359,7 +358,6 @@ export function ShowDiagnosticsList({
 function TimelineInspectorContent() {
     const t = useInspectorTranslate();
     const { selectedMarchers } = useSelectedMarchers()!;
-    const { selectedPage } = useSelectedPage()!;
     const marcherIds = useMemo(
         () => selectedMarchers.map((m) => m.id),
         [selectedMarchers],
@@ -368,7 +366,8 @@ function TimelineInspectorContent() {
         () => new Map(selectedMarchers.map((m) => [m.id, m.drill_number])),
         [selectedMarchers],
     );
-    const beat = selectedPage ? pageEndBeat(selectedPage) : null;
+    // UI-9: the inspector explains each marcher at the paused playhead
+    const beat = useTimelineSelectionStore((s) => s.playheadBeat);
     const {
         inspections,
         omitted,
@@ -395,9 +394,6 @@ function TimelineInspectorContent() {
             translatableTitle={{ keyName: "inspector.timeline.title" }}
             className="mt-12 flex flex-col gap-16"
         >
-            {selectedMarchers.length > 0 && beat === null && (
-                <p className="text-sub">{t("inspector.timeline.noPage")}</p>
-            )}
             {inspections.map((inspection) => (
                 <MarcherInspectionView
                     key={inspection.marcherId}

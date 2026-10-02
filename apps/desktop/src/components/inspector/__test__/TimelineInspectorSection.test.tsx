@@ -22,6 +22,8 @@ import {
     inspect,
 } from "@/timeline/__test__/inspectorFixtures";
 import { buildTransitionEditTarget } from "@/timeline/timelineTransitionEditor";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { useTimelineInspections } from "@/timeline/useTimelineInspections";
 import { TIMELINE_INSPECTOR_STRINGS } from "../timelineInspectorStrings";
 import {
     MarcherInspectionView,
@@ -42,7 +44,6 @@ const mocks = vi.hoisted(() => ({
     unknown: [] as number[],
     transitionEdits: [] as unknown[],
     selectedMarchers: [] as Array<{ id: number; drill_number: string }>,
-    selectedPage: null as unknown,
 }));
 
 vi.mock("@/hooks/queries/useWorkspaceSettings", () => ({
@@ -50,9 +51,6 @@ vi.mock("@/hooks/queries/useWorkspaceSettings", () => ({
 }));
 vi.mock("@/context/SelectedMarchersContext", () => ({
     useSelectedMarchers: () => ({ selectedMarchers: mocks.selectedMarchers }),
-}));
-vi.mock("@/context/SelectedPageContext", () => ({
-    useSelectedPage: () => ({ selectedPage: mocks.selectedPage }),
 }));
 vi.mock("@/timeline/useTimelineInspections", () => ({
     MAX_INSPECTED_MARCHERS: 10,
@@ -83,7 +81,7 @@ beforeEach(() => {
     mocks.unknown = [];
     mocks.transitionEdits = [];
     mocks.selectedMarchers = [];
-    mocks.selectedPage = null;
+    useTimelineSelectionStore.getState().reset();
 });
 
 const view = (inspection: MarcherInspection, label = "T1") =>
@@ -268,7 +266,7 @@ describe("TimelineInspectorSection", () => {
 
     it("with the flag on, shows the selected marchers' inspections and the show's diagnostics", () => {
         mocks.selectedMarchers = [{ id: 2, drill_number: "T2" }];
-        mocks.selectedPage = { id: 1, beats: [{ index: 7 }] };
+        useTimelineSelectionStore.getState().seek(8);
         mocks.inspections = [inspect(golden("G9"), 2, 8)];
         mocks.diagnostics = createResolver(golden("G9")).diagnostics();
         renderSection();
@@ -280,12 +278,21 @@ describe("TimelineInspectorSection", () => {
         expect(screen.getByTestId("timeline-show-diagnostics")).toBeTruthy();
     });
 
+    it("explains the selected marchers at the paused playhead (UI-9, P8.12)", () => {
+        mocks.selectedMarchers = [{ id: 2, drill_number: "T2" }];
+        useTimelineSelectionStore.getState().seek(5);
+        renderSection();
+        expect(vi.mocked(useTimelineInspections)).toHaveBeenLastCalledWith(
+            expect.objectContaining({ marcherIds: [2], beat: 5 }),
+        );
+    });
+
     it("says a marcher isn't in the timeline only when the hook reports it unknown", () => {
         mocks.selectedMarchers = [
             { id: 2, drill_number: "T2" },
             { id: 3, drill_number: "T3" },
         ];
-        mocks.selectedPage = { id: 1, beats: [{ index: 7 }] };
+        useTimelineSelectionStore.getState().seek(8);
         // Rows still loading: nothing is reported missing
         renderSection();
         expect(screen.queryByText(/isn't in the timeline yet/)).toBeNull();
@@ -299,7 +306,7 @@ describe("TimelineInspectorSection", () => {
     it("shows an editor for each transition the hook offers (P8.3)", () => {
         const show = golden("G1");
         mocks.selectedMarchers = [{ id: 1, drill_number: "T1" }];
-        mocks.selectedPage = { id: 1, beats: [{ index: 7 }] };
+        useTimelineSelectionStore.getState().seek(8);
         mocks.inspections = [inspect(show, 1, 8)];
         mocks.transitionEdits = [
             buildTransitionEditTarget(1, {
@@ -311,13 +318,5 @@ describe("TimelineInspectorSection", () => {
         renderSection();
         expect(screen.getByTestId("timeline-transition-editor-1")).toBeTruthy();
         expect(screen.getByText("Edit transition 1")).toBeTruthy();
-    });
-
-    it("asks for a page when marchers are selected but no page is", () => {
-        mocks.selectedMarchers = [{ id: 2, drill_number: "T2" }];
-        renderSection();
-        expect(
-            screen.getByText(/Select a page to see why each marcher/),
-        ).toBeTruthy();
     });
 });

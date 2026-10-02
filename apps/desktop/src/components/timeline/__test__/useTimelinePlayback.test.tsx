@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { describeDbTests, type DbConnection, schema } from "@/test/base";
 import { transactionWithHistory } from "@/db-functions/history";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import {
+    useCurrentPage,
+    usePageNavigation,
+} from "@/context/SelectedPageContext";
 import { useTimingObjects } from "@/hooks";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
@@ -15,7 +18,7 @@ import {
     playbackStep,
     playStartBeat,
 } from "@/timeline/timelinePlayhead";
-import { useTimelinePageBridge } from "@/timeline/useTimelinePageBridge";
+import { setTimelineModeFlag } from "@/test/timelineMode";
 import { useTimelinePlayback } from "../useTimelinePlayback";
 
 /**
@@ -127,19 +130,16 @@ const seedShow = (db: DbConnection) =>
     });
 
 describeDbTests("useTimelinePlayback", (it) => {
-    const renderPlayback = (
-        wrapper: ComponentType<{ children: ReactNode }>,
-        bridge = false,
-    ) =>
+    const renderPlayback = (wrapper: ComponentType<{ children: ReactNode }>) =>
         renderHook(
             () => {
                 const { beats, pages } = useTimingObjects()!;
-                useTimelinePageBridge(bridge);
                 return {
                     pages,
                     beats,
                     playback: useTimelinePlayback({ beats, pages }),
-                    selected: useSelectedPage()!,
+                    currentPage: useCurrentPage(),
+                    navigation: usePageNavigation(),
                     playing: useIsPlaying()!,
                     selection: useTimelineSelectionStore((s) => s.selection),
                 };
@@ -298,40 +298,39 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(store().playheadBeat).toBe(5);
     });
 
-    it("keeps the legacy selected page on the playhead's page, and back (TEMPORARY, P8.12)", async ({
+    it("reads the page at the playhead, and goes to a page by its flag and timeline, in timeline mode (P8.12)", async ({
         db,
         wrapper,
     }) => {
         await seedShow(db);
-        const { result } = renderPlayback(wrapper, true);
+        await setTimelineModeFlag(db, true);
+        const { result } = renderPlayback(wrapper);
         await waitFor(() => expect(result.current.pages).toHaveLength(3));
 
+        await waitFor(() => expect(result.current.currentPage?.id).toBe(0));
         act(() => {
             store().selectRange(9, 17);
         });
-        await waitFor(() =>
-            expect(result.current.selected.selectedPage?.id).toBe(2),
-        );
+        expect(result.current.currentPage?.id).toBe(2);
         act(() => {
             store().seek(4);
         });
-        await waitFor(() =>
-            expect(result.current.selected.selectedPage?.id).toBe(1),
-        );
-        // Selecting a page elsewhere moves the playhead to its flag, not the selection
+        expect(result.current.currentPage?.id).toBe(1);
+        // Going to a page moves the playhead to its flag and selects its timeline (home for the first)
         act(() => {
-            result.current.selected.setSelectedPage({ id: 2 });
+            result.current.navigation.goToPage({ id: 2 });
         });
-        await waitFor(() => expect(store().playheadBeat).toBe(17));
+        expect(store().playheadBeat).toBe(17);
         expect(result.current.selection).toEqual({
             kind: "range",
             start: 9,
             end: 17,
         });
         act(() => {
-            result.current.selected.setSelectedPage({ id: 0 });
+            result.current.navigation.goToPage({ id: 0 });
         });
-        await waitFor(() => expect(store().playheadBeat).toBe(0));
-        expect(result.current.selected.selectedPage?.id).toBe(0);
+        expect(store().playheadBeat).toBe(0);
+        expect(result.current.selection).toEqual({ kind: "home" });
+        expect(result.current.currentPage?.id).toBe(0);
     });
 });

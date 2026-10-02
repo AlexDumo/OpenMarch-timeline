@@ -1,5 +1,8 @@
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import {
+    useCurrentPage,
+    usePageNavigation,
+} from "@/context/SelectedPageContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -31,7 +34,10 @@ export default function PageTimeline() {
     const queryClient = useQueryClient();
     const { uiSettings } = useUiSettingsStore();
     const { isPlaying } = useIsPlaying()!;
-    const { selectedPage, setSelectedPage } = useSelectedPage()!;
+    // Timeline mode shows this page timeline only while beats are edited; there it highlights the
+    // page at the playhead and a click goes to the page's flag (UI-9)
+    const currentPage = useCurrentPage();
+    const { goToPage } = usePageNavigation();
     const { setSelectedShapePageIds } = useSelectionStore()!;
     const { isFullscreen } = useFullscreenStore();
     const { pages, beats } = useTimingObjects()!;
@@ -256,22 +262,22 @@ export default function PageTimeline() {
             deletePages(new Set([page.id]), {
                 onSuccess: () => {
                     if (page.previousPageId != null)
-                        setSelectedPage({ id: page.previousPageId });
+                        goToPage({ id: page.previousPageId });
                 },
             });
         },
-        [deletePages, setSelectedPage],
+        [deletePages, goToPage],
     );
     const handleDeletePageYank = useCallback(
         (page: Page) => {
             deletePageYank(page.id, {
                 onSuccess: () => {
                     if (page.previousPageId != null)
-                        setSelectedPage({ id: page.previousPageId });
+                        goToPage({ id: page.previousPageId });
                 },
             });
         },
-        [deletePageYank, setSelectedPage],
+        [deletePageYank, goToPage],
     );
     return (
         <div className="flex h-fit gap-0" id="pages">
@@ -282,7 +288,7 @@ export default function PageTimeline() {
                         className={clsx(
                             "rounded-l-6 bg-fg-2 flex h-full w-[40px] items-center justify-center border px-10 py-4 font-mono",
                             !isPlaying && "cursor-pointer",
-                            pages[0].id === selectedPage?.id
+                            pages[0].id === currentPage?.id
                                 ? [
                                       "border-accent",
                                       isPlaying &&
@@ -295,7 +301,7 @@ export default function PageTimeline() {
                                   ],
                         )}
                         onClick={() => {
-                            setSelectedPage(pages[0]);
+                            goToPage(pages[0]);
                             setSelectedShapePageIds([]);
                         }}
                         title={t("timeline.page.firstPage")}
@@ -311,7 +317,7 @@ export default function PageTimeline() {
                     if (index === 0) return null;
                     const width = getWidth(page);
                     const selectedIndex = pages.findIndex(
-                        (p) => p.id === selectedPage?.id,
+                        (p) => p.id === currentPage?.id,
                     );
                     return (
                         <ContextMenu.Root
@@ -333,7 +339,7 @@ export default function PageTimeline() {
                                         className={clsx(
                                             "bg-fg-2 text-body text-text group-last:rounded-r-6 relative flex h-full items-center justify-end overflow-clip border px-8 py-4 font-mono",
                                             !isPlaying && "cursor-pointer",
-                                            page.id === selectedPage?.id
+                                            page.id === currentPage?.id
                                                 ? [
                                                       "border-accent",
                                                       isPlaying &&
@@ -346,8 +352,7 @@ export default function PageTimeline() {
                                                   ],
                                         )}
                                         onClick={() => {
-                                            if (!isPlaying)
-                                                setSelectedPage(page);
+                                            if (!isPlaying) goToPage(page);
                                             setSelectedShapePageIds([]);
                                         }}
                                     >

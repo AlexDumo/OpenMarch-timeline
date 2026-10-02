@@ -14,7 +14,13 @@ import {
 import { safelyInvalidateQueries } from "./utils";
 import { allMarchersQueryOptions } from "./useMarchers";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import {
+    useCurrentPage,
+    usePageNavigation,
+} from "@/context/SelectedPageContext";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { pageFlags } from "@/timeline/timelinePlayhead";
+import { useTimelineMode } from "./useWorkspaceSettings";
 import { useTimingObjects } from "../useTimingObjects";
 import { coordinateDataKeys } from "./useCoordinateData";
 import { toast } from "sonner";
@@ -109,8 +115,10 @@ export const usePerformHistoryAction = () => {
     const selectedMarchersContext = useSelectedMarchers();
     const setSelectedMarchers =
         selectedMarchersContext?.setSelectedMarchers ?? (() => {});
-    const selectedPageContext = useSelectedPage();
-    const setSelectedPage = selectedPageContext?.setSelectedPage ?? (() => {});
+    // Timeline mode: the page at the playhead (UI-9 No selected page)
+    const currentPage = useCurrentPage();
+    const { goToPage } = usePageNavigation();
+    const timelineMode = useTimelineMode();
     const [pendingFocus, setPendingFocus] = useState<PendingFocus | null>(null);
 
     const selectMarchers = (ids: Set<number>) => {
@@ -122,14 +130,22 @@ export const usePerformHistoryAction = () => {
 
     // An action can target a page it just restored (redo "add page", undo "delete page"), which
     // the page list only has after it is fetched again. Go there, and select the marchers, once
-    // it is in the list; the marchers are selected only together with that page.
+    // it is in the list; the marchers are selected only together with that page. In timeline mode
+    // (UI-9 Page-relative tools) going there moves only the playhead, to the page's flag; the
+    // timeline selection stays until undo's selection is decided (ui.md backlog).
     useEffect(() => {
         if (!pendingFocus) return;
         const page = pages?.find((p) => p.id === pendingFocus.pageId);
         if (!page) return;
         setPendingFocus(null);
-        if (selectedPageContext?.selectedPage?.id !== page.id)
-            setSelectedPage(page);
+        if (currentPage?.id !== page.id) {
+            if (timelineMode) {
+                const flag = pageFlags(pages).find(
+                    (f) => f.page.id === page.id,
+                );
+                if (flag) useTimelineSelectionStore.getState().seek(flag.flag);
+            } else goToPage(page);
+        }
         if (pendingFocus.marcherIds) selectMarchers(pendingFocus.marcherIds);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pendingFocus, pages]);
@@ -137,7 +153,7 @@ export const usePerformHistoryAction = () => {
     return useMutation({
         mutationFn: (type: "undo" | "redo") =>
             performHistoryAction(type, db, {
-                currentPageId: selectedPageContext?.selectedPage?.id,
+                currentPageId: currentPage?.id,
             }),
         onSuccess: async (response, type) => {
             // Invalidate history query

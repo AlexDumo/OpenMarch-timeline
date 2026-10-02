@@ -7,7 +7,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useQuery } from "@tanstack/react-query";
 import { marcherPagesByPageQueryOptions } from "@/hooks/queries";
 import { useSelectionStore } from "@/stores/SelectionStore";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { isTimelineShapeHandle } from "@/global/classes/canvasObjects/TimelineShapeOverlay";
 
 // eslint-disable-next-line max-lines-per-function
@@ -17,7 +17,7 @@ export const useSelectionListeners = ({
     canvas: OpenMarchCanvas | null;
 }) => {
     const { selectedShapePageIds } = useSelectionStore()!;
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const { setSelectedShapePageIds } = useSelectionStore();
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const unimplementedError = (
@@ -28,7 +28,7 @@ export const useSelectionListeners = ({
         );
     };
     const { data: marcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.id),
+        marcherPagesByPageQueryOptions(currentPage?.id),
     );
 
     /**
@@ -293,7 +293,7 @@ export const useSelectionListeners = ({
     // Set the canvas' active object to the global selected object when they change outside of user-canvas-interaction
     useEffect(() => {
         syncCanvasToGlobal();
-    }, [selectedMarchers, marcherPages, selectedPage, syncCanvasToGlobal]);
+    }, [selectedMarchers, marcherPages, currentPage, syncCanvasToGlobal]);
 
     // Update the control points on MarcherShapes when the selectedShapePages change
     useEffect(() => {

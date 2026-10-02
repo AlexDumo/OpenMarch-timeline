@@ -8,14 +8,14 @@ import { useEffect, useState } from "react";
 import { clsx } from "clsx";
 import { T } from "@tolgee/react";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import SelectTab from "./tabs/SelectTab";
 
 export default function Topbar() {
     const { isFullscreen } = useFullscreenStore();
     const [activeTab, setActiveTab] = useState("alignment");
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const { currentCollisions } = useCollisionStore();
 
     // Switch to "view" tab when entering fullscreen mode
@@ -33,7 +33,7 @@ export default function Topbar() {
         if (activeTab === "collisions" && currentCollisions.length === 0) {
             setActiveTab("alignment");
         }
-    }, [selectedPage, currentCollisions.length, activeTab]);
+    }, [currentPage, currentCollisions.length, activeTab]);
 
     return (
         <div
@@ -73,7 +73,7 @@ export default function Topbar() {
                     <TabItem value="view">
                         <T keyName="inspector.shape.viewTab" />
                     </TabItem>
-                    {selectedPage && currentCollisions.length > 0 && (
+                    {currentPage && currentCollisions.length > 0 && (
                         <TabItem value="collisions">
                             <div className="flex items-center gap-4">
                                 <WarningIcon

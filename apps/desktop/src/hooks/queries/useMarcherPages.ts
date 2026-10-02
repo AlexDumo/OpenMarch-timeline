@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { db, schema } from "@/global/database/db";
 import { invalidateByPage } from "./sharedInvalidators";
 import type MarcherPage from "@/global/classes/MarcherPage";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useTolgee } from "@tolgee/react";
 import { FieldProperties } from "@openmarch/core";
@@ -367,7 +367,7 @@ export const useUpdateSelectedMarchers = (
  * @returns A mutation function that takes a marcher transform function and updates the selected marchers on the selected page.
  */
 export const useUpdateSelectedMarchersOnSelectedPage = () => {
-    const selectedPageContext = useSelectedPage();
-    const selectedPage = selectedPageContext?.selectedPage ?? null;
-    return useUpdateSelectedMarchers(selectedPage?.id, selectedPage);
+    // Timeline mode: the page at the playhead (UI-9 No selected page)
+    const currentPage = useCurrentPage();
+    return useUpdateSelectedMarchers(currentPage?.id, currentPage);
 };

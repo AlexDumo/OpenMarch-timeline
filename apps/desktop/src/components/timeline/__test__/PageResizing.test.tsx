@@ -17,7 +17,10 @@ import {
 import { useTimingObjects } from "@/hooks";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import {
+    useCurrentPage,
+    usePageNavigation,
+} from "@/context/SelectedPageContext";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
 import { ElectronApi } from "electron/preload";
 import Beat from "@/global/classes/Beat";
@@ -173,11 +176,11 @@ describe.todo("PageTimeline Resizing", () => {
             setIsPlaying: vi.fn(),
         });
 
-        // Mock the useSelectedPage hook
-        vi.mocked(useSelectedPage).mockReturnValue({
-            selectedPage: mockPages[1],
-            setSelectedPage: vi.fn(),
-            setPageToSelect: vi.fn(),
+        // Mock the current page and page navigation
+        vi.mocked(useCurrentPage).mockReturnValue(mockPages[1]!);
+        vi.mocked(usePageNavigation).mockReturnValue({
+            goToPage: vi.fn(),
+            goToPageWhenItExists: vi.fn(),
         });
 
         // Mock the useSelectedAudioFile hook

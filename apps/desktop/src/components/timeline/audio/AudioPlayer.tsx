@@ -1,6 +1,6 @@
 import WaveSurfer from "wavesurfer.js";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
 import AudioFile, {
@@ -60,11 +60,10 @@ export const getPausedPlaybackSeconds = (page: Page | null): number => {
 
 export const seekWaveSurferToPausedPosition = (
     ws: ReturnType<typeof WaveSurfer.create>,
-    page: Page | null,
+    seconds: number,
     duration: number,
 ): void => {
     if (duration <= 0) return;
-    const seconds = getPausedPlaybackSeconds(page);
     const progress = Math.max(0, Math.min(1, seconds / duration));
     ws.seekTo(progress);
 };
@@ -111,7 +110,8 @@ export default function AudioPlayer() {
     const { uiSettings } = useUiSettingsStore();
     const audioMuted = uiSettings.audioMuted;
     const audioVolume = uiSettings.audioVolume;
-    const selectedPageContext = useSelectedPage();
+    // Page mode plays from the selected page; timeline mode from the playhead (UI-9)
+    const currentPage = useCurrentPage();
     const isPlayingContext = useIsPlaying();
     const selectedAudioFileContext = useSelectedAudioFile();
     const { beats, measures, pages } = useTimingObjects();
@@ -119,11 +119,7 @@ export default function AudioPlayer() {
         workspaceSettingsQueryOptions(),
     );
     const audioOffsetSeconds = workspaceSettings?.audioOffsetSeconds ?? 0;
-    const contextsReady =
-        !!selectedPageContext &&
-        !!isPlayingContext &&
-        !!selectedAudioFileContext;
-    const selectedPage = selectedPageContext?.selectedPage ?? null;
+    const contextsReady = !!isPlayingContext && !!selectedAudioFileContext;
     const isPlaying = isPlayingContext?.isPlaying ?? false;
     const selectedAudioFile =
         selectedAudioFileContext?.selectedAudioFile ?? null;
@@ -169,13 +165,17 @@ export default function AudioPlayer() {
         ? timeAtBeat(beats, playheadBeat)
         : playbackTimestamp;
     const restartKey = timelineMode ? playheadRevision : 0;
-    const selectedPageRef = useRef(selectedPage);
+    // Where the waveform rests while paused: the selected page's end, or the playhead
+    const pausedSeconds = timelineMode
+        ? startSeconds
+        : getPausedPlaybackSeconds(currentPage);
+    const pausedSecondsRef = useRef(pausedSeconds);
     const audioDurationRef = useRef(audioDuration);
     const isPlayingRef = useRef(isPlaying);
 
     useEffect(() => {
-        selectedPageRef.current = selectedPage;
-    }, [selectedPage]);
+        pausedSecondsRef.current = pausedSeconds;
+    }, [pausedSeconds]);
 
     useEffect(() => {
         audioDurationRef.current = audioDuration;
@@ -369,10 +369,10 @@ export default function AudioPlayer() {
 
     // Sync audio and store playback position with the selected page
     useEffect(() => {
-        if (!selectedPage || isPlaying) return;
+        if (!currentPage || isPlaying) return;
 
-        setPlaybackTimestamp(getPausedPlaybackSeconds(selectedPage));
-    }, [selectedPage, isPlaying, setPlaybackTimestamp]);
+        setPlaybackTimestamp(getPausedPlaybackSeconds(currentPage));
+    }, [currentPage, isPlaying, setPlaybackTimestamp]);
 
     // Play/pause audio when isPlaying changes
     useEffect(() => {
@@ -465,8 +465,8 @@ export default function AudioPlayer() {
                   }
                 : {
                       playStartTime: startAt,
-                      startTimestamp: selectedPage?.timestamp ?? 0,
-                      pageDuration: selectedPage?.duration ?? 0,
+                      startTimestamp: currentPage?.timestamp ?? 0,
+                      pageDuration: currentPage?.duration ?? 0,
                   };
         } else {
             // If not playing, stop any existing playback
@@ -522,7 +522,7 @@ export default function AudioPlayer() {
             if (isPlayingRef.current) return;
             seekWaveSurferToPausedPosition(
                 ws,
-                selectedPageRef.current,
+                pausedSecondsRef.current,
                 audioDurationRef.current,
             );
         };
@@ -567,8 +567,12 @@ export default function AudioPlayer() {
     useEffect(() => {
         if (!waveSurfer || !audioBuffer || isPlaying) return;
 
-        seekWaveSurferToPausedPosition(waveSurfer, selectedPage, audioDuration);
-    }, [waveSurfer, audioBuffer, audioDuration, selectedPage, isPlaying]);
+        seekWaveSurferToPausedPosition(
+            waveSurfer,
+            pausedSeconds,
+            audioDuration,
+        );
+    }, [waveSurfer, audioBuffer, audioDuration, pausedSeconds, isPlaying]);
 
     // Animate WaveSurfer progress bar when playing
     useEffect(() => {

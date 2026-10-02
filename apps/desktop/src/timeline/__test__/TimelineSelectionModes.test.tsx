@@ -31,9 +31,9 @@ import { pageFlags } from "../timelinePlayhead";
 /**
  * Page navigation and the selection on the `base.tsx` fixtures (ui.md UI-9 Page-relative tools;
  * P8.11). Under `test:timeline` (a converted show with the flag on), navigation moves the
- * playhead to a flag and selects that page's box, home for the first page, and the legacy selected
- * page follows the playhead. The default run checks that page mode still selects pages and never
- * touches the timeline selection.
+ * playhead to a flag and selects that page's box, home for the first page, and the current page
+ * (page data) is the page at the playhead (P8.12). The default run checks that page mode still
+ * selects pages and never touches the timeline selection.
  */
 
 const app = vi.hoisted(() => ({ client: (): unknown => null }));
@@ -94,7 +94,7 @@ describeDbTests("page navigation and the selection", (it) => {
         if (!timelineFixtureMode()) {
             await trigger(RegisteredActionsEnum.nextPage);
             await waitFor(() =>
-                expect(probed().selectedPage?.id).toBe(pages[1]!.id),
+                expect(probed().currentPage?.id).toBe(pages[1]!.id),
             );
             expect(timelineSelection().selection).toEqual({ kind: "home" });
             expect(timelineSelection().playheadBeat).toBe(0);
@@ -108,7 +108,7 @@ describeDbTests("page navigation and the selection", (it) => {
         );
         expect(timelineSelection().playheadBeat).toBe(flags[1]!.flag);
         await waitFor(() =>
-            expect(probed().selectedPage?.id).toBe(pages[1]!.id),
+            expect(probed().currentPage?.id).toBe(pages[1]!.id),
         );
 
         await trigger(RegisteredActionsEnum.nextPage);
@@ -134,7 +134,7 @@ describeDbTests("page navigation and the selection", (it) => {
         );
         expect(timelineSelection().playheadBeat).toBe(0);
         await waitFor(() =>
-            expect(probed().selectedPage?.id).toBe(pages[0]!.id),
+            expect(probed().currentPage?.id).toBe(pages[0]!.id),
         );
     });
 
@@ -152,7 +152,7 @@ describeDbTests("page navigation and the selection", (it) => {
             selection: boxOf(2),
             playheadBeat: pageFlags(probed().pages)[2]!.flag,
         });
-        expect(probed().selectedPage?.id).toBe(page.id);
+        expect(probed().currentPage?.id).toBe(page.id);
         // P9.10 converts a timeline per page, so the box resolves to a stored timeline with every
         // marcher in it, and nobody is dimmed
         const { selectedTimeline } = timelineSelection();

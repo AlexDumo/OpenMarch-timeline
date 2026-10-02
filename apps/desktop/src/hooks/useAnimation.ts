@@ -4,7 +4,10 @@ import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import { getCoordinatesAtTime } from "@/utilities/Keyframes";
 import { getLivePlaybackPosition } from "@/components/timeline/audio/AudioPlayer";
 import { useTimingObjects } from "@/hooks";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import {
+    useCurrentPage,
+    usePageNavigation,
+} from "@/context/SelectedPageContext";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import { useManyCoordinateData } from "./queries/useCoordinateData";
 import Page from "@/global/classes/Page";
@@ -31,7 +34,10 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
             {} as Record<number, Page>,
         );
     }, [pages]);
-    const { setSelectedPage, selectedPage } = useSelectedPage()!;
+    // Page mode follows playback with the selected page; timeline mode has none (UI-9) and reads
+    // the page at the playhead only for its collisions
+    const selectedPage = useCurrentPage();
+    const { goToPage: setSelectedPage } = usePageNavigation();
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
     const {
         collisions: pageCollisions,

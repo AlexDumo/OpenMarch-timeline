@@ -130,14 +130,34 @@ export function pathsIntoPage(
     previousPage: PathPage | null | undefined,
     tolerance = PATH_DRAW_TOLERANCE,
 ): Map<number, TimelinePath> {
+    if (!page || !previousPage) return new Map();
+    return pathsBetweenBeats(
+        resolver,
+        marcherIds,
+        pageEndBeat(previousPage),
+        pageEndBeat(page),
+        tolerance,
+    );
+}
+
+/**
+ * Every listed marcher's path from `fromBeat` to `toBeat`, by marcher id; marchers the resolver
+ * doesn't know, and every marcher when the range is empty, are left out.
+ */
+export function pathsBetweenBeats(
+    resolver: PathResolver,
+    marcherIds: Iterable<number>,
+    fromBeat: number,
+    toBeat: number,
+    tolerance = PATH_DRAW_TOLERANCE,
+): Map<number, TimelinePath> {
     const paths = new Map<number, TimelinePath>();
-    if (!page || !previousPage) return paths;
     for (const marcherId of marcherIds) {
-        const path = pathIntoPage(
+        const path = sampleTimelinePath(
             resolver,
             marcherId,
-            page,
-            previousPage,
+            fromBeat,
+            toBeat,
             tolerance,
         );
         if (path) paths.set(marcherId, path);

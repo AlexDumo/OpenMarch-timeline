@@ -7,8 +7,6 @@
 export const TIMELINE_INSPECTOR_STRINGS = {
     "inspector.timeline.title": "Timeline",
     "inspector.timeline.marcherTitle": "{marcher} at beat {beat}",
-    "inspector.timeline.noPage":
-        "Select a page to see why each marcher is where it is.",
     "inspector.timeline.omitted": "and {count} more selected marchers",
     "inspector.timeline.notInTimeline": "{marcher} isn't in the timeline yet.",
 

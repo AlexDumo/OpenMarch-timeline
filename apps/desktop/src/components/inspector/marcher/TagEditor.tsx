@@ -22,7 +22,7 @@ import {
 import { DatabaseTag, getTagName, NewMarcherTagArgs } from "@/db-functions";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { AppearanceModalContents } from "@/components/marcher/appearance/AppearanceModal";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 
 const buttonClassName = twMerge("flex items-center gap-4 w-full");
 
@@ -95,7 +95,7 @@ const TagContextMenu = ({ tag }: { tag: DatabaseTag }) => {
     const [isRenaming, setIsRenaming] = useState(false);
     const renameInputRef = useRef<HTMLInputElement>(null);
     const queryClient = useQueryClient();
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
 
     const { mutate: updateTag, isPending: isUpdating } = useMutation(
         updateTagsMutationOptions(queryClient),
@@ -148,13 +148,13 @@ const TagContextMenu = ({ tag }: { tag: DatabaseTag }) => {
                 mode="tag"
                 launchArgs={{
                     targetTagId: tag.id,
-                    targetPageId: selectedPage?.id,
+                    targetPageId: currentPage?.id,
                 }}
             />,
             "marcher-appearance",
         );
     }, [
-        selectedPage?.id,
+        currentPage?.id,
         setHighlightSelection,
         setSidebarModalContent,
         setSidebarModalOpen,

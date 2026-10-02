@@ -1,5 +1,5 @@
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { useEffect, useRef } from "react";
 import {
     XIcon,
@@ -25,18 +25,18 @@ import clsx from "clsx";
 export default function TimelineContainer() {
     const { isPlaying } = useIsPlaying()!;
     const { measures } = useTimingObjects()!;
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const { uiSettings } = useUiSettingsStore();
     const { isFullscreen } = useFullscreenStore();
     const timelineRef = useRef<HTMLDivElement>(null);
     const timelineMode = useTimelineMode();
 
     useEffect(() => {
-        if (!selectedPage) return;
+        if (!currentPage) return;
 
         const container = timelineRef.current;
         const selectedPageElement = document.querySelector(
-            `[timeline-page-id="${selectedPage.id}"]`,
+            `[timeline-page-id="${currentPage.id}"]`,
         );
 
         if (!container || !selectedPageElement) return;
@@ -68,7 +68,7 @@ export default function TimelineContainer() {
             container.style.scrollBehavior = "smooth";
             container.style.transition = "";
         };
-    }, [selectedPage, isPlaying]);
+    }, [currentPage, isPlaying]);
 
     // Rerender the timeline when the measures or pages change
     useEffect(() => {

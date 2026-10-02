@@ -17,7 +17,8 @@ import type Marcher from "@/global/classes/Marcher";
 import { IsPlayingProvider } from "@/context/IsPlayingContext";
 import {
     SelectedPageProvider,
-    useSelectedPage,
+    useCurrentPage,
+    usePageNavigation,
 } from "@/context/SelectedPageContext";
 import {
     SelectedMarchersProvider,
@@ -73,11 +74,13 @@ export const harnessQueryClient = (): QueryClient | null => queryClient;
 export interface FeatureProbe {
     pages: Page[];
     marchers: Marcher[] | undefined;
-    selectedPage: Page | null;
+    /** The selected page in page mode; the page at the playhead in timeline mode (UI-9) */
+    currentPage: Page | null;
     selectedMarchers: Marcher[];
-    setSelectedPage: (page: { id: number }) => void;
+    /** Selects the page in page mode; goes to its flag and timeline in timeline mode */
+    goToPage: (page: { id: number }) => void;
     setSelectedMarchers: (marchers: Marcher[]) => void;
-    /** Settings, field properties and the selected page's rows have loaded */
+    /** Settings, field properties and the current page's rows have loaded */
     loaded: boolean;
     /** The file's timeline flag, from the loaded workspace settings */
     timelineMode: boolean;
@@ -88,19 +91,20 @@ const probe: { current: FeatureProbe | null } = { current: null };
 function ProbeView() {
     const { pages } = useTimingObjects();
     const { data: marchers } = useQuery(allMarchersQueryOptions());
-    const selectedPageContext = useSelectedPage()!;
+    const currentPage = useCurrentPage();
+    const { goToPage } = usePageNavigation();
     const selectedMarchersContext = useSelectedMarchers()!;
     const settings = useQuery(workspaceSettingsQueryOptions());
     const fieldProperties = useQuery(fieldPropertiesQueryOptions());
     const marcherPages = useQuery(
-        marcherPagesByPageQueryOptions(selectedPageContext.selectedPage?.id),
+        marcherPagesByPageQueryOptions(currentPage?.id),
     );
     probe.current = {
         pages,
         marchers,
-        selectedPage: selectedPageContext.selectedPage,
+        currentPage,
         selectedMarchers: selectedMarchersContext.selectedMarchers,
-        setSelectedPage: selectedPageContext.setSelectedPage,
+        goToPage,
         setSelectedMarchers: selectedMarchersContext.setSelectedMarchers,
         timelineMode: isTimelineModeEnabled(settings.data),
         loaded:
@@ -121,14 +125,13 @@ export const probed = (): FeatureProbe => {
  * Sets the timeline-mode selection (ui.md UI-9), as clicking the timeline does: `"home"` selects
  * home and moves the playhead to beat 0; a page selects its box (previous flag to its own flag)
  * and moves the playhead to its flag, or home for the first page; a range selects it and moves the
- * playhead to its end. Waits for the selected page to follow the playhead (the TEMPORARY bridge
- * until P8.12) and, in timeline mode, for the stored timelines to load, so dimming and the
- * selected timeline are settled.
+ * playhead to its end. Waits, in timeline mode, for the stored timelines to load, so dimming and
+ * the selected timeline are settled.
  */
 export const selectTimeline = async (
     target: "home" | Page | { readonly start: number; readonly end: number },
 ) => {
-    // Page mode has no timeline selection (and no bridge to wait for)
+    // Page mode has no timeline selection
     expect(
         probed().timelineMode,
         "selectTimeline needs a file in timeline mode",
@@ -150,7 +153,7 @@ export const selectTimeline = async (
     await waitFor(() => {
         const { playheadBeat, storedTimelines } =
             useTimelineSelectionStore.getState();
-        expect(probed().selectedPage?.id).toBe(
+        expect(probed().currentPage?.id).toBe(
             pageAtPlayhead(probed().pages, playheadBeat)?.id,
         );
         if (timelineFixtureMode()) expect(storedTimelines).not.toBeNull();
@@ -198,19 +201,23 @@ export const mountFeature = (children: ReactNode) => {
     return { qc, result };
 };
 
-/** Selects `page` and the marchers with `marcherIds`, and waits for their data to load. */
+/**
+ * Goes to `page` (`usePageNavigation`: selects it in page mode; in timeline mode moves the playhead
+ * to its flag and selects its timeline) and selects the marchers with `marcherIds`, and waits for
+ * their data to load.
+ */
 export const selectPageAndMarchers = async (
     page: Page,
     marcherIds: readonly number[],
 ) => {
-    act(() => probed().setSelectedPage(page));
+    act(() => probed().goToPage(page));
     act(() =>
         probed().setSelectedMarchers(
             probed().marchers!.filter((m) => marcherIds.includes(m.id)),
         ),
     );
     await waitFor(() => {
-        expect(probed().selectedPage?.id).toBe(page.id);
+        expect(probed().currentPage?.id).toBe(page.id);
         expect(
             probed()
                 .selectedMarchers.map((m) => m.id)

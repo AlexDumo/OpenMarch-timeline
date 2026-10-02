@@ -1,6 +1,6 @@
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { useTolgee } from "@tolgee/react";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import { useMemo } from "react";
 import * as Popover from "@radix-ui/react-popover";
@@ -9,7 +9,7 @@ import { useCanvasStore } from "@/stores/CanvasStore";
 import { Button } from "@openmarch/ui";
 
 export function CollisionsTab() {
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const { currentCollisions } = useCollisionStore();
 
     const collisionInfo = useMemo(() => {
@@ -24,7 +24,7 @@ export function CollisionsTab() {
     }, [currentCollisions]);
 
     // Only show tab when there are collisions
-    if (!selectedPage || currentCollisions.length === 0) return null;
+    if (!currentPage || currentCollisions.length === 0) return null;
 
     return (
         <div className="flex w-full flex-wrap gap-8">

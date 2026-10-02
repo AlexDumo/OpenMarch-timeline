@@ -2,14 +2,25 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { ClockIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { getLivePlaybackPosition } from "@/components/timeline/audio/AudioPlayer";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
+import { useTimingObjects } from "@/hooks";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { timeAtBeat } from "@/timeline/timeMap";
 
 /**
  * Live clock component that displays the current playback position
  */
 export function AudioClock() {
     const { isPlaying } = useIsPlaying()!;
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
+    const { beats } = useTimingObjects()!;
+    // Timeline mode (UI-9): paused, the clock shows the playhead's time
+    const timelineMode = useTimelineMode();
+    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    const pausedTime = timelineMode
+        ? timeAtBeat(beats, playheadBeat)
+        : (currentPage?.timestamp ?? 0) + (currentPage?.duration ?? 0);
     const [displayTime, setDisplayTime] = useState<number>(0);
 
     // Animation frame loop to update the displayed time
@@ -24,15 +35,13 @@ export function AudioClock() {
         if (isPlaying) {
             update();
         } else {
-            setDisplayTime(
-                (selectedPage?.timestamp ?? 0) + (selectedPage?.duration ?? 0),
-            );
+            setDisplayTime(pausedTime);
         }
 
         return () => {
             cancelAnimationFrame(rafId);
         };
-    }, [isPlaying, selectedPage]);
+    }, [isPlaying, pausedTime]);
 
     // Helper function to format time in MM:SS.mmm format
     const formatTime = (seconds: number) => {

@@ -8,8 +8,8 @@ import { GOLDEN_FIXTURES } from "../fixtures/goldenFixtures";
 import { useTimelineResolverStore } from "../timelineStore";
 import { pathsIntoPage } from "../timelinePaths";
 import {
+    timelinePathRanges,
     useTimelinePathRender,
-    type PathRenderPage,
 } from "../useTimelinePathRender";
 import { useTimelineStepSizes } from "../useTimelineStepSizes";
 
@@ -22,7 +22,7 @@ const fieldProperties =
     FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
 
 /** G8 (an arc over beats 0 to 8) split into pages 1 to 3, ending at beats 0, 4 and 8 */
-const PAGES: PathRenderPage[] = [
+const PAGES = [
     { id: 1, counts: 0, beats: [], previousPageId: null, nextPageId: 2 },
     {
         id: 2,
@@ -79,8 +79,8 @@ const props = (
     canvas,
     enabled,
     isPlaying: false,
-    selectedPage: PAGES[1]!,
-    pages: PAGES,
+    // Page 2's box, [0, 4): the path through it and on to page 3's flag
+    ranges: timelinePathRanges({ kind: "range", start: 0, end: 4 }, PAGES),
     marcherIds: MARCHER_IDS,
     marcherVisuals: VISUALS,
     fieldProperties,
@@ -100,7 +100,7 @@ const ready = (r: Resolver = resolver()) => {
 };
 
 describe("useTimelinePathRender", () => {
-    it("draws the moves into and out of the selected page from the resolver", () => {
+    it("draws the moves through the selected timeline and on to the next flag from the resolver", () => {
         const r = ready();
         const canvas = stubCanvas();
         renderHook(() => useTimelinePathRender(props(canvas, true)));
@@ -206,6 +206,47 @@ describe("useTimelinePathRender", () => {
         expect(second![0].previousPaths).toBe(first![0].previousPaths);
         expect(second![0].nextPaths).toBe(first![0].nextPaths);
         expect(spy).not.toHaveBeenCalled();
+    });
+});
+
+describe("timelinePathRanges (UI-9 Page-relative tools)", () => {
+    it("runs through the selected range and on to the next flag", () => {
+        expect(
+            timelinePathRanges({ kind: "range", start: 0, end: 4 }, PAGES),
+        ).toEqual({
+            previous: { start: 0, end: 4 },
+            next: { start: 4, end: 8 },
+        });
+        // A dragged range that ends between flags runs on to the next one
+        expect(
+            timelinePathRanges({ kind: "range", start: 1, end: 6 }, PAGES),
+        ).toEqual({
+            previous: { start: 1, end: 6 },
+            next: { start: 6, end: 8 },
+        });
+    });
+
+    it("has no next path past the last flag, and no paths at home or with nothing selected", () => {
+        expect(
+            timelinePathRanges({ kind: "range", start: 4, end: 8 }, PAGES),
+        ).toEqual({ previous: { start: 4, end: 8 }, next: null });
+        const none = { previous: null, next: null };
+        expect(timelinePathRanges({ kind: "home" }, PAGES)).toEqual(none);
+        expect(timelinePathRanges({ kind: "none" }, PAGES)).toEqual(none);
+    });
+
+    it("draws nothing with no timeline selected", () => {
+        ready();
+        const canvas = stubCanvas();
+        renderHook(() =>
+            useTimelinePathRender({
+                ...props(canvas, true),
+                ranges: timelinePathRanges({ kind: "home" }, PAGES),
+            }),
+        );
+        const args = canvas.renderTimelinePathVisuals.mock.calls[0]![0];
+        expect(args.previousPaths.size).toBe(0);
+        expect(args.nextPaths.size).toBe(0);
     });
 });
 

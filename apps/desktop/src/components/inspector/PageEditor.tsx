@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useSelectedPage } from "../../context/SelectedPageContext";
+import { useCurrentPage } from "../../context/SelectedPageContext";
 import { InspectorCollapsible } from "./InspectorCollapsible";
 import { Button, Switch } from "@openmarch/ui";
 import { measureRangeString } from "../../global/classes/Page";
@@ -11,12 +11,12 @@ import { useSplitPage } from "./PageEditorUtils";
 // TODO: figure out how to make this work with the new music system
 function PageEditor() {
     const queryClient = useQueryClient();
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const updatePagesMutation = useMutation(
         updatePagesMutationOptions(queryClient),
     );
     const splitPage = useSplitPage().mutate;
-    const isFirstPage = selectedPage?.previousPageId === null;
+    const isFirstPage = currentPage?.previousPageId === null;
 
     const countsInputId = "page-counts";
     const subsetInputId = "page-subset";
@@ -29,16 +29,16 @@ function PageEditor() {
 
     // Reset the form when the selected page changes so the values are correct
     useEffect(() => {
-        if (selectedPage) resetForm();
-    }, [selectedPage]);
+        if (currentPage) resetForm();
+    }, [currentPage]);
 
-    if (selectedPage)
+    if (currentPage)
         return (
             <InspectorCollapsible
                 defaultOpen
                 translatableTitle={{
                     keyName: "inspector.page.title",
-                    parameters: { pageNumber: selectedPage.name },
+                    parameters: { pageNumber: currentPage.name },
                 }}
                 className="mt-12"
             >
@@ -49,7 +49,7 @@ function PageEditor() {
                 >
                     {/* <div className="input-group">
                     <label htmlFor="page-name">Name</label>
-                    <Input type="text" value={selectedPage.name} onChange={undefined} id="page-name" />
+                    <Input type="text" value={currentPage.name} onChange={undefined} id="page-name" />
                 </div> */}
                     <div className="flex w-full items-center justify-between">
                         <label
@@ -59,7 +59,7 @@ function PageEditor() {
                             <T keyName="inspector.page.counts" />
                         </label>
                         <div className="w-fit min-w-0">
-                            {isFirstPage ? 0 : selectedPage.counts.toString()}
+                            {isFirstPage ? 0 : currentPage.counts.toString()}
                         </div>
                     </div>
                     <div className="flex w-full items-center justify-between gap-8">
@@ -72,19 +72,19 @@ function PageEditor() {
                         <Switch
                             disabled={isFirstPage}
                             onClick={(e) => {
-                                if (selectedPage) {
+                                if (currentPage) {
                                     updatePagesMutation.mutate({
                                         modifiedPagesArgs: [
                                             {
-                                                id: selectedPage.id,
+                                                id: currentPage.id,
                                                 is_subset:
-                                                    !selectedPage.isSubset,
+                                                    !currentPage.isSubset,
                                             },
                                         ],
                                     });
                                 }
                             }}
-                            checked={selectedPage?.isSubset || false}
+                            checked={currentPage?.isSubset || false}
                             id={subsetInputId}
                         />
                     </div>
@@ -93,14 +93,14 @@ function PageEditor() {
                             <T keyName="inspector.page.measures" />
                         </label>
                         <p className="text-body text-text leading-none">
-                            {measureRangeString(selectedPage)}
+                            {measureRangeString(currentPage)}
                         </p>
                     </div>
                     <Button
                         variant="secondary"
                         size="compact"
-                        onClick={() => splitPage({ page: selectedPage })}
-                        disabled={selectedPage?.beats.length <= 1}
+                        onClick={() => splitPage({ page: currentPage })}
+                        disabled={currentPage?.beats.length <= 1}
                     >
                         <T keyName="inspector.page.splitPage" />
                     </Button>
