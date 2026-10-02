@@ -139,6 +139,56 @@ QA-SC-01 to -15 runnable from the UI. Verdicts for SC-07, SC-14 and SC-15 record
 
 Apply C-11 (implementation-plan.md): every transition starts and ends exactly when its timeline does. A timeline can own several transitions, but they all share its range; assignments still go in and out inside it. Range edits move the timeline and all its transitions together (one lockstep R-E1 procedure), creating a transition with another range is refused, the ripple's holding moves get their own timelines, deleting a timeline's last transition deletes the timeline, and a marcher track's clip is its timeline's range. The converter and the database check are P9.10.
 
+### P8.11: UI-9 selection and playhead
+
+- Owner: none
+- Status: open
+- PR: none
+- Parallel: yes (with P8.13 and P8.14)
+- Depends on: P8.10
+
+The selection state and what it draws (`ui.md` UI-9: Pages, Home, Playhead, Play, Selection, Tracks, What the selection holds, The end of the show). In timeline mode the selection is home, a range or nothing, held in one store that P8.12–P8.15 read. A page box selects its page's range (previous flag to its own flag) and seeks to its end; the initial box selects home and seeks to beat 0. The paused playhead rests on any whole beat, including the last flag, and seeking doesn't change the selection (replaces `pageForSeek`/`followSelectedPage` in `useTimelinePlayback.ts`). Play resumes from the playhead and loops the selected range. Marchers without a transition in the selected timeline are dimmed and can't be selected or hit (clicks, box select); selecting a timeline deselects them. A dragged range is selectable like a page box. The view model draws one track per stored timeline. No database writes. Leaves the canvas's page-based reads to P8.12.
+
+### P8.13: UI-9 page flags
+
+- Owner: none
+- Status: open
+- PR: none
+- Parallel: yes (with P8.11 and P8.14)
+- Depends on: P8.10
+
+Page writes in timeline mode (UI-9 **+** and Deleting a flag). **+** shows after the paused playhead when it isn't on a flag and there is a beat there. Inside a page it inserts a row at the split page's old start and moves that page's `start_beat` to the playhead, so the split page keeps its flag, id and data and later pages renumber (no `is_subset`); in the last page it also rewrites `last_page_counts`. Past the last flag it appends a page ending at the playhead. Deleting a flag deletes only that page row. None of these write timeline rows: in timeline mode they skip `withTimelinePageRipple` (P7.4) and its holding moves. One undoable edit each; the new page becomes the selection once P8.11 lands. Page mode is unchanged.
+
+### P8.14: UI-9 timeline membership
+
+- Owner: none
+- Status: open
+- PR: none
+- Parallel: yes (with P8.11 and P8.13)
+- Depends on: P8.10
+
+The db-functions and context menu for who is in a timeline (UI-9: Adding marchers, New marchers, Removing marchers, Layers, One timeline per range, One transition per marcher). **Add selected marchers** on a timeline, page box or dragged range creates the timeline when none has that range, then gives each selected marcher not already in it a one-slot shapeless `direct` transition spanning it, destination at the marcher's position at the timeline's end, one layer above its highest layer there. Refuse (E-ARGS) a partial overlap with one of the marcher's timelines and a second timeline over an existing range. Remove from a timeline deletes the assignment and the marcher's one-slot transition, never the timeline (an exception to P8.10's rule); point the inspector's existing remove at it. Replace P7.3's join in timeline mode: a new marcher joins every stored timeline, in start order, with its own one-slot transition whose destination is its home, skipping a timeline that partly overlaps one it has joined. Marcher delete removes its transitions the same way and keeps timelines. One undoable edit each. The right-click menu doesn't change the selection.
+
+### P8.15: UI-9 canvas edits
+
+- Owner: none
+- Status: open
+- PR: none
+- Parallel: no
+- Depends on: P8.11, P8.14
+
+Canvas moves against the selection (UI-9: Editing, Editing off the end, More than one row, Home). With a timeline selected and the playhead on its end beat, a drag, nudge or alignment sets the ending of each moved marcher's transition in that timeline, found by timeline id (not by end beat, as `moveMarchersOnPage` in `db-functions/timelineMoves.ts` does today). Refuse with a hint while the playhead is off the end (TEMPORARY), when no timeline is selected away from beat 0, and for a marcher with more than one row in the timeline. At home (beat 0, no timeline) moves edit homes. Rework `canvasCoordinateWriter`/`withTimelinePositions` (`timeline/timelineCoordinateWrites.ts`) to take the selection instead of a page.
+
+### P8.12: No selected page in timeline mode
+
+- Owner: none
+- Status: open
+- PR: none
+- Parallel: yes (with P8.13–P8.15 once P8.11's selection store exists)
+- Depends on: P8.11
+
+Apply C-12's "no selected page": in timeline mode nothing reads `useSelectedPage` (about 36 files under `apps/desktop/src` today: the inspector, canvas listeners, toolbar, collisions, `useAnimation`, the clock and the timeline). Editing reads the selected timeline, rendering and playback read the playhead, and page data (notes, counts) reads the page containing or ending at the playhead. Port appearance-by-time from the `coordinates-v2` branch (`services/appearance/db-to-timeline.ts`, `get-appearance-at-time.ts`, `useAppearanceAnimation.ts`): per-page tag and section appearances become a step function keyed by flag timestamps and sampled at the playhead, without the per-marcher-page overrides dropped in P7.14. Page mode is unchanged.
+
 ## Exit gate
 
 Tick an item only after running its check, and paste the command and result into the log.
@@ -151,7 +201,7 @@ Tick an item only after running its check, and paste the command and result into
 
 Kept current by the phase lead: where things stand, surprises, and what not to redo.
 
-- None yet.
+- **UI-9 (pages are flags) is the current build, 2026-10-01.** Read `ui.md` UI-9 and `implementation-plan.md` C-12 first; UI-9 wins over older text in `ui.md`. Packages: P8.11 (selection, playhead), P8.13 (page flags), P8.14 (membership) can run in parallel after P8.10; P8.15 (canvas edits) follows P8.11 and P8.14; P8.12 (no selected page, appearance by time) follows P8.11. Converted shows need P9.10 before page boxes have timelines; build and test on timeline-mode fixtures with one timeline per page meanwhile. The linear MVP in `validation-plan.md` needs P8.11 and P8.13–P8.15 plus P9.10. Open owner questions are in `ui.md` U-Q5; _lead default_ items in UI-9 are settled enough to build. Page-based playback helpers (`pageForSeek`, and `followSelectedPage` if it lands) are replaced by P8.11, not extended.
 - Porting the 0.2 timeline (P8.1): 0.2's `TimelineContainer` computes the beat with its own `getBeatIndexAtTime(beats, timeMs)`, in milliseconds, returning 0 with no beats. Replace it with `beatIndexAtTime(beats, timeMs / 1000)` from `src/timeline/timeMap.ts`, so there is one tempo map, and don't pass its -1 (no beats) to `setCurrentBeatIndex`. Don't bring back 0.2's `getBeatIndexAtTime` or `getNearestBeatIndex`.
 - After P8.1 (PR #19), the timeline is in `apps/desktop/src/components/timeline/`:
   - **Clock:** `Timeline` takes a `playback` prop and doesn't read the frame clock. `useTimelinePlayback` feeds it from the existing clock (`IsPlayingContext`, the selected page and `getLivePlaybackPosition`). While playing, the cursor is `beatIndexAtTime`; while paused, it's `pageEndBeat(selectedPage)`, and `pageLabel` names the selected page in the transport and playhead labels. Seeking to a beat line selects the page whose move contains or ends at that line (`pageForSeek`), so seeking to the paused cursor keeps the selection. A ruler page click selects that page directly (`TimelineModePanel`). Wiring the frame clock later means changing only that hook.
@@ -661,3 +711,17 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** `npx vitest run --silent=true` (apps/desktop): 2483 passed, 15 skipped, 15 todo, 0 failed, including the e2e fuzz and its v0.6 negative control. `tsc --noEmit`: pass. Pre-commit (cspell, eslint, prettier): pass. Not run, at the owner's request: `test:timeline`, focused `test:history`, `pnpm check:quick`, Playwright e2e. `test:timeline` is the most relevant of these (ripple on converted shows).
 - **Next:** review and merge; then P9.10.
 - **Blockers:** none.
+
+### 2026-10-01 · lead session · C-12 (decided)
+
+- **Done:** the project owner refined UI-9/C-12: page boxes select a page timeline that is stored only once marchers are added; one timeline per range and one transition per marcher per timeline; adding marchers is a right-click **Add selected marchers** (not double-click); **+** and flag delete write only the page row; no selected page in timeline mode, with appearance sampled by time as on `coordinates-v2`. Added P8.11 (UI-9) and P8.12 (no selected page). Non-linear parents for added marchers and layered validation are deferred.
+- **Checks:** none (decision only).
+- **Next:** P8.11 after P8.10 and P9.10.
+- **Blockers:** none.
+
+### 2026-10-02 · lead session · UI-9 ready to build
+
+- **Done:** the project owner settled the rest of UI-9 (2026-10-01): a page is named by its end flag; **+** keeps the split page's id and renumbers later pages; home (page 0) selects no timeline and edits homes; play loops the selected timeline; one track per timeline; dimmed marchers can't be selected or touched; removing a marcher never deletes a timeline; new marchers join every stored timeline; editing off the timeline's end is refused for now (TEMPORARY). The lead filled the remaining implementation gaps as _lead default_ items in UI-9 (selection held as a range, playhead may rest on the last flag, **+** past the last flag appends, refusal for more than one row, new-marcher join order). Split P8.11 into P8.11 (selection and playhead), P8.13 (page flags), P8.14 (membership) and P8.15 (canvas edits). C-12 recorded in ADR 0001.
+- **Checks:** none (decisions and docs only); prettier and cspell on the changed docs.
+- **Next:** P8.11, P8.13 and P8.14 in parallel once P8.10 merges; P9.10 for converted shows.
+- **Blockers:** none for the MVP path. Open owner questions: `ui.md` U-Q5.

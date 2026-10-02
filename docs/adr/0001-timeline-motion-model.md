@@ -128,6 +128,27 @@ timeline's last transition deletes the timeline. The database check, an `E-T1`
 row in `timeline_commit_violations`, comes with P9.10, once the converter
 writes a timeline per page move instead of one show-wide timeline.
 
+**Pages are flags (C-12, decided by the project owner on 2026-10-01).** In
+timeline mode a page owns no motion. A page is named by its end flag, and its
+box stands for the timeline from the previous flag to its own (its page
+timeline); selecting a timeline replaces selecting a page, and nothing reads a
+selected page. Rules on stored data, enforced by the write functions
+(`E-ARGS`), not by the database:
+
+- At most one timeline has a given range.
+- A marcher has at most one transition in a timeline when UI-9 makes it; a
+  marcher added to a timeline gets its own one-slot shapeless `direct`
+  transition spanning it.
+- A timeline is created only when marchers are first added to it, but removing
+  marchers never deletes it, so a stored timeline can be empty. This is an
+  exception to C-11's rule that deleting a timeline's last transition deletes
+  the timeline.
+- Adding or deleting a page writes only page rows (and `last_page_counts`),
+  never timeline rows.
+
+Beat editing can still make two timelines share a range; that is in the
+`ui.md` backlog. The interaction is UI-9 in `docs/timeline/ui.md`.
+
 **Coordinates and beats.** Resolver coordinates are the same units as
 `marcher_pages.x`/`y`, so the converter copies page-end positions exactly. The
 spec's `[−10⁶, 10⁶]` bound applies to those units. The spec's integer beats are
