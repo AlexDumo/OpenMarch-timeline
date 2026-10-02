@@ -37,6 +37,8 @@ import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
 import { useTimelineShapeCanvas } from "@/timeline/useTimelineShapeCanvas";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { useTimelineDimming } from "@/timeline/useTimelineDimming";
 import { canvasCoordinateWriter } from "@/timeline/timelineCoordinateWrites";
 
 /**
@@ -97,6 +99,8 @@ export default function Canvas({
         (s) => s.status === "ready",
     );
     const drawFromResolver = timelineMode && timelineResolverReady;
+    // UI-9: the paused canvas shows positions at the playhead
+    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     const marcherIds = useMemo(() => marchers?.map((m) => m.id), [marchers]);
 
     const { data: fieldProperties } = useQuery(
@@ -629,7 +633,15 @@ export default function Canvas({
     useTimelineStaticRender({
         canvas,
         selectedPage,
+        beat: playheadBeat,
         isPlaying,
+        enabled: timelineMode,
+        redrawKey: marcherVisuals,
+    });
+
+    // Timeline mode (UI-9): marchers outside the selected timeline are dimmed and can't be hit
+    useTimelineDimming({
+        canvas,
         enabled: timelineMode,
         redrawKey: marcherVisuals,
     });

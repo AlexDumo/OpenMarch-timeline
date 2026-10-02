@@ -1,10 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
 import { useTimingObjects } from "@/hooks";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
 import { db } from "@/global/database/db";
+import {
+    useTimelineSelectionStore,
+    type TimelineEditSelection,
+} from "@/stores/TimelineSelectionStore";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
@@ -36,16 +39,37 @@ function FullscreenButton() {
     );
 }
 
+/** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
+export const toTimelineSelection = (
+    selection: TimelineEditSelection,
+): TimelineSelection =>
+    selection.kind === "range"
+        ? {
+              kind: "range",
+              range: {
+                  startBeatIndex: selection.start,
+                  endBeatIndex: selection.end,
+              },
+          }
+        : selection.kind === "home"
+          ? { kind: "home" }
+          : null;
+
 /**
  * The timeline (ui.md, from the 0.2 branch) for a file whose timeline dev flag is on. It takes the
- * file's real beats, pages and measures, and plays through the app's existing audio clock.
+ * file's real beats, pages and measures, and plays through the app's existing audio clock. Its
+ * selection is `useTimelineSelectionStore`'s (UI-9): the initial page box selects home, a page box
+ * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
     const playback = useTimelinePlayback({ beats, pages });
-    const [selection, setSelection] = useState<TimelineSelection>(null);
+    const editSelection = useTimelineSelectionStore((s) => s.selection);
+    const selection = useMemo(
+        () => toTimelineSelection(editSelection),
+        [editSelection],
+    );
     const { isPlaying } = useIsPlaying()!;
-    const { setSelectedPage } = useSelectedPage()!;
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
     const selectedIdsKey = (selectedMarchers ?? []).map((m) => m.id).join(",");
     const selectedMarcherIds = useMemo(
@@ -60,20 +84,23 @@ export default function TimelineModePanel() {
     const timelines = useTimelineTracks({
         database: db,
         enabled: useTimelineMode(),
-        selectedMarcherIds,
     });
     const commands = useTimelineCommands({
         database: db,
         timelines,
         selectedMarcherIds,
     });
+    // UI-9: selecting home seeks to beat 0 and a range to its end; not while playing
     const changeSelection = (next: TimelineSelection) => {
-        setSelection(next);
-        commands.noteSelection(next);
-        // Clicking a page in the ruler also seeks to its first beat, which `pageForSeek` reads as
-        // the end of the page before it. Select the clicked page itself.
-        if (next?.kind === "page" && !isPlaying)
-            setSelectedPage({ id: Number(next.pageId) });
+        if (isPlaying) return;
+        const store = useTimelineSelectionStore.getState();
+        if (next?.kind === "home") store.selectHome();
+        else if (next?.kind === "range")
+            store.selectRange(
+                next.range.startBeatIndex,
+                next.range.endBeatIndex,
+            );
+        else store.selectNothing();
     };
 
     return (

@@ -37,6 +37,10 @@ import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import { useSelectionStore } from "@/stores/SelectionStore";
 import { toast } from "sonner";
 import { useTimingObjects } from "@/hooks";
+import {
+    navigateTimelinePages,
+    toggleTimelinePlayback,
+} from "@/timeline/timelineTransport";
 import tolgee from "@/global/singletons/Tolgee";
 import { T, useTolgee } from "@tolgee/react";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
@@ -547,7 +551,7 @@ function RegisteredActionsHandler() {
     const setSelectedPage =
         selectedPageContext?.setSelectedPage ?? (() => undefined);
     const { registeredButtonActions } = useRegisteredActionsStore()!;
-    const { pages } = useTimingObjects()!;
+    const { pages, beats } = useTimingObjects()!;
     const isPlayingContext = useIsPlaying();
     const isPlaying = isPlayingContext?.isPlaying ?? false;
     const setIsPlaying = isPlayingContext?.setIsPlaying ?? (() => {});
@@ -925,18 +929,34 @@ function RegisteredActionsHandler() {
                 /****************** Navigation and playback ******************/
                 case RegisteredActionsEnum.nextPage: {
                     if (!databaseReady || !pages || pages.length === 0) break;
+                    // UI-9: navigation moves the playhead to a flag and selects that page
+                    if (timelineMode) {
+                        if (!isPlaying)
+                            navigateTimelinePages(pages, "next-page");
+                        break;
+                    }
                     const nextPage = getNextPage(selectedPage, pages);
                     if (nextPage && !isPlaying) setSelectedPage(nextPage);
                     break;
                 }
                 case RegisteredActionsEnum.lastPage: {
                     if (!databaseReady || !pages || pages.length === 0) break;
+                    if (timelineMode) {
+                        if (!isPlaying)
+                            navigateTimelinePages(pages, "last-page");
+                        break;
+                    }
                     const lastPage = pages[pages.length - 1];
                     if (lastPage && !isPlaying) setSelectedPage(lastPage);
                     break;
                 }
                 case RegisteredActionsEnum.previousPage: {
                     if (!databaseReady || !pages || pages.length === 0) break;
+                    if (timelineMode) {
+                        if (!isPlaying)
+                            navigateTimelinePages(pages, "previous-page");
+                        break;
+                    }
                     const previousPage = getPreviousPage(selectedPage, pages);
                     if (previousPage && !isPlaying)
                         setSelectedPage(previousPage);
@@ -944,12 +964,26 @@ function RegisteredActionsHandler() {
                 }
                 case RegisteredActionsEnum.firstPage: {
                     if (!databaseReady || !pages || pages.length === 0) break;
+                    if (timelineMode) {
+                        if (!isPlaying)
+                            navigateTimelinePages(pages, "first-page");
+                        break;
+                    }
                     const firstPage = pages[0];
                     if (firstPage && !isPlaying) setSelectedPage(firstPage);
                     break;
                 }
                 case RegisteredActionsEnum.playPause: {
                     if (!databaseReady || !pages || pages.length === 0) break;
+                    // UI-9 Play: resumes from the playhead and loops a selected range
+                    if (timelineMode) {
+                        toggleTimelinePlayback({
+                            isPlaying,
+                            showEndBeat: beats.length,
+                            setIsPlaying,
+                        });
+                        break;
+                    }
                     const nextPage = getNextPage(selectedPage, pages);
                     if (nextPage) setIsPlaying(!isPlaying);
                     break;
@@ -1313,6 +1347,7 @@ function RegisteredActionsHandler() {
             uiSettings,
             performHistoryAction,
             pages,
+            beats,
             isPlaying,
             setSelectedPage,
             setIsPlaying,

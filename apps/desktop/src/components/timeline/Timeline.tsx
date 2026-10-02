@@ -13,6 +13,7 @@ import {
     timelineInputToView,
     type TimelineBeatAxis,
 } from "@/timeline/timelineViewModel";
+import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { clamp } from "./TimelineGeometry";
 import { CollapsedTimeline, ExpandedTimeline } from "./TimelineVariants";
 import type {
@@ -28,6 +29,7 @@ import type {
     TimelineTarget,
     TimelineTrack,
     TimelineTrackDiagnostics,
+    TimelineTrackTargetType,
     TimelineViewModel,
     TimelineWaveform,
 } from "./TimelineViewModel";
@@ -50,7 +52,7 @@ export interface TimelineInput {
     /** The spec timeline: clips with the same link id move together */
     readonly linkId?: string | number;
     readonly targetId: string | number;
-    readonly targetType: TimelineTarget["type"];
+    readonly targetType: TimelineTrackTargetType;
     readonly label: string;
     readonly color: string;
     readonly startBeatIndex: number;
@@ -66,7 +68,7 @@ export interface TimelineInput {
  * 0.2 read the frame clock store here instead; that clock isn't wired into the app yet (P5.9).
  */
 export interface TimelinePlayback {
-    /** The beat under the playback cursor, a beat index in `[0, beats.length)` */
+    /** The beat under the playback cursor, in `[0, beats.length]` (the end of the show included) */
     readonly positionBeat: number;
     /** Names the page in the transport and playhead labels, such as the selected page while paused */
     readonly pageLabel?: string;
@@ -86,7 +88,7 @@ const STOPPED_AT_START: TimelinePlayback = {
 /**
  * Every beat in these props, and in the commands the timeline sends, is a spec beat position
  * (`beats` indexes). The timeline draws them on a view axis that hides the zero-length beat 0
- * (`createTimelineBeatAxis`); its selection is in view beats and is only passed back to it.
+ * (`createTimelineBeatAxis`), and converts at this boundary, the selection included.
  */
 export interface TimelineProps {
     readonly mode: TimelineMode;
@@ -182,6 +184,7 @@ export const createTimelineViewModel = ({
                       id: page.id,
                       label: page.name,
                       atBeat: axis.toView(first),
+                      endBeat: axis.toView(pageEndBeat(page)),
                       isInitial:
                           page.previousPageId === null && page.counts === 0,
                   },
@@ -199,6 +202,36 @@ export const createTimelineViewModel = ({
     }),
     waveform,
 });
+
+/** A spec-beat selection on the view axis */
+export const selectionToView = (
+    selection: TimelineSelection | undefined,
+    axis: TimelineBeatAxis,
+): TimelineSelection | undefined =>
+    selection?.kind === "range"
+        ? {
+              kind: "range",
+              range: {
+                  startBeatIndex: axis.toView(selection.range.startBeatIndex),
+                  endBeatIndex: axis.toView(selection.range.endBeatIndex),
+              },
+          }
+        : selection;
+
+/** A view-axis selection in spec beats */
+export const selectionToSpec = (
+    selection: TimelineSelection,
+    axis: TimelineBeatAxis,
+): TimelineSelection =>
+    selection?.kind === "range"
+        ? {
+              kind: "range",
+              range: {
+                  startBeatIndex: axis.toSpec(selection.range.startBeatIndex),
+                  endBeatIndex: axis.toSpec(selection.range.endBeatIndex),
+              },
+          }
+        : selection;
 
 export function Timeline(props: TimelineProps) {
     const axis = useMemo(
@@ -228,21 +261,29 @@ export function Timeline(props: TimelineProps) {
     const playback = props.playback ?? STOPPED_AT_START;
     const [pixelsPerBeat, setPixelsPerBeat] = useState(16);
 
+    // The playhead may rest on the end of the show (the last flag, UI-9), one past the last beat
     const positionBeat = clamp(
         axis.toView(playback.positionBeat),
         0,
-        Math.max(model.beatCount - 1, 0),
+        model.beatCount,
     );
     const seekToBeat = playback.onSeek
         ? (viewBeat: number) => {
-              const nextIndex = clamp(
-                  axis.toSpec(Math.round(viewBeat)),
-                  0,
-                  Math.max(props.beats.length - 1, 0),
+              if (props.beats.length === 0) return;
+              playback.onSeek?.(
+                  clamp(
+                      axis.toSpec(Math.round(viewBeat)),
+                      0,
+                      props.beats.length,
+                  ),
               );
-              if (!props.beats[nextIndex]) return;
-              playback.onSeek?.(nextIndex);
           }
+        : undefined;
+    const { onSelectionChange } = props;
+    const selection = selectionToView(props.selection, axis);
+    const changeSelection = onSelectionChange
+        ? (next: TimelineSelection) =>
+              onSelectionChange(selectionToSpec(next, axis))
         : undefined;
     const { onTimelineRangeCommit, onCreateTrack, timelines } = props;
     // A clip move keeps its length: send the spec range shifted by the move, so a clip whose start
@@ -304,14 +345,14 @@ export function Timeline(props: TimelineProps) {
         pageLabel: playback.pageLabel,
         isPlaying: playback.isPlaying,
         pixelsPerBeat,
-        selection: props.selection,
+        selection,
         selectedTarget: props.selectedTarget,
         className: props.className,
         onSeek: seekToBeat,
         onPlayingChange: playback.onPlayingChange,
         onNavigate: playback.onNavigate,
         onPixelsPerBeatChange: setPixelsPerBeat,
-        onSelectionChange: props.onSelectionChange,
+        onSelectionChange: changeSelection,
         onCreateTrack: createTrack,
         addSelectedMarchers: addMarchersMenu,
         onTimelineRangeCommit: commitRange,

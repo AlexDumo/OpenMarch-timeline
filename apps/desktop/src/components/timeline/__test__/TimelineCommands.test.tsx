@@ -1,5 +1,4 @@
 import {
-    act,
     cleanup,
     fireEvent,
     render,
@@ -14,6 +13,7 @@ import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { createTrack, shiftTimeline } from "@/db-functions/timelineCommands";
 import { conToastError } from "@/utilities/utils";
 import { timelineErrorMessage } from "@/timeline/timelineErrorMessages";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { Timeline, type TimelineInput } from "../Timeline";
 import type { TimelineSelection } from "../TimelineViewModel";
 import {
@@ -122,10 +122,7 @@ function Harness({
             showTransport={false}
             selection={selection}
             selectedTarget={commands.selectedTarget}
-            onSelectionChange={(next) => {
-                setSelection(next);
-                commands.noteSelection(next);
-            }}
+            onSelectionChange={setSelection}
             onTimelineRangeCommit={commands.commitTimelineRange}
             onCreateTrack={commands.createTrack}
         />
@@ -221,10 +218,10 @@ describe("the timeline's commands", () => {
             <Harness
                 timelines={[]}
                 selectedMarcherIds={new Set([5])}
-                // View beats [2, 6) are spec beats [3, 7)
+                // Spec beats [3, 7), drawn as view beats [2, 6)
                 initialSelection={{
                     kind: "range",
-                    range: { startBeatIndex: 2, endBeatIndex: 6 },
+                    range: { startBeatIndex: 3, endBeatIndex: 7 },
                 }}
             />,
         );
@@ -234,24 +231,6 @@ describe("the timeline's commands", () => {
             target: { kind: "marcher", marcherId: 5 },
             startBeat: 3,
             endBeat: 7,
-        });
-    });
-
-    it("Create Track for a shape picked by its track takes the selected marchers", () => {
-        const shapeTrack = input("S", 3, 1, 9, {
-            targetId: 11,
-            targetType: "shape",
-        });
-        render(<ShapeThenRange shapeTrack={shapeTrack} marchers={[4, 2]} />);
-        // Selecting the shape's track picks the shape; then a range is selected
-        fireEvent.click(screen.getByLabelText(/^S timeline/));
-        fireEvent.click(screen.getByRole("button", { name: "select range" }));
-        fireEvent.click(screen.getByRole("button", { name: "Create Track" }));
-        expect(createTrack).toHaveBeenCalledWith({
-            db: DB,
-            target: { kind: "shape", shapeId: 11, marcherIds: [4, 2] },
-            startBeat: 1,
-            endBeat: 5,
         });
     });
 
@@ -271,53 +250,6 @@ describe("the timeline's commands", () => {
         ).toBeNull();
     });
 });
-
-/** The panel's wiring, plus a button that selects view range [0, 4) once a track is picked. */
-function ShapeThenRange({
-    shapeTrack,
-    marchers,
-}: {
-    shapeTrack: TimelineInput;
-    marchers: number[];
-}) {
-    const [selection, setSelection] = useState<TimelineSelection>(null);
-    const [selected] = useState(() => new Set(marchers));
-    const commands = useTimelineCommands({
-        database: DB,
-        timelines: [shapeTrack],
-        selectedMarcherIds: selected,
-    });
-    return (
-        <>
-            <button
-                type="button"
-                onClick={() =>
-                    setSelection({
-                        kind: "range",
-                        range: { startBeatIndex: 0, endBeatIndex: 4 },
-                    })
-                }
-            >
-                select range
-            </button>
-            <Timeline
-                mode="expanded"
-                beats={appBeats(16)}
-                pages={[]}
-                measures={[]}
-                timelines={[shapeTrack]}
-                showTransport={false}
-                selection={selection}
-                selectedTarget={commands.selectedTarget}
-                onSelectionChange={(next) => {
-                    setSelection(next);
-                    commands.noteSelection(next);
-                }}
-                onCreateTrack={commands.createTrack}
-            />
-        </>
-    );
-}
 
 describe("the commands' pure parts", () => {
     it("timelineShiftFor reads the spec timeline from the clip's link id", () => {
@@ -359,97 +291,84 @@ describe("the commands' pure parts", () => {
     });
 });
 
-describe("the picked shape", () => {
-    const shapeTrack = input("S", 3, 1, 9, {
-        targetId: 11,
-        targetType: "shape",
-    });
-    const marcherTrack = input("M", 3, 1, 9, { targetId: 5 });
-    const range: TimelineSelection = {
-        kind: "range",
-        range: { startBeatIndex: 0, endBeatIndex: 4 },
+describe("a clip move and the selection (UI-9)", () => {
+    beforeEach(() => useTimelineSelectionStore.getState().reset());
+
+    const drag = () => {
+        const clip = screen.getByLabelText(/^A timeline/);
+        pointer(clip, "pointerdown", 0);
+        pointer(clip, "pointermove", 32);
+        pointer(clip, "pointerup", 32);
     };
-    const SHAPE = { type: "shape", id: 11 };
 
-    const renderCommands = (selected: ReadonlySet<number> = new Set([4])) =>
-        renderHook(
-            ({ timelines }: { timelines: TimelineInput[] }) =>
-                useTimelineCommands({
-                    database: DB,
-                    timelines,
-                    selectedMarcherIds: selected,
-                }),
-            { initialProps: { timelines: [shapeTrack, marcherTrack] } },
-        );
-    const pick = (result: { current: { noteSelection: Noter } }) =>
-        act(() =>
-            result.current.noteSelection({ kind: "track", trackId: "S" }),
-        );
-    type Noter = (next: TimelineSelection) => void;
-
-    it("stays through a range selection, which is where Create Track is offered", () => {
-        const { result } = renderCommands();
-        pick(result);
-        expect(result.current.selectedTarget).toEqual(SHAPE);
-        act(() => result.current.noteSelection(range));
-        expect(result.current.selectedTarget).toEqual(SHAPE);
-    });
-
-    it.each<[string, TimelineSelection]>([
-        ["a page", { kind: "page", pageId: 2 }],
-        ["nothing", null],
-        ["a marcher's track", { kind: "track", trackId: "M" }],
-    ])("is dropped when %s is selected", (_, next) => {
-        const { result } = renderCommands();
-        pick(result);
-        act(() => result.current.noteSelection(next));
-        // Back to the one selected marcher, and a later range doesn't bring the shape back
-        expect(result.current.selectedTarget).toEqual({
-            type: "marcher",
-            id: 4,
-        });
-        act(() => result.current.noteSelection(range));
-        expect(result.current.selectedTarget).toEqual({
-            type: "marcher",
-            id: 4,
-        });
-    });
-
-    it("is dropped when its track disappears, and doesn't come back with it", () => {
-        const { result, rerender } = renderCommands();
-        pick(result);
-        rerender({ timelines: [marcherTrack] });
-        expect(result.current.selectedTarget).toEqual({
-            type: "marcher",
-            id: 4,
-        });
-        // An undo that brings the shape's track back doesn't pick it again
-        rerender({ timelines: [shapeTrack, marcherTrack] });
-        expect(result.current.selectedTarget).toEqual({
-            type: "marcher",
-            id: 4,
-        });
-    });
-
-    it("hides Create Track while no marcher is selected", () => {
-        const { result } = renderCommands(new Set());
-        pick(result);
-        expect(result.current.selectedTarget).toBeNull();
+    it("moves a selection of the moved timeline's range with it", async () => {
+        vi.mocked(shiftTimeline).mockResolvedValue({} as never);
+        useTimelineSelectionStore.getState().selectRange(3, 9);
         render(
-            <Timeline
-                mode="expanded"
-                beats={appBeats(16)}
-                pages={[]}
-                measures={[]}
-                timelines={[shapeTrack]}
-                showTransport={false}
-                selection={range}
-                selectedTarget={result.current.selectedTarget}
-                onCreateTrack={result.current.createTrack}
+            <Harness
+                timelines={[input("A", 7, 3, 9)]}
+                selectedMarcherIds={new Set()}
             />,
         );
-        expect(
-            screen.queryByRole("button", { name: "Create Track" }),
-        ).toBeNull();
+        drag();
+        await flush();
+        expect(useTimelineSelectionStore.getState().selection).toEqual({
+            kind: "range",
+            start: 5,
+            end: 11,
+        });
+        // The playhead stays where it was
+        expect(useTimelineSelectionStore.getState().playheadBeat).toBe(9);
+    });
+
+    it("leaves another selection, and a refused move, alone", async () => {
+        vi.mocked(shiftTimeline).mockResolvedValue({} as never);
+        useTimelineSelectionStore.getState().selectRange(9, 12);
+        render(
+            <Harness
+                timelines={[input("A", 7, 3, 9)]}
+                selectedMarcherIds={new Set()}
+            />,
+        );
+        drag();
+        await flush();
+        expect(useTimelineSelectionStore.getState().selection).toEqual({
+            kind: "range",
+            start: 9,
+            end: 12,
+        });
+
+        cleanup();
+        vi.mocked(shiftTimeline).mockRejectedValue(
+            new TimelineWriteError("E-ARGS", "refused"),
+        );
+        useTimelineSelectionStore.getState().selectRange(3, 9);
+        render(
+            <Harness
+                timelines={[input("A", 7, 3, 9)]}
+                selectedMarcherIds={new Set()}
+            />,
+        );
+        drag();
+        await flush();
+        expect(useTimelineSelectionStore.getState().selection).toEqual({
+            kind: "range",
+            start: 3,
+            end: 9,
+        });
+    });
+
+    it("offers Create Track for the one selected marcher only", () => {
+        const { result } = renderHook(() =>
+            useTimelineCommands({
+                database: DB,
+                timelines: [],
+                selectedMarcherIds: new Set([4]),
+            }),
+        );
+        expect(result.current.selectedTarget).toEqual({
+            type: "marcher",
+            id: 4,
+        });
     });
 });

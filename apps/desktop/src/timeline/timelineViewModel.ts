@@ -13,6 +13,9 @@ import type {
  * docs/timeline/phases/08-authoring-ui.md P8.8). Pure: the stored timeline tables, the resolver's
  * spans and its diagnostics in, the timeline's tracks out. Nothing it builds is stored.
  *
+ * Under UI-9 the app draws one track per stored timeline (`buildTimelineClipTracks`). The marcher
+ * and shape tracks below (`buildTimelineTracks`, UI-3) are what it drew before.
+ *
  * - **Marcher track:** one per spec timeline in which the marcher has an assignment. The clip runs
  *   from the marcher's first assignment start to its last assignment end in that timeline. Its
  *   legs are the marcher's resolver spans (R-2) inside the clip: a hold span is `hold`, any other
@@ -258,6 +261,91 @@ export function buildTimelineTracks(
         );
 }
 
+export const timelineTrackId = (timelineId: number) => `timeline-${timelineId}`;
+
+/**
+ * One track per stored timeline (ui.md UI-9 "Tracks"; P8.11), however many transitions it holds,
+ * so a group of one-slot transitions is one clip. This supersedes the marcher and shape tracks of
+ * `buildTimelineTracks` (UI-3) in timeline mode.
+ *
+ * - **Clip:** the timeline's range (C-11), one `move` leg. A stored timeline with nobody in it
+ *   still shows (UI-9: removing marchers never deletes a timeline).
+ * - **Activity:** active where at least one member's winning span (R-2) is in one of its
+ *   transitions, and inactive where every member is stolen or there are none (UI-4's rule over
+ *   the whole timeline).
+ * - **Diagnostics:** every diagnostic of its transitions.
+ * - **Order and color:** by start, then id; one color per timeline, as `buildTimelineTracks`.
+ *
+ * How a selected marcher's spans (UI-1) show inside the one track is open (ui.md U-Q5 TODO).
+ */
+export function buildTimelineClipTracks(
+    sources: TimelineViewSources,
+): TimelineInput[] {
+    const { tables } = sources;
+    const transitionsByTimeline = groupBy(
+        tables.transitions,
+        (t) => t.timelineId,
+    );
+    const rowsByTransition = groupBy(tables.assignments, (r) => r.transition);
+    const diagnosticsByTransition = groupBy(
+        sources.diagnostics,
+        (d) => d.transitionId,
+    );
+    const spanCache = new Map<number, readonly SpanInfo[]>();
+    const spansOf = (marcherId: number) => {
+        let spans = spanCache.get(marcherId);
+        if (!spans)
+            spanCache.set(marcherId, (spans = sources.spansOf(marcherId)));
+        return spans;
+    };
+    return [...tables.timelines]
+        .sort((a, b) => a.start - b.start || a.id - b.id)
+        .map((timeline, index) => {
+            const transitions = transitionsByTimeline.get(timeline.id) ?? [];
+            const ids = new Set(transitions.map((t) => t.id));
+            const members = new Set(
+                transitions.flatMap((t) =>
+                    (rowsByTransition.get(t.id) ?? []).map((r) => r.marcher),
+                ),
+            );
+            const active: Interval[] = [];
+            for (const marcherId of members)
+                for (const span of spansOf(marcherId))
+                    if (span.transitionId != null && ids.has(span.transitionId))
+                        active.push({ start: span.start, end: span.end });
+            const id = timelineTrackId(timeline.id);
+            const clip: Interval = { start: timeline.start, end: timeline.end };
+            return {
+                id,
+                linkId: timeline.id,
+                targetId: timeline.id,
+                targetType: "timeline",
+                label: timeline.name ?? `Timeline ${timeline.id}`,
+                color: TIMELINE_TRACK_COLORS[
+                    index % TIMELINE_TRACK_COLORS.length
+                ],
+                startBeatIndex: clip.start,
+                endBeatIndex: clip.end,
+                legs: [
+                    {
+                        id: `${id}-leg-${clip.start}`,
+                        startBeatIndex: clip.start,
+                        endBeatIndex: clip.end,
+                        texture: "move",
+                    },
+                ],
+                activitySpans: activityOver(clip, union(active)),
+                diagnostics: diagnosticsBadge(
+                    [...ids]
+                        .sort((a, b) => a - b)
+                        .flatMap(
+                            (tid) => diagnosticsByTransition.get(tid) ?? [],
+                        ),
+                ),
+            };
+        });
+}
+
 function shapeTracksOfTimeline(
     context: BuildContext,
     timelineId: number,
@@ -363,9 +451,9 @@ function tracksOfTimeline(
  * clip when another shape's transition in the timeline occupies it, so the shape doesn't seem to
  * hold through another formation.
  *
- * TODO(P8.11): every transition spans its timeline (C-11), and the converter writes a timeline
- * per page move (P9.10), so no timeline has gaps to split any more; remove this with the
- * one-track-per-timeline view model.
+ * TODO(P8.12): every transition spans its timeline (C-11) and P9.10 converts a timeline per page,
+ * so no timeline has gaps to split. The app no longer draws shape tracks (UI-9 draws
+ * `buildTimelineClipTracks`), so remove this with `buildTimelineTracks`.
  */
 function clipsOfShape(
     shapeTransitions: readonly TimelineViewTransition[],

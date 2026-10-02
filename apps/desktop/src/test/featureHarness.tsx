@@ -34,6 +34,15 @@ import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { timelinePositionsSettled } from "@/timeline/timelineCoordinateWrites";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { isTimelineModeEnabled } from "@/settings/workspaceSettings";
+import {
+    selectedStoredTimeline,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
+import {
+    pageAtPlayhead,
+    pageFlags,
+    selectionOfPage,
+} from "@/timeline/timelinePlayhead";
 import { timelineFixtureMode } from "./timelineMode";
 
 /**
@@ -108,11 +117,65 @@ export const probed = (): FeatureProbe => {
     return probe.current!;
 };
 
-/** Renders `children` inside the app's providers, with the resolver host. */
+/**
+ * Sets the timeline-mode selection (ui.md UI-9), as clicking the timeline does: `"home"` selects
+ * home and moves the playhead to beat 0; a page selects its box (previous flag to its own flag)
+ * and moves the playhead to its flag, or home for the first page; a range selects it and moves the
+ * playhead to its end. Waits for the selected page to follow the playhead (the TEMPORARY bridge
+ * until P8.12) and, in timeline mode, for the stored timelines to load, so dimming and the
+ * selected timeline are settled.
+ */
+export const selectTimeline = async (
+    target: "home" | Page | { readonly start: number; readonly end: number },
+) => {
+    // Page mode has no timeline selection (and no bridge to wait for)
+    expect(
+        probed().timelineMode,
+        "selectTimeline needs a file in timeline mode",
+    ).toBe(true);
+    const store = useTimelineSelectionStore.getState();
+    act(() => {
+        if (target === "home") store.selectHome();
+        else if ("start" in target) store.selectRange(target.start, target.end);
+        else {
+            const flag = pageFlags(probed().pages).find(
+                (f) => f.page.id === target.id,
+            );
+            expect(flag, "the page is in the show").toBeDefined();
+            const selection = selectionOfPage(flag!);
+            if (selection.kind === "home") store.selectHome();
+            else store.selectRange(selection.start, selection.end);
+        }
+    });
+    await waitFor(() => {
+        const { playheadBeat, storedTimelines } =
+            useTimelineSelectionStore.getState();
+        expect(probed().selectedPage?.id).toBe(
+            pageAtPlayhead(probed().pages, playheadBeat)?.id,
+        );
+        if (timelineFixtureMode()) expect(storedTimelines).not.toBeNull();
+    });
+};
+
+/** The timeline-mode selection, playhead and the stored timeline the selection resolves to */
+export const timelineSelection = () => {
+    const state = useTimelineSelectionStore.getState();
+    return {
+        selection: state.selection,
+        playheadBeat: state.playheadBeat,
+        selectedTimeline: selectedStoredTimeline(state),
+    };
+};
+
+/**
+ * Renders `children` inside the app's providers, with the resolver host. The timeline selection
+ * starts on home, as opening a show does.
+ */
 export const mountFeature = (children: ReactNode) => {
     const qc = new QueryClient();
     queryClient = qc;
     probe.current = null;
+    useTimelineSelectionStore.getState().reset();
     const result = render(
         <QueryClientProvider client={qc}>
             <TolgeeProvider tolgee={tolgee} fallback="Loading...">
