@@ -315,7 +315,11 @@ export const TimelineRuler = ({
                             key={page.id}
                             type="button"
                             data-timeline-interactive="true"
-                            {...timelineRangeTargetProps(range)}
+                            {...timelineRangeTargetProps(
+                                range,
+                                undefined,
+                                page.id,
+                            )}
                             aria-label={`Page ${page.label}`}
                             aria-pressed={selected}
                             onClick={(event) => {

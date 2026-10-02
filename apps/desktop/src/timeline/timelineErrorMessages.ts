@@ -193,6 +193,13 @@ export function timelineErrorMessage(
             TIMELINE_NOT_READY_MESSAGE.key,
             TIMELINE_NOT_READY_MESSAGE.defaultMessage,
         );
+    // A canvas move the selection refuses (UI-9, P8.15): its own key and default
+    if (
+        error instanceof Error &&
+        error.name === "TimelineEditRefusedError" &&
+        typeof (error as Error & { key?: unknown }).key === "string"
+    )
+        return translate((error as Error & { key: string }).key, error.message);
     if (code === null)
         return (
             fallback ??

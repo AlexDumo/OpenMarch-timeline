@@ -113,6 +113,13 @@ export interface TimelineProps {
      * timeline or a dragged range. It gets spec beats; the menu doesn't change the selection.
      */
     readonly addSelectedMarchers?: TimelineAddMarchersMenu;
+    /**
+     * UI-9 **+** at the paused playhead (P8.13's `useAddPageFlag`); omit it where **+** doesn't
+     * show (on a flag, at home, past the beats).
+     */
+    readonly onAddPageFlag?: () => void;
+    /** The page box menu's **Delete page flag** (UI-9 Deleting a flag), by page id */
+    readonly onDeletePageFlag?: (pageId: number) => void;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -313,31 +320,40 @@ export function Timeline(props: TimelineProps) {
                   },
               })
         : undefined;
-    const { addSelectedMarchers } = props;
+    const { addSelectedMarchers, onDeletePageFlag } = props;
     // A clip sends its stored spec range: the view axis folds spec beats 0 and 1 together, so a
     // converted show's timeline over [0, N) would come back as [1, N). Page boxes and dragged
     // ranges start on a flag or a timed beat, which `toSpec` maps back exactly.
+    // The right-click menu has an entry for each command given: add, and delete on page boxes
     const addMarchersMenu:
         | TimelineAddMarchersMenu<TimelineMenuTarget>
-        | undefined = addSelectedMarchers && {
-        disabledReason: addSelectedMarchers.disabledReason,
-        onAdd: ({ range, trackId }) => {
-            const input =
-                trackId === undefined
-                    ? undefined
-                    : timelines.find((t) => String(t.id) === trackId);
-            addSelectedMarchers.onAdd(
-                input
-                    ? {
-                          startBeatIndex: input.startBeatIndex,
-                          endBeatIndex: input.endBeatIndex,
-                      }
-                    : {
-                          startBeatIndex: axis.toSpec(range.startBeatIndex),
-                          endBeatIndex: axis.toSpec(range.endBeatIndex),
-                      },
-            );
-        },
+        | undefined = (addSelectedMarchers || onDeletePageFlag) && {
+        disabledReason: addSelectedMarchers?.disabledReason,
+        ...(onDeletePageFlag
+            ? {
+                  onDeleteFlag: (pageId: string | number) =>
+                      onDeletePageFlag(Number(pageId)),
+              }
+            : {}),
+        onAdd:
+            addSelectedMarchers?.onAdd &&
+            (({ range, trackId }) => {
+                const input =
+                    trackId === undefined
+                        ? undefined
+                        : timelines.find((t) => String(t.id) === trackId);
+                addSelectedMarchers.onAdd?.(
+                    input
+                        ? {
+                              startBeatIndex: input.startBeatIndex,
+                              endBeatIndex: input.endBeatIndex,
+                          }
+                        : {
+                              startBeatIndex: axis.toSpec(range.startBeatIndex),
+                              endBeatIndex: axis.toSpec(range.endBeatIndex),
+                          },
+                );
+            }),
     };
     const commonProps = {
         model,
@@ -355,6 +371,7 @@ export function Timeline(props: TimelineProps) {
         onSelectionChange: changeSelection,
         onCreateTrack: createTrack,
         addSelectedMarchers: addMarchersMenu,
+        onAddPageFlag: props.onAddPageFlag,
         onTimelineRangeCommit: commitRange,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,

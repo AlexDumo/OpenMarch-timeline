@@ -44,6 +44,8 @@ describeDbTests("marcher mutations take the file's mode", (it) => {
             // marchers, P8.14), not a slot in the page moves
             expect(transitions.length).toBeGreaterThan(0);
             const timelines = await db.select().from(schema.timelines).all();
+            // Exactly one assignment per stored timeline
+            expect(assignments).toHaveLength(timelines.length);
             const own = await db
                 .select()
                 .from(schema.timeline_transitions)

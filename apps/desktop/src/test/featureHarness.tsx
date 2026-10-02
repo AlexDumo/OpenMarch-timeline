@@ -198,11 +198,28 @@ export const mountFeature = (children: ReactNode) => {
     return { qc, result };
 };
 
-/** Selects `page` and the marchers with `marcherIds`, and waits for their data to load. */
+/**
+ * Selects `page` and the marchers with `marcherIds`, and waits for their data to load. In timeline
+ * mode it also selects the page's box (its page timeline, or home), as the editing context.
+ */
 export const selectPageAndMarchers = async (
     page: Page,
     marcherIds: readonly number[],
 ) => {
+    // Timeline mode edits the selected timeline, not the page (UI-9, P8.15): select the page's
+    // box as a click on it does (its page timeline, or home for the first page)
+    if (probed().timelineMode) {
+        const flag = pageFlags(probed().pages).find(
+            (f) => f.page.id === page.id,
+        );
+        const selection = flag ? selectionOfPage(flag) : null;
+        const store = useTimelineSelectionStore.getState();
+        act(() => {
+            if (selection?.kind === "home") store.selectHome();
+            else if (selection?.kind === "range")
+                store.selectRange(selection.start, selection.end);
+        });
+    }
     act(() => probed().setSelectedPage(page));
     act(() =>
         probed().setSelectedMarchers(
@@ -217,6 +234,11 @@ export const selectPageAndMarchers = async (
                 .sort(),
         ).toEqual([...marcherIds].sort());
         expect(probed().loaded).toBe(true);
+        // A selected range resolves to its stored timeline only once they've loaded
+        if (probed().timelineMode)
+            expect(
+                useTimelineSelectionStore.getState().storedTimelines,
+            ).not.toBeNull();
     });
 };
 

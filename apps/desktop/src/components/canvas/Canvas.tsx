@@ -5,7 +5,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import {
     marcherPagesByPageQueryOptions,
     updateMarcherPagesMutationOptions,
-    moveMarchersOnPageMutationOptions,
+    moveMarchersInTargetMutationOptions,
     fieldPropertiesQueryOptions,
     allMarchersQueryOptions,
     marcherWithVisualsQueryOptions,
@@ -40,6 +40,7 @@ import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelineDimming } from "@/timeline/useTimelineDimming";
 import { canvasCoordinateWriter } from "@/timeline/timelineCoordinateWrites";
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 
 /**
  * The field/stage UI of OpenMarch
@@ -87,8 +88,8 @@ export default function Canvas({
     const updateMarcherPages = useMutation(
         updateMarcherPagesMutationOptions(queryClient),
     );
-    const { mutate: moveMarchersOnPageMutate } = useMutation(
-        moveMarchersOnPageMutationOptions(),
+    const { mutate: moveMarchersMutate } = useMutation(
+        moveMarchersInTargetMutationOptions(),
     );
     const { setSelectedShapePageIds } = useSelectionStore()!;
     const databaseReady = useDatabaseReady();
@@ -248,26 +249,23 @@ export default function Canvas({
     // Update section appearances
     useEffect(() => {
         if (canvas) {
-            // Timeline mode (P7.2): a drag sets the dragged marchers' destinations on the selected
-            // page. A refused move snaps the marchers back to the resolver's position.
+            // Timeline mode (UI-9 Editing, P8.15): a drag sets the dragged marchers' endings in
+            // the selected timeline, or their homes at home. The selection is read when the drag
+            // ends. A refused move shows why and snaps the marchers back to the resolver.
             canvas.updateMarcherPagesFunction = canvasCoordinateWriter({
                 timelineMode,
-                page: selectedPage,
                 writePages: updateMarcherPages.mutate,
                 writeTimeline: (request) =>
-                    moveMarchersOnPageMutate(request, {
+                    moveMarchersMutate(request, {
                         onError: () => canvas.refreshMarchers(),
                     }),
-                onNoPage: () => canvas.refreshMarchers(),
+                onRefused: (error) => {
+                    toastTimelineError(error);
+                    canvas.refreshMarchers();
+                },
             });
         }
-    }, [
-        canvas,
-        updateMarcherPages.mutate,
-        moveMarchersOnPageMutate,
-        timelineMode,
-        selectedPage,
-    ]);
+    }, [canvas, updateMarcherPages.mutate, moveMarchersMutate, timelineMode]);
 
     // Sync canvas with marcher visuals
     useEffect(() => {
