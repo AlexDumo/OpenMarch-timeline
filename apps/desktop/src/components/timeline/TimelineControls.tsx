@@ -15,6 +15,10 @@ import {
 } from "@phosphor-icons/react";
 import RegisteredActionButton from "@/components/RegisteredActionButton";
 import { useCurrentPage } from "@/context/SelectedPageContext";
+import { useTimingObjects } from "@/hooks";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { canPlay, navigationTarget } from "@/timeline/timelinePlayhead";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
@@ -151,11 +155,37 @@ export function TimelineMetronomeButton() {
     );
 }
 
-function PlaybackControls() {
+/**
+ * Whether there is somewhere to go back to, forward to, and something to play. Page mode reads
+ * the selected page's neighbors; timeline mode (UI-9) reads the flags around the playhead and the
+ * selection, as the transport actions do (`navigateTimelinePages`, `startTimelinePlayback`).
+ */
+function useTransportAvailability() {
     const currentPage = useCurrentPage();
+    const timelineMode = useTimelineMode();
+    const { pages, beats } = useTimingObjects()!;
+    const selection = useTimelineSelectionStore((s) => s.selection);
+    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    if (timelineMode)
+        return {
+            back:
+                navigationTarget(pages, playheadBeat, "previous-page") !== null,
+            forward:
+                navigationTarget(pages, playheadBeat, "next-page") !== null,
+            play: canPlay(selection, playheadBeat, beats.length),
+        };
+    return {
+        back: !!currentPage && currentPage.previousPageId !== null,
+        forward: !!currentPage && currentPage.nextPageId !== null,
+        play: !!currentPage && currentPage.nextPageId !== null,
+    };
+}
+
+function PlaybackControls() {
     const { isPlaying } = useIsPlaying()!;
     const { uiSettings } = useUiSettingsStore();
     const { t } = useTolgee();
+    const available = useTransportAvailability();
 
     return (
         <div
@@ -165,8 +195,7 @@ function PlaybackControls() {
             <RegisteredActionButton
                 registeredAction={RegisteredActionsObjects.firstPage}
                 disabled={
-                    !currentPage ||
-                    currentPage.previousPageId === null ||
+                    !available.back ||
                     isPlaying ||
                     uiSettings.focussedComponent === "timeline"
                 }
@@ -177,8 +206,7 @@ function PlaybackControls() {
             <RegisteredActionButton
                 registeredAction={RegisteredActionsObjects.previousPage}
                 disabled={
-                    !currentPage ||
-                    currentPage.previousPageId === null ||
+                    !available.back ||
                     isPlaying ||
                     uiSettings.focussedComponent === "timeline"
                 }
@@ -189,10 +217,7 @@ function PlaybackControls() {
             <RegisteredActionButton
                 registeredAction={RegisteredActionsObjects.playPause}
                 className="focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2"
-                disabled={
-                    !currentPage ||
-                    (!isPlaying && currentPage.nextPageId === null)
-                }
+                disabled={!isPlaying && !available.play}
             >
                 {isPlaying ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
             </RegisteredActionButton>
@@ -200,8 +225,7 @@ function PlaybackControls() {
             <RegisteredActionButton
                 registeredAction={RegisteredActionsObjects.nextPage}
                 disabled={
-                    !currentPage ||
-                    currentPage.nextPageId === null ||
+                    !available.forward ||
                     isPlaying ||
                     uiSettings.focussedComponent === "timeline"
                 }
@@ -212,8 +236,7 @@ function PlaybackControls() {
             <RegisteredActionButton
                 registeredAction={RegisteredActionsObjects.lastPage}
                 disabled={
-                    !currentPage ||
-                    currentPage.nextPageId === null ||
+                    !available.forward ||
                     isPlaying ||
                     uiSettings.focussedComponent === "timeline"
                 }

@@ -12,6 +12,12 @@ import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { useCurrentPage } from "./SelectedPageContext";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { appearanceIsHidden } from "@/entity-components/appearance";
+import { useTimingObjects } from "@/hooks/useTimingObjects";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { useMarcherAppearanceTimelines } from "@/hooks/useMarcherAppearanceTimelines";
+import { hiddenMarcherIdsAt } from "@/services/appearance/get-appearance-at-time";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { timeAtBeat } from "@/timeline/timeMap";
 
 // Define the type for the context value
 type SelectedMarcherContextProps = {
@@ -37,14 +43,27 @@ export function SelectedMarchersProvider({
 }) {
     const { data: marchers } = useQuery(allMarchersQueryOptions());
     const [selectedMarchers, setSelectedMarchers] = useState<Marcher[]>([]);
-    // Timeline mode: the page at the playhead (UI-9 No selected page)
+    // Hidden marchers can't be selected. Page mode reads the selected page's appearances; timeline
+    // mode samples the appearance timeline at the playhead, as the canvas draws it (UI-9 No
+    // selected page, `useAppearanceAnimation`)
+    const timelineMode = useTimelineMode();
     const currentPage = useCurrentPage();
     const queryClient = useQueryClient();
     const { data: marcherAppearances } = useQuery({
         ...marcherAppearancesQueryOptions(currentPage?.id, queryClient),
-        enabled: currentPage !== null,
+        enabled: currentPage !== null && !timelineMode,
     });
+    const appearanceTimelines = useMarcherAppearanceTimelines(timelineMode);
+    const { beats } = useTimingObjects();
+    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     const hiddenMarcherIds: Set<number> = useMemo(() => {
+        if (timelineMode)
+            return appearanceTimelines
+                ? hiddenMarcherIdsAt(
+                      appearanceTimelines,
+                      timeAtBeat(beats, playheadBeat) * 1000,
+                  )
+                : new Set();
         if (marcherAppearances == null) return new Set();
         const hiddenMarcherIds = new Set(
             Object.entries(marcherAppearances)
@@ -54,7 +73,13 @@ export function SelectedMarchersProvider({
                 .map((marcherAppearance) => parseInt(marcherAppearance[0])),
         );
         return hiddenMarcherIds;
-    }, [marcherAppearances]);
+    }, [
+        timelineMode,
+        appearanceTimelines,
+        beats,
+        playheadBeat,
+        marcherAppearances,
+    ]);
 
     // Update the selected marcher if the marchers list changes. This refreshes the information of the selected marcher
     useEffect(() => {

@@ -1,87 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import type CanvasMarcher from "@/global/classes/canvasObjects/CanvasMarcher";
 import type { RgbaColor } from "@openmarch/core";
-import {
-    allMarchersQueryOptions,
-    allSectionAppearancesQueryOptions,
-    allTagAppearancesQueryOptions,
-    fieldPropertiesQueryOptions,
-    marcherIdsForAllTagIdsQueryOptions,
-    tagAppearanceByPageIdMapQueryOptions,
-} from "@/hooks/queries";
+import { fieldPropertiesQueryOptions } from "@/hooks/queries";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { getLivePlaybackPosition } from "@/components/timeline/audio/AudioPlayer";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { timeAtBeat } from "@/timeline/timeMap";
-import { dbToMarcherAppearanceTimelines } from "@/services/appearance/db-to-timeline";
+import { useMarcherAppearanceTimelines } from "./useMarcherAppearanceTimelines";
 import { getAppearanceAtTime } from "@/services/appearance/get-appearance-at-time";
 import type { MarcherAppearanceTimeline } from "@/services/appearance/type";
-
-/**
- * Every marcher's appearance timeline for the whole show (`dbToMarcherAppearanceTimelines`), or
- * `undefined` until its queries load. Rebuilt when the pages, tags, sections or theme change.
- */
-export function useMarcherAppearanceTimelines(
-    enabled: boolean,
-): Map<number, MarcherAppearanceTimeline> | undefined {
-    const { pages } = useTimingObjects();
-    const { data: marchers } = useQuery({
-        ...allMarchersQueryOptions(),
-        enabled,
-    });
-    const { data: sectionAppearances } = useQuery({
-        ...allSectionAppearancesQueryOptions(),
-        enabled,
-    });
-    const { data: tagAppearances } = useQuery({
-        ...allTagAppearancesQueryOptions(),
-        enabled,
-    });
-    const { data: marcherIdsByTagId } = useQuery({
-        ...marcherIdsForAllTagIdsQueryOptions(),
-        enabled,
-    });
-    const { data: tagAppearanceIdsByPageId } = useQuery({
-        ...tagAppearanceByPageIdMapQueryOptions(),
-        enabled,
-    });
-    const { data: fieldProperties } = useQuery({
-        ...fieldPropertiesQueryOptions(),
-        enabled,
-    });
-    return useMemo(() => {
-        if (
-            !enabled ||
-            !marchers ||
-            !sectionAppearances ||
-            !tagAppearances ||
-            !marcherIdsByTagId ||
-            !tagAppearanceIdsByPageId ||
-            !fieldProperties
-        )
-            return undefined;
-        return dbToMarcherAppearanceTimelines({
-            pages,
-            marchers,
-            sectionAppearances,
-            marcherIdsByTagId,
-            tagAppearances,
-            tagAppearanceIdsByPageId,
-            fieldProperties,
-        });
-    }, [
-        enabled,
-        pages,
-        marchers,
-        sectionAppearances,
-        tagAppearances,
-        marcherIdsByTagId,
-        tagAppearanceIdsByPageId,
-        fieldProperties,
-    ]);
-}
 
 /**
  * Styles each canvas marcher with its appearance at `timeMs`, skipping a marcher already styled

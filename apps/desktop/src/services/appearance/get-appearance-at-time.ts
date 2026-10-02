@@ -1,4 +1,7 @@
-import type { AppearanceComponentOptional } from "@/entity-components/appearance";
+import {
+    appearanceIsHidden,
+    type AppearanceComponentOptional,
+} from "@/entity-components/appearance";
 import type { MarcherAppearanceTimeline } from "./type";
 
 /**
@@ -36,4 +39,17 @@ export function getAppearanceAtTime(
         } else hi = mid - 1;
     }
     return stacks[found]!;
+}
+
+/** The marchers whose appearance at `timeMs` is hidden, so they can't be selected. */
+export function hiddenMarcherIdsAt(
+    timelines: ReadonlyMap<number, MarcherAppearanceTimeline>,
+    timeMs: number,
+): Set<number> {
+    const hidden = new Set<number>();
+    for (const [marcherId, timeline] of timelines) {
+        const stack = getAppearanceAtTime(timeline, timeMs);
+        if (stack && appearanceIsHidden(stack)) hidden.add(marcherId);
+    }
+    return hidden;
 }
