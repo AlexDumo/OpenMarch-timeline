@@ -8,7 +8,6 @@ import { performRedo, performUndo, transactionWithHistory } from "../history";
 import {
     TimelineCommitViolationError,
     TimelineWriteError,
-    createLegacyPageTransitionsInTransaction,
     createTimelineAssignmentsInTransaction,
     createTimelineShapesInTransaction,
     createTimelineTransitionsInTransaction,
@@ -318,34 +317,41 @@ describeDbTests("timeline range edit (R-E1) and write-path storage", (it) => {
         );
 
         testWithHistory(
-            "a legacy timeline whose transitions don't span it, and a missing transition, are refused with E-ARGS",
+            "an edit that leaves a transition off its timeline's range is refused at commit (E-T1, C-11), and a missing transition with E-ARGS",
             async ({ db }) => {
                 const { shapeId } = await seed(db);
-                const legacy = await transactionWithHistory(
+                const before = await snapshot(db);
+                // The row triggers allow a transition inside its timeline, so write one past the
+                // write functions' check; the commit check refuses the whole edit
+                const error = await transactionWithHistory(
                     db,
-                    "legacy",
+                    "partial",
                     async (tx) => {
                         const timelineId = await timelineOver(tx, 32, 64);
-                        const [row] =
-                            await createLegacyPageTransitionsInTransaction({
-                                newTransitions: [
-                                    {
-                                        timelineId,
-                                        startBeat: 32,
-                                        endBeat: 48,
-                                        slotCount: 1,
-                                        destination: { kind: "shape", shapeId },
-                                    },
-                                ],
-                                tx,
-                            });
-                        return row!.id;
+                        await tx
+                            .insert(schema.timeline_transitions)
+                            .values({
+                                timeline_id: timelineId,
+                                dest_shape_id: shapeId,
+                                path_style: "direct",
+                                order_mode: "inherit",
+                                slot_count: 1,
+                                start_beat: 32,
+                                end_beat: 48,
+                            })
+                            .run();
                     },
+                ).then(
+                    () => undefined,
+                    (e: unknown) => e,
                 );
-                const error = await expectRejected(db, "E-ARGS", () =>
-                    rangeEdit(db, legacy, 32, 40),
+                expect(error).toBeInstanceOf(TimelineCommitViolationError);
+                const violation = error as TimelineCommitViolationError;
+                expect(violation.code).toBe("E-T1");
+                expect(violation.message).toMatch(
+                    /E-T1: transition \d+: transition spans \[32, 48\) but its timeline spans \[32, 64\)/,
                 );
-                expect(error.message).toMatch(/older conversion/);
+                expect(await snapshot(db)).toEqual(before);
                 await expectRejected(db, "E-ARGS", () =>
                     rangeEdit(db, 999, 0, 8),
                 );

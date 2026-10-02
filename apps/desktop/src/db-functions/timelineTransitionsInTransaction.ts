@@ -174,22 +174,6 @@ type SpanningTransitionArgs = NewTimelineTransitionArgs & {
     endBeat: number;
 };
 
-/**
- * Creates transitions over any range inside their timeline, skipping the C-11 check that
- * `createTimelineTransitionsInTransaction` makes.
- *
- * TODO(P9.10): only the page converter calls this, because it still writes one show-wide
- * timeline with a transition per page. Remove it once the converter writes a timeline per page.
- */
-export const createLegacyPageTransitionsInTransaction = async ({
-    newTransitions,
-    tx,
-}: {
-    newTransitions: SpanningTransitionArgs[];
-    tx: DbTransaction;
-}): Promise<DatabaseTimelineTransition[]> =>
-    await insertTimelineTransitions(tx, newTransitions);
-
 const insertTimelineTransitions = async (
     tx: DbTransaction,
     newTransitions: SpanningTransitionArgs[],
@@ -349,9 +333,9 @@ export const updateTimelineTransitionsInTransaction = async ({
  * outside the new range fails step 3 (E-A1), a moved row that becomes empty fails I-A6 (a CHECK,
  * so `E-DB`), and a moved row that overlaps the same marcher's row at the same layer fails E-A3.
  *
- * A timeline whose transitions don't all span it (an older conversion, TODO(P9.10)) is refused
- * (E-ARGS). Run it inside `transactionWithHistory`, so the edit is one undo group and one change
- * batch. A target equal to the current range writes nothing, so don't make it the only write of
+ * Every transition spans its timeline before and after (C-11; `timeline_commit_violations`
+ * checks it at commit, E-T1). Run it inside `transactionWithHistory`, so the edit is one undo
+ * group and one change batch. A target equal to the current range writes nothing, so don't make it the only write of
  * an edit.
  */
 // eslint-disable-next-line max-lines-per-function
@@ -383,17 +367,6 @@ export const setTimelineRangeInTransaction = async ({
         .where(eq(T.timeline_id, timelineId))
         .orderBy(asc(T.id))
         .all();
-    const partial = owned.filter(
-        (t) => t.start_beat !== s0 || t.end_beat !== e0,
-    );
-    if (partial.length > 0)
-        refuse(
-            `timeline ${timelineId} holds moves that don't span it (transition(s) ${partial
-                .map((t) => t.id)
-                .join(
-                    ", ",
-                )}, from an older conversion), so its range can't change`,
-        );
     if (start === s0 && end === e0) return timeline;
     const ids = owned.map((t) => t.id);
     const unionStart = Math.min(s0, start);

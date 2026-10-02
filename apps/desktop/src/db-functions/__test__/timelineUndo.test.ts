@@ -665,7 +665,7 @@ describeDbTests("timeline undo round trips (P4.8)", (it) => {
         it("QA-UNDO-1: a restored v0.6 row-rewriting range trigger makes a shrink's undo fail (U-1)", async ({
             db,
         }) => {
-            const { t1 } = await seed(db);
+            const { t1, timelineId } = await seed(db);
             await db.run(sql.raw("DROP TRIGGER timeline_tr_range_check"));
             await db.run(
                 sql.raw(`CREATE TRIGGER v06_range_anchor AFTER UPDATE OF start_beat, end_beat ON timeline_transitions
@@ -682,12 +682,17 @@ describeDbTests("timeline undo round trips (P4.8)", (it) => {
             // the v0.6 review found (spec Appendix G).
             await dropUndoTriggers(db, "timeline_transitions");
             await createUndoTriggers(db, "timeline_transitions");
-            await transactionWithHistory(db, "shrink", (tx) =>
-                tx
+            await transactionWithHistory(db, "shrink", async (tx) => {
+                await tx
                     .update(schema.timeline_transitions)
                     .set({ end_beat: 20 })
-                    .where(eq(schema.timeline_transitions.id, t1)),
-            );
+                    .where(eq(schema.timeline_transitions.id, t1));
+                // The timeline too, so the transition still spans it at commit (C-11)
+                await tx
+                    .update(schema.timelines)
+                    .set({ end_beat: 20 })
+                    .where(eq(schema.timelines.id, timelineId));
+            });
             const edited = await snapshot(db);
             expect((await assignmentOf(db, 2)).end_beat).toBe(20);
 
@@ -701,7 +706,7 @@ describeDbTests("timeline undo round trips (P4.8)", (it) => {
         it("QA-UNDO-1b: without the transition-side range check, 'shrink, then fix the rows' commits and can't be undone (U-3)", async ({
             db,
         }) => {
-            const { t1 } = await seed(db);
+            const { t1, timelineId } = await seed(db);
             await db.run(sql.raw("DROP TRIGGER timeline_tr_range_check"));
             await transactionWithHistory(db, "shrinkThenFix", async (tx) => {
                 await tx
@@ -712,6 +717,11 @@ describeDbTests("timeline undo round trips (P4.8)", (it) => {
                     .update(schema.timeline_assignments)
                     .set({ end_beat: 16 })
                     .where(eq(schema.timeline_assignments.transition_id, t1));
+                // The timeline too, so the transition still spans it at commit (C-11)
+                await tx
+                    .update(schema.timelines)
+                    .set({ end_beat: 16 })
+                    .where(eq(schema.timelines.id, timelineId));
             });
             const edited = await snapshot(db);
 
