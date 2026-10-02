@@ -141,8 +141,8 @@ Apply C-11 (implementation-plan.md): every transition starts and ends exactly wh
 
 ### P8.11: UI-9 selection and playhead
 
-- Owner: none
-- Status: open
+- Owner: timeline-worker (timeline/p8-11-selection-playhead)
+- Status: claimed
 - PR: none
 - Parallel: yes (with P8.13 and P8.14)
 - Depends on: P8.10
