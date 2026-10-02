@@ -6,8 +6,10 @@ import {
     useState,
     type MouseEvent,
 } from "react";
+import { PlusIcon } from "@phosphor-icons/react";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
 import {
+    beatToX,
     clamp,
     getPageSnapBeats,
     getSelectionRange,
@@ -387,6 +389,23 @@ function TimelineSurface({
                         onFocusChange={setPlayheadFocused}
                         onSeek={props.onSeek}
                     />
+                    {props.onAddPageFlag && !props.isPlaying && (
+                        <button
+                            type="button"
+                            data-testid="timeline-add-page-flag"
+                            data-timeline-interactive="true"
+                            aria-label="Add a page flag here"
+                            title="Add a page flag here"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={props.onAddPageFlag}
+                            className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-50 flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
+                            style={{
+                                left: beatToX(positionBeat, pixelsPerBeat) + 8,
+                            }}
+                        >
+                            <PlusIcon size={10} weight="bold" />
+                        </button>
+                    )}
                     <TimelinePlayheadDetail
                         model={model}
                         positionBeat={positionBeat}

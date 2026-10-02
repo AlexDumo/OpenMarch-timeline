@@ -1,9 +1,5 @@
 import { useCallback, useMemo } from "react";
-import {
-    createTrack,
-    shiftTimeline,
-    type CreateTrackTarget,
-} from "@/db-functions/timelineCommands";
+import { shiftTimeline } from "@/db-functions/timelineCommands";
 import { addMarchersToTimeline } from "@/db-functions/timelineMembership";
 import type { DbConnection } from "@/db-functions/types";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
@@ -12,9 +8,7 @@ import type { TimelineInput } from "./Timeline";
 import type { TimelineAddMarchersMenu } from "./TimelineRangeMenu";
 import type {
     TimelineBeatRange,
-    TimelineCreateTrackRequest,
     TimelineRangeChange,
-    TimelineTarget,
 } from "./TimelineViewModel";
 
 /**
@@ -38,35 +32,6 @@ export function timelineShiftFor(
     return { timelineId: Number(track.linkId), delta };
 }
 
-/**
- * Create Track's target: a shape picked by selecting its track, which takes the selected marchers
- * (none when no marcher is selected, since there would be nobody to move into it); otherwise the
- * one selected marcher. With several marchers selected and no shape, there's none.
- */
-export function selectedTimelineTarget(
-    shape: TimelineTarget | null,
-    selectedMarcherIds: ReadonlySet<number>,
-): TimelineTarget | null {
-    if (shape) return selectedMarcherIds.size > 0 ? shape : null;
-    if (selectedMarcherIds.size !== 1) return null;
-    const [id] = selectedMarcherIds;
-    return { type: "marcher", id: id! };
-}
-
-/** The write path's target for a Create Track request. */
-export function createTrackTargetFor(
-    target: TimelineTarget,
-    selectedMarcherIds: ReadonlySet<number>,
-): CreateTrackTarget {
-    return target.type === "shape"
-        ? {
-              kind: "shape",
-              shapeId: Number(target.id),
-              marcherIds: [...selectedMarcherIds],
-          }
-        : { kind: "marcher", marcherId: Number(target.id) };
-}
-
 /** Why **Add selected marchers** is unavailable, or null when it can run. */
 export function addSelectedMarchersBlocker(
     selectedMarcherIds: ReadonlySet<number>,
@@ -77,12 +42,13 @@ export function addSelectedMarchersBlocker(
 }
 
 /**
- * The panel's side of the commands: the selected target for Create Track, and the callbacks that
- * run each command as one undoable edit and show a refusal's friendly message (P8.6) as a toast.
+ * The panel's side of the commands: the callbacks that run each command as one undoable edit and
+ * show a refusal's friendly message (P8.6) as a toast. A clip move of the selected timeline moves
+ * the selection with it (UI-9).
  *
- * Under UI-9 the timeline draws one track per timeline, so no shape track can be picked: Create
- * Track's target is the one selected marcher, until **Add selected marchers** (P8.14) replaces it.
- * A clip move of the selected timeline moves the selection with it (UI-9).
+ * Create Track isn't offered in timeline mode (P8.15): with one timeline per page it would give a
+ * marcher a second transition in a page timeline. **Add selected marchers** replaces it (UI-9
+ * Creating a timeline).
  */
 export function useTimelineCommands({
     database,
@@ -93,11 +59,6 @@ export function useTimelineCommands({
     timelines: readonly TimelineInput[];
     selectedMarcherIds: ReadonlySet<number>;
 }) {
-    const selectedTarget = useMemo(
-        () => selectedTimelineTarget(null, selectedMarcherIds),
-        [selectedMarcherIds],
-    );
-
     const commitTimelineRange = useCallback(
         (change: TimelineRangeChange) => {
             const shift = timelineShiftFor(change, timelines);
@@ -120,25 +81,8 @@ export function useTimelineCommands({
         [database, timelines],
     );
 
-    const createTrackFromRequest = useCallback(
-        (request: TimelineCreateTrackRequest) => {
-            createTrack({
-                db: database,
-                target: createTrackTargetFor(
-                    request.target,
-                    selectedMarcherIds,
-                ),
-                startBeat: request.range.startBeatIndex,
-                endBeat: request.range.endBeatIndex,
-            }).catch((error: unknown) => toastTimelineError(error));
-        },
-        [database, selectedMarcherIds],
-    );
-
     return {
-        selectedTarget,
         commitTimelineRange,
-        createTrack: createTrackFromRequest,
         addSelectedMarchers: useAddSelectedMarchers(
             database,
             selectedMarcherIds,

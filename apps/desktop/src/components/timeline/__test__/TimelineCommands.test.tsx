@@ -16,16 +16,12 @@ import { timelineErrorMessage } from "@/timeline/timelineErrorMessages";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { Timeline, type TimelineInput } from "../Timeline";
 import type { TimelineSelection } from "../TimelineViewModel";
-import {
-    selectedTimelineTarget,
-    timelineShiftFor,
-    useTimelineCommands,
-} from "../useTimelineCommands";
+import { timelineShiftFor, useTimelineCommands } from "../useTimelineCommands";
 
 /**
  * The timeline's commands as the panel wires them (P8.9): a clip move shifts its spec timeline by
- * the dragged beats, Create Track sends its range in spec beats with the selected target, no-ops
- * write nothing, and a refusal is a toast with its error code.
+ * the dragged beats, no-ops write nothing, and a refusal is a toast with its error code. Create
+ * Track isn't offered in timeline mode (P8.15, UI-9: Add selected marchers replaces it).
  */
 
 vi.mock("@/db-functions/timelineCommands", () => ({
@@ -121,10 +117,9 @@ function Harness({
             timelines={timelines}
             showTransport={false}
             selection={selection}
-            selectedTarget={commands.selectedTarget}
             onSelectionChange={setSelection}
             onTimelineRangeCommit={commands.commitTimelineRange}
-            onCreateTrack={commands.createTrack}
+            addSelectedMarchers={commands.addSelectedMarchers}
         />
     );
 }
@@ -213,41 +208,24 @@ describe("the timeline's commands", () => {
         expect(vi.mocked(conToastError).mock.calls[0]![0]).not.toMatch(/E-A3/);
     });
 
-    it("Create Track for the one selected marcher sends the range in spec beats", () => {
-        render(
-            <Harness
-                timelines={[]}
-                selectedMarcherIds={new Set([5])}
-                // Spec beats [3, 7), drawn as view beats [2, 6)
-                initialSelection={{
-                    kind: "range",
-                    range: { startBeatIndex: 3, endBeatIndex: 7 },
-                }}
-            />,
-        );
-        fireEvent.click(screen.getByRole("button", { name: "Create Track" }));
-        expect(createTrack).toHaveBeenCalledWith({
-            db: DB,
-            target: { kind: "marcher", marcherId: 5 },
-            startBeat: 3,
-            endBeat: 7,
-        });
-    });
-
-    it("hides Create Track with several marchers selected and no shape", () => {
-        render(
-            <Harness
-                timelines={[]}
-                selectedMarcherIds={new Set([1, 2])}
-                initialSelection={{
-                    kind: "range",
-                    range: { startBeatIndex: 2, endBeatIndex: 6 },
-                }}
-            />,
-        );
-        expect(
-            screen.queryByRole("button", { name: "Create Track" }),
-        ).toBeNull();
+    it("offers no Create Track, even for one selected marcher on a range (P8.15)", () => {
+        for (const ids of [[5], [1, 2]]) {
+            render(
+                <Harness
+                    timelines={[]}
+                    selectedMarcherIds={new Set(ids)}
+                    initialSelection={{
+                        kind: "range",
+                        range: { startBeatIndex: 3, endBeatIndex: 7 },
+                    }}
+                />,
+            );
+            expect(
+                screen.queryByRole("button", { name: "Create Track" }),
+            ).toBeNull();
+            cleanup();
+        }
+        expect(createTrack).not.toHaveBeenCalled();
     });
 });
 
@@ -271,22 +249,6 @@ describe("the commands' pure parts", () => {
                 { timelineId: "missing", startBeatIndex: 1, endBeatIndex: 7 },
                 tracks,
             ),
-        ).toBeNull();
-    });
-
-    it("selectedTimelineTarget prefers a picked shape, then one marcher", () => {
-        expect(selectedTimelineTarget(null, new Set([3]))).toEqual({
-            type: "marcher",
-            id: 3,
-        });
-        expect(selectedTimelineTarget(null, new Set())).toBeNull();
-        expect(selectedTimelineTarget(null, new Set([1, 2]))).toBeNull();
-        expect(
-            selectedTimelineTarget({ type: "shape", id: 9 }, new Set([1, 2])),
-        ).toEqual({ type: "shape", id: 9 });
-        // A shape with nobody to move into it is no target
-        expect(
-            selectedTimelineTarget({ type: "shape", id: 9 }, new Set()),
         ).toBeNull();
     });
 });
@@ -358,7 +320,7 @@ describe("a clip move and the selection (UI-9)", () => {
         });
     });
 
-    it("offers Create Track for the one selected marcher only", () => {
+    it("has no Create Track command (P8.15)", () => {
         const { result } = renderHook(() =>
             useTimelineCommands({
                 database: DB,
@@ -366,9 +328,9 @@ describe("a clip move and the selection (UI-9)", () => {
                 selectedMarcherIds: new Set([4]),
             }),
         );
-        expect(result.current.selectedTarget).toEqual({
-            type: "marcher",
-            id: 4,
-        });
+        expect(Object.keys(result.current).sort()).toEqual([
+            "addSelectedMarchers",
+            "commitTimelineRange",
+        ]);
     });
 });

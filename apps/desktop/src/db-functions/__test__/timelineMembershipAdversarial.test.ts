@@ -175,6 +175,8 @@ describeDbTests("P8.14 adversarial", (it) => {
                 { length: pageEndBeat(pages[pages.length - 1]!) * 4 + 1 },
                 (_, i) => i / 4,
             );
+            // Pages too short for a range inside them are skipped; at least one must not be
+            let insideRuns = 0;
             for (let i = 1; i < pages.length; i++) {
                 // P9.10 stores a timeline per page move with every marcher in it
                 await expectRefused(
@@ -190,6 +192,7 @@ describeDbTests("P8.14 adversarial", (it) => {
                 );
                 const range = insidePage(pages, i);
                 if (range.end <= range.start) continue;
+                insideRuns++;
                 const before = await sample(db, beats);
                 await addMarchersToTimeline({
                     db,
@@ -203,6 +206,7 @@ describeDbTests("P8.14 adversarial", (it) => {
                     [],
                 );
             }
+            expect(insideRuns).toBeGreaterThan(0);
             expect(await violations(db)).toEqual([]);
         });
 
