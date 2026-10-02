@@ -182,7 +182,7 @@ Canvas moves against the selection (UI-9: Editing, Editing off the end, More tha
 ### P8.12: No selected page in timeline mode
 
 - Owner: timeline-worker (timeline/p8-12-no-selected-page)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes (with P8.13–P8.15 once P8.11's selection store exists)
 - Depends on: P8.11
@@ -877,3 +877,12 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** **+** button and delete-flag menu entry, remove Create Track from timeline mode, PR #52 test nits, then whole-suite checks.
 - **Blockers:** none.
 - **Resume from:** `apps/desktop/src/components/timeline/TimelineModePanel.tsx` (wire `useAddPageFlag`, `deletePageFlagsMutationOptions`; drop `onCreateTrack`/`selectedTarget`), `TimelineVariants.tsx` and `TimelineRangeMenu.tsx`. In a fresh work tree run `pnpm install`, then build each workspace package by name (`pnpm --filter @openmarch/core --filter @openmarch/metronome --filter @openmarch/musicxml-parser --filter @openmarch/ui --filter @openmarch/config build`).
+
+### 2026-10-02 · timeline-worker (timeline/p8-12-no-selected-page) · P8.12
+
+- **Done:** pushed `7473d3fe` (wip). `SelectedPageContext` now also gives `useCurrentPage()` (page mode: the selected page; timeline mode: `pageAtPlayhead`) and `usePageNavigation()` (`goToPage`: page mode selects; timeline mode moves the playhead to the flag and selects that page's timeline via the new `selectTimelinePage` in `timelineTransport.ts`). `useSelectedPage` warns once per component in development when read in timeline mode (`SELECTED_PAGE_IN_TIMELINE_MODE_WARNING`). Every reader under `src` moved off `useSelectedPage`. `useTimelinePageBridge` is deleted. The inspector's timeline section, the marcher editor's coordinates, the clock and the waveform read the playhead. Undo and redo in timeline mode move only the playhead. Previous and next paths run through the selected range and on to the next flag (`timelinePathRanges`, `pathsBetweenBeats`); nothing at home. Set to previous or next page edits the selected stored timeline's members and is refused with none selected (new `actions.batchEdit.noTimelineSelected`).
+- **Shared files touched (P8.15):** `Canvas.tsx` and `canvasListeners.movement.ts` only swap where `selectedPage` comes from (`useCurrentPage`; the local name stays to avoid conflicts), and Canvas's path-render arguments. `canvasCoordinateWriter`, `updateCoordinates` and `useUpdateSelectedMarchersOnSelectedPage` still write by the page at the playhead. Neighbor-page writes go through `moveMarchersOnPage` at the selected timeline's end beat (`TODO(P8.15)`: by timeline id). `copyPagePositions` in `timelineCoordinateWrites.ts` is no longer used by the app; left for P8.15.
+- **Proposed split:** this PR (P8.12a) is the reads, the bridge, the guard and the page-relative tools; appearance-by-time (P8.12b) follows as its own commit on this branch, or a second PR if this one is already large.
+- **Checks so far:** `pnpm tsc --noEmit` pass; focused vitest on timeline, canvas, hooks, inspector and context tests pass; eslint on touched files 0 errors.
+- **Blockers:** none.
+- **Resume from:** on `timeline/p8-12-no-selected-page`: timeline-mode feature tests through `src/test/featureHarness.tsx` that spy `console.warn` for `SELECTED_PAGE_IN_TIMELINE_MODE_WARNING` while mounting the inspector, toolbar, timeline container, canvas listeners and action handler; then remove `buildTimelineTracks`/`clipsOfShape` (`TODO(P8.12)`, `timelineViewModel.ts`); then appearance-by-time from `coordinates-v2`.
