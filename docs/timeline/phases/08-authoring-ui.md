@@ -132,7 +132,7 @@ QA-SC-01 to -15 runnable from the UI. Verdicts for SC-07, SC-14 and SC-15 record
 ### P8.10: Transitions span their timeline
 
 - Owner: timeline-worker (timeline/p8-10-transitions-span-timeline)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/47
 - Parallel: no
 - Depends on: P8.9
@@ -731,4 +731,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Done:** the project owner accepted the lead's proposals for features built on the selected page (UI-9 Page-relative tools, Deprecating page selection): page navigation moves the playhead to a flag and selects that page's timeline; set to previous/next page edits endings in the selected timeline; previous/next page paths follow the selected timeline; a show opens on home; undo moves only the playhead for now; a dev-mode warning guards `useSelectedPage` in timeline mode. Added to P8.11 (navigation, open, selection type, harness) and P8.12 (neighbor-page actions, paths, history focus, guard).
 - **Checks:** none (decisions and docs only); prettier and cspell on the changed docs.
 - **Next:** unchanged: P8.11, P8.13 and P8.14 after P8.10.
+- **Blockers:** none.
+
+### 2026-10-02 · lead session · P8.10 (done)
+
+- **Done:** PR #47 was already merged (`e12c5e1e`); P8.10 set to done. P8.11, P8.13, P8.14 and P9.10 are unblocked and started with timeline-worker agents.
+- **Checks:** none (status only).
+- **Next:** review and test each PR as it reaches in-review; then P8.15 and P8.12.
 - **Blockers:** none.
