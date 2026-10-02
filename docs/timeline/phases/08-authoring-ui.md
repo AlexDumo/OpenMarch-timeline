@@ -820,3 +820,21 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Not run: the full `test:history` suite, Playwright e2e, and a manual run of the app.
 - **Next:** re-review.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-11-selection-playhead) · P8.11 (re-review fixes)
+
+- **Done:** PR #51 is now `571c46c4`, still one squashed commit.
+  - **Shift-drag lasso:** the select tool's lasso (`DefaultListeners`) skips dimmed marchers and turns marchers back on through `setInteractive`, so dimmed ones stay off; tested. No other direct writes turn marchers back on: the remaining `selectable`/`evented` writes only turn things off.
+  - **Comment fixed:** the `useAnimation` comment now names `useTimelinePlaybackDriver`.
+  - **TODO re-tagged:** the `clipsOfShape` TODO now points at P8.12.
+  - **Test renamed:** the harness test in `TimelineSelectionModes.test.tsx` now says what it checks. It no longer claims anything about stored timelines for page boxes, since P9.10 will add them.
+  - **Known gap, documented in `setTimelineDimmed`:** clearing the dim while the line or lasso tool has every marcher off makes that marcher selectable mid-tool. Restoring the state from before the dim would leave it stuck off when the tool finishes while it's dimmed, which is worse.
+- **Checks:**
+  - `pnpm tsc --noEmit`: pass.
+  - eslint on touched files: 0 errors.
+  - `pnpm run test:focused` (the whole suite): 178 files and 2510 tests passed.
+  - `pnpm run test:timeline` on the timeline, canvas, stores, hooks, inspector and utilities paths: 1112 passed.
+  - Pre-commit: pass.
+  - Not run: the full `test:history` suite, Playwright e2e, and a manual run of the app.
+- **Next:** re-review.
+- **Blockers:** none.
