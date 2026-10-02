@@ -157,9 +157,15 @@ const pageRange = (pages: readonly Page[], i: number): BeatRange => ({
     end: pageEndBeat(pages[i]!),
 });
 
+/** Inside page `i`'s move, two beats in from each flag (a converted page's own range is stored). */
+const insidePage = (pages: readonly Page[], i: number): BeatRange => {
+    const { start, end } = pageRange(pages, i);
+    return { start: start + 2, end: end - 2 };
+};
+
 describeDbTests("P8.14 adversarial", (it) => {
     describe("add is motion-neutral on linear paths", () => {
-        it("(a) every page range not stored yet of a converted show, one marcher each", async ({
+        it("(a) every page of a converted show: its own range is refused (everyone is in), a range inside it is motion-neutral", async ({
             db,
             marchersAndPages,
         }) => {
@@ -170,7 +176,19 @@ describeDbTests("P8.14 adversarial", (it) => {
                 (_, i) => i / 4,
             );
             for (let i = 1; i < pages.length; i++) {
-                const range = pageRange(pages, i);
+                // P9.10 stores a timeline per page move with every marcher in it
+                await expectRefused(
+                    db,
+                    () =>
+                        addMarchersToTimeline({
+                            db,
+                            range: pageRange(pages, i),
+                            marcherIds: [ids[i % ids.length]!],
+                        }),
+                    "E-ARGS",
+                    /already in this timeline/,
+                );
+                const range = insidePage(pages, i);
                 if (range.end <= range.start) continue;
                 const before = await sample(db, beats);
                 await addMarchersToTimeline({
@@ -334,7 +352,7 @@ describeDbTests("P8.14 adversarial", (it) => {
             );
         });
 
-        it("(d') REPORT: a range spanning two page moves of a converted show (not a linear path)", async ({
+        it("(d') a range spanning two page moves of a converted show holds the marcher's page timelines: refused", async ({
             db,
             marchersAndPages,
         }) => {
@@ -344,33 +362,40 @@ describeDbTests("P8.14 adversarial", (it) => {
                 start: pageRange(pages, 2).start,
                 end: pageRange(pages, 3).end,
             };
-            const before = await sample(db);
-            await addMarchersToTimeline({ db, range, marcherIds: [a] });
-            const changed = diffs(before, await sample(db));
-            // Not asserted as a bug: the path over two page moves isn't linear (ui.md backlog),
-            // so samples inside the range may change. Ends are kept
-            expect(
-                changed.filter(
-                    (c) => c.beat <= range.start || c.beat >= range.end,
-                ),
-            ).toEqual([]);
+            // P9.10 stores a timeline per page, so the range holds two of the marcher's timelines
+            // and adding would replace those moves (lead decision: refused)
+            await expectRefused(
+                db,
+                () => addMarchersToTimeline({ db, range, marcherIds: [a] }),
+                "E-ARGS",
+                /inside/,
+            );
         });
     });
 
-    describe("menu range from a clip at beat 0", () => {
-        it("right-clicking the converted show-wide clip finds its timeline: no new timeline, no motion change", async ({
+    describe("menu range from a converted page's clip", () => {
+        it("right-clicking a converted page's clip finds its timeline: no new timeline, no motion change", async ({
             db,
             marchersAndPages,
         }) => {
             const pages = await setUpConverted(db);
-            const end = pageEndBeat(pages[pages.length - 1]!);
-            const showWide = (await db.select().from(schema.timelines).get())!;
-            expect([showWide.start_beat, showWide.end_beat]).toEqual([0, end]);
+            const timelinesBefore = await db
+                .select()
+                .from(schema.timelines)
+                .all();
+            // P9.10: one timeline per page move, the first from page 0's flag at beat 1
+            const first = timelinesBefore.find(
+                (t) => t.start_beat === pageRange(pages, 1).start,
+            )!;
+            expect([first.start_beat, first.end_beat]).toEqual([
+                pageRange(pages, 1).start,
+                pageRange(pages, 1).end,
+            ]);
             const a = marchersAndPages.expectedMarchers[0]!.id;
             const before = await sample(db);
-            // What the clip menu sends since the fix: the clip's stored spec range, not the view
-            // axis round trip [1, end) (TimelineRangeMenuAdversarial covers the UI side)
-            const sent = { start: showWide.start_beat, end };
+            // What the clip menu sends: the clip's stored spec range (TimelineRangeMenuAdversarial
+            // covers the UI side, including a clip from spec beat 0)
+            const sent = { start: first.start_beat, end: first.end_beat };
             const r = await addMarchersToTimeline({
                 db,
                 range: sent,
@@ -382,8 +407,8 @@ describeDbTests("P8.14 adversarial", (it) => {
             // Expected (UI-9): the marcher is already in the clip's timeline, so nothing changes
             expect(r).toBeInstanceOf(TimelineWriteError);
             expect(diffs(before, await sample(db))).toEqual([]);
-            expect(await db.select().from(schema.timelines).all()).toHaveLength(
-                1,
+            expect(await db.select().from(schema.timelines).all()).toEqual(
+                timelinesBefore,
             );
         });
     });
@@ -715,7 +740,7 @@ describeDbTests("P8.14 adversarial", (it) => {
             const beats = Array.from({ length: end * 4 + 1 }, (_, i) => i / 4);
             await addMarchersToTimeline({
                 db,
-                range: pageRange(pages, 2),
+                range: insidePage(pages, 2),
                 marcherIds: [_.expectedMarchers[0]!.id],
             });
             const before = await sample(db, beats);
@@ -729,14 +754,17 @@ describeDbTests("P8.14 adversarial", (it) => {
             const after = await sample(db, beats);
             expect(diffs(before, after, beats)).toEqual([]);
             for (const p of after.get(created!.id)!) expect(p).toEqual(home);
-            expect(await layersOf(db, created!.id)).toEqual([
-                { start: 0, end: end, layer: 0 },
-                {
-                    start: pageRange(pages, 2).start,
-                    end: pageRange(pages, 2).end,
-                    layer: 1,
-                },
-            ]);
+            // Each page timeline (P9.10) at layer 0, and the range inside page 2 one layer up
+            const expected = [];
+            for (let i = 1; i < pages.length; i++) {
+                const range = pageRange(pages, i);
+                if (range.end > range.start)
+                    expected.push({ ...range, layer: 0 });
+                if (i === 2)
+                    expected.push({ ...insidePage(pages, 2), layer: 1 });
+            }
+            expect(await layersOf(db, created!.id)).toEqual(expected);
+            expect(end).toBe(pageRange(pages, pages.length - 1).end);
         });
     });
 

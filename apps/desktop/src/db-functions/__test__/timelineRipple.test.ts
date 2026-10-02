@@ -628,10 +628,11 @@ describeDbTests("page and beat ripple in timeline mode", (it) => {
             const created = await createLastPage({ db, newPageCounts: 8 });
             await timelineResolverSettled();
 
-            expect(await timeline(db)).toMatchObject([
-                { start_beat: 0, end_beat: 49 },
-                { id: stored.timelineId, start_beat: 49, end_beat: 57 },
-            ]);
+            // The page timelines (P9.10), then the stored one: no second timeline over [49, 57)
+            expect(await timelineRanges(db)).toEqual([...ORIGINAL, [49, 57]]);
+            expect(
+                (await timeline(db)).find((t) => t.start_beat === 49)!.id,
+            ).toBe(stored.timelineId);
             // The holds went into the stored timeline; the marcher already there has its own move
             const inStored = (await transitions(db)).filter(
                 (t) => t.timeline_id === stored.timelineId,
