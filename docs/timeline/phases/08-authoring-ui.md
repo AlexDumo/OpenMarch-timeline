@@ -142,8 +142,8 @@ Apply C-11 (implementation-plan.md): every transition starts and ends exactly wh
 ### P8.11: UI-9 selection and playhead
 
 - Owner: timeline-worker (timeline/p8-11-selection-playhead)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/51
 - Parallel: yes (with P8.13 and P8.14)
 - Depends on: P8.10
 
@@ -780,4 +780,20 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:**
   - **P8.11:** `clipsOfShape` in `src/timeline/timelineViewModel.ts` (marked `TODO(P9.10)`) only split gaps in the old show-wide timeline and is now dead. Drop it with the one-track-per-timeline rewrite. P9.10 didn't touch the file, to avoid a conflict.
   - **P8.14:** P7.3's join (`addMarchersToTimelineInTransaction`) still works per page timeline, so nothing blocks replacing it.
+- **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-11-selection-playhead) · P8.11
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/51 (squashed `f76a24ea`). Selection store `apps/desktop/src/stores/TimelineSelectionStore.ts` (home / range / none, paused playhead, stored timelines; `useSelectedStoredTimeline`, `isMarcherDimmed`). The timeline selects home and ranges from page boxes, dragged ranges and resized ranges, in spec beats. It draws one track per stored timeline (`buildTimelineClipTracks`). The playhead can rest on any whole beat, including the end of the show, and seeking doesn't change the selection (`pageForSeek`, `pageAtBeat` and `pageForNavigation` are removed). Play resumes from the playhead and loops a selected range (`timelineTransport.ts`, `useAnimation`, `AudioPlayer`). Navigation moves the playhead to a flag and selects that page, or home for the first page. Dimmed marchers can't be selected or hit (`useTimelineDimming.ts`). Opening a show selects home. Harness: `selectTimeline`, `timelineSelection`.
+- **Notes for P8.12, P8.13, P8.14 and P8.15:** `src/timeline/useTimelinePageBridge.ts` is a TEMPORARY bridge that keeps the legacy selected page on the playhead's page, and moves the playhead when something else selects a page. P8.12 should delete it with the selected page. The paused canvas already draws at the playhead (`useTimelineStaticRender`'s `beat`), but `canvasCoordinateWriter` still writes page-based (P8.15). P8.13 can make a new page the selection with `selectRange(start, end)`. Create Track is still offered for one selected marcher until P8.14. The `useTimelineCommands` `noteSelection` and shape picking are removed. Clip click selects nothing, because that is still open in U-Q5. The handoff notes' "Clock" bullet (paused cursor = selected page's end, `pageForSeek`) is now stale; the lead may want to update it.
+- **Checks** (from `apps/desktop`):
+  - `pnpm tsc --noEmit`: pass.
+  - eslint on touched files: 0 errors.
+  - `pnpm prettier --check apps/desktop/src` (repo root): pass.
+  - `pnpm run test:focused` (the whole desktop vitest suite): 177 files and 2496 tests passed.
+  - `pnpm run test:timeline` on `src/components/timeline src/timeline src/utilities src/components/canvas src/stores src/hooks src/components/inspector src/global/classes`: 1098 passed.
+  - `pnpm run test:timeline src/timeline/__test__/TimelineSelectionModes.test.tsx`: 2 passed.
+  - Not run, per policy: the full `test:history` suite and Playwright e2e. No history test covers these files.
+  - Not run: a manual check in the app.
+- **Next:** review and merge.
 - **Blockers:** none.
