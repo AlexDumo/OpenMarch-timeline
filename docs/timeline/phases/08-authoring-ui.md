@@ -797,3 +797,26 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Not run: a manual check in the app.
 - **Next:** review and merge.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-11-selection-playhead) · P8.11 (review fixes)
+
+- **Done:** PR #51 is now `8060a271`, still one squashed commit.
+  - **Clip move:** a clip move of the selected timeline no longer clears the marcher selection; `followTimelineShift` moves the loaded stored timeline with the selection.
+  - **Dimmed marchers can't be selected again:** `CanvasMarcher.makeSelectable` and the new `setInteractive` respect `timelineDimmed`, which fixes the line and lasso tools, and the lasso skips dimmed marchers.
+  - **Loop no longer depends on the audio restart:** the loop, stop and pause rules moved to `src/timeline/useTimelinePlaybackDriver.ts` (mounted in `TimelineResolverHost`). A loop moves the live position at once (`restartLivePlaybackAt`).
+  - **Last page box:** it ends at its flag (`TimelinePageMarker.endBeat`).
+  - **Seeks:** non-finite seeks are ignored, and seeks clamp to `showEndBeat`.
+  - **Harness:** `selectTimeline` fails fast in page mode.
+  - **TODO tag:** the `clipsOfShape` TODO is re-tagged.
+  - **Tests:** added for each fix (driver with fake animation frames, clip move, line and lasso tools, page boxes with the zero-length beat 0 and on `marchersAndPages`).
+  - **Tester's files not adopted:** copying them from the tester's work tree was refused by the permission system (untrusted code integration). My own tests cover the same cases.
+- **Checks:**
+  - `pnpm tsc --noEmit`: pass.
+  - eslint on touched files: 0 errors.
+  - `pnpm run test:focused` (the whole suite): 178 files and 2509 tests passed.
+  - `pnpm run test:timeline` on the timeline, canvas, stores, hooks, inspector and utilities paths: 1111 passed.
+  - `TimelineSelectionModes.test.tsx`: 3 passed in each mode.
+  - Pre-commit: pass.
+  - Not run: the full `test:history` suite, Playwright e2e, and a manual run of the app.
+- **Next:** re-review.
+- **Blockers:** none.
