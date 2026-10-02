@@ -119,7 +119,7 @@ From the P9.4 packaged smoke run: on macOS a Quit sent while the "Preparing your
 ### P9.10: Convert to range-aligned timelines, then enforce C-11
 
 - Owner: timeline-worker (timeline/p9-10-range-aligned-convert)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P8.10
@@ -602,3 +602,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Skipped per the policy: the full `test:history` suite and e2e. `build:electron` wasn't run.
 - **Next:** re-review and merge by the lead.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p9-10-range-aligned-convert) · P9.10
+
+- **Done:** wip commit 6413e917 on `timeline/p9-10-range-aligned-convert`. The converter writes one timeline per page move over exactly the page's range (page 1 from beat 1), each with the one transition spanning it, through the checked `createTimelineTransitionsInTransaction`; page 0 gets no timeline. `createLegacyPageTransitionsInTransaction` and the multi-range refusal in `setTimelineRangeInTransaction` are gone. `timeline_commit_violations` has an `E-T1` row; `_blank.dots` regenerated with `pnpm migrate`.
+- **Checks:** `tsc --noEmit` clean; focused vitest (planner, pageConversion, conversionEquality, conversionCorpus, timelineRangeEdit, `electron/database`): 345 passed, 2 skipped.
+- **Next:** run the wider focused timeline suites, check ripple, P7.3 and P7.2 moves against the new shape, then open the PR.
+- **Blockers:** none.
+- **Resume from:** `git checkout timeline/p9-10-range-aligned-convert`; run `npx vitest run --silent=true src/db-functions/__test__/timeline* src/timeline` in `apps/desktop` and fix fallout.

@@ -142,7 +142,7 @@ Apply C-11 (implementation-plan.md): every transition starts and ends exactly wh
 ### P8.11: UI-9 selection and playhead
 
 - Owner: timeline-worker (timeline/p8-11-selection-playhead)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes (with P8.13 and P8.14)
 - Depends on: P8.10
@@ -151,9 +151,9 @@ The selection state and what it draws (`ui.md` UI-9: Pages, Home, Playhead, Play
 
 ### P8.13: UI-9 page flags
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p8-13-page-flags)
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/48
 - Parallel: yes (with P8.11 and P8.14)
 - Depends on: P8.10
 
@@ -739,3 +739,35 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** none (status only).
 - **Next:** review and test each PR as it reaches in-review; then P8.15 and P8.12.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-11-selection-playhead) · P8.11
+
+- **Done:** the selection store is pushed (commit `ca9df07d` on `timeline/p8-11-selection-playhead`). **Module: `apps/desktop/src/stores/TimelineSelectionStore.ts`**, `useTimelineSelectionStore`: `selection` is `{kind: "home"} | {kind: "range", start, end} | {kind: "none"}` (spec beats, half-open); `playheadBeat` is the paused playhead (whole spec beat; show time 0 is written as 0); `selectHome()` seeks to 0, `selectRange(start, end)` seeks to `end`, `seek(beat)` moves only the playhead, `followTimelineShift` moves a selection with its clip. The stored timeline a range resolves to: `selectedStoredTimeline(state)` / `useSelectedStoredTimeline()` (`{id, start, end, marcherIds}` or null); `isMarcherDimmed(state, marcherId)`. `storedTimelines` is kept current by `useTimelineSelectionHost` (`src/timeline/useTimelineSelectionHost.ts`, mounted in `TimelineResolverHost`). P8.13–P8.15 and P8.12 read these; the API may still gain fields, but these names stay.
+- **Checks:** `pnpm run test:focused src/stores/__test__/TimelineSelectionStore.test.ts` (apps/desktop): 8 passed. `pnpm tsc --noEmit`: pass. Pre-commit (cspell, eslint, prettier): pass.
+- **Next:** wire the timeline (page boxes, home, dragged range, one track per timeline), playhead and play/loop, navigation, opening on home, dimming on the canvas, harness.
+- **Blockers:** none.
+- **Resume from:** `apps/desktop/src/components/timeline/TimelineViewModel.ts` (`TimelineSelection` to home/range in spec beats), then `TimelinePrimitives.tsx`, `TimelineVariants.tsx`, `TimelineModePanel.tsx`, `useTimelinePlayback.ts`. Run `pnpm install` first in a fresh work tree.
+
+### 2026-10-02 · timeline-worker (timeline/p8-13-page-flags) · P8.13
+
+- **Done:** `apps/desktop/src/db-functions/pageFlags.ts`: `planPageFlagInsertion` (pure: split inside a page, append past the last flag, nothing on a flag, at home or past the beats), `pageFlagGrid` (renderer pages to the plan's grid), `addPageFlag` and `deletePageFlags` (one undoable edit each, page rows and `last_page_counts` only, no `withTimelinePageRipple`, refused outside timeline mode). `hooks/queries/usePageFlags.ts` has mutation options. Tests in `db-functions/__test__/pageFlags.test.ts`. Pushed as a `wip:` commit on `timeline/p8-13-page-flags`.
+- **Checks:** `pnpm run test:focused src/db-functions/__test__/pageFlags.test.ts`: 15 passed. `pnpm run test:history` on the same file: 15 passed. `pnpm tsc --noEmit`: pass.
+- **Next:** desktop verification, tidy commits, PR.
+- **Blockers:** none.
+- **Resume from:** `timeline/p8-13-page-flags`; run `pnpm --filter "./packages/*" build` in a fresh work tree, then the focused test above; then finish (WORKER.md step 6).
+
+### 2026-10-02 · timeline-worker (timeline/p8-13-page-flags) · P8.13
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/48. `db-functions/pageFlags.ts`: `addPageFlag` (**+**: split keeps the split page's flag, id and data with a new row at its old start; splitting the last page keeps the last flag through `last_page_counts`; past the last flag it appends a page ending at the beat) and `deletePageFlags`, each one undoable edit that writes only page rows and `last_page_counts`, with no ripple, refused outside timeline mode. `planPageFlagInsertion`/`pageFlagGrid` decide where **+** shows; `hooks/queries/usePageFlags.ts` has mutation options and `useAddPageFlag`, whose `onAdded` returns the new page's range.
+- **Interpretation for review:** deleting page N's flag deletes N's row and moves the next page's `start_beat` back to N's start, so only N's flag goes and the next page keeps its flag, id and data (the inverse of **+**). Deleting the row alone would remove page N−1's flag instead. Existing `deletePages` and its P7.4 ripple are unchanged.
+- **Checks:** `pnpm run test:focused src/db-functions/__test__/pageFlags.test.ts`: 15 passed; `pnpm run test:history` on it: 15 passed; with `VITEST_TIMELINE_MODE=true`: 15 passed; `test:focused` on `timelineRipple.test.ts` and `page.test.ts`: 147 passed, 1 todo; `pnpm tsc --noEmit`: pass; eslint, prettier --check and cspell on the changed files: pass. Not run (worker policy): full `test:history`, full `test:timeline`, Playwright e2e, `pnpm check:quick`. No exit-gate items ticked.
+- **Next (follow-ups after P8.11 merges):** wire `useAddPageFlag`'s `onAdded` to `useTimelineSelectionStore.getState().selectRange(startBeat, endBeat)`. Render the **+** button after the free paused playhead, in P8.11's `Timeline.tsx`/`TimelinePrimitives.tsx`; it never shows while the playhead sits on a selected page's flag. Give delete an entry point, such as a page-box context menu shared with P8.14, calling `deletePageFlagsMutationOptions`; `PageTimeline` in beat-edit mode still calls the ripple `deletePages`.
+- **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-11-selection-playhead) · P8.11
+
+- **Done:** pushed `5119bd98`. The timeline selects home (initial box) and ranges (page boxes, a drag on empty space, resized ranges) through `useTimelineSelectionStore`; `TimelineSelection` is now `home | range | null` in spec beats (`Timeline` converts). One track per stored timeline (`buildTimelineClipTracks`). Playhead: `useTimelinePlayback` reads the store; seeks move only the playhead; navigation and play/pause in `src/timeline/timelineTransport.ts` (pure rules in `src/timeline/timelinePlayhead.ts`); the audio player starts at the playhead and restarts on each playhead write, which is how `useAnimation` loops a selected range. Dimming and deselection: `src/timeline/useTimelineDimming.ts`. Opening a show selects home (`StateInitializer`). TEMPORARY bridge until P8.12: `src/timeline/useTimelinePageBridge.ts` keeps the legacy selected page on the playhead's page (and moves the playhead to a page selected elsewhere). Harness: `selectTimeline`, `timelineSelection` in `src/test/featureHarness.tsx`.
+- **Checks:** focused vitest on the changed timeline tests (`useTimelinePlayback`, `timelineSelection`, `TimelineVariants`, `TimelineGeometry`, `TimelineCommands`, `TimelineAdapterView`, `TimelineStories`, `useTimelineTracks`, `TimelineSelectionStore`): all pass. `pnpm tsc --noEmit`: pass. Pre-commit: pass.
+- **Next:** a timeline-mode feature test through the harness (navigation actions), broader focused runs, then PR.
+- **Blockers:** none.
+- **Resume from:** add `src/utilities/__test__/` or `src/timeline/__test__/` harness test for the navigation actions under `pnpm run test:timeline <file>`; then run `pnpm run test:focused src/components/timeline src/timeline src/utilities src/components/canvas` and lint; open the PR.
