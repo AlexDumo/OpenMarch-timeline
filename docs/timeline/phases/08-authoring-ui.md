@@ -151,8 +151,8 @@ The selection state and what it draws (`ui.md` UI-9: Pages, Home, Playhead, Play
 
 ### P8.13: UI-9 page flags
 
-- Owner: none
-- Status: open
+- Owner: timeline-worker (timeline/p8-13-page-flags)
+- Status: claimed
 - PR: none
 - Parallel: yes (with P8.11 and P8.14)
 - Depends on: P8.10
