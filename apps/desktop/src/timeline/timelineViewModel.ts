@@ -363,8 +363,9 @@ function tracksOfTimeline(
  * clip when another shape's transition in the timeline occupies it, so the shape doesn't seem to
  * hold through another formation.
  *
- * TODO(P9.10): every transition spans its timeline (C-11), so only a legacy converted timeline
- * has gaps to split; remove this once the converter writes a timeline per page move.
+ * TODO(P8.11): every transition spans its timeline (C-11), and the converter writes a timeline
+ * per page move (P9.10), so no timeline has gaps to split any more; remove this with the
+ * one-track-per-timeline view model.
  */
 function clipsOfShape(
     shapeTransitions: readonly TimelineViewTransition[],
