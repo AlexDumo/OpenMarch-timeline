@@ -172,7 +172,7 @@ The db-functions and context menu for who is in a timeline (UI-9: Adding marcher
 ### P8.15: UI-9 canvas edits
 
 - Owner: timeline-worker (timeline/p8-15-canvas-edits)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/53
 - Parallel: no
 - Depends on: P8.11, P8.14
@@ -953,4 +953,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - `pnpm run test:history` on 6 touched test files: 55 passed.
   - Not run (policy): the full `test:history` suite and Playwright.
 - **Next:** re-review and merge.
+- **Blockers:** none.
+
+### 2026-10-02 · lead session · P8.15 merged
+
+- **Done:** PR #53 merged (`4429acfb`) after review, test and a fix round. The linear MVP's build packages (P8.11, P8.13, P8.14, P8.15, P9.10) are all merged. Lead decisions for UI-9: deleting the selected page's flag selects the merged page; deleting the selected last page's flag selects the previous page (home for page 0). P8.12 is paused for MVP testing (see handoff notes).
+- **Checks:** reviewer and tester re-ran the PR's checks; whole `test:focused` and `test:timeline` passed on its final commit.
+- **Next:** build and run `validation-plan.md` V1–V4 in the app.
 - **Blockers:** none.

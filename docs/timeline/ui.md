@@ -259,7 +259,7 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Deleting a flag.** Deleting page N's flag deletes N's row and moves
     page N+1's start back to N's start, the exact inverse of **+**: N+1 keeps
     its flag, id and data (per-page data follows the page that keeps its
-    flag). Deleting the last page's flag makes the previous page last.
+    flag). Deleting the last page's flag makes the previous page last. If the deleted flag was the selected page's, the merged page is selected (the previous page's box, or home, when it was the last page).
     Timelines are unchanged, so motion is unchanged (P8.13, lead,
     2026-10-02).
 
