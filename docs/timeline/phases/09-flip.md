@@ -118,8 +118,8 @@ From the P9.4 packaged smoke run: on macOS a Quit sent while the "Preparing your
 
 ### P9.10: Convert to range-aligned timelines, then enforce C-11
 
-- Owner: unassigned
-- Status: open
+- Owner: timeline-worker (timeline/p9-10-range-aligned-convert)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P8.10
