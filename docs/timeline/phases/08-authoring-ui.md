@@ -182,8 +182,8 @@ Canvas moves against the selection (UI-9: Editing, Editing off the end, More tha
 ### P8.12: No selected page in timeline mode
 
 - Owner: timeline-worker (timeline/p8-12-no-selected-page)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/54
 - Parallel: yes (with P8.13–P8.15 once P8.11's selection store exists)
 - Depends on: P8.11
 
@@ -913,3 +913,20 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** whole `test:focused` passed at `257a3943` (186 files, 2598 tests); `tsc` passes. Whole `test:focused` and `test:timeline` are now running at `4eeb237b`.
 - **Blockers:** none.
 - **Resume from:** read the scratchpad logs (`p812-focused2.log`, `p812-timeline.log`) or rerun both suites one after the other. Then run focused `test:history` on `timelinePageCopy`, `useHistory`, `useTimelinePlayback` and `NoSelectedPageModes`, squash the wip commits into one per step, and open the PR.
+
+### 2026-10-02 · timeline-worker (timeline/p8-12-no-selected-page) · P8.12 (in review)
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/54, one squashed commit `4feb856b`. It covers the reads, the bridge removal, the dev guard, the page-relative tools, appearance by time, the removed dead track builders and the timeline-mode feature test (see the two checkpoints above). After the full `test:timeline` run, the final commit also stubs `ResizeObserver` in `Canvas.test.tsx`: in timeline mode the canvas now starts from the page at the playhead, without a selected page.
+- **Split:** kept as one PR; the appearance part is about 300 lines of the roughly 3,100 changed (about 1,300 of them deletions).
+- **For P8.15:** see the first checkpoint for the shared files. `copyPagePositions` is unused by the app. The neighbor-page write is marked `TODO(P8.15)` (write by timeline id). Both PRs touch `Canvas.tsx`; run the whole suite on the combined branch before merging.
+- **Notes:** between flags, appearance shows the last flag's page (as on `coordinates-v2`), while page data (notes, tag editor, `SelectedMarchersContext`'s hidden marchers) reads the page whose box holds the playhead. Hidden-marcher selection still uses the per-page appearance query.
+- **Checks** (from `apps/desktop`):
+  - `pnpm tsc --noEmit`: pass.
+  - Whole `pnpm run test:focused` at `4eeb237b`: 187 files and 2604 tests passed.
+  - Whole `pnpm run test:timeline` at `4eeb237b`: 187 files and 2558 tests passed, with 1 unhandled `ResizeObserver` error in `Canvas.test.tsx`. It is fixed in the final commit, and `Canvas.test.tsx` passes in both modes.
+  - Focused `test:history` on 9 touched test files: 58 passed.
+  - Pre-commit: pass.
+  - Not run, per policy: the full `test:history` suite and Playwright e2e. Also not run: a manual check in the app.
+- **Exit gate:** nothing ticked; this package covers none of the gate items.
+- **Next:** review.
+- **Blockers:** none.
