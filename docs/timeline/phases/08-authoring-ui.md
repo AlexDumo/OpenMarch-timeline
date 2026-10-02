@@ -172,7 +172,7 @@ The db-functions and context menu for who is in a timeline (UI-9: Adding marcher
 ### P8.15: UI-9 canvas edits
 
 - Owner: timeline-worker (timeline/p8-15-canvas-edits)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P8.11, P8.14
@@ -869,3 +869,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** reviewers and testers re-ran each PR's focused checks; none ran on the combined result before merging. After merging, the base fails 19 unit tests and 1 `test:timeline` test (P8.14 tests vs P9.10 conversion), the same without #51.
 - **Next:** the P8.14 worker's fix PR, then P8.15 and P8.12. Lesson: run the full unit suite on the combined branch before merging parallel PRs that meet in the same area.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-15-canvas-edits) · P8.15
+
+- **Done:** pushed `wip` commit on `timeline/p8-15-canvas-edits`. Canvas moves edit the selection, not a page. `db-functions/timelineMoves.ts`: `moveMarchersInTimelineInTransaction` finds each marcher's row by timeline id and sets its slot destination (refuses E-ARGS: not in the timeline, more than one row, a row ending early, a higher layer winning at the end); `moveMarchersInTarget` is one undoable edit for `{kind: "home"}` or `{kind: "timeline", timelineId}`. `timeline/timelineCoordinateWrites.ts`: `planCanvasEdit` reads the selection store (stored timeline with the playhead on its end, or home/nothing at beat 0; otherwise `TimelineEditRefusedError` with a hint); `withTimelinePositions`/`timelineCoordinateRecords` take a beat; `transformMarchersInSelection` replaces `transformMarchersOnPage`; `canvasCoordinateWriter` plans when the drag ends. Wired in `Canvas.tsx` (shared with P8.12: only the writer effect and its mutation), `RegisteredActionsHandler.tsx` (`getSelectedMarcherPages` timeline branch, `updateCoordinates`) and `useMarcherPages.ts` (`useUpdateSelectedMarchers`, `moveMarchersInTargetMutationOptions`). `moveMarchersOnPage`, `copyPagePositions` and `TimelineMoveRequest` stay for "set to previous/next page", which P8.12 owns.
+- **Checks:** `pnpm run test:focused` on `timelineMovesByTimeline.test.ts` (new), `timelineCoordinateWrites.test.ts`, `timelineToastPaths.test.ts`: 34 passed. `tsc` (apps/desktop): pass.
+- **Next:** **+** button and delete-flag menu entry, remove Create Track from timeline mode, PR #52 test nits, then whole-suite checks.
+- **Blockers:** none.
+- **Resume from:** `apps/desktop/src/components/timeline/TimelineModePanel.tsx` (wire `useAddPageFlag`, `deletePageFlagsMutationOptions`; drop `onCreateTrack`/`selectedTarget`), `TimelineVariants.tsx` and `TimelineRangeMenu.tsx`. In a fresh work tree run `pnpm install`, then build each workspace package by name (`pnpm --filter @openmarch/core --filter @openmarch/metronome --filter @openmarch/musicxml-parser --filter @openmarch/ui --filter @openmarch/config build`).
