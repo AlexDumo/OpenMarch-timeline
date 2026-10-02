@@ -838,3 +838,19 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Not run: the full `test:history` suite, Playwright e2e, and a manual run of the app.
 - **Next:** re-review.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-11-selection-playhead) · P8.11 (rebased onto P9.10, P8.13, P8.14)
+
+- **Done:** PR #51 rebased onto `timeline-try-2` (`889cb433`). It is now one commit, `e2203924`.
+  - **Conflict:** the `clipsOfShape` TODO; I kept `TODO(P8.12)`.
+  - **Integration with P8.14:** the right-click menu works with the selection model. Page boxes carry their flag-ended range. Clips send their stored spec range. A right-click or ctrl+click neither seeks nor changes the selection: `TimelineRangeMenuAdversarial` passes. I updated `TimelineRangeMenu.test.tsx` because the dragged-range selection is in spec beats now. Its converted-show test had assumed P9.10's earlier single timeline across the whole show; it now checks per-page timelines from both a page box and a clip.
+  - **Integration with P9.10:** in `TimelineSelectionModes`, a page box on a converted show now resolves to its stored timeline with every marcher in it. The `useTimelineTracks` expectations follow the [1, 9) seed. P8.13's `pageFlags.ts` and `usePageFlags.ts` don't conflict.
+- **Checks:**
+  - `pnpm tsc --noEmit`: pass.
+  - `pnpm run test:history` on `useTimelineTracks`, `timelineSelection` and `TimelineRangeMenu`: 19 passed.
+  - `pnpm run test:focused` (the whole suite): 2582 passed, 19 failed, all in `timelineMembership`, `timelineMembershipAdversarial`, `timelineMarchers`, `timelineRipple` and `timelineHistoryFocus` (db-functions this PR doesn't touch).
+  - `pnpm run test:timeline` on the timeline, canvas, stores, hooks, inspector and utilities paths: 1141 passed, 1 failed (`useMarchersTimelineMode`).
+  - **The same 19 and the same 1 fail on base `889cb433`** (a separate checkout of base, same commands). They are P8.14 tests that assume P9.10's earlier single timeline across the whole show; not this PR.
+  - Not run: Playwright e2e and a manual run of the app.
+- **Next:** review. Someone needs to fix the base failures above (P8.14 or P9.10 owner).
+- **Blockers:** none for P8.11.
