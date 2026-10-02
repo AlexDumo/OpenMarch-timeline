@@ -142,7 +142,7 @@ Apply C-11 (implementation-plan.md): every transition starts and ends exactly wh
 ### P8.11: UI-9 selection and playhead
 
 - Owner: timeline-worker (timeline/p8-11-selection-playhead)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: yes (with P8.13 and P8.14)
 - Depends on: P8.10
@@ -739,3 +739,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** none (status only).
 - **Next:** review and test each PR as it reaches in-review; then P8.15 and P8.12.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-11-selection-playhead) · P8.11
+
+- **Done:** the selection store is pushed (commit `ca9df07d` on `timeline/p8-11-selection-playhead`). **Module: `apps/desktop/src/stores/TimelineSelectionStore.ts`**, `useTimelineSelectionStore`: `selection` is `{kind: "home"} | {kind: "range", start, end} | {kind: "none"}` (spec beats, half-open); `playheadBeat` is the paused playhead (whole spec beat; show time 0 is written as 0); `selectHome()` seeks to 0, `selectRange(start, end)` seeks to `end`, `seek(beat)` moves only the playhead, `followTimelineShift` moves a selection with its clip. The stored timeline a range resolves to: `selectedStoredTimeline(state)` / `useSelectedStoredTimeline()` (`{id, start, end, marcherIds}` or null); `isMarcherDimmed(state, marcherId)`. `storedTimelines` is kept current by `useTimelineSelectionHost` (`src/timeline/useTimelineSelectionHost.ts`, mounted in `TimelineResolverHost`). P8.13–P8.15 and P8.12 read these; the API may still gain fields, but these names stay.
+- **Checks:** `pnpm run test:focused src/stores/__test__/TimelineSelectionStore.test.ts` (apps/desktop): 8 passed. `pnpm tsc --noEmit`: pass. Pre-commit (cspell, eslint, prettier): pass.
+- **Next:** wire the timeline (page boxes, home, dragged range, one track per timeline), playhead and play/loop, navigation, opening on home, dimming on the canvas, harness.
+- **Blockers:** none.
+- **Resume from:** `apps/desktop/src/components/timeline/TimelineViewModel.ts` (`TimelineSelection` to home/range in spec beats), then `TimelinePrimitives.tsx`, `TimelineVariants.tsx`, `TimelineModePanel.tsx`, `useTimelinePlayback.ts`. Run `pnpm install` first in a fresh work tree.
