@@ -172,8 +172,8 @@ The db-functions and context menu for who is in a timeline (UI-9: Adding marcher
 ### P8.15: UI-9 canvas edits
 
 - Owner: timeline-worker (timeline/p8-15-canvas-edits)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/53
 - Parallel: no
 - Depends on: P8.11, P8.14
 
@@ -894,3 +894,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** whole `test:focused`, then whole `test:timeline`, focused `test:history`, PR.
 - **Blockers:** none.
 - **Resume from:** `timeline/p8-15-canvas-edits`; run `pnpm run test:focused` then `pnpm run test:timeline` (apps/desktop, sequentially) and fix failures; then WORKER.md step 6.
+
+### 2026-10-02 · timeline-worker (timeline/p8-15-canvas-edits) · P8.15
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/53 (one commit, `92998165`). Canvas drag, nudges, alignment and the inspector's coordinate tools edit the UI-9 selection. `moveMarchersInTarget` covers homes, or the endings in a timeline found by id. `planCanvasEdit` refuses off the end (TEMPORARY), with no timeline away from beat 0, on an empty range, and (in the db function) for more than one row. **+** after the free paused playhead selects the new page. Page boxes have **Delete page flag**. Create Track is gone from timeline mode. PR #52 test nits done.
+- **Shared files touched (minimal; P8.12 owns the rest):** `Canvas.tsx` (writer effect only), `RegisteredActionsHandler.tsx` (`getSelectedMarcherPages` timeline branch, `updateCoordinates`, nudge `.catch`), `useMarcherPages.ts`, `test/featureHarness.tsx` (`selectPageAndMarchers` selects the page's box in timeline mode). Left for P8.12: set to previous/next page (`moveMarchersOnPage`, `copyPagePositions`), `triggerAction`'s `selectedPage` guard, and the canvas init's `selectedPage`.
+- **Checks:** `pnpm tsc --noEmit`: pass. Whole `pnpm run test:focused`: 2625 passed. Whole `pnpm run test:timeline`: 2579 passed. `pnpm run test:history` on 9 touched test files: 81 passed. eslint: 0 errors; prettier: pass. Not run (policy): the full `test:history` suite and Playwright. No exit-gate items ticked.
+- **Next:** review and merge. Run the whole suite on the combined branch if P8.12 merges first.
+- **Blockers:** none.
