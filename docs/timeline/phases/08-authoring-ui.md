@@ -171,8 +171,8 @@ The db-functions and context menu for who is in a timeline (UI-9: Adding marcher
 
 ### P8.15: UI-9 canvas edits
 
-- Owner: none
-- Status: open
+- Owner: timeline-worker (timeline/p8-15-canvas-edits)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P8.11, P8.14
