@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { T, useTranslate } from "@tolgee/react";
-import { useSelectedPage } from "../../context/SelectedPageContext";
+import { useCurrentPage } from "../../context/SelectedPageContext";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { updatePagesMutationOptions } from "../../hooks/queries";
 import { NotesRichTextEditor } from "../notes/NotesRichTextEditor";
@@ -8,7 +8,7 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useTimingObjects } from "@/hooks";
 
 export function PageNotesSection() {
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const { isPlaying } = useIsPlaying()!;
     const { pages } = useTimingObjects()!;
     const { t } = useTranslate();
@@ -17,13 +17,13 @@ export function PageNotesSection() {
         updatePagesMutationOptions(queryClient),
     );
 
-    // During playback, selectedPage is the departure page — show the next page's notes instead
+    // During playback, currentPage is the departure page — show the next page's notes instead
     const displayPage = useMemo(() => {
-        if (!isPlaying || !selectedPage?.nextPageId) return selectedPage;
+        if (!isPlaying || !currentPage?.nextPageId) return currentPage;
         return (
-            pages.find((p) => p.id === selectedPage.nextPageId) ?? selectedPage
+            pages.find((p) => p.id === currentPage.nextPageId) ?? currentPage
         );
-    }, [isPlaying, selectedPage, pages]);
+    }, [isPlaying, currentPage, pages]);
 
     const [notes, setNotes] = useState(displayPage?.notes || "");
     const editingPageIdRef = useRef<number | null>(null);

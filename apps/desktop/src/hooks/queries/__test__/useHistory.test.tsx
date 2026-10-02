@@ -6,15 +6,21 @@ import type { ReactNode } from "react";
 /**
  * After an undo or redo, `usePerformHistoryAction` goes to the page the action names and selects
  * its marchers (P7.13): page 0 included, a page the action restored once the page list has it, and
- * marchers the action restored.
+ * marchers the action restored. In timeline mode (P8.12, UI-9) going to the page moves only the
+ * playhead, to the page's flag, and leaves the timeline selection alone.
  */
 
-type TestPage = { id: number; name: string };
+type TestPage = {
+    id: number;
+    name: string;
+    beats?: { index: number }[];
+};
 type TestMarcher = { id: number };
 
 const state = vi.hoisted(() => ({
-    pages: [] as { id: number; name: string }[],
-    selectedPage: null as { id: number; name: string } | null,
+    pages: [] as TestPage[],
+    selectedPage: null as TestPage | null,
+    timelineMode: false,
     setSelectedPage: vi.fn(),
     setSelectedMarchers: vi.fn(),
     performHistoryAction: vi.fn(),
@@ -33,10 +39,11 @@ vi.mock("@/hooks/useTimingObjects", () => ({
     useTimingObjects: () => ({ pages: state.pages }),
 }));
 vi.mock("@/context/SelectedPageContext", () => ({
-    useSelectedPage: () => ({
-        selectedPage: state.selectedPage,
-        setSelectedPage: state.setSelectedPage,
-    }),
+    useCurrentPage: () => state.selectedPage,
+    usePageNavigation: () => ({ goToPage: state.setSelectedPage }),
+}));
+vi.mock("@/hooks/queries/useWorkspaceSettings", () => ({
+    useTimelineMode: () => state.timelineMode,
 }));
 vi.mock("@/context/SelectedMarchersContext", () => ({
     useSelectedMarchers: () => ({
@@ -45,6 +52,8 @@ vi.mock("@/context/SelectedMarchersContext", () => ({
 }));
 
 const { usePerformHistoryAction } = await import("../useHistory");
+const { useTimelineSelectionStore } =
+    await import("@/stores/TimelineSelectionStore");
 const { marcherKeys } = await import("../useMarchers");
 
 const page = (id: number): TestPage => ({ id, name: String(id) });
@@ -72,6 +81,7 @@ describe("usePerformHistoryAction", () => {
     beforeEach(() => {
         state.pages = [page(0), page(1), page(2)];
         state.selectedPage = page(2);
+        state.timelineMode = false;
         state.setSelectedPage.mockReset();
         state.setSelectedMarchers.mockReset();
         state.performHistoryAction.mockReset();
@@ -148,5 +158,34 @@ describe("usePerformHistoryAction", () => {
         await act(() => hook.result.current.mutateAsync("undo"));
         expect(selectedMarcherIds()).toEqual([1]);
         expect(state.setSelectedPage).not.toHaveBeenCalled();
+    });
+
+    it("in timeline mode, moves only the playhead to the page's flag", async () => {
+        // Page 0 is beat 0; page 1 is beats 1-4 (flag 5); page 2 is beats 5-8 (flag 9)
+        state.timelineMode = true;
+        state.pages = [
+            { ...page(0), beats: [{ index: 0 }] },
+            { ...page(1), beats: [1, 2, 3, 4].map((index) => ({ index })) },
+            { ...page(2), beats: [5, 6, 7, 8].map((index) => ({ index })) },
+        ];
+        state.selectedPage = state.pages[2]!;
+        useTimelineSelectionStore.getState().selectRange(5, 9);
+        state.performHistoryAction.mockResolvedValue({
+            pageIdToGoTo: 1,
+            marcherIdsToSelect: new Set([2]),
+            queriesToInvalidate: [],
+        });
+        const { hook } = setUp([{ id: 1 }, { id: 2 }]);
+        await act(() => hook.result.current.mutateAsync("undo"));
+        await waitFor(() =>
+            expect(useTimelineSelectionStore.getState().playheadBeat).toBe(5),
+        );
+        expect(useTimelineSelectionStore.getState().selection).toEqual({
+            kind: "range",
+            start: 5,
+            end: 9,
+        });
+        expect(state.setSelectedPage).not.toHaveBeenCalled();
+        expect(selectedMarcherIds()).toEqual([2]);
     });
 });

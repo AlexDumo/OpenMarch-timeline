@@ -22,7 +22,11 @@ import {
 } from "./setMarchersToNeighborPage";
 import { createCircle } from "@openmarch/core";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import {
+    useCurrentPage,
+    usePageNavigation,
+} from "@/context/SelectedPageContext";
+import { useSelectedStoredTimeline } from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useCallback, useEffect, useRef } from "react";
 import * as CoordinateActions from "./CoordinateActions";
@@ -546,10 +550,12 @@ export const RegisteredActionsObjects: {
 function RegisteredActionsHandler() {
     const { t } = useTolgee();
     const queryClient = useQueryClient();
-    const selectedPageContext = useSelectedPage();
-    const selectedPage = selectedPageContext?.selectedPage ?? null;
-    const setSelectedPage =
-        selectedPageContext?.setSelectedPage ?? (() => undefined);
+    // Timeline mode has no selected page (UI-9): this is the page at the playhead, and page
+    // navigation there goes through the timeline transport below
+    const selectedPage = useCurrentPage();
+    const { goToPage: setSelectedPage } = usePageNavigation();
+    // Timeline mode's page-relative tools edit the selected timeline (UI-9)
+    const selectedTimeline = useSelectedStoredTimeline();
     const { registeredButtonActions } = useRegisteredActionsStore()!;
     const { pages, beats } = useTimingObjects()!;
     const isPlayingContext = useIsPlaying();
@@ -694,13 +700,13 @@ function RegisteredActionsHandler() {
      */
     const runNeighborPageAction = useCallback(
         (direction: NeighborPageDirection, scope: NeighborPageScope) => {
-            if (!selectedPage || !databaseReady || !pages || pages.length === 0)
-                return;
+            if (!databaseReady || !pages || pages.length === 0) return;
             void setMarchersToNeighborPage({
                 timelineMode,
                 direction,
                 scope,
                 selectedPage,
+                selectedTimeline,
                 pages,
                 selectedMarcherIds: (
                     selectedMarchersContext?.selectedMarchers ?? []
@@ -717,6 +723,7 @@ function RegisteredActionsHandler() {
         },
         [
             selectedPage,
+            selectedTimeline,
             databaseReady,
             pages,
             timelineMode,

@@ -14,7 +14,7 @@ import {
     SpeakerSimpleXIcon,
 } from "@phosphor-icons/react";
 import RegisteredActionButton from "@/components/RegisteredActionButton";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
@@ -152,7 +152,7 @@ export function TimelineMetronomeButton() {
 }
 
 function PlaybackControls() {
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const { isPlaying } = useIsPlaying()!;
     const { uiSettings } = useUiSettingsStore();
     const { t } = useTolgee();
@@ -165,8 +165,8 @@ function PlaybackControls() {
             <RegisteredActionButton
                 registeredAction={RegisteredActionsObjects.firstPage}
                 disabled={
-                    !selectedPage ||
-                    selectedPage.previousPageId === null ||
+                    !currentPage ||
+                    currentPage.previousPageId === null ||
                     isPlaying ||
                     uiSettings.focussedComponent === "timeline"
                 }
@@ -177,8 +177,8 @@ function PlaybackControls() {
             <RegisteredActionButton
                 registeredAction={RegisteredActionsObjects.previousPage}
                 disabled={
-                    !selectedPage ||
-                    selectedPage.previousPageId === null ||
+                    !currentPage ||
+                    currentPage.previousPageId === null ||
                     isPlaying ||
                     uiSettings.focussedComponent === "timeline"
                 }
@@ -190,8 +190,8 @@ function PlaybackControls() {
                 registeredAction={RegisteredActionsObjects.playPause}
                 className="focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2"
                 disabled={
-                    !selectedPage ||
-                    (!isPlaying && selectedPage.nextPageId === null)
+                    !currentPage ||
+                    (!isPlaying && currentPage.nextPageId === null)
                 }
             >
                 {isPlaying ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
@@ -200,8 +200,8 @@ function PlaybackControls() {
             <RegisteredActionButton
                 registeredAction={RegisteredActionsObjects.nextPage}
                 disabled={
-                    !selectedPage ||
-                    selectedPage.nextPageId === null ||
+                    !currentPage ||
+                    currentPage.nextPageId === null ||
                     isPlaying ||
                     uiSettings.focussedComponent === "timeline"
                 }
@@ -212,8 +212,8 @@ function PlaybackControls() {
             <RegisteredActionButton
                 registeredAction={RegisteredActionsObjects.lastPage}
                 disabled={
-                    !selectedPage ||
-                    selectedPage.nextPageId === null ||
+                    !currentPage ||
+                    currentPage.nextPageId === null ||
                     isPlaying ||
                     uiSettings.focussedComponent === "timeline"
                 }

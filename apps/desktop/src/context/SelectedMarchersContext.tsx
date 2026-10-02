@@ -9,7 +9,7 @@ import {
 import Marcher from "@/global/classes/Marcher";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
-import { useSelectedPage } from "./SelectedPageContext";
+import { useCurrentPage } from "./SelectedPageContext";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { appearanceIsHidden } from "@/entity-components/appearance";
 
@@ -37,12 +37,12 @@ export function SelectedMarchersProvider({
 }) {
     const { data: marchers } = useQuery(allMarchersQueryOptions());
     const [selectedMarchers, setSelectedMarchers] = useState<Marcher[]>([]);
-    const selectedPageContext = useSelectedPage();
-    const selectedPage = selectedPageContext?.selectedPage ?? null;
+    // Timeline mode: the page at the playhead (UI-9 No selected page)
+    const currentPage = useCurrentPage();
     const queryClient = useQueryClient();
     const { data: marcherAppearances } = useQuery({
-        ...marcherAppearancesQueryOptions(selectedPage?.id, queryClient),
-        enabled: selectedPage !== null,
+        ...marcherAppearancesQueryOptions(currentPage?.id, queryClient),
+        enabled: currentPage !== null,
     });
     const hiddenMarcherIds: Set<number> = useMemo(() => {
         if (marcherAppearances == null) return new Set();

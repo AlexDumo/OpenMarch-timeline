@@ -13,7 +13,7 @@ import { db } from "@/global/database/db";
 import { invalidatePageQueries, measureKeys } from "@/hooks/queries";
 import Page from "@/global/classes/Page";
 import Beat from "@/global/classes/Beat";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { usePageNavigation } from "@/context/SelectedPageContext";
 
 export const getAvailableOffsets = ({
     currentPage,
@@ -79,7 +79,7 @@ export const useCreateLastPageOnTimeline = () => {
         workspaceSettingsQueryOptions(),
     );
     const tolgee = useTolgee();
-    const { setPageToSelect } = useSelectedPage()!;
+    const { goToPageWhenItExists } = usePageNavigation();
     const fn = useCallback(async (): Promise<DatabasePage> => {
         if (!workspaceSettings) {
             conToastError(
@@ -104,9 +104,9 @@ export const useCreateLastPageOnTimeline = () => {
                 db,
                 workspaceSettings,
             });
-        setPageToSelect({ id: result.id });
+        goToPageWhenItExists({ id: result.id });
         return result;
-    }, [setPageToSelect, tolgee, workspaceSettings]);
+    }, [goToPageWhenItExists, tolgee, workspaceSettings]);
 
     return useMutation({
         mutationFn: fn,

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import {
     marcherPagesByPageQueryOptions,
@@ -20,6 +20,7 @@ import { CircleNotchIcon } from "@phosphor-icons/react";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import clsx from "clsx";
 import { useAnimation } from "@/hooks/useAnimation";
+import { useAppearanceAnimation } from "@/hooks/useAppearanceAnimation";
 import CollisionMarker from "@/global/classes/canvasObjects/CollisionMarker";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import { setCanvasStore } from "@/stores/CanvasStore";
@@ -34,7 +35,10 @@ import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { ShapePath } from "@/global/classes/canvasObjects/ShapePath";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
-import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
+import {
+    timelinePathRanges,
+    useTimelinePathRender,
+} from "@/timeline/useTimelinePathRender";
 import { useTimelineShapeCanvas } from "@/timeline/useTimelineShapeCanvas";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -64,12 +68,18 @@ export default function Canvas({
     const { isPlaying } = useIsPlaying()!;
     const { data: marchers } = useQuery(allMarchersQueryOptions());
     const { pages } = useTimingObjects()!;
-    const { selectedPage } = useSelectedPage()!;
+    // Timeline mode has no selected page: this is the page at the playhead (UI-9, P8.12)
+    const selectedPage = useCurrentPage();
     const { data: marcherVisuals } = useQuery(
         marcherWithVisualsQueryOptions(queryClient),
     );
+    const timelineMode = useTimelineMode();
+    // Timeline mode samples appearance by time instead (useAppearanceAnimation below)
     const { data: marcherAppearances } = useQuery(
-        marcherAppearancesQueryOptions(selectedPage?.id, queryClient),
+        marcherAppearancesQueryOptions(
+            timelineMode ? null : selectedPage?.id,
+            queryClient,
+        ),
     );
     const { setSelectedMarchers } = useSelectedMarchers()!;
 
@@ -92,7 +102,6 @@ export default function Canvas({
     );
     const { setSelectedShapePageIds } = useSelectionStore()!;
     const databaseReady = useDatabaseReady();
-    const timelineMode = useTimelineMode();
     // Draw from the resolver only once it's ready. Until the first cold build finishes (or if it
     // fails), keep drawing from marcher_pages instead of leaving every marcher at (0, 0).
     const timelineResolverReady = useTimelineResolverStore(
@@ -101,6 +110,12 @@ export default function Canvas({
     const drawFromResolver = timelineMode && timelineResolverReady;
     // UI-9: the paused canvas shows positions at the playhead
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    const timelineSelection = useTimelineSelectionStore((s) => s.selection);
+    // UI-9 Page-relative tools: the paths through the selected timeline and on to the next flag
+    const timelinePaths = useMemo(
+        () => timelinePathRanges(timelineSelection, pages),
+        [timelineSelection, pages],
+    );
     const marcherIds = useMemo(() => marchers?.map((m) => m.id), [marchers]);
 
     const { data: fieldProperties } = useQuery(
@@ -639,6 +654,15 @@ export default function Canvas({
         redrawKey: marcherVisuals,
     });
 
+    // Timeline mode (UI-9 No selected page): appearance by page, sampled at the playhead or the
+    // live playback time, in place of the selected page's appearance sync above
+    useAppearanceAnimation({
+        canvas,
+        enabled: timelineMode,
+        isPlaying,
+        redrawKey: marcherVisuals,
+    });
+
     // Timeline mode (UI-9): marchers outside the selected timeline are dimmed and can't be hit
     useTimelineDimming({
         canvas,
@@ -654,14 +678,14 @@ export default function Canvas({
         theme: fieldProperties?.theme,
     });
 
-    // Timeline mode (P7.10): paths, midpoints, endpoints and step-size warnings from the resolver
-    // between page end beats, in place of the marcher_pages paths above
+    // Timeline mode (P7.10): paths, midpoints, endpoints and step-size warnings from the resolver,
+    // through the selected timeline and on to the next flag (UI-9), in place of the marcher_pages
+    // paths above
     useTimelinePathRender({
         canvas,
         enabled: drawFromResolver,
         isPlaying,
-        selectedPage,
-        pages,
+        ranges: timelinePaths,
         marcherIds,
         marcherVisuals,
         fieldProperties,

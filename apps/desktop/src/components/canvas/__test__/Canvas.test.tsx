@@ -1,7 +1,7 @@
 import Canvas from "../Canvas";
 import { render, waitFor } from "@testing-library/react";
 import { describeDbTests } from "@/test/base";
-import { expect } from "vitest";
+import { beforeAll, expect, vi } from "vitest";
 import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { defaultSettings } from "@/stores/UiSettingsStore";
@@ -13,6 +13,19 @@ const createCanvas = () =>
             FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES,
         uiSettings: defaultSettings,
     });
+
+// In timeline mode the canvas starts as soon as there is a page at the playhead (P8.12), which
+// doesn't wait for a selected page, so its resize observer runs here; jsdom has none
+beforeAll(() => {
+    vi.stubGlobal(
+        "ResizeObserver",
+        class {
+            observe() {}
+            unobserve() {}
+            disconnect() {}
+        },
+    );
+});
 
 describeDbTests("Canvas", (it) => {
     it("renders", async ({ wrapper, db, marchers }) => {

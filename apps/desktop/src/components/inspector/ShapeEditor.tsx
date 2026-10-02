@@ -10,7 +10,7 @@ import {
     SelectTriggerCompact,
 } from "@openmarch/ui";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import {
     SvgCommandEnum,
     SvgCommands,
@@ -41,13 +41,13 @@ export default function ShapeEditor() {
     //             selectedShapePageIds.includes(shapePage.id),
     //         ),
     // });
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const timelineMode = useTimelineMode();
     const { mutate: copyShapePageToPage, isPending: isCopyingShapePageToPage } =
         useMutation(copyShapePageToPageMutationOptions(queryClient));
     const { data: shapePagesForThisPage } = useQuery(
         shapePagesQueryByPageIdOptions(
-            timelineMode ? null : (selectedPage?.id ?? null),
+            timelineMode ? null : (currentPage?.id ?? null),
         ),
     );
 
@@ -78,7 +78,7 @@ export default function ShapeEditor() {
     // >(new Map());
 
     // useEffect(() => {
-    //     if (!selectedPage || !selectedMarcherShapes) {
+    //     if (!currentPage || !selectedMarcherShapes) {
     //         setShapeIsOnNextPage(new Map());
     //         setShapeIsOnPreviousPage(new Map());
     //         return;
@@ -108,14 +108,14 @@ export default function ShapeEditor() {
     //     for (const marcherShape of selectedMarcherShapes) {
     //         nextPageMap.set(
     //             marcherShape.shapePage.id,
-    //             shapeIsOnPage(marcherShape, selectedPage.nextPageId),
+    //             shapeIsOnPage(marcherShape, currentPage.nextPageId),
     //         );
     //         previousPageMap.set(
     //             marcherShape.shapePage.id,
-    //             shapeIsOnPage(marcherShape, selectedPage.previousPageId),
+    //             shapeIsOnPage(marcherShape, currentPage.previousPageId),
     //         );
     //     }
-    // }, [pages, selectedMarcherShapes, selectedPage, shapePages]);
+    // }, [pages, selectedMarcherShapes, currentPage, shapePages]);
 
     const updateSegment = useCallback(
         ({
@@ -157,11 +157,11 @@ export default function ShapeEditor() {
                     className="flex flex-col gap-24"
                 >
                     <div className="flex flex-wrap gap-8">
-                        {selectedPage && (
+                        {currentPage && (
                             <>
                                 <Button
                                     disabled={
-                                        selectedPage.previousPageId == null ||
+                                        currentPage.previousPageId == null ||
                                         isCopyingShapePageToPage
                                     }
                                     onClick={() => {
@@ -169,7 +169,7 @@ export default function ShapeEditor() {
                                             shapePageId:
                                                 marcherShape.shapePage.id,
                                             targetPageId:
-                                                selectedPage.previousPageId!,
+                                                currentPage.previousPageId!,
                                         });
                                     }}
                                     className="min-h-0 w-fit"
@@ -178,7 +178,7 @@ export default function ShapeEditor() {
                                     variant="secondary"
                                     tooltipSide="top"
                                     tooltipText={
-                                        selectedPage.previousPageId === null
+                                        currentPage.previousPageId === null
                                             ? t(
                                                   "inspector.shape.errorNoPreviousPage",
                                               )
@@ -191,7 +191,7 @@ export default function ShapeEditor() {
                                 </Button>
                                 <Button
                                     disabled={
-                                        selectedPage.nextPageId === null ||
+                                        currentPage.nextPageId === null ||
                                         isCopyingShapePageToPage
                                     }
                                     onClick={() => {
@@ -199,7 +199,7 @@ export default function ShapeEditor() {
                                             shapePageId:
                                                 marcherShape.shapePage.id,
                                             targetPageId:
-                                                selectedPage.nextPageId!,
+                                                currentPage.nextPageId!,
                                         });
                                     }}
                                     className="min-h-0 w-fit"
@@ -207,7 +207,7 @@ export default function ShapeEditor() {
                                     size="compact"
                                     variant="secondary"
                                     tooltipText={
-                                        selectedPage.nextPageId === null
+                                        currentPage.nextPageId === null
                                             ? t(
                                                   "inspector.shape.errorNoNextPage",
                                               )

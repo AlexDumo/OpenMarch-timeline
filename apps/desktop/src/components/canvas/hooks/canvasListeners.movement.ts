@@ -9,7 +9,7 @@ import {
     marcherWithVisualsQueryOptions,
     fieldPropertiesQueryOptions,
 } from "@/hooks/queries";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useTimingObjects } from "@/hooks";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
@@ -22,7 +22,8 @@ export const useMovementListeners = ({
     canvas: OpenMarchCanvas | null;
 }) => {
     const { uiSettings } = useUiSettingsStore()!;
-    const { selectedPage } = useSelectedPage()!;
+    // Timeline mode has no selected page: this is the page at the playhead (UI-9, P8.12)
+    const selectedPage = useCurrentPage();
     const { pages } = useTimingObjects()!;
     const { selectedMarchers } = useSelectedMarchers()!;
     const queryClient = useQueryClient();

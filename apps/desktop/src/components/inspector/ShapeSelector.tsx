@@ -6,7 +6,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import RegisteredActionButton from "../RegisteredActionButton";
 import { RegisteredActionsObjects } from "@/utilities/RegisteredActionsHandler";
 import { marcherPagesByPageQueryOptions } from "@/hooks/queries/useMarcherPages";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { useQuery } from "@tanstack/react-query";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 
@@ -16,10 +16,10 @@ function ShapeSelector() {
         () => new Set(selectedMarchers.map((marcher) => marcher.id)),
         [selectedMarchers],
     );
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const timelineMode = useTimelineMode();
     const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.id),
+        marcherPagesByPageQueryOptions(currentPage?.id),
     );
     const editingDisabled = useMemo(() => {
         // No shape locks in timeline mode (P7.11): the circle writes positions (P7.2)

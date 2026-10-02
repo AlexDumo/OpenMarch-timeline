@@ -329,7 +329,7 @@ describeDbTests("registered coordinate actions in the file's mode", (it) => {
         // `rowIdFromSql` in history.ts parses the whole match (filed as P7.19)
         if (timelineFixtureMode())
             await waitFor(() => {
-                expect(probed().selectedPage?.id).toBe(page.id);
+                expect(probed().currentPage?.id).toBe(page.id);
                 expect(
                     probed()
                         .selectedMarchers.map((m) => m.id)

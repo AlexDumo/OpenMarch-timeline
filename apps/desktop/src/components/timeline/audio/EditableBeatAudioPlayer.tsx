@@ -1,6 +1,6 @@
 import WaveSurfer from "wavesurfer.js";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
 import { SyntheticEvent, useEffect, useRef, useState } from "react";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
 import AudioFile from "@/global/classes/AudioFile";
@@ -19,7 +19,7 @@ import { normalizeVolume } from "./volume";
 // eslint-disable-next-line max-lines-per-function
 export default function EditableBeatAudioPlayer() {
     const { uiSettings } = useUiSettingsStore();
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
     const { isPlaying } = useIsPlaying()!;
     const { beats, measures, utility, fetchTimingObjects } = useTimingObjects();
     const { selectedAudioFile } = useSelectedAudioFile()!;
@@ -40,12 +40,12 @@ export default function EditableBeatAudioPlayer() {
         if (isPlaying) {
             void audio.play();
         } else {
-            audio.currentTime = selectedPage
-                ? selectedPage.timestamp + selectedPage.duration
+            audio.currentTime = currentPage
+                ? currentPage.timestamp + currentPage.duration
                 : 0;
             audio.pause();
         }
-    }, [audioFileUrl, isPlaying, selectedPage, selectedPage?.timestamp]);
+    }, [audioFileUrl, isPlaying, currentPage, currentPage?.timestamp]);
 
     useEffect(() => {
         if (!selectedAudioFile) return;

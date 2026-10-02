@@ -5,7 +5,6 @@ import type { DbConnection } from "@/db-functions/types";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { startTimelineResolver, stopTimelineResolver } from "./timelineStore";
 import { useTimelineSelectionHost } from "./useTimelineSelectionHost";
-import { useTimelinePageBridge } from "./useTimelinePageBridge";
 import { useDeselectDimmedMarchers } from "./useTimelineDimming";
 import { useTimelinePlaybackDriver } from "./useTimelinePlaybackDriver";
 import {
@@ -69,8 +68,6 @@ export default function TimelineResolverHost() {
     useTimelineResolverSession(db, enabled);
     // The stored timelines the UI-9 selection resolves to (P8.11)
     useTimelineSelectionHost(db, enabled);
-    // TEMPORARY (P8.12): the legacy selected page follows the playhead
-    useTimelinePageBridge(enabled);
     // UI-9: marchers outside the selected timeline can't stay selected
     useDeselectDimmedMarchers(enabled);
     // UI-9 Play: loop a selected range, stop at the end, leave the playhead where a pause lands

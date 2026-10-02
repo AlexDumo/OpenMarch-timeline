@@ -3,6 +3,7 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     canPlay,
     navigationTarget,
+    pageFlags,
     playStartBeat,
     type FlagPage,
 } from "./timelinePlayhead";
@@ -26,6 +27,22 @@ export function navigateTimelinePages(
     const target = navigationTarget(pages, state.playheadBeat, direction);
     if (!target) return false;
     if (target.range) state.selectRange(target.range.start, target.range.end);
+    else state.selectHome();
+    return true;
+}
+
+/**
+ * Goes to one page (UI-9 Page-relative tools): moves the playhead to its flag and selects its
+ * timeline, or home for the first page. Returns false when the page isn't in `pages`.
+ */
+export function selectTimelinePage(
+    pages: readonly FlagPage[],
+    pageId: number,
+): boolean {
+    const flag = pageFlags(pages).find((f) => f.page.id === pageId);
+    if (!flag) return false;
+    const state = useTimelineSelectionStore.getState();
+    if (flag.range) state.selectRange(flag.range.start, flag.range.end);
     else state.selectHome();
     return true;
 }

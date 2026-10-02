@@ -45,7 +45,7 @@ vi.mock("@/context/SelectedMarchersContext", () => ({
     }),
 }));
 vi.mock("@/context/SelectedPageContext", () => ({
-    useSelectedPage: () => ({ selectedPage: null }),
+    useCurrentPage: () => null,
 }));
 
 const BOX: ShapeRow = {

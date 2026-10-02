@@ -23,14 +23,14 @@ import { StepSize } from "@/global/classes/StepSize";
 import MarcherRotationInput from "./marcher/MarcherRotationInput";
 import StepSizeWarningBadge from "./StepSizeWarningBadge";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useCurrentPage } from "@/context/SelectedPageContext";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { clsx } from "clsx";
 import { T } from "@tolgee/react";
 import { useQuery } from "@tanstack/react-query";
 import type { FieldProperties } from "@openmarch/core";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { usePositionAt } from "@/timeline/timelineStore";
-import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { useTimelineStepSizes } from "@/timeline/useTimelineStepSizes";
 import { useTimingObjects } from "@/hooks";
 import {
@@ -434,25 +434,27 @@ function MarcherEditor() {
         () => new Set(selectedMarchers.map((marcher) => marcher.id)),
         [selectedMarchers],
     );
-    const { selectedPage } = useSelectedPage()!;
+    const currentPage = useCurrentPage();
+    // Timeline mode (UI-9): the marcher's position at the paused playhead
+    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.id),
+        marcherPagesByPageQueryOptions(currentPage?.id),
     );
     const { data: previousMarcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.previousPageId!),
+        marcherPagesByPageQueryOptions(currentPage?.previousPageId!),
     );
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const timelineMode = useTimelineMode();
     const timelinePosition = usePositionAt(
         selectedMarchers.length === 1 ? selectedMarchers[0].id : -1,
-        selectedPage ? pageEndBeat(selectedPage) : 0,
+        playheadBeat,
     );
     // Timeline mode has no shape locks (P7.11): moving a marcher whose slot is in a shape-backed
     // transition switches that transition to individual points (P7.2), and shape pages are
     // frozen page-era rows. So the shape page marchers aren't read there.
     const { data: spmsForThisPage } = useQuery(
         shapePageMarchersQueryByPageIdOptions(
-            timelineMode ? null : (selectedPage?.id ?? null),
+            timelineMode ? null : (currentPage?.id ?? null),
         ),
     );
     const editingDisabled = useMemo(() => {
@@ -540,13 +542,13 @@ function MarcherEditor() {
         [selectedMarchers],
     );
     const previousPage = useMemo(
-        () => pages.find((p) => p.id === selectedPage?.previousPageId) ?? null,
-        [pages, selectedPage?.previousPageId],
+        () => pages.find((p) => p.id === currentPage?.previousPageId) ?? null,
+        [pages, currentPage?.previousPageId],
     );
     const timelineStepSizes = useTimelineStepSizes({
         timelineMode,
         marcherIds: selectedMarcherIdList,
-        page: selectedPage,
+        page: currentPage,
         previousPage,
         fieldProperties,
     });
@@ -557,13 +559,13 @@ function MarcherEditor() {
             selectedMarchers.length !== 1 ||
             !marcherPagesLoaded ||
             !previousMarcherPages ||
-            !selectedPage ||
+            !currentPage ||
             !fieldProperties
         )
             return undefined;
 
         const previousMarcherPage =
-            selectedPage?.previousPageId !== null
+            currentPage?.previousPageId !== null
                 ? previousMarcherPages[selectedMarchers[0]?.id]
                 : undefined;
 
@@ -580,7 +582,7 @@ function MarcherEditor() {
         return StepSize.createStepSizeForMarcher({
             startingPage: previousMarcherPage,
             endingPage: selectedMarcherPage,
-            page: selectedPage,
+            page: currentPage,
             fieldProperties,
         });
     }, [
@@ -589,7 +591,7 @@ function MarcherEditor() {
         selectedMarchers,
         marcherPagesLoaded,
         previousMarcherPages,
-        selectedPage,
+        currentPage,
         fieldProperties,
         marcherPages,
         timelineMode,
@@ -601,7 +603,7 @@ function MarcherEditor() {
             selectedMarchers.length <= 1 ||
             !marcherPagesLoaded ||
             !previousMarcherPages ||
-            !selectedPage ||
+            !currentPage ||
             !fieldProperties
         )
             return undefined;
@@ -610,7 +612,7 @@ function MarcherEditor() {
             marchers: selectedMarchers,
             startingMarcherPages: previousMarcherPages,
             endingMarcherPages: marcherPages,
-            page: selectedPage,
+            page: currentPage,
             fieldProperties,
         });
     }, [
@@ -619,7 +621,7 @@ function MarcherEditor() {
         selectedMarchers,
         marcherPagesLoaded,
         previousMarcherPages,
-        selectedPage,
+        currentPage,
         fieldProperties,
         marcherPages,
     ]);
@@ -673,7 +675,7 @@ function MarcherEditor() {
         resetForm();
     }, [selectedMarchers, rCoords, resetForm]);
 
-    if (!selectedPage)
+    if (!currentPage)
         return (
             <>
                 <T keyName="inspector.marcher.noPageSelected" />
