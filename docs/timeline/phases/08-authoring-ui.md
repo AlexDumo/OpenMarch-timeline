@@ -886,3 +886,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks so far:** `pnpm tsc --noEmit` pass; focused vitest on timeline, canvas, hooks, inspector and context tests pass; eslint on touched files 0 errors.
 - **Blockers:** none.
 - **Resume from:** on `timeline/p8-12-no-selected-page`: timeline-mode feature tests through `src/test/featureHarness.tsx` that spy `console.warn` for `SELECTED_PAGE_IN_TIMELINE_MODE_WARNING` while mounting the inspector, toolbar, timeline container, canvas listeners and action handler; then remove `buildTimelineTracks`/`clipsOfShape` (`TODO(P8.12)`, `timelineViewModel.ts`); then appearance-by-time from `coordinates-v2`.
+
+### 2026-10-02 · timeline-worker (timeline/p8-15-canvas-edits) · P8.15
+
+- **Done:** pushed `352b1b44`. **+** shows just after the free paused playhead (`TimelineModePanel` wires `useAddPageFlag`; `onAdded` → `selectRange` through `selectAddedPage`); page boxes carry their page id and the right-click menu has **Delete page flag** (`deletePageFlagsMutationOptions`). Create Track is gone from timeline mode (`useTimelineCommands` has no `createTrack`/`selectedTarget`; the db-level `createTrack` stays for its tests). PR #52 nits: `useMarchersTimelineMode.test.ts` asserts one assignment per stored timeline; `timelineMembershipAdversarial.test.ts` (a) asserts the inside-page loop ran. Shared test helper: `test/featureHarness.tsx` `selectPageAndMarchers` now also selects the page's box in timeline mode (it's the editing context) and waits for stored timelines. Nudges in `RegisteredActionsHandler` catch the already-toasted rejection. New `TimelineCanvasEditModes.test.tsx` (timeline mode) and `TimelinePageFlagControls.test.tsx`.
+- **Checks:** focused runs of each touched test pass in both modes; `pnpm tsc --noEmit` pass; eslint 0 errors on touched files; prettier --check pass.
+- **Next:** whole `test:focused`, then whole `test:timeline`, focused `test:history`, PR.
+- **Blockers:** none.
+- **Resume from:** `timeline/p8-15-canvas-edits`; run `pnpm run test:focused` then `pnpm run test:timeline` (apps/desktop, sequentially) and fix failures; then WORKER.md step 6.
