@@ -199,12 +199,12 @@ describe("the timeline's right-click menu (UI-9)", () => {
 
     it("adds to a dragged range when right-clicked inside it, and offers nothing elsewhere", () => {
         const onAdd = vi.fn();
-        // View beats [10, 14) are spec beats [11, 15)
+        // Spec beats [11, 15), drawn as view beats [10, 14)
         show({
             menu: { onAdd },
             selection: {
                 kind: "range",
-                range: { startBeatIndex: 10, endBeatIndex: 14 },
+                range: { startBeatIndex: 11, endBeatIndex: 15 },
             },
         });
         const surface = screen.getByTestId("timeline-pointer-surface");
@@ -276,7 +276,7 @@ function Panel({
 }
 
 describeDbTests("the right-click menu on a converted show", (it) => {
-    it("adds to a page box's timeline, and the show-wide clip (from beat 0) finds its own timeline", async ({
+    it("finds a page's stored timeline from its box and its clip, and refuses marchers already in it", async ({
         db,
         marchersAndPages,
     }) => {
@@ -284,26 +284,33 @@ describeDbTests("the right-click menu on a converted show", (it) => {
         await setTimelineModeFlag(db, true);
         const { beats, pages } = await readShowTiming(db);
         const ordered = [...pages].sort((a, b) => a.order - b.order);
-        const [show] = await db.select().from(schema.timelines).all();
-        expect(show!.start_beat).toBe(0);
-        const showClip: TimelineInput = {
+        // P9.10: one timeline per page move, the first starting at beat 1
+        const stored = await db
+            .select()
+            .from(schema.timelines)
+            .orderBy(schema.timelines.start_beat)
+            .all();
+        expect(stored).toHaveLength(ordered.length - 1);
+        const first = stored[0]!;
+        expect(first.start_beat).toBe(1);
+        const firstClip: TimelineInput = {
             ...clip,
-            id: "show",
-            linkId: show!.id,
-            startBeatIndex: show!.start_beat,
-            endBeatIndex: show!.end_beat,
+            id: "first",
+            linkId: first.id,
+            startBeatIndex: first.start_beat,
+            endBeatIndex: first.end_beat,
             legs: [
                 {
                     id: "leg",
-                    startBeatIndex: show!.start_beat,
-                    endBeatIndex: show!.end_beat,
+                    startBeatIndex: first.start_beat,
+                    endBeatIndex: first.end_beat,
                     texture: "move",
                 },
             ],
             activitySpans: [
                 {
-                    startBeatIndex: show!.start_beat,
-                    endBeatIndex: show!.end_beat,
+                    startBeatIndex: first.start_beat,
+                    endBeatIndex: first.end_beat,
                     active: true,
                 },
             ],
@@ -314,49 +321,43 @@ describeDbTests("the right-click menu on a converted show", (it) => {
                 db={db}
                 beats={beats}
                 pages={ordered}
-                timelines={[showClip]}
+                timelines={[firstClip]}
                 selectedMarcherIds={new Set([a])}
             />,
         );
-
-        // A page box: its timeline is created, with the marcher's own move
-        fireEvent.contextMenu(
-            screen.getByRole("button", { name: `Page ${ordered[2]!.name}` }),
-        );
-        fireEvent.click(menuItem()!);
-        await waitFor(async () =>
-            expect(await db.select().from(schema.timelines).all()).toHaveLength(
-                2,
-            ),
-        );
-        const added = await db
-            .select()
-            .from(schema.timelines)
-            .where(
-                eq(
-                    schema.timelines.start_beat,
-                    ordered[1]!.beats.at(-1)!.index + 1,
-                ),
-            )
-            .all();
-        expect(added.map((t) => t.end_beat)).toEqual([
-            ordered[2]!.beats.at(-1)!.index + 1,
-        ]);
-
-        // The show-wide clip: the marcher is already in it, so it's refused and nothing is written
         const before = await db
             .select()
             .from(schema.timeline_assignments)
             .all();
+
+        // A page box resolves to its stored page timeline; the marcher is already in it
+        fireEvent.contextMenu(
+            screen.getByRole("button", { name: `Page ${ordered[2]!.name}` }),
+        );
+        fireEvent.click(menuItem()!);
+        await waitFor(() =>
+            expect(toastTimelineError).toHaveBeenCalledTimes(1),
+        );
+        const refusal = vi.mocked(toastTimelineError).mock.calls[0]![0];
+        expect(refusal).toBeInstanceOf(TimelineWriteError);
+        expect((refusal as Error).message).toMatch(/already in this timeline/);
+
+        // The first page's clip (from beat 1, drawn at view 0) finds its own timeline
         fireEvent.contextMenu(
             screen.getByRole("button", { name: /A1 timeline/ }),
         );
         fireEvent.click(menuItem()!);
-        await waitFor(() => expect(toastTimelineError).toHaveBeenCalled());
-        const refusal = vi.mocked(toastTimelineError).mock.calls[0]![0];
-        expect(refusal).toBeInstanceOf(TimelineWriteError);
-        expect((refusal as Error).message).toMatch(/already in this timeline/);
-        expect(await db.select().from(schema.timelines).all()).toHaveLength(2);
+        await waitFor(() =>
+            expect(toastTimelineError).toHaveBeenCalledTimes(2),
+        );
+        expect(
+            (vi.mocked(toastTimelineError).mock.calls[1]![0] as Error).message,
+        ).toMatch(/already in this timeline/);
+
+        // Nothing was written
+        expect(await db.select().from(schema.timelines).all()).toHaveLength(
+            stored.length,
+        );
         expect(
             await db.select().from(schema.timeline_assignments).all(),
         ).toEqual(before);

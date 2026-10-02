@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
     createTrack,
     shiftTimeline,
@@ -7,13 +7,13 @@ import {
 import { addMarchersToTimeline } from "@/db-functions/timelineMembership";
 import type { DbConnection } from "@/db-functions/types";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import type { TimelineInput } from "./Timeline";
 import type { TimelineAddMarchersMenu } from "./TimelineRangeMenu";
 import type {
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineRangeChange,
-    TimelineSelection,
     TimelineTarget,
 } from "./TimelineViewModel";
 
@@ -80,11 +80,9 @@ export function addSelectedMarchersBlocker(
  * The panel's side of the commands: the selected target for Create Track, and the callbacks that
  * run each command as one undoable edit and show a refusal's friendly message (P8.6) as a toast.
  *
- * `noteSelection`: call it with every selection change. Selecting a shape's track picks that shape
- * as the target. A range selection keeps it, because Create Track is offered on a range, so the
- * shape is picked first and the range selected next. Any other selection (a marcher's track, a
- * page, or nothing) drops it, and so does its track disappearing (the shape was deleted, or no
- * longer has a move).
+ * Under UI-9 the timeline draws one track per timeline, so no shape track can be picked: Create
+ * Track's target is the one selected marcher, until **Add selected marchers** (P8.14) replaces it.
+ * A clip move of the selected timeline moves the selection with it (UI-9).
  */
 export function useTimelineCommands({
     database,
@@ -95,49 +93,28 @@ export function useTimelineCommands({
     timelines: readonly TimelineInput[];
     selectedMarcherIds: ReadonlySet<number>;
 }) {
-    const [shape, setShape] = useState<TimelineTarget | null>(null);
-
-    const noteSelection = useCallback(
-        (next: TimelineSelection) => {
-            if (next?.kind === "range") return;
-            const track =
-                next?.kind === "track"
-                    ? timelines.find((t) => t.id === next.trackId)
-                    : undefined;
-            setShape(
-                track?.targetType === "shape"
-                    ? { type: "shape", id: track.targetId }
-                    : null,
-            );
-        },
-        [timelines],
-    );
-
-    // Drop a picked shape whose track is gone
-    const shapeShown =
-        shape !== null &&
-        timelines.some(
-            (t) => t.targetType === "shape" && t.targetId === shape.id,
-        );
-    useEffect(() => {
-        if (shape !== null && !shapeShown) setShape(null);
-    }, [shape, shapeShown]);
-
     const selectedTarget = useMemo(
-        () =>
-            selectedTimelineTarget(
-                shapeShown ? shape : null,
-                selectedMarcherIds,
-            ),
-        [shape, shapeShown, selectedMarcherIds],
+        () => selectedTimelineTarget(null, selectedMarcherIds),
+        [selectedMarcherIds],
     );
 
     const commitTimelineRange = useCallback(
         (change: TimelineRangeChange) => {
             const shift = timelineShiftFor(change, timelines);
-            if (!shift) return;
-            shiftTimeline({ db: database, ...shift }).catch((error: unknown) =>
-                toastTimelineError(error),
+            const track = timelines.find((t) => t.id === change.timelineId);
+            if (!shift || !track) return;
+            const from = {
+                start: track.startBeatIndex,
+                end: track.endBeatIndex,
+            };
+            shiftTimeline({ db: database, ...shift }).then(
+                (result) => {
+                    if (result)
+                        useTimelineSelectionStore
+                            .getState()
+                            .followTimelineShift(from, shift.delta);
+                },
+                (error: unknown) => toastTimelineError(error),
             );
         },
         [database, timelines],
@@ -160,7 +137,6 @@ export function useTimelineCommands({
 
     return {
         selectedTarget,
-        noteSelection,
         commitTimelineRange,
         createTrack: createTrackFromRequest,
         addSelectedMarchers: useAddSelectedMarchers(

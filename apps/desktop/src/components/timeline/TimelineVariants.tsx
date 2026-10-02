@@ -11,6 +11,8 @@ import {
     clamp,
     getPageSnapBeats,
     getSelectionRange,
+    getTrackRange,
+    sameRange,
     packTimelineTracks,
 } from "./TimelineGeometry";
 import {
@@ -181,20 +183,10 @@ function TimelineSurface({
     const waveformHeight = expanded ? 32 : 22;
     const audioTop = trackTop + trackBandHeight + (expanded ? 4 : 2);
     const timelineHeight = audioTop + waveformHeight + 4;
-    const selectionRange = getSelectionRange(selection, model);
-    const selectedLinkId =
-        selection?.kind === "track"
-            ? model.tracks.find((track) => track.id === selection.trackId)
-                  ?.linkId
-            : undefined;
+    const selectionRange = getSelectionRange(selection);
     const [selectionInteraction, setSelectionInteraction] =
         useState<TimelineSelectionInteraction | null>(null);
-    const selectionIdentity =
-        selection?.kind === "page"
-            ? `page:${String(selection.pageId)}`
-            : selection?.kind === "track"
-              ? `track:${String(selection.trackId)}`
-              : (selection?.kind ?? "none");
+    const selectionIdentity = selection?.kind ?? "none";
     useEffect(() => {
         setSelectionInteraction(null);
     }, [
@@ -220,18 +212,18 @@ function TimelineSurface({
         leadingInset: initialPageWidth,
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
     });
+    // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
+    const onSelectionChange = (next: TimelineSelection) =>
+        props.onSelectionChange?.(next);
     const pointer = useTimelinePointer({
         onSeek: props.onSeek,
+        onRangeSelect: props.onSelectionChange
+            ? (range) => onSelectionChange({ kind: "range", range })
+            : undefined,
         pixelsPerBeat,
         beatCount: model.beatCount,
+        snapBeats,
     });
-    const onSelectionChange = (next: TimelineSelection) => {
-        if (next?.kind === "page") {
-            const page = model.pages.find((item) => item.id === next.pageId);
-            if (page) props.onSeek?.(page.atBeat);
-        }
-        props.onSelectionChange?.(next);
-    };
     const showCreateTrack =
         selection?.kind === "range" &&
         selectedTarget != null &&
@@ -347,24 +339,13 @@ function TimelineSurface({
                                 pixelsPerBeat={pixelsPerBeat}
                                 top={trackTop + rowIndex * rowPitch}
                                 height={trackHeight}
-                                selected={
-                                    selection?.kind === "track" &&
-                                    selection.trackId === track.id
-                                }
-                                linked={
-                                    selectedLinkId != null &&
-                                    track.linkId === selectedLinkId &&
-                                    !(
-                                        selection?.kind === "track" &&
-                                        selection.trackId === track.id
-                                    )
-                                }
-                                onSelect={(trackId) =>
-                                    onSelectionChange({
-                                        kind: "track",
-                                        trackId,
-                                    })
-                                }
+                                // A clip is its timeline: it shows selected when its range is
+                                // the selection. Whether clicking it selects it is open (ui.md
+                                // U-Q5 TODO), so a click does nothing.
+                                selected={sameRange(
+                                    getTrackRange(track),
+                                    selectionRange,
+                                )}
                                 onRangeCommit={props.onTimelineRangeCommit}
                                 beatCount={model.beatCount}
                                 snapBeats={snapBeats}
@@ -415,6 +396,23 @@ function TimelineSurface({
                         anchorRef={playheadRef}
                         visible={showPlayheadDetail}
                     />
+                    {pointer.rangePreview && (
+                        <div
+                            data-testid="timeline-range-preview"
+                            aria-hidden="true"
+                            className="bg-accent/15 border-accent pointer-events-none absolute top-28 z-30 border-x"
+                            style={{
+                                left:
+                                    pointer.rangePreview.startBeatIndex *
+                                    pixelsPerBeat,
+                                width:
+                                    (pointer.rangePreview.endBeatIndex -
+                                        pointer.rangePreview.startBeatIndex) *
+                                    pixelsPerBeat,
+                                height: Math.max(0, timelineHeight - 28),
+                            }}
+                        />
+                    )}
                     {selectionRange && (
                         <TimelineSelectionRange
                             range={selectionRange}
