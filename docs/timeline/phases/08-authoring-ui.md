@@ -930,3 +930,26 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Exit gate:** nothing ticked; this package covers none of the gate items.
 - **Next:** review.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-15-canvas-edits) · P8.15 (review fixes)
+
+- **Done:** PR #53 is now one commit, `18a3a10d` (force-pushed; the pre-commit hook ran).
+  - **Swap:** when the selection refuses, swap now shows the same hint as the other tools (`RegisteredActionsHandler`).
+  - **Delete page flag without Add:** the entry no longer depends on **Add selected marchers**; `onAdd` is optional in `TimelineRangeMenu` (`Timeline.tsx`).
+  - **Lead decision, implemented:** deleting the flag of the selected page selects the merged box (the next page's box, which now runs from the deleted page's start to the next flag), as **+** selects the new page. Deleting the selected last page's flag selects the previous page's box (home for page 0), since that page becomes last. See `selectionAfterFlagDelete` in `TimelineModePanel.tsx`; it runs `selectRange` after `deletePageFlags` succeeds.
+  - **Planning twice:** skipped, with a comment in `updateCoordinates`. The tools call `getSelectedMarcherPages` and the write synchronously in one action, or within the nudge mutation's own promise chain, so the selection can't change between the two plans.
+  - **Tests (`timelineMovesByTimeline.test.ts`):**
+    - every other slot of the shared converted transition keeps its destination;
+    - new: the refusal for a row ending early;
+    - new: an R-5/D-12 nested-timeline case (the nested move ends at the edited point, and the outer move resumes on the line from it to its unchanged destination).
+  - **Tests (other files):** a swap refusal in `TimelineCanvasEditModes.test.tsx`; Delete without Add and `selectionAfterFlagDelete` cases in `TimelinePageFlagControls.test.tsx`.
+- **Checks** (apps/desktop):
+  - `pnpm tsc --noEmit`: pass.
+  - eslint on touched files: 0 errors; the 3 warnings in `RegisteredActionsHandler.tsx` were already there.
+  - `prettier --check src`: pass.
+  - Whole `pnpm run test:focused`: 2631 passed.
+  - Whole `pnpm run test:timeline`: 2585 passed. It ran after the focused suite, not alongside it.
+  - `pnpm run test:history` on 6 touched test files: 55 passed.
+  - Not run (policy): the full `test:history` suite and Playwright.
+- **Next:** re-review and merge.
+- **Blockers:** none.
