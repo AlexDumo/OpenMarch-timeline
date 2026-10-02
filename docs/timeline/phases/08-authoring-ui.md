@@ -771,3 +771,13 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** a timeline-mode feature test through the harness (navigation actions), broader focused runs, then PR.
 - **Blockers:** none.
 - **Resume from:** add `src/utilities/__test__/` or `src/timeline/__test__/` harness test for the navigation actions under `pnpm run test:timeline <file>`; then run `pnpm run test:focused src/components/timeline src/timeline src/utilities src/components/canvas` and lint; open the PR.
+
+### 2026-10-02 · Cross-phase note from P9 · P8.11, P8.14
+
+- **Done:** P9.10 (PR https://github.com/AlexDumo/OpenMarch-timeline/pull/50) changes what the converter writes.
+  - A converted show now has one unnamed timeline per page move, over exactly the page's range (page 1 from beat 1), with one shapeless transition spanning it. Each marcher has one layer-0 assignment in each timeline.
+  - `timeline_commit_violations` now reports `E-T1` at commit for any transition whose range differs from its timeline's.
+- **Next:**
+  - **P8.11:** `clipsOfShape` in `src/timeline/timelineViewModel.ts` (marked `TODO(P9.10)`) only split gaps in the old show-wide timeline and is now dead. Drop it with the one-track-per-timeline rewrite. P9.10 didn't touch the file, to avoid a conflict.
+  - **P8.14:** P7.3's join (`addMarchersToTimelineInTransaction`) still works per page timeline, so nothing blocks replacing it.
+- **Blockers:** none.
