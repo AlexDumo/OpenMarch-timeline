@@ -155,10 +155,12 @@ Phase 0. Record outcomes in the ADR (`docs/adr/0001-timeline-motion-model.md`).
   timeline has no effect on resolution, R-1). Enforcement: the write functions
   refuse a transition whose range differs from its timeline's (E-ARGS), and
   every range edit moves the timeline and all its transitions together
-  (P8.10). The database check, an `E-T1` row in `timeline_commit_violations`,
-  waits for P9.10, because the converter still writes one show-wide timeline
-  with a transition per page; until then a function that would have to resize
-  such a legacy timeline refuses. Recorded in ADR 0001.
+  (P8.10). The database check is an `E-T1` row in
+  `timeline_commit_violations`, checked at commit (P9.10), now that the
+  converter writes one timeline per page move. A file converted by an earlier
+  development build (one show-wide timeline) fails every edit with E-T1 and
+  must be converted again by hand; open doesn't repair it (project owner,
+  2026-10-02). Recorded in ADR 0001.
 
 - **C-12: Pages are cosmetic flags; the selected timeline is the editing
   context.** **Decided (project owner, 2026-10-01):** a page owns no motion.

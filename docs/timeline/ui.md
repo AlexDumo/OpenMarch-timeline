@@ -230,7 +230,10 @@ from it. The spec still wins on the model; this file decides presentation.
     point and still ends where it ended (R-5, D-12, D-7), so its path after
     the steal changes. Adding to a timeline that only partly overlaps one of
     the marcher's timelines is refused (E-ARGS); the database wouldn't refuse
-    it, since the new row is a layer up.
+    it, since the new row is a layer up. Adding to a range that strictly
+    contains one of the marcher's timelines is refused too, since the new
+    layer would steal that whole move (P8.14, lead, 2026-10-02). Ctrl+click
+    on the timeline is ignored (it opens the context menu on macOS).
   - **Creating a timeline.** Click and drag on empty timeline space selects a
     range (snapping as in UI-2), which acts as an empty timeline that isn't
     stored yet; **Add selected marchers** on it creates the timeline. It
@@ -253,8 +256,12 @@ from it. The spec still wins on the model; this file decides presentation.
   - **New marchers and overlaps** (_lead default_). A new marcher joins
     stored timelines in start order and skips one that only partly overlaps a
     timeline it has already joined.
-  - **Deleting a flag.** Deletes only the page row. Timelines are unchanged,
-    so motion is unchanged.
+  - **Deleting a flag.** Deleting page N's flag deletes N's row and moves
+    page N+1's start back to N's start, the exact inverse of **+**: N+1 keeps
+    its flag, id and data (per-page data follows the page that keeps its
+    flag). Deleting the last page's flag makes the previous page last.
+    Timelines are unchanged, so motion is unchanged (P8.13, lead,
+    2026-10-02).
 
   Why: pages mark checkpoints without owning motion, and the timeline is the
   container for its transitions (C-11). Editing the selected timeline's ending
@@ -495,5 +502,12 @@ points (P7.2).
   - Moving marchers between timelines ("Move to timeline", or add then
     remove, where order matters).
   - Undo's selection (replacing P7.13's page jump; until then undo moves only
-    the playhead, UI-9 Page-relative tools), and what a converted show offers
-    before P9.10.
+    the playhead, UI-9 Page-relative tools). Undoing a clip move leaves the
+    selection on the moved range, which then resolves to nothing, so everyone
+    is dimmed until the user selects again.
+  - The ripple's holds (`timelineRipple.ts` `addHoldingMoves`) group by layer
+    into one timeline, so a marcher with moves on two layers ending at a new
+    page can get two transitions in one timeline.
+  - Clearing a marcher's dimming while the line or lasso tool has every marcher
+    switched off makes it selectable mid-tool (`CanvasMarcher.setTimelineDimmed`).
+  - Ctrl+click is ignored on the timeline on every platform, not only macOS.

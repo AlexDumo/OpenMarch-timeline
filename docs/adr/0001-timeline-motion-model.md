@@ -124,9 +124,10 @@ are unchanged (a timeline has no effect on resolution, R-1). The write
 functions enforce it (P8.10): a transition takes its timeline's range, and any
 other range is refused (`E-ARGS`); every range edit moves the timeline and all
 its transitions together, with anchored assignments (R-E1); and deleting a
-timeline's last transition deletes the timeline. The database check, an `E-T1`
-row in `timeline_commit_violations`, comes with P9.10, once the converter
-writes a timeline per page move instead of one show-wide timeline.
+timeline's last transition deletes the timeline. The database checks it too:
+an `E-T1` row in `timeline_commit_violations`, at commit, since P9.10 made the
+converter write a timeline per page move. Files converted by earlier
+development builds are converted again by hand, not repaired on open.
 
 **Pages are flags (C-12, decided by the project owner on 2026-10-01).** In
 timeline mode a page owns no motion. A page is named by its end flag, and its

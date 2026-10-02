@@ -142,7 +142,7 @@ Apply C-11 (implementation-plan.md): every transition starts and ends exactly wh
 ### P8.11: UI-9 selection and playhead
 
 - Owner: timeline-worker (timeline/p8-11-selection-playhead)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/51
 - Parallel: yes (with P8.13 and P8.14)
 - Depends on: P8.10
@@ -152,7 +152,7 @@ The selection state and what it draws (`ui.md` UI-9: Pages, Home, Playhead, Play
 ### P8.13: UI-9 page flags
 
 - Owner: timeline-worker (timeline/p8-13-page-flags)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/48
 - Parallel: yes (with P8.11 and P8.14)
 - Depends on: P8.10
@@ -161,9 +161,9 @@ Page writes in timeline mode (UI-9 **+** and Deleting a flag). **+** shows after
 
 ### P8.14: UI-9 timeline membership
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: timeline-worker (timeline/p8-14-timeline-membership)
+- Status: done
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/49
 - Parallel: yes (with P8.11 and P8.13)
 - Depends on: P8.10
 
@@ -201,10 +201,12 @@ Tick an item only after running its check, and paste the command and result into
 
 Kept current by the phase lead: where things stand, surprises, and what not to redo.
 
+- **State on 2026-10-02:** P8.11, P8.13, P8.14 and P9.10 are merged. The base fails 19 tests in 5 files (timelineMembership, timelineMembershipAdversarial, timelineMarchers, timelineRipple, timelineHistoryFocus) and one in `useMarchersTimelineMode` under `test:timeline`: P8.14's tests met P9.10's per-page conversion. A fix PR from the P8.14 worker is in progress; don't start P8.15 or P8.12 until it merges. P8.13's **+** button isn't wired to the timeline yet; P8.15 or a small follow-up wires it to the selection.
+- **Fresh work trees:** after `pnpm install`, also run `pnpm --filter @openmarch/metronome build`. If jest-dom matchers fail (around 23 `tsc` errors), the install hoisted vitest 3.2.3 at the root; that is the install, not your change.
 - **UI-9 (pages are flags) is the current build, 2026-10-01.** Read `ui.md` UI-9 and `implementation-plan.md` C-12 first; UI-9 wins over older text in `ui.md`. Packages: P8.11 (selection, playhead), P8.13 (page flags), P8.14 (membership) can run in parallel after P8.10; P8.15 (canvas edits) follows P8.11 and P8.14; P8.12 (no selected page, appearance by time) follows P8.11. Converted shows need P9.10 before page boxes have timelines; build and test on timeline-mode fixtures with one timeline per page meanwhile. The linear MVP in `validation-plan.md` needs P8.11 and P8.13–P8.15 plus P9.10. Open owner questions are in `ui.md` U-Q5; _lead default_ items in UI-9 are settled enough to build. Page-based playback helpers (`pageForSeek`, and `followSelectedPage` if it lands) are replaced by P8.11, not extended.
 - Porting the 0.2 timeline (P8.1): 0.2's `TimelineContainer` computes the beat with its own `getBeatIndexAtTime(beats, timeMs)`, in milliseconds, returning 0 with no beats. Replace it with `beatIndexAtTime(beats, timeMs / 1000)` from `src/timeline/timeMap.ts`, so there is one tempo map, and don't pass its -1 (no beats) to `setCurrentBeatIndex`. Don't bring back 0.2's `getBeatIndexAtTime` or `getNearestBeatIndex`.
 - After P8.1 (PR #19), the timeline is in `apps/desktop/src/components/timeline/`:
-  - **Clock:** `Timeline` takes a `playback` prop and doesn't read the frame clock. `useTimelinePlayback` feeds it from the existing clock (`IsPlayingContext`, the selected page and `getLivePlaybackPosition`). While playing, the cursor is `beatIndexAtTime`; while paused, it's `pageEndBeat(selectedPage)`, and `pageLabel` names the selected page in the transport and playhead labels. Seeking to a beat line selects the page whose move contains or ends at that line (`pageForSeek`), so seeking to the paused cursor keeps the selection. A ruler page click selects that page directly (`TimelineModePanel`). Wiring the frame clock later means changing only that hook.
+  - **Clock (superseded by P8.11):** the paused playhead and selection live in `src/stores/TimelineSelectionStore.ts` (`useTimelineSelectionStore`: home, range or none in spec beats; `playheadBeat`; `selectHome`, `selectRange`, `seek`). `useTimelineSelectionHost` keeps its stored timelines current, and `useTimelinePlaybackDriver` runs play, loop, stop and pause. `useTimelinePageBridge` keeps the old selected page following the playhead until P8.12 deletes it.
   - **Data (P8.8):** `TimelineModePanel` passes real beats, pages and measures and `NO_TIMELINES`. Replace that with the adapter's `TimelineInput[]` (`TODO(P8.8)`). View beat indexes are real beat indexes (spec beat positions), so the fixed beat 0 is a one-beat-wide empty column before page 1. Compress that column in the adapter (`TODO(P8.8)` in `createTimelineViewModel`).
   - **Commands (P8.9):** `commitTimelineRange` and `createTrack` are no-ops, and `selectedTarget` is null, so Create Track is hidden (`TODO(P8.9)`).
   - **Snapping:** `getPageSnapBeats`, `snapBoundary`, `snapRangeOffset` and `isPageSnapDisabled` in `TimelineGeometry.ts`. The snap distance is 24 px, and Alt turns snapping off.
@@ -854,3 +856,16 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Not run: Playwright e2e and a manual run of the app.
 - **Next:** review. Someone needs to fix the base failures above (P8.14 or P9.10 owner).
 - **Blockers:** none for P8.11.
+
+### 2026-10-02 · timeline-worker (timeline/p8-14-timeline-membership) · P8.14
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/49 (commit `56a64681`, then `82cad6a7` after review). `src/db-functions/timelineMembership.ts`: `addMarchersToTimeline` (creates the timeline over a range when none has it; one-slot shapeless direct transition per marcher, destination at its position at the end, one layer above its highest layer there; refuses partial overlaps and ranges around one of the marcher's timelines), `removeMarchersFromTimeline` / `removeAssignmentFromTimeline` (delete the assignment and the own one-slot transition, never the timeline; the inspector's remove uses the latter). `createTimelinesInTransaction` refuses a second timeline over a range (`allowSharedRanges` for the scenario loader). New marchers join every stored timeline with their own transition to home (start order, skip partial overlaps), replacing P7.3's join; marcher delete removes own transitions and keeps timelines. Right-click **Add selected marchers** on page boxes, clips and dragged ranges (`TimelineRangeMenu.tsx`), with the target range passed in and no selection change.
+- **Checks:** tsc pass; full `vitest run` (apps/desktop) 2,526 passed, 0 failed at `82cad6a7`; focused `test:history` on 9 files, 134 passed; eslint/prettier/cspell clean. Skipped by policy: full `test:history`, Playwright, `build:electron`, `test:timeline`.
+- **Blockers:** none. The coordination edits for this package were applied by the lead with the project owner's OK: the worker's isolation blocked `coord.sh`.
+
+### 2026-10-02 · lead session · P8.11, P8.13, P8.14, P9.10 merged
+
+- **Done:** each PR had a reviewer and a tester sub-agent and a fix round where asked; the project owner ordered the merges. Merged #50 (P9.10, `76fd399c`), #48 (P8.13, `aff90ab1`), #49 (P8.14, `889cb433`) and #51 (P8.11, `fc149a70`, rebased onto the others). Lead decisions recorded in `ui.md` UI-9: deleting a flag is the inverse of **+**; adding over a range that contains one of the marcher's timelines is refused; ctrl+click is ignored on the timeline. Backlog additions: undoing a clip move dims everyone, ripple holds can give a marcher two transitions in one timeline, clearing dimming mid-tool, ctrl+click on every platform. Old dev-converted files aren't repaired on open (project owner).
+- **Checks:** reviewers and testers re-ran each PR's focused checks; none ran on the combined result before merging. After merging, the base fails 19 unit tests and 1 `test:timeline` test (P8.14 tests vs P9.10 conversion), the same without #51.
+- **Next:** the P8.14 worker's fix PR, then P8.15 and P8.12. Lesson: run the full unit suite on the combined branch before merging parallel PRs that meet in the same area.
+- **Blockers:** none.
