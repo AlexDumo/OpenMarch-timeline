@@ -182,8 +182,8 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
                 .select()
                 .from(schema.timelines)
                 .all();
-            // The converter writes one show-wide timeline (TODO(P9.10))
-            expect(timelinesBefore.length).toBe(1);
+            // The converter writes one timeline per page move (P9.10)
+            expect(timelinesBefore.length).toBe(pages.length - 1);
             const endsBefore = pageEnds(pages);
             const before = await snapshot(db);
 
@@ -208,46 +208,51 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             const transitionsAfter = await transitions(db);
             for (const t of transitionsBefore)
                 expect(transitionsAfter.find((a) => a.id === t.id)).toEqual(t);
-            // One new transition: one slot at the home, spanning the timeline
+            // One new transition per timeline: one slot at the home, spanning its timeline
             const added = transitionsAfter.filter(
                 (t) => !transitionsBefore.some((b) => b.id === t.id),
             );
-            expect(added.length).toBe(1);
-            const timeline = timelinesBefore[0]!;
-            expect(added[0]).toMatchObject({
-                timeline_id: timeline.id,
-                dest_shape_id: null,
-                path_style: "direct",
-                slot_count: 1,
-                start_beat: timeline.start_beat,
-                end_beat: timeline.end_beat,
-            });
+            expect(added.map((t) => t.timeline_id).sort()).toEqual(
+                timelinesBefore.map((t) => t.id).sort(),
+            );
             const rows = await db
                 .select()
                 .from(schema.timeline_assignments)
                 .where(eq(schema.timeline_assignments.marcher_id, id))
                 .all();
-            expect(rows.length).toBe(1);
-            expect(rows[0]).toMatchObject({
-                transition_id: added[0]!.id,
-                slot_index: 0,
-                start_beat: timeline.start_beat,
-                end_beat: timeline.end_beat,
-                layer: 0,
-            });
-            const dest = await db
-                .select()
-                .from(schema.timeline_slot_destinations)
-                .where(
-                    eq(
-                        schema.timeline_slot_destinations.transition_id,
-                        added[0]!.id,
-                    ),
-                )
-                .all();
-            expect(dest.map((d) => [d.slot_index, d.x, d.y])).toEqual([
-                [0, ...home],
-            ]);
+            expect(rows.length).toBe(timelinesBefore.length);
+            for (const timeline of timelinesBefore) {
+                const own = added.find((t) => t.timeline_id === timeline.id)!;
+                expect(own).toMatchObject({
+                    dest_shape_id: null,
+                    path_style: "direct",
+                    slot_count: 1,
+                    start_beat: timeline.start_beat,
+                    end_beat: timeline.end_beat,
+                });
+                // Page timelines don't overlap, so every join is at layer 0
+                expect(
+                    rows.find((r) => r.transition_id === own.id),
+                ).toMatchObject({
+                    slot_index: 0,
+                    start_beat: timeline.start_beat,
+                    end_beat: timeline.end_beat,
+                    layer: 0,
+                });
+                const dest = await db
+                    .select()
+                    .from(schema.timeline_slot_destinations)
+                    .where(
+                        eq(
+                            schema.timeline_slot_destinations.transition_id,
+                            own.id,
+                        ),
+                    )
+                    .all();
+                expect(dest.map((d) => [d.slot_index, d.x, d.y])).toEqual([
+                    [0, ...home],
+                ]);
+            }
 
             // The resolver puts it on its home everywhere and moves no one else
             await timelineResolverSettled();
@@ -300,7 +305,11 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             expect(homes[1]![0]).toBeGreaterThan(homes[0]![0]!);
 
             const transitionsAfter = await transitions(db);
-            expect(transitionsAfter.length).toBe(transitionsBefore.length + 3);
+            // One page timeline per page move (P9.10), and a transition per marcher in each
+            const timelineCount = pages.length - 1;
+            expect(transitionsAfter.length).toBe(
+                transitionsBefore.length + 3 * timelineCount,
+            );
             const rows = await db
                 .select()
                 .from(schema.timeline_assignments)
@@ -308,8 +317,11 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             const own = created.map(
                 (c) => rows.filter((r) => r.marcher_id === c.id)!,
             );
-            for (const r of own) expect(r.length).toBe(1);
-            expect(new Set(own.map((r) => r[0]!.transition_id)).size).toBe(3);
+            for (const r of own) expect(r.length).toBe(timelineCount);
+            // Nobody shares a transition: each row is in its own
+            expect(new Set(own.flat().map((r) => r.transition_id)).size).toBe(
+                3 * timelineCount,
+            );
             await timelineResolverSettled();
             const endsAfter = pageEnds(pages);
             created.forEach((c, i) => {
@@ -619,13 +631,8 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             const last = ts[ts.length - 1]!;
             const [m0, m1, m2] = marchersAndPages.expectedMarchers;
             await transactionWithHistory(db, "addFtl", async (tx) => {
-                // A transition spans its own timeline (C-11)
-                const [timeline] = await createTimelinesInTransaction({
-                    tx,
-                    newTimelines: [
-                        { startBeat: last.start_beat, endBeat: last.end_beat },
-                    ],
-                });
+                // It shares the last page move's timeline (C-11; one timeline per range, C-12)
+                const timeline = { id: last.timeline_id };
                 const [shape] = await createTimelineShapesInTransaction({
                     tx,
                     newShapes: [

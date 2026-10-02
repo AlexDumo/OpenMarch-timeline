@@ -257,7 +257,7 @@ describeDbTests("undo and redo in timeline mode", (it) => {
         const pages = await setUp(db);
         const page = pages[pages.length - 1]!;
         const t = schema.timeline_transitions;
-        // Edit 1 adds a marcher, who gets its own move in the show's one timeline (UI-9)
+        // Edit 1 adds a marcher, who gets its own move in each page's timeline (UI-9, P9.10)
         const [created] = await createMarchers({
             db,
             newMarchers: [
@@ -265,16 +265,22 @@ describeDbTests("undo and redo in timeline mode", (it) => {
             ],
         });
         const id = created!.id;
-        // Edit 2 changes that move, which ends on the last page and selects everyone in it
-        const own = await db
-            .select({ transition: schema.timeline_assignments.transition_id })
-            .from(schema.timeline_assignments)
-            .where(eq(schema.timeline_assignments.marcher_id, id))
-            .get();
+        // Edit 2 changes its move on the last page, which selects everyone in it
+        const own = new Set(
+            (
+                await db
+                    .select({
+                        transition: schema.timeline_assignments.transition_id,
+                    })
+                    .from(schema.timeline_assignments)
+                    .where(eq(schema.timeline_assignments.marcher_id, id))
+                    .all()
+            ).map((r) => r.transition),
+        );
         const transition = (await db.select().from(t).all()).find(
-            (row) => row.id === own!.transition,
+            (row) => own.has(row.id) && row.end_beat === pageEndBeat(page),
         )!;
-        expect(transition.end_beat).toBe(pageEndBeat(page));
+        expect(transition).toBeDefined();
         await transactionWithHistory(db, "arcPageMove", async (tx) => {
             await tx
                 .update(t)

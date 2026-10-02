@@ -77,11 +77,21 @@ const setUp = async (db: DbConnection): Promise<Page[]> => {
     return [...pages].sort((a, b) => a.order - b.order);
 };
 
-/** Page `i`'s box: from the previous page's flag to its own (UI-9 Pages). */
+/**
+ * Page `i`'s box: from the previous page's flag to its own (UI-9 Pages). A converted show already
+ * stores a timeline over it with every marcher in it (P9.10).
+ */
 const pageRange = (pages: readonly Page[], i: number): BeatRange => ({
     start: pageEndBeat(pages[i - 1]!),
     end: pageEndBeat(pages[i]!),
 });
+
+/** A range wholly inside page `i`'s move, two beats in from each flag: not stored yet. */
+const insidePage = (pages: readonly Page[], i: number): BeatRange => {
+    const { start, end } = pageRange(pages, i);
+    expect(end - start).toBeGreaterThanOrEqual(6);
+    return { start: start + 2, end: end - 2 };
+};
 
 /** Every marcher's position at each of `beats`, keyed by marcher id. */
 const positions = (beats: readonly number[]) => {
@@ -166,12 +176,12 @@ const timelineIds = async (db: DbConnection) =>
 
 describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
     describe("Add selected marchers", () => {
-        it("creates a page's timeline and gives each marcher its own one-slot move there, changing no motion", async ({
+        it("creates a timeline inside a page move and gives each marcher its own one-slot move there, changing no motion", async ({
             db,
             marchersAndPages,
         }) => {
             const pages = await setUp(db);
-            const range = pageRange(pages, 2);
+            const range = insidePage(pages, 2);
             const ids = marchersAndPages.expectedMarchers
                 .slice(0, 2)
                 .map((m) => m.id);
@@ -203,7 +213,7 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
                 range.end,
             ]);
             const rows = await ownRows(db, result.timelineId);
-            // One transition per marcher; one layer above the show-wide timeline's page move
+            // One transition per marcher; one layer above the page move it lies inside
             expect(rows).toEqual(
                 [...ids]
                     .sort((a, b) => a - b)
@@ -246,7 +256,7 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
             marchersAndPages,
         }) => {
             const pages = await setUp(db);
-            const range = pageRange(pages, 3);
+            const range = insidePage(pages, 3);
             const [a, b, c] = marchersAndPages.expectedMarchers.map(
                 (m) => m.id,
             );
@@ -294,16 +304,19 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
             marchersAndPages,
         }) => {
             const pages = await setUp(db);
+            // The page's stored timeline (P9.10) holds the marcher's page move at layer 0
             const range = pageRange(pages, 2);
-            expect(range.end - range.start).toBeGreaterThanOrEqual(3);
             const id = marchersAndPages.expectedMarchers[0]!.id;
-            await addMarchersToTimeline({ db, range, marcherIds: [id] });
-
+            const inPage = await addMarchersToTimeline({
+                db,
+                range: insidePage(pages, 2),
+                marcherIds: [id],
+            });
             // Wholly inside: one layer above its highest layer there (UI-9 Layers)
-            const inner = { start: range.start + 1, end: range.end - 1 };
+            expect(inPage.added.map((x) => x.layer)).toEqual([1]);
             const nested = await addMarchersToTimeline({
                 db,
-                range: inner,
+                range: { start: range.start + 3, end: range.end - 3 },
                 marcherIds: [id],
             });
             expect(nested.added.map((x) => x.layer)).toEqual([2]);
@@ -335,14 +348,18 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
             );
         });
 
-        it("a converted show's own timeline range finds that timeline: no new timeline, no motion change", async ({
+        it("a converted page's stored range finds its timeline: everyone is already in, no new timeline, no motion change", async ({
             db,
             marchersAndPages,
         }) => {
-            // What the clip menu sends for a converted show (its stored spec range from beat 0)
+            // What a page box (or its clip) sends on a converted show (P9.10: a timeline per page)
             const pages = await setUp(db);
-            const [show] = await db.select().from(schema.timelines).all();
-            expect(show!.start_beat).toBe(0);
+            const range = pageRange(pages, 1);
+            const timelinesBefore = await timelineIds(db);
+            const show = (await db.select().from(schema.timelines).all()).find(
+                (t) => t.start_beat === range.start && t.end_beat === range.end,
+            );
+            expect(show).toBeDefined();
             const ends = pages.map((p) => pageEndBeat(p));
             const positionsBefore = positions(ends);
             await expectRefused(
@@ -358,7 +375,7 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
                 "E-ARGS",
                 /already in this timeline/,
             );
-            expect(await timelineIds(db)).toEqual([show!.id]);
+            expect(await timelineIds(db)).toEqual(timelinesBefore);
             await timelineResolverSettled();
             expectSamePositions(positionsBefore, positions(ends));
         });
@@ -368,7 +385,7 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
             marchersAndPages,
         }) => {
             const pages = await setUp(db);
-            const range = pageRange(pages, 2);
+            const range = insidePage(pages, 2);
             const [a, b] = marchersAndPages.expectedMarchers.map((m) => m.id);
             await addMarchersToTimeline({ db, range, marcherIds: [a!] });
             // A second timeline over the same range, as a file from before C-12 could hold
@@ -470,7 +487,7 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
             marchersAndPages,
         }) => {
             const pages = await setUp(db);
-            const range = pageRange(pages, 2);
+            const range = insidePage(pages, 2);
             const [a, b] = marchersAndPages.expectedMarchers.map((m) => m.id);
             const { timelineId } = await addMarchersToTimeline({
                 db,
@@ -526,7 +543,7 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
             const [a, b] = marchersAndPages.expectedMarchers.map((m) => m.id);
             const { timelineId } = await addMarchersToTimeline({
                 db,
-                range: pageRange(pages, 2),
+                range: insidePage(pages, 2),
                 marcherIds: [a!],
             });
             await expectRefused(
@@ -561,7 +578,7 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
             const [a] = marchersAndPages.expectedMarchers.map((m) => m.id);
             const { added, timelineId } = await addMarchersToTimeline({
                 db,
-                range: pageRange(pages, 2),
+                range: insidePage(pages, 2),
                 marcherIds: [a!],
             });
             const own = await removeAssignmentFromTimeline({
@@ -611,12 +628,12 @@ describeDbTests("timeline membership (P8.14, UI-9)", (it) => {
             const [a, b] = marchersAndPages.expectedMarchers.map((m) => m.id);
             const { timelineId } = await addMarchersToTimeline({
                 db,
-                range: pageRange(pages, 2),
+                range: insidePage(pages, 2),
                 marcherIds: [a!],
             });
             const kept = await addMarchersToTimeline({
                 db,
-                range: pageRange(pages, 4),
+                range: insidePage(pages, 4),
                 marcherIds: [a!, b!],
             });
             const before = await snapshot(db);
