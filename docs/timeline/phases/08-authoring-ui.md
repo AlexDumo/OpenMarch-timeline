@@ -961,3 +961,26 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Checks:** reviewer and tester re-ran the PR's checks; whole `test:focused` and `test:timeline` passed on its final commit.
 - **Next:** build and run `validation-plan.md` V1–V4 in the app.
 - **Blockers:** none.
+
+### 2026-10-02 · timeline-worker (timeline/p8-12-no-selected-page) · P8.12 (review fixes, paused)
+
+- **Done:** pushed `ee2b4cb2` (wip) on PR #54. Paused by the project owner for MVP testing; status stays in-review.
+  - **Item 2 (done):** `TimelineControls.tsx` gets its transport state from `useTransportAvailability`. In timeline mode, back and forward use `navigationTarget` from the playhead, and play uses `canPlay(selection, playhead, beats.length)`.
+  - **Item 3 (done):** in timeline mode, `SelectedMarchersContext` takes hidden marchers from the appearance timeline at the playhead (`hiddenMarcherIdsAt` in `services/appearance/get-appearance-at-time.ts`). `useMarcherAppearanceTimelines` moved to `src/hooks/useMarcherAppearanceTimelines.ts`. The per-page appearance query runs in page mode only.
+  - **Item 4 (done):** in timeline mode, while playing, `PageNotesSection` shows the notes of the page whose box holds the live position (`useLivePlaybackPage`, checked each frame and updated on change), which follows a loop. Paused, it shows the page at the playhead. Page mode is unchanged.
+- **Not done:**
+  - Item 5 (extend `NoSelectedPageModes.test.tsx`).
+  - Item 1 (write by timeline id after #53, plus the tester's adversarial tests).
+  - No new tests for items 2–4 yet.
+- **Checks at `ee2b4cb2`:**
+  - `pnpm tsc --noEmit`: pass.
+  - `test:focused` on `src/context`, `src/components/timeline`, `src/components/inspector`, `src/services/appearance`, `NoSelectedPageModes` and `RegisteredActionsHandlerModes`: 295 passed.
+  - `test:timeline` on the same paths, without `RegisteredActionsHandlerModes`: 288 passed.
+  - Pre-commit: pass.
+  - Not run: the whole suites and `test:history`.
+- **Blockers:** none (item 1 waits on #53).
+- **Resume from:** on `timeline/p8-12-no-selected-page` at `ee2b4cb2`, do these in order:
+  1. **Tests for items 2–4:** `TimelineControls` disabled states in timeline mode; hidden marchers between flags follow the canvas's sampled appearance; the live-page notes while playing.
+  2. **Item 5:** in `src/timeline/__test__/NoSelectedPageModes.test.tsx`, mount `SelectedMarchersContext` (already in the harness), `TagButtons`, `ShapeSelector` and `TimelineContainer` (needs the electron and `ResizeObserver` stubs; see `TimelineContainerMode.test.tsx`), and assert that set to previous page wrote (the positions at the timeline's end equal those at its start).
+  3. **Item 1, after #53 merges:** rebase onto `timeline-try-2`. In `useMarcherPages.ts`, keep `useCurrentPage` and call #53's one-argument `useUpdateSelectedMarchers`. In `featureHarness.tsx`, keep `goToPage` and drop the unused `pageFlags` and `selectionOfPage` imports. Then switch `setMarchersToNeighborPage.ts`'s timeline write (`timelineEndPage`, `TODO(P8.15)`) to #53's `moveMarchersInTimelineInTransaction` or `moveMarchersInTarget`, and show its higher-layer refusal as a toast. Adopt the tester's `P812Adversarial.test.tsx` and `P812UndoAdversarial.test.tsx` from `/Users/openmarchdev/GitHub/OpenMarch/.claude/worktrees/agent-af5ffb1de086b0faa/apps/desktop/src/timeline/__test__/`, changing the mid-page undo assertion so the playhead stays put. If copying is refused, write equivalent tests.
+  4. **Finish:** `tsc`; whole `test:focused`, then whole `test:timeline`; focused `test:history` on the touched files; push; log.
