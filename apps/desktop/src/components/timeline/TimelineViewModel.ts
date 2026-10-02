@@ -1,4 +1,8 @@
 import type { ReactNode } from "react";
+import type {
+    TimelineAddMarchersMenu,
+    TimelineMenuTarget,
+} from "./TimelineRangeMenu";
 
 export type TimelineTrackId = string | number;
 
@@ -109,6 +113,8 @@ export interface TimelineInteractionProps {
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
+    /** The right-click menu's **Add selected marchers** (UI-9, P8.14), in view beats here */
+    readonly addSelectedMarchers?: TimelineAddMarchersMenu<TimelineMenuTarget>;
 }
 
 export interface TimelineScaleProps {

@@ -16,6 +16,10 @@ import {
 import { clamp } from "./TimelineGeometry";
 import { CollapsedTimeline, ExpandedTimeline } from "./TimelineVariants";
 import type {
+    TimelineAddMarchersMenu,
+    TimelineMenuTarget,
+} from "./TimelineRangeMenu";
+import type {
     TimelineActivitySpan,
     TimelineCreateTrackRequest,
     TimelineNavigation,
@@ -102,6 +106,11 @@ export interface TimelineProps {
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
+    /**
+     * The right-click menu's **Add selected marchers** (UI-9, P8.14), for a page box, a clip's
+     * timeline or a dragged range. It gets spec beats; the menu doesn't change the selection.
+     */
+    readonly addSelectedMarchers?: TimelineAddMarchersMenu;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -263,6 +272,32 @@ export function Timeline(props: TimelineProps) {
                   },
               })
         : undefined;
+    const { addSelectedMarchers } = props;
+    // A clip sends its stored spec range: the view axis folds spec beats 0 and 1 together, so a
+    // converted show's timeline over [0, N) would come back as [1, N). Page boxes and dragged
+    // ranges start on a flag or a timed beat, which `toSpec` maps back exactly.
+    const addMarchersMenu:
+        | TimelineAddMarchersMenu<TimelineMenuTarget>
+        | undefined = addSelectedMarchers && {
+        disabledReason: addSelectedMarchers.disabledReason,
+        onAdd: ({ range, trackId }) => {
+            const input =
+                trackId === undefined
+                    ? undefined
+                    : timelines.find((t) => String(t.id) === trackId);
+            addSelectedMarchers.onAdd(
+                input
+                    ? {
+                          startBeatIndex: input.startBeatIndex,
+                          endBeatIndex: input.endBeatIndex,
+                      }
+                    : {
+                          startBeatIndex: axis.toSpec(range.startBeatIndex),
+                          endBeatIndex: axis.toSpec(range.endBeatIndex),
+                      },
+            );
+        },
+    };
     const commonProps = {
         model,
         positionBeat,
@@ -278,6 +313,7 @@ export function Timeline(props: TimelineProps) {
         onPixelsPerBeatChange: setPixelsPerBeat,
         onSelectionChange: props.onSelectionChange,
         onCreateTrack: createTrack,
+        addSelectedMarchers: addMarchersMenu,
         onTimelineRangeCommit: commitRange,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,

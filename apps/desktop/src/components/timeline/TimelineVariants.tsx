@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type MouseEvent,
+} from "react";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
 import {
     clamp,
@@ -22,6 +29,7 @@ import {
     TimelineTransport,
     useTimelinePointer,
 } from "./TimelinePrimitives";
+import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
 import type {
     TimelineCommonProps,
     TimelineNavigation,
@@ -236,6 +244,27 @@ function TimelineSurface({
         ...props,
         onNavigate: transportNavigation(props),
     };
+    // The right-click menu's target: a page box or clip under the pointer, else a dragged range
+    // the pointer is inside (UI-9 Adding marchers, Creating a timeline)
+    const rangeMenu = useTimelineRangeMenu({
+        menu: props.addSelectedMarchers,
+        resolveRange: (event: MouseEvent<HTMLElement>) => {
+            const marked = markedRangeAt(event.target);
+            if (marked) return marked;
+            if (selection?.kind !== "range" || !selectionRange) return null;
+            const surface = event.currentTarget.querySelector(
+                '[data-testid="timeline-pointer-surface"]',
+            );
+            if (!surface) return null;
+            const beat =
+                (event.clientX - surface.getBoundingClientRect().left) /
+                pixelsPerBeat;
+            return beat >= selectionRange.startBeatIndex &&
+                beat <= selectionRange.endBeatIndex
+                ? { range: selectionRange }
+                : null;
+        },
+    });
 
     return (
         <TimelineShell
@@ -275,6 +304,7 @@ function TimelineSurface({
             <div
                 className="relative"
                 style={{ width: surfaceWidth, height: timelineHeight }}
+                onContextMenu={rangeMenu.onContextMenu}
             >
                 <div
                     {...pointer.pointerHandlers}
@@ -450,6 +480,7 @@ function TimelineSurface({
                         </div>
                     )}
                 </div>
+                {rangeMenu.element}
             </div>
         </TimelineShell>
     );

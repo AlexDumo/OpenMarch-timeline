@@ -135,6 +135,8 @@ export async function writeTimelineFixtureInTransaction({
     const timelineOf = new Map<number, number>();
     const createdTimelines = await createTimelinesInTransaction({
         tx,
+        // A scenario is loaded as written, and may share ranges (it predates C-12)
+        allowSharedRanges: true,
         newTimelines: timelines.map((l) => ({
             name: l.name,
             startBeat: l.start + beatOffset,
