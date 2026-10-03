@@ -192,7 +192,7 @@ Apply C-12's "no selected page": in timeline mode nothing reads `useSelectedPage
 ### P8.16: Ranges not stored yet dim nobody
 
 - Owner: timeline-worker (timeline/p8-16-range-dim)
-- Status: in-review
+- Status: done
 - PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/55
 - Parallel: no
 - Depends on: P8.11, P8.14, P8.15
@@ -1020,4 +1020,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   - Not run, per policy: the full `test:history` suite and Playwright. No manual V2 check either.
 - **Exit gate:** nothing ticked; this package covers none of the gate items.
 - **Next:** review.
+- **Blockers:** none.
+
+### 2026-10-03 · lead session · P8.16 and the pause loop merged
+
+- **Done:** PR #55 (P8.16, `34a33b18`): a range with no stored timeline dims nobody, so drag-to-create and adding marchers right after **+** work. PR #56 (`c38c45ac`): fixes "Maximum update depth exceeded" on play, pause, play in timeline mode, found in MVP testing. The temporary page bridge read the stale play-start beat on pause and ping-ponged between two flags; it now ignores all of its own pending writes. Each PR had a reviewer and tester (combined for #55 under machine load).
+- **Checks:** #55: whole suites had only load timeouts in untouched files, each passing alone; focused 34/34 in all modes. #56: reproduction test red without the fix, green with it; 27/27 focused in both modes.
+- **Next:** continue MVP testing in the app; P8.12 stays paused (it deletes the bridge). Known: on every pause the bridge's selected page flickers to the previous page for one commit (fixed for good when P8.12 lands).
 - **Blockers:** none.
