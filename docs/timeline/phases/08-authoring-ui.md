@@ -192,7 +192,7 @@ Apply C-12's "no selected page": in timeline mode nothing reads `useSelectedPage
 ### P8.16: Ranges not stored yet dim nobody
 
 - Owner: timeline-worker (timeline/p8-16-range-dim)
-- Status: claimed
+- Status: in-progress
 - PR: none
 - Parallel: no
 - Depends on: P8.11, P8.14, P8.15
@@ -994,3 +994,11 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
   2. **Item 5:** in `src/timeline/__test__/NoSelectedPageModes.test.tsx`, mount `SelectedMarchersContext` (already in the harness), `TagButtons`, `ShapeSelector` and `TimelineContainer` (needs the electron and `ResizeObserver` stubs; see `TimelineContainerMode.test.tsx`), and assert that set to previous page wrote (the positions at the timeline's end equal those at its start).
   3. **Item 1, after #53 merges:** rebase onto `timeline-try-2`. In `useMarcherPages.ts`, keep `useCurrentPage` and call #53's one-argument `useUpdateSelectedMarchers`. In `featureHarness.tsx`, keep `goToPage` and drop the unused `pageFlags` and `selectionOfPage` imports. Then switch `setMarchersToNeighborPage.ts`'s timeline write (`timelineEndPage`, `TODO(P8.15)`) to #53's `moveMarchersInTimelineInTransaction` or `moveMarchersInTarget`, and show its higher-layer refusal as a toast. Adopt the tester's `P812Adversarial.test.tsx` and `P812UndoAdversarial.test.tsx` from `/Users/openmarchdev/GitHub/OpenMarch/.claude/worktrees/agent-af5ffb1de086b0faa/apps/desktop/src/timeline/__test__/`, changing the mid-page undo assertion so the playhead stays put. If copying is refused, write equivalent tests.
   4. **Finish:** `tsc`; whole `test:focused`, then whole `test:timeline`; focused `test:history` on the touched files; push; log.
+
+### 2026-10-02 · timeline-worker (timeline/p8-16-range-dim) · P8.16
+
+- **Done:** pushed `6b414865` (wip) on `timeline/p8-16-range-dim`. `isMarcherDimmed` dims non-members only when the selected range resolves to a stored timeline, so `useDeselectDimmedMarchers` and the canvas dimming keep marchers selectable on a range with no stored timeline. Canvas moves there stay refused (`emptyTimeline`). Updated the store and selection tests, and added `RangeNotStoredModes.test.tsx` (drag keeps the selection, select on the range, Add then dims, + then add, refused moves write nothing).
+- **Checks:** `tsc --noEmit`: pass. The new and changed test files pass under `test:timeline`, and fail on the old store.
+- **Next:** the whole suites, then the PR.
+- **Blockers:** none.
+- **Resume from:** on `timeline/p8-16-range-dim`, run the whole `pnpm run test:focused`, then the whole `pnpm run test:timeline`, then focused `test:history` on the touched test files; open the PR.
