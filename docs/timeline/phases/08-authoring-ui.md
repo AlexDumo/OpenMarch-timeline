@@ -192,8 +192,8 @@ Apply C-12's "no selected page": in timeline mode nothing reads `useSelectedPage
 ### P8.16: Ranges not stored yet dim nobody
 
 - Owner: timeline-worker (timeline/p8-16-range-dim)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: https://github.com/AlexDumo/OpenMarch-timeline/pull/55
 - Parallel: no
 - Depends on: P8.11, P8.14, P8.15
 
@@ -1002,3 +1002,22 @@ Kept current by the phase lead: where things stand, surprises, and what not to r
 - **Next:** the whole suites, then the PR.
 - **Blockers:** none.
 - **Resume from:** on `timeline/p8-16-range-dim`, run the whole `pnpm run test:focused`, then the whole `pnpm run test:timeline`, then focused `test:history` on the touched test files; open the PR.
+
+### 2026-10-02 · timeline-worker (timeline/p8-16-range-dim) · P8.16 (in review)
+
+- **Done:** PR https://github.com/AlexDumo/OpenMarch-timeline/pull/55, one commit `a445988e` on `timeline-try-2`.
+  - `isMarcherDimmed` dims non-members only for a stored timeline. The canvas dimming, the hit and lasso skips and `useDeselectDimmedMarchers` all go through it.
+  - A stored timeline with nobody in it still dims everyone.
+  - Canvas moves on a range that isn't stored stay refused (`emptyTimeline`).
+  - The Add disabled reason now mentions a range with no timeline yet.
+  - Tests: the store and selection tests are updated, and `RangeNotStoredModes.test.tsx` is new.
+- **Checks** (apps/desktop; the machine was heavily loaded, load average up to 125):
+  - `tsc --noEmit`: pass. eslint, prettier and pre-commit: pass.
+  - Whole `test:focused`: 2617 passed, 2 failed, plus 2 worker-start errors. The failures were load timeouts in `backup.test.ts` and `pageEraFreeze.test.ts`.
+  - Whole `test:timeline`, run after the focused suite: 2582 passed, 2 failed, plus 1 worker-start error. The failures were timeouts in `convertOnOpen.test.ts` and `MarcherEditorModes.test.tsx`.
+  - Every file that failed or didn't start passes when re-run alone (the PR lists them).
+  - Focused `test:history` on the 3 touched test files: 23 passed.
+  - Not run, per policy: the full `test:history` suite and Playwright. No manual V2 check either.
+- **Exit gate:** nothing ticked; this package covers none of the gate items.
+- **Next:** review.
+- **Blockers:** none.
