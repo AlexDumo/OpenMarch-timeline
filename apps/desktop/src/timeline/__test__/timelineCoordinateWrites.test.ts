@@ -9,10 +9,7 @@ import {
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
 import type Page from "@/global/classes/Page";
 import * as CoordinateActions from "@/utilities/CoordinateActions";
-import {
-    useTimelineSelectionStore,
-    type StoredTimelineMembership,
-} from "@/stores/TimelineSelectionStore";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     convertPagesToTimeline,
     readShowTiming,
@@ -115,18 +112,6 @@ const loadSelection = async (db: DbConnection) =>
     useTimelineSelectionStore
         .getState()
         .setStoredTimelines(await readStoredTimelineMemberships(db));
-
-const stored = (
-    id: number,
-    start: number,
-    end: number,
-    marcherIds: number[] = [1],
-): StoredTimelineMembership => ({
-    id,
-    start,
-    end,
-    marcherIds: new Set(marcherIds),
-});
 
 describe("planCanvasEdit (UI-10 edit window, Home)", () => {
     plainIt("home edits homes", () => {

@@ -243,6 +243,7 @@ const windowFields = (
 
 /** The timeline-mode edit window and playhead. See the module comment. */
 export const useTimelineSelectionStore = create<TimelineSelectionState>(
+    // eslint-disable-next-line max-lines-per-function
     (set) => {
         const clamp = (s: TimelineSelectionState, beat: number) => {
             const whole = normalizePlayheadBeat(beat);
