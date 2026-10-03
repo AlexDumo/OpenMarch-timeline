@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
 import type { AddedPageFlag } from "@/db-functions/pageFlags";
@@ -54,6 +54,7 @@ function FullscreenButton() {
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
     selection: TimelineEditSelection,
+    startBeat?: number,
 ): TimelineSelection =>
     selection.kind === "range"
         ? {
@@ -62,6 +63,10 @@ export const toTimelineSelection = (
                   startBeatIndex: selection.start,
                   endBeatIndex: selection.end,
               },
+              // UI-10: after Stop the window falls back, but the flag stays where it is
+              ...(startBeat !== undefined && startBeat !== selection.start
+                  ? { startFlagBeatIndex: startBeat }
+                  : {}),
           }
         : selection.kind === "home"
           ? { kind: "home" }
@@ -73,16 +78,25 @@ export const toTimelineSelection = (
  * selection is `useTimelineSelectionStore`'s (UI-9): the initial page box selects home, a page box
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
  * **+** after the free paused playhead adds a page flag there and selects the new page; a page
- * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15). Create Track isn't
- * offered: **Add selected marchers** replaces it (UI-9 Creating a timeline).
+ * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15). Neither Create Track
+ * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10).
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
     const playback = useTimelinePlayback({ beats, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
+    // UI-10: the start flag follows the page boxes
+    useEffect(() => {
+        useTimelineSelectionStore
+            .getState()
+            .setPageBoxes(
+                pageFlags(pages).flatMap((f) => (f.range ? [f.range] : [])),
+            );
+    }, [pages]);
+    const startBeat = useTimelineSelectionStore((s) => s.startBeat);
     const selection = useMemo(
-        () => toTimelineSelection(editSelection),
-        [editSelection],
+        () => toTimelineSelection(editSelection, startBeat),
+        [editSelection, startBeat],
     );
     const { isPlaying } = useIsPlaying()!;
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
@@ -151,7 +165,6 @@ export default function TimelineModePanel() {
             selection={selection}
             onSelectionChange={changeSelection}
             onTimelineRangeCommit={commands.commitTimelineRange}
-            addSelectedMarchers={commands.addSelectedMarchers}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
             onDeletePageFlag={(pageId) => {
                 const after = selectionAfterFlagDelete(

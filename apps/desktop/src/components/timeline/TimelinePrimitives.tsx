@@ -4,6 +4,7 @@ import {
     MagnifyingGlassMinusIcon,
     MagnifyingGlassPlusIcon,
     PauseIcon,
+    StopIcon,
     PlayIcon,
     RewindIcon,
     SkipBackIcon,
@@ -95,6 +96,7 @@ export function TimelineTransport({
     pageLabel,
     isPlaying,
     onPlayingChange,
+    onStop,
     onNavigate,
     onZoomOut,
     onZoomIn,
@@ -110,6 +112,8 @@ export function TimelineTransport({
     pageLabel?: string;
     isPlaying: boolean;
     onPlayingChange?: (isPlaying: boolean) => void;
+    /** **Stop** (UI-10); without it, there is no Stop button */
+    onStop?: () => void;
     onNavigate?: (direction: TimelineNavigation) => void;
     onZoomOut?: () => void;
     onZoomIn?: () => void;
@@ -163,6 +167,11 @@ export function TimelineTransport({
                         <PlayIcon size={24} />
                     )}
                 </TransportButton>
+                {onStop && (
+                    <TransportButton label="Stop" onClick={onStop}>
+                        <StopIcon size={20} />
+                    </TransportButton>
+                )}
                 <TransportButton
                     label="Next page"
                     onClick={
@@ -586,6 +595,7 @@ export const TimelineTrackClip = ({
 
 export const TimelineSelectionRange = ({
     range,
+    startFlagBeatIndex,
     beatCount,
     pixelsPerBeat,
     height,
@@ -594,6 +604,8 @@ export const TimelineSelectionRange = ({
     onInteractionChange,
 }: {
     range: TimelineBeatRange;
+    /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
+    startFlagBeatIndex?: number;
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
@@ -695,8 +707,12 @@ export const TimelineSelectionRange = ({
         <button
             type="button"
             data-timeline-interactive="true"
-            aria-label={`Selection ${kind}`}
-            title={`Selection ${kind}: beat boundary ${beatIndex}`}
+            aria-label={kind === "start" ? "Start flag" : `Selection ${kind}`}
+            title={
+                kind === "start"
+                    ? `Start flag: marchers leave from here (beat boundary ${beatIndex}). Drag to pin it.`
+                    : `Selection ${kind}: beat boundary ${beatIndex}`
+            }
             disabled={!onCommit}
             onPointerDown={(event) => {
                 if (!onCommit || event.button !== 0) return;
@@ -767,15 +783,20 @@ export const TimelineSelectionRange = ({
             className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 h-full w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize disabled:cursor-default"
             style={{ left: beatToX(beatIndex, pixelsPerBeat), height }}
         >
-            <span className="bg-accent absolute inset-y-0 left-1/2 w-px" />
             <span
                 className={clsx(
-                    "bg-accent absolute top-0 h-10 w-8",
-                    kind === "start"
-                        ? "left-1/2 rounded-r-sm"
-                        : "right-1/2 rounded-l-sm",
+                    "absolute inset-y-0 left-1/2",
+                    kind === "start" ? "bg-yellow w-0.5" : "bg-accent w-px",
                 )}
             />
+            {kind === "start" ? (
+                // UI-10: the start flag, where movers leave from and Stop returns to
+                <span className="bg-yellow text-text-invert absolute top-0 left-1/2 rounded-r-sm px-3 font-mono text-[9px] leading-[14px] font-semibold tracking-wide">
+                    START
+                </span>
+            ) : (
+                <span className="bg-accent absolute top-0 right-1/2 h-10 w-8 rounded-l-sm" />
+            )}
         </button>
     );
 
@@ -792,8 +813,13 @@ export const TimelineSelectionRange = ({
                 style={{ left: startX, width: endX - startX, height }}
             />
             <div className="pointer-events-none absolute inset-0">
-                {flag("start", preview.startBeatIndex)}
-                {flag("end", preview.endBeatIndex)}
+                {flag(
+                    "start",
+                    startFlagBeatIndex !== undefined && !dragRef.current
+                        ? startFlagBeatIndex
+                        : preview.startBeatIndex,
+                )}
+                {/* UI-10: the playhead is the window's end, so it has no handle of its own */}
             </div>
         </div>
     );

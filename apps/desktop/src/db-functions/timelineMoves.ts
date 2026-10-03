@@ -16,6 +16,11 @@ import {
     updateTimelineSlotDestinationInTransaction,
 } from "./timelineTransitions";
 import { assertValid, refuse, TimelineWriteError } from "./timelineErrors";
+import {
+    addMarchersToTimelineInTransaction,
+    findTimelineByRange,
+    type BeatRange,
+} from "./timelineMembership";
 
 /**
  * "Move a marcher on page N" in timeline mode (docs/timeline/phases/07-page-parity.md P7.2, spec
@@ -326,12 +331,14 @@ export const moveMarchersOnPage = async ({
 };
 
 /**
- * What a canvas move edits under UI-9 (docs/timeline/ui.md, P8.15): the marchers' homes (home, at
- * beat 0, with no timeline selected) or the endings of their transitions in one stored timeline.
+ * What a canvas move edits (docs/timeline/ui.md UI-9, UI-10; P8.15, P8.17): the marchers' homes
+ * (home, at beat 0), the endings of their transitions in one stored timeline, or the endings in
+ * the timeline over an edit window `[start, end)`, which the move creates and joins as needed.
  */
 export type TimelineEditTarget =
     | { readonly kind: "home" }
-    | { readonly kind: "timeline"; readonly timelineId: number };
+    | { readonly kind: "timeline"; readonly timelineId: number }
+    | { readonly kind: "range"; readonly start: number; readonly end: number };
 
 /**
  * UI-9 Editing: sets the **ending** of each moved marcher's transition in timeline `timelineId`,
@@ -455,10 +462,74 @@ export const moveMarchersInTimelineInTransaction = async ({
     return result;
 };
 
+/** The marchers among `marcherIds` with an assignment in timeline `timelineId`. */
+const marchersInTimeline = async (
+    tx: DbTransaction,
+    timelineId: number,
+    marcherIds: readonly number[],
+): Promise<Set<number>> => {
+    const a = schema.timeline_assignments;
+    const t = schema.timeline_transitions;
+    const rows = await tx
+        .selectDistinct({ marcherId: a.marcher_id })
+        .from(a)
+        .innerJoin(t, eq(a.transition_id, t.id))
+        .where(
+            and(
+                eq(t.timeline_id, timelineId),
+                inArray(a.marcher_id, [...marcherIds]),
+            ),
+        )
+        .all();
+    return new Set(rows.map((r) => r.marcherId));
+};
+
 /**
- * A canvas move as one undoable edit (UI-9 Editing, Home): the homes for `{kind: "home"}`, the
- * endings in the timeline otherwise (`moveMarchersInTimelineInTransaction`). Nothing to move
- * opens no edit.
+ * UI-10 Dragging adds: sets where each moved marcher arrives at `range.end`, leaving
+ * `range.start`. Creates the timeline over `range` when none has it (one per range, C-12), adds
+ * every moved marcher that isn't in it (`addMarchersToTimelineInTransaction`: its own one-slot
+ * transition, one layer above its highest layer over the range), then sets their endings
+ * (`moveMarchersInTimelineInTransaction`). Refusals are the add's and the move's, decided before
+ * they write; inside one transaction, a refused move rolls back the add too.
+ */
+export const moveMarchersInRangeInTransaction = async ({
+    tx,
+    range,
+    moves,
+}: {
+    tx: DbTransaction;
+    range: BeatRange;
+    moves: readonly TimelineMarcherMove[];
+}): Promise<TimelineMoveResult> => {
+    if (moves.length === 0)
+        return { homes: [], slots: [], convertedTransitionIds: [] };
+    refuseDuplicateMarchers(moves);
+    for (const m of moves)
+        assertValid(validateDestination([m.x, m.y]), "position");
+    const marcherIds = moves.map((m) => m.marcherId);
+    const existing = await findTimelineByRange(tx, range);
+    const members = existing
+        ? await marchersInTimeline(tx, existing.id, marcherIds)
+        : new Set<number>();
+    const toAdd = marcherIds.filter((id) => !members.has(id));
+    const timelineId =
+        toAdd.length > 0
+            ? (
+                  await addMarchersToTimelineInTransaction({
+                      tx,
+                      range,
+                      marcherIds: toAdd,
+                  })
+              ).timelineId
+            : existing!.id;
+    return await moveMarchersInTimelineInTransaction({ tx, timelineId, moves });
+};
+
+/**
+ * A canvas move as one undoable edit (UI-9 Editing, Home; UI-10): the homes for `{kind: "home"}`,
+ * the endings in the timeline for `{kind: "timeline"}` (`moveMarchersInTimelineInTransaction`),
+ * and the window's timeline, joined as needed, for `{kind: "range"}`
+ * (`moveMarchersInRangeInTransaction`). Nothing to move opens no edit.
  */
 export const moveMarchersInTarget = async ({
     db,
@@ -476,6 +547,12 @@ export const moveMarchersInTarget = async ({
             return await moveMarchersInTimelineInTransaction({
                 tx,
                 timelineId: target.timelineId,
+                moves,
+            });
+        if (target.kind === "range")
+            return await moveMarchersInRangeInTransaction({
+                tx,
+                range: { start: target.start, end: target.end },
                 moves,
             });
         refuseDuplicateMarchers(moves);
