@@ -189,12 +189,16 @@ from it. The spec still wins on the model; this file decides presentation.
     start beat, so this inserts a row at the split page's old start and moves
     that page's `start_beat` to the playhead. Past the last flag, nothing is
     split: **+** appends a page ending at the playhead (_lead default_).
-  - **Selection.** With a timeline selected, marchers without a transition in
-    it are dimmed, and a dimmed marcher can't be selected or interacted with
-    at all: clicks and box selection pass over it, and selecting a timeline
-    deselects any selected marcher that isn't in it. So a selection never
-    mixes dimmed and undimmed marchers. With none selected, all marchers are
-    drawn alike.
+  - **Selection.** With a stored timeline selected, marchers without a
+    transition in it are dimmed, and a dimmed marcher can't be selected or
+    interacted with at all: clicks and box selection pass over it, and
+    selecting a timeline deselects any selected marcher that isn't in it. So
+    a selection never mixes dimmed and undimmed marchers. With none selected,
+    or with a range that has no stored timeline yet (a new page's box, or a
+    dragged range), nobody is dimmed: that range is where a timeline is
+    created, not edited, so marchers stay selectable for **Add selected
+    marchers**, and canvas moves there are refused (project owner,
+    2026-10-02).
   - **Editing.** With a timeline selected, a canvas drag, nudge or alignment
     sets the **ending** coordinate of each moved marcher's transition in that
     timeline. Its start is already defined: wherever the marcher is at the
@@ -208,8 +212,9 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Adding marchers.** Right-click a timeline or page box and choose **Add
     selected marchers**. The right-click doesn't change the timeline
     selection, so the marchers to add are picked first where they can be
-    selected: at home, with no timeline selected, or in a timeline they're
-    already in. Each marcher
+    selected: at home, with no timeline or a range not stored yet selected,
+    or in a timeline they're already in. To create a timeline that isn't a
+    page, drag a range, select marchers, then right-click the range. Each marcher
     gets its own transition, because each moves individually: a one-slot
     shapeless `direct` transition spanning the timeline (C-11), whose
     destination is the marcher's position at the timeline's end, so adding

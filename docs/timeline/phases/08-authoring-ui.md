@@ -189,6 +189,16 @@ Canvas moves against the selection (UI-9: Editing, Editing off the end, More tha
 
 Apply C-12's "no selected page": in timeline mode nothing reads `useSelectedPage` (about 36 files under `apps/desktop/src` today: the inspector, canvas listeners, toolbar, collisions, `useAnimation`, the clock and the timeline). Editing reads the selected timeline, rendering and playback read the playhead, and page data (notes, counts) reads the page containing or ending at the playhead. Port appearance-by-time from the `coordinates-v2` branch (`services/appearance/db-to-timeline.ts`, `get-appearance-at-time.ts`, `useAppearanceAnimation.ts`): per-page tag and section appearances become a step function keyed by flag timestamps and sampled at the playhead, without the per-marcher-page overrides dropped in P7.14. Page-relative tools (UI-9): set all or selected marchers to the previous page sets their ending in the selected timeline to their position at its start, and to the next page to their position at the next flag (`setMarchersToNeighborPage` and its four registered actions; refused with no timeline selected); previous and next page paths show positions at the selected timeline's start and the next flag, and nothing with no timeline selected; undo and redo (`timelineHistoryFocus.ts`) move the playhead and leave the selection alone. Add a dev-mode warning when `useSelectedPage` is read in timeline mode, and prove with timeline-mode feature tests that the listed features no longer read it. Page mode is unchanged; `SelectedPageContext` is removed with page mode in Phase 10.
 
+### P8.16: Ranges not stored yet dim nobody
+
+- Owner: none
+- Status: open
+- PR: none
+- Parallel: no
+- Depends on: P8.11, P8.14, P8.15
+
+UI-9 Selection (project owner, 2026-10-02): a selected range with no stored timeline (a new page's box after **+**, or a dragged range) dims nobody, so marchers stay selectable and **Add selected marchers** can create a timeline that isn't a page. Today `isMarcherDimmed` (`src/stores/TimelineSelectionStore.ts`) dims everyone for such a range and `useDeselectDimmedMarchers` clears the marcher selection, so drag-to-create is impossible. Change it so only a stored timeline dims non-members; canvas moves on such a range stay refused (P8.15's empty-timeline hint). Update the tests that assert such a range dims everyone (P8.11, P8.15 and their adversarial tests) and add tests for: drag a range with marchers selected keeps them selected; select marchers on such a range; right-click Add creates the timeline and then non-members dim; + then select and add without visiting home. Whole `test:focused` and `test:timeline` must pass.
+
 ## Exit gate
 
 Tick an item only after running its check, and paste the command and result into the log.

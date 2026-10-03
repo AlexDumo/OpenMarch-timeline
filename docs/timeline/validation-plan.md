@@ -76,14 +76,12 @@ expanding the scope.
 
 - Pause mid-move and click **+**. Confirm exactly one flag appears at the
   playhead, the ruler shows its two page boxes with the right count ranges,
-  the new page (the box ending at the new flag) is selected with both
-  marchers dimmed, and positions are unchanged at the new flag, between
+  the new page (the box ending at the new flag) is selected with nobody
+  dimmed (it has no stored timeline yet), and positions are unchanged at the new flag, between
   flags, and at the next flag. All without restarting or reopening the show.
-- Confirm a dimmed marcher can't be clicked or box-selected.
-- Click the initial page box (home), select both marchers, right-click the
-  new page box and choose **Add selected marchers**. Then click the new page
-  box. Confirm both marchers are still selected and no longer dimmed, and
-  motion is still unchanged (each marcher's destination starts at its
+- Select both marchers, right-click the new page box and choose **Add
+  selected marchers**. Confirm both marchers are still selected, and motion
+  is still unchanged (each marcher's destination starts at its
   position at the flag).
 - Drag each marcher to a distinct point. Confirm linear motion to it, then
   the old move resuming linearly from it to its unchanged destination at the
