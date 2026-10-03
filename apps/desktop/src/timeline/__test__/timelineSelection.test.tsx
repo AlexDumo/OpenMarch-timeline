@@ -202,16 +202,63 @@ describeDbTests("the stored timelines the selection resolves to", (it) => {
         await waitFor(() =>
             expect(result.current.selectedMarchers).toEqual([]),
         );
-        // A range with no stored timeline dims everyone
+        // A range with no stored timeline dims nobody (P8.16): the selection stays
         act(() => {
             result.current.setSelectedMarchers([1].map(marcher));
         });
         act(() => {
             store().selectRange(9, 17);
         });
+        expect(result.current.selectedMarchers.map((m) => m.id)).toEqual([1]);
+        // ...and any marcher can be selected there, for Add selected marchers
+        act(() => {
+            result.current.setSelectedMarchers([1, 3].map(marcher));
+        });
+        expect(result.current.selectedMarchers.map((m) => m.id)).toEqual([
+            1, 3,
+        ]);
+        // Once that range is stored, non-members are dimmed and deselected
+        act(() => {
+            store().setStoredTimelines([
+                membership(1, 1, 9, [1, 2]),
+                membership(2, 9, 17, [3]),
+            ]);
+        });
         await waitFor(() =>
-            expect(result.current.selectedMarchers).toEqual([]),
+            expect(result.current.selectedMarchers.map((m) => m.id)).toEqual([
+                3,
+            ]),
         );
+    });
+
+    it("keeps the marcher selection when a range with no stored timeline is selected", async ({
+        wrapper,
+    }) => {
+        store().setStoredTimelines([membership(1, 1, 9, [1, 2])]);
+        const seen: number[][] = [];
+        const { result } = renderHook(
+            () => {
+                useDeselectDimmedMarchers(true);
+                const selected = useSelectedMarchers()!;
+                seen.push(selected.selectedMarchers.map((m) => m.id));
+                return selected;
+            },
+            { wrapper },
+        );
+        act(() => {
+            result.current.setSelectedMarchers([1, 2, 3].map(marcher));
+        });
+        seen.length = 0;
+        // A dragged range: [3, 12) overlaps the stored [1, 9) but isn't it
+        act(() => {
+            store().selectRange(3, 12);
+        });
+        expect(selectedStoredTimeline(store())).toBeNull();
+        await waitFor(() => expect(seen.length).toBeGreaterThan(0));
+        expect(result.current.selectedMarchers.map((m) => m.id)).toEqual([
+            1, 2, 3,
+        ]);
+        expect(seen.every((ids) => ids.length === 3)).toBe(true);
     });
 
     it("keeps the marcher selection through a clip move of the selected timeline", async ({
@@ -436,5 +483,66 @@ describe("dimming on the canvas (UI-9 Selection)", () => {
             selectable: true,
             evented: true,
         });
+    });
+
+    it("dims nobody on a range with no stored timeline, and the lasso selects anyone there", () => {
+        const { canvas, marchers } = setUpCanvas();
+        store().setStoredTimelines([membership(1, 1, 9, [1])]);
+        renderHook(() => useTimelineDimming({ canvas, enabled: true }));
+        act(() => {
+            store().selectRange(1, 9);
+        });
+        expect(marchers.map((m) => m.timelineDimmed)).toEqual([
+            false,
+            true,
+            true,
+        ]);
+        // A new page's box (or a dragged range) has no stored timeline yet
+        act(() => {
+            store().selectRange(9, 17);
+        });
+        const undimmed = {
+            dimmed: false,
+            opacity: 1,
+            selectable: true,
+            evented: true,
+        };
+        expect(states(marchers)).toEqual([undimmed, undimmed, undimmed]);
+
+        const lasso = new LassoListeners({ canvas });
+        lasso.initiateListeners();
+        const far = 1e6;
+        Object.assign(lasso, {
+            startPoint: { x: -far, y: -far },
+            currentPath: [
+                { x: -far, y: -far },
+                { x: far, y: -far },
+                { x: far, y: far },
+                { x: -far, y: far },
+            ],
+        });
+        (
+            lasso as unknown as { closeLassoAndSelect: () => void }
+        ).closeLassoAndSelect();
+        expect(
+            canvas
+                .getActiveObjects()
+                .map((o) => (o as CanvasMarcher).id)
+                .sort(),
+        ).toEqual([1, 2, 3]);
+        lasso.cleanupListeners();
+
+        // Storing it (Add selected marchers adds marcher 3) dims the others
+        act(() => {
+            store().setStoredTimelines([
+                membership(1, 1, 9, [1]),
+                membership(2, 9, 17, [3]),
+            ]);
+        });
+        expect(marchers.map((m) => m.timelineDimmed)).toEqual([
+            true,
+            true,
+            false,
+        ]);
     });
 });

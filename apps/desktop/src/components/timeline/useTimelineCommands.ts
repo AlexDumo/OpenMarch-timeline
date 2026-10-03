@@ -37,7 +37,7 @@ export function addSelectedMarchersBlocker(
     selectedMarcherIds: ReadonlySet<number>,
 ): string | null {
     return selectedMarcherIds.size === 0
-        ? "Select marchers first: at home, with no timeline selected, or in a timeline they're in."
+        ? "Select marchers first: at home, on a range with no timeline yet, or in a timeline they're in."
         : null;
 }
 

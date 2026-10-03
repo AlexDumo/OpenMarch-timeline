@@ -108,7 +108,8 @@ export type CanvasEditPlan =
  * and the paused playhead:
  *
  * - a range that resolves to a stored timeline, with the playhead on its end: that timeline;
- * - a range with no stored timeline: refused (nobody is in it, so every marcher is dimmed);
+ * - a range with no stored timeline: refused (nobody is in it yet; it dims nobody, so marchers can
+ *   be selected and added to it);
  * - a stored timeline with the playhead elsewhere: refused (TEMPORARY);
  * - home or nothing with the playhead on beat 0: the homes; elsewhere: refused.
  *

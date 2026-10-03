@@ -148,17 +148,19 @@ export const selectedStoredTimeline = (
     resolveStoredTimeline(state.selection, state.storedTimelines);
 
 /**
- * Whether a marcher is dimmed (UI-9 Selection): a range is selected and the marcher has no
- * transition in it. Dimmed marchers can't be selected, hit or moved. Nothing is dimmed at home,
- * with nothing selected, or before the stored timelines load.
+ * Whether a marcher is dimmed (UI-9 Selection): the selected range resolves to a stored timeline
+ * and the marcher has no transition in it. Dimmed marchers can't be selected, hit or moved.
+ * Nothing is dimmed at home, with nothing selected, before the stored timelines load, or for a
+ * range with no stored timeline yet (a new page's box, a dragged range): that range is where a
+ * timeline is created, so marchers stay selectable for **Add selected marchers** (project owner,
+ * 2026-10-02). A stored timeline with nobody in it still dims everyone.
  */
 export function isMarcherDimmed(
     state: Pick<TimelineSelectionState, "selection" | "storedTimelines">,
     marcherId: number,
 ): boolean {
-    if (state.selection.kind !== "range" || !state.storedTimelines)
-        return false;
-    return !(selectedStoredTimeline(state)?.marcherIds.has(marcherId) ?? false);
+    const timeline = selectedStoredTimeline(state);
+    return timeline !== null && !timeline.marcherIds.has(marcherId);
 }
 
 const HOME: TimelineEditSelection = { kind: "home" };
