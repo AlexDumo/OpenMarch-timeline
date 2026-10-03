@@ -22,8 +22,15 @@ export function useTimelinePageBridge(enabled: boolean): void {
     const setSelectedPage = selectedPageContext?.setSelectedPage;
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
-    /** The page this bridge selected last, so its own write isn't read back as someone else's */
-    const bridged = useRef<number | null>(null);
+    /**
+     * Pages this bridge selected that the effect below hasn't seen yet, so its own writes aren't
+     * read back as someone else's. More than one can be in flight: on pause, the stale playhead's
+     * page is selected before the pause seek selects the page where playback stopped, and reading
+     * the first back as a page change would seek to it, which selects it again, and so on.
+     */
+    const bridged = useRef<Set<number>>(new Set());
+    /** The page this bridge selected last; once that is seen, older writes are superseded */
+    const lastBridged = useRef<number | null>(null);
     const lastSeenPageId = useRef<number | null>(null);
 
     // Playhead to page
@@ -31,7 +38,8 @@ export function useTimelinePageBridge(enabled: boolean): void {
         if (!enabled || isPlaying || !setSelectedPage) return;
         const page = pageAtPlayhead(pages, playheadBeat);
         if (!page || page.id === selectedPage?.id) return;
-        bridged.current = page.id;
+        bridged.current.add(page.id);
+        lastBridged.current = page.id;
         setSelectedPage(page);
         // Only the playhead and pages drive this direction
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -43,8 +51,13 @@ export function useTimelinePageBridge(enabled: boolean): void {
         const changed = id !== lastSeenPageId.current;
         lastSeenPageId.current = id;
         if (!enabled || isPlaying || !changed || id === null) return;
-        if (id === bridged.current) return;
-        bridged.current = id;
+        if (bridged.current.has(id)) {
+            if (id === lastBridged.current) bridged.current.clear();
+            else bridged.current.delete(id);
+            return;
+        }
+        // Someone else selected it; any write of ours still pending was superseded
+        bridged.current.clear();
         const store = useTimelineSelectionStore.getState();
         if (pageAtPlayhead(pages, store.playheadBeat)?.id === id) return;
         const flag = pageFlags(pages).find((f) => f.page.id === id);
