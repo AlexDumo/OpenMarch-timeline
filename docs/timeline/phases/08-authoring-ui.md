@@ -191,8 +191,8 @@ Apply C-12's "no selected page": in timeline mode nothing reads `useSelectedPage
 
 ### P8.16: Ranges not stored yet dim nobody
 
-- Owner: none
-- Status: open
+- Owner: timeline-worker (timeline/p8-16-range-dim)
+- Status: claimed
 - PR: none
 - Parallel: no
 - Depends on: P8.11, P8.14, P8.15
