@@ -88,16 +88,41 @@ describe("TimelineSelectionStore (UI-9)", () => {
         expect(selectedStoredTimeline(store())).toBeNull();
     });
 
-    it("dims marchers without a transition in the selected range only", () => {
-        store().setStoredTimelines([timeline(5, 1, 9, [1])]);
+    it("dims marchers without a transition in the selected stored timeline only", () => {
+        store().setStoredTimelines([
+            timeline(5, 1, 9, [1]),
+            timeline(6, 17, 25, []),
+        ]);
         expect(isMarcherDimmed(store(), 2)).toBe(false); // home
         store().selectRange(1, 9);
         expect(isMarcherDimmed(store(), 1)).toBe(false);
         expect(isMarcherDimmed(store(), 2)).toBe(true);
-        store().selectRange(9, 17); // not stored: everyone is dimmed
+        store().selectRange(9, 17); // not stored yet: nobody is dimmed
+        expect(isMarcherDimmed(store(), 1)).toBe(false);
+        expect(isMarcherDimmed(store(), 2)).toBe(false);
+        store().selectRange(17, 25); // stored with nobody in it: everyone is dimmed
         expect(isMarcherDimmed(store(), 1)).toBe(true);
+        expect(isMarcherDimmed(store(), 2)).toBe(true);
         store().selectNothing();
         expect(isMarcherDimmed(store(), 1)).toBe(false);
+    });
+
+    it("dims nobody on a range before the stored timelines load", () => {
+        store().selectRange(1, 9);
+        expect(store().storedTimelines).toBeNull();
+        expect(isMarcherDimmed(store(), 1)).toBe(false);
+    });
+
+    it("starts dimming non-members once the selected range's timeline is stored", () => {
+        store().setStoredTimelines([]);
+        store().selectRange(9, 17);
+        expect(isMarcherDimmed(store(), 1)).toBe(false);
+        expect(isMarcherDimmed(store(), 2)).toBe(false);
+        store().setStoredTimelines([timeline(7, 9, 17, [1])]); // Add selected marchers
+        expect(isMarcherDimmed(store(), 1)).toBe(false);
+        expect(isMarcherDimmed(store(), 2)).toBe(true);
+        store().setStoredTimelines([]); // undone
+        expect(isMarcherDimmed(store(), 2)).toBe(false);
     });
 
     it("moves a selection with its timeline's clip move, and no other", () => {
