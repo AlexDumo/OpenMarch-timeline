@@ -143,6 +143,8 @@ export interface TimelineInteractionProps {
      * while it's given and the timeline isn't playing; the owner passes it only where **+** applies.
      */
     readonly onAddPageFlag?: () => void;
+    /** Double-clicking a page box or clip opens (isolates) its range, in view beats here */
+    readonly onOpenRange?: (target: TimelineMenuTarget) => void;
 }
 
 export interface TimelineScaleProps {

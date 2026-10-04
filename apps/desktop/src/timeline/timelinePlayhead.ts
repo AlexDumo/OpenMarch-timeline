@@ -111,13 +111,16 @@ export function canPlay(
 
 /**
  * What playback does at a live beat (UI-10 Play): it plays on, with no loop, until the end of the
- * show, where it stops.
+ * show, where it stops. An isolated timeline loops instead: at its end, playback goes back to its
+ * start.
  */
 export function playbackStep(
     _selection: TimelineEditSelection,
     liveBeat: number,
     showEndBeat: number,
+    isolated?: { readonly start: number; readonly end: number } | null,
 ): { readonly loopTo: number } | "stop" | null {
+    if (isolated && liveBeat >= isolated.end) return { loopTo: isolated.start };
     if (liveBeat >= showEndBeat) return "stop";
     return null;
 }

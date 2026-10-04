@@ -215,4 +215,88 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
             [9, 17],
         ]);
     });
+
+    describe("isolation (docs/timeline/research/ownership/09-isolation.md)", () => {
+        const TIMELINES = [
+            timeline(1, 1, 9, [1, 2]),
+            timeline(2, 9, 17, [1, 2, 3]),
+            timeline(3, 12, 20, [3]),
+        ];
+        beforeEach(() => {
+            store().setPageBoxes(BOXES);
+            store().setStoredTimelines(TIMELINES);
+        });
+
+        it("sets the window to the timeline and dims and locks only those outside it", () => {
+            store().seek(5);
+            store().isolate(3);
+            expect(store().isolation?.timelineId).toBe(3);
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 12,
+                end: 20,
+            });
+            expect(isMarcherDimmed(store(), 3)).toBe(false);
+            expect(isMarcherDimmed(store(), 1)).toBe(true);
+            // Ignored: a timeline that isn't loaded
+            store().isolate(99);
+            expect(store().isolation?.timelineId).toBe(3);
+        });
+
+        it("keeps the playhead inside the timeline and the start flag on its start", () => {
+            store().isolate(3);
+            store().seek(30);
+            expect(store().playheadBeat).toBe(20);
+            store().seek(2);
+            expect(store().playheadBeat).toBe(12);
+            store().seek(15);
+            expect(store().startBeat).toBe(12);
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 12,
+                end: 15,
+            });
+            store().seekKeepingStart(40);
+            expect(store().playheadBeat).toBe(20);
+        });
+
+        it("Esc (exit) restores the start flag and playhead it saved", () => {
+            store().selectRange(3, 9);
+            store().isolate(2);
+            store().isolate(3);
+            store().seek(14);
+            store().exitIsolation();
+            expect(store().isolation).toBeNull();
+            expect(store().startBeat).toBe(3);
+            expect(store().startPinned).toBe(true);
+            expect(store().playheadBeat).toBe(9);
+        });
+
+        it("navigating to a page box, home or a dragged range ends isolation", () => {
+            store().isolate(3);
+            store().selectRange(1, 9);
+            expect(store().isolation).toBeNull();
+            store().isolate(3);
+            store().selectHome();
+            expect(store().isolation).toBeNull();
+        });
+
+        it("ends when the timeline goes away, and follows it when its range changes", () => {
+            store().isolate(3);
+            store().setStoredTimelines([
+                TIMELINES[0]!,
+                TIMELINES[1]!,
+                timeline(3, 14, 22, [3]),
+            ]);
+            expect(store().isolation).toMatchObject({ start: 14, end: 22 });
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 14,
+                end: 20,
+            });
+            store().setStoredTimelines(TIMELINES.slice(0, 2));
+            expect(store().isolation).toBeNull();
+            expect(isMarcherDimmed(store(), 1)).toBe(false);
+        });
+    });
 });

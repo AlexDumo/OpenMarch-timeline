@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { useEffect, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
@@ -83,7 +84,8 @@ export const toTimelineSelection = (
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
  * **+** after the free paused playhead adds a page flag there and selects the new page; a page
  * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15). Neither Create Track
- * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10).
+ * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
+ * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
@@ -174,6 +176,20 @@ export default function TimelineModePanel() {
             selection={selection}
             onSelectionChange={changeSelection}
             onTimelineRangeCommit={commands.commitTimelineRange}
+            onOpenRange={(range) => {
+                if (isPlaying) return;
+                const store = useTimelineSelectionStore.getState();
+                const timeline = store.storedTimelines?.find(
+                    (t) =>
+                        t.start === range.startBeatIndex &&
+                        t.end === range.endBeatIndex,
+                );
+                if (timeline) store.isolate(timeline.id);
+                else
+                    toast.info(
+                        "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
+                    );
+            }}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
             onDeletePageFlag={(pageId) => {
                 const after = selectionAfterFlagDelete(

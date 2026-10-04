@@ -15,7 +15,8 @@ import { consumeStopRequest } from "./timelineTransport";
  * Timeline mode's playback rules while playing (docs/timeline/ui.md UI-9 Play; P8.11), once per
  * animation frame, independent of the canvas:
  *
- * - It plays on, with no loop, and stops at the end of the show (UI-10 Play).
+ * - It plays on, with no loop, and stops at the end of the show (UI-10 Play). An isolated
+ *   timeline loops over its range instead.
  * - Pausing, however it happens, leaves the playhead on the last whole beat played, and leaves
  *   the start flag where it is (`seekKeepingStart`).
  * - **Stop** (`stopTimelinePlayback`) returns the playhead to the start flag instead.
@@ -65,7 +66,12 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
                 const live = beatAtTime(beats, getLivePlaybackPosition());
                 lastLiveBeat.current = live;
                 const store = useTimelineSelectionStore.getState();
-                const step = playbackStep(store.selection, live, beats.length);
+                const step = playbackStep(
+                    store.selection,
+                    live,
+                    beats.length,
+                    store.isolation,
+                );
                 if (step === "stop") {
                     lastLiveBeat.current = beats.length;
                     setIsPlaying(false);

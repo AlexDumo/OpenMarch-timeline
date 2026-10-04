@@ -28,6 +28,12 @@ import { create } from "zustand";
  * and redo. It is `null` until first loaded and outside timeline mode. `pageBoxes` is kept by
  * `TimelineModePanel`.
  *
+ * **Isolation** (docs/timeline/research/ownership/09-isolation.md, _prototype_): double-clicking a
+ * stored timeline's clip or page box isolates it. The window becomes its range, the playhead stays
+ * inside it, marchers outside it are dimmed and locked (`isMarcherDimmed`), and play loops it.
+ * Esc, a page box or home, a dragged range, or the timeline going away ends isolation and puts S
+ * and P back where they were.
+ *
  * Page mode doesn't read this store.
  */
 
@@ -49,6 +55,19 @@ export interface StoredTimelineMembership {
     readonly start: number;
     readonly end: number;
     readonly marcherIds: ReadonlySet<number>;
+}
+
+/** An isolated stored timeline (see the module comment) and the window to restore after it. */
+export interface TimelineIsolation {
+    readonly timelineId: number;
+    /** The timeline's range, kept current when it moves */
+    readonly start: number;
+    readonly end: number;
+    readonly restore: {
+        readonly startBeat: number;
+        readonly startPinned: boolean;
+        readonly playheadBeat: number;
+    };
 }
 
 /** A page's box: the previous flag to its own flag (`pageFlags`), in spec beats. */
@@ -80,7 +99,16 @@ export interface TimelineSelectionState {
      * Kept by `useTimelinePlaybackDriver`.
      */
     readonly showEndBeat: number | null;
+    /** The isolated timeline, or `null` (see the module comment) */
+    readonly isolation: TimelineIsolation | null;
 
+    /**
+     * Isolates the stored timeline `timelineId`: the window becomes its range with the playhead at
+     * its end. Does nothing for a timeline that isn't loaded, or while it is already isolated.
+     */
+    readonly isolate: (timelineId: number) => void;
+    /** Ends isolation and restores the start flag and playhead it saved. */
+    readonly exitIsolation: () => void;
     /** Moves the playhead to beat 0 (home); S goes there too and is unpinned. */
     readonly selectHome: () => void;
     /**
@@ -209,16 +237,30 @@ export const selectedStoredTimeline = (
 ): StoredTimelineMembership | null =>
     resolveStoredTimeline(state.selection, state.storedTimelines);
 
+/** The isolated stored timeline with its members, or `null` (also before the timelines load). */
+export const isolatedTimeline = (
+    state: Pick<TimelineSelectionState, "isolation" | "storedTimelines">,
+): StoredTimelineMembership | null =>
+    state.isolation === null
+        ? null
+        : (state.storedTimelines?.find(
+              (t) => t.id === state.isolation!.timelineId,
+          ) ?? null);
+
 /**
  * Whether a marcher is dimmed. Under UI-10 nothing is dimmed: dragging a marcher is what adds it
- * to the window's timeline, so every marcher must stay selectable (_lead default_; showing who
- * moves is the ghosts-and-paths work, not membership).
+ * to the window's timeline, so every marcher must stay selectable (_lead default_). Isolating a
+ * timeline dims and locks every marcher that isn't in it.
  */
 export function isMarcherDimmed(
-    _state: Pick<TimelineSelectionState, "selection" | "storedTimelines">,
-    _marcherId: number,
+    state: Pick<
+        TimelineSelectionState,
+        "selection" | "storedTimelines" | "isolation"
+    >,
+    marcherId: number,
 ): boolean {
-    return false;
+    const isolated = isolatedTimeline(state);
+    return isolated !== null && !isolated.marcherIds.has(marcherId);
 }
 
 const HOME: TimelineEditSelection = { kind: "home" };
@@ -247,9 +289,41 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
     (set) => {
         const clamp = (s: TimelineSelectionState, beat: number) => {
             const whole = normalizePlayheadBeat(beat);
-            return s.showEndBeat === null
-                ? whole
-                : Math.min(whole, s.showEndBeat);
+            const bounded =
+                s.showEndBeat === null ? whole : Math.min(whole, s.showEndBeat);
+            return s.isolation === null
+                ? bounded
+                : Math.min(
+                      Math.max(bounded, s.isolation.start),
+                      s.isolation.end,
+                  );
+        };
+        // Isolation keeps S on the timeline's start, pinned unless S would follow there anyway
+        const isolatedWindow = (
+            s: TimelineSelectionState,
+            isolation: TimelineIsolation,
+            playheadBeat: number,
+        ): WindowFields =>
+            windowFields(
+                isolation.start,
+                isolation.start !== followingStart(playheadBeat, s.pageBoxes),
+                playheadBeat,
+                s.pageBoxes,
+            );
+        const restored = (s: TimelineSelectionState) => {
+            const r = s.isolation!.restore;
+            return {
+                ...windowFields(
+                    r.startBeat,
+                    r.startPinned,
+                    s.showEndBeat === null
+                        ? r.playheadBeat
+                        : Math.min(r.playheadBeat, s.showEndBeat),
+                    s.pageBoxes,
+                ),
+                isolation: null,
+                playheadRevision: s.playheadRevision + 1,
+            };
         };
         return {
             selection: HOME,
@@ -260,13 +334,42 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             pageBoxes: [],
             storedTimelines: null,
             showEndBeat: null,
+            isolation: null,
+            isolate: (timelineId) =>
+                set((s) => {
+                    if (s.isolation?.timelineId === timelineId) return {};
+                    const timeline = s.storedTimelines?.find(
+                        (t) => t.id === timelineId,
+                    );
+                    if (!timeline) return {};
+                    const isolation: TimelineIsolation = {
+                        timelineId,
+                        start: timeline.start,
+                        end: timeline.end,
+                        // Isolating another timeline from inside one keeps the first restore point
+                        restore: s.isolation?.restore ?? {
+                            startBeat: s.startBeat,
+                            startPinned: s.startPinned,
+                            playheadBeat: s.playheadBeat,
+                        },
+                    };
+                    return {
+                        ...isolatedWindow(s, isolation, timeline.end),
+                        isolation,
+                        playheadRevision: s.playheadRevision + 1,
+                    };
+                }),
+            exitIsolation: () =>
+                set((s) => (s.isolation === null ? {} : restored(s))),
             selectHome: () =>
                 set((s) => ({
                     ...windowFields(0, false, 0, s.pageBoxes),
+                    isolation: null,
                     playheadRevision: s.playheadRevision + 1,
                 })),
             selectRange: (start, end) =>
                 set((s) => ({
+                    isolation: null,
                     ...windowFields(
                         start,
                         start !== followingStart(end, s.pageBoxes),
@@ -280,6 +383,11 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                 set((s) => {
                     if (!Number.isFinite(beat)) return {};
                     const playhead = clamp(s, beat);
+                    if (s.isolation)
+                        return {
+                            ...isolatedWindow(s, s.isolation, playhead),
+                            playheadRevision: s.playheadRevision + 1,
+                        };
                     const keep = s.startPinned && playhead > s.startBeat;
                     return {
                         ...windowFields(
@@ -318,8 +426,17 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                 })),
             followTimelineShift: (from, delta) =>
                 set((s) => {
+                    const isolation =
+                        s.isolation?.start === from.start &&
+                        s.isolation.end === from.end
+                            ? {
+                                  ...s.isolation,
+                                  start: from.start + delta,
+                                  end: from.end + delta,
+                              }
+                            : s.isolation;
                     if (!selectionIsRange(s.selection, from.start, from.end))
-                        return {};
+                        return isolation === s.isolation ? {} : { isolation };
                     const moved = (t: StoredTimelineMembership) =>
                         t.start === from.start && t.end === from.end
                             ? {
@@ -331,6 +448,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     const start = from.start + delta;
                     const end = from.end + delta;
                     return {
+                        isolation,
                         ...windowFields(
                             start,
                             start !== followingStart(end, s.pageBoxes),
@@ -371,12 +489,48 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                               )),
                     };
                 }),
-            setStoredTimelines: (storedTimelines) => set({ storedTimelines }),
+            setStoredTimelines: (storedTimelines) =>
+                set((s) => {
+                    if (s.isolation === null || storedTimelines === null)
+                        return {
+                            storedTimelines,
+                            ...(storedTimelines === null && s.isolation
+                                ? restored(s)
+                                : {}),
+                        };
+                    const timeline = storedTimelines.find(
+                        (t) => t.id === s.isolation!.timelineId,
+                    );
+                    // The isolated timeline is gone (deleted, or undone away)
+                    if (!timeline) return { storedTimelines, ...restored(s) };
+                    if (
+                        timeline.start === s.isolation.start &&
+                        timeline.end === s.isolation.end
+                    )
+                        return { storedTimelines };
+                    // Its range changed (a clip move, a beat edit): follow it
+                    const isolation = {
+                        ...s.isolation,
+                        start: timeline.start,
+                        end: timeline.end,
+                    };
+                    const playhead = Math.min(
+                        Math.max(s.playheadBeat, timeline.start),
+                        timeline.end,
+                    );
+                    return {
+                        storedTimelines,
+                        isolation,
+                        ...isolatedWindow(s, isolation, playhead),
+                        playheadRevision: s.playheadRevision + 1,
+                    };
+                }),
             setShowEndBeat: (showEndBeat) => set({ showEndBeat }),
             reset: () =>
                 set((s) => ({
                     ...windowFields(0, false, 0, s.pageBoxes),
                     playheadRevision: s.playheadRevision + 1,
+                    isolation: null,
                     storedTimelines: null,
                     showEndBeat: null,
                 })),

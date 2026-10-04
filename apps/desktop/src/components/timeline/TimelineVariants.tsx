@@ -300,6 +300,10 @@ function TimelineSurface({
                 className="relative"
                 style={{ width: surfaceWidth, height: timelineHeight }}
                 onContextMenu={rangeMenu.onContextMenu}
+                onDoubleClick={(event) => {
+                    const marked = markedRangeAt(event.target);
+                    if (marked) props.onOpenRange?.(marked);
+                }}
             >
                 <div
                     {...pointer.pointerHandlers}

@@ -108,6 +108,13 @@ describe("play", () => {
         expect(playbackStep(home, 17, 17)).toBe("stop");
         expect(playbackStep({ kind: "none" }, 17, 17)).toBe("stop");
     });
+
+    it("loops over an isolated timeline (docs/timeline/research/ownership/09-isolation.md)", () => {
+        const isolated = { start: 3, end: 9 };
+        expect(playbackStep(range, 8.5, 17, isolated)).toBeNull();
+        expect(playbackStep(range, 9, 17, isolated)).toEqual({ loopTo: 3 });
+        expect(playbackStep(range, 9, 17, null)).toBeNull();
+    });
 });
 
 /** Beats 1..16 of 0.5 s after the fixed beat 0; page 1 starts at beat 1 and page 2 at beat 9. */
