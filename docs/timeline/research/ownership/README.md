@@ -118,6 +118,23 @@ Note: agents 01 and 03 read the main checkout while it was on
    (pink) whose end is linked to green's path, which avoids the snap back
    that today's implicit resume (R-5/D-12 rebase) causes.
 
+### Confirmed (2026-10-04, second round)
+
+- **Live link: yes.** A move that enters a host at beat j stores its
+  destination as "host's planned path for that slot at j", recomputed
+  whenever the host changes. Not a one-off Re-snap.
+- **Ghost starts: stored, and they follow the group.** A joiner's ghost
+  start is its origin in the host's authored formation, stored per slot.
+  The default is wherever the marcher stood when it changed from founder
+  to joiner (the designer authored the move "as if all the marchers were
+  there all along"). The user can drag it. Gestures that edit the group's
+  start move the ghosts along with the founders.
+- **A window ending strictly inside the host defaults to exit plus an
+  automatic return.** The edit creates the exit and a default straight
+  return move (pink in Scenario 3) whose end is live-linked to the host's
+  path at a rejoin beat the user can drag. This replaces the implicit
+  resume (R-5/D-12 rebase) as the default.
+
 ## Emerging model (lead's synthesis, not yet agreed)
 
 The scenarios reduce to two primitives, both with links to a host path:
@@ -140,6 +157,91 @@ enter, layers carry little meaning. That moves toward hypothesis B's
 per-marcher segments. Decide whether to keep layers as the storage and
 treat exit/enter as UI concepts, or to restructure.
 
+## Round 2 plans (2026-10-04)
+
+| File                                           | What                                                                                           |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [05-link-semantics.md](05-link-semantics.md)   | Intent path, live links, rails vs rebase, acyclicity proof, failure policy (freeze), spec list |
+| [06-authoring-ux.md](06-authoring-ux.md)       | Gesture → result table, join gestures, automatic return, notches, menus, undo rows, WP-O1..O6  |
+| [07-ghost-rendering.md](07-ghost-rendering.md) | What a focused move draws, tokens, ghost handles, data source, canvas integration, G0..G3      |
+| [08-storage.md](08-storage.md)                 | Layers vs trims vs segments; recommends O (override storage) plus two additive tables          |
+| [VALIDATION.md](VALIDATION.md)                 | Feel-based decisions to check by hand once built; add a row for every unproven default         |
+
+### Where the four agree
+
+- **The link beat is never stored:** `j = feeder.end_beat` (05 §2.1, 06 §4.2, 08 §2.2). The
+  rejoin-beat drag is just a range edit of the feeder's end.
+- **Ghost starts are absolute rows;** "follow the group" is a write-path rule (05 GF-1, 08 §2.1,
+  06 §3), using the gesture's own transform, never a fit.
+- **Rails:** a span that follows an effective linked feeder evaluates the host's intent path.
+  For `direct` this equals today's rebase exactly (05 §1.4, 08 §2.3), so only arcs change.
+- **Layers can stay.** 08 recommends **O**: host rows stay whole, movers sit one layer up, a
+  linked return makes the host's resume ride the rails. This corrects the "Open consequence"
+  below: implicit resume is only bad when unlinked. No seams against the host, no table rebuild,
+  legacy data unchanged, 3–4 weeks for storage + resolver + write path.
+- **Two app-side steps ship first with no schema change:** lift the partial-overlap refusal for
+  exits, and render read-only ghosts with a throwaway resolver (06 WP-O1/O2, 07 G0, 08 WP-0).
+
+### Decided (owner, 2026-10-04)
+
+- **Layers stay as the storage** (08's option O): group rows stay whole, movers sit above them,
+  and deleting a mover lets the group show through again. Segments are not pursued.
+- **Designers never see layers.** The app always picks the layer; no layer numbers appear
+  anywhere in the UI, including the inspector. The designer works only with exits, joins,
+  returns, strip notches and ghosts. This revises `ui.md` U-Q3 (layers in the inspector and as
+  dashed spans) when the ui.md update is written.
+
+### Conflicts to settle
+
+1. **Acyclicity.** 08 says it "comes free"; 05 found a real cycle the DB accepts under layers (a
+   link into a slot whose founder starts after the feeder starts) and adds **L-ACYCLIC**. Take 05.
+2. **Link storage and the fallback value.** 05 assumes a `source` column on `slot_destinations`
+   with a stored x,y used as seed and fallback, and "freeze" = flip to placed. 08 recommends a
+   separate `timeline_links` table with no x,y, and "unlink" = delete link + insert destination.
+   Take 08's table, but 05's resolver fallback needs a value: either add fallback x,y to
+   `timeline_links`, or make every breaking edit freeze (05 §4 already requires that) and let
+   the resolver fall back to a hold with `D-LINK-BROKEN`.
+3. **Deleting a return move. Decided (owner, provisional): back to the group (08's O default).**
+   Deleting pink lets green take the marcher back through the unlinked resume, so it still ends
+   at green's destination and the next move's path is unchanged. Exit-and-hold stays available
+   as an explicit "Hold here instead". Conditions: the catch-up must be drawn (rebase spans are
+   drawn solid plus their intent as a ghost, with the step-size warning), never hidden. 06 §4.2
+   "Remove return (hold there)" changes accordingly. Tracked in [VALIDATION.md](VALIDATION.md) V-1.
+4. **Ghost start when the landing was placed by the user** (overrun into blue, merge into green).
+   **Decided (owner, provisional): seed** where the marcher stood, as the confirmed rule says, so
+   the landing snaps onto the host's path. 06's "solve" (keep the drop) is the alternative if
+   manual validation shows the jump feels broken. Tracked in [VALIDATION.md](VALIDATION.md) V-2.
+5. **Which dot a canvas drag edits at the host's end.** 06: when the window is the host, an exited
+   marcher's real dot is inert (60%) and only its ghost drags. 07: the real marcher wins the
+   click, a repeat click cycles to the ghost, and mixed real + ghost drags are allowed when
+   P = F.end. Lead leaning: 06's rule (window decides) plus 07's mixed drag.
+6. **Core API names.** 05: `intentAt`, `intentInfo`, `linksInto`, `SpanInfo.mode`. 07:
+   `intentAt`, `slotEnds`, `links`, `SpanInfo.entry`. Merge on 05's names (it owns semantics);
+   07 needs outgoing links per transition too.
+7. **New risks only 05 raised:** the §8.11 bounded-range proof no longer follows for arcs onto
+   linked (derived) targets, and P-12 causality must be amended (a host edit can now move a
+   feeder's positions before the host starts).
+
+### Consolidated owner questions
+
+From all four plans, grouped; the plans' own lists have the full wording.
+
+- **Model:** Freeze-and-notify rather
+  than refuse when a host with incoming links is deleted or shortened (05 Q5)? No links into
+  follow-the-leader hosts in v1 (05 Q6, 08 Q5)? "Meet the group at its destination" (j = host
+  end) wanted (05 Q4)? A link whose two ends hold different marchers: warn or refuse (08 Q4)?
+- **Defaults:** A window starting with the group: return or join late by
+  default (06 Q1)? Rejoin default = exit length capped at host end (06 Q3)? Return per clip with
+  "Split selected off" (06 Q4)? Overrun stopgap before links land: old catch-up with a warning,
+  or refuse (06 Q6)?
+- **Ghosts following the group:** only when all founders move uniformly, including edits made
+  from the previous move's context (05 Q1–Q2, 06 Q7)? Feeders stay put when a host clip moves
+  alone, freezing if they fall outside (05 Q3)?
+- **Canvas:** conflict 5; hover preview with paths or dots only (07 Q1); stable move colors
+  instead of start-order (07 Q2); exit beat draggable on the canvas (07 Q4); ghosts while
+  playing off by default, toggle location (07 Q6).
+- **Files:** keep user version 8 if this lands before P9.4, or bump to 9 (08 Q3)?
+
 ## Next steps
 
 1. Answer the owner's open points: confirm a live link (2) and the
@@ -153,5 +255,8 @@ treat exit/enter as UI concepts, or to restructure.
    - the UX of creating exits, entries and returns on the strip and canvas;
    - the ghost rendering and handle spec;
    - layers vs segments as storage for this model.
+     Launched 2026-10-04 with the confirmed decisions above; outputs land as
+     `05-link-semantics.md`, `06-authoring-ux.md`, `07-ghost-rendering.md`
+     and `08-storage.md`.
 3. Then record decisions in `ui.md` (UI-9/UI-10 revision) and a spec
    amendment, per `docs/conventions/architecture-decisions.md`.
