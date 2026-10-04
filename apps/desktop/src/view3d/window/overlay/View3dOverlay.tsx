@@ -8,12 +8,13 @@
  *
  * In fullscreen, everything but the readout hides after 3 s without pointer
  * movement, and the readout grows. F toggles fullscreen and C the crowd; the
- * camera rig (P3.2) owns 1–9 and Esc.
+ * camera rig (P3.2) owns 1–9 and Esc for pick-a-seat.
  */
 import { useEffect, useRef, useState } from "react";
 import { useTranslate } from "@tolgee/react";
 import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { useCameraStore } from "../camera/cameraStore";
 import { CameraBar } from "./CameraBar";
 import { Panel, PanelSeparator, ToggleButton } from "./Panel";
 import { Readout } from "./Readout";
@@ -52,7 +53,10 @@ export function isTypingTarget(target: EventTarget | null): boolean {
     );
 }
 
-/** F toggles fullscreen and C the crowd. */
+/**
+ * F toggles fullscreen and C the crowd. Esc leaves fullscreen unless the rig
+ * used it to cancel pick-a-seat.
+ */
 function useOverlayShortcuts(toggleFullscreen: () => void) {
     const { settings, request } = useVenueRequest();
     const latest = useRef({ settings, request, toggleFullscreen });
@@ -76,6 +80,14 @@ function useOverlayShortcuts(toggleFullscreen: () => void) {
             } else if (key === "c" && settings) {
                 event.preventDefault();
                 request({ kind: "crowd", crowd: !settings.crowd });
+            } else if (
+                key === "escape" &&
+                document.fullscreenElement &&
+                !event.defaultPrevented &&
+                // The rig cancels pick-a-seat on this Esc instead.
+                !useCameraStore.getState().pickMode
+            ) {
+                void document.exitFullscreen();
             }
         };
         window.addEventListener("keydown", onKeyDown);
