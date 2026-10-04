@@ -76,6 +76,8 @@ export interface TimelinePlayback {
     /** Seek to a whole beat index, already clamped to the show */
     readonly onSeek?: (beatIndex: number) => void;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
+    /** **Stop** (UI-10): back to the start flag */
+    readonly onStop?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -222,6 +224,13 @@ export const selectionToView = (
                   startBeatIndex: axis.toView(selection.range.startBeatIndex),
                   endBeatIndex: axis.toView(selection.range.endBeatIndex),
               },
+              ...(selection.startFlagBeatIndex !== undefined
+                  ? {
+                        startFlagBeatIndex: axis.toView(
+                            selection.startFlagBeatIndex,
+                        ),
+                    }
+                  : {}),
           }
         : selection;
 
@@ -366,6 +375,7 @@ export function Timeline(props: TimelineProps) {
         className: props.className,
         onSeek: seekToBeat,
         onPlayingChange: playback.onPlayingChange,
+        onStop: playback.onStop,
         onNavigate: playback.onNavigate,
         onPixelsPerBeatChange: setPixelsPerBeat,
         onSelectionChange: changeSelection,

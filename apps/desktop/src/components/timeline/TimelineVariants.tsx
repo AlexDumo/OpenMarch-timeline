@@ -274,6 +274,7 @@ function TimelineSurface({
                         pageLabel={props.pageLabel}
                         isPlaying={transportProps.isPlaying}
                         onPlayingChange={transportProps.onPlayingChange}
+                        onStop={transportProps.onStop}
                         onNavigate={transportProps.onNavigate}
                         onZoomOut={
                             expanded && props.onPixelsPerBeatChange
@@ -435,6 +436,11 @@ function TimelineSurface({
                     {selectionRange && (
                         <TimelineSelectionRange
                             range={selectionRange}
+                            startFlagBeatIndex={
+                                selection?.kind === "range"
+                                    ? selection.startFlagBeatIndex
+                                    : undefined
+                            }
                             beatCount={model.beatCount}
                             pixelsPerBeat={pixelsPerBeat}
                             height={timelineHeight}

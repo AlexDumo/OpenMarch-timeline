@@ -31,8 +31,7 @@ export function navigateTimelinePages(
 }
 
 /**
- * Starts playback (UI-9 Play): from the playhead, or from the selected range's start when the
- * playhead is at or past its end. Returns false, and doesn't start, when there's nothing to play.
+ * Starts playback (UI-10 Play): from the playhead. Returns false, and doesn't start, when there's nothing to play.
  *
  * @param showEndBeat the end of the show, `beats.length`
  */
@@ -64,4 +63,34 @@ export function toggleTimelinePlayback({
 }): void {
     if (isPlaying) setIsPlaying(false);
     else startTimelinePlayback(showEndBeat, setIsPlaying);
+}
+
+/** Set by `stopTimelinePlayback` while playing, so the pause that follows returns to the flag. */
+let stopRequested = false;
+
+/** Whether the pause in progress came from **Stop**; clears the request. */
+export function consumeStopRequest(): boolean {
+    const requested = stopRequested;
+    stopRequested = false;
+    return requested;
+}
+
+/**
+ * **Stop** (UI-10): stops playback and returns the playhead to the start flag. While playing, the
+ * playback driver does the return once the pause lands, so its pause handling doesn't overwrite
+ * it; while paused, it returns at once.
+ */
+export function stopTimelinePlayback({
+    isPlaying,
+    setIsPlaying,
+}: {
+    isPlaying: boolean;
+    setIsPlaying: (isPlaying: boolean) => void;
+}): void {
+    if (isPlaying) {
+        stopRequested = true;
+        setIsPlaying(false);
+        return;
+    }
+    useTimelineSelectionStore.getState().returnToStart();
 }
