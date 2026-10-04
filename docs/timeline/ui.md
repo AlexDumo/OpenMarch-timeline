@@ -315,6 +315,12 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Dimming** (_lead default_). Nothing is dimmed and every marcher can be
     selected, since dragging is what adds. Showing who moves comes with the
     ghosts-and-paths work (report H1), not membership.
+  - **Clips only off the page boxes** (project owner, 2026-10-03). A page box
+    stands for the stored timeline with exactly its range, so that timeline
+    gets no clip. Only timelines that start or end off a flag (a mid-page
+    arrival, a pinned start flag) are drawn as clips. To change when a page timeline happens, move its flags
+    (P7.5). Diagnostics of a hidden page timeline still
+    show in the inspector (spec §8.9); a badge on the page box is a follow-up.
 
   Why: the community's most common complaint about drill tools is the number
   of steps and hidden rules between "I want these marchers there" and the

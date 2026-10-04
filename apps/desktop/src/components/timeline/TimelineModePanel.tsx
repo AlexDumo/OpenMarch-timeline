@@ -28,7 +28,11 @@ import {
     TimelineMetronomeButton,
     TimelineMuteButton,
 } from "./TimelineControls";
-import { Timeline, type TimelineSelection } from "./Timeline";
+import {
+    Timeline,
+    type TimelineInput,
+    type TimelineSelection,
+} from "./Timeline";
 import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 
@@ -114,6 +118,11 @@ export default function TimelineModePanel() {
         database: db,
         enabled: useTimelineMode(),
     });
+    // UI-10: a page box already stands for its page timeline, so only the others get a clip
+    const offPage = useMemo(
+        () => timelinesOffPages(timelines, pages),
+        [timelines, pages],
+    );
     const commands = useTimelineCommands({
         database: db,
         timelines,
@@ -152,7 +161,7 @@ export default function TimelineModePanel() {
             beats={beats}
             pages={pages}
             measures={measures}
-            timelines={timelines}
+            timelines={offPage}
             playback={playback}
             transportClock={<AudioClock />}
             transportAccessories={
@@ -221,3 +230,22 @@ export const selectAddedPage = ({
     endBeat,
 }: Pick<AddedPageFlag, "startBeat" | "endBeat">) =>
     useTimelineSelectionStore.getState().selectRange(startBeat, endBeat);
+
+/**
+ * The timelines that don't match a page box (UI-10, project owner, 2026-10-03). A page box
+ * already stands for the stored timeline with exactly its range: clicking it sets the start flag
+ * and playhead to its edges, so a clip under it would only repeat it. Timelines that start or end
+ * off a flag (a mid-page arrival, a pinned start flag) keep their clips. Ranges are spec beats.
+ */
+export function timelinesOffPages<
+    T extends Pick<TimelineInput, "startBeatIndex" | "endBeatIndex">,
+>(timelines: readonly T[], pages: readonly FlagPage[]): T[] {
+    const boxes = new Set(
+        pageFlags(pages).flatMap((f) =>
+            f.range ? [`${f.range.start}:${f.range.end}`] : [],
+        ),
+    );
+    return timelines.filter(
+        (t) => !boxes.has(`${t.startBeatIndex}:${t.endBeatIndex}`),
+    );
+}
