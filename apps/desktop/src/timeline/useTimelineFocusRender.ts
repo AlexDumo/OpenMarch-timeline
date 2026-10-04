@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { eq } from "drizzle-orm";
 import type { FieldTheme } from "@openmarch/core";
 import { schema } from "@/global/database/db";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { withTimelineWriteLock } from "@/db-functions/history";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
@@ -19,7 +20,7 @@ import {
 
 export interface FocusRows {
     readonly timelineId: number;
-    /** One row per member: the one that ends last when a member has several */
+    /** Every assignment row in the timeline */
     readonly members: readonly FocusMemberSlot[];
     readonly timelineOfTransition: ReadonlyMap<number, number>;
 }
@@ -40,26 +41,19 @@ export async function readFocusRows(
             marcherId: a.marcher_id,
             transitionId: a.transition_id,
             slot: a.slot_index,
+            start: a.start_beat,
             end: a.end_beat,
+            layer: a.layer,
         })
         .from(a)
         .innerJoin(t, eq(a.transition_id, t.id))
         .where(eq(t.timeline_id, timelineId))
         .all();
-    const byMarcher = new Map<number, (typeof rows)[number]>();
-    for (const row of rows) {
-        const seen = byMarcher.get(row.marcherId);
-        if (!seen || row.end > seen.end) byMarcher.set(row.marcherId, row);
-    }
     return {
         timelineId,
-        members: [...byMarcher.values()]
-            .sort((x, y) => x.marcherId - y.marcherId)
-            .map(({ marcherId, transitionId, slot }) => ({
-                marcherId,
-                transitionId,
-                slot,
-            })),
+        members: rows.sort(
+            (x, y) => x.marcherId - y.marcherId || x.start - y.start,
+        ),
         timelineOfTransition: new Map(
             transitions.map((r) => [r.id, r.timelineId]),
         ),
@@ -98,6 +92,17 @@ export function useTimelineFocusRender({
     const timeline = useTimelineSelectionStore(isolatedTimeline);
     const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
     const [rows, setRows] = useState<FocusRows | null>(null);
+    // With marchers selected, the others' paths step back (a page-wide move draws every member)
+    const selectedKey = (useSelectedMarchers()?.selectedMarchers ?? [])
+        .map((m) => m.id)
+        .join(",");
+    const emphasis = useMemo(
+        () =>
+            selectedKey === ""
+                ? null
+                : new Set(selectedKey.split(",").map(Number)),
+        [selectedKey],
+    );
 
     const timelineId = enabled ? (timeline?.id ?? null) : null;
     useEffect(() => {
@@ -153,8 +158,8 @@ export function useTimelineFocusRender({
             canvas.clearTimelineFocus();
             return;
         }
-        canvas.renderTimelineFocus(scene, ghostColorFor(theme));
-    }, [canvas, scene, theme]);
+        canvas.renderTimelineFocus(scene, ghostColorFor(theme), emphasis);
+    }, [canvas, scene, theme, emphasis]);
 
     useEffect(() => () => canvas?.clearTimelineFocus(), [canvas]);
     return scene;

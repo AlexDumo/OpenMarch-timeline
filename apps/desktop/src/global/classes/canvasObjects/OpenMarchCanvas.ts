@@ -2392,14 +2392,19 @@ export default class OpenMarchCanvas extends fabric.Canvas {
      * Draws an isolated timeline's scene (docs/timeline/research/ownership/09-isolation.md) above the grid and
      * below the marchers, replacing any scene drawn before.
      */
-    renderTimelineFocus(scene: FocusScene, ghostColor: string): void {
+    renderTimelineFocus(
+        scene: FocusScene,
+        ghostColor: string,
+        emphasis: ReadonlySet<number> | null = null,
+    ): void {
         const existing = this.getObjectsByType(TimelineFocusLayer)[0];
-        if (existing) existing.update(scene, ghostColor);
+        if (existing) existing.update(scene, ghostColor, emphasis);
         else
             this.add(
                 new TimelineFocusLayer({
                     scene,
                     ghostColor,
+                    emphasis,
                     width: this._fieldProperties.width,
                     height: this._fieldProperties.height,
                 }),

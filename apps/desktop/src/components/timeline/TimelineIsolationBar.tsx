@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { Button } from "@openmarch/ui";
 import { useTimingObjects } from "@/hooks";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
@@ -9,19 +10,30 @@ import {
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
 
 /**
- * How the isolation bar names a timeline: "Page 3's move" when a page box has exactly its range,
- * else "The move over beats 9–25" (spec beats, as the timeline's messages write them).
+ * How the isolation bar names a timeline, in pages and counts as designers count them:
+ * "Page 2's move" when a page box has exactly its range, "Page 2, counts 5–8" inside one page,
+ * else "Page 2 count 5 to page 3 count 4". Ranges are spec beats; a page's counts start at 1 on
+ * the beat after the previous flag.
  */
 export function isolatedTimelineName(
     range: { readonly start: number; readonly end: number },
     pages: readonly (FlagPage & { readonly name: string })[],
 ): string {
-    const page = pageFlags(pages).find(
-        (f) => f.range?.start === range.start && f.range.end === range.end,
+    const boxes = pageFlags(pages).filter((f) => f.range !== null);
+    const exact = boxes.find(
+        (f) => f.range!.start === range.start && f.range!.end === range.end,
     );
-    return page
-        ? `Page ${page.page.name}'s move`
-        : `The move over beats ${range.start}–${range.end}`;
+    if (exact) return `Page ${exact.page.name}'s move`;
+    const at = (beat: number) =>
+        boxes.find((f) => f.range!.start <= beat && beat < f.range!.end);
+    const first = at(range.start);
+    const last = at(range.end - 1);
+    if (!first || !last) return `Beats ${range.start}–${range.end}`;
+    const from = range.start - first.range!.start + 1;
+    const to = range.end - last.range!.start;
+    return first === last
+        ? `Page ${first.page.name}, counts ${from}–${to}`
+        : `Page ${first.page.name} count ${from} to page ${last.page.name} count ${to}`;
 }
 
 const isTyping = (target: EventTarget | null) =>
@@ -30,22 +42,27 @@ const isTyping = (target: EventTarget | null) =>
         ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
 /**
- * Esc ends isolation, unless the key goes to a text field or the line or lasso tool is open (Esc
- * cancels those first).
+ * Esc ends isolation (V-14): the first Esc deselects marchers as it always does (the registered
+ * Escape action), so isolation ends only on an Esc with nothing selected. Text fields and the line
+ * or lasso tool keep their Esc. Listens in the capture phase, before the registered actions, which
+ * mark Escape handled.
  */
 export function useIsolationEscape(): void {
     const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
+    const selectedCount = useSelectedMarchers()?.selectedMarchers.length ?? 0;
+    const selected = useRef(selectedCount);
+    selected.current = selectedCount;
     useEffect(() => {
         if (!isolated) return;
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== "Escape" || event.defaultPrevented) return;
-            if (isTyping(event.target)) return;
+            if (event.key !== "Escape" || isTyping(event.target)) return;
             if (useAlignmentEventStore.getState().alignmentEvent !== "default")
                 return;
+            if (selected.current > 0) return;
             useTimelineSelectionStore.getState().exitIsolation();
         };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
     }, [isolated]);
 }
 

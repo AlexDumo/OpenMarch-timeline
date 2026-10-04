@@ -17,6 +17,9 @@ const GHOST_DASH = [2, 4] as const;
 const DOT_RADIUS = 3;
 const GHOST_DOT_RADIUS = 4;
 const FORK_RADIUS = 3.5;
+/** Paths of members outside the selection, and rings of members who hold still */
+const BACKGROUND_ALPHA = 0.25;
+const HOLD_ALPHA = 0.4;
 
 /**
  * Everything an isolated timeline draws on the field (docs/timeline/research/ownership/09-isolation.md), as one
@@ -28,15 +31,19 @@ const FORK_RADIUS = 3.5;
 export default class TimelineFocusLayer extends fabric.Object {
     scene: FocusScene;
     ghostColor: string;
+    /** With marchers selected, only theirs are drawn at full strength */
+    emphasis: ReadonlySet<number> | null;
 
     constructor({
         scene,
         ghostColor,
+        emphasis = null,
         width,
         height,
     }: {
         scene: FocusScene;
         ghostColor: string;
+        emphasis?: ReadonlySet<number> | null;
         width: number;
         height: number;
     }) {
@@ -56,12 +63,25 @@ export default class TimelineFocusLayer extends fabric.Object {
         });
         this.scene = scene;
         this.ghostColor = ghostColor;
+        this.emphasis = emphasis;
     }
 
-    update(scene: FocusScene, ghostColor: string): void {
+    update(
+        scene: FocusScene,
+        ghostColor: string,
+        emphasis: ReadonlySet<number> | null,
+    ): void {
         this.scene = scene;
         this.ghostColor = ghostColor;
+        this.emphasis = emphasis;
         this.dirty = true;
+    }
+
+    /** A member's strength: full, or stepped back when others are selected */
+    private alphaOf(marcherId: number): number {
+        return this.emphasis === null || this.emphasis.has(marcherId)
+            ? 1
+            : BACKGROUND_ALPHA;
     }
 
     // eslint-disable-next-line max-lines-per-function
@@ -90,44 +110,55 @@ export default class TimelineFocusLayer extends fabric.Object {
         };
 
         // 1. Context moves: the move each member leaves for
-        ctx.globalAlpha = CONTEXT_ALPHA;
         ctx.lineWidth = px(CONTEXT_WIDTH);
         ctx.setLineDash([]);
         for (const path of scene.context) {
+            ctx.globalAlpha = CONTEXT_ALPHA * this.alphaOf(path.marcherId);
             ctx.strokeStyle = path.color;
             line(path.points);
         }
-        ctx.globalAlpha = 1;
 
         // 2. Ghosts: the isolated move's plan where it no longer has the member
         ctx.strokeStyle = ghostColor;
         ctx.lineWidth = px(GHOST_WIDTH);
         ctx.setLineDash(GHOST_DASH.map(px));
-        for (const slot of scene.slots) for (const g of slot.ghosts) line(g);
+        for (const slot of scene.slots) {
+            ctx.globalAlpha = this.alphaOf(slot.marcherId);
+            for (const g of slot.ghosts) line(g);
+        }
         ctx.setLineDash([]);
 
         // 3. Performed paths
         ctx.strokeStyle = scene.color;
         ctx.lineWidth = px(PERFORMED_WIDTH);
-        for (const slot of scene.slots) for (const p of slot.performed) line(p);
-
-        // 4. Dots: start rings, destinations, ghost ends, forks
         for (const slot of scene.slots) {
+            if (slot.holds) continue;
+            ctx.globalAlpha = this.alphaOf(slot.marcherId);
+            for (const p of slot.performed) line(p);
+        }
+
+        // 4. Dots: start rings, destinations, ghost ends, forks. One who holds still gets only a
+        // quiet ring
+        for (const slot of scene.slots) {
+            const alpha = this.alphaOf(slot.marcherId);
+            ctx.globalAlpha = slot.holds ? HOLD_ALPHA * alpha : alpha;
             ctx.strokeStyle = scene.color;
             ctx.lineWidth = px(1.5);
             dot(slot.origin, DOT_RADIUS);
             ctx.stroke();
+            if (slot.holds) continue;
+            ctx.globalAlpha = alpha;
             if (slot.destination) {
                 ctx.fillStyle = scene.color;
                 dot(slot.destination, DOT_RADIUS);
                 ctx.fill();
             }
             if (slot.ghostEnd) {
-                ctx.globalAlpha = 0.45;
+                ctx.globalAlpha = 0.45 * alpha;
                 ctx.fillStyle = ghostColor;
                 dot(slot.ghostEnd, GHOST_DOT_RADIUS);
                 ctx.fill();
-                ctx.globalAlpha = 1;
+                ctx.globalAlpha = alpha;
                 ctx.strokeStyle = ghostColor;
                 ctx.lineWidth = px(1.5);
                 dot(slot.ghostEnd, GHOST_DOT_RADIUS);
@@ -139,6 +170,7 @@ export default class TimelineFocusLayer extends fabric.Object {
                 ctx.fill();
             }
         }
+        ctx.globalAlpha = 1;
         ctx.restore();
     }
 }

@@ -104,9 +104,14 @@ export interface TimelineSelectionState {
 
     /**
      * Isolates the stored timeline `timelineId`: the window becomes its range with the playhead at
-     * its end. Does nothing for a timeline that isn't loaded, or while it is already isolated.
+     * its end. `restore` is where leaving goes back to (default: the window now; a double-click
+     * passes the window from before its first click). Does nothing for a timeline that isn't
+     * loaded, or while it is already isolated.
      */
-    readonly isolate: (timelineId: number) => void;
+    readonly isolate: (
+        timelineId: number,
+        restore?: TimelineIsolation["restore"],
+    ) => void;
     /** Ends isolation and restores the start flag and playhead it saved. */
     readonly exitIsolation: () => void;
     /** Moves the playhead to beat 0 (home); S goes there too and is unpinned. */
@@ -293,11 +298,12 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                 s.showEndBeat === null ? whole : Math.min(whole, s.showEndBeat);
             return s.isolation === null
                 ? bounded
-                : Math.min(
-                      Math.max(bounded, s.isolation.start),
-                      s.isolation.end,
-                  );
+                : isolatedPlayhead(s.isolation, bounded);
         };
+        // Inside isolation the playhead stays after the start: on the start flag, UI-10's window
+        // falls back to the page box ending there, so a drag would edit the previous move
+        const isolatedPlayhead = (isolation: TimelineIsolation, beat: number) =>
+            Math.min(Math.max(beat, isolation.start + 1), isolation.end);
         // Isolation keeps S on the timeline's start, pinned unless S would follow there anyway
         const isolatedWindow = (
             s: TimelineSelectionState,
@@ -335,7 +341,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             storedTimelines: null,
             showEndBeat: null,
             isolation: null,
-            isolate: (timelineId) =>
+            isolate: (timelineId, restore) =>
                 set((s) => {
                     if (s.isolation?.timelineId === timelineId) return {};
                     const timeline = s.storedTimelines?.find(
@@ -347,11 +353,12 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         start: timeline.start,
                         end: timeline.end,
                         // Isolating another timeline from inside one keeps the first restore point
-                        restore: s.isolation?.restore ?? {
-                            startBeat: s.startBeat,
-                            startPinned: s.startPinned,
-                            playheadBeat: s.playheadBeat,
-                        },
+                        restore: s.isolation?.restore ??
+                            restore ?? {
+                                startBeat: s.startBeat,
+                                startPinned: s.startPinned,
+                                playheadBeat: s.playheadBeat,
+                            },
                     };
                     return {
                         ...isolatedWindow(s, isolation, timeline.end),
@@ -378,7 +385,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     ),
                     playheadRevision: s.playheadRevision + 1,
                 })),
-            selectNothing: () => set({ selection: { kind: "none" } }),
+            selectNothing: () =>
+                set({ selection: { kind: "none" }, isolation: null }),
             seek: (beat) =>
                 set((s) => {
                     if (!Number.isFinite(beat)) return {};
@@ -405,23 +413,31 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                 set((s) => {
                     if (!Number.isFinite(beat)) return {};
                     return {
-                        ...windowFields(
-                            s.startBeat,
-                            s.startPinned,
-                            clamp(s, beat),
-                            s.pageBoxes,
-                        ),
+                        ...(s.isolation
+                            ? isolatedWindow(s, s.isolation, clamp(s, beat))
+                            : windowFields(
+                                  s.startBeat,
+                                  s.startPinned,
+                                  clamp(s, beat),
+                                  s.pageBoxes,
+                              )),
                         playheadRevision: s.playheadRevision + 1,
                     };
                 }),
             returnToStart: () =>
                 set((s) => ({
-                    ...windowFields(
-                        s.startBeat,
-                        s.startPinned,
-                        s.startBeat,
-                        s.pageBoxes,
-                    ),
+                    ...(s.isolation
+                        ? isolatedWindow(
+                              s,
+                              s.isolation,
+                              isolatedPlayhead(s.isolation, s.isolation.start),
+                          )
+                        : windowFields(
+                              s.startBeat,
+                              s.startPinned,
+                              s.startBeat,
+                              s.pageBoxes,
+                          )),
                     playheadRevision: s.playheadRevision + 1,
                 })),
             followTimelineShift: (from, delta) =>
@@ -435,8 +451,32 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                                   end: from.end + delta,
                               }
                             : s.isolation;
+                    // The isolated clip moved: S and P go with it, wherever P was in it
+                    if (isolation && isolation !== s.isolation)
+                        return {
+                            isolation,
+                            ...isolatedWindow(
+                                s,
+                                isolation,
+                                isolatedPlayhead(
+                                    isolation,
+                                    s.playheadBeat + delta,
+                                ),
+                            ),
+                            storedTimelines:
+                                s.storedTimelines?.map((t) =>
+                                    t.id === isolation.timelineId
+                                        ? {
+                                              ...t,
+                                              start: isolation.start,
+                                              end: isolation.end,
+                                          }
+                                        : t,
+                                ) ?? null,
+                            playheadRevision: s.playheadRevision + 1,
+                        };
                     if (!selectionIsRange(s.selection, from.start, from.end))
-                        return isolation === s.isolation ? {} : { isolation };
+                        return {};
                     const moved = (t: StoredTimelineMembership) =>
                         t.start === from.start && t.end === from.end
                             ? {
@@ -470,6 +510,15 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                                 b.end === s.pageBoxes[i]!.end,
                         );
                     if (same) return {};
+                    if (s.isolation)
+                        return {
+                            pageBoxes,
+                            ...isolatedWindow(
+                                { ...s, pageBoxes },
+                                s.isolation,
+                                s.playheadBeat,
+                            ),
+                        };
                     // A pinned S that is where S would follow to now (set before the boxes
                     // loaded, or a flag moved onto it) is unpinned, so it follows from here on
                     const following = followingStart(s.playheadBeat, pageBoxes);
@@ -514,9 +563,9 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         start: timeline.start,
                         end: timeline.end,
                     };
-                    const playhead = Math.min(
-                        Math.max(s.playheadBeat, timeline.start),
-                        timeline.end,
+                    const playhead = isolatedPlayhead(
+                        isolation,
+                        s.playheadBeat,
                     );
                     return {
                         storedTimelines,

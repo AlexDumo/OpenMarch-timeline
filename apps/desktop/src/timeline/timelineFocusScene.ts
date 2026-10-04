@@ -50,6 +50,8 @@ export interface FocusSlotScene {
     readonly ghostEnd: FocusPoint | null;
     /** Where it leaves F for another move, in that move's color */
     readonly forks: readonly (FocusPoint & { readonly color: string })[];
+    /** It stays put over all of F: no path to draw, so it is drawn quietly */
+    readonly holds: boolean;
 }
 
 export interface FocusContextPath {
@@ -65,11 +67,14 @@ export interface FocusScene {
     readonly context: readonly FocusContextPath[];
 }
 
-/** One member's row in F: which transition and slot it fills there. */
+/** One of F's assignment rows. A member can have several (a converted show's split moves). */
 export interface FocusMemberSlot {
     readonly marcherId: number;
     readonly transitionId: number;
     readonly slot: number;
+    readonly start: number;
+    readonly end: number;
+    readonly layer: number;
 }
 
 type FocusResolver = Pick<Resolver, "positionAt" | "spanInfos" | "marcherIds">;
@@ -82,7 +87,7 @@ export interface BuildFocusSceneInput {
         readonly start: number;
         readonly end: number;
     };
-    /** Each member's row in F (one per member) */
+    /** Every assignment row in F */
     readonly members: readonly FocusMemberSlot[];
     /** The host's snapshot: F's transitions and the shapes they use are read from it */
     readonly snapshot: Pick<TimelineSnapshot, "transitions" | "shapes">;
@@ -111,9 +116,10 @@ const sample = (
         : [];
 
 /**
- * F's planned paths: a resolver over F's transitions only, where each member holds at its real
- * position at F's start and then fills its slot over F's whole range. Null when F has no
- * transitions in the snapshot.
+ * F's planned paths: a resolver over F's rows only, where each member holds at its real position
+ * at F's start and then follows its rows in F as if no other move took it. Null when a row's
+ * transition isn't in the snapshot. Known gap: a follow-the-leader transition that inherits its
+ * order from a transition outside F falls back to slot order here (D-ORDER-FALLBACK).
  */
 export function planResolver(
     input: Pick<
@@ -130,10 +136,11 @@ export function planResolver(
         transitions[id] = row;
     }
     if (members.length === 0) return null;
+    const marcherIds = [...new Set(members.map((m) => m.marcherId))];
     const plan: TimelineSnapshot = {
-        marchers: members.map((m) => ({
-            id: m.marcherId,
-            home: resolver.positionAt(m.marcherId, timeline.start),
+        marchers: marcherIds.map((id) => ({
+            id,
+            home: resolver.positionAt(id, timeline.start),
         })),
         shapes: snapshot.shapes,
         transitions,
@@ -142,9 +149,9 @@ export function planResolver(
             marcher: m.marcherId,
             transition: m.transitionId,
             slot: m.slot,
-            start: transitions[m.transitionId]!.start,
-            end: transitions[m.transitionId]!.end,
-            layer: 0,
+            start: m.start,
+            end: m.end,
+            layer: m.layer,
         })),
     };
     return createResolver(plan);
@@ -176,7 +183,16 @@ export function buildFocusScene(input: BuildFocusSceneInput): FocusScene {
         tolerance = PATH_DRAW_TOLERANCE,
     } = input;
     const { start, end } = timeline;
+    // Every transition of F, not only the rows' (a member's other rows in F count as F)
     const inF = new Set(members.map((m) => m.transitionId));
+    for (const [transitionId, timelineId] of timelineOfTransition)
+        if (timelineId === timeline.id) inF.add(transitionId);
+    const firstRow = new Map<number, number>();
+    for (const m of members)
+        firstRow.set(
+            m.marcherId,
+            Math.min(firstRow.get(m.marcherId) ?? Infinity, m.start),
+        );
     const plan = planResolver(input);
     const known = new Set(resolver.marcherIds());
     const colorOfTransition = (transitionId: number | null) => {
@@ -187,14 +203,21 @@ export function buildFocusScene(input: BuildFocusSceneInput): FocusScene {
 
     const slots: FocusSlotScene[] = [];
     const context: FocusContextPath[] = [];
-    for (const { marcherId } of members) {
+    // Whether F's plan has the member on its own path at `beat`: a catch-up in the real show is
+    // drawn beside the plan only where the plan doesn't catch up there too
+    const planFounds = (marcherId: number, beat: number) =>
+        plan?.spanInfos(marcherId).find((p) => p.start <= beat && beat < p.end)
+            ?.kind === "founding";
+    const drawnContext = new Set<string>();
+    for (const [marcherId, rowStart] of firstRow) {
         if (!known.has(marcherId)) continue;
         const all = resolver.spanInfos(marcherId);
         const spans = clipped(all, start, end);
+        // F has it from its first row on: before that is a joiner's approach (not drawn yet)
+        const started = (beat: number) => beat >= rowStart;
         const performed: FocusPolyline[] = [];
         const ghosts: FocusPolyline[] = [];
         const forks: (FocusPoint & { color: string })[] = [];
-        let started = false;
         const ghost = (from: number, to: number) => {
             if (plan) {
                 const points = sample(plan, marcherId, from, to, tolerance);
@@ -215,14 +238,17 @@ export function buildFocusScene(input: BuildFocusSceneInput): FocusScene {
                         tolerance,
                     ),
                 );
-                // A catch-up (resume) isn't F's plan: show the plan beside it
-                if (started && span.kind !== "founding")
+                // A catch-up (join, resume) isn't F's plan: show the plan beside it. A joiner's
+                // join from its first row on is its own entry, not a catch-up
+                if (
+                    span.kind !== "founding" &&
+                    span.start > rowStart &&
+                    planFounds(marcherId, span.start)
+                )
                     ghost(span.start, span.end);
-                started = true;
                 continue;
             }
-            // Before the member first performs F (a joiner's approach): not drawn yet
-            if (!started) continue;
+            if (!started(span.start)) continue;
             ghost(span.start, span.end);
             const previous = spans[i - 1];
             if (
@@ -233,7 +259,9 @@ export function buildFocusScene(input: BuildFocusSceneInput): FocusScene {
                     ...xy(resolver.positionAt(marcherId, span.start)),
                     color: colorOfTransition(span.transitionId),
                 });
-            if (span.transitionId !== null) {
+            const key = `${marcherId}:${span.transitionId}`;
+            if (span.transitionId !== null && !drawnContext.has(key)) {
+                drawnContext.add(key);
                 // One hop: the other move over its whole span, past F's end too
                 const whole = all.find(
                     (s) =>
@@ -259,20 +287,31 @@ export function buildFocusScene(input: BuildFocusSceneInput): FocusScene {
             }
         }
         const last = spans[spans.length - 1];
+        const origin = xy(resolver.positionAt(marcherId, start));
+        const kept = performed.filter((p) => p.length > 0);
         const endsInF =
             last !== undefined &&
             last.transitionId !== null &&
             inF.has(last.transitionId);
         slots.push({
             marcherId,
-            origin: xy(resolver.positionAt(marcherId, start)),
-            performed: performed.filter((p) => p.length > 0),
+            origin,
+            performed: kept,
             ghosts,
+            holds:
+                ghosts.length === 0 &&
+                kept.every((p) =>
+                    p.every(
+                        (q) =>
+                            Math.abs(q.x - origin.x) < 0.5 &&
+                            Math.abs(q.y - origin.y) < 0.5,
+                    ),
+                ),
             destination: endsInF
                 ? xy(resolver.positionAt(marcherId, end))
                 : null,
             ghostEnd:
-                !endsInF && started && plan
+                !endsInF && started(end - 1) && plan
                     ? xy(plan.positionAt(marcherId, end))
                     : null,
             forks,

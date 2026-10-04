@@ -77,6 +77,37 @@ resolver), `TimelineFocusLayer.ts` (one fabric object), `useTimelineFocusRender.
   UI-10 falls back to the page box ending there, and the strip briefly highlights the
   previous page.
 
+## Reviews (2026-10-04)
+
+A code review and a designer-UX review ran on the first commit.
+
+**Fixed after review:**
+
+- **The playhead on the first beat edited the previous move.** After Stop, a seek to the start or the loop's wrap, P could equal S. UI-10's window then fell back to the previous page box, so a drag wrote the wrong move. Inside isolation P now stays in `(start, end]`.
+- **Esc was swallowed by the registered Escape action.** It now listens in the capture phase. The first Esc deselects as usual; an Esc with nothing selected leaves.
+- **The restore point was the double-clicked range.** The panel now records the window on the first mousedown of the click sequence.
+- **S drifted when page boxes changed, and S and P stayed behind when the isolated clip moved with P mid-range.** Both now rebuild the isolated window.
+- **Scene: a member with two rows lost its first path; a member another move held at the start had no ghost; context paths could repeat.** All three are fixed, and a catch-up ghost is drawn only where the plan doesn't catch up too.
+- **`selectNothing` kept isolation, and the join refusal suggested a range that is also refused.** Both fixed.
+- **UX:**
+  - the bar names moves in pages and counts ("Page 2, counts 5–8");
+  - with marchers selected, the others' paths drop to 25%;
+  - members who hold still are a quiet ring with no path;
+  - the bar no longer wraps.
+
+**Open, for the owner:**
+
+- **Ghost prominence (V-8).** The UX review says gray dashes on a gray grid are the faintest mark on the field, though ghosts are why the mode exists. It suggests the move's color, dashed, with hollow ends, as the drag target.
+- **Mid-range edits.** With P scrubbed mid-move, a drag follows UI-10 and makes a sub-range move. The UX review suggests that inside isolation, edits always target the move's end and scrubbing is for viewing only.
+- **Draggable ghost ends (need 1).** Selecting B10–B16 inside isolation selects their real dots, which belong to the move that stole them; ghosts need their own hit-testing and selection (07 G2).
+- **Not done yet:**
+  - the inspector doesn't name the isolated move;
+  - nothing on a page box hints at double-click;
+  - faded marchers turn pink, which can clash with a move's color (UI-9 dimming);
+  - the selection box stays put while playing;
+  - step-size warnings are hidden while isolated;
+  - follow-the-leader `inherit` order falls back in the plan.
+
 ## Validation rows (to merge into VALIDATION.md)
 
 | ID   | Decision (status)                                                                                    | Alternative                                            | What to try                                                                                     |

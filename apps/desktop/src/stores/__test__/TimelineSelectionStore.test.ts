@@ -247,8 +247,9 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
             store().isolate(3);
             store().seek(30);
             expect(store().playheadBeat).toBe(20);
+            // Never on the start flag: UI-10 would fall back to the previous page box there
             store().seek(2);
-            expect(store().playheadBeat).toBe(12);
+            expect(store().playheadBeat).toBe(13);
             store().seek(15);
             expect(store().startBeat).toBe(12);
             expect(store().selection).toEqual({
@@ -295,6 +296,86 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
                 end: 20,
             });
             store().setStoredTimelines(TIMELINES.slice(0, 2));
+            expect(store().isolation).toBeNull();
+            expect(isMarcherDimmed(store(), 1)).toBe(false);
+        });
+
+        it("Stop and the loop's wrap keep the window on the isolated move (code review 1)", () => {
+            store().isolate(2);
+            store().returnToStart();
+            expect(store().playheadBeat).toBe(10);
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 9,
+                end: 10,
+            });
+            store().seek(9);
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 9,
+                end: 10,
+            });
+        });
+
+        it("keeps S on the isolated start when the page boxes change (code review 4)", () => {
+            store().isolate(2);
+            store().seek(12);
+            store().setPageBoxes([
+                { start: 1, end: 6 },
+                { start: 6, end: 17 },
+                { start: 17, end: 25 },
+            ]);
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 9,
+                end: 12,
+            });
+        });
+
+        it("moves S and P with the isolated clip even with P mid-range (code review 5)", () => {
+            store().isolate(3);
+            store().seek(15);
+            store().followTimelineShift({ start: 12, end: 20 }, 2);
+            expect(store().isolation).toMatchObject({ start: 14, end: 22 });
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 14,
+                end: 17,
+            });
+            // The reload then finds the range unchanged
+            store().setStoredTimelines([
+                TIMELINES[0]!,
+                TIMELINES[1]!,
+                timeline(3, 14, 22, [3]),
+            ]);
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 14,
+                end: 17,
+            });
+        });
+
+        it("restores the window it was given (the one before a double-click's clicks; code review 3)", () => {
+            store().selectRange(3, 9);
+            const before = {
+                startBeat: store().startBeat,
+                startPinned: store().startPinned,
+                playheadBeat: store().playheadBeat,
+            };
+            // The double-click's single clicks select the page box first
+            store().selectRange(9, 17);
+            store().isolate(2, before);
+            store().exitIsolation();
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 3,
+                end: 9,
+            });
+        });
+
+        it("selecting nothing ends isolation (code review 10)", () => {
+            store().isolate(3);
+            store().selectNothing();
             expect(store().isolation).toBeNull();
             expect(isMarcherDimmed(store(), 1)).toBe(false);
         });

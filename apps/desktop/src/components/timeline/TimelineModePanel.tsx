@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
 import type { AddedPageFlag } from "@/db-functions/pageFlags";
@@ -15,6 +15,7 @@ import {
     selectionIsRange,
     useTimelineSelectionStore,
     type TimelineEditSelection,
+    type TimelineIsolation,
 } from "@/stores/TimelineSelectionStore";
 import {
     pageFlags,
@@ -140,6 +141,7 @@ export default function TimelineModePanel() {
         onAdded: selectAddedPage,
     });
     const queryClient = useQueryClient();
+    const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
     const { mutate: deletePageFlags } = useMutation(
         deletePageFlagsMutationOptions(queryClient),
     );
@@ -157,56 +159,77 @@ export default function TimelineModePanel() {
     };
 
     return (
-        <Timeline
-            mode="expanded"
-            className="w-full"
-            beats={beats}
-            pages={pages}
-            measures={measures}
-            timelines={offPage}
-            playback={playback}
-            transportClock={<AudioClock />}
-            transportAccessories={
-                <>
-                    <TimelineMuteButton />
-                    <TimelineMetronomeButton />
-                    <FullscreenButton />
-                </>
-            }
-            selection={selection}
-            onSelectionChange={changeSelection}
-            onTimelineRangeCommit={commands.commitTimelineRange}
-            onOpenRange={(range) => {
-                if (isPlaying) return;
-                const store = useTimelineSelectionStore.getState();
-                const timeline = store.storedTimelines?.find(
-                    (t) =>
-                        t.start === range.startBeatIndex &&
-                        t.end === range.endBeatIndex,
-                );
-                if (timeline) store.isolate(timeline.id);
-                else
-                    toast.info(
-                        "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
+        // A double-click's two clicks select the range first; remember the window from before the
+        // first one, so leaving isolation goes back there (V-18)
+        <div
+            className="contents"
+            onMouseDownCapture={(event) => {
+                if (event.detail !== 1) return;
+                const s = useTimelineSelectionStore.getState();
+                windowBeforeClick.current = s.isolation?.restore ?? {
+                    startBeat: s.startBeat,
+                    startPinned: s.startPinned,
+                    playheadBeat: s.playheadBeat,
+                };
+            }}
+        >
+            <Timeline
+                mode="expanded"
+                className="w-full"
+                beats={beats}
+                pages={pages}
+                measures={measures}
+                timelines={offPage}
+                playback={playback}
+                transportClock={<AudioClock />}
+                transportAccessories={
+                    <>
+                        <TimelineMuteButton />
+                        <TimelineMetronomeButton />
+                        <FullscreenButton />
+                    </>
+                }
+                selection={selection}
+                onSelectionChange={changeSelection}
+                onTimelineRangeCommit={commands.commitTimelineRange}
+                onOpenRange={(range) => {
+                    if (isPlaying) return;
+                    const store = useTimelineSelectionStore.getState();
+                    const timeline = store.storedTimelines?.find(
+                        (t) =>
+                            t.start === range.startBeatIndex &&
+                            t.end === range.endBeatIndex,
                     );
-            }}
-            onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
-            onDeletePageFlag={(pageId) => {
-                const after = selectionAfterFlagDelete(
-                    pages,
-                    pageId,
-                    useTimelineSelectionStore.getState().selection,
-                );
-                deletePageFlags(new Set([pageId]), {
-                    onSuccess: () => {
-                        if (!after) return;
-                        const store = useTimelineSelectionStore.getState();
-                        if (after.kind === "home") store.selectHome();
-                        else store.selectRange(after.start, after.end);
-                    },
-                });
-            }}
-        />
+                    if (timeline)
+                        store.isolate(
+                            timeline.id,
+                            windowBeforeClick.current ?? undefined,
+                        );
+                    else
+                        toast.info(
+                            "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
+                        );
+                }}
+                onAddPageFlag={
+                    addPageFlag.insertion ? addPageFlag.add : undefined
+                }
+                onDeletePageFlag={(pageId) => {
+                    const after = selectionAfterFlagDelete(
+                        pages,
+                        pageId,
+                        useTimelineSelectionStore.getState().selection,
+                    );
+                    deletePageFlags(new Set([pageId]), {
+                        onSuccess: () => {
+                            if (!after) return;
+                            const store = useTimelineSelectionStore.getState();
+                            if (after.kind === "home") store.selectHome();
+                            else store.selectRange(after.start, after.end);
+                        },
+                    });
+                }}
+            />
+        </div>
     );
 }
 
