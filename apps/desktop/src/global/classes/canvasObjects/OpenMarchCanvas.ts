@@ -5,6 +5,11 @@ import Pathway, { DEFAULT_PATHWAY_STROKE_WIDTH } from "./Pathway";
 import Midpoint from "./Midpoint";
 import TimelinePathway from "./TimelinePathway";
 import TimelineFocusLayer from "./TimelineFocusLayer";
+import {
+    makeGhostHandle,
+    type GhostEndTarget,
+    type GhostHandleObject,
+} from "./GhostHandle";
 import type { FocusScene } from "@/timeline/timelineFocusScene";
 import type TimelineShapeOverlay from "./TimelineShapeOverlay";
 import { FieldProperties } from "@openmarch/core";
@@ -2388,14 +2393,23 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         this.requestRenderAll();
     }
 
+    /** The ghost end handles drawn for this scene (rebuilt only when the scene changes) */
+    private _ghostHandles: GhostHandleObject[] = [];
+    private _ghostHandleScene: FocusScene | null = null;
+
     /**
-     * Draws an isolated timeline's scene (docs/timeline/research/ownership/09-isolation.md) above the grid and
-     * below the marchers, replacing any scene drawn before.
+     * Draws an isolated timeline's scene (docs/timeline/research/ownership/09-isolation.md) above
+     * the grid and below the marchers, replacing any scene drawn before. With `onGhostCommit`, each
+     * ghost end dot gets a handle above the marchers that drags its planned destination.
      */
     renderTimelineFocus(
         scene: FocusScene,
         ghostColor: string,
         emphasis: ReadonlySet<number> | null = null,
+        onGhostCommit?: (
+            target: GhostEndTarget,
+            point: { x: number; y: number },
+        ) => Promise<boolean>,
     ): void {
         const existing = this.getObjectsByType(TimelineFocusLayer)[0];
         if (existing) existing.update(scene, ghostColor, emphasis);
@@ -2409,15 +2423,69 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                     height: this._fieldProperties.height,
                 }),
             );
+        if (scene !== this._ghostHandleScene) {
+            this.removeGhostHandles();
+            this._ghostHandleScene = scene;
+            if (onGhostCommit)
+                for (const slot of scene.slots)
+                    if (slot.ghostEnd) {
+                        const handle = makeGhostHandle({
+                            target: {
+                                timelineId: scene.timelineId,
+                                marcherId: slot.marcherId,
+                            },
+                            at: slot.ghostEnd,
+                            color: ghostColor,
+                            zoom: this.getZoom() || 1,
+                            onCommit: onGhostCommit,
+                        });
+                        this._ghostHandles.push(handle);
+                        this.add(handle);
+                    }
+        }
         this.sendCanvasMarchersToFront();
+        // Ghost handles win over marchers they overlap: in isolation they are what you edit
+        for (const handle of this._ghostHandles) handle.bringToFront();
         this.requestRenderAll();
     }
 
-    /** Removes the isolated timeline's scene, if one is drawn. */
+    /**
+     * A press on a ghost end handle goes to the handle, even inside the marcher selection's box,
+     * which fabric would otherwise give every press to (and drag the real marchers).
+     */
+    findTarget(e: Event, skipGroup: boolean): fabric.Object | undefined {
+        if (this._ghostHandles.length > 0) {
+            const p = this.getPointer(e);
+            const ghost = this._ghostHandles.find(
+                (h) =>
+                    h.evented !== false &&
+                    Math.hypot((h.left ?? 0) - p.x, (h.top ?? 0) - p.y) <=
+                        (h.radius ?? 0) * 1.5,
+            );
+            if (ghost) return ghost;
+        }
+        return super.findTarget(e, skipGroup);
+    }
+
+    private removeGhostHandles(): void {
+        const active = this.getActiveObjects();
+        if (
+            active.some((o) =>
+                (this._ghostHandles as fabric.Object[]).includes(o),
+            )
+        )
+            this.discardActiveObject();
+        for (const handle of this._ghostHandles) this.remove(handle);
+        this._ghostHandles = [];
+        this._ghostHandleScene = null;
+    }
+
+    /** Removes the isolated timeline's scene and its ghost handles, if drawn. */
     clearTimelineFocus(): void {
         const layers = this.getObjectsByType(TimelineFocusLayer);
-        if (layers.length === 0) return;
+        if (layers.length === 0 && this._ghostHandles.length === 0) return;
         for (const layer of layers) this.remove(layer);
+        this.removeGhostHandles();
         this.requestRenderAll();
     }
 

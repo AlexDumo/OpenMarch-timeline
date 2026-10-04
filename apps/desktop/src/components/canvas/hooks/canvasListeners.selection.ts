@@ -9,6 +9,11 @@ import { marcherPagesByPageQueryOptions } from "@/hooks/queries";
 import { useSelectionStore } from "@/stores/SelectionStore";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { isTimelineShapeHandle } from "@/global/classes/canvasObjects/TimelineShapeOverlay";
+import { isGhostHandle } from "@/global/classes/canvasObjects/GhostHandle";
+
+/** Timeline shape handles (P7.11) and isolation's ghost end handles: transparent to selection */
+const isCanvasHandle = (object: unknown) =>
+    isTimelineShapeHandle(object) || isGhostHandle(object);
 
 // eslint-disable-next-line max-lines-per-function
 export const useSelectionListeners = ({
@@ -136,7 +141,7 @@ export const useSelectionListeners = ({
         if (!canvas) return;
         // Timeline shape handles (P7.11) are transparent to the selection
         const active = canvas.getActiveObjects();
-        const handles = active.filter(isTimelineShapeHandle);
+        const handles = active.filter(isCanvasHandle);
         if (handles.length > 0) {
             // A press on one handle starts its drag: keep the marchers selected as they are
             if (active.length === 1) return;
@@ -220,7 +225,7 @@ export const useSelectionListeners = ({
     const syncCanvasToGlobal = useCallback(() => {
         if (!canvas || activeObjectsAreGloballySelected()) return;
         // Never take a timeline shape handle away mid-drag (P7.11)
-        if (canvas.getActiveObjects().some(isTimelineShapeHandle)) return;
+        if (canvas.getActiveObjects().some(isCanvasHandle)) return;
         const selectableObjects: Map<string, Selectable.ISelectable> = new Map(
             canvas
                 .getAllSelectableObjects()
@@ -256,10 +261,7 @@ export const useSelectionListeners = ({
             // A timeline shape handle let go (P7.11): the marchers were never deselected, so show
             // them as selected again rather than clearing them
             const deselected = event?.deselected ?? [];
-            if (
-                deselected.length > 0 &&
-                deselected.every(isTimelineShapeHandle)
-            ) {
+            if (deselected.length > 0 && deselected.every(isCanvasHandle)) {
                 syncCanvasToGlobal();
                 return;
             }

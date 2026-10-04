@@ -77,6 +77,27 @@ resolver), `TimelineFocusLayer.ts` (one fabric object), `useTimelineFocusRender.
   UI-10 falls back to the page box ending there, and the strip briefly highlights the
   previous page.
 
+## Ghost ends are draggable (2026-10-04)
+
+The gray end dot of a member another move has at the timeline's end is now a drag handle (07 G2, the owner's need 1). Releasing it sets that member's planned destination in the isolated timeline. This is the timeline's existing slot destination (`moveGhostEnds`; `moveMarchersInTimelineInTransaction` with `ghosts`, which skips the higher-layer refusal). It is one undo step, and it needs no new storage.
+
+What follows from the edit is re-derived:
+
+- the ghost path;
+- the point where the member leaves (R-4);
+- the stealing move's start.
+
+The member's real end doesn't move.
+
+A press on a handle always goes to it, even inside the marcher selection's box. `findTarget` prefers handles; otherwise fabric would hand the press to the selection and drag the real marchers. Like the shape handles, ghost handles are transparent to the marcher selection.
+
+Limits:
+
+- one ghost at a time; a box selection drops handles, as it does shape handles;
+- no live path preview while dragging, so the scene redraws on release;
+- coordinate rounding isn't applied;
+- ghost starts (joiners) wait for WP-O3.
+
 ## Reviews (2026-10-04)
 
 A code review and a designer-UX review ran on the first commit.

@@ -353,16 +353,23 @@ export type TimelineEditTarget =
  *   (R-2), since then its destination isn't where the marcher is drawn there.
  *
  * Shape-backed and follow-the-leader transitions are handled as in `moveMarchersOnPage`.
+ *
+ * With `ghosts`, the moves are ghost end dots of an isolated timeline
+ * (docs/timeline/research/ownership/09-isolation.md): the timeline's own planned destinations for
+ * marchers another move has at its end. The higher-layer refusal is then skipped, since the edit
+ * names the timeline's slot directly and the marcher isn't drawn there.
  */
 // eslint-disable-next-line max-lines-per-function
 export const moveMarchersInTimelineInTransaction = async ({
     tx,
     timelineId,
     moves,
+    ghosts = false,
 }: {
     tx: DbTransaction;
     timelineId: number;
     moves: readonly TimelineMarcherMove[];
+    ghosts?: boolean;
 }): Promise<TimelineMoveResult> => {
     const result: TimelineMoveResult = {
         homes: [],
@@ -447,7 +454,7 @@ export const moveMarchersInTimelineInTransaction = async ({
             refuse(
                 `marcher ${await marcherLabel(tx, move.marcherId)}'s move in this timeline ends at beat ${row.end}, before the timeline's end (beat ${endBeat}). Edit it in the inspector.`,
             );
-        if ((topLayer.get(move.marcherId) ?? row.layer) > row.layer)
+        if (!ghosts && (topLayer.get(move.marcherId) ?? row.layer) > row.layer)
             refuse(
                 `marcher ${await marcherLabel(tx, move.marcherId)} is in a move on a higher layer at beat ${endBeat}, so this timeline doesn't set where it is there. Select that move's timeline instead.`,
             );
@@ -523,6 +530,32 @@ export const moveMarchersInRangeInTransaction = async ({
               ).timelineId
             : existing!.id;
     return await moveMarchersInTimelineInTransaction({ tx, timelineId, moves });
+};
+
+/**
+ * Drags of an isolated timeline's ghost end dots as one undoable edit: each sets that marcher's
+ * planned destination in the timeline (`moveMarchersInTimelineInTransaction` with `ghosts`). The
+ * move that took the marcher out re-derives from it (R-4); nothing else is written.
+ */
+export const moveGhostEnds = async ({
+    db,
+    timelineId,
+    moves,
+}: {
+    db: DbConnection;
+    timelineId: number;
+    moves: readonly TimelineMarcherMove[];
+}): Promise<TimelineMoveResult> => {
+    if (moves.length === 0)
+        return { homes: [], slots: [], convertedTransitionIds: [] };
+    return await transactionWithHistory(db, "moveGhostEnds", (tx) =>
+        moveMarchersInTimelineInTransaction({
+            tx,
+            timelineId,
+            moves,
+            ghosts: true,
+        }),
+    );
 };
 
 /**

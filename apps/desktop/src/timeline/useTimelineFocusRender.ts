@@ -4,8 +4,11 @@ import type { FieldTheme } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { withTimelineWriteLock } from "@/db-functions/history";
+import { moveGhostEnds } from "@/db-functions/timelineMoves";
+import { toastTimelineError } from "./timelineErrorMessages";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
+import type { GhostEndTarget } from "@/global/classes/canvasObjects/GhostHandle";
 import {
     isolatedTimeline,
     useTimelineSelectionStore,
@@ -71,6 +74,46 @@ export function ghostColorFor(theme: Pick<FieldTheme, "background">): string {
 }
 
 /**
+ * Writes a dragged ghost end dot as one undoable edit (`moveGhostEnds`); a refusal shows its
+ * message, and resolves false so the handle goes back.
+ */
+const ghostEndWriter =
+    (database: DbConnection) =>
+    async (
+        { timelineId, marcherId }: GhostEndTarget,
+        { x, y }: { x: number; y: number },
+    ): Promise<boolean> => {
+        try {
+            await moveGhostEnds({
+                db: database,
+                timelineId,
+                moves: [{ marcherId, x, y }],
+            });
+            return true;
+        } catch (error) {
+            toastTimelineError(error, "Error moving the ghost dot");
+            return false;
+        }
+    };
+
+/**
+ * The selected marchers, or null with none: with a selection, the others' paths step back (a
+ * page-wide move draws every member).
+ */
+function useSelectionEmphasis(): ReadonlySet<number> | null {
+    const selectedKey = (useSelectedMarchers()?.selectedMarchers ?? [])
+        .map((m) => m.id)
+        .join(",");
+    return useMemo(
+        () =>
+            selectedKey === ""
+                ? null
+                : new Set(selectedKey.split(",").map(Number)),
+        [selectedKey],
+    );
+}
+
+/**
  * Draws the isolated timeline's scene (docs/timeline/research/ownership/09-isolation.md): its members' paths,
  * gray ghosts for the parts of the move they no longer perform, the moves they leave for, and
  * their start and end dots. Clears it when nothing is isolated or `enabled` is false. The scene
@@ -92,17 +135,7 @@ export function useTimelineFocusRender({
     const timeline = useTimelineSelectionStore(isolatedTimeline);
     const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
     const [rows, setRows] = useState<FocusRows | null>(null);
-    // With marchers selected, the others' paths step back (a page-wide move draws every member)
-    const selectedKey = (useSelectedMarchers()?.selectedMarchers ?? [])
-        .map((m) => m.id)
-        .join(",");
-    const emphasis = useMemo(
-        () =>
-            selectedKey === ""
-                ? null
-                : new Set(selectedKey.split(",").map(Number)),
-        [selectedKey],
-    );
+    const emphasis = useSelectionEmphasis();
 
     const timelineId = enabled ? (timeline?.id ?? null) : null;
     useEffect(() => {
@@ -158,8 +191,13 @@ export function useTimelineFocusRender({
             canvas.clearTimelineFocus();
             return;
         }
-        canvas.renderTimelineFocus(scene, ghostColorFor(theme), emphasis);
-    }, [canvas, scene, theme, emphasis]);
+        canvas.renderTimelineFocus(
+            scene,
+            ghostColorFor(theme),
+            emphasis,
+            ghostEndWriter(database),
+        );
+    }, [canvas, database, scene, theme, emphasis]);
 
     useEffect(() => () => canvas?.clearTimelineFocus(), [canvas]);
     return scene;

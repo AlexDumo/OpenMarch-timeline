@@ -18,7 +18,7 @@ import { TimelineWriteError } from "../timelineErrors";
 import { createTimelinesInTransaction } from "../timelines";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import { createTimelineTransitionsInTransaction } from "../timelineTransitions";
-import { moveMarchersInTarget } from "../timelineMoves";
+import { moveGhostEnds, moveMarchersInTarget } from "../timelineMoves";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 
 // These tests convert the show themselves
@@ -294,6 +294,36 @@ describeDbTests("moving marchers in the selected timeline (UI-9)", (it) => {
                 moves: [{ marcherId: 6, x: 10, y: 10 }],
             }),
         );
+    });
+
+    it("a ghost end drag sets the plan of a marcher another move has at the end (isolation)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const timeline = await timelineOf(db, pages[2]!);
+        const { start_beat: s, end_beat: e } = timeline;
+        const exit = e - 4;
+        // Marcher 6 leaves the page's move 4 beats before its end (a steal-out)
+        await addRow(db, { marcherId: 6, start: exit, end: e, layer: 1 });
+        await timelineResolverSettled();
+        const origin = resolver().positionAt(6, s);
+        const stolenEnd = resolver().positionAt(6, e);
+        await moveGhostEnds({
+            db,
+            timelineId: timeline.id,
+            moves: [{ marcherId: 6, x: 10, y: 20 }],
+        });
+        await timelineResolverSettled();
+        // It still ends where the stealing move takes it
+        expect(resolver().positionAt(6, e)).toEqual(stolenEnd);
+        // It leaves from the page move's new plan (R-4)
+        const p = (exit - s) / (e - s);
+        const [x, y] = resolver().positionAt(6, exit);
+        expect(x).toBeCloseTo(origin[0] + p * (10 - origin[0]), 6);
+        expect(y).toBeCloseTo(origin[1] + p * (20 - origin[1]), 6);
+        // One undo step takes it back
+        expect((await performUndo(db)).success).toBe(true);
     });
 
     it("refuses a row that ends before the timeline's end (use the inspector)", async ({
