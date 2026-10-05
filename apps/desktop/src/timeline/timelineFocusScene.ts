@@ -98,6 +98,8 @@ export interface BuildFocusSceneInput {
     /** Color for a stretch with no move (a hold) */
     readonly holdColor?: string;
     readonly tolerance?: number;
+    /** The plan resolver, when the caller built it already (`planResolver`) */
+    readonly plan?: Resolver | null;
 }
 
 const xy = ([x, y]: readonly [number, number]): FocusPoint => ({ x, y });
@@ -193,7 +195,7 @@ export function buildFocusScene(input: BuildFocusSceneInput): FocusScene {
             m.marcherId,
             Math.min(firstRow.get(m.marcherId) ?? Infinity, m.start),
         );
-    const plan = planResolver(input);
+    const plan = input.plan !== undefined ? input.plan : planResolver(input);
     const known = new Set(resolver.marcherIds());
     const colorOfTransition = (transitionId: number | null) => {
         if (transitionId === null) return holdColor;

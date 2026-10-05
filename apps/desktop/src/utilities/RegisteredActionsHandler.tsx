@@ -11,6 +11,7 @@ import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import type { ModifiedMarcherPageArgs } from "@/db-functions/marcherPage";
 import {
     planCanvasEdit,
+    snapIsolatedPlayheadToEnd,
     timelineCoordinateRecords,
     toTimelineMoves,
 } from "@/timeline/timelineCoordinateWrites";
@@ -709,6 +710,7 @@ function RegisteredActionsHandler() {
                 return;
             }
             if (changes.length === 0) return;
+            snapIsolatedPlayheadToEnd();
             moveMarchersInTarget({
                 target: plan.target,
                 moves: toTimelineMoves(changes),

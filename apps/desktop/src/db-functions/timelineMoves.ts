@@ -337,7 +337,15 @@ export const moveMarchersOnPage = async ({
  */
 export type TimelineEditTarget =
     | { readonly kind: "home" }
-    | { readonly kind: "timeline"; readonly timelineId: number }
+    | {
+          readonly kind: "timeline";
+          readonly timelineId: number;
+          /**
+           * An isolated timeline's edit: its members' endings in it, stolen members too (see
+           * `moveMarchersInTimelineInTransaction`)
+           */
+          readonly ghosts?: boolean;
+      }
     | { readonly kind: "range"; readonly start: number; readonly end: number };
 
 /**
@@ -354,10 +362,10 @@ export type TimelineEditTarget =
  *
  * Shape-backed and follow-the-leader transitions are handled as in `moveMarchersOnPage`.
  *
- * With `ghosts`, the moves are ghost end dots of an isolated timeline
- * (docs/timeline/research/ownership/09-isolation.md): the timeline's own planned destinations for
- * marchers another move has at its end. The higher-layer refusal is then skipped, since the edit
- * names the timeline's slot directly and the marcher isn't drawn there.
+ * With `ghosts`, the edit comes from an isolated timeline
+ * (docs/timeline/research/ownership/09-isolation.md), which draws its members where its plan puts
+ * them: a member another move has at the timeline's end is drawn at its planned destination, so
+ * the higher-layer refusal is skipped and the edit sets that planned destination.
  */
 // eslint-disable-next-line max-lines-per-function
 export const moveMarchersInTimelineInTransaction = async ({
@@ -533,32 +541,6 @@ export const moveMarchersInRangeInTransaction = async ({
 };
 
 /**
- * Drags of an isolated timeline's ghost end dots as one undoable edit: each sets that marcher's
- * planned destination in the timeline (`moveMarchersInTimelineInTransaction` with `ghosts`). The
- * move that took the marcher out re-derives from it (R-4); nothing else is written.
- */
-export const moveGhostEnds = async ({
-    db,
-    timelineId,
-    moves,
-}: {
-    db: DbConnection;
-    timelineId: number;
-    moves: readonly TimelineMarcherMove[];
-}): Promise<TimelineMoveResult> => {
-    if (moves.length === 0)
-        return { homes: [], slots: [], convertedTransitionIds: [] };
-    return await transactionWithHistory(db, "moveGhostEnds", (tx) =>
-        moveMarchersInTimelineInTransaction({
-            tx,
-            timelineId,
-            moves,
-            ghosts: true,
-        }),
-    );
-};
-
-/**
  * A canvas move as one undoable edit (UI-9 Editing, Home; UI-10): the homes for `{kind: "home"}`,
  * the endings in the timeline for `{kind: "timeline"}` (`moveMarchersInTimelineInTransaction`),
  * and the window's timeline, joined as needed, for `{kind: "range"}`
@@ -581,6 +563,7 @@ export const moveMarchersInTarget = async ({
                 tx,
                 timelineId: target.timelineId,
                 moves,
+                ghosts: target.ghosts ?? false,
             });
         if (target.kind === "range")
             return await moveMarchersInRangeInTransaction({

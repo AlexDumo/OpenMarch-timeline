@@ -118,6 +118,16 @@ export default class TimelineFocusLayer extends fabric.Object {
             line(path.points);
         }
 
+        // Where each member another move took really ends up: the end of that move's path
+        for (const path of scene.context) {
+            const end = path.points[path.points.length - 1];
+            if (!end) continue;
+            ctx.globalAlpha = this.alphaOf(path.marcherId);
+            ctx.fillStyle = path.color;
+            dot(end, DOT_RADIUS);
+            ctx.fill();
+        }
+
         // 2. Ghosts: the isolated move's plan where it no longer has the member
         ctx.strokeStyle = ghostColor;
         ctx.lineWidth = px(GHOST_WIDTH);

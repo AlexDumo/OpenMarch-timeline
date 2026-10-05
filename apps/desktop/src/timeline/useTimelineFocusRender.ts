@@ -4,11 +4,8 @@ import type { FieldTheme } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { withTimelineWriteLock } from "@/db-functions/history";
-import { moveGhostEnds } from "@/db-functions/timelineMoves";
-import { toastTimelineError } from "./timelineErrorMessages";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
-import type { GhostEndTarget } from "@/global/classes/canvasObjects/GhostHandle";
 import {
     isolatedTimeline,
     useTimelineSelectionStore,
@@ -17,9 +14,14 @@ import { getTimelineHost, useTimelineResolverStore } from "./timelineStore";
 import { TIMELINE_TRACK_COLORS } from "./timelineViewModel";
 import {
     buildFocusScene,
+    planResolver,
     type FocusMemberSlot,
     type FocusScene,
 } from "./timelineFocusScene";
+import {
+    useIsolationPlanStore,
+    type IsolationPlan,
+} from "./timelineIsolationPlan";
 
 export interface FocusRows {
     readonly timelineId: number;
@@ -73,28 +75,21 @@ export function ghostColorFor(theme: Pick<FieldTheme, "background">): string {
     return luminance > 0.5 ? "#6f6f6f" : "#c4c4c4";
 }
 
-/**
- * Writes a dragged ghost end dot as one undoable edit (`moveGhostEnds`); a refusal shows its
- * message, and resolves false so the handle goes back.
- */
-const ghostEndWriter =
-    (database: DbConnection) =>
-    async (
-        { timelineId, marcherId }: GhostEndTarget,
-        { x, y }: { x: number; y: number },
-    ): Promise<boolean> => {
-        try {
-            await moveGhostEnds({
-                db: database,
-                timelineId,
-                moves: [{ marcherId, x, y }],
-            });
-            return true;
-        } catch (error) {
-            toastTimelineError(error, "Error moving the ghost dot");
-            return false;
-        }
-    };
+/** A timeline's color as the strip draws it: by start order over every timeline. */
+const stripColors = (timelines: readonly { readonly id: number }[]) => {
+    const index = new Map(timelines.map((t, i) => [t.id, i]));
+    return (id: number) =>
+        TIMELINE_TRACK_COLORS[
+            (index.get(id) ?? 0) % TIMELINE_TRACK_COLORS.length
+        ];
+};
+
+/** Publishes the plan, so the static render and the coordinate tools draw and edit at it. */
+function usePublishIsolationPlan(plan: IsolationPlan | null): void {
+    const setPlan = useIsolationPlanStore((s) => s.set);
+    useEffect(() => setPlan(plan), [plan, setPlan]);
+    useEffect(() => () => setPlan(null), [setPlan]);
+}
 
 /**
  * The selected marchers, or null with none: with a selection, the others' paths step back (a
@@ -114,10 +109,12 @@ function useSelectionEmphasis(): ReadonlySet<number> | null {
 }
 
 /**
- * Draws the isolated timeline's scene (docs/timeline/research/ownership/09-isolation.md): its members' paths,
- * gray ghosts for the parts of the move they no longer perform, the moves they leave for, and
- * their start and end dots. Clears it when nothing is isolated or `enabled` is false. The scene
- * stays while playing, so a loop over the move shows the ghosts against the moving dots.
+ * Draws the isolated timeline's scene (docs/timeline/research/ownership/09-isolation.md): its
+ * members' paths, gray ghosts for the parts of the move they no longer perform, the moves they
+ * leave for, and their start and end dots. Publishes the timeline's plan
+ * (`useIsolationPlanStore`), so while paused the members are drawn and edited where it puts them.
+ * Clears both when nothing is isolated or `enabled` is false. The scene stays while playing, so a
+ * loop over the move shows the ghosts against the moving dots.
  */
 export function useTimelineFocusRender({
     canvas,
@@ -156,7 +153,7 @@ export function useTimelineFocusRender({
         };
     }, [database, timelineId, version]);
 
-    const scene = useMemo(() => {
+    const built = useMemo(() => {
         const host = getTimelineHost();
         if (
             !timeline ||
@@ -167,23 +164,30 @@ export function useTimelineFocusRender({
             !storedTimelines
         )
             return null;
-        // The strip's colors: by start order over every timeline
-        const index = new Map(storedTimelines.map((t, i) => [t.id, i]));
-        const colorOf = (id: number) =>
-            TIMELINE_TRACK_COLORS[
-                (index.get(id) ?? 0) % TIMELINE_TRACK_COLORS.length
-            ];
-        return buildFocusScene({
+        const colorOf = stripColors(storedTimelines);
+        const input = {
             resolver,
             timeline,
             members: rows.members,
             snapshot: host.snapshot,
             timelineOfTransition: rows.timelineOfTransition,
             colorOf,
-        });
+        };
+        const plan = planResolver(input);
+        return {
+            scene: buildFocusScene({ ...input, plan }),
+            plan: plan && {
+                timelineId: timeline.id,
+                plan,
+                members: new Set(rows.members.map((m) => m.marcherId)),
+            },
+        };
         // `version` changes whenever the resolver's answers may have
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timeline, resolver, version, rows, storedTimelines]);
+
+    const scene = built?.scene ?? null;
+    usePublishIsolationPlan(built?.plan ?? null);
 
     useEffect(() => {
         if (!canvas) return;
@@ -191,13 +195,8 @@ export function useTimelineFocusRender({
             canvas.clearTimelineFocus();
             return;
         }
-        canvas.renderTimelineFocus(
-            scene,
-            ghostColorFor(theme),
-            emphasis,
-            ghostEndWriter(database),
-        );
-    }, [canvas, database, scene, theme, emphasis]);
+        canvas.renderTimelineFocus(scene, ghostColorFor(theme), emphasis);
+    }, [canvas, scene, theme, emphasis]);
 
     useEffect(() => () => canvas?.clearTimelineFocus(), [canvas]);
     return scene;

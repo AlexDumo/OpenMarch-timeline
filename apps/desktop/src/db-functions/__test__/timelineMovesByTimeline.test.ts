@@ -18,7 +18,7 @@ import { TimelineWriteError } from "../timelineErrors";
 import { createTimelinesInTransaction } from "../timelines";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import { createTimelineTransitionsInTransaction } from "../timelineTransitions";
-import { moveGhostEnds, moveMarchersInTarget } from "../timelineMoves";
+import { moveMarchersInTarget } from "../timelineMoves";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 
 // These tests convert the show themselves
@@ -296,7 +296,7 @@ describeDbTests("moving marchers in the selected timeline (UI-9)", (it) => {
         );
     });
 
-    it("a ghost end drag sets the plan of a marcher another move has at the end (isolation)", async ({
+    it("an isolated edit sets the plan of a marcher another move has at the end", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -309,9 +309,9 @@ describeDbTests("moving marchers in the selected timeline (UI-9)", (it) => {
         await timelineResolverSettled();
         const origin = resolver().positionAt(6, s);
         const stolenEnd = resolver().positionAt(6, e);
-        await moveGhostEnds({
+        await moveMarchersInTarget({
             db,
-            timelineId: timeline.id,
+            target: { kind: "timeline", timelineId: timeline.id, ghosts: true },
             moves: [{ marcherId: 6, x: 10, y: 20 }],
         });
         await timelineResolverSettled();

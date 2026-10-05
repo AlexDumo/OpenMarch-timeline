@@ -77,26 +77,19 @@ resolver), `TimelineFocusLayer.ts` (one fabric object), `useTimelineFocusRender.
   UI-10 falls back to the page box ending there, and the strip briefly highlights the
   previous page.
 
-## Ghost ends are draggable (2026-10-04)
+## The plan dot is the marcher (owner, 2026-10-04)
 
-The gray end dot of a member another move has at the timeline's end is now a drag handle (07 G2, the owner's need 1). Releasing it sets that member's planned destination in the isolated timeline. This is the timeline's existing slot destination (`moveGhostEnds`; `moveMarchersInTimelineInTransaction` with `ghosts`, which skips the higher-layer refusal). It is one undo step, and it needs no new storage.
+A first version had separate gray handles for ghost ends, but only one could be dragged at a time and no marcher tool worked on them. The owner chose instead: **inside isolation, while paused, each member is drawn, selected and edited where the isolated move's plan puts it.**
 
-What follows from the edit is re-derived:
+- A stolen member stands at its planned spot, as if it still did the whole move. Where it really goes becomes the overlay: the stealing move's path in its color, with a dot where that path ends.
+- Every marcher tool works unchanged on members: canvas drag, box and lasso, align and distribute, nudges, rounding, and the inspector's coordinates. They read positions through `editingPositionAt` and write through `planCanvasEdit`, which in isolation targets the isolated timeline's own endings (`{kind: "timeline", ghosts: true}`), stolen members included. One gesture is one undo step.
+- **Edits always target the move's end** (owner, 2026-10-04): an edit made with the playhead mid-move first sends the playhead to the end (`snapIsolatedPlayheadToEnd`). Scrubbing inside isolation is for watching.
+- Playback shows the real show, not the plan. The plan view applies only while paused, when the static render draws (`applyIsolationPlan`).
+- An edit re-derives the ghost path, where the member leaves (R-4) and the stealing move's start. The member's real end doesn't move.
 
-- the ghost path;
-- the point where the member leaves (R-4);
-- the stealing move's start.
+Code: `timelineIsolationPlan.ts` (plan store, `editingPositionAt`, `applyIsolationPlan`), `planCanvasEdit` and `snapIsolatedPlayheadToEnd` in `timelineCoordinateWrites.ts`, and `ghosts` on `moveMarchersInTimelineInTransaction`.
 
-The member's real end doesn't move.
-
-A press on a handle always goes to it, even inside the marcher selection's box. `findTarget` prefers handles; otherwise fabric would hand the press to the selection and drag the real marchers. Like the shape handles, ghost handles are transparent to the marcher selection.
-
-Limits:
-
-- one ghost at a time; a box selection drops handles, as it does shape handles;
-- no live path preview while dragging, so the scene redraws on release;
-- coordinate rounding isn't applied;
-- ghost starts (joiners) wait for WP-O3.
+V-19 (**provisional**, owner): members are drawn at the plan when paused but at the real show when playing. Alternative: plan while playing too. Try: loop a steal-out and pause at different counts. Does the jump between the real and planned positions on pause read as "editing view", or as a bug?
 
 ## Reviews (2026-10-04)
 

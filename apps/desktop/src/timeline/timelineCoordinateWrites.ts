@@ -10,6 +10,7 @@ import {
     useTimelineSelectionStore,
     type TimelineSelectionState,
 } from "@/stores/TimelineSelectionStore";
+import { editingPositionAt } from "./timelineIsolationPlan";
 import type { CoordinateRecord } from "@/utilities/CoordinateActions";
 import { pageEndBeat } from "./timelineCanvas";
 import {
@@ -28,7 +29,11 @@ import {
  * - a window `[S, P)`: where the moved marchers arrive at the playhead P, leaving the start flag
  *   S. The move creates the window's timeline and adds the marchers to it as needed
  *   (`moveMarchersInRangeInTransaction`), starting from the resolver's positions at P;
- * - home (the playhead on beat 0): the marchers' homes.
+ * - home (the playhead on beat 0): the marchers' homes;
+ * - an isolated timeline (docs/timeline/research/ownership/09-isolation.md): the timeline's own
+ *   endings, from where its plan puts its members (`editingPositionAt`), for stolen members too.
+ *   The playhead goes to the timeline's end first (`snapIsolatedPlayheadToEnd`), so the edit is
+ *   seen where it lands.
  *
  * Nothing selected is refused with a hint (`TimelineEditRefusedError`). "Set marchers to the
  * previous or next page" (P7.6) still copies page positions through `copyPagePositions` until
@@ -101,10 +106,21 @@ export type CanvasEditPlan =
 export function planCanvasEdit(
     state: Pick<
         TimelineSelectionState,
-        "selection"
+        "selection" | "isolation"
     > = useTimelineSelectionStore.getState(),
 ): CanvasEditPlan {
-    const { selection } = state;
+    const { selection, isolation } = state;
+    // Isolation always edits the isolated timeline's end (owner, 2026-10-04)
+    if (isolation)
+        return {
+            ok: true,
+            target: {
+                kind: "timeline",
+                timelineId: isolation.timelineId,
+                ghosts: true,
+            },
+            beat: isolation.end,
+        };
     if (selection.kind === "range")
         return {
             ok: true,
@@ -118,6 +134,16 @@ export function planCanvasEdit(
     if (selection.kind === "home")
         return { ok: true, target: { kind: "home" }, beat: 0 };
     return { ok: false, error: new TimelineEditRefusedError("noTimeline") };
+}
+
+/**
+ * Inside isolation, an edit goes to the isolated timeline's end; the playhead goes there first,
+ * so the edit is drawn where it lands. Does nothing outside isolation or with the playhead there.
+ */
+export function snapIsolatedPlayheadToEnd(): void {
+    const store = useTimelineSelectionStore.getState();
+    if (store.isolation && store.playheadBeat !== store.isolation.end)
+        store.seek(store.isolation.end);
 }
 
 /**
@@ -137,7 +163,7 @@ export function withTimelinePositions<T extends MarcherXY>(
     return coordinates
         .filter((c) => known.has(c.marcher_id))
         .map((c) => {
-            const [x, y] = resolver.positionAt(c.marcher_id, beat);
+            const [x, y] = editingPositionAt(resolver, c.marcher_id, beat);
             return { ...c, x, y };
         });
 }
@@ -190,6 +216,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     plan?: CanvasEditPlan;
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
+    snapIsolatedPlayheadToEnd();
     const next = transform(timelineCoordinateRecords(plan.beat, marcherIds));
     await moveMarchersInTarget({
         db,
@@ -315,6 +342,7 @@ export function canvasCoordinateWriter<A extends MarcherXY>({
             onRefused(current.error);
             return;
         }
+        snapIsolatedPlayheadToEnd();
         writeTimeline({
             target: current.target,
             moves: toTimelineMoves(changes),
