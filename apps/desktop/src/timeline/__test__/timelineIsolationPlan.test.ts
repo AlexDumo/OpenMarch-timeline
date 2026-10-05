@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createResolver, type TimelineSnapshot } from "@openmarch/core";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { planCanvasEdit } from "../timelineCoordinateWrites";
+import { atIsolatedEnd, planCanvasEdit } from "../timelineCoordinateWrites";
+import { useTimelineResolverStore } from "../timelineStore";
 import {
     applyIsolationPlan,
     editingPositionAt,
+    useIsolationPlanStore,
     type IsolationPlan,
 } from "../timelineIsolationPlan";
 
@@ -53,7 +55,18 @@ const real = {
 };
 
 describe("isolation plan (docs/timeline/research/ownership/09-isolation.md)", () => {
-    afterEach(() => useTimelineSelectionStore.getState().reset());
+    afterEach(() => {
+        useTimelineSelectionStore.getState().reset();
+        useIsolationPlanStore.getState().set(null);
+        useTimelineResolverStore.setState({ resolver: null });
+    });
+
+    const ISOLATION = {
+        timelineId: 7,
+        start: 0,
+        end: 16,
+        restore: { startBeat: 0, startPinned: false, playheadBeat: 0 },
+    };
 
     it("members are drawn and edited at the plan; others at the real show", () => {
         expect(editingPositionAt(real, 1, 16, plan())).toEqual([0, 160]);
@@ -65,6 +78,7 @@ describe("isolation plan (docs/timeline/research/ownership/09-isolation.md)", ()
     });
 
     it("isolation edits the isolated timeline's end, stolen members included", () => {
+        useIsolationPlanStore.getState().set(plan());
         expect(
             planCanvasEdit({
                 selection: { kind: "range", start: 4, end: 9 },
@@ -84,5 +98,33 @@ describe("isolation plan (docs/timeline/research/ownership/09-isolation.md)", ()
             target: { kind: "timeline", timelineId: 7, ghosts: true },
             beat: 17,
         });
+    });
+
+    it("refuses edits while the isolated plan isn't loaded (review: isolation 3)", () => {
+        const result = planCanvasEdit({
+            selection: { kind: "range", start: 0, end: 16 },
+            isolation: ISOLATION,
+        });
+        expect(result.ok).toBe(false);
+    });
+
+    it("a canvas drop mid-move lands at the move's end by the same offset (review: isolation 1)", () => {
+        useIsolationPlanStore.getState().set(plan());
+        useTimelineResolverStore.setState({
+            resolver: createResolver(snapshot()),
+        });
+        useTimelineSelectionStore.setState({
+            isolation: ISOLATION,
+            playheadBeat: 8,
+        });
+        // Marcher 1 is drawn at (0, 80) at beat 8 and dropped 5 to the right
+        expect(atIsolatedEnd([{ marcher_id: 1, x: 5, y: 80 }])).toEqual([
+            { marcher_id: 1, x: 5, y: 160 },
+        ]);
+        // At the end, a drop is written as it is
+        useTimelineSelectionStore.setState({ playheadBeat: 16 });
+        expect(atIsolatedEnd([{ marcher_id: 1, x: 5, y: 80 }])).toEqual([
+            { marcher_id: 1, x: 5, y: 80 },
+        ]);
     });
 });

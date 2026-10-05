@@ -10,7 +10,10 @@ import {
     useTimelineSelectionStore,
     type TimelineSelectionState,
 } from "@/stores/TimelineSelectionStore";
-import { editingPositionAt } from "./timelineIsolationPlan";
+import {
+    editingPositionAt,
+    useIsolationPlanStore,
+} from "./timelineIsolationPlan";
 import type { CoordinateRecord } from "@/utilities/CoordinateActions";
 import { pageEndBeat } from "./timelineCanvas";
 import {
@@ -110,8 +113,14 @@ export function planCanvasEdit(
     > = useTimelineSelectionStore.getState(),
 ): CanvasEditPlan {
     const { selection, isolation } = state;
-    // Isolation always edits the isolated timeline's end (owner, 2026-10-04)
-    if (isolation)
+    // Isolation always edits the isolated timeline's end (owner, 2026-10-04). Until its plan is
+    // loaded (or reloaded after an undo), positions would come from the real show: refuse
+    if (isolation) {
+        if (
+            useIsolationPlanStore.getState().current?.timelineId !==
+            isolation.timelineId
+        )
+            return { ok: false, error: new TimelineNotReadyError() };
         return {
             ok: true,
             target: {
@@ -121,6 +130,7 @@ export function planCanvasEdit(
             },
             beat: isolation.end,
         };
+    }
     if (selection.kind === "range")
         return {
             ok: true,
@@ -144,6 +154,34 @@ export function snapIsolatedPlayheadToEnd(): void {
     const store = useTimelineSelectionStore.getState();
     if (store.isolation && store.playheadBeat !== store.isolation.end)
         store.seek(store.isolation.end);
+}
+
+/**
+ * Canvas drops inside isolation with the playhead before the isolated move's end: each becomes
+ * the plan's position at the end plus the drag's offset from the plan's position at the playhead.
+ * Unchanged outside isolation, at the end, or before the plan loads.
+ */
+export function atIsolatedEnd<A extends MarcherXY>(changes: readonly A[]): A[] {
+    const { isolation, playheadBeat } = useTimelineSelectionStore.getState();
+    const plan = useIsolationPlanStore.getState().current;
+    const resolver = useTimelineResolverStore.getState().resolver;
+    if (!isolation || !plan || !resolver || playheadBeat === isolation.end)
+        return [...changes];
+    return changes.map((c) => {
+        const [px, py] = editingPositionAt(
+            resolver,
+            c.marcher_id,
+            playheadBeat,
+            plan,
+        );
+        const [ex, ey] = editingPositionAt(
+            resolver,
+            c.marcher_id,
+            isolation.end,
+            plan,
+        );
+        return { ...c, x: ex + (c.x - px), y: ey + (c.y - py) };
+    });
 }
 
 /**
@@ -342,10 +380,10 @@ export function canvasCoordinateWriter<A extends MarcherXY>({
             onRefused(current.error);
             return;
         }
+        // A drop is where the marcher was dragged at the playhead; isolation writes the move's
+        // end, so carry the drag over as an offset from where the plan has it there
+        const moves = toTimelineMoves(atIsolatedEnd(changes));
         snapIsolatedPlayheadToEnd();
-        writeTimeline({
-            target: current.target,
-            moves: toTimelineMoves(changes),
-        });
+        writeTimeline({ target: current.target, moves });
     };
 }

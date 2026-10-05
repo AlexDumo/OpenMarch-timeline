@@ -622,6 +622,9 @@ export const TimelineSelectionRange = ({
         kind: "start" | "end";
         pointerId: number;
         surface: HTMLElement;
+        startClientX: number;
+        /** The pointer has moved past the drag threshold: a drag, not a click */
+        moved: boolean;
     } | null>(null);
 
     useEffect(() => {
@@ -686,6 +689,13 @@ export const TimelineSelectionRange = ({
     const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
         const drag = dragRef.current;
         if (!drag || drag.pointerId !== event.pointerId) return;
+        if (!drag.moved) {
+            // A click: nothing changes
+            dragRef.current = null;
+            event.currentTarget.releasePointerCapture?.(event.pointerId);
+            onInteractionChange?.(null);
+            return;
+        }
         const next = updatePreview(
             drag.kind,
             event.clientX,
@@ -720,22 +730,27 @@ export const TimelineSelectionRange = ({
                 const surface =
                     event.currentTarget.parentElement?.parentElement;
                 if (!surface) return;
+                // Nothing moves until the pointer does: after Stop the start flag is drawn on the
+                // playhead, away from the fallback window's start, so a press must not jump it
                 dragRef.current = {
                     kind,
                     pointerId: event.pointerId,
                     surface,
+                    startClientX: event.clientX,
+                    moved: false,
                 };
                 event.currentTarget.setPointerCapture?.(event.pointerId);
-                updatePreview(
-                    kind,
-                    event.clientX,
-                    surface,
-                    isPageSnapDisabled(event),
-                );
             }}
             onPointerMove={(event) => {
                 const drag = dragRef.current;
                 if (!drag || drag.pointerId !== event.pointerId) return;
+                if (
+                    !drag.moved &&
+                    Math.abs(event.clientX - drag.startClientX) <
+                        TIMELINE_RANGE_DRAG_PX
+                )
+                    return;
+                drag.moved = true;
                 updatePreview(
                     kind,
                     event.clientX,
@@ -760,6 +775,8 @@ export const TimelineSelectionRange = ({
                           : 0;
                 if (delta === 0) return;
                 event.preventDefault();
+                // The arrow moves the flag, not the selected marchers (the window's nudge keys)
+                event.stopPropagation();
                 // The start flag stays before the playhead (UI-10): after Stop it is drawn on the
                 // playhead, so a step right has nowhere to go
                 if (

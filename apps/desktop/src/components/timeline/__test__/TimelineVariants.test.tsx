@@ -510,6 +510,69 @@ describe("timeline views", () => {
             range: { startBeatIndex: 8, endBeatIndex: 9 },
         });
     });
+    it("after Stop, a click on the start flag changes nothing (review: P8.17)", () => {
+        const onSelectionChange = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                selection={{
+                    kind: "range",
+                    range: { startBeatIndex: 1, endBeatIndex: 9 },
+                    startFlagBeatIndex: 9,
+                }}
+                onSelectionChange={onSelectionChange}
+            />,
+        );
+        const flag = screen.getByRole("button", { name: "Start flag" });
+        fireEvent(
+            flag,
+            new MouseEvent("pointerdown", {
+                bubbles: true,
+                button: 0,
+                clientX: 200,
+            }),
+        );
+        fireEvent(
+            flag,
+            new MouseEvent("pointerup", {
+                bubbles: true,
+                button: 0,
+                clientX: 201,
+            }),
+        );
+        expect(onSelectionChange).not.toHaveBeenCalled();
+        expect(flag).toHaveAttribute(
+            "title",
+            expect.stringContaining("beat boundary 9"),
+        );
+    });
+
+    it("an arrow key on the start flag doesn't reach the window's nudge keys (review: P8.17)", () => {
+        const onWindowKey = vi.fn();
+        window.addEventListener("keydown", onWindowKey);
+        try {
+            render(
+                <ExpandedTimeline
+                    {...commonProps}
+                    showTransport={false}
+                    selection={{
+                        kind: "range",
+                        range: { startBeatIndex: 5, endBeatIndex: 9 },
+                    }}
+                    onSelectionChange={vi.fn()}
+                />,
+            );
+            fireEvent.keyDown(
+                screen.getByRole("button", { name: "Start flag" }),
+                { key: "ArrowLeft" },
+            );
+            expect(onWindowKey).not.toHaveBeenCalled();
+        } finally {
+            window.removeEventListener("keydown", onWindowKey);
+        }
+    });
+
     it("uses the playhead as the only hover detail and scrubs on drag", () => {
         const onSeek = vi.fn();
         render(
