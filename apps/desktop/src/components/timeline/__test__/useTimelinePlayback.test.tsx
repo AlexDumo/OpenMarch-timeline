@@ -14,8 +14,6 @@ import {
     pageFlags,
     playbackStep,
     previewBounds,
-    PREVIEW_POST_ROLL_BEATS,
-    PREVIEW_PRE_ROLL_BEATS,
 } from "@/timeline/timelinePlayhead";
 import { startTimelinePlayOn } from "@/timeline/timelineTransport";
 import { useTimelinePageBridge } from "@/timeline/useTimelinePageBridge";
@@ -96,33 +94,24 @@ describe("play", () => {
 
     const on = { kind: "on" } as const;
 
-    it("previews the window with pre-roll and post-roll (UI-11 Play)", () => {
+    it("previews exactly the window, with no roll (UI-11 Play)", () => {
         const window = (start: number, end: number) => ({
             selection: { kind: "range", start, end } as const,
             isolation: null,
         });
-        expect(previewBounds(window(5, 9), 17)).toEqual({
-            from: 5 - PREVIEW_PRE_ROLL_BEATS,
-            to: 9 + PREVIEW_POST_ROLL_BEATS,
-        });
-        // Clamped to the show
-        expect(previewBounds(window(1, 16), 17)).toEqual({
-            from: Math.max(0, 1 - PREVIEW_PRE_ROLL_BEATS),
-            to: 17,
-        });
+        expect(previewBounds(window(5, 9))).toEqual({ from: 5, to: 9 });
+        expect(previewBounds(window(1, 17))).toEqual({ from: 1, to: 17 });
         // Nothing to preview at home or with nothing selected: Play plays on
-        expect(previewBounds({ selection: home, isolation: null }, 17)).toBe(
-            null,
-        );
+        expect(previewBounds({ selection: home, isolation: null })).toBeNull();
         expect(
-            previewBounds({ selection: { kind: "none" }, isolation: null }, 17),
+            previewBounds({ selection: { kind: "none" }, isolation: null }),
         ).toBeNull();
-        // An isolated timeline previews its whole range, without roll
+        // An isolated timeline previews its whole range
         expect(
-            previewBounds(
-                { selection: range, isolation: { start: 3, end: 9 } },
-                17,
-            ),
+            previewBounds({
+                selection: range,
+                isolation: { start: 3, end: 9 },
+            }),
         ).toEqual({ from: 3, to: 9 });
     });
 

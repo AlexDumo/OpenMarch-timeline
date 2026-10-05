@@ -80,8 +80,8 @@ export interface TimelineIsolation {
 }
 
 /**
- * What is playing (UI-11): a **preview** of the window, from `from` to `to` (the window with its
- * pre-roll and post-roll), or playing **on** from where it started to the end of the show. Taken
+ * What is playing (UI-11): a **preview** of the window, from `from` (the start flag) to `to` (the
+ * playhead), or playing **on** from where it started to the end of the show. Taken
  * when playback starts, so edits made while playing don't move its bounds.
  */
 export type TimelinePlaybackRun =
