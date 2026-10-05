@@ -135,7 +135,10 @@ stopgap is better than that.
   caught-up moves. `toastPassThrough` (`timeline/timelinePassThrough.ts`) shows the info toast;
   its **Only change Page N** runs `moveMarchersFromFlagInstead`, a separate undoable edit that
   takes the marchers out of the long move (deleting it when empty) and moves them over
-  `[last flag, P)`. It is decided from the rows as they are, not by undoing, so it is safe after
-  other edits. Not built yet: the −n/+n notches on overridden page boxes, the step-size warning
+  `[last flag, P)`. It is decided from the rows as they are, not by undoing: each marcher
+  keeps where it is at P now (so later nudges survive), and the long move is deleted only if the
+  drag created it and it is now empty. Marchers the drag added without passing through anything
+  stay in the long move. When P is partway into a page the label reads **Only change from Page
+  N's set**. Not built yet: the −n/+n notches on overridden page boxes, the step-size warning
   in the catch-up toast, and the deletion wording in the clip menu.
 - **WP-X3**: ghosts of overridden sets (shares 07 G0) and the crossed-flag ticks on the window.

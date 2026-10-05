@@ -6,7 +6,7 @@ import {
     type XY,
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
-import { shapeFromRow } from "@/timeline/timelineRows";
+import { readTimelineTables, shapeFromRow } from "@/timeline/timelineRows";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
@@ -94,6 +94,8 @@ export interface TimelinePassThrough {
     overridden: BeatRange[];
     /** The distinct ranges of the moves that now catch up, by start */
     caughtUp: BeatRange[];
+    /** The timeline over the range, when this move created it */
+    createdTimelineId?: number;
 }
 
 /** The distinct ranges among `moves`, by start then end. */
@@ -576,7 +578,7 @@ export const moveMarchersInRangeInTransaction = async ({
     const toAdd = marcherIds.filter((id) => !timelineOf.has(id));
     let passThrough: TimelinePassThrough | undefined;
     if (toAdd.length > 0) {
-        const { timelineId, overridden, caughtUp } =
+        const { timelineId, createdTimeline, overridden, caughtUp } =
             await addMarchersToTimelineInTransaction({
                 tx,
                 range,
@@ -596,6 +598,7 @@ export const moveMarchersInRangeInTransaction = async ({
                 labels,
                 overridden: distinctRanges(overridden),
                 caughtUp: distinctRanges(caughtUp),
+                ...(createdTimeline ? { createdTimelineId: timelineId } : {}),
             };
         }
     }
@@ -623,9 +626,10 @@ export const moveMarchersInRangeInTransaction = async ({
 /**
  * **Only change Page N** (research/ownership/10-cross-page-windows.md §4.1): the toast's way back
  * from a drag that passed through pages. Takes `marcherIds` out of the timeline over `range` (the
- * drag's), deletes that timeline when nobody is left in it, then moves them over
- * `[from, range.end)` instead, `from` being the last flag before the range's end. One undoable
- * edit, decided from the rows as they are now, so it is safe after other edits.
+ * drag's), deletes that timeline when the drag created it (`deleteIfEmpty`) and nobody is left in
+ * it, then moves them over `[from, range.end)` instead, `from` being the last flag inside the
+ * range. Each marcher keeps where it is at the range's end now, so later nudges in the window are
+ * kept. One undoable edit, decided from the rows as they are now, so it is safe after other edits.
  *
  * Refused (E-ARGS) when `from` isn't strictly inside the range, or none of the marchers is in the
  * timeline over the range any more.
@@ -634,12 +638,15 @@ export const moveMarchersFromFlagInstead = async ({
     db,
     range,
     from,
-    moves,
+    marcherIds,
+    deleteIfEmpty,
 }: {
     db: DbConnection;
     range: BeatRange;
     from: number;
-    moves: readonly TimelineMarcherMove[];
+    marcherIds: readonly number[];
+    /** The timeline over `range` that the drag created, deleted if this edit empties it */
+    deleteIfEmpty?: number;
 }): Promise<TimelineMoveResult> =>
     await transactionWithHistory(
         db,
@@ -649,7 +656,6 @@ export const moveMarchersFromFlagInstead = async ({
                 refuse(
                     `beat ${from} isn't inside [${range.start}, ${range.end}), so there's nothing to narrow`,
                 );
-            const marcherIds = moves.map((m) => m.marcherId);
             const timelineIds = (await timelinesWithRange(tx, range)).map(
                 (t) => t.id,
             );
@@ -658,41 +664,50 @@ export const moveMarchersFromFlagInstead = async ({
                 timelineIds,
                 marcherIds,
             );
-            const kept = moves.filter((m) => timelineOf.has(m.marcherId));
+            const kept = marcherIds.filter((id) => timelineOf.has(id));
             if (kept.length === 0)
                 refuse(
                     "the marchers aren't in that move any more, so there's nothing to change",
                 );
-            for (const timelineId of new Set(timelineOf.values()))
+            // Where they are at the range's end now, before they leave the long move
+            const { snapshot } = await readTimelineTables(tx);
+            const resolver = createResolver(snapshot);
+            const moves: TimelineMarcherMove[] = kept.map((marcherId) => {
+                const [x, y] = resolver.positionAt(marcherId, range.end);
+                return { marcherId, x, y };
+            });
+            const touched = new Set(kept.map((id) => timelineOf.get(id)!));
+            for (const timelineId of touched)
                 await removeMarchersFromTimelineInTransaction({
                     tx,
                     timelineId,
-                    marcherIds: kept
-                        .filter(
-                            (m) => timelineOf.get(m.marcherId) === timelineId,
-                        )
-                        .map((m) => m.marcherId),
+                    marcherIds: kept.filter(
+                        (id) => timelineOf.get(id) === timelineId,
+                    ),
                 });
-            const empty: number[] = [];
-            for (const timelineId of timelineIds) {
+            // Only the timeline the drag created; one the user kept empty stays (UI-9 Remove)
+            if (deleteIfEmpty !== undefined && touched.has(deleteIfEmpty)) {
                 const left = await tx
                     .select({ id: schema.timeline_transitions.id })
                     .from(schema.timeline_transitions)
                     .where(
-                        eq(schema.timeline_transitions.timeline_id, timelineId),
+                        eq(
+                            schema.timeline_transitions.timeline_id,
+                            deleteIfEmpty,
+                        ),
                     )
                     .limit(1)
                     .all();
-                if (left.length === 0) empty.push(timelineId);
+                if (left.length === 0)
+                    await deleteTimelinesInTransaction({
+                        tx,
+                        timelineIds: new Set([deleteIfEmpty]),
+                    });
             }
-            await deleteTimelinesInTransaction({
-                tx,
-                timelineIds: new Set(empty),
-            });
             return await moveMarchersInRangeInTransaction({
                 tx,
                 range: { start: from, end: range.end },
-                moves: kept,
+                moves,
             });
         },
     );

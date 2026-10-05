@@ -690,6 +690,7 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
                 { start: second.start_beat, end: second.end_beat },
             ],
             caughtUp: [],
+            createdTimelineId: expect.any(Number),
         });
         await timelineResolverSettled();
         expect(resolver().positionAt(5, end)).toEqual([200, 210]);
@@ -761,18 +762,20 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
         const range = { start: first.start_beat, end: second.end_beat };
         const atInnerFlag = resolver().positionAt(5, first.end_beat);
         const moves = [{ marcherId: 5, x: 200, y: 210 }];
-        await moveMarchersInTarget({
+        const { passThrough } = await moveMarchersInTarget({
             db,
             target: { kind: "range", ...range },
             moves,
         });
+        expect(passThrough?.createdTimelineId).toBeDefined();
         const passedThrough = await snapshot(db);
 
         await moveMarchersFromFlagInstead({
             db,
             range,
             from: second.start_beat,
-            moves,
+            marcherIds: [5],
+            deleteIfEmpty: passThrough!.createdTimelineId,
         });
         await timelineResolverSettled();
         const long = await db
@@ -802,13 +805,12 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
         const first = await timelineOf(db, pages[2]!);
         const second = await timelineOf(db, pages[3]!);
         const range = { start: first.start_beat, end: second.end_beat };
-        const moves = [{ marcherId: 5, x: 200, y: 210 }];
         await expectRefused(db, /isn't inside/, () =>
             moveMarchersFromFlagInstead({
                 db,
                 range,
                 from: range.end,
-                moves,
+                marcherIds: [5],
             }),
         );
         await expectRefused(db, /aren't in that move any more/, () =>
@@ -816,8 +818,129 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
                 db,
                 range,
                 from: second.start_beat,
-                moves,
+                marcherIds: [5],
             }),
         );
+    });
+    it("Only change Page N keeps where the marchers are now, not where the first drag put them", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const first = await timelineOf(db, pages[2]!);
+        const second = await timelineOf(db, pages[3]!);
+        const range = { start: first.start_beat, end: second.end_beat };
+        const target = { kind: "range" as const, ...range };
+        const { passThrough } = await moveMarchersInTarget({
+            db,
+            target,
+            moves: [{ marcherId: 5, x: 200, y: 210 }],
+        });
+        // A later nudge in the same window: already in, so no new pass-through
+        const nudge = await moveMarchersInTarget({
+            db,
+            target,
+            moves: [{ marcherId: 5, x: 204, y: 210 }],
+        });
+        expect(nudge.passThrough).toBeUndefined();
+
+        await moveMarchersFromFlagInstead({
+            db,
+            range,
+            from: second.start_beat,
+            marcherIds: [5],
+            deleteIfEmpty: passThrough!.createdTimelineId,
+        });
+        await timelineResolverSettled();
+        expect(resolver().positionAt(5, range.end)).toEqual([204, 210]);
+    });
+
+    it("Only change Page N keeps a timeline it didn't create, and other marchers in the long move", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const first = await timelineOf(db, pages[2]!);
+        const second = await timelineOf(db, pages[3]!);
+        const range = { start: first.start_beat, end: second.end_beat };
+        const target = { kind: "range" as const, ...range };
+        // Marcher 6 is in the long move first; then marcher 5 joins it
+        const before = await moveMarchersInTarget({
+            db,
+            target,
+            moves: [{ marcherId: 6, x: 220, y: 230 }],
+        });
+        const { passThrough } = await moveMarchersInTarget({
+            db,
+            target,
+            moves: [{ marcherId: 5, x: 200, y: 210 }],
+        });
+        expect(passThrough?.marcherIds).toEqual([5]);
+        expect(passThrough?.createdTimelineId).toBeUndefined();
+
+        await moveMarchersFromFlagInstead({
+            db,
+            range,
+            from: second.start_beat,
+            marcherIds: passThrough!.marcherIds,
+            deleteIfEmpty: before.passThrough?.createdTimelineId,
+        });
+        await timelineResolverSettled();
+        const long = await db
+            .select()
+            .from(schema.timelines)
+            .where(
+                and(
+                    eq(schema.timelines.start_beat, range.start),
+                    eq(schema.timelines.end_beat, range.end),
+                ),
+            )
+            .all();
+        expect(long, "marcher 6's long move stays").toHaveLength(1);
+        expect(resolver().positionAt(6, range.end)).toEqual([220, 230]);
+        expect(resolver().positionAt(5, range.end)).toEqual([200, 210]);
+    });
+
+    it("Only change Page N never deletes an empty timeline the user kept over the range", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const first = await timelineOf(db, pages[2]!);
+        const second = await timelineOf(db, pages[3]!);
+        const range = { start: first.start_beat, end: second.end_beat };
+        // An empty stored timeline over the range, as UI-9 Remove leaves one
+        const kept = await transactionWithHistory(
+            db,
+            "empty",
+            async (tx) =>
+                (
+                    await createTimelinesInTransaction({
+                        tx,
+                        newTimelines: [
+                            { startBeat: range.start, endBeat: range.end },
+                        ],
+                    })
+                )[0]!.id,
+        );
+        const { passThrough } = await moveMarchersInTarget({
+            db,
+            target: { kind: "range", ...range },
+            moves: [{ marcherId: 5, x: 200, y: 210 }],
+        });
+        expect(passThrough?.createdTimelineId).toBeUndefined();
+        await moveMarchersFromFlagInstead({
+            db,
+            range,
+            from: second.start_beat,
+            marcherIds: [5],
+            deleteIfEmpty: passThrough?.createdTimelineId,
+        });
+        const row = await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.id, kept))
+            .get();
+        expect(row, "the user's empty timeline stays").toBeDefined();
     });
 });

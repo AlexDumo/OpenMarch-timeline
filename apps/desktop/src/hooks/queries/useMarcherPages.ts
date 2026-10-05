@@ -183,8 +183,7 @@ export const moveMarchersInTargetMutationOptions = () => {
         mutationFn: ({ target, moves }: TimelineEditRequest) =>
             moveMarchersInTarget({ db, target, moves }),
         // A drag over a window that crosses pages says what it passed through (UI-10)
-        onSuccess: (result, { moves }) =>
-            toastPassThrough(result.passThrough, moves),
+        onSuccess: (result) => toastPassThrough(result.passThrough),
         onError: (e, variables) => {
             toastTimelineError(e, `Error moving marchers`, variables);
         },

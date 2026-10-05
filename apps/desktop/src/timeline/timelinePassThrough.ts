@@ -3,7 +3,6 @@ import { db } from "@/global/database/db";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     moveMarchersFromFlagInstead,
-    type TimelineMarcherMove,
     type TimelinePassThrough,
 } from "@/db-functions/timelineMoves";
 import type { BeatRange } from "@/db-functions/timelineMembership";
@@ -59,20 +58,38 @@ export function moveName(range: BeatRange, boxes: readonly PageBox[]): string {
         : `the move over beats [${range.start}, ${range.end})`;
 }
 
+/** Where **Only change** narrows a drag to, from `narrowingFlag`. */
+export interface NarrowingFlag {
+    /** The last page flag strictly inside the drag's range */
+    beat: number;
+    /** The page whose flag it is (the box ending there) */
+    flagPage?: string;
+    /** The page whose box starts there */
+    nextPage?: string;
+    /** The drag ends on that page's own flag, so the narrowed move is exactly that page */
+    endsOnFlag: boolean;
+}
+
 /**
- * The flag **Only change** narrows to: the last page flag strictly inside the drag's range, and
- * the page whose box starts there. `null` when no flag is inside (the range crossed only clips).
+ * The flag **Only change** narrows to: the last page flag strictly inside the drag's range.
+ * `null` when no flag is inside (the range crossed only clips).
  */
 export function narrowingFlag(
     range: BeatRange,
     boxes: readonly PageBox[],
-): { beat: number; name?: string } | null {
+): NarrowingFlag | null {
     const inside = boxes
-        .map((b) => b.start)
+        .map((b) => b.end)
         .filter((beat) => range.start < beat && beat < range.end);
     if (inside.length === 0) return null;
     const beat = Math.max(...inside);
-    return { beat, name: boxes.find((b) => b.start === beat)?.name };
+    const next = boxes.find((b) => b.start === beat);
+    return {
+        beat,
+        flagPage: boxes.find((b) => b.end === beat)?.name,
+        nextPage: next?.name,
+        endsOnFlag: next?.end === range.end,
+    };
 }
 
 /** The toast's text for `pass`, worded for one marcher or several. */
@@ -94,7 +111,7 @@ export function passThroughMessage(
                   params,
               )
             : translate(
-                  "timeline.edit.passThrough.throughAndCatchUp",
+                  "timeline.edit.passThrough.throughAndCatchUp.many",
                   "{marchers} now move straight through {through}, then catch up to {caughtUp}'s set by its end.",
                   params,
               );
@@ -106,7 +123,7 @@ export function passThroughMessage(
                   params,
               )
             : translate(
-                  "timeline.edit.passThrough.through",
+                  "timeline.edit.passThrough.through.many",
                   "{marchers} now move straight through {through}.",
                   params,
               );
@@ -117,61 +134,69 @@ export function passThroughMessage(
               params,
           )
         : translate(
-              "timeline.edit.passThrough.catchUp",
+              "timeline.edit.passThrough.catchUp.many",
               "{marchers} now catch up to {caughtUp}'s set by its end.",
               params,
           );
 }
 
-/** The action's label: "Only change Page 3", or "Only change from beat 32" for an unnamed page. */
+/**
+ * The action's label: "Only change Page 3" when the drag ends on Page 3's flag; otherwise (it ends
+ * partway into a page) "Only change from Page 2's set", or by beat for an unnamed page.
+ */
 export function narrowingLabel(
-    flag: { beat: number; name?: string },
+    flag: NarrowingFlag,
     translate: PassThroughTranslate = defaultTranslate,
 ): string {
-    return flag.name !== undefined
-        ? translate(
-              "timeline.edit.passThrough.onlyChangePage",
-              "Only change Page {page}",
-              { page: flag.name },
-          )
-        : translate(
-              "timeline.edit.passThrough.onlyChangeFrom",
-              "Only change from beat {beat}",
-              { beat: String(flag.beat) },
-          );
+    if (flag.endsOnFlag && flag.nextPage !== undefined)
+        return translate(
+            "timeline.edit.passThrough.onlyChangePage",
+            "Only change Page {page}",
+            { page: flag.nextPage },
+        );
+    if (flag.flagPage !== undefined)
+        return translate(
+            "timeline.edit.passThrough.onlyChangeFromPage",
+            "Only change from Page {page}'s set",
+            { page: flag.flagPage },
+        );
+    return translate(
+        "timeline.edit.passThrough.onlyChangeFrom",
+        "Only change from beat {beat}",
+        { beat: String(flag.beat) },
+    );
 }
 
 /**
- * Shows what a range move passed through, if anything, with **Only change Page N** when a page
- * flag lies inside the range. `moves` are the drag's moves; the action re-runs the passed
- * marchers' ones.
+ * Shows what a range move passed through, if anything, with **Only change** when a page flag lies
+ * inside the range. The action narrows the passed marchers (`moveMarchersFromFlagInstead`, which
+ * keeps where they are now), and says in turn what the narrowed move passed through, if anything.
  */
-export function toastPassThrough(
-    pass: TimelinePassThrough | undefined,
-    moves: readonly TimelineMarcherMove[],
-): void {
+export function toastPassThrough(pass: TimelinePassThrough | undefined): void {
     if (!pass) return;
     const boxes = useTimelineSelectionStore.getState().pageBoxes;
     const flag = narrowingFlag(pass.range, boxes);
-    const passed = new Set(pass.marcherIds);
-    const narrowed = moves.filter((m) => passed.has(m.marcherId));
     toast.info(passThroughMessage(pass, boxes), {
         duration: 10000,
-        action:
-            flag && narrowed.length > 0
-                ? {
-                      label: narrowingLabel(flag),
-                      onClick: () => {
-                          moveMarchersFromFlagInstead({
-                              db,
-                              range: pass.range,
-                              from: flag.beat,
-                              moves: narrowed,
-                          }).catch((e: unknown) =>
+        action: flag
+            ? {
+                  label: narrowingLabel(flag),
+                  onClick: () => {
+                      moveMarchersFromFlagInstead({
+                          db,
+                          range: pass.range,
+                          from: flag.beat,
+                          marcherIds: pass.marcherIds,
+                          deleteIfEmpty: pass.createdTimelineId,
+                      })
+                          .then((result) =>
+                              toastPassThrough(result.passThrough),
+                          )
+                          .catch((e: unknown) =>
                               toastTimelineError(e, "Error moving marchers"),
                           );
-                      },
-                  }
-                : undefined,
+                  },
+              }
+            : undefined,
     });
 }

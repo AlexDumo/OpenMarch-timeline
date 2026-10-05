@@ -264,7 +264,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
         target: plan.target,
         moves,
     });
-    toastPassThrough(result.passThrough, moves);
+    toastPassThrough(result.passThrough);
     return next;
 }
 
