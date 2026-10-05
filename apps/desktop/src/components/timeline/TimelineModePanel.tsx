@@ -97,7 +97,9 @@ export default function TimelineModePanel() {
         useTimelineSelectionStore
             .getState()
             .setPageBoxes(
-                pageFlags(pages).flatMap((f) => (f.range ? [f.range] : [])),
+                pageFlags(pages).flatMap((f) =>
+                    f.range ? [{ ...f.range, name: f.page.name }] : [],
+                ),
             );
     }, [pages]);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);

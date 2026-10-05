@@ -171,6 +171,22 @@ export interface AddMarchersToTimelineResult {
     added: OwnTransition[];
     /** Selected marchers that were already in the timeline and were left alone */
     alreadyIn: number[];
+    /**
+     * With `passThrough`: each added marcher's moves that lie inside the range, which the new
+     * move overrides for all of their beats (their rows stay stored underneath)
+     */
+    overridden: PassedMove[];
+    /**
+     * With `passThrough`: each added marcher's move that the range runs into partway, which
+     * resumes at the range's end and catches up to its own destination (R-5 rebase)
+     */
+    caughtUp: PassedMove[];
+}
+
+/** One marcher's move that an add over a range passes through or runs into. */
+export interface PassedMove extends BeatRange {
+    marcherId: number;
+    timelineId: number;
 }
 
 /**
@@ -189,16 +205,23 @@ export interface AddMarchersToTimelineResult {
  * timeline that lies inside the range (adding it would steal that whole move, so the add would
  * change its motion). A marcher off the field at the range's end is refused too, and so is a
  * layer past the limit (E-A3).
+ *
+ * With `passThrough` (a canvas drag, UI-10; research/ownership/10-cross-page-windows.md) neither
+ * layer refusal applies: the drag says where the marchers go, so the new move overrides the moves
+ * inside the range (they stay stored, and come back when it is deleted), and a move the range runs
+ * into partway resumes at the range's end and catches up (R-5). Both are reported.
  */
 // eslint-disable-next-line max-lines-per-function
 export const addMarchersToTimelineInTransaction = async ({
     tx,
     range,
     marcherIds,
+    passThrough = false,
 }: {
     tx: DbTransaction;
     range: BeatRange;
     marcherIds: readonly number[];
+    passThrough?: boolean;
 }): Promise<AddMarchersToTimelineResult> => {
     const { start, end } = range;
     if (
@@ -235,19 +258,38 @@ export const addMarchersToTimelineInTransaction = async ({
                 ? "the selected marcher is already in this timeline"
                 : "every selected marcher is already in this timeline",
         );
+    const overridden: PassedMove[] = [];
+    const caughtUp: PassedMove[] = [];
     for (const id of toAdd) {
         for (const other of timelinesOf.get(id) ?? []) {
+            const passed = {
+                marcherId: id,
+                timelineId: other.timelineId,
+                start: other.start,
+                end: other.end,
+            };
             // Starting inside a move and running past its end is an exit (research/ownership
             // 06 §2 D): the new row steals the rest of it. Running into a later move partway
-            // would need a join, which waits for live links (WP-O3), so it stays refused
-            if (partlyOverlaps(other, range) && other.start >= range.start)
+            // would need a join, which waits for live links (WP-O3): a drag lets it catch up
+            // (10 §4.2), and the add on its own refuses it
+            if (partlyOverlaps(other, range) && other.start >= range.start) {
+                if (passThrough) {
+                    caughtUp.push(passed);
+                    continue;
+                }
                 refuse(
                     `${labels.get(id)} is in a timeline over beats ${rangeText(other)}, which only partly overlaps ${rangeText(range)}: joining a move partway isn't supported yet. End the range at beat ${other.start}.`,
                 );
-            if (!containsRange(other, range) && containsRange(range, other))
+            }
+            if (!containsRange(other, range) && containsRange(range, other)) {
+                if (passThrough) {
+                    overridden.push(passed);
+                    continue;
+                }
                 refuse(
                     `${labels.get(id)} is in a timeline over beats ${rangeText(other)}, inside ${rangeText(range)}; adding it would replace that move`,
                 );
+            }
         }
     }
 
@@ -293,6 +335,8 @@ export const addMarchersToTimelineInTransaction = async ({
         createdTimeline: existing === undefined,
         added,
         alreadyIn,
+        overridden,
+        caughtUp,
     };
 };
 

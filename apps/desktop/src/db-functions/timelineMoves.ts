@@ -18,9 +18,10 @@ import {
 import { assertValid, refuse, TimelineWriteError } from "./timelineErrors";
 import {
     addMarchersToTimelineInTransaction,
+    removeMarchersFromTimelineInTransaction,
     type BeatRange,
 } from "./timelineMembership";
-import { timelinesWithRange } from "./timelines";
+import { deleteTimelinesInTransaction, timelinesWithRange } from "./timelines";
 
 /**
  * "Move a marcher on page N" in timeline mode (docs/timeline/phases/07-page-parity.md P7.2, spec
@@ -72,7 +73,36 @@ export interface TimelineMoveResult {
     slots: { marcherId: number; transitionId: number; slotIndex: number }[];
     /** Shape-backed transitions switched to individual destinations first */
     convertedTransitionIds: number[];
+    /** A range move that passed through or ran into other moves (`TimelinePassThrough`) */
+    passThrough?: TimelinePassThrough;
 }
+
+/**
+ * What a range move (UI-10 drag) did to the moved marchers' other moves
+ * (research/ownership/10-cross-page-windows.md): the moves inside the range it overrides, and the
+ * moves it runs into partway, which catch up after it. Only marchers it added are listed: one
+ * already in the range's timeline changes nothing else.
+ */
+export interface TimelinePassThrough {
+    /** The range moved over */
+    range: BeatRange;
+    /** The marchers whose other moves were passed through or run into, in marcher id order */
+    marcherIds: number[];
+    /** Their drill numbers ("T3"), in the same order */
+    labels: string[];
+    /** The distinct ranges of the moves overridden, by start */
+    overridden: BeatRange[];
+    /** The distinct ranges of the moves that now catch up, by start */
+    caughtUp: BeatRange[];
+}
+
+/** The distinct ranges among `moves`, by start then end. */
+const distinctRanges = (moves: readonly BeatRange[]): BeatRange[] =>
+    [
+        ...new Map(
+            moves.map(({ start, end }) => [`${start}:${end}`, { start, end }]),
+        ).values(),
+    ].sort((a, b) => a.start - b.start || a.end - b.end);
 
 const pageLabel = (page: TimelineMovePage) =>
     page.name !== undefined ? `page ${page.name}` : "this page";
@@ -520,6 +550,10 @@ const timelineOfMarchers = async (
  * transition, one layer above its highest layer over the range), then sets their endings
  * (`moveMarchersInTimelineInTransaction`). Refusals are the add's and the move's, decided before
  * they write; inside one transaction, a refused move rolls back the add too.
+ *
+ * The add passes through (research/ownership/10-cross-page-windows.md): the drag overrides the
+ * moved marchers' moves inside the range, and a move the range runs into partway catches up after
+ * it. The result's `passThrough` names them, so the app can say so.
  */
 export const moveMarchersInRangeInTransaction = async ({
     tx,
@@ -540,13 +574,30 @@ export const moveMarchersInRangeInTransaction = async ({
     const sameRange = (await timelinesWithRange(tx, range)).map((t) => t.id);
     const timelineOf = await timelineOfMarchers(tx, sameRange, marcherIds);
     const toAdd = marcherIds.filter((id) => !timelineOf.has(id));
+    let passThrough: TimelinePassThrough | undefined;
     if (toAdd.length > 0) {
-        const { timelineId } = await addMarchersToTimelineInTransaction({
-            tx,
-            range,
-            marcherIds: toAdd,
-        });
+        const { timelineId, overridden, caughtUp } =
+            await addMarchersToTimelineInTransaction({
+                tx,
+                range,
+                marcherIds: toAdd,
+                passThrough: true,
+            });
         for (const id of toAdd) timelineOf.set(id, timelineId);
+        const passed = [
+            ...new Set([...overridden, ...caughtUp].map((m) => m.marcherId)),
+        ].sort((a, b) => a - b);
+        if (passed.length > 0) {
+            const labels: string[] = [];
+            for (const id of passed) labels.push(await marcherLabel(tx, id));
+            passThrough = {
+                range: { start: range.start, end: range.end },
+                marcherIds: passed,
+                labels,
+                overridden: distinctRanges(overridden),
+                caughtUp: distinctRanges(caughtUp),
+            };
+        }
     }
     // One move per timeline the marchers are in (one, except in a file from before C-12)
     const result: TimelineMoveResult = {
@@ -565,8 +616,86 @@ export const moveMarchersInRangeInTransaction = async ({
         result.slots.push(...part.slots);
         result.convertedTransitionIds.push(...part.convertedTransitionIds);
     }
+    if (passThrough) result.passThrough = passThrough;
     return result;
 };
+
+/**
+ * **Only change Page N** (research/ownership/10-cross-page-windows.md §4.1): the toast's way back
+ * from a drag that passed through pages. Takes `marcherIds` out of the timeline over `range` (the
+ * drag's), deletes that timeline when nobody is left in it, then moves them over
+ * `[from, range.end)` instead, `from` being the last flag before the range's end. One undoable
+ * edit, decided from the rows as they are now, so it is safe after other edits.
+ *
+ * Refused (E-ARGS) when `from` isn't strictly inside the range, or none of the marchers is in the
+ * timeline over the range any more.
+ */
+export const moveMarchersFromFlagInstead = async ({
+    db,
+    range,
+    from,
+    moves,
+}: {
+    db: DbConnection;
+    range: BeatRange;
+    from: number;
+    moves: readonly TimelineMarcherMove[];
+}): Promise<TimelineMoveResult> =>
+    await transactionWithHistory(
+        db,
+        "moveMarchersFromFlagInstead",
+        async (tx) => {
+            if (!(range.start < from && from < range.end))
+                refuse(
+                    `beat ${from} isn't inside [${range.start}, ${range.end}), so there's nothing to narrow`,
+                );
+            const marcherIds = moves.map((m) => m.marcherId);
+            const timelineIds = (await timelinesWithRange(tx, range)).map(
+                (t) => t.id,
+            );
+            const timelineOf = await timelineOfMarchers(
+                tx,
+                timelineIds,
+                marcherIds,
+            );
+            const kept = moves.filter((m) => timelineOf.has(m.marcherId));
+            if (kept.length === 0)
+                refuse(
+                    "the marchers aren't in that move any more, so there's nothing to change",
+                );
+            for (const timelineId of new Set(timelineOf.values()))
+                await removeMarchersFromTimelineInTransaction({
+                    tx,
+                    timelineId,
+                    marcherIds: kept
+                        .filter(
+                            (m) => timelineOf.get(m.marcherId) === timelineId,
+                        )
+                        .map((m) => m.marcherId),
+                });
+            const empty: number[] = [];
+            for (const timelineId of timelineIds) {
+                const left = await tx
+                    .select({ id: schema.timeline_transitions.id })
+                    .from(schema.timeline_transitions)
+                    .where(
+                        eq(schema.timeline_transitions.timeline_id, timelineId),
+                    )
+                    .limit(1)
+                    .all();
+                if (left.length === 0) empty.push(timelineId);
+            }
+            await deleteTimelinesInTransaction({
+                tx,
+                timelineIds: new Set(empty),
+            });
+            return await moveMarchersInRangeInTransaction({
+                tx,
+                range: { start: from, end: range.end },
+                moves: kept,
+            });
+        },
+    );
 
 /**
  * A canvas move as one undoable edit (UI-9 Editing, Home; UI-10): the homes for `{kind: "home"}`,

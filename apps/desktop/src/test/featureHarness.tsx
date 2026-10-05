@@ -100,7 +100,9 @@ function ProbeView() {
         useTimelineSelectionStore
             .getState()
             .setPageBoxes(
-                pageFlags(pages).flatMap((f) => (f.range ? [f.range] : [])),
+                pageFlags(pages).flatMap((f) =>
+                    f.range ? [{ ...f.range, name: f.page.name }] : [],
+                ),
             );
     }, [pages]);
     probe.current = {
