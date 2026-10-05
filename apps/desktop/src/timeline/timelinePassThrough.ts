@@ -75,7 +75,7 @@ export function narrowingFlag(
     return { beat, name: boxes.find((b) => b.start === beat)?.name };
 }
 
-/** The toast's text for `pass`. */
+/** The toast's text for `pass`, worded for one marcher or several. */
 export function passThroughMessage(
     pass: TimelinePassThrough,
     boxes: readonly PageBox[],
@@ -84,23 +84,43 @@ export function passThroughMessage(
     const marchers = marcherList(pass.labels);
     const through = joinList(pass.overridden.map((r) => moveName(r, boxes)));
     const caughtUp = joinList(pass.caughtUp.map((r) => moveName(r, boxes)));
+    const one = pass.labels.length === 1;
+    const params = { marchers, through, caughtUp };
     if (through && caughtUp)
-        return translate(
-            "timeline.edit.passThrough.throughAndCatchUp",
-            "{marchers} now move straight through {through}, then catch up to {caughtUp}'s set by its end.",
-            { marchers, through, caughtUp },
-        );
+        return one
+            ? translate(
+                  "timeline.edit.passThrough.throughAndCatchUp.one",
+                  "{marchers} now moves straight through {through}, then catches up to {caughtUp}'s set by its end.",
+                  params,
+              )
+            : translate(
+                  "timeline.edit.passThrough.throughAndCatchUp",
+                  "{marchers} now move straight through {through}, then catch up to {caughtUp}'s set by its end.",
+                  params,
+              );
     if (through)
-        return translate(
-            "timeline.edit.passThrough.through",
-            "{marchers} now move straight through {through}.",
-            { marchers, through },
-        );
-    return translate(
-        "timeline.edit.passThrough.catchUp",
-        "{marchers} now catch up to {caughtUp}'s set by its end.",
-        { marchers, caughtUp },
-    );
+        return one
+            ? translate(
+                  "timeline.edit.passThrough.through.one",
+                  "{marchers} now moves straight through {through}.",
+                  params,
+              )
+            : translate(
+                  "timeline.edit.passThrough.through",
+                  "{marchers} now move straight through {through}.",
+                  params,
+              );
+    return one
+        ? translate(
+              "timeline.edit.passThrough.catchUp.one",
+              "{marchers} now catches up to {caughtUp}'s set by its end.",
+              params,
+          )
+        : translate(
+              "timeline.edit.passThrough.catchUp",
+              "{marchers} now catch up to {caughtUp}'s set by its end.",
+              params,
+          );
 }
 
 /** The action's label: "Only change Page 3", or "Only change from beat 32" for an unnamed page. */

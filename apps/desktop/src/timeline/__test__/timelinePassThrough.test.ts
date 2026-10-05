@@ -76,5 +76,15 @@ describe("timeline pass-through messages (research/ownership/10)", () => {
         expect(
             passThroughMessage({ ...pass, overridden: [] }, boxes, english),
         ).toBe("T3 and T4 now catch up to Page 3's set by its end.");
+        const one = { ...pass, marcherIds: [3], labels: ["T3"] };
+        expect(passThroughMessage(one, boxes, english)).toBe(
+            "T3 now moves straight through Page 1 and Page 2, then catches up to Page 3's set by its end.",
+        );
+        expect(
+            passThroughMessage({ ...one, caughtUp: [] }, boxes, english),
+        ).toBe("T3 now moves straight through Page 1 and Page 2.");
+        expect(
+            passThroughMessage({ ...one, overridden: [] }, boxes, english),
+        ).toBe("T3 now catches up to Page 3's set by its end.");
     });
 });
