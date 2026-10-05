@@ -10,6 +10,7 @@ import {
     SkipBackIcon,
     SkipForwardIcon,
     WarningIcon,
+    XIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import {
@@ -862,7 +863,9 @@ export const TimelineSelectionRange = ({
                     className="bg-yellow/80 text-text-invert pointer-events-auto absolute top-0 flex h-14 items-center justify-end gap-4 overflow-hidden rounded-r-sm pr-4 font-mono text-[9px] font-semibold tracking-wide whitespace-nowrap"
                     style={{ left: startX, width: endX - startX }}
                 >
-                    FROM START ✕
+                    {/* Narrow, the START tag already names it; only the way out shows */}
+                    {endX - startX >= 120 && "FROM START"}
+                    <XIcon size={10} weight="bold" />
                 </button>
             )}
             <div

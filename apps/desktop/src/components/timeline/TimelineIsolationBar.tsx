@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { Button } from "@openmarch/ui";
+import { XIcon } from "@phosphor-icons/react";
 import { useTimingObjects } from "@/hooks";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import {
@@ -96,12 +97,12 @@ export function TimelineFromStartBadge() {
                 type="button"
                 aria-label="Turn off playing from the start flag"
                 title="Turn off (C or Esc)"
-                className="text-text-subtitle hover:text-text"
+                className="text-text-subtitle hover:text-text flex items-center"
                 onClick={() =>
                     useTimelineSelectionStore.getState().setPlayFromStart(false)
                 }
             >
-                ✕
+                <XIcon size={12} weight="bold" />
             </button>
         </div>
     );
