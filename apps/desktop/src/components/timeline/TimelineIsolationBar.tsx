@@ -3,6 +3,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { Button } from "@openmarch/ui";
 import { FlagIcon, XIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { START_INK } from "./startFlagInk";
 import { useTimingObjects } from "@/hooks";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import {
@@ -38,6 +39,12 @@ export function isolatedTimelineName(
         : `Page ${first.page.name} count ${from} to page ${last.page.name} count ${to}`;
 }
 
+/** A popover, menu or dialog is open: its Esc closes it, and nothing else */
+const overlayOpen = () =>
+    document.querySelector(
+        '[data-radix-popper-content-wrapper], [role="menu"], [role="dialog"][data-state="open"], [role="alertdialog"]',
+    ) !== null;
+
 const isTyping = (target: EventTarget | null) =>
     target instanceof HTMLElement &&
     (target.isContentEditable ||
@@ -46,7 +53,8 @@ const isTyping = (target: EventTarget | null) =>
 /**
  * Esc ends isolation (V-14), and after that turns **From start** off (UI-11): the first Esc
  * deselects marchers as it always does (the registered Escape action), so these happen only on an
- * Esc with nothing selected, one per press. Text fields and the line or lasso tool keep their Esc.
+ * Esc with nothing selected, one per press. Text fields, open popovers, menus and dialogs, and the
+ * line or lasso tool keep their Esc.
  * Listens in the capture phase, before the registered actions, which mark Escape handled.
  */
 export function useIsolationEscape(): void {
@@ -62,7 +70,7 @@ export function useIsolationEscape(): void {
             if (event.key !== "Escape" || isTyping(event.target)) return;
             if (useAlignmentEventStore.getState().alignmentEvent !== "default")
                 return;
-            if (selected.current > 0) return;
+            if (selected.current > 0 || overlayOpen()) return;
             const store = useTimelineSelectionStore.getState();
             if (store.isolation) store.exitIsolation();
             else if (store.playFromStart) store.setPlayFromStart(false);
@@ -96,14 +104,15 @@ export function TimelineFromStartBadge() {
             data-testid="timeline-from-start-badge"
             role="status"
             className={clsx(
-                "bg-bg-1 text-text rounded-6 text-sub dark:border-yellow pointer-events-auto absolute top-8 left-8 z-10 flex max-w-[calc(50%-24px)] items-center gap-8 border border-[rgb(150,120,0)] px-8 py-4 whitespace-nowrap shadow-md transition-shadow duration-300",
-                fresh && "dark:ring-yellow/40 ring-4 ring-[rgb(150,120,0)]/40",
+                "bg-bg-1 text-text rounded-6 text-sub pointer-events-auto absolute top-8 left-8 z-10 flex max-w-[calc(50%-24px)] items-center gap-8 border px-8 py-4 whitespace-nowrap shadow-md transition-shadow duration-300",
+                START_INK.border,
+                fresh && `ring-4 ${START_INK.ring}`,
             )}
         >
             <FlagIcon
                 size={14}
                 weight="fill"
-                className="dark:text-yellow shrink-0 text-[rgb(150,120,0)]"
+                className={clsx("shrink-0", START_INK.text)}
             />
             <span className="truncate">
                 Space replays {isolatedTimelineName(selection, pages)}

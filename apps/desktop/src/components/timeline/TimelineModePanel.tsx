@@ -140,11 +140,13 @@ export default function TimelineModePanel() {
     });
     // UI-9 **+** after the free paused playhead; the new page becomes the selection
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    // Not while a paused preview holds a frame: + is drawn there, but would add at P (UI-11)
+    const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
     const addPageFlag = useAddPageFlag({
         pages,
         beatCount: beats.length,
         playheadBeat,
-        isPlaying,
+        isPlaying: isPlaying || holding,
         onAdded: selectAddedPage,
     });
     const queryClient = useQueryClient();

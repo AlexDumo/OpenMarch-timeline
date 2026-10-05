@@ -21,6 +21,7 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { clsx } from "clsx";
+import { START_INK } from "./startFlagInk";
 import { AudioClock } from "./Clock";
 import { T, useTolgee } from "@tolgee/react";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
@@ -173,7 +174,7 @@ export function TimelineFromStartButton() {
                     "rounded-4 flex items-center gap-4 px-4 outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50",
                     {
                         // The start flag's ink, so the button reads as the flag's (TimelinePrimitives)
-                        "dark:text-text-invert dark:bg-yellow bg-[rgb(150,120,0)] text-white":
+                        [`${START_INK.bg} dark:text-text-invert text-white`]:
                             on,
                         "text-text enabled:hover:text-accent": !on,
                     },

@@ -20,7 +20,10 @@ import {
     useTimelineMode,
     workspaceSettingsQueryOptions,
 } from "@/hooks/queries/useWorkspaceSettings";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { timeAtBeat } from "@/timeline/timeMap";
 import AudioOffsetWorker from "@/workers/audioOffset.worker.ts?worker";
 import { CircleNotchIcon } from "@phosphor-icons/react";
@@ -162,9 +165,7 @@ export default function AudioPlayer() {
     // is none), not the selected page. Every cursor or playhead write restarts playback from it,
     // which is how a preview loops back to its start.
     const timelineMode = useTimelineMode();
-    const playheadBeat = useTimelineSelectionStore(
-        (s) => s.cursorBeat ?? s.playheadBeat,
-    );
+    const playheadBeat = useTimelineSelectionStore(displayedBeat);
     const playheadRevision = useTimelineSelectionStore(
         (s) => s.playheadRevision,
     );

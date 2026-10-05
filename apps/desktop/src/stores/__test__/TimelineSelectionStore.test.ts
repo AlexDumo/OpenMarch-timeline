@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+    displayedBeat,
     editWindow,
     followingStart,
     isMarcherDimmed,
@@ -401,6 +402,12 @@ describe("the playback cursor (UI-11)", () => {
         store().selectRange(9, 17);
     });
 
+    it("shows the held frame, or else the playhead", () => {
+        expect(displayedBeat(store())).toBe(17);
+        store().cue(11);
+        expect(displayedBeat(store())).toBe(11);
+    });
+
     it("cueing moves the cursor without moving the window, and restarts playback", () => {
         const revision = store().playheadRevision;
         store().cue(11);
@@ -435,6 +442,25 @@ describe("the playback cursor (UI-11)", () => {
         store().setPlayback(null);
         store().setPageBoxes(BOXES);
         expect(store().cursorBeat).toBeNull();
+    });
+
+    it("a reload while playing doesn't restart the audio (code review)", () => {
+        store().setStoredTimelines([timeline(1, 9, 17, [1])]);
+        store().isolate(1);
+        store().setPlayback({ kind: "preview", from: 9, to: 17 });
+        store().cue(11);
+        const revision = store().playheadRevision;
+        store().setStoredTimelines([timeline(1, 9, 19, [1])]);
+        expect(store().isolation?.end).toBe(19);
+        expect(store().playheadRevision).toBe(revision);
+        expect(store().cursorBeat).toBe(11);
+    });
+
+    it("a reload after an edit drops a held frame, so the canvas shows the edit at P (code review)", () => {
+        store().cue(11);
+        store().setStoredTimelines([timeline(1, 9, 17, [1])]);
+        expect(store().cursorBeat).toBeNull();
+        expect(store().playheadBeat).toBe(17);
     });
 
     it("toggles the preview loop", () => {

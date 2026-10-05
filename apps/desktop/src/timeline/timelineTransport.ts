@@ -1,5 +1,8 @@
 import type { TimelineNavigation } from "@/components/timeline/TimelineViewModel";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import {
     canPlayOn,
     navigationTarget,
@@ -26,7 +29,8 @@ export function navigateTimelinePages(
     direction: TimelineNavigation,
 ): boolean {
     const state = useTimelineSelectionStore.getState();
-    const target = navigationTarget(pages, state.playheadBeat, direction);
+    // From the beat the timeline shows: a held preview frame, or the playhead (UI-11)
+    const target = navigationTarget(pages, displayedBeat(state), direction);
     if (!target) return false;
     if (target.range) state.selectRange(target.range.start, target.range.end);
     else state.selectHome();

@@ -37,7 +37,10 @@ import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
 import { useTimelineShapeCanvas } from "@/timeline/useTimelineShapeCanvas";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { useTimelineDimming } from "@/timeline/useTimelineDimming";
 import TimelineIsolationBar, {
     TimelineFromStartBadge,
@@ -107,9 +110,7 @@ export default function Canvas({
     const drawFromResolver = timelineMode && timelineResolverReady;
     // UI-9, UI-11: the paused canvas shows positions at the playhead, or at the frame a paused
     // preview holds
-    const playheadBeat = useTimelineSelectionStore(
-        (s) => s.cursorBeat ?? s.playheadBeat,
-    );
+    const playheadBeat = useTimelineSelectionStore(displayedBeat);
     const marcherIds = useMemo(() => marchers?.map((m) => m.id), [marchers]);
 
     const { data: fieldProperties } = useQuery(
@@ -603,8 +604,12 @@ export default function Canvas({
         const onPress = (event: Event) => {
             const store = useTimelineSelectionStore.getState();
             if (event.type === "pointerdown") {
+                // Only presses on the field itself: overlays (badges, bars) and the popovers
+                // that listen for outside presses keep theirs
                 swallowing =
-                    store.cursorBeat !== null && store.playback === null;
+                    event.target instanceof HTMLCanvasElement &&
+                    store.cursorBeat !== null &&
+                    store.playback === null;
                 if (swallowing) store.clearCursor();
             }
             if (!swallowing) return;

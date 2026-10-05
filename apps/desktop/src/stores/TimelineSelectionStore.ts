@@ -373,16 +373,24 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                 s.pageBoxes,
             );
         // Reloads (page boxes, stored timelines, a clip move) rewrite the window without the user
-        // seeking; while playing, they keep the cursor so the audio isn't restarted at P (UI-11)
+        // seeking; while playing, they keep the cursor and the revision, so the audio isn't
+        // restarted (UI-11)
         const keepCursorWhilePlaying =
             <T extends object>(
                 fn: (s: TimelineSelectionState) => T,
             ): ((s: TimelineSelectionState) => T) =>
             (s) => {
                 const next = fn(s);
-                return s.playback !== null && "cursorBeat" in next
-                    ? { ...next, cursorBeat: s.cursorBeat }
-                    : next;
+                if (s.playback === null) return next;
+                return {
+                    ...next,
+                    ...("cursorBeat" in next
+                        ? { cursorBeat: s.cursorBeat }
+                        : {}),
+                    ...("playheadRevision" in next
+                        ? { playheadRevision: s.playheadRevision }
+                        : {}),
+                };
             };
         const restored = (s: TimelineSelectionState) => {
             const r = s.isolation!.restore;
@@ -632,6 +640,14 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             setStoredTimelines: (storedTimelines) =>
                 set(
                     keepCursorWhilePlaying((s) => {
+                        // Stored timelines reload after every timeline edit, undo and redo, so
+                        // while paused this drops a held preview frame: whatever edited (the
+                        // canvas, the inspector, a shortcut) wrote at P, and the canvas goes back
+                        // to show it
+                        const dropHeld =
+                            s.playback === null && s.cursorBeat !== null;
+                        if (dropHeld && s.isolation === null)
+                            return { storedTimelines, cursorBeat: null };
                         if (s.isolation === null || storedTimelines === null)
                             return {
                                 storedTimelines,
@@ -701,6 +717,14 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
         };
     },
 );
+
+/**
+ * The beat the timeline and the paused canvas show (UI-11): the frame a paused preview holds, or
+ * the playhead. Where audio starts, too.
+ */
+export const displayedBeat = (
+    state: Pick<TimelineSelectionState, "cursorBeat" | "playheadBeat">,
+): number => state.cursorBeat ?? state.playheadBeat;
 
 /** The stored timeline the selection resolves to (see `resolveStoredTimeline`). */
 export const useSelectedStoredTimeline = (): StoredTimelineMembership | null =>

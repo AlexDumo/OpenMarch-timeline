@@ -66,8 +66,11 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
             store.clearCursor();
             return;
         }
-        // Paused before the audio started: nothing played, so the cursor stays where it was cued
-        if (live === null) return;
+        // Paused before the audio started: nothing played, so there is no frame to hold
+        if (live === null) {
+            store.clearCursor();
+            return;
+        }
         const beat = Math.min(Math.floor(live), beats.length);
         if (run.kind === "preview") store.cue(beat);
         else store.seekKeepingStart(beat);

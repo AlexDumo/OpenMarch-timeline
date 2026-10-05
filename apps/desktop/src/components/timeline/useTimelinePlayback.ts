@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
 import { pageAtPlayhead } from "@/timeline/timelinePlayhead";
 import {
@@ -40,9 +43,7 @@ export function useTimelinePlayback({
     pages: readonly Page[];
 }): TimelinePlayback {
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
-    const playheadBeat = useTimelineSelectionStore(
-        (s) => s.cursorBeat ?? s.playheadBeat,
-    );
+    const playheadBeat = useTimelineSelectionStore(displayedBeat);
     const seek = useTimelineSelectionStore((s) => s.seek);
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 

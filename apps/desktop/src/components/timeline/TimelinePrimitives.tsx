@@ -12,6 +12,7 @@ import {
     WarningIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { START_INK } from "./startFlagInk";
 import {
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
@@ -594,13 +595,6 @@ export const TimelineTrackClip = ({
     );
 };
 
-/**
- * The start flag's ink (UI-11): the theme's yellow is too light on the light ruler (about 1.9:1),
- * so light mode draws a darker ochre (about 3.6:1); dark mode keeps the yellow.
- */
-const START_INK_BG = "bg-[rgb(150,120,0)] dark:bg-yellow";
-const START_INK_TEXT = "text-[rgb(150,120,0)] dark:text-yellow";
-
 export const TimelineSelectionRange = ({
     range,
     startFlagBeatIndex,
@@ -851,7 +845,7 @@ export const TimelineSelectionRange = ({
                     <span
                         className={clsx(
                             "absolute inset-y-0 left-1/2",
-                            START_INK_BG,
+                            START_INK.bg,
                             fromStart ? "w-0.5" : "w-px",
                         )}
                     />
@@ -877,7 +871,7 @@ export const TimelineSelectionRange = ({
                         aria-hidden="true"
                         className={clsx(
                             "absolute top-0 left-0",
-                            START_INK_TEXT,
+                            START_INK.text,
                         )}
                     >
                         <path
@@ -933,7 +927,7 @@ export const TimelineSelectionRange = ({
                     <span
                         className={clsx(
                             "absolute top-0 h-3 transition-[height] duration-100 group-hover:h-5",
-                            START_INK_BG,
+                            START_INK.bg,
                         )}
                         style={{
                             left:

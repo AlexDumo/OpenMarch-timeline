@@ -407,7 +407,7 @@ function TimelineSurface({
                             title="Add a page flag here"
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={props.onAddPageFlag}
-                            className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-50 flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
+                            className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
                             style={{
                                 left: beatToX(positionBeat, pixelsPerBeat) + 8,
                             }}

@@ -372,4 +372,23 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().playback).toEqual({ kind: "on" });
         expect(store().cursorBeat).toBe(13);
     });
+
+    it("a pause before the audio starts leaves no held frame (code review)", async ({
+        db,
+        wrapper,
+    }) => {
+        const { result } = await setUp(db, wrapper);
+        act(() => {
+            store().selectRange(9, 13);
+        });
+        act(() => {
+            startTimelinePlayback(17, result.current.playing.setIsPlaying);
+        });
+        expect(store().cursorBeat).toBe(13);
+        act(() => {
+            result.current.playing.setIsPlaying(false);
+        });
+        expect(store().cursorBeat).toBeNull();
+        expect(store().playheadBeat).toBe(13);
+    });
 });
