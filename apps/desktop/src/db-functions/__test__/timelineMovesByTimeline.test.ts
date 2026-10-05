@@ -287,12 +287,18 @@ describeDbTests("moving marchers in the selected timeline (UI-9)", (it) => {
             end: timeline.end_beat,
             layer: 1,
         });
-        await expectRefused(db, /higher layer/, () =>
-            moveMarchersInTarget({
-                db,
-                target: { kind: "timeline", timelineId: timeline.id },
-                moves: [{ marcherId: 6, x: 10, y: 10 }],
-            }),
+        // UI-10: the refusal names the move in the way by its beats
+        await expectRefused(
+            db,
+            new RegExp(
+                `another move over beats \\[${timeline.end_beat - 1}, ${timeline.end_beat}\\)`,
+            ),
+            () =>
+                moveMarchersInTarget({
+                    db,
+                    target: { kind: "timeline", timelineId: timeline.id },
+                    moves: [{ marcherId: 6, x: 10, y: 10 }],
+                }),
         );
     });
 
@@ -562,6 +568,42 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
         expect(over).toHaveLength(1);
         expect(resolver().positionAt(5, window.end)).toEqual([201, 211]);
         expect(resolver().positionAt(7, window.end)).toEqual([240, 250]);
+    });
+
+    it("a refusal in the move step rolls back the add made in the same edit", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const timeline = await timelineOf(db, pages[3]!);
+        const window = {
+            kind: "range" as const,
+            start: timeline.start_beat,
+            end: timeline.start_beat + 3,
+        };
+        // Marcher 6 joins the window's timeline, then a higher layer decides where it is at the end
+        await moveMarchersInTarget({
+            db,
+            target: window,
+            moves: [{ marcherId: 6, x: 200, y: 210 }],
+        });
+        await addRow(db, {
+            marcherId: 6,
+            start: window.end - 1,
+            end: window.end,
+            layer: 5,
+        });
+        // Marcher 5 would be added before marcher 6's move is refused: nothing may stay written
+        await expectRefused(db, /another move over beats/, () =>
+            moveMarchersInTarget({
+                db,
+                target: window,
+                moves: [
+                    { marcherId: 5, x: 230, y: 240 },
+                    { marcherId: 6, x: 201, y: 211 },
+                ],
+            }),
+        );
     });
 
     it("a window that only partly overlaps a marcher's move is refused, and writes nothing", async ({

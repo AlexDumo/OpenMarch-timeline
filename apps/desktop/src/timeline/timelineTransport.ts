@@ -13,6 +13,9 @@ import {
  * `useTimelineSelectionStore`; page mode keeps its own page-based transport.
  */
 
+/** Set by `stopTimelinePlayback` while playing, so the pause that follows returns to the flag. */
+let stopRequested = false;
+
 /**
  * Page navigation (UI-9 Page-relative tools): moves the playhead to the target flag and selects
  * that page's timeline, or home for the first page. Returns false when there is nowhere to go.
@@ -42,6 +45,9 @@ export function startTimelinePlayback(
     const state = useTimelineSelectionStore.getState();
     if (!canPlay(state.selection, state.playheadBeat, showEndBeat))
         return false;
+    // A Stop whose pause never landed (pressed with a stale isPlaying) mustn't turn the next
+    // ordinary pause into a return
+    stopRequested = false;
     const start = playStartBeat(state.selection, state.playheadBeat);
     if (start !== state.playheadBeat) state.seek(start);
     setIsPlaying(true);
@@ -64,9 +70,6 @@ export function toggleTimelinePlayback({
     if (isPlaying) setIsPlaying(false);
     else startTimelinePlayback(showEndBeat, setIsPlaying);
 }
-
-/** Set by `stopTimelinePlayback` while playing, so the pause that follows returns to the flag. */
-let stopRequested = false;
 
 /** Whether the pause in progress came from **Stop**; clears the request. */
 export function consumeStopRequest(): boolean {

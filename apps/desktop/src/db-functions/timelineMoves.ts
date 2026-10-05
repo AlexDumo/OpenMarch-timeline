@@ -18,9 +18,9 @@ import {
 import { assertValid, refuse, TimelineWriteError } from "./timelineErrors";
 import {
     addMarchersToTimelineInTransaction,
-    findTimelineByRange,
     type BeatRange,
 } from "./timelineMembership";
+import { timelinesWithRange } from "./timelines";
 
 /**
  * "Move a marcher on page N" in timeline mode (docs/timeline/phases/07-page-parity.md P7.2, spec
@@ -414,7 +414,12 @@ export const moveMarchersInTimelineInTransaction = async ({
 
     // R-2: the highest layer among each marcher's rows covering the last moment before the end
     const covering = await tx
-        .select({ marcherId: a.marcher_id, layer: a.layer })
+        .select({
+            marcherId: a.marcher_id,
+            layer: a.layer,
+            start: a.start_beat,
+            end: a.end_beat,
+        })
         .from(a)
         .where(
             and(
@@ -424,19 +429,19 @@ export const moveMarchersInTimelineInTransaction = async ({
             ),
         )
         .all();
-    const topLayer = new Map<number, number>();
-    for (const row of covering)
-        topLayer.set(
-            row.marcherId,
-            Math.max(topLayer.get(row.marcherId) ?? -Infinity, row.layer),
-        );
+    // The winning row at the end, per marcher, so a refusal can name the move in the way
+    const top = new Map<number, (typeof covering)[number]>();
+    for (const row of covering) {
+        const best = top.get(row.marcherId);
+        if (!best || row.layer > best.layer) top.set(row.marcherId, row);
+    }
 
     const plans: SlotMovePlan[] = [];
     for (const move of moves) {
         const own = byMarcher.get(move.marcherId) ?? [];
         if (own.length === 0)
             refuse(
-                `marcher ${await marcherLabel(tx, move.marcherId)} isn't in this timeline. Add it first: right-click the timeline and choose Add selected marchers.`,
+                `marcher ${await marcherLabel(tx, move.marcherId)} isn't in this timeline.`,
             );
         if (own.length > 1)
             refuse(
@@ -447,9 +452,10 @@ export const moveMarchersInTimelineInTransaction = async ({
             refuse(
                 `marcher ${await marcherLabel(tx, move.marcherId)}'s move in this timeline ends at beat ${row.end}, before the timeline's end (beat ${endBeat}). Edit it in the inspector.`,
             );
-        if ((topLayer.get(move.marcherId) ?? row.layer) > row.layer)
+        const winner = top.get(move.marcherId);
+        if (winner && winner.layer > row.layer)
             refuse(
-                `marcher ${await marcherLabel(tx, move.marcherId)} is in a move on a higher layer at beat ${endBeat}, so this timeline doesn't set where it is there. Select that move's timeline instead.`,
+                `marcher ${await marcherLabel(tx, move.marcherId)} has another move over beats [${winner.start}, ${winner.end}) that decides where it is at beat ${endBeat}. Put the start flag and playhead on that move's edges to edit it.`,
             );
         plans.push({ move, row });
     }
@@ -462,26 +468,34 @@ export const moveMarchersInTimelineInTransaction = async ({
     return result;
 };
 
-/** The marchers among `marcherIds` with an assignment in timeline `timelineId`. */
-const marchersInTimeline = async (
+/**
+ * Which of the timelines `timelineIds` each of `marcherIds` has an assignment in (the first, by
+ * id, when a file from before C-12 holds two over one range).
+ */
+const timelineOfMarchers = async (
     tx: DbTransaction,
-    timelineId: number,
+    timelineIds: readonly number[],
     marcherIds: readonly number[],
-): Promise<Set<number>> => {
+): Promise<Map<number, number>> => {
+    const out = new Map<number, number>();
+    if (timelineIds.length === 0) return out;
     const a = schema.timeline_assignments;
     const t = schema.timeline_transitions;
     const rows = await tx
-        .selectDistinct({ marcherId: a.marcher_id })
+        .selectDistinct({ marcherId: a.marcher_id, timelineId: t.timeline_id })
         .from(a)
         .innerJoin(t, eq(a.transition_id, t.id))
         .where(
             and(
-                eq(t.timeline_id, timelineId),
+                inArray(t.timeline_id, [...timelineIds]),
                 inArray(a.marcher_id, [...marcherIds]),
             ),
         )
         .all();
-    return new Set(rows.map((r) => r.marcherId));
+    rows.sort((x, y) => x.timelineId - y.timelineId);
+    for (const { marcherId, timelineId } of rows)
+        if (!out.has(marcherId)) out.set(marcherId, timelineId);
+    return out;
 };
 
 /**
@@ -507,22 +521,36 @@ export const moveMarchersInRangeInTransaction = async ({
     for (const m of moves)
         assertValid(validateDestination([m.x, m.y]), "position");
     const marcherIds = moves.map((m) => m.marcherId);
-    const existing = await findTimelineByRange(tx, range);
-    const members = existing
-        ? await marchersInTimeline(tx, existing.id, marcherIds)
-        : new Set<number>();
-    const toAdd = marcherIds.filter((id) => !members.has(id));
-    const timelineId =
-        toAdd.length > 0
-            ? (
-                  await addMarchersToTimelineInTransaction({
-                      tx,
-                      range,
-                      marcherIds: toAdd,
-                  })
-              ).timelineId
-            : existing!.id;
-    return await moveMarchersInTimelineInTransaction({ tx, timelineId, moves });
+    // Membership by range, not by one timeline: a file from before C-12 may hold two over it
+    const sameRange = (await timelinesWithRange(tx, range)).map((t) => t.id);
+    const timelineOf = await timelineOfMarchers(tx, sameRange, marcherIds);
+    const toAdd = marcherIds.filter((id) => !timelineOf.has(id));
+    if (toAdd.length > 0) {
+        const { timelineId } = await addMarchersToTimelineInTransaction({
+            tx,
+            range,
+            marcherIds: toAdd,
+        });
+        for (const id of toAdd) timelineOf.set(id, timelineId);
+    }
+    // One move per timeline the marchers are in (one, except in a file from before C-12)
+    const result: TimelineMoveResult = {
+        homes: [],
+        slots: [],
+        convertedTransitionIds: [],
+    };
+    for (const timelineId of new Set(timelineOf.values())) {
+        const part = await moveMarchersInTimelineInTransaction({
+            tx,
+            timelineId,
+            moves: moves.filter(
+                (m) => timelineOf.get(m.marcherId) === timelineId,
+            ),
+        });
+        result.slots.push(...part.slots);
+        result.convertedTransitionIds.push(...part.convertedTransitionIds);
+    }
+    return result;
 };
 
 /**

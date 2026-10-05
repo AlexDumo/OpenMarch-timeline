@@ -166,6 +166,17 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         expect(store().selection).toEqual({ kind: "range", start: 1, end: 9 });
     });
 
+    it("Stop inside page 1 returns home: page 1's box starts at beat 1, show time 0", () => {
+        store().setPageBoxes(BOXES);
+        store().seek(5);
+        expect(store().startBeat).toBe(1);
+        store().returnToStart();
+        expect(store().playheadBeat).toBe(0);
+        expect(store().selection).toEqual({ kind: "home" });
+        expect(editWindow(1, 1, BOXES)).toEqual({ kind: "home" });
+        expect(followingStart(1, BOXES)).toBe(0);
+    });
+
     it("a start flag placed before the page boxes load is unpinned when they arrive", () => {
         store().selectRange(9, 17);
         expect(store().startPinned).toBe(true); // no boxes yet

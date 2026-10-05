@@ -760,6 +760,14 @@ export const TimelineSelectionRange = ({
                           : 0;
                 if (delta === 0) return;
                 event.preventDefault();
+                // The start flag stays before the playhead (UI-10): after Stop it is drawn on the
+                // playhead, so a step right has nowhere to go
+                if (
+                    kind === "start" &&
+                    (beatIndex + delta >= range.endBeatIndex ||
+                        beatIndex + delta < 0)
+                )
+                    return;
                 onCommit(
                     kind === "start"
                         ? {

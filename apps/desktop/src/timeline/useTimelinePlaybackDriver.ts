@@ -4,10 +4,9 @@ import { useTimingObjects } from "@/hooks/useTimingObjects";
 import {
     getLivePlaybackPosition,
     playbackStartInfoRef,
-    restartLivePlaybackAt,
 } from "@/components/timeline/audio/AudioPlayer";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { beatAtTime, timeAtBeat } from "./timeMap";
+import { beatAtTime } from "./timeMap";
 import { playbackStep } from "./timelinePlayhead";
 import { consumeStopRequest } from "./timelineTransport";
 
@@ -70,11 +69,6 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
                     lastLiveBeat.current = beats.length;
                     setIsPlaying(false);
                     return;
-                }
-                if (step) {
-                    restartLivePlaybackAt(timeAtBeat(beats, step.loopTo));
-                    lastLiveBeat.current = step.loopTo;
-                    store.seek(step.loopTo);
                 }
             }
             frame = requestAnimationFrame(tick);
