@@ -1,0 +1,347 @@
+{
+  "poses": [
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-slim/001-neutral.png",
+      "frame": 1,
+      "pose": "neutral",
+      "profile_id": "neutral-slim"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-slim/021-arms-raised.png",
+      "frame": 21,
+      "pose": "arms-raised",
+      "profile_id": "neutral-slim"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-slim/061-marching-high-knee.png",
+      "frame": 61,
+      "pose": "marching-high-knee",
+      "profile_id": "neutral-slim"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-slim/081-stride-opposing-arm.png",
+      "frame": 81,
+      "pose": "stride-opposing-arm",
+      "profile_id": "neutral-slim"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-slim/101-chest-head-turn.png",
+      "frame": 101,
+      "pose": "chest-head-turn",
+      "profile_id": "neutral-slim"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-slim/041-deep-knee-bend.png",
+      "frame": 41,
+      "pose": "deep-knee-bend",
+      "profile_id": "neutral-slim"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-slim/061-foot-roll-toe-lift.png",
+      "frame": 61,
+      "pose": "foot-roll-toe-lift",
+      "profile_id": "neutral-slim"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-average/001-neutral.png",
+      "frame": 1,
+      "pose": "neutral",
+      "profile_id": "neutral-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-average/021-arms-raised.png",
+      "frame": 21,
+      "pose": "arms-raised",
+      "profile_id": "neutral-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-average/061-marching-high-knee.png",
+      "frame": 61,
+      "pose": "marching-high-knee",
+      "profile_id": "neutral-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-average/081-stride-opposing-arm.png",
+      "frame": 81,
+      "pose": "stride-opposing-arm",
+      "profile_id": "neutral-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-average/101-chest-head-turn.png",
+      "frame": 101,
+      "pose": "chest-head-turn",
+      "profile_id": "neutral-average"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-average/041-deep-knee-bend.png",
+      "frame": 41,
+      "pose": "deep-knee-bend",
+      "profile_id": "neutral-average"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-average/061-foot-roll-toe-lift.png",
+      "frame": 61,
+      "pose": "foot-roll-toe-lift",
+      "profile_id": "neutral-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-athletic/001-neutral.png",
+      "frame": 1,
+      "pose": "neutral",
+      "profile_id": "neutral-athletic"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-athletic/021-arms-raised.png",
+      "frame": 21,
+      "pose": "arms-raised",
+      "profile_id": "neutral-athletic"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-athletic/061-marching-high-knee.png",
+      "frame": 61,
+      "pose": "marching-high-knee",
+      "profile_id": "neutral-athletic"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-athletic/081-stride-opposing-arm.png",
+      "frame": 81,
+      "pose": "stride-opposing-arm",
+      "profile_id": "neutral-athletic"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-athletic/101-chest-head-turn.png",
+      "frame": 101,
+      "pose": "chest-head-turn",
+      "profile_id": "neutral-athletic"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-athletic/041-deep-knee-bend.png",
+      "frame": 41,
+      "pose": "deep-knee-bend",
+      "profile_id": "neutral-athletic"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-athletic/061-foot-roll-toe-lift.png",
+      "frame": 61,
+      "pose": "foot-roll-toe-lift",
+      "profile_id": "neutral-athletic"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-broad/001-neutral.png",
+      "frame": 1,
+      "pose": "neutral",
+      "profile_id": "neutral-broad"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-broad/021-arms-raised.png",
+      "frame": 21,
+      "pose": "arms-raised",
+      "profile_id": "neutral-broad"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-broad/061-marching-high-knee.png",
+      "frame": 61,
+      "pose": "marching-high-knee",
+      "profile_id": "neutral-broad"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-broad/081-stride-opposing-arm.png",
+      "frame": 81,
+      "pose": "stride-opposing-arm",
+      "profile_id": "neutral-broad"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-broad/101-chest-head-turn.png",
+      "frame": 101,
+      "pose": "chest-head-turn",
+      "profile_id": "neutral-broad"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-broad/041-deep-knee-bend.png",
+      "frame": 41,
+      "pose": "deep-knee-bend",
+      "profile_id": "neutral-broad"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-broad/061-foot-roll-toe-lift.png",
+      "frame": 61,
+      "pose": "foot-roll-toe-lift",
+      "profile_id": "neutral-broad"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-full/001-neutral.png",
+      "frame": 1,
+      "pose": "neutral",
+      "profile_id": "neutral-full"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-full/021-arms-raised.png",
+      "frame": 21,
+      "pose": "arms-raised",
+      "profile_id": "neutral-full"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-full/061-marching-high-knee.png",
+      "frame": 61,
+      "pose": "marching-high-knee",
+      "profile_id": "neutral-full"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-full/081-stride-opposing-arm.png",
+      "frame": 81,
+      "pose": "stride-opposing-arm",
+      "profile_id": "neutral-full"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/neutral-full/101-chest-head-turn.png",
+      "frame": 101,
+      "pose": "chest-head-turn",
+      "profile_id": "neutral-full"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-full/041-deep-knee-bend.png",
+      "frame": 41,
+      "pose": "deep-knee-bend",
+      "profile_id": "neutral-full"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/neutral-full/061-foot-roll-toe-lift.png",
+      "frame": 61,
+      "pose": "foot-roll-toe-lift",
+      "profile_id": "neutral-full"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/feminine-average/001-neutral.png",
+      "frame": 1,
+      "pose": "neutral",
+      "profile_id": "feminine-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/feminine-average/021-arms-raised.png",
+      "frame": 21,
+      "pose": "arms-raised",
+      "profile_id": "feminine-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/feminine-average/061-marching-high-knee.png",
+      "frame": 61,
+      "pose": "marching-high-knee",
+      "profile_id": "feminine-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/feminine-average/081-stride-opposing-arm.png",
+      "frame": 81,
+      "pose": "stride-opposing-arm",
+      "profile_id": "feminine-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/feminine-average/101-chest-head-turn.png",
+      "frame": 101,
+      "pose": "chest-head-turn",
+      "profile_id": "feminine-average"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/feminine-average/041-deep-knee-bend.png",
+      "frame": 41,
+      "pose": "deep-knee-bend",
+      "profile_id": "feminine-average"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/feminine-average/061-foot-roll-toe-lift.png",
+      "frame": 61,
+      "pose": "foot-roll-toe-lift",
+      "profile_id": "feminine-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/masculine-average/001-neutral.png",
+      "frame": 1,
+      "pose": "neutral",
+      "profile_id": "masculine-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/masculine-average/021-arms-raised.png",
+      "frame": 21,
+      "pose": "arms-raised",
+      "profile_id": "masculine-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/masculine-average/061-marching-high-knee.png",
+      "frame": 61,
+      "pose": "marching-high-knee",
+      "profile_id": "masculine-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/masculine-average/081-stride-opposing-arm.png",
+      "frame": 81,
+      "pose": "stride-opposing-arm",
+      "profile_id": "masculine-average"
+    },
+    {
+      "action": "Rig_Test",
+      "file": "qa/masculine-average/101-chest-head-turn.png",
+      "frame": 101,
+      "pose": "chest-head-turn",
+      "profile_id": "masculine-average"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/masculine-average/041-deep-knee-bend.png",
+      "frame": 41,
+      "pose": "deep-knee-bend",
+      "profile_id": "masculine-average"
+    },
+    {
+      "action": "Rig_IK_Check",
+      "file": "qa/masculine-average/061-foot-roll-toe-lift.png",
+      "frame": 61,
+      "pose": "foot-roll-toe-lift",
+      "profile_id": "masculine-average"
+    }
+  ]
+}

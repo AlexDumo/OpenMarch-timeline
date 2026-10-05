@@ -1,4 +1,31 @@
 words:
+  # Blender / 3D asset pipeline
+  - bbone
+  - bbones
+  - bmesh
+  - Bsdf
+  - datablock
+  - denoising
+  - depsgraph
+  - EEVEE
+  - Epaulette
+  - gltf
+  - idname
+  - Leadpipe
+  - lerp
+  - mainfile
+  - mathutils
+  - metarig
+  - pydata
+  - recalc
+  - remesh
+  - reparents
+  - Rigify
+  - subtarget
+  - threequarter
+  - unrigged
+  - unselectable
+  - verts
   - bighs
   - drei
   - frameless
@@ -196,6 +223,7 @@ words:
 ignorePaths:
   - node_modules/**
   - docs/3d/ref/**
+  - assets/blender/**/*.json
   - "**/node_modules/**"
   - "**/dist/**"
   - dist/**

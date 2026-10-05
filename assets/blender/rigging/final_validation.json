@@ -1,0 +1,38 @@
+{
+  "geometry_topology_shading_unchanged": true,
+  "materials_unchanged": true,
+  "cameras_lights_unchanged": true,
+  "vertices": 530,
+  "faces": 1056,
+  "uv_layers": 0,
+  "shape_keys": false,
+  "deform_bones": 22,
+  "vertex_groups": 22,
+  "groups_exactly_deform_bones": true,
+  "unweighted_vertices": 0,
+  "max_influences": 4,
+  "max_weight_sum_error": 3.725290298461914e-08,
+  "armature_modifier_correct": true,
+  "deform_bones_protected": true,
+  "actions": [
+    {
+      "name": "Rig_IK_Check",
+      "range": [
+        1.0,
+        81.0
+      ],
+      "retained": true
+    },
+    {
+      "name": "Rig_Test",
+      "range": [
+        1.0,
+        121.0
+      ],
+      "retained": true
+    }
+  ],
+  "active_action": "Rig_Test",
+  "frame": 1,
+  "embedded_guide": true
+}

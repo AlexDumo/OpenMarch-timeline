@@ -1,0 +1,20 @@
+{
+  "skeleton_bones": 23,
+  "clips": [
+    {
+      "name": "Rig_Test_Baked",
+      "start": 1,
+      "end": 121,
+      "max_vertex_bake_error": 2.7227157729052616e-06
+    },
+    {
+      "name": "Rig_IK_Check_Baked",
+      "start": 1,
+      "end": 81,
+      "max_vertex_bake_error": 2.740001030706278e-06
+    }
+  ],
+  "constraints_remaining": 0,
+  "source_file": "/Users/openmarchdev/Documents/ChatGPT/OpenMarch 3D/assets/blender/openmarch-body-v4-rigged.blend",
+  "baked_file": "/Users/openmarchdev/Documents/ChatGPT/OpenMarch 3D/assets/blender/exports/openmarch-body-v4-baked.blend"
+}

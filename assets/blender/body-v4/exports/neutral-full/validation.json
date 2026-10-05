@@ -1,0 +1,127 @@
+{
+  "constraints_remaining": 0,
+  "deform_bones": [
+    "DEF-spine",
+    "DEF-spine.001",
+    "DEF-spine.002",
+    "DEF-spine.003",
+    "DEF-spine.004",
+    "DEF-spine.006",
+    "DEF-thigh.L",
+    "DEF-shin.L",
+    "DEF-foot.L",
+    "DEF-toe.L",
+    "DEF-thigh.R",
+    "DEF-shin.R",
+    "DEF-foot.R",
+    "DEF-toe.R",
+    "DEF-shoulder.L",
+    "DEF-upper_arm.L",
+    "DEF-forearm.L",
+    "DEF-hand.L",
+    "DEF-shoulder.R",
+    "DEF-upper_arm.R",
+    "DEF-forearm.R",
+    "DEF-hand.R"
+  ],
+  "exported_bone_count": 23,
+  "fps": 24,
+  "maximum_influence_count": 4,
+  "maximum_weight_sum_error": 3.725290298461914e-08,
+  "outputs": [
+    {
+      "path": "/Users/openmarchdev/Documents/ChatGPT/OpenMarch 3D/assets/blender/body-v4/exports/neutral-full/openmarch-body-v4-neutral-full-baked.blend",
+      "sha256": "831c3402ff3d215e9f6677767d4a921af6e9879ac82057c1641fc8102481a85a",
+      "size_bytes": 222674
+    },
+    {
+      "path": "/Users/openmarchdev/Documents/ChatGPT/OpenMarch 3D/assets/blender/body-v4/exports/neutral-full/openmarch-body-v4-neutral-full.glb",
+      "sha256": "995d5cae1242a4f81d0974f9404672cf292213be557de73d73809c13852225e1",
+      "size_bytes": 152588
+    }
+  ],
+  "passed": true,
+  "per_action_bake_deviation": [
+    {
+      "baked_action": "Rig_Test_Baked",
+      "frame_end": 121,
+      "frame_start": 1,
+      "maximum_vertex_bake_deviation": 2.713525593009759e-06,
+      "source_action": "Rig_Test",
+      "worst_frame": 54
+    },
+    {
+      "baked_action": "Rig_IK_Check_Baked",
+      "frame_end": 81,
+      "frame_start": 1,
+      "maximum_vertex_bake_deviation": 2.7304624454685477e-06,
+      "source_action": "Rig_IK_Check",
+      "worst_frame": 54
+    }
+  ],
+  "profile_id": "neutral-full",
+  "roundtrip": {
+    "fbx": {
+      "armature_objects": 1,
+      "bone_count": 23,
+      "bone_names_match": true,
+      "candidate_mesh_objects": 1,
+      "faces": 1056,
+      "faces_match": true,
+      "hierarchy_matches": true,
+      "maximum_influence_count": 4,
+      "maximum_rest_matrix_error": 3.922512722014104e-06,
+      "mesh_objects": 1,
+      "passed": true,
+      "unweighted_vertices": 0,
+      "vertex_groups_exact": true
+    },
+    "glb": {
+      "armature_objects": 1,
+      "bone_count": 23,
+      "bone_names_match": true,
+      "candidate_mesh_objects": 1,
+      "faces": 1056,
+      "faces_match": true,
+      "hierarchy_matches": true,
+      "maximum_influence_count": 4,
+      "maximum_rest_matrix_error": 2.512740718841472e-05,
+      "mesh_objects": 2,
+      "passed": true,
+      "unweighted_vertices": 0,
+      "vertex_groups_exact": true
+    }
+  },
+  "schema_version": 1,
+  "skeleton_signature": "308ed12093cfb0725ee206c2638d26f765e78ba3988ecb259841868d1d107cc6",
+  "source_file": {
+    "path": "/Users/openmarchdev/Documents/ChatGPT/OpenMarch 3D/assets/blender/body-v4/source/openmarch-body-v4-neutral-full-rigged.blend",
+    "sha256": "9ab9dc8f19aa1027c73aca1eb172b57e5104026a2234b74c5a93373fc30964c6",
+    "size_bytes": 351166
+  },
+  "unweighted_vertex_count": 0,
+  "vertex_groups": [
+    "DEF-spine",
+    "DEF-spine.001",
+    "DEF-spine.002",
+    "DEF-spine.003",
+    "DEF-spine.004",
+    "DEF-spine.006",
+    "DEF-thigh.L",
+    "DEF-shin.L",
+    "DEF-foot.L",
+    "DEF-toe.L",
+    "DEF-thigh.R",
+    "DEF-shin.R",
+    "DEF-foot.R",
+    "DEF-toe.R",
+    "DEF-shoulder.L",
+    "DEF-upper_arm.L",
+    "DEF-forearm.L",
+    "DEF-hand.L",
+    "DEF-shoulder.R",
+    "DEF-upper_arm.R",
+    "DEF-forearm.R",
+    "DEF-hand.R"
+  ]
+}

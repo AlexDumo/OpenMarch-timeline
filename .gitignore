@@ -60,3 +60,7 @@ packages/metronome/
 
 *.tmp.dots
 *.tmp.dots-journal
+
+# Blender backups and Python caches
+*.blend1
+__pycache__/

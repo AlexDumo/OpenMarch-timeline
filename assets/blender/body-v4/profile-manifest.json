@@ -1,0 +1,415 @@
+{
+  "fps": 24,
+  "master": "master/openmarch-body-v4-base-rigged.blend",
+  "motion_source": "master/openmarch-motion-v4.blend",
+  "profiles": {
+    "feminine-average": {
+      "bounding_box": {
+        "max": [
+          0.37218523025512695,
+          0.10275642573833466,
+          1.7827448844909668
+        ],
+        "min": [
+          -0.37218523025512695,
+          -0.17102377116680145,
+          0.0024726875126361847
+        ]
+      },
+      "maximum_vertex_displacement": 0.01629493542306817,
+      "parameters": {
+        "chest": [
+          1.02,
+          1.11,
+          0.09
+        ],
+        "foot": 1.0,
+        "forearm": 0.95,
+        "hand": 0.96,
+        "head": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "neck": [
+          0.94,
+          0.94,
+          0.0
+        ],
+        "pelvis": [
+          1.19,
+          1.12,
+          0.0
+        ],
+        "rib": [
+          0.93,
+          1.02,
+          0.04
+        ],
+        "shin": 1.01,
+        "shoulder": 0.92,
+        "thigh": 1.1,
+        "toe": 1.0,
+        "upper_arm": 0.96,
+        "waist": [
+          0.84,
+          0.89,
+          0.0
+        ]
+      },
+      "preview": "previews/openmarch-body-v4-feminine-average.png",
+      "skeleton_signature": "308ed12093cfb0725ee206c2638d26f765e78ba3988ecb259841868d1d107cc6",
+      "source": "source/openmarch-body-v4-feminine-average-rigged.blend"
+    },
+    "masculine-average": {
+      "bounding_box": {
+        "max": [
+          0.37433671951293945,
+          0.10980987548828125,
+          1.7827448844909668
+        ],
+        "min": [
+          -0.37433671951293945,
+          -0.17102377116680145,
+          0.0024726875126361847
+        ]
+      },
+      "maximum_vertex_displacement": 0.015109687031808311,
+      "parameters": {
+        "chest": [
+          1.19,
+          1.11,
+          0.0
+        ],
+        "foot": 1.0,
+        "forearm": 1.07,
+        "hand": 1.04,
+        "head": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "neck": [
+          1.08,
+          1.08,
+          0.0
+        ],
+        "pelvis": [
+          0.96,
+          0.99,
+          0.0
+        ],
+        "rib": [
+          1.12,
+          1.07,
+          0.0
+        ],
+        "shin": 1.04,
+        "shoulder": 1.17,
+        "thigh": 1.06,
+        "toe": 1.0,
+        "upper_arm": 1.1,
+        "waist": [
+          1.02,
+          1.02,
+          0.0
+        ]
+      },
+      "preview": "previews/openmarch-body-v4-masculine-average.png",
+      "skeleton_signature": "308ed12093cfb0725ee206c2638d26f765e78ba3988ecb259841868d1d107cc6",
+      "source": "source/openmarch-body-v4-masculine-average-rigged.blend"
+    },
+    "neutral-athletic": {
+      "bounding_box": {
+        "max": [
+          0.37379884719848633,
+          0.10543487221002579,
+          1.7827448844909668
+        ],
+        "min": [
+          -0.37379884719848633,
+          -0.17102377116680145,
+          0.0024726875126361847
+        ]
+      },
+      "maximum_vertex_displacement": 0.009501172283144838,
+      "parameters": {
+        "chest": [
+          1.11,
+          1.07,
+          0.0
+        ],
+        "foot": 1.0,
+        "forearm": 1.08,
+        "hand": 1.02,
+        "head": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "neck": [
+          1.04,
+          1.04,
+          0.0
+        ],
+        "pelvis": [
+          1.02,
+          1.01,
+          0.0
+        ],
+        "rib": [
+          1.06,
+          1.04,
+          0.0
+        ],
+        "shin": 1.08,
+        "shoulder": 1.1,
+        "thigh": 1.11,
+        "toe": 1.0,
+        "upper_arm": 1.11,
+        "waist": [
+          0.97,
+          0.98,
+          0.0
+        ]
+      },
+      "preview": "previews/openmarch-body-v4-neutral-athletic.png",
+      "skeleton_signature": "308ed12093cfb0725ee206c2638d26f765e78ba3988ecb259841868d1d107cc6",
+      "source": "source/openmarch-body-v4-neutral-athletic-rigged.blend"
+    },
+    "neutral-average": {
+      "bounding_box": {
+        "max": [
+          0.3732609748840332,
+          0.10017761588096619,
+          1.7827448844909668
+        ],
+        "min": [
+          -0.3732609748840332,
+          -0.17102377116680145,
+          0.0024726875126361847
+        ]
+      },
+      "maximum_vertex_displacement": 1.2013700229374393e-07,
+      "parameters": {
+        "chest": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "foot": 1.0,
+        "forearm": 1.0,
+        "hand": 1.0,
+        "head": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "neck": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "pelvis": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "rib": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "shin": 1.0,
+        "shoulder": 1.0,
+        "thigh": 1.0,
+        "toe": 1.0,
+        "upper_arm": 1.0,
+        "waist": [
+          1.0,
+          1.0,
+          0.0
+        ]
+      },
+      "preview": "previews/openmarch-body-v4-neutral-average.png",
+      "skeleton_signature": "308ed12093cfb0725ee206c2638d26f765e78ba3988ecb259841868d1d107cc6",
+      "source": "source/openmarch-body-v4-neutral-average-rigged.blend"
+    },
+    "neutral-broad": {
+      "bounding_box": {
+        "max": [
+          0.374605655670166,
+          0.1090528815984726,
+          1.7827448844909668
+        ],
+        "min": [
+          -0.374605655670166,
+          -0.17102377116680145,
+          0.0024726875126361847
+        ]
+      },
+      "maximum_vertex_displacement": 0.015938435705695024,
+      "parameters": {
+        "chest": [
+          1.15,
+          1.11,
+          0.0
+        ],
+        "foot": 1.0,
+        "forearm": 1.11,
+        "hand": 1.05,
+        "head": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "neck": [
+          1.08,
+          1.08,
+          0.0
+        ],
+        "pelvis": [
+          1.08,
+          1.06,
+          0.0
+        ],
+        "rib": [
+          1.12,
+          1.09,
+          0.0
+        ],
+        "shin": 1.1,
+        "shoulder": 1.13,
+        "thigh": 1.12,
+        "toe": 1.0,
+        "upper_arm": 1.12,
+        "waist": [
+          1.08,
+          1.07,
+          0.0
+        ]
+      },
+      "preview": "previews/openmarch-body-v4-neutral-broad.png",
+      "skeleton_signature": "308ed12093cfb0725ee206c2638d26f765e78ba3988ecb259841868d1d107cc6",
+      "source": "source/openmarch-body-v4-neutral-broad-rigged.blend"
+    },
+    "neutral-full": {
+      "bounding_box": {
+        "max": [
+          0.374605655670166,
+          0.11652247607707977,
+          1.7827448844909668
+        ],
+        "min": [
+          -0.374605655670166,
+          -0.17102377116680145,
+          0.0024726875126361847
+        ]
+      },
+      "maximum_vertex_displacement": 0.02208369050462736,
+      "parameters": {
+        "chest": [
+          1.13,
+          1.16,
+          0.0
+        ],
+        "foot": 1.0,
+        "forearm": 1.13,
+        "hand": 1.05,
+        "head": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "neck": [
+          1.08,
+          1.08,
+          0.0
+        ],
+        "pelvis": [
+          1.17,
+          1.17,
+          0.0
+        ],
+        "rib": [
+          1.14,
+          1.17,
+          0.0
+        ],
+        "shin": 1.13,
+        "shoulder": 1.1,
+        "thigh": 1.15,
+        "toe": 1.0,
+        "upper_arm": 1.14,
+        "waist": [
+          1.16,
+          1.19,
+          0.0
+        ]
+      },
+      "preview": "previews/openmarch-body-v4-neutral-full.png",
+      "skeleton_signature": "308ed12093cfb0725ee206c2638d26f765e78ba3988ecb259841868d1d107cc6",
+      "source": "source/openmarch-body-v4-neutral-full-rigged.blend"
+    },
+    "neutral-slim": {
+      "bounding_box": {
+        "max": [
+          0.37164735794067383,
+          0.09040889889001846,
+          1.7827448844909668
+        ],
+        "min": [
+          -0.37164735794067383,
+          -0.17102377116680145,
+          0.0024726875126361847
+        ]
+      },
+      "maximum_vertex_displacement": 0.015280178509980426,
+      "parameters": {
+        "chest": [
+          0.91,
+          0.9,
+          0.0
+        ],
+        "foot": 1.0,
+        "forearm": 0.89,
+        "hand": 0.94,
+        "head": [
+          1.0,
+          1.0,
+          0.0
+        ],
+        "neck": [
+          0.94,
+          0.94,
+          0.0
+        ],
+        "pelvis": [
+          0.92,
+          0.91,
+          0.0
+        ],
+        "rib": [
+          0.91,
+          0.9,
+          0.0
+        ],
+        "shin": 0.89,
+        "shoulder": 0.92,
+        "thigh": 0.9,
+        "toe": 1.0,
+        "upper_arm": 0.88,
+        "waist": [
+          0.88,
+          0.88,
+          0.0
+        ]
+      },
+      "preview": "previews/openmarch-body-v4-neutral-slim.png",
+      "skeleton_signature": "308ed12093cfb0725ee206c2638d26f765e78ba3988ecb259841868d1d107cc6",
+      "source": "source/openmarch-body-v4-neutral-slim-rigged.blend"
+    }
+  },
+  "schema_version": 1,
+  "skeleton_signature": "308ed12093cfb0725ee206c2638d26f765e78ba3988ecb259841868d1d107cc6"
+}
