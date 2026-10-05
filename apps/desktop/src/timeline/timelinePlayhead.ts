@@ -95,8 +95,8 @@ export function pageAtPlayhead<P extends FlagPage>(
     );
 }
 
-/** Counts played before the start flag when previewing the window (UI-11, _lead default_, V-24) */
-export const PREVIEW_PRE_ROLL_BEATS = 2;
+/** Counts played before the start flag when previewing the window (UI-11, owner, V-24) */
+export const PREVIEW_PRE_ROLL_BEATS = 0;
 /** Counts played after the playhead when previewing, so the arrival and hold show (UI-11, V-24) */
 export const PREVIEW_POST_ROLL_BEATS = 2;
 

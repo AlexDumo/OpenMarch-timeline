@@ -259,12 +259,15 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         current: { playing: { setIsPlaying: (p: boolean) => void } };
     }) => {
         act(() => {
+            store().setPlayFromStart(true);
+        });
+        act(() => {
             startTimelinePlayback(17, result.current.playing.setIsPlaying);
         });
         audio.startInfo.current = {};
     };
 
-    it("Play previews from before the start flag to after the playhead, then puts the cursor back on it (UI-11)", async ({
+    it("with From start on, Play previews from the start flag to after the playhead, then puts the cursor back on it (UI-11)", async ({
         db,
         wrapper,
     }) => {
@@ -273,8 +276,8 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             store().selectRange(9, 13);
         });
         preview(result);
-        // Two counts of pre-roll; the playhead stays on the window's end
-        expect(store().cursorBeat).toBe(7);
+        // From the start flag; the playhead stays on the window's end
+        expect(store().cursorBeat).toBe(9);
         expect(store().playheadBeat).toBe(13);
         audio.seconds = 4.5; // beat 10
         frame();
@@ -301,8 +304,8 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         audio.seconds = 7; // beat 15
         frame();
         expect(result.current.playing.isPlaying).toBe(true);
-        expect(audio.restarts).toEqual([3]); // beat 7
-        expect(store().cursorBeat).toBe(7);
+        expect(audio.restarts).toEqual([4]); // beat 9
+        expect(store().cursorBeat).toBe(9);
         expect(store().playheadBeat).toBe(13);
         expect(store().startBeat).toBe(9);
     });
@@ -353,5 +356,20 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().cursorBeat).toBeNull();
         expect(store().playheadBeat).toBe(13);
         expect(store().startBeat).toBe(9);
+    });
+
+    it("with From start off, Play plays on from the playhead", async ({
+        db,
+        wrapper,
+    }) => {
+        const { result } = await setUp(db, wrapper);
+        act(() => {
+            store().selectRange(9, 13);
+        });
+        act(() => {
+            startTimelinePlayback(17, result.current.playing.setIsPlaying);
+        });
+        expect(store().playback).toEqual({ kind: "on" });
+        expect(store().cursorBeat).toBe(13);
     });
 });

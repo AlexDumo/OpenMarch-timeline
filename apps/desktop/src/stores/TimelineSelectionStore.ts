@@ -34,7 +34,8 @@ import { create } from "zustand";
  * Esc, a page box or home, a dragged range, or the timeline going away ends isolation and puts S
  * and P back where they were.
  *
- * **Playback** (UI-11): playing never writes the playhead. Audio plays from, and the paused canvas
+ * **Playback** (UI-11): with **From start** on (`playFromStart`), Play previews the window from S;
+ * with it off, Play plays on from where the cursor is. Playing never writes the playhead. Audio plays from, and the paused canvas
  * shows, the **cursor** (`cursorBeat`) when there is one, and the playhead otherwise. Play sets the
  * cursor where playback starts and `playback` to what is running: a preview of the window, or
  * playing on. A preview that loops moves the cursor back to its start; a preview that is paused
@@ -131,6 +132,12 @@ export interface TimelineSelectionState {
     readonly cursorBeat: number | null;
     /** What is playing, or `null` while paused (UI-11) */
     readonly playback: TimelinePlaybackRun | null;
+    /**
+     * **From start** (UI-11): Play previews the window from the start flag instead of playing on
+     * from where the cursor is. Only the user turns it on or off; turning it off keeps S and the
+     * window.
+     */
+    readonly playFromStart: boolean;
     /** Whether a preview loops until stopped (UI-11, the loop toggle); isolation always loops */
     readonly loopPreview: boolean;
 
@@ -191,11 +198,13 @@ export interface TimelineSelectionState {
     readonly clearCursor: () => void;
     /** Records what is playing (`null` once it stops). Used by the transport and the driver. */
     readonly setPlayback: (playback: TimelinePlaybackRun | null) => void;
+    /** Turns **From start** on or off (`!playFromStart` without an argument). */
+    readonly setPlayFromStart: (on?: boolean) => void;
     /** Turns the preview loop on or off (`!loopPreview` without an argument). */
     readonly toggleLoopPreview: (loop?: boolean) => void;
     /** Used by `useTimelinePlaybackDriver` only. */
     readonly setShowEndBeat: (showEndBeat: number | null) => void;
-    /** Opening a show: home, playhead at 0, nothing loaded. */
+    /** Opening a show: home, playhead at 0, nothing loaded, From start off. */
     readonly reset: () => void;
 }
 
@@ -402,6 +411,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             isolation: null,
             cursorBeat: null,
             playback: null,
+            playFromStart: false,
             loopPreview: false,
             isolate: (timelineId, restore) =>
                 set((s) => {
@@ -673,6 +683,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             clearCursor: () =>
                 set((s) => (s.cursorBeat === null ? {} : { cursorBeat: null })),
             setPlayback: (playback) => set({ playback }),
+            setPlayFromStart: (on) =>
+                set((s) => ({ playFromStart: on ?? !s.playFromStart })),
             toggleLoopPreview: (loop) =>
                 set((s) => ({ loopPreview: loop ?? !s.loopPreview })),
             setShowEndBeat: (showEndBeat) => set({ showEndBeat }),
@@ -684,6 +696,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     storedTimelines: null,
                     showEndBeat: null,
                     playback: null,
+                    playFromStart: false,
                 })),
         };
     },

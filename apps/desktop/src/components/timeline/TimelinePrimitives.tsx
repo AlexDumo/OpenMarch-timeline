@@ -596,6 +596,8 @@ export const TimelineTrackClip = ({
 export const TimelineSelectionRange = ({
     range,
     startFlagBeatIndex,
+    fromStart = false,
+    onFromStartOff,
     beatCount,
     pixelsPerBeat,
     height,
@@ -606,6 +608,13 @@ export const TimelineSelectionRange = ({
     range: TimelineBeatRange;
     /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
     startFlagBeatIndex?: number;
+    /**
+     * **From start** is on (UI-11): the window is drawn in the start flag's color with a bar
+     * across its top; clicking the bar turns it off (`onFromStartOff`). Off, the start flag is
+     * dimmed, since Play doesn't go back to it.
+     */
+    fromStart?: boolean;
+    onFromStartOff?: () => void;
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
@@ -816,7 +825,7 @@ export const TimelineSelectionRange = ({
             />
             {kind === "start" ? (
                 // UI-10: the start flag, where movers leave from and Stop returns to
-                <span className="bg-yellow text-text-invert absolute top-0 left-1/2 rounded-r-sm px-3 font-mono text-[9px] leading-[14px] font-semibold tracking-wide">
+                <span className="bg-yellow text-text-invert absolute top-0 left-1/2 z-10 rounded-r-sm px-3 font-mono text-[9px] leading-[14px] font-semibold tracking-wide">
                     START
                 </span>
             ) : (
@@ -834,10 +843,34 @@ export const TimelineSelectionRange = ({
         >
             <span
                 aria-hidden="true"
-                className="bg-accent/8 absolute top-0"
+                className={clsx(
+                    "absolute top-0",
+                    fromStart ? "bg-yellow/12" : "bg-accent/8",
+                )}
                 style={{ left: startX, width: endX - startX, height }}
             />
-            <div className="pointer-events-none absolute inset-0">
+            {fromStart && (
+                <button
+                    type="button"
+                    data-testid="timeline-from-start-bar"
+                    data-timeline-interactive="true"
+                    aria-label="Playing from the start flag. Click to turn off"
+                    title="Play starts at the start flag. Click, C or Esc to turn off"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={onFromStartOff}
+                    disabled={!onFromStartOff}
+                    className="bg-yellow/80 text-text-invert pointer-events-auto absolute top-0 flex h-14 items-center justify-end gap-4 overflow-hidden rounded-r-sm pr-4 font-mono text-[9px] font-semibold tracking-wide whitespace-nowrap"
+                    style={{ left: startX, width: endX - startX }}
+                >
+                    FROM START ✕
+                </button>
+            )}
+            <div
+                className={clsx(
+                    "pointer-events-none absolute inset-0",
+                    !fromStart && "opacity-60",
+                )}
+            >
                 {flag(
                     "start",
                     startFlagBeatIndex !== undefined && !dragRef.current

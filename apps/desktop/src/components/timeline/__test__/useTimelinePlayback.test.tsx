@@ -106,7 +106,10 @@ describe("play", () => {
             to: 9 + PREVIEW_POST_ROLL_BEATS,
         });
         // Clamped to the show
-        expect(previewBounds(window(1, 16), 17)).toEqual({ from: 0, to: 17 });
+        expect(previewBounds(window(1, 16), 17)).toEqual({
+            from: Math.max(0, 1 - PREVIEW_PRE_ROLL_BEATS),
+            to: 17,
+        });
         // Nothing to preview at home or with nothing selected: Play plays on
         expect(previewBounds({ selection: home, isolation: null }, 17)).toBe(
             null,
@@ -311,9 +314,11 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(result.current.playback.isPlaying).toBe(false);
 
-        // UI-11: Play starts before the start flag; the playhead stays on the window's end
+        // UI-11: with From start on, Play starts at the start flag (beat 1, show time 0, written
+        // as 0); the playhead stays on the window's end
         act(() => {
             store().selectRange(1, 9);
+            store().setPlayFromStart(true);
         });
         act(() => {
             result.current.playback.onPlayingChange!(true);

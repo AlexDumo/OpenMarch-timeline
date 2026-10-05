@@ -139,9 +139,11 @@ describe("timeline views", () => {
                 altKey: true,
             }),
         );
+        // Marked drawn, which turns From start on in the app (UI-11)
         expect(onSelectionChange).toHaveBeenCalledWith({
             kind: "range",
             range: { startBeatIndex: 3, endBeatIndex: 6 },
+            drawn: true,
         });
         expect(onSeek).not.toHaveBeenCalled();
         expect(

@@ -34,10 +34,11 @@ export function navigateTimelinePages(
 }
 
 /**
- * **Play** (UI-11): previews the window, from a little before the start flag to a little after
- * the playhead (`previewBounds`), looping when the loop is on. A paused preview holding a frame
- * inside those bounds resumes from it. With no window to preview (home), it plays on instead.
- * Returns false, and doesn't start, when there's nothing to play.
+ * **Play** (UI-11). With **From start** on, it previews the window from the start flag to a
+ * little after the playhead (`previewBounds`), looping when the loop is on; a paused preview
+ * holding a frame inside those bounds resumes from it. With From start off, or no window to
+ * preview (home), it plays on from where the cursor is (`startTimelinePlayOn`). Returns false,
+ * and doesn't start, when there's nothing to play.
  *
  * @param showEndBeat the end of the show, `beats.length`
  */
@@ -46,7 +47,9 @@ export function startTimelinePlayback(
     setIsPlaying: (isPlaying: boolean) => void,
 ): boolean {
     const state = useTimelineSelectionStore.getState();
-    const bounds = previewBounds(state, showEndBeat);
+    const bounds = state.playFromStart
+        ? previewBounds(state, showEndBeat)
+        : null;
     if (!bounds) return startTimelinePlayOn(showEndBeat, setIsPlaying);
     // A Stop whose pause never landed (pressed with a stale isPlaying) mustn't turn the next
     // ordinary pause into a return
@@ -60,8 +63,9 @@ export function startTimelinePlayback(
 }
 
 /**
- * **Play on** (UI-11, the P key): plays from the playhead, or from the frame a paused preview
- * holds, to the end of the show, as UI-10's Play did. Returns false when there's nothing after it.
+ * Playing on (UI-11, Play with From start off): plays from the playhead, or from the frame a
+ * paused preview holds, to the end of the show, as UI-10's Play did. Returns false when there's
+ * nothing after it.
  */
 export function startTimelinePlayOn(
     showEndBeat: number,
@@ -79,7 +83,7 @@ export function startTimelinePlayOn(
 
 /**
  * Play/pause from the transport or the shortcut (Space): pausing keeps the selection; playing
- * previews the window (`startTimelinePlayback`).
+ * follows From start (`startTimelinePlayback`).
  */
 export function toggleTimelinePlayback({
     isPlaying,
@@ -92,20 +96,6 @@ export function toggleTimelinePlayback({
 }): void {
     if (isPlaying) setIsPlaying(false);
     else startTimelinePlayback(showEndBeat, setIsPlaying);
-}
-
-/** Play on or pause (the P key and the transport's Play on button). */
-export function toggleTimelinePlayOn({
-    isPlaying,
-    showEndBeat,
-    setIsPlaying,
-}: {
-    isPlaying: boolean;
-    showEndBeat: number;
-    setIsPlaying: (isPlaying: boolean) => void;
-}): void {
-    if (isPlaying) setIsPlaying(false);
-    else startTimelinePlayOn(showEndBeat, setIsPlaying);
 }
 
 /** Whether the pause in progress came from **Stop**; clears the request. */

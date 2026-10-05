@@ -42,28 +42,69 @@ const isTyping = (target: EventTarget | null) =>
         ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
 /**
- * Esc ends isolation (V-14): the first Esc deselects marchers as it always does (the registered
- * Escape action), so isolation ends only on an Esc with nothing selected. Text fields and the line
- * or lasso tool keep their Esc. Listens in the capture phase, before the registered actions, which
- * mark Escape handled.
+ * Esc ends isolation (V-14), and after that turns **From start** off (UI-11): the first Esc
+ * deselects marchers as it always does (the registered Escape action), so these happen only on an
+ * Esc with nothing selected, one per press. Text fields and the line or lasso tool keep their Esc.
+ * Listens in the capture phase, before the registered actions, which mark Escape handled.
  */
 export function useIsolationEscape(): void {
-    const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
+    const active = useTimelineSelectionStore(
+        (s) => s.isolation !== null || s.playFromStart,
+    );
     const selectedCount = useSelectedMarchers()?.selectedMarchers.length ?? 0;
     const selected = useRef(selectedCount);
     selected.current = selectedCount;
     useEffect(() => {
-        if (!isolated) return;
+        if (!active) return;
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== "Escape" || isTyping(event.target)) return;
             if (useAlignmentEventStore.getState().alignmentEvent !== "default")
                 return;
             if (selected.current > 0) return;
-            useTimelineSelectionStore.getState().exitIsolation();
+            const store = useTimelineSelectionStore.getState();
+            if (store.isolation) store.exitIsolation();
+            else if (store.playFromStart) store.setPlayFromStart(false);
         };
         window.addEventListener("keydown", onKeyDown, true);
         return () => window.removeEventListener("keydown", onKeyDown, true);
-    }, [isolated]);
+    }, [active]);
+}
+
+/**
+ * The badge over the field while **From start** is on (UI-11): what Play will play, and the ways
+ * out (the badge's ✕, C, Esc). Shows only with a window to play; renders nothing otherwise.
+ */
+export function TimelineFromStartBadge() {
+    const on = useTimelineSelectionStore((s) => s.playFromStart);
+    const selection = useTimelineSelectionStore((s) => s.selection);
+    const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
+    const { pages } = useTimingObjects()!;
+    if (!on || isolated || selection.kind !== "range") return null;
+    return (
+        <div
+            data-testid="timeline-from-start-badge"
+            role="status"
+            className="border-yellow bg-bg-1 text-text rounded-6 text-sub pointer-events-auto absolute top-8 left-8 z-10 flex max-w-[calc(50%-24px)] items-center gap-8 border px-8 py-4 whitespace-nowrap shadow-md"
+        >
+            <span className="bg-yellow text-text-invert rounded-sm px-3 font-mono text-[9px] leading-[14px] font-semibold tracking-wide">
+                FROM START
+            </span>
+            <span className="truncate">
+                Play plays {isolatedTimelineName(selection, pages)}
+            </span>
+            <button
+                type="button"
+                aria-label="Turn off playing from the start flag"
+                title="Turn off (C or Esc)"
+                className="text-text-subtitle hover:text-text"
+                onClick={() =>
+                    useTimelineSelectionStore.getState().setPlayFromStart(false)
+                }
+            >
+                ✕
+            </button>
+        </div>
+    );
 }
 
 /**

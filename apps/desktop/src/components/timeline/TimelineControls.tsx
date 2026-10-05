@@ -13,7 +13,7 @@ import {
     SpeakerSimpleLowIcon,
     SpeakerSimpleXIcon,
     RepeatIcon,
-    ArrowLineRightIcon,
+    FlagIcon,
 } from "@phosphor-icons/react";
 import RegisteredActionButton from "@/components/RegisteredActionButton";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -26,9 +26,7 @@ import { T, useTolgee } from "@tolgee/react";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
 import * as Popover from "@radix-ui/react-popover";
 import { Slider } from "@openmarch/ui";
-import { useTimingObjects } from "@/hooks";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { toggleTimelinePlayOn } from "@/timeline/timelineTransport";
 
 export default function TimelineControls() {
     const { isFullscreen, toggleFullscreen } = useFullscreenStore();
@@ -157,50 +155,63 @@ export function TimelineMetronomeButton() {
 }
 
 /**
- * **Play on** (UI-11): plays from the playhead to the end of the show, as UI-10's Play did; Play
- * itself previews the move. Shortcut P.
+ * **From start** (UI-11): while on (lit), Play previews the move from the start flag; while off,
+ * Play plays on from where you are. Shortcut C; Esc, or clicking the range bar, turns it off.
  */
-export function TimelinePlayOnButton() {
-    const { isPlaying, setIsPlaying } = useIsPlaying()!;
-    const { beats } = useTimingObjects();
-    const label = isPlaying ? "Pause (P)" : "Play on from the playhead (P)";
+export function TimelineFromStartButton() {
+    const on = useTimelineSelectionStore((s) => s.playFromStart);
+    const set = useTimelineSelectionStore((s) => s.setPlayFromStart);
+    const label = on
+        ? "Play from the start flag: on (C, or Esc to turn off)"
+        : "Play from the start flag: off (C)";
     return (
         <button
             type="button"
-            className="text-text enabled:hover:text-accent outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label={label}
+            data-testid="timeline-from-start"
+            className={clsx(
+                "rounded-4 flex items-center gap-4 px-4 outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50",
+                {
+                    "bg-accent text-text-invert": on,
+                    "text-text enabled:hover:text-accent": !on,
+                },
+            )}
+            aria-label="Play from the start flag (C)"
+            aria-pressed={on}
             title={label}
-            onClick={() =>
-                toggleTimelinePlayOn({
-                    isPlaying,
-                    showEndBeat: beats.length,
-                    setIsPlaying,
-                })
-            }
+            onClick={() => set()}
         >
-            <ArrowLineRightIcon size={24} />
+            <FlagIcon size={20} weight={on ? "fill" : "regular"} />
         </button>
     );
 }
 
-/** The preview loop (UI-11): Play repeats the move until stopped. Shortcut C. */
+/**
+ * The preview loop (UI-11): with From start on, Play repeats the move until stopped. Off while
+ * From start is off, since playing on doesn't loop.
+ */
 export function TimelineLoopButton() {
     const loop = useTimelineSelectionStore((s) => s.loopPreview);
+    const fromStart = useTimelineSelectionStore((s) => s.playFromStart);
     const toggle = useTimelineSelectionStore((s) => s.toggleLoopPreview);
-    const label = loop ? "Loop the move: on (C)" : "Loop the move: off (C)";
+    const label = !fromStart
+        ? "Loop the move (turn on Play from the start flag first)"
+        : loop
+          ? "Loop the move: on"
+          : "Loop the move: off";
     return (
         <button
             type="button"
             className={clsx(
                 "outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50",
                 {
-                    "text-accent": loop,
-                    "text-text enabled:hover:text-accent": !loop,
+                    "text-accent": loop && fromStart,
+                    "text-text enabled:hover:text-accent": !(loop && fromStart),
                 },
             )}
-            aria-label="Loop the move (C)"
-            aria-pressed={loop}
+            aria-label="Loop the move"
+            aria-pressed={loop && fromStart}
             title={label}
+            disabled={!fromStart}
             onClick={() => toggle()}
         >
             <RepeatIcon size={24} />

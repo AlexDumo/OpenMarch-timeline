@@ -113,6 +113,8 @@ export interface TimelineProps {
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
+    /** Turns **From start** off (UI-11), from the range bar */
+    readonly onPlayFromStartOff?: () => void;
     /**
      * The right-click menu's **Add selected marchers** (UI-9, P8.14), for a page box, a clip's
      * timeline or a dragged range. It gets spec beats; the menu doesn't change the selection.
@@ -239,6 +241,7 @@ export const selectionToView = (
                         ),
                     }
                   : {}),
+              ...(selection.fromStart ? { fromStart: true } : {}),
           }
         : selection;
 
@@ -254,6 +257,7 @@ export const selectionToSpec = (
                   startBeatIndex: axis.toSpec(selection.range.startBeatIndex),
                   endBeatIndex: axis.toSpec(selection.range.endBeatIndex),
               },
+              ...(selection.drawn ? { drawn: true } : {}),
           }
         : selection;
 
@@ -409,6 +413,7 @@ export function Timeline(props: TimelineProps) {
         onAddPageFlag: props.onAddPageFlag,
         onOpenRange: onOpenRange && openRange,
         onTimelineRangeCommit: commitRange,
+        onPlayFromStartOff: props.onPlayFromStartOff,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,

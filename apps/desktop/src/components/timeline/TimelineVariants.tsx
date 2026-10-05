@@ -220,7 +220,8 @@ function TimelineSurface({
     const pointer = useTimelinePointer({
         onSeek: props.onSeek,
         onRangeSelect: props.onSelectionChange
-            ? (range) => onSelectionChange({ kind: "range", range })
+            ? (range) =>
+                  onSelectionChange({ kind: "range", range, drawn: true })
             : undefined,
         pixelsPerBeat,
         beatCount: model.beatCount,
@@ -448,6 +449,11 @@ function TimelineSurface({
                                     ? selection.startFlagBeatIndex
                                     : undefined
                             }
+                            fromStart={
+                                selection?.kind === "range" &&
+                                selection.fromStart === true
+                            }
+                            onFromStartOff={props.onPlayFromStartOff}
                             beatCount={model.beatCount}
                             pixelsPerBeat={pixelsPerBeat}
                             height={timelineHeight}

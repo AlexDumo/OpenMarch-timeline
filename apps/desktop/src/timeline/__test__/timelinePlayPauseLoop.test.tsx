@@ -116,6 +116,7 @@ describeDbTests("timeline play, pause, play", (it) => {
         // The page at [5, 9): Play previews it (UI-11); pausing holds the frame and leaves P at 9
         act(() => {
             store().selectRange(5, 9);
+            store().setPlayFromStart(true);
         });
         writes = 0;
         playPause(3.1); // beat 7.2

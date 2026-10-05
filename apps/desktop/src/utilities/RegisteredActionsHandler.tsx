@@ -43,7 +43,6 @@ import { useTimingObjects } from "@/hooks";
 import {
     navigateTimelinePages,
     stopTimelinePlayback,
-    toggleTimelinePlayOn,
     toggleTimelinePlayback,
 } from "@/timeline/timelineTransport";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -81,9 +80,8 @@ export enum RegisteredActionsEnum {
     previousPage = "previousPage",
     firstPage = "firstPage",
     playPause = "playPause",
-    playOn = "playOn",
     stopPlayback = "stopPlayback",
-    toggleLoopPreview = "toggleLoopPreview",
+    togglePlayFromStart = "togglePlayFromStart",
     toggleMetronome = "toggleMetronome",
 
     // Batch editing
@@ -288,9 +286,8 @@ class KeyboardShortcut {
 /** Playback controls, which leave a held preview frame alone (UI-11) */
 const TRANSPORT_ACTIONS: ReadonlySet<RegisteredActionsEnum> = new Set([
     RegisteredActionsEnum.playPause,
-    RegisteredActionsEnum.playOn,
     RegisteredActionsEnum.stopPlayback,
-    RegisteredActionsEnum.toggleLoopPreview,
+    RegisteredActionsEnum.togglePlayFromStart,
     RegisteredActionsEnum.toggleMetronome,
 ]);
 
@@ -362,20 +359,15 @@ export const RegisteredActionsObjects: {
         keyboardShortcut: new KeyboardShortcut({ key: " " }),
         enumString: "playPause",
     }),
-    playOn: new RegisteredAction({
-        descKey: "actions.playback.playOn",
-        keyboardShortcut: new KeyboardShortcut({ key: "p" }),
-        enumString: "playOn",
-    }),
     stopPlayback: new RegisteredAction({
         descKey: "actions.playback.stop",
         keyboardShortcut: new KeyboardShortcut({ key: " ", shift: true }),
         enumString: "stopPlayback",
     }),
-    toggleLoopPreview: new RegisteredAction({
-        descKey: "actions.playback.toggleLoop",
+    togglePlayFromStart: new RegisteredAction({
+        descKey: "actions.playback.togglePlayFromStart",
         keyboardShortcut: new KeyboardShortcut({ key: "c" }),
-        enumString: "toggleLoopPreview",
+        enumString: "togglePlayFromStart",
     }),
     toggleMetronome: new RegisteredAction({
         descKey: "actions.playback.toggleMetronome",
@@ -1040,24 +1032,15 @@ function RegisteredActionsHandler() {
                     if (firstPage && !isPlaying) setSelectedPage(firstPage);
                     break;
                 }
-                case RegisteredActionsEnum.playOn: {
-                    // UI-11 Play on: from the playhead to the end (timeline mode only)
-                    if (!databaseReady || !timelineMode) break;
-                    toggleTimelinePlayOn({
-                        isPlaying,
-                        showEndBeat: beats.length,
-                        setIsPlaying,
-                    });
-                    break;
-                }
-                case RegisteredActionsEnum.toggleLoopPreview: {
+                case RegisteredActionsEnum.togglePlayFromStart: {
+                    // UI-11 From start: Play previews the window from the start flag
                     if (!timelineMode) break;
-                    useTimelineSelectionStore.getState().toggleLoopPreview();
+                    useTimelineSelectionStore.getState().setPlayFromStart();
                     break;
                 }
                 case RegisteredActionsEnum.playPause: {
                     if (!databaseReady || !pages || pages.length === 0) break;
-                    // UI-11 Play: previews the edit window
+                    // UI-11 Play: plays on, or previews the window with From start on
                     if (timelineMode) {
                         toggleTimelinePlayback({
                             isPlaying,

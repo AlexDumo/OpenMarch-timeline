@@ -39,7 +39,9 @@ import { useTimelineShapeCanvas } from "@/timeline/useTimelineShapeCanvas";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelineDimming } from "@/timeline/useTimelineDimming";
-import TimelineIsolationBar from "@/components/timeline/TimelineIsolationBar";
+import TimelineIsolationBar, {
+    TimelineFromStartBadge,
+} from "@/components/timeline/TimelineIsolationBar";
 import { useTimelineFocusRender } from "@/timeline/useTimelineFocusRender";
 import { db } from "@/global/database/db";
 import { canvasCoordinateWriter } from "@/timeline/timelineCoordinateWrites";
@@ -766,6 +768,7 @@ export default function Canvas({
             }}
         >
             {timelineMode && <TimelineIsolationBar />}
+            {timelineMode && <TimelineFromStartBadge />}
             {pages.length > 0 || canvas ? (
                 <div
                     ref={innerDivRef}
