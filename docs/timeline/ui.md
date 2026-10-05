@@ -400,9 +400,12 @@ from it. The spec still wins on the model; this file decides presentation.
   alone are V-27 to V-30 in research/ownership/VALIDATION.md. Built on branch
   `timeline/calmer-timeline`.
   - **No empty lanes.** Under the ruler are the measure row, then a clip row only for each packed
-    row of off-page clips (none in a page-by-page show), then the waveform only when there are
-    audio peaks. A clip lane appearing when a drag first makes an off-page timeline is a change
-    of content, not a mode change, and it is the sign that one exists.
+    row of off-page clips (none in a page-by-page show), then the waveform only when audio is
+    loaded. The waveform comes from the audio player's decoded, offset audio: the loudest moment
+    in each eighth of a beat, scaled to the loudest moment of the show (`timelineWaveform.ts`).
+    Beat ticks are drawn once, in the measure row. A clip lane appearing when a drag first makes
+    an off-page timeline is a change of content, not a mode change, and it is the sign that one
+    exists.
   - **Measures stay.** Musicians count by measure and rehearsal letter, as drill writers count by
     page. Measure numbers drop the "M"; rehearsal marks are tabs in the measure row, in place of
     their measure's number (they sat on the waveform lane before), thinned like the numbers.
@@ -423,9 +426,11 @@ from it. The spec still wins on the model; this file decides presentation.
     count and the start flag's pin; and clips as 6px bars in 14px hit areas that still click, drag
     and double-click. It leaves out the measure numbers and the waveform. Everything else (the
     window, the start flag, the From start bar, the playhead and **+**) is the same as expanded.
-  - **Dragging on the ruler scrubs.** A press on a page box that moves past the drag threshold
-    scrubs the playhead and doesn't select the box; a press that doesn't move still selects it.
-    Ranges are still drawn by dragging below the ruler, which still turns From start on (UI-11).
+  - **A plain drag scrubs; Ctrl+drag draws a range** (project owner, 2026-10-05: the ruler scrub
+    "feels right", and ranges go behind a modifier). A drag anywhere on the timeline, on the page
+    boxes or below them, moves the playhead with the pointer; a press on a page box that doesn't
+    move still selects the box. Ctrl+drag (Cmd+drag on macOS, where Ctrl+click is a right-click)
+    draws a range, on the boxes too, which still turns From start on (UI-11's cycle drag).
   - **The pinned start flag shows.** A pinned flag (UI-10 Pinning) has a heavier stem and a pin in
     the measure row; clicking the pin unpins it, sending the flag back to the page box holding the
     playhead. Hidden in isolation, whose start flag is the isolated move's own.

@@ -26,6 +26,10 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { timeAtBeat } from "@/timeline/timeMap";
 import AudioOffsetWorker from "@/workers/audioOffset.worker.ts?worker";
+import {
+    audioEnvelope,
+    useAudioEnvelopeStore,
+} from "@/timeline/timelineWaveform";
 import { CircleNotchIcon } from "@phosphor-icons/react";
 import type Page from "@/global/classes/Page";
 
@@ -245,6 +249,20 @@ export default function AudioPlayer() {
             largestMinimumDuration.current = cappedDuration;
         return largestMinimumDuration.current;
     }, [pages]);
+
+    // The timeline's waveform lane (UI-12) reads the offset audio's envelope
+    useEffect(() => {
+        const { setEnvelope } = useAudioEnvelopeStore.getState();
+        setEnvelope(
+            audioBuffer && selectedAudioFile
+                ? audioEnvelope(audioBuffer)
+                : null,
+        );
+    }, [audioBuffer, selectedAudioFile]);
+    useEffect(
+        () => () => useAudioEnvelopeStore.getState().setEnvelope(null),
+        [],
+    );
 
     // Populate audio data when selectedAudioFile changes
     useEffect(() => {

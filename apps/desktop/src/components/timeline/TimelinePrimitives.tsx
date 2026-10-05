@@ -295,6 +295,12 @@ const useRulerScrub = (
         handlers: {
             onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
                 swallowClick.current = false;
+                // A range-modifier press draws a range: the surface handles it, and the click it
+                // ends with mustn't select the box
+                if (event.button === 0 && isRangeModifier(event)) {
+                    swallowClick.current = true;
+                    return;
+                }
                 if (!onSeek || event.button !== 0 || event.ctrlKey) return;
                 const surface = event.currentTarget.closest(
                     '[data-testid="timeline-pointer-surface"]',
@@ -1370,6 +1376,20 @@ export const getDraggedRange = ({
  * space, a click seeks; with `onRangeSelect`, a drag selects the dragged range instead (UI-9),
  * shown as `rangePreview` until it's released. Without it, a drag scrubs.
  */
+/** macOS, where Ctrl+click is a right-click and Cmd is the modifier */
+export const isMac = () =>
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
+/**
+ * The modifier that turns a drag on the timeline into a drawn range (UI-12): Cmd on macOS, Ctrl
+ * elsewhere. Without it a drag scrubs the playhead.
+ */
+export const isRangeModifier = (event: {
+    readonly ctrlKey: boolean;
+    readonly metaKey: boolean;
+}) => (isMac() ? event.metaKey : event.ctrlKey);
+
 export const useTimelinePointer = ({
     onSeek,
     onRangeSelect,
@@ -1448,20 +1468,30 @@ export const useTimelinePointer = ({
                 setRangePreview(draggedRange(event, current.startBeat));
             },
             onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+                const drawing = isRangeModifier(event);
                 if (
                     (event.button !== undefined && event.button !== 0) ||
                     // macOS ctrl+click is a right-click: it opens the context menu, not a seek
-                    event.ctrlKey ||
+                    (isMac() && event.ctrlKey) ||
                     (event.target instanceof Element &&
-                        event.target.closest("[data-timeline-interactive]"))
+                        // With the range modifier a page box is timeline space too (UI-12)
+                        event.target.closest(
+                            drawing
+                                ? "[data-timeline-interactive]:not([data-timeline-range-page])"
+                                : "[data-timeline-interactive]",
+                        ))
                 )
                     return;
                 const onPlayhead =
                     event.target instanceof Element &&
                     event.target.closest("[data-timeline-scrub]") != null;
                 const startBeat = pointerBeat(event);
+                // UI-12: a plain drag scrubs; Ctrl+drag (Cmd on macOS) draws a range
                 gesture.current = {
-                    mode: onPlayhead || !onRangeSelect ? "scrub" : "press",
+                    mode:
+                        onPlayhead || !onRangeSelect || !drawing
+                            ? "scrub"
+                            : "press",
                     startClientX: event.clientX,
                     startBeat,
                 };

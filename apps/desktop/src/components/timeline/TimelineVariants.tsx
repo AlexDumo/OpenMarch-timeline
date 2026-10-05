@@ -370,7 +370,8 @@ function TimelineSurface({
                         measures={model.measures}
                         lineTop={28}
                         topTickY={34}
-                        bottomTickY={timelineHeight - 1}
+                        // UI-12: one row of beat ticks, in the measure row
+                        bottomTickY={null}
                     />
                     <TimelinePageLines
                         pages={model.pages}

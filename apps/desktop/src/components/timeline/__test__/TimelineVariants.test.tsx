@@ -99,7 +99,7 @@ describe("timeline views", () => {
         ).not.toBeInTheDocument();
     });
 
-    it("selects a dragged range on empty space and seeks on a click (UI-9)", () => {
+    it("Ctrl+drag draws a range on empty space, and a click seeks (UI-9, UI-12)", () => {
         const onSelectionChange = vi.fn();
         const onSeek = vi.fn();
         render(
@@ -111,7 +111,8 @@ describe("timeline views", () => {
             />,
         );
         const surface = screen.getByTestId("timeline-pointer-surface");
-        // jsdom lays the surface out at x = 0; Alt turns page snapping off
+        // jsdom lays the surface out at x = 0; Alt turns page snapping off. jsdom isn't macOS, so
+        // the range modifier is Ctrl
         fireEvent(
             surface,
             new MouseEvent("pointerdown", {
@@ -119,6 +120,7 @@ describe("timeline views", () => {
                 button: 0,
                 clientX: 3 * 16,
                 altKey: true,
+                ctrlKey: true,
             }),
         );
         fireEvent(
@@ -1012,6 +1014,59 @@ describe("a calmer timeline (UI-12)", () => {
             target,
             new MouseEvent(type, { bubbles: true, button: 0, clientX }),
         );
+
+    it("a plain drag on empty space scrubs instead of drawing a range", () => {
+        const onSeek = vi.fn();
+        const onSelectionChange = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSeek={onSeek}
+                onSelectionChange={onSelectionChange}
+            />,
+        );
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        press(surface, "pointerdown", 3 * 16);
+        press(surface, "pointermove", 6 * 16);
+        expect(screen.queryByTestId("timeline-range-preview")).toBeNull();
+        press(surface, "pointerup", 6 * 16);
+        expect(onSeek).toHaveBeenLastCalledWith(6);
+        expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+
+    it("Ctrl+drag across the page boxes draws a range, and doesn't select a box", () => {
+        const onSelectionChange = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSelectionChange={onSelectionChange}
+            />,
+        );
+        const box = screen.getByRole("button", { name: "Page 2" });
+        const ctrl = (type: string, clientX: number) =>
+            fireEvent(
+                box,
+                new MouseEvent(type, {
+                    bubbles: true,
+                    button: 0,
+                    clientX,
+                    ctrlKey: true,
+                    altKey: true,
+                }),
+            );
+        ctrl("pointerdown", 9 * 16);
+        ctrl("pointermove", 13 * 16);
+        ctrl("pointerup", 13 * 16);
+        fireEvent.click(box, { ctrlKey: true });
+        expect(onSelectionChange).toHaveBeenCalledTimes(1);
+        expect(onSelectionChange).toHaveBeenCalledWith({
+            kind: "range",
+            range: { startBeatIndex: 9, endBeatIndex: 13 },
+            drawn: true,
+        });
+    });
 
     it("dragging along the page boxes scrubs, and doesn't select the box under the release", () => {
         const onSeek = vi.fn();

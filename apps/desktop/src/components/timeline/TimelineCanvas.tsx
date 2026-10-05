@@ -57,7 +57,8 @@ interface TimelineGridCanvasProps {
     showMeasureLines?: boolean;
     showBeatTicks?: boolean;
     topTickY?: number;
-    bottomTickY?: number;
+    /** Where the lower row of beat ticks ends; `null` for none */
+    bottomTickY?: number | null;
 }
 
 export const TimelineGridCanvas = memo(function TimelineGridCanvas({
@@ -119,8 +120,10 @@ export const TimelineGridCanvas = memo(function TimelineGridCanvas({
             context.beginPath();
             context.moveTo(x + 0.5, topTickY);
             context.lineTo(x + 0.5, topTickY + 4);
-            context.moveTo(x + 0.5, bottomTickY - 4);
-            context.lineTo(x + 0.5, bottomTickY);
+            if (bottomTickY !== null) {
+                context.moveTo(x + 0.5, bottomTickY - 4);
+                context.lineTo(x + 0.5, bottomTickY);
+            }
             context.stroke();
         }
         context.globalAlpha = 1;

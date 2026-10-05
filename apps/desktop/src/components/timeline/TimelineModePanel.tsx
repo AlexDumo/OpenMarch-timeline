@@ -34,9 +34,15 @@ import {
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     Timeline,
+    TimelineWaveformProvider,
     type TimelineInput,
     type TimelineSelection,
 } from "./Timeline";
+import {
+    peaksByBeat,
+    useAudioEnvelopeStore,
+} from "@/timeline/timelineWaveform";
+import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 
@@ -59,6 +65,8 @@ function FullscreenButton() {
         </button>
     );
 }
+
+const NO_WAVEFORM = { peaksByBeat: [] };
 
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
@@ -126,6 +134,21 @@ export default function TimelineModePanel() {
         [editSelection, startBeat, playFromStart, startPinned],
     );
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
+    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis
+    const envelope = useAudioEnvelopeStore((s) => s.envelope);
+    const waveform = useMemo(
+        () =>
+            envelope
+                ? {
+                      peaksByBeat: peaksByBeat(
+                          envelope,
+                          beats,
+                          createTimelineBeatAxis(beats).offset,
+                      ),
+                  }
+                : null,
+        [envelope, beats],
+    );
     const pixelsPerBeat = useUiSettingsStore(
         (s) => s.uiSettings.timelinePixelsPerBeat,
     );
@@ -204,75 +227,80 @@ export default function TimelineModePanel() {
                 };
             }}
         >
-            <Timeline
-                mode={compact ? "collapsed" : "expanded"}
-                pixelsPerBeat={pixelsPerBeat}
-                onPixelsPerBeatChange={setPixelsPerBeat}
-                className="w-full"
-                beats={beats}
-                pages={pages}
-                measures={measures}
-                timelines={offPage}
-                playback={playback}
-                transportClock={<AudioClock />}
-                transportAccessories={
-                    <>
-                        <TimelinePreviewButtons />
-                        <TimelineSoundButton />
-                    </>
-                }
-                transportViewControls={
-                    <>
-                        <TimelineCompactButton />
-                        <FullscreenButton />
-                    </>
-                }
-                selection={selection}
-                onSelectionChange={changeSelection}
-                onTimelineRangeCommit={commands.commitTimelineRange}
-                onPlayFromStartOff={() =>
-                    useTimelineSelectionStore.getState().setPlayFromStart(false)
-                }
-                onUnpinStart={() =>
-                    useTimelineSelectionStore.getState().unpinStart()
-                }
-                onOpenRange={(range) => {
-                    if (isPlaying) return;
-                    const store = useTimelineSelectionStore.getState();
-                    const timeline = store.storedTimelines?.find(
-                        (t) =>
-                            t.start === range.startBeatIndex &&
-                            t.end === range.endBeatIndex,
-                    );
-                    if (timeline)
-                        store.isolate(
-                            timeline.id,
-                            windowBeforeClick.current ?? undefined,
+            <TimelineWaveformProvider waveform={waveform ?? NO_WAVEFORM}>
+                <Timeline
+                    mode={compact ? "collapsed" : "expanded"}
+                    pixelsPerBeat={pixelsPerBeat}
+                    onPixelsPerBeatChange={setPixelsPerBeat}
+                    className="w-full"
+                    beats={beats}
+                    pages={pages}
+                    measures={measures}
+                    timelines={offPage}
+                    playback={playback}
+                    transportClock={<AudioClock />}
+                    transportAccessories={
+                        <>
+                            <TimelinePreviewButtons />
+                            <TimelineSoundButton />
+                        </>
+                    }
+                    transportViewControls={
+                        <>
+                            <TimelineCompactButton />
+                            <FullscreenButton />
+                        </>
+                    }
+                    selection={selection}
+                    onSelectionChange={changeSelection}
+                    onTimelineRangeCommit={commands.commitTimelineRange}
+                    onPlayFromStartOff={() =>
+                        useTimelineSelectionStore
+                            .getState()
+                            .setPlayFromStart(false)
+                    }
+                    onUnpinStart={() =>
+                        useTimelineSelectionStore.getState().unpinStart()
+                    }
+                    onOpenRange={(range) => {
+                        if (isPlaying) return;
+                        const store = useTimelineSelectionStore.getState();
+                        const timeline = store.storedTimelines?.find(
+                            (t) =>
+                                t.start === range.startBeatIndex &&
+                                t.end === range.endBeatIndex,
                         );
-                    else
-                        toast.info(
-                            "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
+                        if (timeline)
+                            store.isolate(
+                                timeline.id,
+                                windowBeforeClick.current ?? undefined,
+                            );
+                        else
+                            toast.info(
+                                "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
+                            );
+                    }}
+                    onAddPageFlag={
+                        addPageFlag.insertion ? addPageFlag.add : undefined
+                    }
+                    onDeletePageFlag={(pageId) => {
+                        const after = selectionAfterFlagDelete(
+                            pages,
+                            pageId,
+                            useTimelineSelectionStore.getState().selection,
                         );
-                }}
-                onAddPageFlag={
-                    addPageFlag.insertion ? addPageFlag.add : undefined
-                }
-                onDeletePageFlag={(pageId) => {
-                    const after = selectionAfterFlagDelete(
-                        pages,
-                        pageId,
-                        useTimelineSelectionStore.getState().selection,
-                    );
-                    deletePageFlags(new Set([pageId]), {
-                        onSuccess: () => {
-                            if (!after) return;
-                            const store = useTimelineSelectionStore.getState();
-                            if (after.kind === "home") store.selectHome();
-                            else store.selectRange(after.start, after.end);
-                        },
-                    });
-                }}
-            />
+                        deletePageFlags(new Set([pageId]), {
+                            onSuccess: () => {
+                                if (!after) return;
+                                const store =
+                                    useTimelineSelectionStore.getState();
+                                if (after.kind === "home") store.selectHome();
+                                else store.selectRange(after.start, after.end);
+                            },
+                        });
+                    }}
+                />
+            </TimelineWaveformProvider>
         </div>
     );
 }
