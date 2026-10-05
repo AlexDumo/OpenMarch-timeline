@@ -48,10 +48,15 @@ export function audioEnvelope(
     return { peaks, rate: buffer.sampleRate / window };
 }
 
+/** The quietest level the waveform draws, in dB below the show's loudest moment */
+export const WAVEFORM_FLOOR_DB = 42;
+
 /**
  * The waveform's peaks for each beat on the timeline's view axis (`offset` hidden beats first,
  * see `createTimelineBeatAxis`): `perBeat` values a beat, each the loudest moment in its slice of
- * the beat's time, scaled so the loudest moment of the show is 1. Beats past the audio get none.
+ * the beat's time, in decibels below the loudest moment the show's beats cover, mapped from
+ * `-WAVEFORM_FLOOR_DB` .. 0 dB onto 0 .. 1 (UI-12: a quiet ballad stays visible next to a loud
+ * closer, and applause after the last beat doesn't set the scale). Beats past the audio get none.
  */
 export function peaksByBeat(
     envelope: AudioEnvelope,
@@ -59,15 +64,13 @@ export function peaksByBeat(
     offset: number,
     perBeat = WAVEFORM_PEAKS_PER_BEAT,
 ): number[][] {
-    let loudest = 0;
-    for (const peak of envelope.peaks) if (peak > loudest) loudest = peak;
-    const scale = loudest > 0 ? 1 / loudest : 0;
     const at = (seconds: number) =>
         Math.min(
             envelope.peaks.length,
             Math.max(0, Math.floor(seconds * envelope.rate)),
         );
-    return beats.slice(offset).map((beat) => {
+    const shown = beats.slice(offset);
+    const raw = shown.map((beat) => {
         if (at(beat.timestamp) >= envelope.peaks.length) return [];
         return Array.from({ length: perBeat }, (_, slice) => {
             const from = at(beat.timestamp + (beat.duration * slice) / perBeat);
@@ -78,7 +81,26 @@ export function peaksByBeat(
             let peak = 0;
             for (let i = from; i < to && i < envelope.peaks.length; i++)
                 if (envelope.peaks[i]! > peak) peak = envelope.peaks[i]!;
-            return peak * scale;
+            return peak;
         });
     });
+    let loudest = 0;
+    for (const beat of raw)
+        for (const peak of beat) loudest = Math.max(loudest, peak);
+    if (loudest <= 0) return raw.map((beat) => beat.map(() => 0));
+    return raw.map((beat) =>
+        beat.map((peak) =>
+            peak <= 0
+                ? 0
+                : Math.min(
+                      1,
+                      Math.max(
+                          0,
+                          (20 * Math.log10(peak / loudest) +
+                              WAVEFORM_FLOOR_DB) /
+                              WAVEFORM_FLOOR_DB,
+                      ),
+                  ),
+        ),
+    );
 }

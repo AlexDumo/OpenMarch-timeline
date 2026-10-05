@@ -226,7 +226,7 @@ export function TimelineTransport({
                 "border-stroke bg-fg-1 rounded-6 flex shrink-0 border px-12",
                 compact
                     ? "items-center gap-12 py-4"
-                    : "w-[300px] flex-col justify-center gap-8 py-8",
+                    : "w-[324px] flex-col justify-center gap-8 py-8",
             )}
         >
             {/* Play comes first in tab order; the readout row is drawn above it */}
@@ -389,8 +389,19 @@ export const TimelineRuler = ({
     /** Downbeats and page lines a scrub lands on when near (UI-12) */
     seekSnapBeats?: readonly number[];
 }) => {
+    // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
+    const tabBeats = measures
+        .filter((measure) => measure.rehearsalMark?.trim())
+        .map((measure) => measure.atBeat);
     const visibleMeasures = filterMarkersByMinimumSpacing(
-        measures.filter((measure) => !measure.rehearsalMark?.trim()),
+        measures.filter(
+            (measure) =>
+                !measure.rehearsalMark?.trim() &&
+                tabBeats.every(
+                    (beat) =>
+                        Math.abs(beat - measure.atBeat) * pixelsPerBeat >= 26,
+                ),
+        ),
         pixelsPerBeat,
     );
     const scrub = useRulerScrub(
@@ -487,7 +498,12 @@ export const TimelineRuler = ({
                                     pixelsPerBeat,
                             }}
                         >
-                            {page.label}
+                            {/* Too narrow to read when zoomed far out: the label hides (UI-12) */}
+                            {(range.endBeatIndex - range.startBeatIndex) *
+                                pixelsPerBeat >=
+                            String(page.label).length * 7 + 10
+                                ? page.label
+                                : null}
                         </button>
                     );
                 })}
@@ -495,13 +511,18 @@ export const TimelineRuler = ({
             {showMeasures && (
                 // UI-12: measure numbers without the "M"; a measure with a rehearsal mark shows the
                 // mark instead (TimelineRehearsalMarkers)
-                <div className="pointer-events-none absolute inset-x-0 top-[31px] h-16 font-mono">
+                // Each number starts just right of its bar line, so the line doesn't cross it
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 top-[31px] h-16 font-mono"
+                >
                     {visibleMeasures.map((measure) => (
                         <span
                             key={measure.id}
-                            className="text-text-subtitle absolute top-2 -translate-x-1/2 text-[9px] whitespace-nowrap"
+                            className="text-text absolute top-4 text-[10px] leading-none whitespace-nowrap opacity-75"
                             style={{
-                                left: beatToX(measure.atBeat, pixelsPerBeat),
+                                left:
+                                    beatToX(measure.atBeat, pixelsPerBeat) + 3,
                             }}
                         >
                             {measure.label.replace(/^m/i, "")}
@@ -786,6 +807,7 @@ export const TimelineSelectionRange = ({
     startPinned = false,
     onUnpin,
     pinTop = 30,
+    pinSize = 18,
     beatCount,
     pixelsPerBeat,
     height,
@@ -809,8 +831,9 @@ export const TimelineSelectionRange = ({
      */
     startPinned?: boolean;
     onUnpin?: () => void;
-    /** Where the pin sits, below the ruler */
+    /** Where the pin sits, below the ruler, and its size (compact's row is smaller) */
     pinTop?: number;
+    pinSize?: number;
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
@@ -1056,13 +1079,19 @@ export const TimelineSelectionRange = ({
                         onClick={onUnpin}
                         disabled={!onUnpin}
                         className={clsx(
-                            "bg-bg-1 rounded-4 pointer-events-auto absolute z-[55] flex size-14 items-center justify-center border p-0 shadow-sm enabled:cursor-pointer",
+                            "bg-bg-1 rounded-4 pointer-events-auto absolute z-[45] flex items-center justify-center border p-0 shadow-sm enabled:cursor-pointer",
+                            pinSize >= 18 ? "size-18" : "size-14",
                             START_INK.text,
                             START_INK.border,
                         )}
-                        style={{ left: x + 3, top: pinTop }}
+                        // Clear of the flag's own 12px handle and of a rehearsal tab centered on
+                        // the flag's beat (UI-12 review)
+                        style={{ left: x + 10, top: pinTop }}
                     >
-                        <PushPinIcon size={10} weight="fill" />
+                        <PushPinIcon
+                            size={pinSize >= 18 ? 12 : 10}
+                            weight="fill"
+                        />
                     </button>
                 )}
                 {/* The pennant is its own handle above the playhead's (z-50): after Stop the flag
@@ -1198,25 +1227,21 @@ export const TimelineRehearsalMarkers = ({
     onSeek?: (beat: BeatPosition) => void;
 }) => (
     <div className="pointer-events-none absolute inset-0 z-20">
-        {filterMarkersByMinimumSpacing(
-            model.measures.filter((measure) => measure.rehearsalMark?.trim()),
-            pixelsPerBeat,
-            18,
-        ).map((measure) => {
-            const label = measure.rehearsalMark!.trim();
-            return (
+        {model.measures.flatMap((measure) => {
+            const label = measure.rehearsalMark?.trim();
+            if (!label) return [];
+            const number = measure.label.replace(/^m/i, "");
+            return [
                 <button
                     key={measure.id}
                     type="button"
                     data-timeline-interactive="true"
-                    aria-label={`Rehearsal mark ${label}`}
-                    title={`Rehearsal mark ${label}`}
+                    aria-label={`Rehearsal ${label}, measure ${number}`}
+                    title={`Rehearsal ${label}, measure ${number}`}
                     onClick={() => onSeek?.(measure.atBeat)}
                     className={clsx(
-                        "border-text-subtitle bg-bg-1 text-text rounded-4 pointer-events-auto absolute flex -translate-x-1/2 items-center justify-center border px-3 font-mono leading-none font-semibold",
-                        compact
-                            ? "h-12 min-w-12 text-[8px]"
-                            : "h-16 min-w-16 text-[10px]",
+                        "border-text-subtitle bg-bg-1 text-text rounded-r-4 pointer-events-auto absolute flex h-16 min-w-16 items-center justify-center border border-l-2 px-3 font-mono leading-none font-semibold",
+                        compact ? "text-[9px]" : "text-[10px]",
                     )}
                     style={{
                         left: beatToX(measure.atBeat, pixelsPerBeat),
@@ -1224,8 +1249,8 @@ export const TimelineRehearsalMarkers = ({
                     }}
                 >
                     {label}
-                </button>
-            );
+                </button>,
+            ];
         })}
     </div>
 );

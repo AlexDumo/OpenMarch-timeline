@@ -451,7 +451,9 @@ export default function AudioPlayer() {
 
             const metroSource = audioContext.createBufferSource();
             metroGainNode.current = audioContext.createGain();
-            const masterVolume = calculateMasterVolume(audioVolume, audioMuted);
+            // Mute silences the music only, so the metronome can count through it (UI-12); the
+            // volume still scales both
+            const masterVolume = calculateMasterVolume(audioVolume, false);
             // Read metronome settings at playback start, live changes update gain below without restarting
             const { isMetronomeOn: metronomeOn, volume: metronomeVolume } =
                 useMetronomeStore.getState();
@@ -568,13 +570,13 @@ export default function AudioPlayer() {
     // Update metronome on/off state and volume
     useEffect(() => {
         if (metroGainNode.current) {
-            const masterVolume = calculateMasterVolume(audioVolume, audioMuted);
+            const masterVolume = calculateMasterVolume(audioVolume, false);
             metroGainNode.current.gain.value =
                 isMetronomeOn && masterVolume > 0
                     ? volumeAdjustment(volume) * masterVolume
                     : 0;
         }
-    }, [audioMuted, audioVolume, isMetronomeOn, volume]);
+    }, [audioVolume, isMetronomeOn, volume]);
 
     useEffect(() => {
         if (audioGainNode.current) {

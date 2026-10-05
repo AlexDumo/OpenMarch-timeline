@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CollapsedTimeline, ExpandedTimeline } from "../TimelineVariants";
+import { snapSeekBeat } from "../TimelinePrimitives";
 import { Timeline, TimelineWaveformProvider } from "../Timeline";
 import {
     createLongTimelineStoryModel,
@@ -666,7 +667,7 @@ describe("timeline views", () => {
         );
 
         fireEvent.click(
-            screen.getByRole("button", { name: "Rehearsal mark A" }),
+            screen.getByRole("button", { name: /^Rehearsal A, measure / }),
         );
         expect(onSeek).toHaveBeenCalledWith(24);
     });
@@ -684,7 +685,8 @@ describe("timeline views", () => {
         expect(
             container.querySelectorAll('[data-testid="timeline-grid-canvas"]'),
         ).toHaveLength(1);
-        expect(container.querySelectorAll("canvas")).toHaveLength(2);
+        // The grid, and the waveform in its rest and played tones (UI-12)
+        expect(container.querySelectorAll("canvas")).toHaveLength(3);
         expect(container.querySelectorAll("*").length).toBeLessThan(500);
     });
 
@@ -1164,7 +1166,7 @@ describe("a calmer timeline (UI-12)", () => {
         expect(onUnpinStart).toHaveBeenCalledTimes(1);
     });
 
-    it("keeps no empty lanes: no clip rows without clips, no waveform without peaks", () => {
+    it("keeps a steady height: one clip row kept without clips, no waveform without peaks", () => {
         const { container } = render(
             <ExpandedTimeline
                 {...commonProps}
@@ -1184,9 +1186,10 @@ describe("a calmer timeline (UI-12)", () => {
         expect(
             container.querySelector('[data-testid="timeline-waveform-canvas"]'),
         ).toBeNull();
-        // The ruler (28), the measure row (20) and a 2px gap, then nothing, plus the 4px foot
+        // The ruler (28), the measure row (20) and a 2px gap, one kept clip row (22) and a 2px foot,
+        // so the first off-page clip doesn't move the ruler
         expect(screen.getByTestId("timeline-pointer-surface")).toHaveStyle({
-            height: "54px",
+            height: "74px",
         });
     });
 
@@ -1239,5 +1242,19 @@ describe("a calmer timeline (UI-12)", () => {
         );
         fireEvent.click(screen.getByRole("button", { name: /^Next page/ }));
         expect(onNavigate).toHaveBeenCalledWith("next-page");
+    });
+});
+
+describe("where a click or scrub lands (UI-12)", () => {
+    it("lands on a downbeat or page line within 6px, else the nearest beat; Alt turns it off", () => {
+        // 16px a beat: 0.25 beat is 4px, 0.5 beat is 8px
+        expect(snapSeekBeat(12.25, [12, 16], 16, false)).toBe(12);
+        expect(snapSeekBeat(12.5, [12, 16], 16, false)).toBe(13);
+        expect(snapSeekBeat(15.7, [12, 16], 16, false)).toBe(16);
+        expect(snapSeekBeat(12.25, [12, 16], 16, true)).toBe(12);
+        expect(snapSeekBeat(12.4, [12, 16], 16, true)).toBe(12);
+        expect(snapSeekBeat(15.7, [12, 16], 2, true)).toBe(16);
+        // Zoomed out, 6px spans several beats
+        expect(snapSeekBeat(14, [12, 16], 2, false)).toBe(12);
     });
 });

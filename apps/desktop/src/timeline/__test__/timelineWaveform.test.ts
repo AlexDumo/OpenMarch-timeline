@@ -69,3 +69,26 @@ describe("the timeline waveform (UI-12)", () => {
         expect(peaks[2]).toEqual([]);
     });
 });
+
+describe("the waveform's scale (UI-12)", () => {
+    it("draws loudness in decibels, so a quiet passage stays visible next to a loud one", () => {
+        // One beat a second: beat 0 at full level, beat 1 at a tenth of it (-20 dB)
+        const data = new Float32Array(2000);
+        for (let i = 0; i < 1000; i++) data[i] = i % 2 ? 1 : -1;
+        for (let i = 1000; i < 2000; i++) data[i] = i % 2 ? 0.1 : -0.1;
+        const envelope = audioEnvelope(
+            {
+                numberOfChannels: 1,
+                sampleRate: 1000,
+                length: data.length,
+                getChannelData: () => data,
+            },
+            100,
+        );
+        const beats = [0, 1].map((t) => ({ timestamp: t, duration: 1 }));
+        const [loud, quiet] = peaksByBeat(envelope, beats, 0, 1);
+        expect(loud![0]).toBeCloseTo(1);
+        // (-20 + 42) / 42, where a linear scale would give 0.1
+        expect(quiet![0]).toBeCloseTo(22 / 42);
+    });
+});

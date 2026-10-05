@@ -14,8 +14,7 @@ import {
     SpeakerSimpleXIcon,
     RepeatIcon,
     FlagIcon,
-    ArrowsInLineVerticalIcon,
-    ArrowsOutLineVerticalIcon,
+    RowsIcon,
 } from "@phosphor-icons/react";
 import RegisteredActionButton from "@/components/RegisteredActionButton";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -173,7 +172,7 @@ export function TimelineFromStartButton() {
                 type="button"
                 data-testid="timeline-from-start"
                 className={clsx(
-                    "rounded-4 flex items-center gap-4 px-4 outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50",
+                    "rounded-4 focus-visible:ring-accent flex h-24 min-w-24 items-center justify-center px-3 outline-hidden duration-150 ease-out focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50",
                     {
                         // The start flag's ink, so the button reads as the flag's (TimelinePrimitives)
                         [`${START_INK.bg} dark:text-text-invert text-white`]:
@@ -213,7 +212,7 @@ export function TimelineLoopButton() {
         <button
             type="button"
             className={clsx(
-                "outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50",
+                "rounded-4 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden duration-150 ease-out focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50",
                 {
                     "text-accent": loop && fromStart,
                     "text-text enabled:hover:text-accent": !(loop && fromStart),
@@ -238,7 +237,7 @@ export function TimelinePreviewButtons() {
     return (
         <div
             data-testid="timeline-preview-buttons"
-            className="border-stroke rounded-6 flex h-24 items-center gap-6 border px-4"
+            className="border-stroke rounded-6 flex h-28 items-center gap-2 border px-1"
         >
             <TimelineFromStartButton />
             <TimelineLoopButton />
@@ -247,9 +246,9 @@ export function TimelinePreviewButtons() {
 }
 
 /**
- * Sound (UI-12): one button for what was Volume and Metronome. Its popover mutes, sets the volume
- * and turns the metronome on (Ctrl+M still does). The icon shows muted, and a dot shows the
- * metronome is on.
+ * Sound (UI-12): one button for what was Volume and Metronome. Its popover mutes the music (the
+ * metronome keeps counting, a rehearsal habit), sets the volume of both, and turns the metronome
+ * on (Ctrl+M still does). The icon shows the music muted, and a dot shows the metronome is on.
  */
 export function TimelineSoundButton() {
     const audioVolume = useUiSettingsStore((s) => s.uiSettings.audioVolume);
@@ -264,6 +263,7 @@ export function TimelineSoundButton() {
         : audioVolume < 50
           ? SpeakerSimpleLowIcon
           : SpeakerSimpleHighIcon;
+    const state = `${silent ? "music muted" : `volume ${audioVolume}%`}, metronome ${isMetronomeOn ? "on" : "off"}`;
     return (
         <Popover.Root>
             <Popover.Trigger asChild>
@@ -271,13 +271,13 @@ export function TimelineSoundButton() {
                     type="button"
                     data-testid="timeline-sound"
                     className={clsx(
-                        "rounded-4 enabled:hover:bg-fg-2 relative flex size-24 items-center justify-center outline-hidden duration-150 ease-out",
+                        "rounded-4 enabled:hover:bg-fg-2 focus-visible:ring-accent relative flex size-24 items-center justify-center outline-hidden duration-150 ease-out focus-visible:ring-2",
                         silent
                             ? "text-red"
                             : "text-text enabled:hover:text-accent",
                     )}
-                    aria-label="Sound"
-                    title={`Sound: ${silent ? "muted" : `${audioVolume}%`}${isMetronomeOn ? ", metronome on" : ""}`}
+                    aria-label={`Sound: ${state}`}
+                    title={`Sound: ${state}`}
                 >
                     <VolumeIcon size={18} />
                     {isMetronomeOn && (
@@ -288,48 +288,46 @@ export function TimelineSoundButton() {
             <Popover.Portal>
                 <Popover.Content
                     side="top"
-                    className="border-stroke bg-modal text-text shadow-modal rounded-8 z-50 flex w-224 flex-col gap-10 border px-16 py-12 backdrop-blur-sm"
+                    className="border-stroke bg-modal text-text shadow-modal rounded-8 z-50 flex w-232 flex-col gap-10 border px-16 py-12 backdrop-blur-sm"
                 >
-                    <div className="flex items-center justify-between gap-6">
+                    <div className="flex items-center gap-8">
                         <button
                             type="button"
-                            aria-label={silent ? "Unmute" : "Mute"}
+                            aria-label="Mute the music"
                             aria-pressed={audioMuted}
-                            onClick={() =>
-                                audioVolume === 0
-                                    ? setAudioVolume(100)
-                                    : toggleAudioMute()
+                            title={
+                                audioMuted
+                                    ? "Unmute the music"
+                                    : "Mute the music (the metronome keeps counting)"
                             }
+                            onClick={toggleAudioMute}
                             className={clsx(
-                                "flex items-center gap-6 outline-hidden",
+                                "rounded-4 hover:bg-fg-2 focus-visible:ring-accent flex size-24 shrink-0 items-center justify-center outline-hidden focus-visible:ring-2",
                                 silent ? "text-red" : "hover:text-accent",
                             )}
                         >
                             <VolumeIcon size={18} />
-                            <span className="text-body">
-                                <T keyName="timeline.masterVolume" />
-                            </span>
                         </button>
-                        <span className="text-body font-mono">
-                            {silent ? "Muted" : `${audioVolume}%`}
+                        <Slider
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={[audioVolume]}
+                            onValueChange={(values) =>
+                                setAudioVolume(values[0] ?? 0)
+                            }
+                            aria-label="Volume"
+                        />
+                        <span className="text-sub w-36 shrink-0 text-right font-mono">
+                            {audioMuted ? "Muted" : `${audioVolume}%`}
                         </span>
                     </div>
-                    <Slider
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={[audioVolume]}
-                        onValueChange={(values) =>
-                            setAudioVolume(values[0] ?? 0)
-                        }
-                        aria-label="Timeline volume slider"
-                    />
                     <button
                         type="button"
                         aria-pressed={isMetronomeOn}
                         onClick={toggleMetronome}
                         className={clsx(
-                            "border-stroke flex items-center gap-6 border-t pt-8 outline-hidden",
+                            "border-stroke focus-visible:ring-accent flex items-center gap-6 border-t pt-8 outline-hidden focus-visible:ring-2",
                             isMetronomeOn ? "text-accent" : "hover:text-accent",
                         )}
                     >
@@ -349,7 +347,7 @@ export function TimelineSoundButton() {
 
 /**
  * Compact (UI-12): the timeline as a thin strip, or full. Only this button switches it, and the
- * choice is remembered for every show.
+ * choice is remembered for every show. Lit while compact, like the other toggles.
  */
 export function TimelineCompactButton() {
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
@@ -358,17 +356,22 @@ export function TimelineCompactButton() {
         <button
             type="button"
             data-testid="timeline-compact"
-            className="rounded-4 text-text enabled:hover:text-accent enabled:hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden duration-150 ease-out"
+            className={clsx(
+                "rounded-4 enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden duration-150 ease-out focus-visible:ring-2",
+                compact
+                    ? "text-accent bg-accent/10"
+                    : "text-text enabled:hover:text-accent",
+            )}
             aria-label="Compact timeline"
             aria-pressed={compact}
-            title={compact ? "Show the full timeline" : "Compact timeline"}
+            title={
+                compact
+                    ? "Compact timeline: on. Click to show the full timeline"
+                    : "Compact timeline"
+            }
             onClick={() => setCompact()}
         >
-            {compact ? (
-                <ArrowsOutLineVerticalIcon size={16} />
-            ) : (
-                <ArrowsInLineVerticalIcon size={16} />
-            )}
+            <RowsIcon size={16} weight={compact ? "fill" : "regular"} />
         </button>
     );
 }

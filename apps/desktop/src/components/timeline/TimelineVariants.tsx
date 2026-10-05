@@ -312,6 +312,73 @@ const transportNavigation = (props: TimelineCommonProps) =>
               )
         : undefined);
 
+/**
+ * The waveform lane (UI-12): the waveform in the rest tone, with the played tone laid over it up
+ * to the playhead. While playing the played part follows the live position every frame by
+ * resizing its clip, so the canvases are never redrawn for it.
+ */
+function TimelineWaveformLane({
+    waveform,
+    top,
+    width,
+    height,
+    pixelsPerBeat,
+    positionBeat,
+    livePositionBeat,
+}: {
+    waveform: TimelineCommonProps["model"]["waveform"];
+    top: number;
+    width: number;
+    height: number;
+    pixelsPerBeat: number;
+    positionBeat: number;
+    livePositionBeat?: () => number | null;
+}) {
+    const playedRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const played = playedRef.current;
+        if (!played) return;
+        if (!livePositionBeat) {
+            played.style.width = `${Math.max(0, positionBeat * pixelsPerBeat)}px`;
+            return;
+        }
+        let frame = 0;
+        const update = () => {
+            const beat = livePositionBeat() ?? positionBeat;
+            played.style.width = `${Math.max(0, beat * pixelsPerBeat)}px`;
+            frame = requestAnimationFrame(update);
+        };
+        update();
+        return () => cancelAnimationFrame(frame);
+    }, [livePositionBeat, pixelsPerBeat, positionBeat]);
+    return (
+        <div
+            className="rounded-4 pointer-events-none absolute left-0 overflow-hidden"
+            style={{ top, width, height }}
+        >
+            <TimelineWaveformCanvas
+                waveform={waveform}
+                width={width}
+                height={height}
+                pixelsPerBeat={pixelsPerBeat}
+                tone="rest"
+            />
+            <div
+                ref={playedRef}
+                className="absolute inset-y-0 left-0 overflow-hidden"
+            >
+                <TimelineWaveformCanvas
+                    waveform={waveform}
+                    width={width}
+                    height={height}
+                    pixelsPerBeat={pixelsPerBeat}
+                    tone="played"
+                />
+            </div>
+        </div>
+    );
+}
+
 function TimelineSurface({
     density,
     ...props
@@ -347,24 +414,22 @@ function TimelineSurface({
         ? TIMELINE_INITIAL_PAGE_WIDTH
         : 0;
     const surfaceWidth = width + initialPageWidth;
-    // UI-12: the ruler (28px), the measure row under it, then a lane only for what is there:
-    // clip rows only when there are off-page clips, the waveform only with audio peaks (expanded)
-    const railHeight = expanded ? 20 : 14;
-    const trackTop = 28 + railHeight + 2;
-    const rowPitch = expanded ? 22 : 8;
+    // UI-12: the ruler (28px) and the measure row; then the waveform, when audio is loaded, so it
+    // stays put as clips come and go; then the clip rows, one always kept (with no chrome), so the
+    // first off-page clip doesn't move the ruler right after the drag that made it
+    const railHeight = expanded ? 20 : 17;
+    const showWaveform = model.waveform.peaksByBeat.some(
+        (peaks) => peaks.length > 0,
+    );
+    const waveformHeight = expanded ? 32 : 12;
+    const audioTop = 28 + railHeight + 2;
+    const trackTop = showWaveform ? audioTop + waveformHeight + 4 : audioTop;
+    const rowPitch = expanded ? 22 : 12;
     const trackHeight = expanded ? 14 : 6;
-    // Compact bars sit in a taller hit area, so they can still be clicked and dragged
-    const clipHitHeight = expanded ? trackHeight : 14;
-    const trackBandHeight = rows.length * rowPitch;
-    const showWaveform =
-        expanded &&
-        model.waveform.peaksByBeat.some((peaks) => peaks.length > 0);
-    const waveformHeight = 32;
-    const audioTop = trackTop + trackBandHeight + 4;
-    const timelineHeight =
-        (showWaveform
-            ? audioTop + waveformHeight
-            : trackTop + trackBandHeight) + (expanded ? 4 : 0);
+    // Compact bars sit in a hit area as tall as their row, so rows never share a click
+    const clipHitHeight = expanded ? trackHeight : rowPitch;
+    const trackBandHeight = Math.max(rows.length, 1) * rowPitch;
+    const timelineHeight = trackTop + trackBandHeight + (expanded ? 2 : 0);
     const selectionRange = getSelectionRange(selection);
     const [selectionInteraction, setSelectionInteraction] =
         useState<TimelineSelectionInteraction | null>(null);
@@ -567,22 +632,19 @@ function TimelineSurface({
                         )),
                     )}
                     {showWaveform && (
-                        <div
-                            className="bg-bg-1/40 rounded-4 absolute left-0 overflow-hidden"
-                            style={{
-                                top: audioTop,
-                                width,
-                                height: waveformHeight,
-                            }}
-                        >
-                            <TimelineWaveformCanvas
-                                waveform={model.waveform}
-                                width={width}
-                                height={waveformHeight}
-                                pixelsPerBeat={pixelsPerBeat}
-                                positionBeat={positionBeat}
-                            />
-                        </div>
+                        <TimelineWaveformLane
+                            waveform={model.waveform}
+                            top={audioTop}
+                            width={width}
+                            height={waveformHeight}
+                            pixelsPerBeat={pixelsPerBeat}
+                            positionBeat={positionBeat}
+                            livePositionBeat={
+                                props.isPlaying
+                                    ? props.livePositionBeat
+                                    : undefined
+                            }
+                        />
                     )}
                     <TimelineRehearsalMarkers
                         model={model}
@@ -667,7 +729,8 @@ function TimelineSurface({
                                 selection.startPinned === true
                             }
                             onUnpin={props.onUnpinStart}
-                            pinTop={expanded ? 31 : 29}
+                            pinTop={expanded ? 29 : 28}
+                            pinSize={expanded ? 18 : 14}
                             beatCount={model.beatCount}
                             pixelsPerBeat={pixelsPerBeat}
                             height={timelineHeight}

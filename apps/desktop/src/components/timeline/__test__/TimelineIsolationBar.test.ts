@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isolatedTimelineName } from "../TimelineIsolationBar";
+import {
+    flagsInside,
+    isolatedTimelineName,
+    passedSets,
+} from "../TimelineIsolationBar";
 
 /** Page 1 ends at beat 9, page 2 at 17, page 3 at 25 (flags), as `useTimingObjects` gives them */
 const page = (id: number, name: string, beats: number[]) => ({
@@ -25,5 +29,21 @@ describe("isolatedTimelineName", () => {
         expect(isolatedTimelineName({ start: 13, end: 21 }, PAGES)).toBe(
             "Page 2 count 5 to page 3 count 4",
         );
+    });
+});
+
+describe("the field line's words (UI-12)", () => {
+    it("names a window past the last flag by the last page", () => {
+        expect(isolatedTimelineName({ start: 25, end: 29 }, PAGES)).toBe(
+            "After page 3, counts 1–4",
+        );
+    });
+
+    it("names the sets a window passes through, not the page it ends on", () => {
+        expect(flagsInside({ start: 5, end: 21 }, PAGES)).toEqual(["1", "2"]);
+        expect(flagsInside({ start: 9, end: 17 }, PAGES)).toEqual([]);
+        expect(passedSets(["2"])).toBe("page 2's set");
+        expect(passedSets(["1", "2"])).toBe("pages 1 and 2's sets");
+        expect(passedSets(["1", "2", "3"])).toBe("pages 1, 2 and 3's sets");
     });
 });
