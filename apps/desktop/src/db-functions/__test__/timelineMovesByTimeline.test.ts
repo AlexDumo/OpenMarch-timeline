@@ -287,13 +287,49 @@ describeDbTests("moving marchers in the selected timeline (UI-9)", (it) => {
             end: timeline.end_beat,
             layer: 1,
         });
-        await expectRefused(db, /higher layer/, () =>
-            moveMarchersInTarget({
-                db,
-                target: { kind: "timeline", timelineId: timeline.id },
-                moves: [{ marcherId: 6, x: 10, y: 10 }],
-            }),
+        // UI-10: the refusal names the move in the way by its beats
+        await expectRefused(
+            db,
+            new RegExp(
+                `another move over beats \\[${timeline.end_beat - 1}, ${timeline.end_beat}\\)`,
+            ),
+            () =>
+                moveMarchersInTarget({
+                    db,
+                    target: { kind: "timeline", timelineId: timeline.id },
+                    moves: [{ marcherId: 6, x: 10, y: 10 }],
+                }),
         );
+    });
+
+    it("an isolated edit sets the plan of a marcher another move has at the end", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const timeline = await timelineOf(db, pages[2]!);
+        const { start_beat: s, end_beat: e } = timeline;
+        const exit = e - 4;
+        // Marcher 6 leaves the page's move 4 beats before its end (a steal-out)
+        await addRow(db, { marcherId: 6, start: exit, end: e, layer: 1 });
+        await timelineResolverSettled();
+        const origin = resolver().positionAt(6, s);
+        const stolenEnd = resolver().positionAt(6, e);
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "timeline", timelineId: timeline.id, ghosts: true },
+            moves: [{ marcherId: 6, x: 10, y: 20 }],
+        });
+        await timelineResolverSettled();
+        // It still ends where the stealing move takes it
+        expect(resolver().positionAt(6, e)).toEqual(stolenEnd);
+        // It leaves from the page move's new plan (R-4)
+        const p = (exit - s) / (e - s);
+        const [x, y] = resolver().positionAt(6, exit);
+        expect(x).toBeCloseTo(origin[0] + p * (10 - origin[0]), 6);
+        expect(y).toBeCloseTo(origin[1] + p * (20 - origin[1]), 6);
+        // One undo step takes it back
+        expect((await performUndo(db)).success).toBe(true);
     });
 
     it("refuses a row that ends before the timeline's end (use the inspector)", async ({
@@ -439,5 +475,183 @@ describeDbTests("moving marchers in the selected timeline (UI-9)", (it) => {
             convertedTransitionIds: [],
         });
         expect(await snapshot(db)).toEqual(before);
+    });
+});
+
+/**
+ * UI-10 Dragging adds (docs/timeline/ui.md, P8.17): a canvas move in the edit window `[S, P)` sets
+ * where the moved marchers arrive at P, creating the window's timeline and adding them to it as
+ * needed, in one undoable edit.
+ */
+describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
+    it("on a page box: a marcher already in its timeline only gets its ending set", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const page = pages[3]!;
+        const timeline = await timelineOf(db, page);
+        const before = await snapshot(db);
+        await moveMarchersInTarget({
+            db,
+            target: {
+                kind: "range",
+                start: timeline.start_beat,
+                end: timeline.end_beat,
+            },
+            moves: [{ marcherId: 5, x: 123.5, y: 456.25 }],
+        });
+        const after = await snapshot(db);
+        for (const table of TABLES) {
+            const name = getTableName(table);
+            if (name !== "timeline_slot_destinations")
+                expect(after[name], name).toEqual(before[name]);
+        }
+        await timelineResolverSettled();
+        expect(resolver().positionAt(5, timeline.end_beat)).toEqual([
+            123.5, 456.25,
+        ]);
+    });
+
+    it("mid-page: creates the window's timeline, adds the marchers and sets their arrivals, as one undoable edit", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const page = pages[3]!;
+        const timeline = await timelineOf(db, page);
+        const mid = timeline.start_beat + 3;
+        const atFlag = [5, 6].map((id) =>
+            resolver().positionAt(id, timeline.end_beat),
+        );
+        const before = await snapshot(db);
+
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: timeline.start_beat, end: mid },
+            moves: [
+                { marcherId: 5, x: 200, y: 210 },
+                { marcherId: 6, x: 220, y: 230 },
+            ],
+        });
+        await timelineResolverSettled();
+        const created = await db
+            .select()
+            .from(schema.timelines)
+            .where(
+                and(
+                    eq(schema.timelines.start_beat, timeline.start_beat),
+                    eq(schema.timelines.end_beat, mid),
+                ),
+            )
+            .all();
+        expect(
+            created,
+            "one timeline over the window, and no page",
+        ).toHaveLength(1);
+        expect(resolver().positionAt(5, mid)).toEqual([200, 210]);
+        expect(resolver().positionAt(6, mid)).toEqual([220, 230]);
+        // They resume from there to where they already arrived at the flag (R-5, D-12)
+        expect(resolver().positionAt(5, timeline.end_beat)).toEqual(atFlag[0]);
+        expect(resolver().positionAt(6, timeline.end_beat)).toEqual(atFlag[1]);
+
+        const undo = await performUndo(db);
+        expect(undo.success, undo.error?.message).toBe(true);
+        expect(await snapshot(db)).toEqual(before);
+    });
+
+    it("a second move in the same window joins the same timeline", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const timeline = await timelineOf(db, pages[3]!);
+        const window = {
+            kind: "range" as const,
+            start: timeline.start_beat,
+            end: timeline.start_beat + 2,
+        };
+        await moveMarchersInTarget({
+            db,
+            target: window,
+            moves: [{ marcherId: 5, x: 200, y: 210 }],
+        });
+        await moveMarchersInTarget({
+            db,
+            target: window,
+            moves: [
+                { marcherId: 5, x: 201, y: 211 },
+                { marcherId: 7, x: 240, y: 250 },
+            ],
+        });
+        await timelineResolverSettled();
+        const over = await db
+            .select()
+            .from(schema.timelines)
+            .where(
+                and(
+                    eq(schema.timelines.start_beat, window.start),
+                    eq(schema.timelines.end_beat, window.end),
+                ),
+            )
+            .all();
+        expect(over).toHaveLength(1);
+        expect(resolver().positionAt(5, window.end)).toEqual([201, 211]);
+        expect(resolver().positionAt(7, window.end)).toEqual([240, 250]);
+    });
+
+    it("a refusal in the move step rolls back the add made in the same edit", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const timeline = await timelineOf(db, pages[3]!);
+        const window = {
+            kind: "range" as const,
+            start: timeline.start_beat,
+            end: timeline.start_beat + 3,
+        };
+        // Marcher 6 joins the window's timeline, then a higher layer decides where it is at the end
+        await moveMarchersInTarget({
+            db,
+            target: window,
+            moves: [{ marcherId: 6, x: 200, y: 210 }],
+        });
+        await addRow(db, {
+            marcherId: 6,
+            start: window.end - 1,
+            end: window.end,
+            layer: 5,
+        });
+        // Marcher 5 would be added before marcher 6's move is refused: nothing may stay written
+        await expectRefused(db, /another move over beats/, () =>
+            moveMarchersInTarget({
+                db,
+                target: window,
+                moves: [
+                    { marcherId: 5, x: 230, y: 240 },
+                    { marcherId: 6, x: 201, y: 211 },
+                ],
+            }),
+        );
+    });
+
+    it("a window that only partly overlaps a marcher's move is refused, and writes nothing", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const timeline = await timelineOf(db, pages[3]!);
+        await expectRefused(db, /only partly overlaps/, () =>
+            moveMarchersInTarget({
+                db,
+                target: {
+                    kind: "range",
+                    start: timeline.start_beat + 3,
+                    end: timeline.end_beat + 3,
+                },
+                moves: [{ marcherId: 5, x: 200, y: 210 }],
+            }),
+        );
     });
 });
