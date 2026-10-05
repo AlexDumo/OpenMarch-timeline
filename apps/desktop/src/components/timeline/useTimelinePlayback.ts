@@ -21,11 +21,12 @@ import type { TimelinePlayback } from "./Timeline";
  * - While playing, the cursor is `beatIndexAtTime(beats, seconds)`, updated once per animation
  *   frame and re-rendered only when the beat changes. With no beats it returns -1, which is never
  *   used as a position.
- * - While paused, the cursor is the playhead, which rests on any whole beat, the end of the show
- *   included.
+ * - While paused, the cursor is the frame a paused preview holds, or else the playhead, which
+ *   rests on any whole beat, the end of the show included (UI-11).
  * - Seeking moves only the playhead; the selection stays. Page navigation moves the playhead to a
  *   flag and selects that page (`navigateTimelinePages`). Neither does anything while playing.
- * - Play resumes from the playhead and loops a selected range (`toggleTimelinePlayback`).
+ * - Play previews the window, from just before the start flag to just after the playhead,
+ *   looping when the loop is on (`toggleTimelinePlayback`, UI-11).
  */
 export function useTimelinePlayback({
     beats,
@@ -35,7 +36,9 @@ export function useTimelinePlayback({
     pages: readonly Page[];
 }): TimelinePlayback {
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
-    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    const playheadBeat = useTimelineSelectionStore(
+        (s) => s.cursorBeat ?? s.playheadBeat,
+    );
     const seek = useTimelineSelectionStore((s) => s.seek);
     const [liveBeat, setLiveBeat] = useState<number | null>(null);
 

@@ -27,8 +27,10 @@ import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { AudioClock } from "./Clock";
 import {
+    TimelineLoopButton,
     TimelineMetronomeButton,
     TimelineMuteButton,
+    TimelinePlayOnButton,
 } from "./TimelineControls";
 import {
     Timeline,
@@ -186,6 +188,8 @@ export default function TimelineModePanel() {
                 transportClock={<AudioClock />}
                 transportAccessories={
                     <>
+                        <TimelinePlayOnButton />
+                        <TimelineLoopButton />
                         <TimelineMuteButton />
                         <TimelineMetronomeButton />
                         <FullscreenButton />

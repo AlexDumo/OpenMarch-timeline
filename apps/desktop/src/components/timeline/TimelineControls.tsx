@@ -12,6 +12,8 @@ import {
     SpeakerSimpleHighIcon,
     SpeakerSimpleLowIcon,
     SpeakerSimpleXIcon,
+    RepeatIcon,
+    ArrowLineRightIcon,
 } from "@phosphor-icons/react";
 import RegisteredActionButton from "@/components/RegisteredActionButton";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -24,6 +26,9 @@ import { T, useTolgee } from "@tolgee/react";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
 import * as Popover from "@radix-ui/react-popover";
 import { Slider } from "@openmarch/ui";
+import { useTimingObjects } from "@/hooks";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { toggleTimelinePlayOn } from "@/timeline/timelineTransport";
 
 export default function TimelineControls() {
     const { isFullscreen, toggleFullscreen } = useFullscreenStore();
@@ -148,6 +153,58 @@ export function TimelineMetronomeButton() {
                 <MetronomeIcon size={24} />
             </button>
         </div>
+    );
+}
+
+/**
+ * **Play on** (UI-11): plays from the playhead to the end of the show, as UI-10's Play did; Play
+ * itself previews the move. Shortcut P.
+ */
+export function TimelinePlayOnButton() {
+    const { isPlaying, setIsPlaying } = useIsPlaying()!;
+    const { beats } = useTimingObjects();
+    const label = isPlaying ? "Pause (P)" : "Play on from the playhead (P)";
+    return (
+        <button
+            type="button"
+            className="text-text enabled:hover:text-accent outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={label}
+            title={label}
+            onClick={() =>
+                toggleTimelinePlayOn({
+                    isPlaying,
+                    showEndBeat: beats.length,
+                    setIsPlaying,
+                })
+            }
+        >
+            <ArrowLineRightIcon size={24} />
+        </button>
+    );
+}
+
+/** The preview loop (UI-11): Play repeats the move until stopped. Shortcut C. */
+export function TimelineLoopButton() {
+    const loop = useTimelineSelectionStore((s) => s.loopPreview);
+    const toggle = useTimelineSelectionStore((s) => s.toggleLoopPreview);
+    const label = loop ? "Loop the move: on (C)" : "Loop the move: off (C)";
+    return (
+        <button
+            type="button"
+            className={clsx(
+                "outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50",
+                {
+                    "text-accent": loop,
+                    "text-text enabled:hover:text-accent": !loop,
+                },
+            )}
+            aria-label="Loop the move (C)"
+            aria-pressed={loop}
+            title={label}
+            onClick={() => toggle()}
+        >
+            <RepeatIcon size={24} />
+        </button>
     );
 }
 

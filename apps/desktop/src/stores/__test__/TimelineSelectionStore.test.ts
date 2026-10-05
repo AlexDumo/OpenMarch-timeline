@@ -392,3 +392,56 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         });
     });
 });
+
+describe("the playback cursor (UI-11)", () => {
+    beforeEach(() => {
+        store().reset();
+        store().setPageBoxes(BOXES);
+        store().setShowEndBeat(25);
+        store().selectRange(9, 17);
+    });
+
+    it("cueing moves the cursor without moving the window, and restarts playback", () => {
+        const revision = store().playheadRevision;
+        store().cue(11);
+        expect(store().cursorBeat).toBe(11);
+        expect(store().playheadBeat).toBe(17);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 17 });
+        expect(store().playheadRevision).toBe(revision + 1);
+        store().cue(40);
+        expect(store().cursorBeat).toBe(25);
+    });
+
+    it("every write of the window puts the cursor back on the playhead", () => {
+        store().cue(11);
+        store().seek(13);
+        expect(store().cursorBeat).toBeNull();
+        store().cue(11);
+        store().selectRange(1, 9);
+        expect(store().cursorBeat).toBeNull();
+        store().cue(3);
+        store().selectHome();
+        expect(store().cursorBeat).toBeNull();
+        store().cue(3);
+        store().selectNothing();
+        expect(store().cursorBeat).toBeNull();
+    });
+
+    it("reloads keep the cursor while playing, so the audio isn't restarted at the playhead", () => {
+        store().setPlayback({ kind: "preview", from: 7, to: 19 });
+        store().cue(11);
+        store().setPageBoxes([...BOXES, { start: 25, end: 33 }]);
+        expect(store().cursorBeat).toBe(11);
+        store().setPlayback(null);
+        store().setPageBoxes(BOXES);
+        expect(store().cursorBeat).toBeNull();
+    });
+
+    it("toggles the preview loop", () => {
+        expect(store().loopPreview).toBe(false);
+        store().toggleLoopPreview();
+        expect(store().loopPreview).toBe(true);
+        store().toggleLoopPreview(true);
+        expect(store().loopPreview).toBe(true);
+    });
+});

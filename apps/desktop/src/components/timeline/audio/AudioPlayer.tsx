@@ -158,10 +158,13 @@ export default function AudioPlayer() {
     // AudioContext state management
     const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
     const [playbackTimestamp, setPlaybackTimestamp] = useState<number>(0);
-    // Timeline mode (UI-9): play starts at the playhead, not the selected page. Every playhead
-    // write restarts playback from it, which is how a selected range loops back to its start.
+    // Timeline mode (UI-9, UI-11): play starts at the playback cursor (or the playhead when there
+    // is none), not the selected page. Every cursor or playhead write restarts playback from it,
+    // which is how a preview loops back to its start.
     const timelineMode = useTimelineMode();
-    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    const playheadBeat = useTimelineSelectionStore(
+        (s) => s.cursorBeat ?? s.playheadBeat,
+    );
     const playheadRevision = useTimelineSelectionStore(
         (s) => s.playheadRevision,
     );

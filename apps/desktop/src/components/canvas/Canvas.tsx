@@ -103,8 +103,11 @@ export default function Canvas({
         (s) => s.status === "ready",
     );
     const drawFromResolver = timelineMode && timelineResolverReady;
-    // UI-9: the paused canvas shows positions at the playhead
-    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    // UI-9, UI-11: the paused canvas shows positions at the playhead, or at the frame a paused
+    // preview holds
+    const playheadBeat = useTimelineSelectionStore(
+        (s) => s.cursorBeat ?? s.playheadBeat,
+    );
     const marcherIds = useMemo(() => marchers?.map((m) => m.id), [marchers]);
 
     const { data: fieldProperties } = useQuery(
@@ -587,6 +590,35 @@ export default function Canvas({
             window.removeEventListener("resize", handleResize);
         };
     }, [canvas, centerAndFitCanvas, isFullscreen]);
+
+    // UI-11: while a paused preview holds a frame, the field shows that frame, not P, where edits
+    // land. The first press on the field only returns it to P, so nothing is dragged from the held
+    // positions.
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!timelineMode || !container) return;
+        let swallowing = false;
+        const onPress = (event: Event) => {
+            const store = useTimelineSelectionStore.getState();
+            if (event.type === "pointerdown") {
+                swallowing =
+                    store.cursorBeat !== null && store.playback === null;
+                if (swallowing) store.clearCursor();
+            }
+            if (!swallowing) return;
+            event.stopPropagation();
+            event.preventDefault();
+            // Fabric 5 listens for the mouse events, which follow the pointer events
+            if (event.type === "mouseup") swallowing = false;
+        };
+        const types = ["pointerdown", "mousedown", "pointerup", "mouseup"];
+        for (const type of types)
+            container.addEventListener(type, onPress, true);
+        return () => {
+            for (const type of types)
+                container.removeEventListener(type, onPress, true);
+        };
+    }, [timelineMode]);
 
     /* --------------------------Animation Functions-------------------------- */
 

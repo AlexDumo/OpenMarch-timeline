@@ -43,8 +43,10 @@ import { useTimingObjects } from "@/hooks";
 import {
     navigateTimelinePages,
     stopTimelinePlayback,
+    toggleTimelinePlayOn,
     toggleTimelinePlayback,
 } from "@/timeline/timelineTransport";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import tolgee from "@/global/singletons/Tolgee";
 import { T, useTolgee } from "@tolgee/react";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
@@ -79,7 +81,9 @@ export enum RegisteredActionsEnum {
     previousPage = "previousPage",
     firstPage = "firstPage",
     playPause = "playPause",
+    playOn = "playOn",
     stopPlayback = "stopPlayback",
+    toggleLoopPreview = "toggleLoopPreview",
     toggleMetronome = "toggleMetronome",
 
     // Batch editing
@@ -281,6 +285,15 @@ class KeyboardShortcut {
  * When adding a new action, use a translation key and translate it in the i18n files or on Tolgee.
  * The translation key should be in the format "actions.{category}.{action}".
  */
+/** Playback controls, which leave a held preview frame alone (UI-11) */
+const TRANSPORT_ACTIONS: ReadonlySet<RegisteredActionsEnum> = new Set([
+    RegisteredActionsEnum.playPause,
+    RegisteredActionsEnum.playOn,
+    RegisteredActionsEnum.stopPlayback,
+    RegisteredActionsEnum.toggleLoopPreview,
+    RegisteredActionsEnum.toggleMetronome,
+]);
+
 export const RegisteredActionsObjects: {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     [key in RegisteredActionsEnum]: RegisteredAction;
@@ -349,10 +362,20 @@ export const RegisteredActionsObjects: {
         keyboardShortcut: new KeyboardShortcut({ key: " " }),
         enumString: "playPause",
     }),
+    playOn: new RegisteredAction({
+        descKey: "actions.playback.playOn",
+        keyboardShortcut: new KeyboardShortcut({ key: "p" }),
+        enumString: "playOn",
+    }),
     stopPlayback: new RegisteredAction({
         descKey: "actions.playback.stop",
         keyboardShortcut: new KeyboardShortcut({ key: " ", shift: true }),
         enumString: "stopPlayback",
+    }),
+    toggleLoopPreview: new RegisteredAction({
+        descKey: "actions.playback.toggleLoop",
+        keyboardShortcut: new KeyboardShortcut({ key: "c" }),
+        enumString: "toggleLoopPreview",
     }),
     toggleMetronome: new RegisteredAction({
         descKey: "actions.playback.toggleMetronome",
@@ -778,6 +801,14 @@ function RegisteredActionsHandler() {
         (action: RegisteredActionsEnum) => {
             let isElectronAction = true;
 
+            // UI-11: anything but the transport puts a held preview frame back on the playhead, so
+            // edits start from the positions they change
+            if (!TRANSPORT_ACTIONS.has(action)) {
+                const timelineSelection = useTimelineSelectionStore.getState();
+                if (timelineSelection.playback === null)
+                    timelineSelection.clearCursor();
+            }
+
             // Check if this is an electron action
             switch (action) {
                 case RegisteredActionsEnum.launchLoadFileDialogue:
@@ -1009,9 +1040,24 @@ function RegisteredActionsHandler() {
                     if (firstPage && !isPlaying) setSelectedPage(firstPage);
                     break;
                 }
+                case RegisteredActionsEnum.playOn: {
+                    // UI-11 Play on: from the playhead to the end (timeline mode only)
+                    if (!databaseReady || !timelineMode) break;
+                    toggleTimelinePlayOn({
+                        isPlaying,
+                        showEndBeat: beats.length,
+                        setIsPlaying,
+                    });
+                    break;
+                }
+                case RegisteredActionsEnum.toggleLoopPreview: {
+                    if (!timelineMode) break;
+                    useTimelineSelectionStore.getState().toggleLoopPreview();
+                    break;
+                }
                 case RegisteredActionsEnum.playPause: {
                     if (!databaseReady || !pages || pages.length === 0) break;
-                    // UI-10 Play: plays on from the playhead
+                    // UI-11 Play: previews the edit window
                     if (timelineMode) {
                         toggleTimelinePlayback({
                             isPlaying,
@@ -1025,7 +1071,7 @@ function RegisteredActionsHandler() {
                     break;
                 }
                 case RegisteredActionsEnum.stopPlayback: {
-                    // UI-10 Stop: returns the playhead to the start flag (timeline mode only)
+                    // UI-11 Stop: back to the playhead (timeline mode only)
                     if (!databaseReady || !timelineMode) break;
                     stopTimelinePlayback({ isPlaying, setIsPlaying });
                     break;

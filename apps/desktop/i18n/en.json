@@ -61,8 +61,10 @@
         "playback": {
             "pause": "Pause",
             "play": "Play",
-            "playPause": "Play or pause",
-            "stop": "Stop and return to the start flag"
+            "playOn": "Play on from the playhead",
+            "playPause": "Play the move or pause",
+            "stop": "Stop and return to the playhead",
+            "toggleLoop": "Loop the move"
         },
         "select": {
             "selectAll": "Select all marchers"

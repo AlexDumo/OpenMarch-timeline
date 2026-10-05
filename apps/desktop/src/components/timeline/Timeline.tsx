@@ -77,7 +77,7 @@ export interface TimelinePlayback {
     /** Seek to a whole beat index, already clamped to the show */
     readonly onSeek?: (beatIndex: number) => void;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
-    /** **Stop** (UI-10): back to the start flag */
+    /** **Stop** (UI-11): back to the playhead */
     readonly onStop?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;

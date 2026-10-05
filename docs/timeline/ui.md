@@ -316,6 +316,7 @@ from it. The spec still wins on the model; this file decides presentation.
     unpins it. Clicking a page box unpins it.
   - **Play, Pause, Stop.** Play plays on from P to the end of the show, with no
     loop. Pause leaves P where playback was. **Stop** stops and returns P to S.
+    Superseded by UI-11.
   - **Dimming** (_lead default_). Nothing is dimmed and every marcher can be
     selected, since dragging is what adds. Showing who moves comes with the
     ghosts-and-paths work (report H1), not membership.
@@ -332,6 +333,40 @@ from it. The spec still wins on the model; this file decides presentation.
   right-click landing on the wrong timeline after a split). UI-10 keeps the
   model (the spec and C-11/C-12) and removes the membership step: who, where,
   leave when and arrive when are the selection, the drag, S and P.
+
+- **UI-11: Play previews the move (project owner, 2026-10-05).** Supersedes
+  UI-10's **Play, Pause, Stop**. Built on branch `timeline/ui11-preview-playback`.
+  The owner asked for Logic-style "play from the start flag" so the move just
+  edited plays back. A first proposal tied looping to a pinned S and swapped
+  Space and Shift+Space by state; three critiques (a drill designer, a DAW user
+  and a state-machine review) rejected that, and this is the revision. Items
+  marked _lead default_ were filled in by the lead.
+  - **Play (Space) previews the window.** It plays from
+    `PREVIEW_PRE_ROLL_BEATS` before S to `PREVIEW_POST_ROLL_BEATS` after P (2
+    and 2, _lead default_, V-24), clamped to the show, so the arrival and its
+    hold show. At the end it stops and the canvas is back at P. With no window
+    at least a beat long (home), Play plays on. An isolated timeline previews
+    its whole range with no roll and always loops, as before.
+  - **Play on (P, and a transport button)** plays from P to the end of the
+    show, as UI-10's Play did. Pausing it moves P to the paused beat and keeps
+    S (UI-10).
+  - **Loop (C, and a transport button)** repeats the preview until stopped. It
+    is its own toggle, off by default, and doesn't depend on whether S is
+    pinned (V-26).
+  - **Playing never writes P.** Playback moves a separate cursor
+    (`cursorBeat`), which the audio plays from and the paused canvas draws.
+    Any write of the window (seeking, ranges, pages, home) clears it.
+  - **Pausing a preview holds the frame** (_lead default_, V-25): the canvas
+    and ruler show the paused beat, and P, the window's end, is unchanged. Play
+    resumes from the held frame. Clicking the ruler there makes it the new P.
+    The first press on the field only returns to P, so nothing is dragged
+    from held positions, and any shortcut other than the transport's does the
+    same before acting.
+  - **Stop (Shift+Space)** stops and returns to P. Paused with no held frame,
+    it returns P to S as in UI-10.
+  - Not built yet, from the critiques: a ✕ on a pinned range and an undoable
+    unpin, a note on the canvas while S is pinned (V-22), and a clearer label
+    on the main Play button than "Play". Escape doesn't unpin.
 
 ## Mapping the spec onto the view model
 
