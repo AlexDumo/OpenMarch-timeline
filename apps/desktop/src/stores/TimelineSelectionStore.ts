@@ -137,7 +137,8 @@ export interface TimelineSelectionState {
     /**
      * A stored timeline moved from `from` by `delta` beats (a clip move): a selection of exactly
      * `from` moves with it, and so does the loaded stored timeline at `from` until the host
-     * reloads, so the selection keeps resolving to it.
+     * reloads, so the selection keeps resolving to it. The window's end is the playhead, so the
+     * playhead moves too (while paused; it doesn't bump `playheadRevision`, as nothing is playing).
      */
     readonly followTimelineShift: (
         from: { readonly start: number; readonly end: number },
@@ -172,7 +173,8 @@ export function followingStart(
     playheadBeat: number,
     boxes: readonly PageBox[],
 ): number {
-    if (playheadBeat <= 0) return 0;
+    // Beat 1 is show time 0, the same moment as beat 0 (`normalizePlayheadBeat`)
+    if (normalizePlayheadBeat(playheadBeat) === 0) return 0;
     const box = boxes.find(
         (b) => b.start < playheadBeat && playheadBeat <= b.end,
     );
@@ -190,7 +192,7 @@ export function editWindow(
     playheadBeat: number,
     boxes: readonly PageBox[],
 ): Exclude<TimelineEditSelection, { kind: "none" }> {
-    if (playheadBeat <= 0) return { kind: "home" };
+    if (normalizePlayheadBeat(playheadBeat) === 0) return { kind: "home" };
     const start =
         playheadBeat > startBeat
             ? startBeat
@@ -432,10 +434,11 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                               s.isolation,
                               isolatedPlayhead(s.isolation, s.isolation.start),
                           )
-                        : windowFields(
+                        : // Page 1's box starts at beat 1, show time 0: written as beat 0, home
+                          windowFields(
                               s.startBeat,
                               s.startPinned,
-                              s.startBeat,
+                              clamp(s, s.startBeat),
                               s.pageBoxes,
                           )),
                     playheadRevision: s.playheadRevision + 1,

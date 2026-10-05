@@ -77,6 +77,7 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
                     setIsPlaying(false);
                     return;
                 }
+                // An isolated timeline loops (docs/timeline/research/ownership/09-isolation.md)
                 if (step) {
                     restartLivePlaybackAt(timeAtBeat(beats, step.loopTo));
                     lastLiveBeat.current = step.loopTo;

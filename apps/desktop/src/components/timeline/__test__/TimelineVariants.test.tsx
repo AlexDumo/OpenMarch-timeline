@@ -486,6 +486,30 @@ describe("timeline views", () => {
             screen.getByRole("button", { name: "Start flag" }),
         ).toHaveAttribute("title", expect.stringContaining("beat boundary 9"));
     });
+
+    it("after Stop, arrow keys on the start flag never cross the playhead", () => {
+        const onSelectionChange = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                selection={{
+                    kind: "range",
+                    range: { startBeatIndex: 1, endBeatIndex: 9 },
+                    startFlagBeatIndex: 9,
+                }}
+                onSelectionChange={onSelectionChange}
+            />,
+        );
+        const flag = screen.getByRole("button", { name: "Start flag" });
+        fireEvent.keyDown(flag, { key: "ArrowRight" });
+        expect(onSelectionChange).not.toHaveBeenCalled();
+        fireEvent.keyDown(flag, { key: "ArrowLeft" });
+        expect(onSelectionChange).toHaveBeenCalledWith({
+            kind: "range",
+            range: { startBeatIndex: 8, endBeatIndex: 9 },
+        });
+    });
     it("uses the playhead as the only hover detail and scrubs on drag", () => {
         const onSeek = vi.fn();
         render(
