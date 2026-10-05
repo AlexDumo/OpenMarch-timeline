@@ -201,7 +201,12 @@ export const getFrameContext = (
 export const getPageCountAt = (
     model: Pick<TimelineViewModel, "pages">,
     positionBeat: BeatPosition,
-): { readonly pageLabel: string; readonly count: number } => {
+): {
+    readonly pageLabel: string;
+    readonly count: number;
+    /** Past the last flag: `count` is how far past it */
+    readonly after?: boolean;
+} => {
     const beat = Math.round(positionBeat);
     const timed = model.pages
         .filter((page) => !page.isInitial)
@@ -220,7 +225,8 @@ export const getPageCountAt = (
     if (last && beat > endOf(timed.length - 1))
         return {
             pageLabel: last.label,
-            count: beat - last.atBeat,
+            count: beat - endOf(timed.length - 1),
+            after: true,
         };
     return { pageLabel: initial?.label ?? timed[0]?.label ?? "—", count: 0 };
 };

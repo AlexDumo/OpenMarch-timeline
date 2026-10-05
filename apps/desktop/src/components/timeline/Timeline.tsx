@@ -112,6 +112,9 @@ export interface TimelineProps {
     /** The zoom, in pixels per beat; without it the timeline keeps its own (starting at 16) */
     readonly pixelsPerBeat?: number;
     readonly onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
+    /** Whether the zoom was fitted to the show; the timeline opens fitted when it was (UI-12) */
+    readonly zoomFitted?: boolean;
+    readonly onZoomFittedChange?: (fitted: boolean) => void;
     readonly selection?: TimelineSelection;
     readonly selectedTarget?: TimelineTarget | null;
     readonly className?: string;
@@ -417,6 +420,8 @@ export function Timeline(props: TimelineProps) {
         onStop: playback.onStop,
         onNavigate: playback.onNavigate,
         onPixelsPerBeatChange: setPixelsPerBeat,
+        zoomFitted: props.zoomFitted,
+        onZoomFittedChange: props.onZoomFittedChange,
         onSelectionChange: changeSelection,
         onCreateTrack: createTrack,
         addSelectedMarchers: addMarchersMenu,

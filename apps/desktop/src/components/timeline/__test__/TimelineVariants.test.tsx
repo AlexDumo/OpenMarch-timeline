@@ -171,7 +171,7 @@ describe("timeline views", () => {
         expect(onSelectionChange).toHaveBeenCalledTimes(1);
     });
 
-    it("forwards transport playback, and zooms with Fit and Ctrl+scroll in both densities (UI-12)", () => {
+    it("forwards transport playback, and zooms with Fit and Ctrl+scroll in both densities (UI-12)", async () => {
         const onPlayingChange = vi.fn();
         const onPixelsPerBeatChange = vi.fn();
         const { rerender } = render(
@@ -192,12 +192,19 @@ describe("timeline views", () => {
             deltaY: -100,
             ctrlKey: true,
         });
+        // Wheel and pinch events are applied once a frame
+        await act(
+            () => new Promise((resolve) => requestAnimationFrame(resolve)),
+        );
         expect(onPixelsPerBeatChange).toHaveBeenCalledTimes(1);
         expect(onPixelsPerBeatChange.mock.calls[0][0]).toBeGreaterThan(16);
         // A plain scroll scrolls; it doesn't zoom
         fireEvent.wheel(screen.getByTestId("timeline-viewport"), {
             deltaY: -100,
         });
+        await act(
+            () => new Promise((resolve) => requestAnimationFrame(resolve)),
+        );
         expect(onPixelsPerBeatChange).toHaveBeenCalledTimes(1);
 
         rerender(
@@ -1083,7 +1090,7 @@ describe("a calmer timeline (UI-12)", () => {
         press(box, "pointerdown", 130);
         press(box, "pointermove", 200);
         press(box, "pointerup", 200);
-        fireEvent.click(box);
+        fireEvent.click(box, { detail: 1 });
         // The surface starts at x = 0 in jsdom: 200px at 16px a beat is beat 12.5, rounded to 13
         expect(onSeek).toHaveBeenLastCalledWith(13);
         expect(onSelectionChange).not.toHaveBeenCalled();
@@ -1091,8 +1098,15 @@ describe("a calmer timeline (UI-12)", () => {
         // A press that doesn't move is still a click that selects the box
         press(box, "pointerdown", 130);
         press(box, "pointerup", 131);
-        fireEvent.click(box);
+        fireEvent.click(box, { detail: 1 });
         expect(onSelectionChange).toHaveBeenCalledTimes(1);
+
+        // A keyboard click (detail 0) after a scrub still selects: nothing stale swallows it
+        press(box, "pointerdown", 130);
+        press(box, "pointermove", 200);
+        press(box, "pointerup", 200);
+        fireEvent.click(box, { detail: 0 });
+        expect(onSelectionChange).toHaveBeenCalledTimes(2);
     });
 
     it("a dragged clip moves without also selecting it; a click selects it", () => {
@@ -1213,17 +1227,17 @@ describe("a calmer timeline (UI-12)", () => {
         ]);
     });
 
-    it("disables page navigation while playing, since it is ignored then", () => {
+    it("keeps page navigation live while playing, where it jumps playback", () => {
+        const onNavigate = vi.fn();
         render(
             <ExpandedTimeline
                 {...commonProps}
                 isPlaying
                 showTransport
-                onNavigate={vi.fn()}
+                onNavigate={onNavigate}
             />,
         );
-        expect(
-            screen.getByRole("button", { name: /^Next page/ }),
-        ).toBeDisabled();
+        fireEvent.click(screen.getByRole("button", { name: /^Next page/ }));
+        expect(onNavigate).toHaveBeenCalledWith("next-page");
     });
 });

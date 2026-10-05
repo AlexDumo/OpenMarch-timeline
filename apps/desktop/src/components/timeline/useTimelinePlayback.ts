@@ -9,6 +9,8 @@ import {
 import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
 import { pageAtPlayhead } from "@/timeline/timelinePlayhead";
 import {
+    jumpTimelinePages,
+    jumpTimelinePlayback,
     navigateTimelinePages,
     stopTimelinePlayback,
     toggleTimelinePlayback,
@@ -31,7 +33,8 @@ import type { TimelinePlayback } from "./Timeline";
  * - While paused, the cursor is the frame a paused preview holds, or else the playhead, which
  *   rests on any whole beat, the end of the show included (UI-11).
  * - Seeking moves only the playhead; the selection stays. Page navigation moves the playhead to a
- *   flag and selects that page (`navigateTimelinePages`). Neither does anything while playing.
+ *   flag and selects that page (`navigateTimelinePages`). While playing, both jump playback
+ *   instead and leave the playhead alone (UI-12, `jumpTimelinePlayback`).
  * - Play previews the window, from just before the start flag to just after the playhead,
  *   looping when the loop is on (`toggleTimelinePlayback`, UI-11).
  */
@@ -81,11 +84,20 @@ export function useTimelinePlayback({
                 ? undefined
                 : pageAtPlayhead(pages, playheadBeat)?.name,
             isPlaying,
+            // UI-12: while playing, a click, scrub or page button jumps playback there
             onSeek: (beatIndex) => {
-                if (!isPlaying) seek(beatIndex);
+                if (isPlaying) jumpTimelinePlayback(beats, beatIndex);
+                else seek(beatIndex);
             },
             onNavigate: (direction) => {
                 if (!isPlaying) navigateTimelinePages(pages, direction);
+                else
+                    jumpTimelinePages(
+                        beats,
+                        pages,
+                        Math.floor(liveBeat() ?? liveIndex ?? playheadBeat),
+                        direction,
+                    );
             },
             onStop: () => stopTimelinePlayback({ isPlaying, setIsPlaying }),
             onPlayingChange: (next) => {
@@ -98,7 +110,7 @@ export function useTimelinePlayback({
             },
         }),
         [
-            beats.length,
+            beats,
             isPlaying,
             liveBeat,
             liveIndex,

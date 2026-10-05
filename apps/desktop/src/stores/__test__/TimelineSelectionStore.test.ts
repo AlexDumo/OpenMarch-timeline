@@ -138,7 +138,7 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         expect(store().selection).toEqual({ kind: "home" });
     });
 
-    it("a dragged range pins the start flag until the playhead reaches it", () => {
+    it("a dragged range pins the start flag until something unpins it explicitly (UI-12)", () => {
         store().setPageBoxes(BOXES);
         store().selectRange(12, 17);
         expect(store().startPinned).toBe(true);
@@ -148,9 +148,17 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
             start: 12,
             end: 22,
         });
-        store().seek(12); // reaching it unpins it
-        expect(store().startPinned).toBe(false);
+        store().seek(12); // reaching it keeps it: the window falls back to the box, as after Stop
+        expect(store().startPinned).toBe(true);
+        expect(store().startBeat).toBe(12);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 12 });
+        store().seek(5); // scrubbing back past it keeps it too
+        store().seek(16);
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 12,
+            end: 16,
+        });
         store().selectRange(9, 17); // a page box is unpinned
         expect(store().startPinned).toBe(false);
     });

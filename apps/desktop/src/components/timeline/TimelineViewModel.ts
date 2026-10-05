@@ -165,6 +165,9 @@ export interface TimelineInteractionProps {
 export interface TimelineScaleProps {
     readonly pixelsPerBeat: number;
     readonly onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
+    /** The zoom was fitted to the show last time (UI-12): the timeline opens fitted */
+    readonly zoomFitted?: boolean;
+    readonly onZoomFittedChange?: (fitted: boolean) => void;
 }
 
 export interface TimelineCommonProps

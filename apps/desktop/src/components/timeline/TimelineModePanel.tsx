@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
 import type { AddedPageFlag } from "@/db-functions/pageFlags";
@@ -12,6 +12,7 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { db } from "@/global/database/db";
 import {
+    displayedBeat,
     selectionIsRange,
     useTimelineSelectionStore,
     type TimelineEditSelection,
@@ -43,6 +44,7 @@ import {
     useAudioEnvelopeStore,
 } from "@/timeline/timelineWaveform";
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
+import { timeAtBeat } from "@/timeline/timeMap";
 import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 
@@ -133,6 +135,12 @@ export default function TimelineModePanel() {
             ),
         [editSelection, startBeat, playFromStart, startPinned],
     );
+    // UI-12: the paused clock reads the beat the timeline shows, not the selected page's end
+    const shownBeat = useTimelineSelectionStore(displayedBeat);
+    const pausedSeconds =
+        beats.length > 0
+            ? timeAtBeat(beats, Math.min(shownBeat, beats.length))
+            : undefined;
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
     // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
@@ -149,12 +157,24 @@ export default function TimelineModePanel() {
                 : null,
         [envelope, beats],
     );
-    const pixelsPerBeat = useUiSettingsStore(
-        (s) => s.uiSettings.timelinePixelsPerBeat,
+    // The zoom changes every frame of a pinch: keep it here, and save it once the gesture settles
+    const [pixelsPerBeat, setPixelsPerBeat] = useState(
+        () => useUiSettingsStore.getState().uiSettings.timelinePixelsPerBeat,
     );
-    const setPixelsPerBeat = useUiSettingsStore(
-        (s) => s.setTimelinePixelsPerBeat,
+    useEffect(() => {
+        const timeout = setTimeout(
+            () =>
+                useUiSettingsStore
+                    .getState()
+                    .setTimelinePixelsPerBeat(pixelsPerBeat),
+            400,
+        );
+        return () => clearTimeout(timeout);
+    }, [pixelsPerBeat]);
+    const zoomFitted = useUiSettingsStore(
+        (s) => s.uiSettings.timelineZoomFitted,
     );
+    const setZoomFitted = useUiSettingsStore((s) => s.setTimelineZoomFitted);
     const { isPlaying } = useIsPlaying()!;
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
     const selectedIdsKey = (selectedMarchers ?? []).map((m) => m.id).join(",");
@@ -232,13 +252,17 @@ export default function TimelineModePanel() {
                     mode={compact ? "collapsed" : "expanded"}
                     pixelsPerBeat={pixelsPerBeat}
                     onPixelsPerBeatChange={setPixelsPerBeat}
+                    zoomFitted={zoomFitted}
+                    onZoomFittedChange={setZoomFitted}
                     className="w-full"
                     beats={beats}
                     pages={pages}
                     measures={measures}
                     timelines={offPage}
                     playback={playback}
-                    transportClock={<AudioClock />}
+                    transportClock={
+                        <AudioClock pausedSeconds={pausedSeconds} />
+                    }
                     transportAccessories={
                         <>
                             <TimelinePreviewButtons />

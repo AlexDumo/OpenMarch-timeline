@@ -9,6 +9,8 @@ import {
     previewBounds,
     type FlagPage,
 } from "./timelinePlayhead";
+import { timeAtBeat, type BeatTiming } from "./timeMap";
+import { restartLivePlaybackAt } from "@/components/timeline/audio/AudioPlayer";
 
 /**
  * The timeline-mode transport (docs/timeline/ui.md UI-9; P8.11), shared by the timeline's
@@ -35,6 +37,48 @@ export function navigateTimelinePages(
     if (target.range) state.selectRange(target.range.start, target.range.end);
     else state.selectHome();
     return true;
+}
+
+/**
+ * A click, scrub or page navigation while playing (UI-12): playback jumps to `beat` and goes on,
+ * as in a DAW, and the playhead stays put. A preview jumped outside its window plays on from
+ * there; isolation keeps the jump inside the isolated range. Returns false when not playing.
+ */
+export function jumpTimelinePlayback(
+    beats: readonly BeatTiming[],
+    beat: number,
+): boolean {
+    const state = useTimelineSelectionStore.getState();
+    if (!state.playback || !Number.isFinite(beat)) return false;
+    const target = state.isolation
+        ? Math.min(
+              Math.max(beat, state.isolation.start),
+              state.isolation.end - 1,
+          )
+        : Math.min(Math.max(beat, 0), beats.length);
+    if (
+        state.playback.kind === "preview" &&
+        !state.isolation &&
+        (target < state.playback.from || target >= state.playback.to)
+    )
+        state.setPlayback({ kind: "on" });
+    restartLivePlaybackAt(timeAtBeat(beats, target));
+    state.cue(target);
+    return true;
+}
+
+/**
+ * Page navigation while playing (UI-12): playback jumps to the target flag, from the beat playing
+ * now. Returns false when there is nowhere to go.
+ */
+export function jumpTimelinePages(
+    beats: readonly BeatTiming[],
+    pages: readonly FlagPage[],
+    liveBeat: number,
+    direction: TimelineNavigation,
+): boolean {
+    const target = navigationTarget(pages, liveBeat, direction);
+    return target ? jumpTimelinePlayback(beats, target.flag) : false;
 }
 
 /**

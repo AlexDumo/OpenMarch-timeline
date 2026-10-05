@@ -25,6 +25,8 @@ export interface UiSettings {
     timelinePixelsPerBeat: number;
     /** Whether the timeline-mode timeline is drawn as its compact strip (UI-12) */
     timelineCompact: boolean;
+    /** Whether the timeline was fitted to the show, so the next show opens fitted (UI-12) */
+    timelineZoomFitted: boolean;
     /** The current audio volume percentage for timeline playback */
     audioVolume: number;
     /** Whether all app audio is muted */
@@ -71,6 +73,7 @@ export const defaultSettings: UiSettings = {
     timelinePixelsPerSecond: 40,
     timelinePixelsPerBeat: 16,
     timelineCompact: false,
+    timelineZoomFitted: false,
     audioVolume: 100,
     audioMuted: false,
     focussedComponent: "canvas",
@@ -145,6 +148,7 @@ interface UiSettingsStoreActions {
     setUiSettings: (uiSettings: UiSettings, type?: keyof UiSettings) => void;
     setPixelsPerSecond: (pixelsPerSecond: number) => void;
     setTimelinePixelsPerBeat: (pixelsPerBeat: number) => void;
+    setTimelineZoomFitted: (fitted: boolean) => void;
     /** Turns the compact timeline on or off (`!timelineCompact` without an argument) */
     setTimelineCompact: (compact?: boolean) => void;
     toggleAudioMute: () => void;
@@ -202,6 +206,14 @@ export const useUiSettingsStore = create<UiSettingsStoreInterface>(
             const newSettings = {
                 ...get().uiSettings,
                 timelinePixelsPerBeat: pixelsPerBeat,
+            };
+            set({ uiSettings: newSettings });
+            saveSettings(newSettings);
+        },
+        setTimelineZoomFitted: (fitted: boolean) => {
+            const newSettings = {
+                ...get().uiSettings,
+                timelineZoomFitted: fitted,
             };
             set({ uiSettings: newSettings });
             saveSettings(newSettings);

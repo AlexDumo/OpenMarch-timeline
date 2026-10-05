@@ -1,6 +1,7 @@
 import {
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -47,24 +48,50 @@ type TimelineDensity = "expanded" | "collapsed";
 /** The zoom a second Fit goes back to when there was none before (Timeline's starting zoom) */
 const TIMELINE_DEFAULT_PX_PER_BEAT = 16;
 
+/**
+ * The zoom from before Fit, so a second Fit goes back to it (UI-12). Kept outside the surface,
+ * which remounts when compact is switched; there is one timeline.
+ */
+let zoomBeforeFit: number | null = null;
+
+/** How much one pixel of wheel or pinch delta zooms */
+const WHEEL_ZOOM_RATE = 0.0025;
+
+const isTypingTarget = (target: EventTarget | null) =>
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+
+/**
+ * The timeline's zoom (UI-12), native to trackpads and wheels:
+ * - A pinch, or Ctrl/Cmd+scroll, zooms smoothly about the pointer. Events are gathered and applied
+ *   once a frame, and the scroll that keeps the beat under the pointer is set after React draws
+ *   the new width and before the browser paints it, so nothing drifts.
+ * - A plain vertical scroll or swipe scrolls the timeline sideways; a sideways swipe already does.
+ * - Fit (or Shift+Z) fits the show; again goes back, about the playhead. Zooming out stops at the
+ *   fitted zoom, so a show never shows as a sliver; while fitted it stays fitted as the viewport or
+ *   the show changes (`fitted`, remembered by the caller).
+ */
 const useTimelineZoom = ({
     viewportRef,
     pixelsPerBeat,
     beatCount,
     leadingInset,
+    playheadBeat,
     onPixelsPerBeatChange,
+    fitted: rememberedFitted,
+    onFittedChange,
 }: {
     viewportRef: React.RefObject<HTMLDivElement | null>;
     pixelsPerBeat: number;
     beatCount: number;
     leadingInset: number;
+    playheadBeat: number;
     onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
+    fitted?: boolean;
+    onFittedChange?: (fitted: boolean) => void;
 }) => {
     const viewportWidth = useElementWidth(viewportRef);
-    // The zoom from before Fit, so a second Fit goes back to it (UI-12)
-    const beforeFit = useRef<number | null>(null);
-    const latest = useRef({ pixelsPerBeat, onPixelsPerBeatChange });
-    latest.current = { pixelsPerBeat, onPixelsPerBeatChange };
     const fitValue =
         beatCount > 0 && viewportWidth > 0
             ? clamp(
@@ -73,80 +100,175 @@ const useTimelineZoom = ({
                   TIMELINE_MAX_PX_PER_BEAT,
               )
             : null;
-    const fitted =
+    const minimum = fitValue ?? TIMELINE_MIN_PX_PER_BEAT;
+    const isFitted =
         fitValue !== null && Math.abs(pixelsPerBeat - fitValue) < 0.01;
+    const latest = useRef({ pixelsPerBeat, minimum, onPixelsPerBeatChange });
+    latest.current = { pixelsPerBeat, minimum, onPixelsPerBeatChange };
+    /** The beat to keep at `anchorPx` once `pixelsPerBeat` lands on `next` */
+    const pendingScroll = useRef<{
+        next: number;
+        anchorBeat: number;
+        anchorPx: number;
+    } | null>(null);
+    const pendingWheel = useRef<{ factor: number; anchorPx: number } | null>(
+        null,
+    );
+    const frame = useRef(0);
 
-    /** Zooms to `next`, keeping the beat at `anchorPx` (from the viewport's left) in place */
+    /** Zooms to `next`, keeping `anchorBeat` at `anchorPx` from the viewport's left */
     const zoomTo = useCallback(
-        (next: number, anchorPx?: number) => {
+        (next: number, anchorPx: number, anchorBeat?: number) => {
             const viewport = viewportRef.current;
-            const { pixelsPerBeat: current, onPixelsPerBeatChange: change } =
-                latest.current;
-            if (!viewport || !change) return;
-            const bounded = clamp(
-                next,
-                TIMELINE_MIN_PX_PER_BEAT,
-                TIMELINE_MAX_PX_PER_BEAT,
-            );
-            const anchor = anchorPx ?? viewport.clientWidth / 2;
-            const anchorBeat =
-                (viewport.scrollLeft + anchor - leadingInset) / current;
-            latest.current = {
-                pixelsPerBeat: bounded,
+            const {
+                pixelsPerBeat: current,
+                minimum: floor,
                 onPixelsPerBeatChange: change,
+            } = latest.current;
+            if (!viewport || !change) return;
+            const bounded = clamp(next, floor, TIMELINE_MAX_PX_PER_BEAT);
+            if (Math.abs(bounded - current) < 0.001) return;
+            pendingScroll.current = {
+                next: bounded,
+                anchorPx,
+                anchorBeat:
+                    anchorBeat ??
+                    (viewport.scrollLeft + anchorPx - leadingInset) / current,
             };
+            latest.current = { ...latest.current, pixelsPerBeat: bounded };
             change(bounded);
-            requestAnimationFrame(() => {
-                viewport.scrollLeft = Math.max(
-                    0,
-                    leadingInset + anchorBeat * bounded - anchor,
-                );
-            });
         },
         [leadingInset, viewportRef],
     );
 
-    // Ctrl+scroll (or a trackpad pinch, which arrives as one) zooms about the pointer
+    // After React has drawn the new width, before the browser paints: keep the anchor in place
+    useLayoutEffect(() => {
+        const pending = pendingScroll.current;
+        const viewport = viewportRef.current;
+        if (!pending || !viewport) return;
+        if (Math.abs(pending.next - pixelsPerBeat) > 0.001) return;
+        pendingScroll.current = null;
+        viewport.scrollLeft = Math.max(
+            0,
+            leadingInset +
+                pending.anchorBeat * pixelsPerBeat -
+                pending.anchorPx,
+        );
+    }, [leadingInset, pixelsPerBeat, viewportRef]);
+
     useEffect(() => {
         const viewport = viewportRef.current;
         if (!viewport) return;
         const onWheel = (event: WheelEvent) => {
-            if (!(event.ctrlKey || event.metaKey)) return;
-            event.preventDefault();
-            beforeFit.current = null;
-            zoomTo(
-                latest.current.pixelsPerBeat * Math.exp(-event.deltaY * 0.0025),
-                event.clientX - viewport.getBoundingClientRect().left,
-            );
+            if (event.ctrlKey || event.metaKey) {
+                event.preventDefault();
+                const anchorPx =
+                    event.clientX - viewport.getBoundingClientRect().left;
+                // Lines (some mice) are about 16px each
+                const delta =
+                    event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+                const factor = Math.exp(-delta * WHEEL_ZOOM_RATE);
+                pendingWheel.current = {
+                    factor: (pendingWheel.current?.factor ?? 1) * factor,
+                    anchorPx,
+                };
+                if (frame.current) return;
+                frame.current = requestAnimationFrame(() => {
+                    frame.current = 0;
+                    const wheel = pendingWheel.current;
+                    pendingWheel.current = null;
+                    if (!wheel) return;
+                    zoomTo(
+                        latest.current.pixelsPerBeat * wheel.factor,
+                        wheel.anchorPx,
+                    );
+                });
+                return;
+            }
+            // A vertical scroll or swipe scrolls the timeline sideways; it has no rows to scroll
+            if (
+                Math.abs(event.deltaY) > Math.abs(event.deltaX) &&
+                viewport.scrollWidth > viewport.clientWidth
+            ) {
+                event.preventDefault();
+                viewport.scrollLeft +=
+                    event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+            }
         };
         viewport.addEventListener("wheel", onWheel, { passive: false });
-        return () => viewport.removeEventListener("wheel", onWheel);
+        return () => {
+            viewport.removeEventListener("wheel", onWheel);
+            cancelAnimationFrame(frame.current);
+            frame.current = 0;
+        };
     }, [viewportRef, zoomTo]);
+
+    // Never smaller than the show: a remembered zoom from a longer show, a wider window, or a
+    // remembered Fit fits this one
+    useEffect(() => {
+        if (fitValue === null || !onPixelsPerBeatChange) return;
+        if (
+            (rememberedFitted || pixelsPerBeat < fitValue) &&
+            Math.abs(pixelsPerBeat - fitValue) > 0.01
+        ) {
+            onPixelsPerBeatChange(fitValue);
+            const viewport = viewportRef.current;
+            if (viewport) viewport.scrollLeft = 0;
+        }
+        // Only when the fit itself changes, or on the first measure
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fitValue]);
+
+    // Remember whether the timeline is fitted, so the next show opens fitted too
+    useEffect(() => {
+        if (fitValue === null || rememberedFitted === isFitted) return;
+        onFittedChange?.(isFitted);
+    }, [fitValue, isFitted, onFittedChange, rememberedFitted]);
 
     const fit = useCallback(() => {
         const viewport = viewportRef.current;
         if (!viewport || !onPixelsPerBeatChange || fitValue === null) return;
-        if (fitted) {
-            const back = beforeFit.current ?? TIMELINE_DEFAULT_PX_PER_BEAT;
-            beforeFit.current = null;
-            zoomTo(back);
+        if (isFitted) {
+            const back = zoomBeforeFit ?? TIMELINE_DEFAULT_PX_PER_BEAT;
+            zoomBeforeFit = null;
+            // Back about the playhead, where the work is
+            zoomTo(back, viewport.clientWidth / 2, playheadBeat);
             return;
         }
-        beforeFit.current = pixelsPerBeat;
+        zoomBeforeFit = pixelsPerBeat;
         onPixelsPerBeatChange(fitValue);
-        requestAnimationFrame(() => {
-            viewport.scrollLeft = 0;
-        });
+        viewport.scrollLeft = 0;
     }, [
         fitValue,
-        fitted,
+        isFitted,
         onPixelsPerBeatChange,
         pixelsPerBeat,
+        playheadBeat,
         viewportRef,
         zoomTo,
     ]);
 
-    return { fit, fitted };
+    // Shift+Z fits, or goes back
+    useEffect(() => {
+        if (!onPixelsPerBeatChange) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (
+                event.key.toLowerCase() !== "z" ||
+                !event.shiftKey ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.altKey ||
+                isTypingTarget(event.target)
+            )
+                return;
+            event.preventDefault();
+            fit();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [fit, onPixelsPerBeatChange]);
+
+    return { fit, fitted: isFitted };
 };
 
 const navigateToPage = ({
@@ -270,12 +392,27 @@ function TimelineSurface({
         pixelsPerBeat,
         beatCount: model.beatCount,
         leadingInset: initialPageWidth,
+        playheadBeat: positionBeat,
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
+        fitted: props.zoomFitted,
+        onFittedChange: props.onZoomFittedChange,
     });
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = (next: TimelineSelection) =>
         props.onSelectionChange?.(next);
+    // UI-12: clicks and scrubs land on a nearby downbeat or page line
+    const seekSnapBeats = useMemo(
+        () =>
+            [
+                ...new Set([
+                    ...snapBeats,
+                    ...model.measures.map((measure) => measure.atBeat),
+                ]),
+            ].sort((a, b) => a - b),
+        [model.measures, snapBeats],
+    );
     const pointer = useTimelinePointer({
+        seekSnapBeats,
         onSeek: props.onSeek,
         onRangeSelect: props.onSelectionChange
             ? (range) =>
@@ -388,6 +525,7 @@ function TimelineSurface({
                         onSeek={props.onSeek}
                         initialPageWidth={initialPageWidth}
                         showMeasures={expanded}
+                        seekSnapBeats={seekSnapBeats}
                     />
                     {rows.flatMap((row, rowIndex) =>
                         row.map((track) => (

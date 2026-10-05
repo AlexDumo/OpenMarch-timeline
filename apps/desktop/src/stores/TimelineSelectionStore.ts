@@ -170,8 +170,7 @@ export interface TimelineSelectionState {
     readonly unpinStart: () => void;
     /**
      * Navigation: moves the playhead (`normalizePlayheadBeat`, at most `showEndBeat`). An unpinned
-     * S follows it, and so does a pinned S that the playhead reaches or passes. A non-finite beat
-     * is ignored.
+     * S follows it; a pinned S stays (UI-12). A non-finite beat is ignored.
      */
     readonly seek: (beat: number) => void;
     /** Playback (pause, **Stop**): moves the playhead and leaves S where it is. */
@@ -496,7 +495,10 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                             ...isolatedWindow(s, s.isolation, playhead),
                             playheadRevision: s.playheadRevision + 1,
                         };
-                    const keep = s.startPinned && playhead > s.startBeat;
+                    // UI-12: only an explicit action unpins S (the pin, a page box, home), never
+                    // moving the playhead, since dragging now scrubs. With P on or before a pinned
+                    // S the window falls back to the page box holding P, as after Stop
+                    const keep = s.startPinned;
                     return {
                         ...windowFields(
                             keep
