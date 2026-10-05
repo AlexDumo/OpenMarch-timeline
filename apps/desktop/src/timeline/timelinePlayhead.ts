@@ -95,11 +95,6 @@ export function pageAtPlayhead<P extends FlagPage>(
     );
 }
 
-/** Counts played before the start flag when previewing the window (UI-11, owner, V-24) */
-export const PREVIEW_PRE_ROLL_BEATS = 0;
-/** Counts played after the playhead when previewing, so the arrival and hold show (UI-11, V-24) */
-export const PREVIEW_POST_ROLL_BEATS = 2;
-
 /** The fields of the selection store these rules read. */
 export interface PlaybackWindow {
     readonly selection: TimelineEditSelection;
@@ -110,24 +105,20 @@ export interface PlaybackWindow {
 }
 
 /**
- * What **Play** previews (UI-11): the window `[S, P)` with `PREVIEW_PRE_ROLL_BEATS` before and
- * `PREVIEW_POST_ROLL_BEATS` after, clamped to the show. An isolated timeline previews its whole
- * range with no roll, as it always has (09-isolation.md). `null` when there is no window at least
- * a beat long to preview (home, nothing selected), and Play plays on instead.
+ * What **Play** previews (UI-11): exactly the window `[S, P)` the From start bar marks, with no
+ * roll on either side (project owner, V-24). An isolated timeline previews its whole range, as it
+ * always has (09-isolation.md). `null` when there is no window at least a beat long to preview
+ * (home, nothing selected), and Play plays on instead.
  */
 export function previewBounds(
     state: PlaybackWindow,
-    showEndBeat: number,
 ): { readonly from: number; readonly to: number } | null {
     if (state.isolation)
         return { from: state.isolation.start, to: state.isolation.end };
     const { selection } = state;
     if (selection.kind !== "range" || selection.end - selection.start < 1)
         return null;
-    return {
-        from: Math.max(0, selection.start - PREVIEW_PRE_ROLL_BEATS),
-        to: Math.min(showEndBeat, selection.end + PREVIEW_POST_ROLL_BEATS),
-    };
+    return { from: selection.start, to: selection.end };
 }
 
 /** Whether playing on can start from `beat`: there is time after it. */

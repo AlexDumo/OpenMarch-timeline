@@ -267,7 +267,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         audio.startInfo.current = {};
     };
 
-    it("with From start on, Play previews from the start flag to after the playhead, then puts the cursor back on it (UI-11)", async ({
+    it("with From start on, Play previews from the start flag to the playhead and no further, then puts the cursor back on it (UI-11)", async ({
         db,
         wrapper,
     }) => {
@@ -279,10 +279,10 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         // From the start flag; the playhead stays on the window's end
         expect(store().cursorBeat).toBe(9);
         expect(store().playheadBeat).toBe(13);
-        audio.seconds = 4.5; // beat 10
+        audio.seconds = 5.9; // beat 12.8
         frame();
         expect(result.current.playing.isPlaying).toBe(true);
-        audio.seconds = 7; // beat 15: two counts of post-roll
+        audio.seconds = 6; // beat 13, the playhead: the preview ends there
         frame();
         expect(result.current.playing.isPlaying).toBe(false);
         expect(store().cursorBeat).toBeNull();
@@ -301,7 +301,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             store().toggleLoopPreview(true);
         });
         preview(result);
-        audio.seconds = 7; // beat 15
+        audio.seconds = 6; // beat 13, the playhead
         frame();
         expect(result.current.playing.isPlaying).toBe(true);
         expect(audio.restarts).toEqual([4]); // beat 9

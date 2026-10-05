@@ -365,10 +365,11 @@ from it. The spec still wins on the model; this file decides presentation.
     Follow-ups from the critiques: end caps on the bar while looping, a faint
     bar on hover while off so a click turns it on, and a one-time hint on the
     first drag.
-  - **Play (Space), From start on**, previews the window from S to
-    `PREVIEW_POST_ROLL_BEATS` (2) after P, clamped to the show, so the arrival
-    shows (no pre-roll, owner; V-24). At the end the canvas is back at P. With
-    the loop on, it repeats until stopped. With no window (home) it plays on.
+  - **Play (Space), From start on**, previews exactly the window the bar
+    marks, S to P, with no roll on either side (project owner, 2026-10-05:
+    playing past the bar read as a bug; V-24). At the end the canvas is back at
+    P, which shows the arrival. With the loop on, it repeats until stopped.
+    With no window (home) it plays on.
   - **Play (Space), From start off**, plays on from where you are (P, or a
     frame a paused preview holds) to the end of the show, as in UI-10. Pausing
     it moves P to the paused beat and keeps S.

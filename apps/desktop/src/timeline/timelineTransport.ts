@@ -38,8 +38,8 @@ export function navigateTimelinePages(
 }
 
 /**
- * **Play** (UI-11). With **From start** on, it previews the window from the start flag to a
- * little after the playhead (`previewBounds`), looping when the loop is on; a paused preview
+ * **Play** (UI-11). With **From start** on, it previews the window from the start flag to the
+ * playhead (`previewBounds`), looping when the loop is on; a paused preview
  * holding a frame inside those bounds resumes from it. With From start off, or no window to
  * preview (home), it plays on from where the cursor is (`startTimelinePlayOn`). Returns false,
  * and doesn't start, when there's nothing to play.
@@ -51,9 +51,7 @@ export function startTimelinePlayback(
     setIsPlaying: (isPlaying: boolean) => void,
 ): boolean {
     const state = useTimelineSelectionStore.getState();
-    const bounds = state.playFromStart
-        ? previewBounds(state, showEndBeat)
-        : null;
+    const bounds = state.playFromStart ? previewBounds(state) : null;
     if (!bounds) return startTimelinePlayOn(showEndBeat, setIsPlaying);
     // A Stop whose pause never landed (pressed with a stale isPlaying) mustn't turn the next
     // ordinary pause into a return
