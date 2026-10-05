@@ -296,9 +296,13 @@ from it. The spec still wins on the model; this file decides presentation.
     window's timeline if none has that range (one per range still holds), adds
     any moved marcher that isn't in it (UI-9's own transition and layer rules),
     and sets their endings. There is no **Add selected marchers** step; the
-    menu item is removed. Refusals keep UI-9's layer rules (a timeline that
-    only partly overlaps, or lies inside, the window), worded to name the move
-    in the way.
+    menu item is removed. A window that crosses page flags passes through
+    (project owner, 2026-10-04; research/ownership/10-cross-page-windows.md):
+    the drag overrides the moved marchers' moves inside the window, which stay
+    stored underneath and come back when it is deleted, and a move the window
+    runs into partway catches up after it (R-5). An info toast names what was
+    passed through and offers **Only change Page N**, which moves them from the
+    last flag before P instead, as its own undoable edit.
   - **Arrivals off a flag.** P may rest between flags. A drag there creates a
     timeline ending at P, not a page (project owner, 2026-10-03). Pages stay
     cosmetic flags; **+** still adds one.
@@ -568,3 +572,9 @@ points (P7.2).
   - Clearing a marcher's dimming while the line or lasso tool has every marcher
     switched off makes it selectable mid-tool (`CanvasMarcher.setTimelineDimmed`).
   - Ctrl+click is ignored on the timeline on every platform, not only macOS.
+  - Start flag behavior (project owner, 2026-10-04: "a longer conversation",
+    out of scope for now). The flag is the base of every edit; open is when,
+    if ever, it moves on its own. Today a pinned flag survives navigation
+    (UI-10 _lead default_), so a forgotten pin can turn a drag into a move
+    straight through several pages
+    (research/ownership/10-cross-page-windows.md §4.3, VALIDATION V-22).

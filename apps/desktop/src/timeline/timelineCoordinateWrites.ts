@@ -16,6 +16,7 @@ import {
 } from "./timelineIsolationPlan";
 import type { CoordinateRecord } from "@/utilities/CoordinateActions";
 import { pageEndBeat } from "./timelineCanvas";
+import { toastPassThrough } from "./timelinePassThrough";
 import {
     timelineResolverSettled,
     useTimelineResolverStore,
@@ -236,7 +237,8 @@ export function timelineCoordinateRecords(
 /**
  * Timeline mode's `useUpdateSelectedMarchers`: applies `transform` to the marchers' current
  * positions where the selection edits (`planCanvasEdit`; from the resolver, not `marcher_pages`)
- * and writes the result as one `moveMarchersInTarget` edit.
+ * and writes the result as one `moveMarchersInTarget` edit, saying what it passed through
+ * (`toastPassThrough`).
  *
  * @returns the transformed coordinates
  * @throws TimelineEditRefusedError when the selection refuses canvas moves
@@ -256,11 +258,13 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     if (!plan.ok) throw plan.error;
     snapIsolatedPlayheadToEnd();
     const next = transform(timelineCoordinateRecords(plan.beat, marcherIds));
-    await moveMarchersInTarget({
+    const moves = toTimelineMoves(next);
+    const result = await moveMarchersInTarget({
         db,
         target: plan.target,
-        moves: toTimelineMoves(next),
+        moves,
     });
+    toastPassThrough(result.passThrough);
     return next;
 }
 

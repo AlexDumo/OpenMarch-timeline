@@ -74,6 +74,8 @@ export interface TimelineIsolation {
 export interface PageBox {
     readonly start: number;
     readonly end: number;
+    /** The page's name, for messages ("Page 2"); absent where only the range matters */
+    readonly name?: string;
 }
 
 export interface TimelineSelectionState {
@@ -510,7 +512,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         pageBoxes.every(
                             (b, i) =>
                                 b.start === s.pageBoxes[i]!.start &&
-                                b.end === s.pageBoxes[i]!.end,
+                                b.end === s.pageBoxes[i]!.end &&
+                                b.name === s.pageBoxes[i]!.name,
                         );
                     if (same) return {};
                     if (s.isolation)
