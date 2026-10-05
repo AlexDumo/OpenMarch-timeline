@@ -15,6 +15,8 @@
  *   default when the stored one doesn't fit the kit).
  * - `quality`: the render quality the scene builds for. P5.1 lowers it
  *   with `setQuality("low")`; that drops shadows and halves the crowd.
+ * - `performerStyle`: animated figures (the default) or the plain blocks.
+ *   It belongs to the window, not the show.
  *
  * Read it in React with `useView3dSceneStore(selector)`, and in `useFrame` or
  * event handlers with `useView3dSceneStore.getState()`.
@@ -36,6 +38,8 @@ export const CROWD_CLEAR_RADIUS = 4.9;
 
 export type View3dQuality = "low" | "high";
 
+export type View3dPerformerStyle = "figures" | "blocks";
+
 export interface View3dSceneState {
     kitId: VenueKitId | null;
     kit: KitResult | null;
@@ -44,6 +48,8 @@ export interface View3dSceneState {
     lighting: LightingPreset | null;
     quality: View3dQuality;
     setQuality: (quality: View3dQuality) => void;
+    performerStyle: View3dPerformerStyle;
+    setPerformerStyle: (performerStyle: View3dPerformerStyle) => void;
     /** Scene only. */
     _setKit: (kitId: VenueKitId | null, kit: KitResult | null) => void;
     /** Scene only. */
@@ -62,6 +68,8 @@ export const useView3dSceneStore = create<View3dSceneState>()((set) => ({
     lighting: null,
     quality: "high",
     setQuality: (quality) => set({ quality }),
+    performerStyle: "figures",
+    setPerformerStyle: (performerStyle) => set({ performerStyle }),
     _setKit: (kitId, kit) =>
         set({ kitId, kit, focus: kit ? kit.focus : ORIGIN }),
     _setCrowd: (crowd) => set({ crowd }),

@@ -1,9 +1,11 @@
 /**
- * Performer blocks for the 3D View (P4.2, ADR 0002 D-7, design.md §8,
- * ui.md UI-4).
+ * Performers for the 3D View (P4.2, ADR 0002 D-7, design.md §8, ui.md UI-4).
  *
- * - One `InstancedMesh` of cylinders (0.3 m radius, 1.75 m tall) standing on
- *   the ground, one instance per marcher.
+ * - One `InstancedMesh`, one instance per marcher, standing on the ground:
+ *   animated figures by default, or cylinders (0.3 m radius, 1.75 m tall).
+ *   The figures are skinned on the GPU from a baked bone table
+ *   (`core/figures`), step on the counts and face where they're going
+ *   (`figureMotion.ts`). Blocks show while the figure loads, or if it fails.
  * - Colors and visibility follow the selected page's appearance cascade
  *   (marcher page, tags, section, field theme), the same values the 2D
  *   canvas applies to its marchers.
@@ -26,6 +28,7 @@ import {
     CylinderGeometry,
     DoubleSide,
     DynamicDrawUsage,
+    type BufferGeometry,
     InstancedBufferAttribute,
     InstancedMesh,
     MeshBasicMaterial,
@@ -33,8 +36,13 @@ import {
     RingGeometry,
     SRGBColorSpace,
 } from "three";
+import { useTimingObjects } from "@/hooks";
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
+import {
+    FIGURE_ANIM_ATTRIBUTE,
+    createFigureMaterials,
+} from "@/view3d/core/figures/material";
 import { usePerformerTimelines } from "@/view3d/positions";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import type { View3dSelection } from "@/view3d/sync/protocol";
@@ -51,6 +59,8 @@ import {
     writePerformerPositions,
     writeRingMatrices,
 } from "./performerData";
+import { buildStepClock, stepPhaseAt, writeFigureMotion } from "./figureMotion";
+import { usePerformerFigure } from "./figureModel";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -64,6 +74,10 @@ interface PerformersProps {
 export default function Performers({ fieldProperties }: PerformersProps) {
     const queryClient = useQueryClient();
     const quality = useView3dSceneStore((s) => s.quality);
+    const style = useView3dSceneStore((s) => s.performerStyle);
+    const figure = usePerformerFigure(style === "figures");
+    const { pages } = useTimingObjects();
+    const stepClock = useMemo(() => buildStepClock(pages), [pages]);
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
     );
@@ -133,14 +147,37 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         [assets],
     );
 
-    // Meshes and per-instance buffers, rebuilt when the marcher count changes.
+    // The figure's materials, once it has loaded.
+    const figureAssets = useMemo(
+        () => (figure ? createFigureMaterials(figure.baked) : null),
+        [figure],
+    );
+    useEffect(() => () => figureAssets?.dispose(), [figureAssets]);
+
+    // Meshes and per-instance buffers, rebuilt when the marcher count or the
+    // style changes.
     const meshes = useMemo(() => {
         if (count === 0) return null;
-        const bodies = new InstancedMesh(
-            assets.body,
-            assets.bodyMaterial,
-            count,
-        );
+        let bodies: InstancedMesh;
+        let figureGeometry: BufferGeometry | null = null;
+        let anim: Float32Array | null = null;
+        if (figure && figureAssets) {
+            // Each mesh gets its own copy: the instanced attribute is sized
+            // to the count.
+            figureGeometry = figure.baked.geometry.clone();
+            anim = new Float32Array(count * 3);
+            const animAttribute = new InstancedBufferAttribute(anim, 3);
+            animAttribute.setUsage(DynamicDrawUsage);
+            figureGeometry.setAttribute(FIGURE_ANIM_ATTRIBUTE, animAttribute);
+            bodies = new InstancedMesh(
+                figureGeometry,
+                figureAssets.body,
+                count,
+            );
+            bodies.customDepthMaterial = figureAssets.depth;
+        } else {
+            bodies = new InstancedMesh(assets.body, assets.bodyMaterial, count);
+        }
         bodies.name = "view3d-performers";
         bodies.instanceMatrix.setUsage(DynamicDrawUsage);
         bodies.instanceColor = new InstancedBufferAttribute(
@@ -162,16 +199,19 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         return {
             bodies,
             rings,
+            figureGeometry,
+            anim,
             srgb: new Float32Array(count * 3),
             visible: new Uint8Array(count),
             xz: new Float32Array(count * 2),
             placed: new Uint8Array(count),
         };
-    }, [assets, count]);
+    }, [assets, count, figure, figureAssets]);
     useEffect(
         () => () => {
             meshes?.bodies.dispose();
             meshes?.rings.dispose();
+            meshes?.figureGeometry?.dispose();
         },
         [meshes],
     );
@@ -189,7 +229,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const dirtyRef = useRef(true);
     useEffect(() => {
         dirtyRef.current = true;
-    }, [meshes, slots, fieldProperties, appearances]);
+    }, [meshes, slots, fieldProperties, appearances, stepClock]);
 
     // Colors and visibility, only when the looks change.
     useEffect(() => {
@@ -236,7 +276,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         const moved = dirtyRef.current || ms !== frame.lastMs;
         if (!moved && !selectionChanged) return;
 
-        const { bodies, rings, visible, xz, placed } = meshes;
+        const { bodies, rings, visible, xz, placed, anim } = meshes;
         if (moved) {
             writePerformerPositions(
                 slots,
@@ -246,12 +286,29 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 xz,
                 placed,
             );
-            writePerformerMatrices(
-                count,
-                xz,
-                placed,
-                bodies.instanceMatrix.array as Float32Array,
-            );
+            if (figure && anim) {
+                writeFigureMotion(
+                    slots,
+                    ms,
+                    fieldProperties,
+                    xz,
+                    placed,
+                    stepPhaseAt(stepClock, ms),
+                    figure.rows,
+                    bodies.instanceMatrix.array as Float32Array,
+                    anim,
+                );
+                bodies.geometry.getAttribute(
+                    FIGURE_ANIM_ATTRIBUTE,
+                ).needsUpdate = true;
+            } else {
+                writePerformerMatrices(
+                    count,
+                    xz,
+                    placed,
+                    bodies.instanceMatrix.array as Float32Array,
+                );
+            }
             bodies.instanceMatrix.needsUpdate = true;
         }
         const ringCount = writeRingMatrices(

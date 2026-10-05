@@ -1228,6 +1228,8 @@
             "crowdTooltip": "Show or hide the crowd (C)",
             "enterFullscreen": "Fullscreen (F)",
             "exitFullscreen": "Exit fullscreen (F)",
+            "figures": "Figures",
+            "figuresTooltip": "Show performers as animated figures or as blocks",
             "lighting": "Lighting",
             "pickSeat": "Pick a seat",
             "pickSeatTooltip": "Click a seat in the stands to sit there",

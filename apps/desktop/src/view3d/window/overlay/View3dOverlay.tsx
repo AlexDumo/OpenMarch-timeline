@@ -25,6 +25,7 @@ import {
     VenuePicker,
     useVenueRequest,
 } from "./VenueControls";
+import { PerformerStyleToggle } from "./PerformerStyleToggle";
 
 /** Below this overlay width, the venue picker becomes a Select. */
 export const COMPACT_VENUE_WIDTH = 1040;
@@ -137,6 +138,7 @@ export default function View3dOverlay() {
                     <LightingControl />
                     <PanelSeparator />
                     <CrowdToggle />
+                    <PerformerStyleToggle />
                     <ToggleButton
                         pressed={isFullscreen}
                         onClick={toggleFullscreen}

@@ -1,5 +1,9 @@
 words:
   # Blender / 3D asset pipeline
+  - glsl
+  - highp
+  - metalness
+  - texels
   - bbone
   - bbones
   - bmesh
