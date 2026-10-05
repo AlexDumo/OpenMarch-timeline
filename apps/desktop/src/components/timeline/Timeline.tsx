@@ -106,7 +106,12 @@ export interface TimelineProps {
     readonly transportClock?: ReactNode;
     /** Extra transport controls, such as volume, the metronome and fullscreen */
     readonly transportAccessories?: ReactNode;
+    /** View controls at the end of the transport's readout row, such as compact and fullscreen */
+    readonly transportViewControls?: ReactNode;
     readonly showTransport?: boolean;
+    /** The zoom, in pixels per beat; without it the timeline keeps its own (starting at 16) */
+    readonly pixelsPerBeat?: number;
+    readonly onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
     readonly selection?: TimelineSelection;
     readonly selectedTarget?: TimelineTarget | null;
     readonly className?: string;
@@ -115,6 +120,8 @@ export interface TimelineProps {
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
     /** Turns **From start** off (UI-11), from the range bar */
     readonly onPlayFromStartOff?: () => void;
+    /** Unpins the start flag (UI-12), from its pin */
+    readonly onUnpinStart?: () => void;
     /**
      * The right-click menu's **Add selected marchers** (UI-9, P8.14), for a page box, a clip's
      * timeline or a dragged range. It gets spec beats; the menu doesn't change the selection.
@@ -242,6 +249,7 @@ export const selectionToView = (
                     }
                   : {}),
               ...(selection.fromStart ? { fromStart: true } : {}),
+              ...(selection.startPinned ? { startPinned: true } : {}),
           }
         : selection;
 
@@ -287,7 +295,9 @@ export function Timeline(props: TimelineProps) {
         ],
     );
     const playback = props.playback ?? STOPPED_AT_START;
-    const [pixelsPerBeat, setPixelsPerBeat] = useState(16);
+    const [ownPixelsPerBeat, setOwnPixelsPerBeat] = useState(16);
+    const pixelsPerBeat = props.pixelsPerBeat ?? ownPixelsPerBeat;
+    const setPixelsPerBeat = props.onPixelsPerBeatChange ?? setOwnPixelsPerBeat;
 
     // The playhead may rest on the end of the show (the last flag, UI-9), one past the last beat
     const positionBeat = clamp(
@@ -414,6 +424,8 @@ export function Timeline(props: TimelineProps) {
         onOpenRange: onOpenRange && openRange,
         onTimelineRangeCommit: commitRange,
         onPlayFromStartOff: props.onPlayFromStartOff,
+        onUnpinStart: props.onUnpinStart,
+        transportViewControls: props.transportViewControls,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,

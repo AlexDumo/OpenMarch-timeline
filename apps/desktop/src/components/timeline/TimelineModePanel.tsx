@@ -27,11 +27,11 @@ import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { AudioClock } from "./Clock";
 import {
-    TimelineFromStartButton,
-    TimelineLoopButton,
-    TimelineMetronomeButton,
-    TimelineMuteButton,
+    TimelineCompactButton,
+    TimelinePreviewButtons,
+    TimelineSoundButton,
 } from "./TimelineControls";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     Timeline,
     type TimelineInput,
@@ -45,15 +45,16 @@ function FullscreenButton() {
     const { isFullscreen, toggleFullscreen } = useFullscreenStore();
     return (
         <button
-            className="text-text enabled:hover:text-accent focus-visible:ring-accent duration-150 ease-out focus-visible:ring-2 focus-visible:outline-none"
+            className="rounded-4 text-text enabled:hover:text-accent enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center duration-150 ease-out focus-visible:ring-2 focus-visible:outline-none"
             onClick={toggleFullscreen}
             aria-label="Toggle timeline fullscreen"
             aria-pressed={isFullscreen}
+            title={isFullscreen ? "Show the panels" : "Give the field the room"}
         >
             {isFullscreen ? (
-                <CornersInIcon size={20} />
+                <CornersInIcon size={16} />
             ) : (
-                <CornersOutIcon size={20} />
+                <CornersOutIcon size={16} />
             )}
         </button>
     );
@@ -64,6 +65,7 @@ export const toTimelineSelection = (
     selection: TimelineEditSelection,
     startBeat?: number,
     fromStart = false,
+    startPinned = false,
 ): TimelineSelection =>
     selection.kind === "range"
         ? {
@@ -77,6 +79,7 @@ export const toTimelineSelection = (
                   ? { startFlagBeatIndex: startBeat }
                   : {}),
               ...(fromStart ? { fromStart: true } : {}),
+              ...(startPinned ? { startPinned: true } : {}),
           }
         : selection.kind === "home"
           ? { kind: "home" }
@@ -108,9 +111,26 @@ export default function TimelineModePanel() {
     }, [pages]);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
     const playFromStart = useTimelineSelectionStore((s) => s.playFromStart);
+    // UI-12: the pin shows outside isolation, whose start flag is the isolated move's own
+    const startPinned = useTimelineSelectionStore(
+        (s) => s.startPinned && s.isolation === null,
+    );
     const selection = useMemo(
-        () => toTimelineSelection(editSelection, startBeat, playFromStart),
-        [editSelection, startBeat, playFromStart],
+        () =>
+            toTimelineSelection(
+                editSelection,
+                startBeat,
+                playFromStart,
+                startPinned,
+            ),
+        [editSelection, startBeat, playFromStart, startPinned],
+    );
+    const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
+    const pixelsPerBeat = useUiSettingsStore(
+        (s) => s.uiSettings.timelinePixelsPerBeat,
+    );
+    const setPixelsPerBeat = useUiSettingsStore(
+        (s) => s.setTimelinePixelsPerBeat,
     );
     const { isPlaying } = useIsPlaying()!;
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
@@ -185,7 +205,9 @@ export default function TimelineModePanel() {
             }}
         >
             <Timeline
-                mode="expanded"
+                mode={compact ? "collapsed" : "expanded"}
+                pixelsPerBeat={pixelsPerBeat}
+                onPixelsPerBeatChange={setPixelsPerBeat}
                 className="w-full"
                 beats={beats}
                 pages={pages}
@@ -195,10 +217,13 @@ export default function TimelineModePanel() {
                 transportClock={<AudioClock />}
                 transportAccessories={
                     <>
-                        <TimelineFromStartButton />
-                        <TimelineLoopButton />
-                        <TimelineMuteButton />
-                        <TimelineMetronomeButton />
+                        <TimelinePreviewButtons />
+                        <TimelineSoundButton />
+                    </>
+                }
+                transportViewControls={
+                    <>
+                        <TimelineCompactButton />
                         <FullscreenButton />
                     </>
                 }
@@ -207,6 +232,9 @@ export default function TimelineModePanel() {
                 onTimelineRangeCommit={commands.commitTimelineRange}
                 onPlayFromStartOff={() =>
                     useTimelineSelectionStore.getState().setPlayFromStart(false)
+                }
+                onUnpinStart={() =>
+                    useTimelineSelectionStore.getState().unpinStart()
                 }
                 onOpenRange={(range) => {
                     if (isPlaying) return;

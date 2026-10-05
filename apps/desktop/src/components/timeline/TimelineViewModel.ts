@@ -117,6 +117,11 @@ export type TimelineSelection =
           readonly fromStart?: boolean;
           /** The range was drawn by dragging on empty timeline space, which turns From start on */
           readonly drawn?: boolean;
+          /**
+           * The start flag was placed by hand and stays through navigation (UI-10 pinning); UI-12
+           * draws it with a pin that unpins it
+           */
+          readonly startPinned?: boolean;
       }
     | null;
 
@@ -174,6 +179,10 @@ export interface TimelineCommonProps
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
     /** Turns **From start** off (UI-11), from the range bar */
     readonly onPlayFromStartOff?: () => void;
+    /** Unpins the start flag (UI-12), from its pin */
+    readonly onUnpinStart?: () => void;
+    /** Controls at the end of the transport's readout row: Fit, compact, fullscreen (UI-12) */
+    readonly transportViewControls?: ReactNode;
 }
 
 export interface TimelineRangeChange extends TimelineBeatRange {

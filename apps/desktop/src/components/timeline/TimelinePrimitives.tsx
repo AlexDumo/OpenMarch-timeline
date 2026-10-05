@@ -1,12 +1,9 @@
 import {
-    CornersOutIcon,
-    FastForwardIcon,
-    MagnifyingGlassMinusIcon,
-    MagnifyingGlassPlusIcon,
+    ArrowsOutLineHorizontalIcon,
     PauseIcon,
+    PushPinIcon,
     StopIcon,
     PlayIcon,
-    RewindIcon,
     SkipBackIcon,
     SkipForwardIcon,
     WarningIcon,
@@ -15,6 +12,7 @@ import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
 import {
     type KeyboardEvent as ReactKeyboardEvent,
+    type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
     type RefObject,
@@ -31,6 +29,7 @@ import {
     clientXToBeat,
     filterMarkersByMinimumSpacing,
     getFrameContext,
+    getPageCountAt,
     getPageRange,
     getSelectionRange,
     getPlayheadLabel,
@@ -44,7 +43,7 @@ import { timelineRangeTargetProps } from "./TimelineRangeMenu";
 import type {
     BeatPosition,
     TimelineBeatRange,
-    TimelineMarker,
+    TimelineMeasureMarker,
     TimelineNavigation,
     TimelinePageMarker,
     TimelineRangeChange,
@@ -54,7 +53,8 @@ import type {
     TimelineViewModel,
 } from "./TimelineViewModel";
 
-export const TIMELINE_MIN_PX_PER_BEAT = 4;
+/** Low enough that Fit shows a long show whole (UI-12): 500 beats fit in 500px */
+export const TIMELINE_MIN_PX_PER_BEAT = 1;
 export const TIMELINE_MAX_PX_PER_BEAT = 64;
 export const TIMELINE_INITIAL_PAGE_WIDTH = 40;
 
@@ -72,7 +72,7 @@ const TransportButton = ({
 }: {
     label: string;
     children: ReactNode;
-    onClick?: () => void;
+    onClick?: (event: ReactMouseEvent) => void;
     pressed?: boolean;
 }) => (
     <button
@@ -91,133 +91,150 @@ const TransportButton = ({
     </button>
 );
 
+/**
+ * The transport (UI-12): Previous, Play, Stop, Next, then the caller's accessories (From start
+ * with Loop, Sound), under one readout line of the clock, the page and count, the measure, and
+ * the view controls (Fit, then the caller's compact and fullscreen toggles). Shift+click on
+ * Previous or Next goes to the first or last page (as Shift+Q/E do). Compact puts it on one line.
+ * Page navigation is ignored while playing, so its buttons are disabled then.
+ */
 export function TimelineTransport({
     model,
     clock,
     positionBeat,
-    pageLabel,
     isPlaying,
     onPlayingChange,
     onStop,
     onNavigate,
-    onZoomOut,
-    onZoomIn,
     onFit,
-    showZoom = true,
+    fitted = false,
     accessories,
+    viewControls,
+    compact = false,
 }: {
     model: TimelineViewModel;
     /** The playback clock; the app passes its audio clock */
     clock?: ReactNode;
     positionBeat: BeatPosition;
-    /** Overrides the page under the cursor in the label */
-    pageLabel?: string;
     isPlaying: boolean;
     onPlayingChange?: (isPlaying: boolean) => void;
     /** **Stop** (UI-10); without it, there is no Stop button */
     onStop?: () => void;
     onNavigate?: (direction: TimelineNavigation) => void;
-    onZoomOut?: () => void;
-    onZoomIn?: () => void;
+    /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
-    showZoom?: boolean;
-    /** Extra controls at the end of the zoom row, such as volume and the metronome */
+    /** The show is fitted, so Fit goes back */
+    fitted?: boolean;
+    /** Controls after Next, such as From start, Loop and Sound */
     accessories?: ReactNode;
+    /** Controls at the end of the readout, such as compact and fullscreen */
+    viewControls?: ReactNode;
+    compact?: boolean;
 }) {
-    const frame = getFrameContext(model, positionBeat, pageLabel);
-    return (
-        <aside className="border-stroke bg-fg-1 rounded-6 flex w-[244px] shrink-0 flex-col justify-center gap-12 border px-16 py-12">
-            <div className="text-text-subtitle flex items-start justify-between gap-12">
-                {clock ?? <span />}
-                <span className="text-sub text-right font-mono leading-tight">
-                    Pg {frame.pageLabel}
-                    <br />
-                    {frame.measureAndCount}
-                </span>
-            </div>
-            <div className="flex items-center justify-between gap-6">
+    const frame = getFrameContext(model, positionBeat);
+    const at = getPageCountAt(model, positionBeat);
+    const navigate =
+        onNavigate && !isPlaying
+            ? (shift: TimelineNavigation, plain: TimelineNavigation) =>
+                  (event: ReactMouseEvent) =>
+                      onNavigate(event.shiftKey ? shift : plain)
+            : undefined;
+    const readout = (
+        <span
+            data-testid="timeline-readout"
+            className="text-text flex items-baseline gap-6 font-mono text-[11px] leading-none whitespace-nowrap"
+            title={`Page ${at.pageLabel}, count ${at.count} (measure ${frame.measureAndCount.slice(1)})`}
+        >
+            <span>
+                Pg {at.pageLabel} · ct {at.count}
+            </span>
+            <span className="text-text-subtitle">{frame.measureAndCount}</span>
+        </span>
+    );
+    const view = (
+        <div className="ml-auto flex items-center gap-4">
+            {onFit && (
                 <TransportButton
-                    label="First page"
-                    onClick={
-                        onNavigate ? () => onNavigate("first-page") : undefined
+                    label={
+                        fitted
+                            ? "Back to the previous zoom (Ctrl+scroll zooms)"
+                            : "Fit the show (Ctrl+scroll zooms)"
                     }
+                    pressed={fitted}
+                    onClick={onFit}
                 >
-                    <RewindIcon size={20} />
+                    <ArrowsOutLineHorizontalIcon size={16} />
                 </TransportButton>
-                <TransportButton
-                    label="Previous page"
-                    onClick={
-                        onNavigate
-                            ? () => onNavigate("previous-page")
-                            : undefined
-                    }
-                >
-                    <SkipBackIcon size={20} />
-                </TransportButton>
-                <TransportButton
-                    label={isPlaying ? "Pause" : "Play"}
-                    pressed={isPlaying}
-                    onClick={
-                        onPlayingChange
-                            ? () => onPlayingChange(!isPlaying)
-                            : undefined
-                    }
-                >
-                    {isPlaying ? (
-                        <PauseIcon size={24} weight="fill" />
-                    ) : (
-                        <PlayIcon size={24} />
-                    )}
-                </TransportButton>
-                {onStop && (
-                    <TransportButton label="Stop" onClick={onStop}>
-                        <StopIcon size={20} />
-                    </TransportButton>
+            )}
+            {viewControls}
+        </div>
+    );
+    const buttons = (
+        <div className="flex items-center gap-6">
+            <TransportButton
+                label="Previous page (Shift: first page)"
+                onClick={navigate?.("first-page", "previous-page")}
+            >
+                <SkipBackIcon size={18} />
+            </TransportButton>
+            <TransportButton
+                label={isPlaying ? "Pause" : "Play"}
+                pressed={isPlaying}
+                onClick={
+                    onPlayingChange
+                        ? () => onPlayingChange(!isPlaying)
+                        : undefined
+                }
+            >
+                {isPlaying ? (
+                    <PauseIcon size={20} weight="fill" />
+                ) : (
+                    <PlayIcon size={20} weight="fill" />
                 )}
-                <TransportButton
-                    label="Next page"
-                    onClick={
-                        onNavigate ? () => onNavigate("next-page") : undefined
-                    }
-                >
-                    <SkipForwardIcon size={20} />
+            </TransportButton>
+            {onStop && (
+                <TransportButton label="Stop" onClick={onStop}>
+                    <StopIcon size={18} />
                 </TransportButton>
-                <TransportButton
-                    label="Last page"
-                    onClick={
-                        onNavigate ? () => onNavigate("last-page") : undefined
-                    }
-                >
-                    <FastForwardIcon size={20} />
-                </TransportButton>
-            </div>
-            {(showZoom || accessories != null) && (
-                <div className="border-stroke flex items-center gap-12 border-t pt-8">
-                    {showZoom && (
-                        <>
-                            <TransportButton
-                                label="Zoom out"
-                                onClick={onZoomOut}
-                            >
-                                <MagnifyingGlassMinusIcon size={20} />
-                            </TransportButton>
-                            <TransportButton label="Zoom in" onClick={onZoomIn}>
-                                <MagnifyingGlassPlusIcon size={20} />
-                            </TransportButton>
-                            <TransportButton
-                                label="Fit timeline"
-                                onClick={onFit}
-                            >
-                                <CornersOutIcon size={20} />
-                            </TransportButton>
-                        </>
-                    )}
-                    {accessories != null && (
-                        <div className="ml-auto flex items-center gap-12">
-                            {accessories}
-                        </div>
-                    )}
+            )}
+            <TransportButton
+                label="Next page (Shift: last page)"
+                onClick={navigate?.("last-page", "next-page")}
+            >
+                <SkipForwardIcon size={18} />
+            </TransportButton>
+            {accessories != null && (
+                <div className="border-stroke ml-2 flex items-center gap-6 border-l pl-8">
+                    {accessories}
                 </div>
+            )}
+        </div>
+    );
+    return (
+        <aside
+            data-testid="timeline-transport"
+            className={clsx(
+                "border-stroke bg-fg-1 rounded-6 flex shrink-0 border px-12",
+                compact
+                    ? "items-center gap-12 py-4"
+                    : "w-[300px] flex-col justify-center gap-8 py-8",
+            )}
+        >
+            {compact ? (
+                <>
+                    {buttons}
+                    {readout}
+                    {view}
+                </>
+            ) : (
+                <>
+                    <div className="text-text-subtitle flex items-center gap-8">
+                        {clock}
+                        {readout}
+                        {view}
+                    </div>
+                    {buttons}
+                </>
             )}
         </aside>
     );
@@ -248,6 +265,75 @@ export const TimelineShell = ({
     </div>
 );
 
+/**
+ * Scrubbing by dragging along the page boxes (UI-12). A press that moves past the drag threshold
+ * scrubs the playhead with the pointer and swallows the click that follows, so the box under the
+ * release isn't selected; a press that doesn't move stays a click.
+ */
+const useRulerScrub = (
+    onSeek: ((beat: BeatPosition) => void) | undefined,
+    beatCount: number,
+    pixelsPerBeat: number,
+) => {
+    const drag = useRef<{
+        pointerId: number;
+        startClientX: number;
+        surfaceLeft: number;
+        scrubbing: boolean;
+    } | null>(null);
+    const swallowClick = useRef(false);
+    const beatAt = (clientX: number, surfaceLeft: number) =>
+        Math.round(
+            clamp((clientX - surfaceLeft) / pixelsPerBeat, 0, beatCount),
+        );
+    return {
+        consumeClick: () => {
+            const swallow = swallowClick.current;
+            swallowClick.current = false;
+            return swallow;
+        },
+        handlers: {
+            onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
+                swallowClick.current = false;
+                if (!onSeek || event.button !== 0 || event.ctrlKey) return;
+                const surface = event.currentTarget.closest(
+                    '[data-testid="timeline-pointer-surface"]',
+                );
+                if (!surface) return;
+                drag.current = {
+                    pointerId: event.pointerId,
+                    startClientX: event.clientX,
+                    surfaceLeft: surface.getBoundingClientRect().left,
+                    scrubbing: false,
+                };
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+            },
+            onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => {
+                const current = drag.current;
+                if (!current || current.pointerId !== event.pointerId) return;
+                if (
+                    !current.scrubbing &&
+                    Math.abs(event.clientX - current.startClientX) <
+                        TIMELINE_RANGE_DRAG_PX
+                )
+                    return;
+                current.scrubbing = true;
+                onSeek?.(beatAt(event.clientX, current.surfaceLeft));
+            },
+            onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
+                const current = drag.current;
+                if (!current || current.pointerId !== event.pointerId) return;
+                drag.current = null;
+                event.currentTarget.releasePointerCapture?.(event.pointerId);
+                swallowClick.current = current.scrubbing;
+            },
+            onPointerCancel: () => {
+                drag.current = null;
+            },
+        },
+    };
+};
+
 export const TimelineRuler = ({
     pages,
     measures,
@@ -255,20 +341,27 @@ export const TimelineRuler = ({
     pixelsPerBeat,
     selection,
     onSelectionChange,
+    onSeek,
     initialPageWidth,
+    showMeasures = true,
 }: {
     pages: readonly TimelinePageMarker[];
-    measures: readonly TimelineMarker[];
+    measures: readonly TimelineMeasureMarker[];
     beatCount: number;
     pixelsPerBeat: number;
     selection?: TimelineSelection;
     onSelectionChange?: (selection: TimelineSelection) => void;
+    /** Dragging along the page boxes scrubs (UI-12); a click still selects the box */
+    onSeek?: (beat: BeatPosition) => void;
     initialPageWidth: number;
+    /** The measure numbers under the boxes; compact leaves them out */
+    showMeasures?: boolean;
 }) => {
     const visibleMeasures = filterMarkersByMinimumSpacing(
-        measures,
+        measures.filter((measure) => !measure.rehearsalMark?.trim()),
         pixelsPerBeat,
     );
+    const scrub = useRulerScrub(onSeek, beatCount, pixelsPerBeat);
     const initialPage = pages.find((page) => page.isInitial);
     const orderedPages = pages
         .filter((page) => !page.isInitial)
@@ -306,7 +399,10 @@ export const TimelineRuler = ({
                         data-testid="timeline-initial-page"
                         aria-label={`Page ${initialPage.label}`}
                         aria-pressed={isSelected(initialPage)}
-                        onClick={() => selectPage(initialPage)}
+                        {...scrub.handlers}
+                        onClick={() => {
+                            if (!scrub.consumeClick()) selectPage(initialPage);
+                        }}
                         className="border-stroke text-text focus-visible:ring-accent absolute top-0 left-0 flex h-full items-center justify-center border-r text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
                         style={{ width: initialPageWidth }}
                     >
@@ -333,7 +429,9 @@ export const TimelineRuler = ({
                             )}
                             aria-label={`Page ${page.label}`}
                             aria-pressed={selected}
+                            {...scrub.handlers}
                             onClick={(event) => {
+                                if (scrub.consumeClick()) return;
                                 // macOS ctrl+click opens the context menu (UI-9: no selection change)
                                 if (!event.ctrlKey) selectPage(page);
                             }}
@@ -356,17 +454,23 @@ export const TimelineRuler = ({
                     );
                 })}
             </div>
-            <div className="pointer-events-none absolute inset-x-0 top-[31px] h-20 font-mono">
-                {visibleMeasures.map((measure) => (
-                    <span
-                        key={measure.id}
-                        className="text-text-subtitle absolute top-7 -translate-x-1/2 text-[8px] whitespace-nowrap"
-                        style={{ left: beatToX(measure.atBeat, pixelsPerBeat) }}
-                    >
-                        {measure.label}
-                    </span>
-                ))}
-            </div>
+            {showMeasures && (
+                // UI-12: measure numbers without the "M"; a measure with a rehearsal mark shows the
+                // mark instead (TimelineRehearsalMarkers)
+                <div className="pointer-events-none absolute inset-x-0 top-[31px] h-16 font-mono">
+                    {visibleMeasures.map((measure) => (
+                        <span
+                            key={measure.id}
+                            className="text-text-subtitle absolute top-2 -translate-x-1/2 text-[9px] whitespace-nowrap"
+                            style={{
+                                left: beatToX(measure.atBeat, pixelsPerBeat),
+                            }}
+                        >
+                            {measure.label.replace(/^m/i, "")}
+                        </span>
+                    ))}
+                </div>
+            )}
         </>
     );
 };
@@ -408,6 +512,7 @@ export const TimelineTrackClip = ({
     beatCount,
     snapBeats = [],
     micro = false,
+    barHeight,
 }: {
     track: TimelineTrack;
     pixelsPerBeat: number;
@@ -422,9 +527,16 @@ export const TimelineTrackClip = ({
     /** Page lines the clip's edges snap to while it moves (ui.md UI-2); Alt turns snapping off */
     snapBeats?: readonly number[];
     micro?: boolean;
+    /**
+     * The drawn bar's height, centered in `height` (UI-12 compact: a thin bar in a taller hit
+     * area, so it can still be clicked, dragged and double-clicked). Without it the bar fills it.
+     */
+    barHeight?: number;
 }) => {
     const range = getTrackRange(track);
     const [previewOffset, setPreviewOffset] = useState(0);
+    // A drag ends with a click on the clip; that click mustn't also select it
+    const draggedRef = useRef(false);
     const dragRef = useRef<{
         pointerId: number;
         startClientX: number;
@@ -474,10 +586,13 @@ export const TimelineTrackClip = ({
                     : track.label
             }
             onClick={(event) => {
+                const dragged = draggedRef.current;
+                draggedRef.current = false;
                 // macOS ctrl+click opens the context menu (UI-9: no selection change)
-                if (!event.ctrlKey) onSelect?.(track.id);
+                if (!dragged && !event.ctrlKey) onSelect?.(track.id);
             }}
             onPointerDown={(event) => {
+                draggedRef.current = false;
                 if (!canMove || event.button !== 0 || event.ctrlKey) return;
                 event.stopPropagation();
                 dragRef.current = {
@@ -511,6 +626,7 @@ export const TimelineTrackClip = ({
                 );
                 setPreviewOffset(0);
                 if (offset === 0) return;
+                draggedRef.current = true;
                 onRangeCommit?.({
                     timelineId: track.id,
                     startBeatIndex: range.startBeatIndex + offset,
@@ -547,7 +663,8 @@ export const TimelineTrackClip = ({
                         key={`${span.startBeatIndex}-${span.endBeatIndex}`}
                         data-activity={span.active ? "active" : "inactive"}
                         className={clsx(
-                            "absolute inset-y-0 overflow-hidden",
+                            "absolute overflow-hidden",
+                            barHeight === undefined && "inset-y-0",
                             isFirst &&
                                 (micro ? "rounded-l-full" : "rounded-l-4"),
                             isLast &&
@@ -557,6 +674,10 @@ export const TimelineTrackClip = ({
                                 : "border border-dashed",
                         )}
                         style={{
+                            ...(barHeight !== undefined && {
+                                top: (height - barHeight) / 2,
+                                height: barHeight,
+                            }),
                             left:
                                 (span.startBeatIndex - range.startBeatIndex) *
                                 pixelsPerBeat,
@@ -600,6 +721,9 @@ export const TimelineSelectionRange = ({
     startFlagBeatIndex,
     fromStart = false,
     onFromStartOff,
+    startPinned = false,
+    onUnpin,
+    pinTop = 30,
     beatCount,
     pixelsPerBeat,
     height,
@@ -617,6 +741,14 @@ export const TimelineSelectionRange = ({
      */
     fromStart?: boolean;
     onFromStartOff?: () => void;
+    /**
+     * The start flag is pinned (UI-10): it stays through navigation. UI-12 draws a pin beside its
+     * stem, under the ruler, so a forgotten pin can be seen; clicking the pin unpins (`onUnpin`).
+     */
+    startPinned?: boolean;
+    onUnpin?: () => void;
+    /** Where the pin sits, below the ruler */
+    pinTop?: number;
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
@@ -846,10 +978,30 @@ export const TimelineSelectionRange = ({
                         className={clsx(
                             "absolute inset-y-0 left-1/2",
                             START_INK.bg,
-                            fromStart ? "w-0.5" : "w-px",
+                            fromStart || startPinned ? "w-0.5" : "w-px",
                         )}
                     />
                 </button>
+                {startPinned && (
+                    <button
+                        type="button"
+                        data-testid="timeline-start-pin"
+                        data-timeline-interactive="true"
+                        aria-label="Start flag pinned. Click to unpin"
+                        title="Pinned: the start flag stays here when you move to other pages. Click to unpin, so it follows the page again."
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={onUnpin}
+                        disabled={!onUnpin}
+                        className={clsx(
+                            "bg-bg-1 rounded-4 pointer-events-auto absolute z-[55] flex size-14 items-center justify-center border p-0 shadow-sm enabled:cursor-pointer",
+                            START_INK.text,
+                            START_INK.border,
+                        )}
+                        style={{ left: x + 3, top: pinTop }}
+                    >
+                        <PushPinIcon size={10} weight="fill" />
+                    </button>
+                )}
                 {/* The pennant is its own handle above the playhead's (z-50): after Stop the flag
                     is drawn on the playhead, and this is the part of it that can be grabbed */}
                 <button
@@ -951,22 +1103,32 @@ export const TimelineSelectionRange = ({
     );
 };
 
+/**
+ * Rehearsal marks as tabs in the measure row (UI-12; they sat on the waveform lane before), in
+ * place of their measure's number. Clicking one seeks there. Thinned like the measure numbers, so
+ * they don't pile up when zoomed out.
+ */
 export const TimelineRehearsalMarkers = ({
     model,
     pixelsPerBeat,
     top,
+    compact = false,
     onSeek,
 }: {
     model: TimelineViewModel;
     pixelsPerBeat: number;
     top: number;
+    compact?: boolean;
     onSeek?: (beat: BeatPosition) => void;
 }) => (
     <div className="pointer-events-none absolute inset-0 z-20">
-        {model.measures.flatMap((measure) => {
-            const label = measure.rehearsalMark?.trim();
-            if (!label) return [];
-            return [
+        {filterMarkersByMinimumSpacing(
+            model.measures.filter((measure) => measure.rehearsalMark?.trim()),
+            pixelsPerBeat,
+            18,
+        ).map((measure) => {
+            const label = measure.rehearsalMark!.trim();
+            return (
                 <button
                     key={measure.id}
                     type="button"
@@ -974,15 +1136,20 @@ export const TimelineRehearsalMarkers = ({
                     aria-label={`Rehearsal mark ${label}`}
                     title={`Rehearsal mark ${label}`}
                     onClick={() => onSeek?.(measure.atBeat)}
-                    className="border-text-subtitle bg-bg-1 text-text pointer-events-auto absolute flex size-22 -translate-x-1/2 items-center justify-center rounded-full border font-mono text-[10px] shadow-sm"
+                    className={clsx(
+                        "border-text-subtitle bg-bg-1 text-text rounded-4 pointer-events-auto absolute flex -translate-x-1/2 items-center justify-center border px-3 font-mono leading-none font-semibold",
+                        compact
+                            ? "h-12 min-w-12 text-[8px]"
+                            : "h-16 min-w-16 text-[10px]",
+                    )}
                     style={{
                         left: beatToX(measure.atBeat, pixelsPerBeat),
                         top,
                     }}
                 >
                     {label}
-                </button>,
-            ];
+                </button>
+            );
         })}
     </div>
 );
@@ -1333,6 +1500,8 @@ export const useElementWidth = (ref: RefObject<HTMLElement | null>) => {
         if (!element) return;
         const updateWidth = () => setWidth(element.clientWidth);
         updateWidth();
+        // Without ResizeObserver (jsdom) the first measure stands
+        if (typeof ResizeObserver === "undefined") return;
         const observer = new ResizeObserver(updateWidth);
         observer.observe(element);
         return () => observer.disconnect();

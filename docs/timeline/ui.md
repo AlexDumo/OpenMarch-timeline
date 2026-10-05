@@ -390,6 +390,57 @@ from it. The spec still wins on the model; this file decides presentation.
     position every frame); everything else, and every edit, stays on whole
     beats.
 
+- **UI-12: a calmer timeline (lead, 2026-10-05).** The owner found the timeline "intimidating
+  and clunky" and asked whether a compact and an expanded mode would help, then asked the lead to
+  decide from the existing decisions. Four flow walkthroughs (everyday page writing, breakaways
+  and clips, music and review, and a critique of the mode itself) found the weight came from
+  clutter more than height: a reserved empty clip row, a waveform lane that is always empty in the
+  app, a two-row transport of 14 buttons, and page/measure readouts in three places. So the
+  default gets calmer first, and compact is a small, explicit extra. Defaults chosen on reasoning
+  alone are V-27 to V-30 in research/ownership/VALIDATION.md. Built on branch
+  `timeline/calmer-timeline`.
+  - **No empty lanes.** Under the ruler are the measure row, then a clip row only for each packed
+    row of off-page clips (none in a page-by-page show), then the waveform only when there are
+    audio peaks. A clip lane appearing when a drag first makes an off-page timeline is a change
+    of content, not a mode change, and it is the sign that one exists.
+  - **Measures stay.** Musicians count by measure and rehearsal letter, as drill writers count by
+    page. Measure numbers drop the "M"; rehearsal marks are tabs in the measure row, in place of
+    their measure's number (they sat on the waveform lane before), thinned like the numbers.
+  - **One readout,** in the transport: "Pg 3 · ct 8 m7.1". The count is counted to the page's flag,
+    as page counts are, so the playhead on page 3's flag is count 8 of page 3, not count 0 of 4.
+  - **The transport:** Previous, Play, Stop, Next; then From start with Loop as one pair (Loop
+    only works with From start on, so it sits beside it, disabled while off, and doesn't come and
+    go); then **Sound**, one popover for mute, volume and the metronome (Ctrl+M stays). Shift+click
+    on Previous or Next goes to the first or last page (Shift+Q/E stay). Page navigation is
+    disabled while playing, since it is ignored then. The readout row ends with the view
+    controls: Fit, Compact and Fullscreen.
+  - **Zoom** is Ctrl+scroll (or a pinch) about the pointer, and **Fit**, which fits the whole show
+    (the floor drops to 1px a beat so a 500-beat show fits) and, pressed again, goes back. The
+    zoom is remembered. The zoom in and out buttons are gone.
+  - **Compact** is an explicit transport button, remembered for every show (`timelineCompact`).
+    Nothing turns it on or off by itself, as UI-11 asks of modes. Compact is one strip: the
+    transport on one line; the ruler; a thin measure row with the rehearsal tabs, the window's
+    count and the start flag's pin; and clips as 6px bars in 14px hit areas that still click, drag
+    and double-click. It leaves out the measure numbers and the waveform. Everything else (the
+    window, the start flag, the From start bar, the playhead and **+**) is the same as expanded.
+  - **Dragging on the ruler scrubs.** A press on a page box that moves past the drag threshold
+    scrubs the playhead and doesn't select the box; a press that doesn't move still selects it.
+    Ranges are still drawn by dragging below the ruler, which still turns From start on (UI-11).
+  - **The pinned start flag shows.** A pinned flag (UI-10 Pinning) has a heavier stem and a pin in
+    the measure row; clicking the pin unpins it, sending the flag back to the page box holding the
+    playhead. Hidden in isolation, whose start flag is the isolated move's own.
+  - **The field line says what a drag edits,** always, replacing UI-11's badge: "Editing home
+    positions", or "Editing Page 3, counts 3–6", then "· through page 4" when the window passes
+    page flags, a **Pinned ✕** button that unpins, and while From start is on "Space replays it
+    ✕". It hides in isolation (the isolation bar says it) and dims while playing.
+  - **Clicking a clip selects its timeline** (answers U-Q5's TODO): the start flag goes to its start
+    (pinned when that isn't a flag) and the playhead to its end, as a page box does. A drag of the
+    clip doesn't also select it.
+  - Not changed: From start is still off when a show opens; seeking while playing is still
+    ignored. Follow-ups from the walkthroughs: a "Go to" field (rehearsal letter, measure, page),
+    jumping between rehearsal marks, seeking while playing, a visible way into the beat editor in
+    timeline mode, and a hint for double-click isolation.
+
 ## Mapping the spec onto the view model
 
 The reference `TimelineViewModel` becomes a derived view: an adapter builds it
@@ -606,7 +657,7 @@ points (P7.2).
   TODO (project owner, 2026-10-01; not now):
   - how a selected marcher's spans (UI-1) show inside a timeline's one track;
   - appending pages past the last flag (today's `defaultNewPageCounts`);
-  - whether clicking a clip selects its timeline;
+  - ~~whether clicking a clip selects its timeline~~ (yes: UI-12);
   - editing anywhere in the selected timeline, not only at its end (the
     temporary refusal in UI-9).
 

@@ -21,6 +21,10 @@ export interface UiSettings {
     halfLines: boolean;
     /** The number of pixels per second in the timeline */
     timelinePixelsPerSecond: number;
+    /** The timeline-mode timeline's zoom, in pixels per beat (UI-12: remembered) */
+    timelinePixelsPerBeat: number;
+    /** Whether the timeline-mode timeline is drawn as its compact strip (UI-12) */
+    timelineCompact: boolean;
     /** The current audio volume percentage for timeline playback */
     audioVolume: number;
     /** Whether all app audio is muted */
@@ -65,6 +69,8 @@ export const defaultSettings: UiSettings = {
     gridLines: true,
     halfLines: true,
     timelinePixelsPerSecond: 40,
+    timelinePixelsPerBeat: 16,
+    timelineCompact: false,
     audioVolume: 100,
     audioMuted: false,
     focussedComponent: "canvas",
@@ -138,6 +144,9 @@ interface UiSettingsStoreActions {
     fetchUiSettings: () => void;
     setUiSettings: (uiSettings: UiSettings, type?: keyof UiSettings) => void;
     setPixelsPerSecond: (pixelsPerSecond: number) => void;
+    setTimelinePixelsPerBeat: (pixelsPerBeat: number) => void;
+    /** Turns the compact timeline on or off (`!timelineCompact` without an argument) */
+    setTimelineCompact: (compact?: boolean) => void;
     toggleAudioMute: () => void;
     setAudioVolume: (volume: number) => void;
 }
@@ -185,6 +194,23 @@ export const useUiSettingsStore = create<UiSettingsStoreInterface>(
             const newSettings = {
                 ...get().uiSettings,
                 timelinePixelsPerSecond: pixelsPerSecond,
+            };
+            set({ uiSettings: newSettings });
+            saveSettings(newSettings);
+        },
+        setTimelinePixelsPerBeat: (pixelsPerBeat: number) => {
+            const newSettings = {
+                ...get().uiSettings,
+                timelinePixelsPerBeat: pixelsPerBeat,
+            };
+            set({ uiSettings: newSettings });
+            saveSettings(newSettings);
+        },
+        setTimelineCompact: (compact?: boolean) => {
+            const current = get().uiSettings;
+            const newSettings = {
+                ...current,
+                timelineCompact: compact ?? !current.timelineCompact,
             };
             set({ uiSettings: newSettings });
             saveSettings(newSettings);

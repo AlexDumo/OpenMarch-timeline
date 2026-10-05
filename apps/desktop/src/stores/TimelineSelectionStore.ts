@@ -164,6 +164,11 @@ export interface TimelineSelectionState {
     /** Clears the selection; the playhead and S stay. */
     readonly selectNothing: () => void;
     /**
+     * Unpins S (UI-12, the pin mark): it goes back to following the playhead, to the start of the
+     * page box holding P. Does nothing in isolation, whose S is the isolated timeline's start.
+     */
+    readonly unpinStart: () => void;
+    /**
      * Navigation: moves the playhead (`normalizePlayheadBeat`, at most `showEndBeat`). An unpinned
      * S follows it, and so does a pinned S that the playhead reaches or passes. A non-finite beat
      * is ignored.
@@ -471,6 +476,17 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     isolation: null,
                     cursorBeat: null,
                 }),
+            unpinStart: () =>
+                set((s) =>
+                    s.isolation !== null || !s.startPinned
+                        ? {}
+                        : windowFields(
+                              followingStart(s.playheadBeat, s.pageBoxes),
+                              false,
+                              s.playheadBeat,
+                              s.pageBoxes,
+                          ),
+                ),
             seek: (beat) =>
                 set((s) => {
                     if (!Number.isFinite(beat)) return {};

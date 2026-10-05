@@ -394,6 +394,37 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
     });
 });
 
+describe("unpinning the start flag (UI-12)", () => {
+    beforeEach(() => {
+        store().reset();
+        store().setPageBoxes(BOXES);
+    });
+
+    it("sends a pinned S back to the page box holding P, which it then follows", () => {
+        store().selectRange(5, 17);
+        expect(store().startPinned).toBe(true);
+        store().unpinStart();
+        expect(store().startPinned).toBe(false);
+        expect(store().startBeat).toBe(9);
+        expect(store().playheadBeat).toBe(17);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 17 });
+        store().seek(21);
+        expect(store().startBeat).toBe(17);
+    });
+
+    it("leaves an unpinned S, and isolation's S, alone", () => {
+        store().selectRange(9, 17);
+        const before = store().selection;
+        store().unpinStart();
+        expect(store().selection).toBe(before);
+        store().setStoredTimelines([timeline(1, 5, 17, [1])]);
+        store().isolate(1);
+        const isolated = store().startBeat;
+        store().unpinStart();
+        expect(store().startBeat).toBe(isolated);
+    });
+});
+
 describe("the playback cursor (UI-11)", () => {
     beforeEach(() => {
         store().reset();

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     clientXToNearestBeat,
     filterMarkersByMinimumSpacing,
+    getPageCountAt,
     getPageRange,
     getPageSnapBeats,
     getPlayheadLabel,
@@ -265,5 +266,22 @@ describe("page snapping (UI-2)", () => {
     it("turns snapping off while Alt is held", () => {
         expect(isPageSnapDisabled({ altKey: true })).toBe(true);
         expect(isPageSnapDisabled({ altKey: false })).toBe(false);
+    });
+});
+
+describe("getPageCountAt (UI-12)", () => {
+    it("counts to a page's flag: its flag is its last count, the next beat is the next page's 1", () => {
+        expect(getPageCountAt(timelineStoryModel, 8)).toEqual({
+            pageLabel: "1",
+            count: 8,
+        });
+        expect(getPageCountAt(timelineStoryModel, 9)).toEqual({
+            pageLabel: "2",
+            count: 1,
+        });
+        expect(getPageCountAt(timelineStoryModel, 0)).toEqual({
+            pageLabel: "0",
+            count: 0,
+        });
     });
 });

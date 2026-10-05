@@ -403,9 +403,10 @@ export const NoTracks: TimelineStoryObj = {
 export const Collapsed: TimelineStoryObj = {
     args: { mode: "collapsed", state: "collapsed" },
     play: async ({ canvas }) => {
+        // UI-12 compact: no waveform lane, and zoom is Fit and Ctrl+scroll
         await expect(
-            canvas.getByLabelText("Audio waveform"),
-        ).toBeInTheDocument();
+            canvas.queryByLabelText("Audio waveform"),
+        ).not.toBeInTheDocument();
         await expect(
             canvas.queryByRole("button", { name: "Zoom in" }),
         ).not.toBeInTheDocument();

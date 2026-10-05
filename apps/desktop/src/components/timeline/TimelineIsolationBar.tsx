@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { Button } from "@openmarch/ui";
-import { FlagIcon, XIcon } from "@phosphor-icons/react";
+import { FlagIcon, PushPinIcon, XIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
 import { useTimingObjects } from "@/hooks";
@@ -80,54 +80,113 @@ export function useIsolationEscape(): void {
     }, [active]);
 }
 
+/** The page flags strictly inside `[start, end)`: the pages a window passes through (UI-12) */
+export function flagsInside(
+    range: { readonly start: number; readonly end: number },
+    pages: readonly (FlagPage & { readonly name: string })[],
+): string[] {
+    return pageFlags(pages).flatMap((f) =>
+        f.range && f.range.end > range.start && f.range.end < range.end
+            ? [f.page.name]
+            : [],
+    );
+}
+
 /**
- * The badge over the field while **From start** is on (UI-11): what Space will replay, and the
- * ways out (the badge's ✕, C, Esc). It flashes once when it appears, since a dragged range turns
- * the mode on without a key press. Shows only with a window to play; renders nothing otherwise.
+ * The line over the field (UI-12, replacing UI-11's From start badge): what a drag edits now,
+ * always, so the window is never only a tint on the timeline. It names the window, the page flags
+ * a drag passes through, a pinned start flag (with a button to unpin), and, while **From start**
+ * is on, what Space replays with the way out (the ✕, C, Esc). It flashes once when From start
+ * turns on, since a dragged range turns it on without a key press. Hidden while isolated: the
+ * isolation bar says it instead.
  */
 export function TimelineFromStartBadge() {
     const on = useTimelineSelectionStore((s) => s.playFromStart);
     const selection = useTimelineSelectionStore((s) => s.selection);
+    const pinned = useTimelineSelectionStore((s) => s.startPinned);
     const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
+    const playing = useTimelineSelectionStore((s) => s.playback !== null);
     const { pages } = useTimingObjects()!;
-    const shown = on && !isolated && selection.kind === "range";
+    const fromStartShown = on && !isolated && selection.kind === "range";
     const [fresh, setFresh] = useState(false);
     useEffect(() => {
-        if (!shown) return;
+        if (!fromStartShown) return;
         setFresh(true);
         const timeout = setTimeout(() => setFresh(false), 900);
         return () => clearTimeout(timeout);
-    }, [shown]);
-    if (!shown) return null;
+    }, [fromStartShown]);
+    if (isolated || selection.kind === "none") return null;
+    const through =
+        selection.kind === "range" ? flagsInside(selection, pages) : [];
     return (
         <div
-            data-testid="timeline-from-start-badge"
+            data-testid="timeline-window-line"
             role="status"
             className={clsx(
-                "bg-bg-1 text-text rounded-6 text-sub pointer-events-auto absolute top-8 left-8 z-10 flex max-w-[calc(50%-24px)] items-center gap-8 border px-8 py-4 whitespace-nowrap shadow-md transition-shadow duration-300",
-                START_INK.border,
+                "bg-bg-1 text-text rounded-6 text-sub pointer-events-auto absolute top-8 left-8 z-10 flex max-w-[calc(50%-24px)] items-center gap-8 border px-8 py-4 whitespace-nowrap shadow-md transition-[opacity,box-shadow] duration-300",
+                fromStartShown ? START_INK.border : "border-stroke",
                 fresh && `ring-4 ${START_INK.ring}`,
+                playing && "opacity-60",
             )}
         >
             <FlagIcon
                 size={14}
-                weight="fill"
+                weight={fromStartShown ? "fill" : "regular"}
                 className={clsx("shrink-0", START_INK.text)}
             />
             <span className="truncate">
-                Space replays {isolatedTimelineName(selection, pages)}
+                {selection.kind === "home"
+                    ? "Editing home positions"
+                    : `Editing ${isolatedTimelineName(selection, pages)}`}
+                {through.length > 0 && (
+                    <span className="text-text-subtitle">
+                        {" "}
+                        · through {through.length === 1 ? "page" : "pages"}{" "}
+                        {through.join(", ")}
+                    </span>
+                )}
             </span>
-            <button
-                type="button"
-                aria-label="Turn off From start"
-                title="Turn off (C or Esc)"
-                className="text-text-subtitle hover:text-text flex items-center"
-                onClick={() =>
-                    useTimelineSelectionStore.getState().setPlayFromStart(false)
-                }
-            >
-                <XIcon size={12} weight="bold" />
-            </button>
+            {pinned && selection.kind === "range" && (
+                <button
+                    type="button"
+                    data-testid="timeline-window-unpin"
+                    aria-label="Unpin the start flag"
+                    title="The start flag is pinned: it stays here when you move to other pages. Click to unpin."
+                    className={clsx(
+                        "rounded-4 flex items-center gap-2 border px-4 text-[11px]",
+                        START_INK.border,
+                        START_INK.text,
+                    )}
+                    onClick={() =>
+                        useTimelineSelectionStore.getState().unpinStart()
+                    }
+                >
+                    <PushPinIcon size={10} weight="fill" />
+                    Pinned
+                    <XIcon size={9} weight="bold" />
+                </button>
+            )}
+            {fromStartShown && (
+                <span
+                    data-testid="timeline-from-start-badge"
+                    className="border-stroke flex items-center gap-6 border-l pl-8"
+                >
+                    Space replays it
+                    <button
+                        type="button"
+                        aria-label="Turn off From start"
+                        title="Turn off (C or Esc)"
+                        className="text-text-subtitle hover:text-text flex items-center"
+                        onClick={() =>
+                            useTimelineSelectionStore
+                                .getState()
+                                .setPlayFromStart(false)
+                        }
+                    >
+                        <XIcon size={12} weight="bold" />
+                    </button>
+                </span>
+            )}
         </div>
     );
 }

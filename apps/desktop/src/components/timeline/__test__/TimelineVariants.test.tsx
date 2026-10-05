@@ -57,9 +57,11 @@ describe("timeline views", () => {
             left: "40px",
         });
 
-        // Whether a clip click selects its timeline is open (ui.md U-Q5 TODO): it doesn't yet
+        // UI-12: clicking a clip selects its timeline's range (ui.md U-Q5)
         fireEvent.click(screen.getByLabelText(/SH timeline/));
-        expect(onSelectionChange).not.toHaveBeenCalled();
+        expect(onSelectionChange).toHaveBeenCalledWith(
+            expect.objectContaining({ kind: "range" }),
+        );
     });
 
     it("selects home from the initial box and a page's range from its box (UI-9)", () => {
@@ -167,7 +169,7 @@ describe("timeline views", () => {
         expect(onSelectionChange).toHaveBeenCalledTimes(1);
     });
 
-    it("forwards transport playback and exposes zoom only when expanded", () => {
+    it("forwards transport playback, and zooms with Fit and Ctrl+scroll in both densities (UI-12)", () => {
         const onPlayingChange = vi.fn();
         const onPixelsPerBeatChange = vi.fn();
         const { rerender } = render(
@@ -180,9 +182,21 @@ describe("timeline views", () => {
         );
 
         fireEvent.click(screen.getByRole("button", { name: "Play" }));
-        fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
         expect(onPlayingChange).toHaveBeenCalledWith(true);
-        expect(onPixelsPerBeatChange).toHaveBeenCalledWith(20);
+        expect(
+            screen.queryByRole("button", { name: "Zoom in" }),
+        ).not.toBeInTheDocument();
+        fireEvent.wheel(screen.getByTestId("timeline-viewport"), {
+            deltaY: -100,
+            ctrlKey: true,
+        });
+        expect(onPixelsPerBeatChange).toHaveBeenCalledTimes(1);
+        expect(onPixelsPerBeatChange.mock.calls[0][0]).toBeGreaterThan(16);
+        // A plain scroll scrolls; it doesn't zoom
+        fireEvent.wheel(screen.getByTestId("timeline-viewport"), {
+            deltaY: -100,
+        });
+        expect(onPixelsPerBeatChange).toHaveBeenCalledTimes(1);
 
         rerender(
             <CollapsedTimeline
@@ -192,8 +206,8 @@ describe("timeline views", () => {
             />,
         );
         expect(
-            screen.queryByRole("button", { name: "Zoom in" }),
-        ).not.toBeInTheDocument();
+            screen.getByRole("button", { name: /^Fit the show/ }),
+        ).toBeInTheDocument();
     });
 
     it("synchronizes page boxes and clips with the selected range", () => {
@@ -989,5 +1003,172 @@ describe("the playhead while playing", () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+});
+
+describe("a calmer timeline (UI-12)", () => {
+    const press = (target: Element, type: string, clientX: number) =>
+        fireEvent(
+            target,
+            new MouseEvent(type, { bubbles: true, button: 0, clientX }),
+        );
+
+    it("dragging along the page boxes scrubs, and doesn't select the box under the release", () => {
+        const onSeek = vi.fn();
+        const onSelectionChange = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSeek={onSeek}
+                onSelectionChange={onSelectionChange}
+            />,
+        );
+        const box = screen.getByRole("button", { name: "Page 2" });
+        press(box, "pointerdown", 130);
+        press(box, "pointermove", 200);
+        press(box, "pointerup", 200);
+        fireEvent.click(box);
+        // The surface starts at x = 0 in jsdom: 200px at 16px a beat is beat 12.5, rounded to 13
+        expect(onSeek).toHaveBeenLastCalledWith(13);
+        expect(onSelectionChange).not.toHaveBeenCalled();
+
+        // A press that doesn't move is still a click that selects the box
+        press(box, "pointerdown", 130);
+        press(box, "pointerup", 131);
+        fireEvent.click(box);
+        expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("a dragged clip moves without also selecting it; a click selects it", () => {
+        const onSelectionChange = vi.fn();
+        const onTimelineRangeCommit = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSelectionChange={onSelectionChange}
+                onTimelineRangeCommit={onTimelineRangeCommit}
+            />,
+        );
+        const clip = screen.getByLabelText(/SH timeline/);
+        press(clip, "pointerdown", 100);
+        press(clip, "pointermove", 132);
+        press(clip, "pointerup", 132);
+        fireEvent.click(clip);
+        expect(onTimelineRangeCommit).toHaveBeenCalledTimes(1);
+        expect(onSelectionChange).not.toHaveBeenCalled();
+
+        fireEvent.click(clip);
+        expect(onSelectionChange).toHaveBeenCalledWith(
+            expect.objectContaining({ kind: "range" }),
+        );
+    });
+
+    it("draws a pin on a pinned start flag, which unpins it", () => {
+        const onUnpinStart = vi.fn();
+        const { rerender } = render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                selection={{
+                    kind: "range",
+                    range: { startBeatIndex: 5, endBeatIndex: 11 },
+                }}
+                onUnpinStart={onUnpinStart}
+            />,
+        );
+        expect(screen.queryByTestId("timeline-start-pin")).toBeNull();
+        rerender(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                selection={{
+                    kind: "range",
+                    range: { startBeatIndex: 5, endBeatIndex: 11 },
+                    startPinned: true,
+                }}
+                onUnpinStart={onUnpinStart}
+            />,
+        );
+        fireEvent.click(screen.getByTestId("timeline-start-pin"));
+        expect(onUnpinStart).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps no empty lanes: no clip rows without clips, no waveform without peaks", () => {
+        const { container } = render(
+            <ExpandedTimeline
+                {...commonProps}
+                model={{
+                    ...timelineStoryModel,
+                    tracks: [],
+                    waveform: {
+                        peaksByBeat:
+                            timelineStoryModel.waveform.peaksByBeat.map(
+                                () => [],
+                            ),
+                    },
+                }}
+                showTransport={false}
+            />,
+        );
+        expect(
+            container.querySelector('[data-testid="timeline-waveform-canvas"]'),
+        ).toBeNull();
+        // The ruler (28), the measure row (20) and a 2px gap, then nothing, plus the 4px foot
+        expect(screen.getByTestId("timeline-pointer-surface")).toHaveStyle({
+            height: "54px",
+        });
+    });
+
+    it("reads the page and count at the playhead, counted to the page's flag", () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                positionBeat={8}
+                showTransport
+            />,
+        );
+        expect(screen.getByTestId("timeline-readout")).toHaveTextContent(
+            "Pg 1 · ct 8",
+        );
+    });
+
+    it("Shift+click on Previous and Next goes to the first and last page", () => {
+        const onNavigate = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onNavigate={onNavigate}
+            />,
+        );
+        fireEvent.click(screen.getByRole("button", { name: /^Next page/ }));
+        fireEvent.click(screen.getByRole("button", { name: /^Next page/ }), {
+            shiftKey: true,
+        });
+        fireEvent.click(
+            screen.getByRole("button", { name: /^Previous page/ }),
+            { shiftKey: true },
+        );
+        expect(onNavigate.mock.calls).toEqual([
+            ["next-page"],
+            ["last-page"],
+            ["first-page"],
+        ]);
+    });
+
+    it("disables page navigation while playing, since it is ignored then", () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                isPlaying
+                showTransport
+                onNavigate={vi.fn()}
+            />,
+        );
+        expect(
+            screen.getByRole("button", { name: /^Next page/ }),
+        ).toBeDisabled();
     });
 });

@@ -104,11 +104,11 @@ export const beatToX = (
     startBeat = 0,
 ) => (beat - startBeat) * pixelsPerBeat;
 
-export const filterMarkersByMinimumSpacing = (
-    markers: readonly TimelineMarker[],
+export const filterMarkersByMinimumSpacing = <T extends TimelineMarker>(
+    markers: readonly T[],
     pixelsPerBeat: number,
     minimumSpacingPx = 32,
-) => {
+): T[] => {
     const ordered = [...markers].sort((a, b) => a.atBeat - b.atBeat);
     let lastVisibleX = Number.NEGATIVE_INFINITY;
 
@@ -191,6 +191,38 @@ export const getFrameContext = (
         pageLabel: pageLabel ?? page?.label ?? "—",
         measureAndCount: `m${measureLabel}.${count}`,
     };
+};
+
+/**
+ * The page and count at a paused playhead, counted as designers count them (UI-12): a page's
+ * counts run from 1 on the beat after the previous flag to N on its own flag, so the playhead on
+ * page 3's flag is "Pg 3, count 8". Home (before the first timed page) is the initial page, count 0.
+ */
+export const getPageCountAt = (
+    model: Pick<TimelineViewModel, "pages">,
+    positionBeat: BeatPosition,
+): { readonly pageLabel: string; readonly count: number } => {
+    const beat = Math.round(positionBeat);
+    const timed = model.pages
+        .filter((page) => !page.isInitial)
+        .sort((a, b) => a.atBeat - b.atBeat);
+    // A page's flag is its end beat, or else the next page's first beat
+    const endOf = (index: number) =>
+        timed[index].endBeat ??
+        timed[index + 1]?.atBeat ??
+        Number.POSITIVE_INFINITY;
+    const page = timed.find(
+        (p, index) => p.atBeat < beat && beat <= endOf(index),
+    );
+    if (page) return { pageLabel: page.label, count: beat - page.atBeat };
+    const initial = model.pages.find((p) => p.isInitial);
+    const last = timed[timed.length - 1];
+    if (last && beat > endOf(timed.length - 1))
+        return {
+            pageLabel: last.label,
+            count: beat - last.atBeat,
+        };
+    return { pageLabel: initial?.label ?? timed[0]?.label ?? "—", count: 0 };
 };
 
 export const getPlayheadLabel = (
