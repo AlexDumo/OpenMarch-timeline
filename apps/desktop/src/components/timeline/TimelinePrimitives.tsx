@@ -985,6 +985,7 @@ export const TimelinePlayheadDetail = ({
 export const TimelinePlayhead = ({
     model,
     positionBeat,
+    livePositionBeat,
     pageLabel,
     pixelsPerBeat,
     height,
@@ -996,6 +997,11 @@ export const TimelinePlayhead = ({
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
+    /**
+     * While playing, the live position (view beats, fractional). The line follows it every
+     * animation frame by setting its own `left`, without re-rendering the timeline.
+     */
+    livePositionBeat?: () => number | null;
     pageLabel?: string;
     pixelsPerBeat: number;
     height: number;
@@ -1004,39 +1010,63 @@ export const TimelinePlayhead = ({
     onHoverChange: (hovered: boolean) => void;
     onFocusChange: (focused: boolean) => void;
     onSeek?: (beat: BeatPosition) => void;
-}) => (
-    <button
-        ref={anchorRef}
-        type="button"
-        data-testid="timeline-playhead"
-        data-timeline-scrub="true"
-        aria-label={`Playback position: ${getPlayheadLabel(model, positionBeat, pageLabel)}`}
-        onPointerDown={(event) => event.preventDefault()}
-        onPointerEnter={() => onHoverChange(true)}
-        onPointerLeave={() => onHoverChange(false)}
-        onFocus={() => onFocusChange(true)}
-        onBlur={() => onFocusChange(false)}
-        onKeyDown={(event) => {
-            const delta =
-                event.key === "ArrowLeft"
-                    ? -1
-                    : event.key === "ArrowRight"
-                      ? 1
-                      : 0;
-            if (delta === 0 || !onSeek) return;
-            event.preventDefault();
-            onSeek(clamp(Math.round(positionBeat) + delta, 0, beatCount));
-        }}
-        className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
-        style={{
-            left: beatToX(positionBeat, pixelsPerBeat),
-            height,
-        }}
-    >
-        <span className="border-t-accent absolute top-0 left-1/2 size-0 -translate-x-1/2 border-t-[6px] border-r-[4px] border-l-[4px] border-r-transparent border-l-transparent" />
-        <span className="bg-accent absolute top-6 bottom-0 left-1/2 w-px" />
-    </button>
-);
+}) => {
+    const left = beatToX(positionBeat, pixelsPerBeat);
+    // Where React last put the line; read when following stops (see below)
+    const restingLeft = useRef(left);
+    restingLeft.current = left;
+    useEffect(() => {
+        const element = anchorRef.current;
+        if (!livePositionBeat || !element) return;
+        let frame = 0;
+        const follow = () => {
+            const beat = livePositionBeat();
+            if (beat !== null)
+                element.style.left = `${beatToX(beat, pixelsPerBeat)}px`;
+            frame = requestAnimationFrame(follow);
+        };
+        frame = requestAnimationFrame(follow);
+        return () => {
+            cancelAnimationFrame(frame);
+            // React only writes `left` when its value changes, so put the line back itself
+            element.style.left = `${restingLeft.current}px`;
+        };
+    }, [anchorRef, livePositionBeat, pixelsPerBeat]);
+
+    return (
+        <button
+            ref={anchorRef}
+            type="button"
+            data-testid="timeline-playhead"
+            data-timeline-scrub="true"
+            aria-label={`Playback position: ${getPlayheadLabel(model, positionBeat, pageLabel)}`}
+            onPointerDown={(event) => event.preventDefault()}
+            onPointerEnter={() => onHoverChange(true)}
+            onPointerLeave={() => onHoverChange(false)}
+            onFocus={() => onFocusChange(true)}
+            onBlur={() => onFocusChange(false)}
+            onKeyDown={(event) => {
+                const delta =
+                    event.key === "ArrowLeft"
+                        ? -1
+                        : event.key === "ArrowRight"
+                          ? 1
+                          : 0;
+                if (delta === 0 || !onSeek) return;
+                event.preventDefault();
+                onSeek(clamp(Math.round(positionBeat) + delta, 0, beatCount));
+            }}
+            className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
+            style={{
+                left,
+                height,
+            }}
+        >
+            <span className="border-t-accent absolute top-0 left-1/2 size-0 -translate-x-1/2 border-t-[6px] border-r-[4px] border-l-[4px] border-r-transparent border-l-transparent" />
+            <span className="bg-accent absolute top-6 bottom-0 left-1/2 w-px" />
+        </button>
+    );
+};
 
 /** How far, in pixels, a press on empty timeline space must move to select a range */
 export const TIMELINE_RANGE_DRAG_PX = 4;

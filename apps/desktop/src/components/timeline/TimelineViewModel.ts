@@ -124,6 +124,12 @@ export type TimelineNavigation =
 
 export interface TimelineInteractionProps {
     readonly positionBeat: BeatPosition;
+    /**
+     * While playing, the live position in view beats, fractional, or `null` when there is none.
+     * The playhead line reads it every animation frame so it moves smoothly; everything else
+     * follows `positionBeat`, which changes once per beat.
+     */
+    readonly livePositionBeat?: () => number | null;
     /** Names the page in the transport and playhead labels instead of the page under the cursor */
     readonly pageLabel?: string;
     readonly isPlaying: boolean;

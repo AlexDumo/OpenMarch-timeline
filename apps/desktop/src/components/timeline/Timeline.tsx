@@ -71,6 +71,8 @@ export interface TimelineInput {
 export interface TimelinePlayback {
     /** The beat under the playback cursor, in `[0, beats.length]` (the end of the show included) */
     readonly positionBeat: number;
+    /** While playing, the live spec beat, fractional, for a smooth playhead; `null` when there is none */
+    readonly liveBeat?: () => number | null;
     /** Names the page in the transport and playhead labels, such as the selected page while paused */
     readonly pageLabel?: string;
     readonly isPlaying: boolean;
@@ -289,6 +291,20 @@ export function Timeline(props: TimelineProps) {
         0,
         model.beatCount,
     );
+    const liveBeat = playback.liveBeat;
+    const beatCount = model.beatCount;
+    const livePositionBeat = useMemo(
+        () =>
+            liveBeat
+                ? () => {
+                      const beat = liveBeat();
+                      return beat === null
+                          ? null
+                          : clamp(axis.toView(beat), 0, beatCount);
+                  }
+                : undefined,
+        [axis, beatCount, liveBeat],
+    );
     const seekToBeat = playback.onSeek
         ? (viewBeat: number) => {
               if (props.beats.length === 0) return;
@@ -375,6 +391,7 @@ export function Timeline(props: TimelineProps) {
     const commonProps = {
         model,
         positionBeat,
+        livePositionBeat,
         pageLabel: playback.pageLabel,
         isPlaying: playback.isPlaying,
         pixelsPerBeat,

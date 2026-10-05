@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CollapsedTimeline, ExpandedTimeline } from "../TimelineVariants";
 import { Timeline, TimelineWaveformProvider } from "../Timeline";
@@ -933,5 +939,41 @@ describe("review follow-ups", () => {
         expect(
             screen.getByRole("button", { name: /^Playback position:/ }),
         ).toHaveAccessibleName("Playback position: Pg 2 · m5.1");
+    });
+});
+
+describe("the playhead while playing", () => {
+    it("follows the live position between beats, and rests on the beat once paused", () => {
+        vi.useFakeTimers({
+            toFake: ["requestAnimationFrame", "cancelAnimationFrame"],
+        });
+        try {
+            let live = 11.5;
+            const { rerender } = render(
+                <ExpandedTimeline
+                    {...commonProps}
+                    showTransport={false}
+                    isPlaying
+                    livePositionBeat={() => live}
+                />,
+            );
+            const playhead = screen.getByTestId("timeline-playhead");
+            act(() => {
+                vi.advanceTimersToNextFrame();
+            });
+            expect(playhead).toHaveStyle({ left: "184px" });
+            live = 11.75;
+            act(() => {
+                vi.advanceTimersToNextFrame();
+            });
+            expect(playhead).toHaveStyle({ left: "188px" });
+
+            rerender(
+                <ExpandedTimeline {...commonProps} showTransport={false} />,
+            );
+            expect(playhead).toHaveStyle({ left: "176px" });
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

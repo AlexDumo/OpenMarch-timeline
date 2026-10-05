@@ -385,6 +385,9 @@ function TimelineSurface({
                     <TimelinePlayhead
                         model={model}
                         positionBeat={positionBeat}
+                        livePositionBeat={
+                            props.isPlaying ? props.livePositionBeat : undefined
+                        }
                         pageLabel={props.pageLabel}
                         pixelsPerBeat={pixelsPerBeat}
                         height={timelineHeight}
