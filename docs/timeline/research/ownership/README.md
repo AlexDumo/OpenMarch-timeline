@@ -165,6 +165,7 @@ treat exit/enter as UI concepts, or to restructure.
 | [06-authoring-ux.md](06-authoring-ux.md)       | Gesture → result table, join gestures, automatic return, notches, menus, undo rows, WP-O1..O6  |
 | [07-ghost-rendering.md](07-ghost-rendering.md) | What a focused move draws, tokens, ghost handles, data source, canvas integration, G0..G3      |
 | [08-storage.md](08-storage.md)                 | Layers vs trims vs segments; recommends O (override storage) plus two additive tables          |
+| [09-isolation.md](09-isolation.md)             | Isolating one move: double-click entry, ghosts, the plan dot as the marcher (prototype, built) |
 | [VALIDATION.md](VALIDATION.md)                 | Feel-based decisions to check by hand once built; add a row for every unproven default         |
 
 ### Where the four agree

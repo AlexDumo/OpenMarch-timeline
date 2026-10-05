@@ -2,10 +2,8 @@
 
 # 09: Isolating a move (prototype)
 
-Status: prototype on branch `timeline/isolation-focus` (based on P8.17,
-`timeline/p8-17-core-loop`). Nothing here changes `spec.md` or `ui.md` yet. This
-folder's other files (01–08, README, VALIDATION) are on `timeline-try-2`; merge this
-file and its validation rows into them when the branches meet.
+Status: prototype, merged into `timeline-try-2` with P8.17 (UI-10). Nothing here
+changes `spec.md` or `ui.md` yet; recording the decisions there is still to do.
 
 ## Why
 
@@ -89,7 +87,7 @@ A first version had separate gray handles for ghost ends, but only one could be 
 
 Code: `timelineIsolationPlan.ts` (plan store, `editingPositionAt`, `applyIsolationPlan`), `planCanvasEdit` and `snapIsolatedPlayheadToEnd` in `timelineCoordinateWrites.ts`, and `ghosts` on `moveMarchersInTimelineInTransaction`.
 
-V-19 (**provisional**, owner): members are drawn at the plan when paused but at the real show when playing. Alternative: plan while playing too. Try: loop a steal-out and pause at different counts. Does the jump between the real and planned positions on pause read as "editing view", or as a bug?
+V-19 in [VALIDATION.md](VALIDATION.md) tracks the paused-plan versus playing-real split.
 
 ## Reviews (2026-10-04)
 
@@ -122,12 +120,6 @@ A code review and a designer-UX review ran on the first commit.
   - step-size warnings are hidden while isolated;
   - follow-the-leader `inherit` order falls back in the plan.
 
-## Validation rows (to merge into VALIDATION.md)
+## Validation rows
 
-| ID   | Decision (status)                                                                                    | Alternative                                            | What to try                                                                                     |
-| ---- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| V-14 | Isolation is entered by double-clicking a page box or clip; Esc or **Done** leaves (**provisional**) | Enter key on a selected clip; a toolbar toggle         | Do five ghost edits in a row. Is the double-click found without being told? Does Esc feel safe? |
-| V-15 | Outside members are dimmed **and locked** while isolated (**provisional**)                           | Faded but still selectable (07 §1.3 focus fade)        | Try to grab a marcher outside the move. Is being blocked helpful, or does it feel stuck?        |
-| V-16 | Play loops the isolated range; the scrub is clamped to it (**provisional**)                          | Play on past the end; free scrub with the range shaded | Loop a steal-out several times. Does anyone want to see what happens after the range?           |
-| V-17 | The scene stays drawn while playing in isolation (**provisional**; 07 draws nothing while playing)   | Hide paths while playing, as outside isolation         | Play a 200-marcher move isolated. Is it readable, and is the frame rate fine?                   |
-| V-18 | Leaving restores the start flag and playhead from before isolating (**provisional**)                 | Stay on the isolated range                             | Isolate, scrub, leave. Did the playhead land where you expected?                                |
+V-14 to V-19 are in [VALIDATION.md](VALIDATION.md).
