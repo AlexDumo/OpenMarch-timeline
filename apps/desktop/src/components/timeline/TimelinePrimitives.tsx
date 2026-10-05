@@ -813,7 +813,8 @@ export const TimelineSelectionRange = ({
     });
 
     const flag = (kind: "start" | "end", beatIndex: number) => {
-        const x = beatToX(beatIndex, pixelsPerBeat);
+        // Whole pixels, so the stem and the pennant blur on the same pixels
+        const x = Math.round(beatToX(beatIndex, pixelsPerBeat));
         if (kind === "end")
             return (
                 <button
@@ -844,14 +845,15 @@ export const TimelineSelectionRange = ({
                 >
                     <span
                         className={clsx(
-                            "absolute inset-y-0 left-1/2",
+                            "absolute top-px bottom-0 left-1/2",
                             START_INK.bg,
-                            fromStart ? "w-0.5" : "w-px",
+                            fromStart ? "w-2" : "w-px",
                         )}
                     />
                 </button>
                 {/* The pennant is its own handle above the playhead's (z-50): after Stop the flag
-                    is drawn on the playhead, and this is the part of it that can be grabbed */}
+                    is drawn on the playhead, and this is the part of it that can be grabbed. Its
+                    left edge is drawn on the stem's pixels, so the two read as one shape */}
                 <button
                     type="button"
                     tabIndex={-1}
@@ -862,35 +864,41 @@ export const TimelineSelectionRange = ({
                     {...flagHandlers(kind, beatIndex)}
                     onKeyDown={undefined}
                     className="pointer-events-auto absolute top-0 z-[55] h-14 w-14 touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize disabled:cursor-default"
-                    style={{ left: x - 1 }}
+                    style={{ left: x }}
                 >
                     <svg
-                        width="11"
-                        height="9"
-                        viewBox="0 0 11 9"
+                        width="10"
+                        height="10"
+                        viewBox="0 0 10 10"
                         aria-hidden="true"
                         className={clsx(
-                            "absolute top-0 left-0",
+                            "absolute top-px left-0",
                             START_INK.text,
                         )}
                     >
-                        <path
-                            d="M1 0.75 L10 4.5 L1 8.25 Z"
-                            fill={
-                                fromStart ? "currentColor" : "var(--color-bg-1)"
-                            }
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinejoin="round"
-                        />
+                        {/* A right triangle whose top lines up with the page boxes' (1px down, inside the
+                            ruler's border), so the From start bar runs straight out of it. Both are
+                            fills, not strokes, so no edge spills past the stem */}
+                        {fromStart ? (
+                            // Filled: the left edge sits inside the 2px stem
+                            <path d="M0 0 L10 0 L0 10 Z" fill="currentColor" />
+                        ) : (
+                            // Hollow: a 1px outline whose left side is the 1px stem
+                            <path
+                                d="M0 0 L10 0 L0 10 Z M1 1 L1 7.59 L7.59 1 Z"
+                                fill="currentColor"
+                                fillRule="evenodd"
+                            />
+                        )}
                     </svg>
                 </button>
             </>
         );
     };
 
-    const startX = beatToX(preview.startBeatIndex, pixelsPerBeat);
-    const endX = beatToX(preview.endBeatIndex, pixelsPerBeat);
+    // Rounded like the flag, so the window and the From start bar start on the stem's pixel
+    const startX = Math.round(beatToX(preview.startBeatIndex, pixelsPerBeat));
+    const endX = Math.round(beatToX(preview.endBeatIndex, pixelsPerBeat));
     return (
         // No z-index here: one would make a stacking context, and the start pennant must rise
         // above the playhead (z-50), which is outside it. Each child sets its own instead.
@@ -901,14 +909,20 @@ export const TimelineSelectionRange = ({
             <span
                 aria-hidden="true"
                 className={clsx(
-                    "absolute top-0 z-30",
+                    // 1px down, inside the ruler's border, like the flag and the page boxes
+                    "absolute top-px z-30",
                     fromStart ? "bg-yellow/12" : "bg-accent/8",
                 )}
-                style={{ left: startX, width: endX - startX, height }}
+                style={{
+                    left: startX,
+                    width: endX - startX,
+                    height: height - 1,
+                }}
             />
             {fromStart && (
-                // UI-11: a thin bar along the ruler's top edge, clear of the page numbers, inside a
-                // taller click target (at least 24px wide) that turns From start off
+                // UI-11: a thin bar along the ruler's top edge, out of the pennant's top and clear
+                // of the page numbers, inside a taller click target (at least 24px wide) that turns
+                // From start off
                 <button
                     type="button"
                     data-testid="timeline-from-start-bar"
@@ -926,7 +940,7 @@ export const TimelineSelectionRange = ({
                 >
                     <span
                         className={clsx(
-                            "absolute top-0 h-3 transition-[height] duration-100 group-hover:h-5",
+                            "absolute top-px h-3 transition-[height] duration-100 group-hover:h-5",
                             START_INK.bg,
                         )}
                         style={{
@@ -1112,7 +1126,8 @@ export const TimelinePlayhead = ({
     onFocusChange: (focused: boolean) => void;
     onSeek?: (beat: BeatPosition) => void;
 }) => {
-    const left = beatToX(positionBeat, pixelsPerBeat);
+    // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
+    const left = Math.round(beatToX(positionBeat, pixelsPerBeat));
     // Where React last put the line; read when following stops (see below)
     const restingLeft = useRef(left);
     restingLeft.current = left;
@@ -1122,8 +1137,10 @@ export const TimelinePlayhead = ({
         let frame = 0;
         const follow = () => {
             const beat = livePositionBeat();
+            // Device pixels while playing: crisp, and still smooth on a high-density screen
+            const ratio = window.devicePixelRatio || 1;
             if (beat !== null)
-                element.style.left = `${beatToX(beat, pixelsPerBeat)}px`;
+                element.style.left = `${Math.round(beatToX(beat, pixelsPerBeat) * ratio) / ratio}px`;
             frame = requestAnimationFrame(follow);
         };
         frame = requestAnimationFrame(follow);
@@ -1163,8 +1180,18 @@ export const TimelinePlayhead = ({
                 height,
             }}
         >
-            <span className="border-t-accent absolute top-0 left-1/2 size-0 -translate-x-1/2 border-t-[6px] border-r-[4px] border-l-[4px] border-r-transparent border-l-transparent" />
-            <span className="bg-accent absolute top-6 bottom-0 left-1/2 w-px" />
+            {/* The line runs from the page boxes' top (1px down, inside the ruler's border), and
+                the head is a fill centered on the line's pixel, so its tip runs into the line */}
+            <span className="bg-accent absolute top-px bottom-0 left-1/2 w-px" />
+            <svg
+                width="9"
+                height="6"
+                viewBox="0 0 9 6"
+                aria-hidden="true"
+                className="text-accent absolute top-px left-[calc(50%-4px)]"
+            >
+                <path d="M0 0 L9 0 L4.5 6 Z" fill="currentColor" />
+            </svg>
         </button>
     );
 };

@@ -351,17 +351,19 @@ from it. The spec still wins on the model; this file decides presentation.
     press). Turning it off keeps S, its pin and the window. Opening a show
     turns it off.
   - **No words on the timeline** (project owner, 2026-10-05, after three
-    critiques). The start flag is a line with a right-pointing pennant,
-    hollow while From start is off and filled while it is on, so the state
-    doesn't rely on color. While on, the window is tinted yellow, a 3px bar
+    critiques). The start flag is a line with a pennant, a right triangle
+    whose top is flat and whose long side faces down, hollow while From start
+    is off and filled while it is on, so the state doesn't rely on color. While on, the window is tinted yellow, a 3px bar
     runs along the ruler's top edge (clear of the page numbers) inside a 10px
     click target at least 24px wide that turns the mode off, and the
     transport's flag button is lit in the same color. The words live on the
     field badge, "Space replays Page 3's move ✕", which flashes once when it
     appears. Light mode draws the flag's color as a darker ochre (about 3.6:1
     on the ruler; the theme yellow is about 1.9:1); dark mode keeps the
-    yellow. The pennant is its own handle above the playhead's, so after
-    **Stop**, when the flag is drawn on the playhead, it can still be dragged.
+    yellow. The bar runs straight out of the pennant's top and the pennant's
+    left edge is the line, so flag and bar read as one shape. The pennant is
+    its own handle above the playhead's, so after **Stop**, when the flag is
+    drawn on the playhead, it can still be dragged.
     Follow-ups from the critiques: end caps on the bar while looping, a faint
     bar on hover while off so a click turns it on, and a one-time hint on the
     first drag.
