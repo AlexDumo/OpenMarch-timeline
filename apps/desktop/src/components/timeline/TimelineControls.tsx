@@ -162,26 +162,34 @@ export function TimelineFromStartButton() {
     const on = useTimelineSelectionStore((s) => s.playFromStart);
     const set = useTimelineSelectionStore((s) => s.setPlayFromStart);
     const label = on
-        ? "Play from the start flag: on (C, or Esc to turn off)"
-        : "Play from the start flag: off (C)";
+        ? "From start: on. Play replays from the start flag (C, or Esc to turn off)"
+        : "From start: off. Play plays on from the playhead (C to turn on)";
     return (
-        <button
-            type="button"
-            data-testid="timeline-from-start"
-            className={clsx(
-                "rounded-4 flex items-center gap-4 px-4 outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50",
-                {
-                    "bg-accent text-text-invert": on,
-                    "text-text enabled:hover:text-accent": !on,
-                },
-            )}
-            aria-label="Play from the start flag (C)"
-            aria-pressed={on}
-            title={label}
-            onClick={() => set()}
-        >
-            <FlagIcon size={20} weight={on ? "fill" : "regular"} />
-        </button>
+        <>
+            <button
+                type="button"
+                data-testid="timeline-from-start"
+                className={clsx(
+                    "rounded-4 flex items-center gap-4 px-4 outline-hidden duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50",
+                    {
+                        // The start flag's ink, so the button reads as the flag's (TimelinePrimitives)
+                        "dark:text-text-invert dark:bg-yellow bg-[rgb(150,120,0)] text-white":
+                            on,
+                        "text-text enabled:hover:text-accent": !on,
+                    },
+                )}
+                aria-label="From start (C)"
+                aria-pressed={on}
+                title={label}
+                onClick={() => set()}
+            >
+                <FlagIcon size={20} weight={on ? "fill" : "regular"} />
+            </button>
+            {/* Announced however the mode changed: C, Esc, the bar or a dragged range */}
+            <span className="sr-only" aria-live="polite">
+                {on ? "From start on" : "From start off"}
+            </span>
+        </>
     );
 }
 

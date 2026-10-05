@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { Button } from "@openmarch/ui";
-import { XIcon } from "@phosphor-icons/react";
+import { FlagIcon, XIcon } from "@phosphor-icons/react";
+import clsx from "clsx";
 import { useTimingObjects } from "@/hooks";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import {
@@ -72,30 +73,44 @@ export function useIsolationEscape(): void {
 }
 
 /**
- * The badge over the field while **From start** is on (UI-11): what Play will play, and the ways
- * out (the badge's ✕, C, Esc). Shows only with a window to play; renders nothing otherwise.
+ * The badge over the field while **From start** is on (UI-11): what Space will replay, and the
+ * ways out (the badge's ✕, C, Esc). It flashes once when it appears, since a dragged range turns
+ * the mode on without a key press. Shows only with a window to play; renders nothing otherwise.
  */
 export function TimelineFromStartBadge() {
     const on = useTimelineSelectionStore((s) => s.playFromStart);
     const selection = useTimelineSelectionStore((s) => s.selection);
     const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
     const { pages } = useTimingObjects()!;
-    if (!on || isolated || selection.kind !== "range") return null;
+    const shown = on && !isolated && selection.kind === "range";
+    const [fresh, setFresh] = useState(false);
+    useEffect(() => {
+        if (!shown) return;
+        setFresh(true);
+        const timeout = setTimeout(() => setFresh(false), 900);
+        return () => clearTimeout(timeout);
+    }, [shown]);
+    if (!shown) return null;
     return (
         <div
             data-testid="timeline-from-start-badge"
             role="status"
-            className="border-yellow bg-bg-1 text-text rounded-6 text-sub pointer-events-auto absolute top-8 left-8 z-10 flex max-w-[calc(50%-24px)] items-center gap-8 border px-8 py-4 whitespace-nowrap shadow-md"
+            className={clsx(
+                "bg-bg-1 text-text rounded-6 text-sub dark:border-yellow pointer-events-auto absolute top-8 left-8 z-10 flex max-w-[calc(50%-24px)] items-center gap-8 border border-[rgb(150,120,0)] px-8 py-4 whitespace-nowrap shadow-md transition-shadow duration-300",
+                fresh && "dark:ring-yellow/40 ring-4 ring-[rgb(150,120,0)]/40",
+            )}
         >
-            <span className="bg-yellow text-text-invert rounded-sm px-3 font-mono text-[9px] leading-[14px] font-semibold tracking-wide">
-                FROM START
-            </span>
+            <FlagIcon
+                size={14}
+                weight="fill"
+                className="dark:text-yellow shrink-0 text-[rgb(150,120,0)]"
+            />
             <span className="truncate">
-                Play plays {isolatedTimelineName(selection, pages)}
+                Space replays {isolatedTimelineName(selection, pages)}
             </span>
             <button
                 type="button"
-                aria-label="Turn off playing from the start flag"
+                aria-label="Turn off From start"
                 title="Turn off (C or Esc)"
                 className="text-text-subtitle hover:text-text flex items-center"
                 onClick={() =>

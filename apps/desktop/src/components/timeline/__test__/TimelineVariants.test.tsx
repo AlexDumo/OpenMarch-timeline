@@ -395,7 +395,7 @@ describe("timeline views", () => {
                 onCreateTrack={onCreateTrack}
             />,
         );
-        const start = screen.getByRole("button", { name: "Start flag" });
+        const start = screen.getByRole("button", { name: /^Start flag/ });
         const actions = screen.getByTestId("timeline-selection-actions");
 
         // Alt turns page snapping off, so the flag stops at beat 7 rather than the page line at 8
@@ -470,7 +470,7 @@ describe("timeline views", () => {
             />,
         );
         expect(
-            screen.getByRole("button", { name: "Start flag" }),
+            screen.getByRole("button", { name: /^Start flag/ }),
         ).toBeInTheDocument();
         expect(
             screen.queryByRole("button", { name: "Selection end" }),
@@ -491,8 +491,8 @@ describe("timeline views", () => {
             />,
         );
         expect(
-            screen.getByRole("button", { name: "Start flag" }),
-        ).toHaveAttribute("title", expect.stringContaining("beat boundary 9"));
+            screen.getByRole("button", { name: "Start flag, beat 9" }),
+        ).toBeInTheDocument();
     });
 
     it("after Stop, arrow keys on the start flag never cross the playhead", () => {
@@ -509,7 +509,7 @@ describe("timeline views", () => {
                 onSelectionChange={onSelectionChange}
             />,
         );
-        const flag = screen.getByRole("button", { name: "Start flag" });
+        const flag = screen.getByRole("button", { name: /^Start flag/ });
         fireEvent.keyDown(flag, { key: "ArrowRight" });
         expect(onSelectionChange).not.toHaveBeenCalled();
         fireEvent.keyDown(flag, { key: "ArrowLeft" });
@@ -532,7 +532,7 @@ describe("timeline views", () => {
                 onSelectionChange={onSelectionChange}
             />,
         );
-        const flag = screen.getByRole("button", { name: "Start flag" });
+        const flag = screen.getByRole("button", { name: /^Start flag/ });
         fireEvent(
             flag,
             new MouseEvent("pointerdown", {
@@ -550,10 +550,7 @@ describe("timeline views", () => {
             }),
         );
         expect(onSelectionChange).not.toHaveBeenCalled();
-        expect(flag).toHaveAttribute(
-            "title",
-            expect.stringContaining("beat boundary 9"),
-        );
+        expect(flag).toHaveAccessibleName("Start flag, beat 9");
     });
 
     it("an arrow key on the start flag doesn't reach the window's nudge keys (review: P8.17)", () => {
@@ -572,7 +569,7 @@ describe("timeline views", () => {
                 />,
             );
             fireEvent.keyDown(
-                screen.getByRole("button", { name: "Start flag" }),
+                screen.getByRole("button", { name: /^Start flag/ }),
                 { key: "ArrowLeft" },
             );
             expect(onWindowKey).not.toHaveBeenCalled();
@@ -756,7 +753,7 @@ describe("production timeline interface", () => {
             </TimelineWaveformProvider>,
         );
         const start = screen.getByRole("button", {
-            name: "Start flag",
+            name: /^Start flag/,
         });
 
         fireEvent.keyDown(start, { key: "ArrowRight" });
@@ -793,7 +790,7 @@ describe("page snapping in drags (UI-2)", () => {
         );
         return {
             onSelectionChange,
-            start: screen.getByRole("button", { name: "Start flag" }),
+            start: screen.getByRole("button", { name: /^Start flag/ }),
         };
     };
 
@@ -804,6 +801,21 @@ describe("page snapping in drags (UI-2)", () => {
         pointer(start, "pointerdown", 80);
         pointer(start, "pointermove", 112);
         pointer(start, "pointerup", 112);
+
+        expect(onSelectionChange).toHaveBeenCalledWith({
+            kind: "range",
+            range: { startBeatIndex: 8, endBeatIndex: 9 },
+        });
+    });
+
+    it("drags the start flag by its pennant, which sits above the playhead (UI-11)", () => {
+        const { onSelectionChange } = renderRange();
+        const pennant = screen.getByTestId("timeline-start-pennant");
+        expect(pennant).toHaveClass("z-[55]");
+
+        pointer(pennant, "pointerdown", 80);
+        pointer(pennant, "pointermove", 112);
+        pointer(pennant, "pointerup", 112);
 
         expect(onSelectionChange).toHaveBeenCalledWith({
             kind: "range",

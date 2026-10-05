@@ -350,12 +350,21 @@ from it. The spec still wins on the model; this file decides presentation.
     or **Esc** (after deselecting marchers and leaving isolation, one step per
     press). Turning it off keeps S, its pin and the window. Opening a show
     turns it off.
-  - **While on**, it is shown three ways: the transport button is lit, the
-    window S→P is drawn as a yellow bar across the top of the timeline reading
-    "FROM START ✕", and a badge on the field names what Play plays ("Play plays
-    Page 2's move"). While off, the START flag is dimmed, since Play doesn't go
-    back to it, but it stays drawn because every drag still leaves from it
-    (V-22).
+  - **No words on the timeline** (project owner, 2026-10-05, after three
+    critiques). The start flag is a line with a right-pointing pennant,
+    hollow while From start is off and filled while it is on, so the state
+    doesn't rely on color. While on, the window is tinted yellow, a 3px bar
+    runs along the ruler's top edge (clear of the page numbers) inside a 10px
+    click target at least 24px wide that turns the mode off, and the
+    transport's flag button is lit in the same color. The words live on the
+    field badge, "Space replays Page 3's move ✕", which flashes once when it
+    appears. Light mode draws the flag's color as a darker ochre (about 3.6:1
+    on the ruler; the theme yellow is about 1.9:1); dark mode keeps the
+    yellow. The pennant is its own handle above the playhead's, so after
+    **Stop**, when the flag is drawn on the playhead, it can still be dragged.
+    Follow-ups from the critiques: end caps on the bar while looping, a faint
+    bar on hover while off so a click turns it on, and a one-time hint on the
+    first drag.
   - **Play (Space), From start on**, previews the window from S to
     `PREVIEW_POST_ROLL_BEATS` (2) after P, clamped to the show, so the arrival
     shows (no pre-roll, owner; V-24). At the end the canvas is back at P. With
