@@ -68,3 +68,73 @@ Feel-based ones also have a row in
   Confidence is steadiness (RMS residual against 10% of a beat) times amount (seven fitted taps =
   full).
 - **Validate:** V-40, then E4 tap-lab data.
+
+## K-0 Test-show kit (kit, 2026-10-06)
+
+Entries K-1 to K-7 are about the test-show kit in `apps/desktop/tempo-kit` (its README has the
+fixture list and how to score).
+
+## K-1. Truth times are audio-file seconds
+
+- **Context:** a show's count times start at 0, but the music in a recording starts later. The app links the two with `audioOffsetSeconds` (audio time = show time − offset).
+- **Choice:** every truth time is seconds from the start of the audio file. The scorer subtracts the show's offset. A synced show stores `-leadIn`.
+- **Alternatives:** times from count 1, which can't score an offset mistake; a lead-in count, which changes the count structure.
+- **Validate:** `-synced.dots` scores 0 ms. Moving the offset by 0.1 s scores 100 ms on every count (unit test).
+
+## K-2. What a count is in each meter
+
+- **Context:** the truth has to commit to a count per note value, and today's parser gets several meters wrong.
+- **Choice:**
+  - 6/8 and 12/8 count dotted quarters.
+  - 7/8 counts 2+2+3 and 5/8 counts 3+2 (three and two uneven counts).
+  - 3/2 counts quarters: six counts, a step per quarter at ♩=176.
+  - A pickup is its own one-count measure, m0, with `measurementOffset` 0.
+- **Alternatives:**
+  - 3/2 in halves (three counts, as the parser's table has it).
+  - 6/8 in six.
+  - The pickup inside m1.
+- **Validate:** ask Sam how the 3/2 bar is marched. If the answer is halves, change `METERS["3/2"]` and regenerate. The E3 import preview's "count in" choice needs the same answer.
+
+## K-3. Fermata and caesura lengths
+
+- **Choice:**
+  - A fermata's seconds are the held count's whole length (3.2 s means the count lasts 3.2 s).
+  - A caesura's seconds are silence added after its count.
+  - Errors "in counts" divide by the count's length without either, so a held count doesn't hide an error.
+- **Alternatives:** a fermata as extra time added to the count.
+- **Validate:** read `rubato.json` m5 beat 4 and m14 beat 4 against the WAV.
+
+## K-4. How each "wrong" show is wrong
+
+- **Choice:**
+  - Dana: flat ♩=120 (the new-show default).
+  - Marcus: every count 4% fast.
+  - Jo: only the printed tempos (no rit., accel., fermatas or caesura).
+  - Sam: 0.5 s per count whatever the note value.
+  - All with no audio offset.
+  - Marcus's live take: his render-synced show with the live audio swapped in.
+  - Counts, measures and marks are always right, so only timing needs fixing. That keeps every fix duration-only, which the ripple never refuses.
+- **Alternatives:** shows imported by today's parser, with its wrong counts. Those test the parser, not alignment, and the MusicXML files already cover that case.
+- **Validate:** each persona's script starts from its `-wrong` show and ends with a scorer run.
+
+## K-5. Generated audio stands in for a MuseScore render
+
+- **Context:** the plan asks for a MuseScore render and a real band recording. MuseScore isn't on the capture box, and the recording needs two annotators.
+- **Choice:** render the click with `createMetronomeWav`, a louder hit sound at marked hits, and a quiet sustained chord per section, straight from the truth. The truth is then exact to the sample.
+- **Alternatives:** time-stretching one render for the live take. The kit renders the live map directly instead, so its truth is exact too.
+- **Validate:** E5 (onset snapping) needs something less clean than clicks. Add reverb or a real recording before running it.
+
+## K-6. Score letters, typo and rit.
+
+- **Choice:**
+  - The score's rit. leads into H. The lead's task named H; Marcus's persona report said K.
+  - The 6/8 section is at I, with the 3/4 bar (m70) closing I before J.
+  - v1 prints the ♩=138 typo at F. The audio and `score.json` are v2 (♩=132).
+  - The Sibelius export prints "c. 132" at K, restating the tempo, so a parser that refuses or warns there loses nothing.
+- **Validate:** Marcus's E12 script. Re-importing v2 over a v1 import should change only the timing after F.
+
+## K-7. The generator runs through vitest
+
+- **Context:** the shows have to be built with the app's own db-functions and converter, which import through the `@/` alias and need a DOM-like environment.
+- **Choice:** `generate.kit.ts` is one vitest "test" under its own config (`tempo-kit/vitest.kit.config.mts`), as `~/om-capture/make-fixture` already does. The scorer is plain Node (`score.mts`), so anyone can run it on a saved show.
+- **Alternatives:** `tsx` with tsconfig paths. Some app modules pull in browser globals at import time, which vitest's jsdom environment provides.

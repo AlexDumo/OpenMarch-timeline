@@ -48,6 +48,13 @@ Per user, all off by default (`useTempoLabFlag(flag)` reads one):
 | `snapToAttacks` | boolean              | Drags and taps snap to attacks in the music (E5)                                 |
 | `drillChoices`  | boolean              | Cuts and inserts ask what the drill does, with a preview (E10)                   |
 
+## Test-show kit
+
+Shows, audio and MusicXML with known count times, plus a scorer, for the experiments and hands-on
+sessions: [apps/desktop/tempo-kit](../../apps/desktop/tempo-kit/README.md). Make it with
+`pnpm --dir apps/desktop run tempo-kit` (writes to `~/om-capture/fixtures/tempo/`) and score a show
+with `node apps/desktop/tempo-kit/score.mts <show.dots> <truth.json>`.
+
 ## Decisions
 
 - [decisions.md](decisions.md): the log of choices made while building.

@@ -1,0 +1,4556 @@
+{
+    "name": "priya",
+    "title": "Priya's show",
+    "description": "A written show, 70% done: opener ♩=168 (A–C, m1–24), ballad ♩=72 (D–F, m25–64, F at m41), closer ♩=176 (G–J, m65–96), 25 pages. Page 23 is 8 counts in the closer.",
+    "personas": ["Priya"],
+    "leadIn": 0.8,
+    "end": 212.05541125541177,
+    "audioLength": 214.05541125541177,
+    "syncedAudioOffsetSeconds": -0.8,
+    "firstMeasureNumber": 1,
+    "pages": [
+        1, 17, 33, 49, 65, 81, 97, 113, 129, 145, 161, 177, 193, 209, 225, 241,
+        257, 273, 289, 305, 321, 329, 337, 345, 361
+    ],
+    "measures": [
+        {
+            "number": 1,
+            "firstCount": 1,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "A",
+            "text": ["♩=168"]
+        },
+        {
+            "number": 2,
+            "firstCount": 5,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 3,
+            "firstCount": 9,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 4,
+            "firstCount": 13,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 5,
+            "firstCount": 17,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 6,
+            "firstCount": 21,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 7,
+            "firstCount": 25,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 8,
+            "firstCount": 29,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 9,
+            "firstCount": 33,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "B"
+        },
+        {
+            "number": 10,
+            "firstCount": 37,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 11,
+            "firstCount": 41,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 12,
+            "firstCount": 45,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 13,
+            "firstCount": 49,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 14,
+            "firstCount": 53,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 15,
+            "firstCount": 57,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 16,
+            "firstCount": 61,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 17,
+            "firstCount": 65,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "C"
+        },
+        {
+            "number": 18,
+            "firstCount": 69,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 19,
+            "firstCount": 73,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 20,
+            "firstCount": 77,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 21,
+            "firstCount": 81,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 22,
+            "firstCount": 85,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 23,
+            "firstCount": 89,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 24,
+            "firstCount": 93,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 25,
+            "firstCount": 97,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "D",
+            "text": ["♩=72"]
+        },
+        {
+            "number": 26,
+            "firstCount": 101,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 27,
+            "firstCount": 105,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 28,
+            "firstCount": 109,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 29,
+            "firstCount": 113,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 30,
+            "firstCount": 117,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 31,
+            "firstCount": 121,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 32,
+            "firstCount": 125,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 33,
+            "firstCount": 129,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "E"
+        },
+        {
+            "number": 34,
+            "firstCount": 133,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 35,
+            "firstCount": 137,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 36,
+            "firstCount": 141,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 37,
+            "firstCount": 145,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 38,
+            "firstCount": 149,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 39,
+            "firstCount": 153,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 40,
+            "firstCount": 157,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 41,
+            "firstCount": 161,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "F"
+        },
+        {
+            "number": 42,
+            "firstCount": 165,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 43,
+            "firstCount": 169,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 44,
+            "firstCount": 173,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 45,
+            "firstCount": 177,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 46,
+            "firstCount": 181,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 47,
+            "firstCount": 185,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 48,
+            "firstCount": 189,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 49,
+            "firstCount": 193,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 50,
+            "firstCount": 197,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 51,
+            "firstCount": 201,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 52,
+            "firstCount": 205,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 53,
+            "firstCount": 209,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 54,
+            "firstCount": 213,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 55,
+            "firstCount": 217,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 56,
+            "firstCount": 221,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 57,
+            "firstCount": 225,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 58,
+            "firstCount": 229,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 59,
+            "firstCount": 233,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 60,
+            "firstCount": 237,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 61,
+            "firstCount": 241,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 62,
+            "firstCount": 245,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 63,
+            "firstCount": 249,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 64,
+            "firstCount": 253,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 65,
+            "firstCount": 257,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "G",
+            "text": ["♩=176"]
+        },
+        {
+            "number": 66,
+            "firstCount": 261,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 67,
+            "firstCount": 265,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 68,
+            "firstCount": 269,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 69,
+            "firstCount": 273,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 70,
+            "firstCount": 277,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 71,
+            "firstCount": 281,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 72,
+            "firstCount": 285,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 73,
+            "firstCount": 289,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "H"
+        },
+        {
+            "number": 74,
+            "firstCount": 293,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 75,
+            "firstCount": 297,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 76,
+            "firstCount": 301,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 77,
+            "firstCount": 305,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 78,
+            "firstCount": 309,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 79,
+            "firstCount": 313,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 80,
+            "firstCount": 317,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 81,
+            "firstCount": 321,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "I"
+        },
+        {
+            "number": 82,
+            "firstCount": 325,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 83,
+            "firstCount": 329,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 84,
+            "firstCount": 333,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 85,
+            "firstCount": 337,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 86,
+            "firstCount": 341,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 87,
+            "firstCount": 345,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 88,
+            "firstCount": 349,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 89,
+            "firstCount": 353,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null,
+            "mark": "J"
+        },
+        {
+            "number": 90,
+            "firstCount": 357,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 91,
+            "firstCount": 361,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 92,
+            "firstCount": 365,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 93,
+            "firstCount": 369,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 94,
+            "firstCount": 373,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 95,
+            "firstCount": 377,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        },
+        {
+            "number": 96,
+            "firstCount": 381,
+            "counts": 4,
+            "meter": "4/4",
+            "grouping": null
+        }
+    ],
+    "counts": [
+        {
+            "index": 1,
+            "time": 0.8,
+            "duration": 0.35714285714285715,
+            "measure": 1,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168,
+            "mark": "A"
+        },
+        {
+            "index": 2,
+            "time": 1.1571428571428573,
+            "duration": 0.35714285714285715,
+            "measure": 1,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 3,
+            "time": 1.5142857142857145,
+            "duration": 0.35714285714285715,
+            "measure": 1,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 4,
+            "time": 1.8714285714285717,
+            "duration": 0.35714285714285715,
+            "measure": 1,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 5,
+            "time": 2.2285714285714286,
+            "duration": 0.35714285714285715,
+            "measure": 2,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 6,
+            "time": 2.585714285714286,
+            "duration": 0.35714285714285715,
+            "measure": 2,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 7,
+            "time": 2.942857142857143,
+            "duration": 0.35714285714285715,
+            "measure": 2,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 8,
+            "time": 3.3000000000000003,
+            "duration": 0.35714285714285715,
+            "measure": 2,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 9,
+            "time": 3.6571428571428575,
+            "duration": 0.35714285714285715,
+            "measure": 3,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 10,
+            "time": 4.014285714285714,
+            "duration": 0.35714285714285715,
+            "measure": 3,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 11,
+            "time": 4.371428571428571,
+            "duration": 0.35714285714285715,
+            "measure": 3,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 12,
+            "time": 4.728571428571428,
+            "duration": 0.35714285714285715,
+            "measure": 3,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 13,
+            "time": 5.0857142857142845,
+            "duration": 0.35714285714285715,
+            "measure": 4,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 14,
+            "time": 5.442857142857141,
+            "duration": 0.35714285714285715,
+            "measure": 4,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 15,
+            "time": 5.799999999999998,
+            "duration": 0.35714285714285715,
+            "measure": 4,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 16,
+            "time": 6.157142857142855,
+            "duration": 0.35714285714285715,
+            "measure": 4,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 17,
+            "time": 6.514285714285712,
+            "duration": 0.35714285714285715,
+            "measure": 5,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 18,
+            "time": 6.871428571428568,
+            "duration": 0.35714285714285715,
+            "measure": 5,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 19,
+            "time": 7.228571428571425,
+            "duration": 0.35714285714285715,
+            "measure": 5,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 20,
+            "time": 7.585714285714282,
+            "duration": 0.35714285714285715,
+            "measure": 5,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 21,
+            "time": 7.942857142857139,
+            "duration": 0.35714285714285715,
+            "measure": 6,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 22,
+            "time": 8.299999999999995,
+            "duration": 0.35714285714285715,
+            "measure": 6,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 23,
+            "time": 8.657142857142853,
+            "duration": 0.35714285714285715,
+            "measure": 6,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 24,
+            "time": 9.01428571428571,
+            "duration": 0.35714285714285715,
+            "measure": 6,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 25,
+            "time": 9.371428571428568,
+            "duration": 0.35714285714285715,
+            "measure": 7,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 26,
+            "time": 9.728571428571426,
+            "duration": 0.35714285714285715,
+            "measure": 7,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 27,
+            "time": 10.085714285714284,
+            "duration": 0.35714285714285715,
+            "measure": 7,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 28,
+            "time": 10.442857142857141,
+            "duration": 0.35714285714285715,
+            "measure": 7,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 29,
+            "time": 10.799999999999999,
+            "duration": 0.35714285714285715,
+            "measure": 8,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 30,
+            "time": 11.157142857142857,
+            "duration": 0.35714285714285715,
+            "measure": 8,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 31,
+            "time": 11.514285714285714,
+            "duration": 0.35714285714285715,
+            "measure": 8,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 32,
+            "time": 11.871428571428572,
+            "duration": 0.35714285714285715,
+            "measure": 8,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 33,
+            "time": 12.22857142857143,
+            "duration": 0.35714285714285715,
+            "measure": 9,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168,
+            "mark": "B"
+        },
+        {
+            "index": 34,
+            "time": 12.585714285714287,
+            "duration": 0.35714285714285715,
+            "measure": 9,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 35,
+            "time": 12.942857142857145,
+            "duration": 0.35714285714285715,
+            "measure": 9,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 36,
+            "time": 13.300000000000002,
+            "duration": 0.35714285714285715,
+            "measure": 9,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 37,
+            "time": 13.65714285714286,
+            "duration": 0.35714285714285715,
+            "measure": 10,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 38,
+            "time": 14.014285714285718,
+            "duration": 0.35714285714285715,
+            "measure": 10,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 39,
+            "time": 14.371428571428575,
+            "duration": 0.35714285714285715,
+            "measure": 10,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 40,
+            "time": 14.728571428571433,
+            "duration": 0.35714285714285715,
+            "measure": 10,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 41,
+            "time": 15.08571428571429,
+            "duration": 0.35714285714285715,
+            "measure": 11,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 42,
+            "time": 15.442857142857148,
+            "duration": 0.35714285714285715,
+            "measure": 11,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 43,
+            "time": 15.800000000000006,
+            "duration": 0.35714285714285715,
+            "measure": 11,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 44,
+            "time": 16.157142857142862,
+            "duration": 0.35714285714285715,
+            "measure": 11,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 45,
+            "time": 16.51428571428572,
+            "duration": 0.35714285714285715,
+            "measure": 12,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 46,
+            "time": 16.871428571428577,
+            "duration": 0.35714285714285715,
+            "measure": 12,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 47,
+            "time": 17.228571428571435,
+            "duration": 0.35714285714285715,
+            "measure": 12,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 48,
+            "time": 17.585714285714293,
+            "duration": 0.35714285714285715,
+            "measure": 12,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 49,
+            "time": 17.94285714285715,
+            "duration": 0.35714285714285715,
+            "measure": 13,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 50,
+            "time": 18.300000000000008,
+            "duration": 0.35714285714285715,
+            "measure": 13,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 51,
+            "time": 18.657142857142865,
+            "duration": 0.35714285714285715,
+            "measure": 13,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 52,
+            "time": 19.014285714285723,
+            "duration": 0.35714285714285715,
+            "measure": 13,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 53,
+            "time": 19.37142857142858,
+            "duration": 0.35714285714285715,
+            "measure": 14,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 54,
+            "time": 19.72857142857144,
+            "duration": 0.35714285714285715,
+            "measure": 14,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 55,
+            "time": 20.085714285714296,
+            "duration": 0.35714285714285715,
+            "measure": 14,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 56,
+            "time": 20.442857142857154,
+            "duration": 0.35714285714285715,
+            "measure": 14,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 57,
+            "time": 20.80000000000001,
+            "duration": 0.35714285714285715,
+            "measure": 15,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 58,
+            "time": 21.15714285714287,
+            "duration": 0.35714285714285715,
+            "measure": 15,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 59,
+            "time": 21.514285714285727,
+            "duration": 0.35714285714285715,
+            "measure": 15,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 60,
+            "time": 21.871428571428584,
+            "duration": 0.35714285714285715,
+            "measure": 15,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 61,
+            "time": 22.228571428571442,
+            "duration": 0.35714285714285715,
+            "measure": 16,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 62,
+            "time": 22.5857142857143,
+            "duration": 0.35714285714285715,
+            "measure": 16,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 63,
+            "time": 22.942857142857157,
+            "duration": 0.35714285714285715,
+            "measure": 16,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 64,
+            "time": 23.300000000000015,
+            "duration": 0.35714285714285715,
+            "measure": 16,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 65,
+            "time": 23.657142857142873,
+            "duration": 0.35714285714285715,
+            "measure": 17,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168,
+            "mark": "C"
+        },
+        {
+            "index": 66,
+            "time": 24.01428571428573,
+            "duration": 0.35714285714285715,
+            "measure": 17,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 67,
+            "time": 24.371428571428588,
+            "duration": 0.35714285714285715,
+            "measure": 17,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 68,
+            "time": 24.728571428571446,
+            "duration": 0.35714285714285715,
+            "measure": 17,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 69,
+            "time": 25.085714285714303,
+            "duration": 0.35714285714285715,
+            "measure": 18,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 70,
+            "time": 25.44285714285716,
+            "duration": 0.35714285714285715,
+            "measure": 18,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 71,
+            "time": 25.80000000000002,
+            "duration": 0.35714285714285715,
+            "measure": 18,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 72,
+            "time": 26.157142857142876,
+            "duration": 0.35714285714285715,
+            "measure": 18,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 73,
+            "time": 26.514285714285734,
+            "duration": 0.35714285714285715,
+            "measure": 19,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 74,
+            "time": 26.87142857142859,
+            "duration": 0.35714285714285715,
+            "measure": 19,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 75,
+            "time": 27.22857142857145,
+            "duration": 0.35714285714285715,
+            "measure": 19,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 76,
+            "time": 27.585714285714307,
+            "duration": 0.35714285714285715,
+            "measure": 19,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 77,
+            "time": 27.942857142857164,
+            "duration": 0.35714285714285715,
+            "measure": 20,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 78,
+            "time": 28.300000000000022,
+            "duration": 0.35714285714285715,
+            "measure": 20,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 79,
+            "time": 28.65714285714288,
+            "duration": 0.35714285714285715,
+            "measure": 20,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 80,
+            "time": 29.014285714285737,
+            "duration": 0.35714285714285715,
+            "measure": 20,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 81,
+            "time": 29.371428571428595,
+            "duration": 0.35714285714285715,
+            "measure": 21,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 82,
+            "time": 29.728571428571453,
+            "duration": 0.35714285714285715,
+            "measure": 21,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 83,
+            "time": 30.08571428571431,
+            "duration": 0.35714285714285715,
+            "measure": 21,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 84,
+            "time": 30.442857142857168,
+            "duration": 0.35714285714285715,
+            "measure": 21,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 85,
+            "time": 30.800000000000026,
+            "duration": 0.35714285714285715,
+            "measure": 22,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 86,
+            "time": 31.157142857142883,
+            "duration": 0.35714285714285715,
+            "measure": 22,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 87,
+            "time": 31.51428571428574,
+            "duration": 0.35714285714285715,
+            "measure": 22,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 88,
+            "time": 31.8714285714286,
+            "duration": 0.35714285714285715,
+            "measure": 22,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 89,
+            "time": 32.228571428571456,
+            "duration": 0.35714285714285715,
+            "measure": 23,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 90,
+            "time": 32.58571428571431,
+            "duration": 0.35714285714285715,
+            "measure": 23,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 91,
+            "time": 32.942857142857164,
+            "duration": 0.35714285714285715,
+            "measure": 23,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 92,
+            "time": 33.30000000000002,
+            "duration": 0.35714285714285715,
+            "measure": 23,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 93,
+            "time": 33.65714285714287,
+            "duration": 0.35714285714285715,
+            "measure": 24,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 94,
+            "time": 34.01428571428573,
+            "duration": 0.35714285714285715,
+            "measure": 24,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 95,
+            "time": 34.37142857142858,
+            "duration": 0.35714285714285715,
+            "measure": 24,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 96,
+            "time": 34.728571428571435,
+            "duration": 0.35714285714285715,
+            "measure": 24,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 168,
+            "markedQpm": 168
+        },
+        {
+            "index": 97,
+            "time": 35.08571428571429,
+            "duration": 0.8333333333333334,
+            "measure": 25,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72,
+            "mark": "D"
+        },
+        {
+            "index": 98,
+            "time": 35.919047619047625,
+            "duration": 0.8333333333333334,
+            "measure": 25,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 99,
+            "time": 36.75238095238096,
+            "duration": 0.8333333333333334,
+            "measure": 25,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 100,
+            "time": 37.585714285714296,
+            "duration": 0.8333333333333334,
+            "measure": 25,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 101,
+            "time": 38.41904761904763,
+            "duration": 0.8333333333333334,
+            "measure": 26,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 102,
+            "time": 39.25238095238097,
+            "duration": 0.8333333333333334,
+            "measure": 26,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 103,
+            "time": 40.0857142857143,
+            "duration": 0.8333333333333334,
+            "measure": 26,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 104,
+            "time": 40.91904761904764,
+            "duration": 0.8333333333333334,
+            "measure": 26,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 105,
+            "time": 41.752380952380975,
+            "duration": 0.8333333333333334,
+            "measure": 27,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 106,
+            "time": 42.58571428571431,
+            "duration": 0.8333333333333334,
+            "measure": 27,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 107,
+            "time": 43.419047619047646,
+            "duration": 0.8333333333333334,
+            "measure": 27,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 108,
+            "time": 44.25238095238098,
+            "duration": 0.8333333333333334,
+            "measure": 27,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 109,
+            "time": 45.08571428571432,
+            "duration": 0.8333333333333334,
+            "measure": 28,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 110,
+            "time": 45.91904761904765,
+            "duration": 0.8333333333333334,
+            "measure": 28,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 111,
+            "time": 46.75238095238099,
+            "duration": 0.8333333333333334,
+            "measure": 28,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 112,
+            "time": 47.585714285714324,
+            "duration": 0.8333333333333334,
+            "measure": 28,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 113,
+            "time": 48.41904761904766,
+            "duration": 0.8333333333333334,
+            "measure": 29,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 114,
+            "time": 49.252380952380996,
+            "duration": 0.8333333333333334,
+            "measure": 29,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 115,
+            "time": 50.08571428571433,
+            "duration": 0.8333333333333334,
+            "measure": 29,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 116,
+            "time": 50.91904761904767,
+            "duration": 0.8333333333333334,
+            "measure": 29,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 117,
+            "time": 51.752380952381,
+            "duration": 0.8333333333333334,
+            "measure": 30,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 118,
+            "time": 52.58571428571434,
+            "duration": 0.8333333333333334,
+            "measure": 30,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 119,
+            "time": 53.419047619047674,
+            "duration": 0.8333333333333334,
+            "measure": 30,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 120,
+            "time": 54.25238095238101,
+            "duration": 0.8333333333333334,
+            "measure": 30,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 121,
+            "time": 55.085714285714346,
+            "duration": 0.8333333333333334,
+            "measure": 31,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 122,
+            "time": 55.91904761904768,
+            "duration": 0.8333333333333334,
+            "measure": 31,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 123,
+            "time": 56.75238095238102,
+            "duration": 0.8333333333333334,
+            "measure": 31,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 124,
+            "time": 57.58571428571435,
+            "duration": 0.8333333333333334,
+            "measure": 31,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 125,
+            "time": 58.41904761904769,
+            "duration": 0.8333333333333334,
+            "measure": 32,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 126,
+            "time": 59.252380952381024,
+            "duration": 0.8333333333333334,
+            "measure": 32,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 127,
+            "time": 60.08571428571436,
+            "duration": 0.8333333333333334,
+            "measure": 32,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 128,
+            "time": 60.919047619047696,
+            "duration": 0.8333333333333334,
+            "measure": 32,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 129,
+            "time": 61.75238095238103,
+            "duration": 0.8333333333333334,
+            "measure": 33,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72,
+            "mark": "E"
+        },
+        {
+            "index": 130,
+            "time": 62.58571428571437,
+            "duration": 0.8333333333333334,
+            "measure": 33,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 131,
+            "time": 63.4190476190477,
+            "duration": 0.8333333333333334,
+            "measure": 33,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 132,
+            "time": 64.25238095238103,
+            "duration": 0.8333333333333334,
+            "measure": 33,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 133,
+            "time": 65.08571428571436,
+            "duration": 0.8333333333333334,
+            "measure": 34,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 134,
+            "time": 65.91904761904769,
+            "duration": 0.8333333333333334,
+            "measure": 34,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 135,
+            "time": 66.75238095238102,
+            "duration": 0.8333333333333334,
+            "measure": 34,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 136,
+            "time": 67.58571428571435,
+            "duration": 0.8333333333333334,
+            "measure": 34,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 137,
+            "time": 68.41904761904767,
+            "duration": 0.8333333333333334,
+            "measure": 35,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 138,
+            "time": 69.252380952381,
+            "duration": 0.8333333333333334,
+            "measure": 35,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 139,
+            "time": 70.08571428571433,
+            "duration": 0.8333333333333334,
+            "measure": 35,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 140,
+            "time": 70.91904761904766,
+            "duration": 0.8333333333333334,
+            "measure": 35,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 141,
+            "time": 71.75238095238099,
+            "duration": 0.8333333333333334,
+            "measure": 36,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 142,
+            "time": 72.58571428571432,
+            "duration": 0.8333333333333334,
+            "measure": 36,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 143,
+            "time": 73.41904761904765,
+            "duration": 0.8333333333333334,
+            "measure": 36,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 144,
+            "time": 74.25238095238097,
+            "duration": 0.8333333333333334,
+            "measure": 36,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 145,
+            "time": 75.0857142857143,
+            "duration": 0.8333333333333334,
+            "measure": 37,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 146,
+            "time": 75.91904761904763,
+            "duration": 0.8333333333333334,
+            "measure": 37,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 147,
+            "time": 76.75238095238096,
+            "duration": 0.8333333333333334,
+            "measure": 37,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 148,
+            "time": 77.58571428571429,
+            "duration": 0.8333333333333334,
+            "measure": 37,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 149,
+            "time": 78.41904761904762,
+            "duration": 0.8333333333333334,
+            "measure": 38,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 150,
+            "time": 79.25238095238095,
+            "duration": 0.8333333333333334,
+            "measure": 38,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 151,
+            "time": 80.08571428571427,
+            "duration": 0.8333333333333334,
+            "measure": 38,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 152,
+            "time": 80.9190476190476,
+            "duration": 0.8333333333333334,
+            "measure": 38,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 153,
+            "time": 81.75238095238093,
+            "duration": 0.8333333333333334,
+            "measure": 39,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 154,
+            "time": 82.58571428571426,
+            "duration": 0.8333333333333334,
+            "measure": 39,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 155,
+            "time": 83.41904761904759,
+            "duration": 0.8333333333333334,
+            "measure": 39,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 156,
+            "time": 84.25238095238092,
+            "duration": 0.8333333333333334,
+            "measure": 39,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 157,
+            "time": 85.08571428571425,
+            "duration": 0.8333333333333334,
+            "measure": 40,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 158,
+            "time": 85.91904761904757,
+            "duration": 0.8333333333333334,
+            "measure": 40,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 159,
+            "time": 86.7523809523809,
+            "duration": 0.8333333333333334,
+            "measure": 40,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 160,
+            "time": 87.58571428571423,
+            "duration": 0.8333333333333334,
+            "measure": 40,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 161,
+            "time": 88.41904761904756,
+            "duration": 0.8333333333333334,
+            "measure": 41,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72,
+            "mark": "F",
+            "events": ["hit"]
+        },
+        {
+            "index": 162,
+            "time": 89.25238095238089,
+            "duration": 0.8333333333333334,
+            "measure": 41,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 163,
+            "time": 90.08571428571422,
+            "duration": 0.8333333333333334,
+            "measure": 41,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 164,
+            "time": 90.91904761904755,
+            "duration": 0.8333333333333334,
+            "measure": 41,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 165,
+            "time": 91.75238095238088,
+            "duration": 0.8333333333333334,
+            "measure": 42,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 166,
+            "time": 92.5857142857142,
+            "duration": 0.8333333333333334,
+            "measure": 42,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 167,
+            "time": 93.41904761904753,
+            "duration": 0.8333333333333334,
+            "measure": 42,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 168,
+            "time": 94.25238095238086,
+            "duration": 0.8333333333333334,
+            "measure": 42,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 169,
+            "time": 95.08571428571419,
+            "duration": 0.8333333333333334,
+            "measure": 43,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 170,
+            "time": 95.91904761904752,
+            "duration": 0.8333333333333334,
+            "measure": 43,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 171,
+            "time": 96.75238095238085,
+            "duration": 0.8333333333333334,
+            "measure": 43,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 172,
+            "time": 97.58571428571418,
+            "duration": 0.8333333333333334,
+            "measure": 43,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 173,
+            "time": 98.4190476190475,
+            "duration": 0.8333333333333334,
+            "measure": 44,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 174,
+            "time": 99.25238095238083,
+            "duration": 0.8333333333333334,
+            "measure": 44,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 175,
+            "time": 100.08571428571416,
+            "duration": 0.8333333333333334,
+            "measure": 44,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 176,
+            "time": 100.91904761904749,
+            "duration": 0.8333333333333334,
+            "measure": 44,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 177,
+            "time": 101.75238095238082,
+            "duration": 0.8333333333333334,
+            "measure": 45,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 178,
+            "time": 102.58571428571415,
+            "duration": 0.8333333333333334,
+            "measure": 45,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 179,
+            "time": 103.41904761904748,
+            "duration": 0.8333333333333334,
+            "measure": 45,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 180,
+            "time": 104.2523809523808,
+            "duration": 0.8333333333333334,
+            "measure": 45,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 181,
+            "time": 105.08571428571413,
+            "duration": 0.8333333333333334,
+            "measure": 46,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 182,
+            "time": 105.91904761904746,
+            "duration": 0.8333333333333334,
+            "measure": 46,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 183,
+            "time": 106.75238095238079,
+            "duration": 0.8333333333333334,
+            "measure": 46,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 184,
+            "time": 107.58571428571412,
+            "duration": 0.8333333333333334,
+            "measure": 46,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 185,
+            "time": 108.41904761904745,
+            "duration": 0.8333333333333334,
+            "measure": 47,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 186,
+            "time": 109.25238095238078,
+            "duration": 0.8333333333333334,
+            "measure": 47,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 187,
+            "time": 110.0857142857141,
+            "duration": 0.8333333333333334,
+            "measure": 47,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 188,
+            "time": 110.91904761904743,
+            "duration": 0.8333333333333334,
+            "measure": 47,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 189,
+            "time": 111.75238095238076,
+            "duration": 0.8333333333333334,
+            "measure": 48,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 190,
+            "time": 112.58571428571409,
+            "duration": 0.8333333333333334,
+            "measure": 48,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 191,
+            "time": 113.41904761904742,
+            "duration": 0.8333333333333334,
+            "measure": 48,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 192,
+            "time": 114.25238095238075,
+            "duration": 0.8333333333333334,
+            "measure": 48,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 193,
+            "time": 115.08571428571408,
+            "duration": 0.8333333333333334,
+            "measure": 49,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 194,
+            "time": 115.9190476190474,
+            "duration": 0.8333333333333334,
+            "measure": 49,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 195,
+            "time": 116.75238095238073,
+            "duration": 0.8333333333333334,
+            "measure": 49,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 196,
+            "time": 117.58571428571406,
+            "duration": 0.8333333333333334,
+            "measure": 49,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 197,
+            "time": 118.41904761904739,
+            "duration": 0.8333333333333334,
+            "measure": 50,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 198,
+            "time": 119.25238095238072,
+            "duration": 0.8333333333333334,
+            "measure": 50,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 199,
+            "time": 120.08571428571405,
+            "duration": 0.8333333333333334,
+            "measure": 50,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 200,
+            "time": 120.91904761904738,
+            "duration": 0.8333333333333334,
+            "measure": 50,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 201,
+            "time": 121.7523809523807,
+            "duration": 0.8333333333333334,
+            "measure": 51,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 202,
+            "time": 122.58571428571403,
+            "duration": 0.8333333333333334,
+            "measure": 51,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 203,
+            "time": 123.41904761904736,
+            "duration": 0.8333333333333334,
+            "measure": 51,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 204,
+            "time": 124.25238095238069,
+            "duration": 0.8333333333333334,
+            "measure": 51,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 205,
+            "time": 125.08571428571402,
+            "duration": 0.8333333333333334,
+            "measure": 52,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 206,
+            "time": 125.91904761904735,
+            "duration": 0.8333333333333334,
+            "measure": 52,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 207,
+            "time": 126.75238095238068,
+            "duration": 0.8333333333333334,
+            "measure": 52,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 208,
+            "time": 127.585714285714,
+            "duration": 0.8333333333333334,
+            "measure": 52,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 209,
+            "time": 128.41904761904735,
+            "duration": 0.8333333333333334,
+            "measure": 53,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 210,
+            "time": 129.2523809523807,
+            "duration": 0.8333333333333334,
+            "measure": 53,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 211,
+            "time": 130.08571428571403,
+            "duration": 0.8333333333333334,
+            "measure": 53,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 212,
+            "time": 130.91904761904738,
+            "duration": 0.8333333333333334,
+            "measure": 53,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 213,
+            "time": 131.75238095238072,
+            "duration": 0.8333333333333334,
+            "measure": 54,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 214,
+            "time": 132.58571428571406,
+            "duration": 0.8333333333333334,
+            "measure": 54,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 215,
+            "time": 133.4190476190474,
+            "duration": 0.8333333333333334,
+            "measure": 54,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 216,
+            "time": 134.25238095238075,
+            "duration": 0.8333333333333334,
+            "measure": 54,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 217,
+            "time": 135.0857142857141,
+            "duration": 0.8333333333333334,
+            "measure": 55,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 218,
+            "time": 135.91904761904743,
+            "duration": 0.8333333333333334,
+            "measure": 55,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 219,
+            "time": 136.75238095238078,
+            "duration": 0.8333333333333334,
+            "measure": 55,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 220,
+            "time": 137.58571428571412,
+            "duration": 0.8333333333333334,
+            "measure": 55,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 221,
+            "time": 138.41904761904746,
+            "duration": 0.8333333333333334,
+            "measure": 56,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 222,
+            "time": 139.2523809523808,
+            "duration": 0.8333333333333334,
+            "measure": 56,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 223,
+            "time": 140.08571428571415,
+            "duration": 0.8333333333333334,
+            "measure": 56,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 224,
+            "time": 140.9190476190475,
+            "duration": 0.8333333333333334,
+            "measure": 56,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 225,
+            "time": 141.75238095238083,
+            "duration": 0.8333333333333334,
+            "measure": 57,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 226,
+            "time": 142.58571428571418,
+            "duration": 0.8333333333333334,
+            "measure": 57,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 227,
+            "time": 143.41904761904752,
+            "duration": 0.8333333333333334,
+            "measure": 57,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 228,
+            "time": 144.25238095238086,
+            "duration": 0.8333333333333334,
+            "measure": 57,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 229,
+            "time": 145.0857142857142,
+            "duration": 0.8333333333333334,
+            "measure": 58,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 230,
+            "time": 145.91904761904755,
+            "duration": 0.8333333333333334,
+            "measure": 58,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 231,
+            "time": 146.7523809523809,
+            "duration": 0.8333333333333334,
+            "measure": 58,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 232,
+            "time": 147.58571428571423,
+            "duration": 0.8333333333333334,
+            "measure": 58,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 233,
+            "time": 148.41904761904757,
+            "duration": 0.8333333333333334,
+            "measure": 59,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 234,
+            "time": 149.25238095238092,
+            "duration": 0.8333333333333334,
+            "measure": 59,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 235,
+            "time": 150.08571428571426,
+            "duration": 0.8333333333333334,
+            "measure": 59,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 236,
+            "time": 150.9190476190476,
+            "duration": 0.8333333333333334,
+            "measure": 59,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 237,
+            "time": 151.75238095238095,
+            "duration": 0.8333333333333334,
+            "measure": 60,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 238,
+            "time": 152.5857142857143,
+            "duration": 0.8333333333333334,
+            "measure": 60,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 239,
+            "time": 153.41904761904763,
+            "duration": 0.8333333333333334,
+            "measure": 60,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 240,
+            "time": 154.25238095238097,
+            "duration": 0.8333333333333334,
+            "measure": 60,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 241,
+            "time": 155.08571428571432,
+            "duration": 0.8333333333333334,
+            "measure": 61,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 242,
+            "time": 155.91904761904766,
+            "duration": 0.8333333333333334,
+            "measure": 61,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 243,
+            "time": 156.752380952381,
+            "duration": 0.8333333333333334,
+            "measure": 61,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 244,
+            "time": 157.58571428571435,
+            "duration": 0.8333333333333334,
+            "measure": 61,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 245,
+            "time": 158.4190476190477,
+            "duration": 0.8333333333333334,
+            "measure": 62,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 246,
+            "time": 159.25238095238103,
+            "duration": 0.8333333333333334,
+            "measure": 62,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 247,
+            "time": 160.08571428571437,
+            "duration": 0.8333333333333334,
+            "measure": 62,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 248,
+            "time": 160.91904761904772,
+            "duration": 0.8333333333333334,
+            "measure": 62,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 249,
+            "time": 161.75238095238106,
+            "duration": 0.8333333333333334,
+            "measure": 63,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 250,
+            "time": 162.5857142857144,
+            "duration": 0.8333333333333334,
+            "measure": 63,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 251,
+            "time": 163.41904761904775,
+            "duration": 0.8333333333333334,
+            "measure": 63,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 252,
+            "time": 164.2523809523811,
+            "duration": 0.8333333333333334,
+            "measure": 63,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 253,
+            "time": 165.08571428571443,
+            "duration": 0.8333333333333334,
+            "measure": 64,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 254,
+            "time": 165.91904761904777,
+            "duration": 0.8333333333333334,
+            "measure": 64,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 255,
+            "time": 166.75238095238112,
+            "duration": 0.8333333333333334,
+            "measure": 64,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 256,
+            "time": 167.58571428571446,
+            "duration": 0.8333333333333334,
+            "measure": 64,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 72,
+            "markedQpm": 72
+        },
+        {
+            "index": 257,
+            "time": 168.4190476190478,
+            "duration": 0.3409090909090909,
+            "measure": 65,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176,
+            "mark": "G",
+            "events": ["hit"]
+        },
+        {
+            "index": 258,
+            "time": 168.7599567099569,
+            "duration": 0.3409090909090909,
+            "measure": 65,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 259,
+            "time": 169.100865800866,
+            "duration": 0.3409090909090909,
+            "measure": 65,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 260,
+            "time": 169.44177489177508,
+            "duration": 0.3409090909090909,
+            "measure": 65,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 261,
+            "time": 169.78268398268418,
+            "duration": 0.3409090909090909,
+            "measure": 66,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 262,
+            "time": 170.12359307359327,
+            "duration": 0.3409090909090909,
+            "measure": 66,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 263,
+            "time": 170.46450216450236,
+            "duration": 0.3409090909090909,
+            "measure": 66,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 264,
+            "time": 170.80541125541146,
+            "duration": 0.3409090909090909,
+            "measure": 66,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 265,
+            "time": 171.14632034632055,
+            "duration": 0.3409090909090909,
+            "measure": 67,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 266,
+            "time": 171.48722943722964,
+            "duration": 0.3409090909090909,
+            "measure": 67,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 267,
+            "time": 171.82813852813874,
+            "duration": 0.3409090909090909,
+            "measure": 67,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 268,
+            "time": 172.16904761904783,
+            "duration": 0.3409090909090909,
+            "measure": 67,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 269,
+            "time": 172.50995670995692,
+            "duration": 0.3409090909090909,
+            "measure": 68,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 270,
+            "time": 172.85086580086602,
+            "duration": 0.3409090909090909,
+            "measure": 68,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 271,
+            "time": 173.1917748917751,
+            "duration": 0.3409090909090909,
+            "measure": 68,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 272,
+            "time": 173.5326839826842,
+            "duration": 0.3409090909090909,
+            "measure": 68,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 273,
+            "time": 173.8735930735933,
+            "duration": 0.3409090909090909,
+            "measure": 69,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 274,
+            "time": 174.2145021645024,
+            "duration": 0.3409090909090909,
+            "measure": 69,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 275,
+            "time": 174.55541125541149,
+            "duration": 0.3409090909090909,
+            "measure": 69,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 276,
+            "time": 174.89632034632058,
+            "duration": 0.3409090909090909,
+            "measure": 69,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 277,
+            "time": 175.23722943722967,
+            "duration": 0.3409090909090909,
+            "measure": 70,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 278,
+            "time": 175.57813852813877,
+            "duration": 0.3409090909090909,
+            "measure": 70,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 279,
+            "time": 175.91904761904786,
+            "duration": 0.3409090909090909,
+            "measure": 70,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 280,
+            "time": 176.25995670995695,
+            "duration": 0.3409090909090909,
+            "measure": 70,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 281,
+            "time": 176.60086580086605,
+            "duration": 0.3409090909090909,
+            "measure": 71,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 282,
+            "time": 176.94177489177514,
+            "duration": 0.3409090909090909,
+            "measure": 71,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 283,
+            "time": 177.28268398268423,
+            "duration": 0.3409090909090909,
+            "measure": 71,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 284,
+            "time": 177.62359307359333,
+            "duration": 0.3409090909090909,
+            "measure": 71,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 285,
+            "time": 177.96450216450242,
+            "duration": 0.3409090909090909,
+            "measure": 72,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 286,
+            "time": 178.3054112554115,
+            "duration": 0.3409090909090909,
+            "measure": 72,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 287,
+            "time": 178.6463203463206,
+            "duration": 0.3409090909090909,
+            "measure": 72,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 288,
+            "time": 178.9872294372297,
+            "duration": 0.3409090909090909,
+            "measure": 72,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 289,
+            "time": 179.3281385281388,
+            "duration": 0.3409090909090909,
+            "measure": 73,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176,
+            "mark": "H"
+        },
+        {
+            "index": 290,
+            "time": 179.6690476190479,
+            "duration": 0.3409090909090909,
+            "measure": 73,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 291,
+            "time": 180.00995670995698,
+            "duration": 0.3409090909090909,
+            "measure": 73,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 292,
+            "time": 180.35086580086607,
+            "duration": 0.3409090909090909,
+            "measure": 73,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 293,
+            "time": 180.69177489177517,
+            "duration": 0.3409090909090909,
+            "measure": 74,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 294,
+            "time": 181.03268398268426,
+            "duration": 0.3409090909090909,
+            "measure": 74,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 295,
+            "time": 181.37359307359336,
+            "duration": 0.3409090909090909,
+            "measure": 74,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 296,
+            "time": 181.71450216450245,
+            "duration": 0.3409090909090909,
+            "measure": 74,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 297,
+            "time": 182.05541125541154,
+            "duration": 0.3409090909090909,
+            "measure": 75,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 298,
+            "time": 182.39632034632064,
+            "duration": 0.3409090909090909,
+            "measure": 75,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 299,
+            "time": 182.73722943722973,
+            "duration": 0.3409090909090909,
+            "measure": 75,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 300,
+            "time": 183.07813852813882,
+            "duration": 0.3409090909090909,
+            "measure": 75,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 301,
+            "time": 183.41904761904792,
+            "duration": 0.3409090909090909,
+            "measure": 76,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 302,
+            "time": 183.759956709957,
+            "duration": 0.3409090909090909,
+            "measure": 76,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 303,
+            "time": 184.1008658008661,
+            "duration": 0.3409090909090909,
+            "measure": 76,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 304,
+            "time": 184.4417748917752,
+            "duration": 0.3409090909090909,
+            "measure": 76,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 305,
+            "time": 184.7826839826843,
+            "duration": 0.3409090909090909,
+            "measure": 77,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 306,
+            "time": 185.12359307359338,
+            "duration": 0.3409090909090909,
+            "measure": 77,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 307,
+            "time": 185.46450216450248,
+            "duration": 0.3409090909090909,
+            "measure": 77,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 308,
+            "time": 185.80541125541157,
+            "duration": 0.3409090909090909,
+            "measure": 77,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 309,
+            "time": 186.14632034632066,
+            "duration": 0.3409090909090909,
+            "measure": 78,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 310,
+            "time": 186.48722943722976,
+            "duration": 0.3409090909090909,
+            "measure": 78,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 311,
+            "time": 186.82813852813885,
+            "duration": 0.3409090909090909,
+            "measure": 78,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 312,
+            "time": 187.16904761904794,
+            "duration": 0.3409090909090909,
+            "measure": 78,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 313,
+            "time": 187.50995670995704,
+            "duration": 0.3409090909090909,
+            "measure": 79,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 314,
+            "time": 187.85086580086613,
+            "duration": 0.3409090909090909,
+            "measure": 79,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 315,
+            "time": 188.19177489177522,
+            "duration": 0.3409090909090909,
+            "measure": 79,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 316,
+            "time": 188.53268398268432,
+            "duration": 0.3409090909090909,
+            "measure": 79,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 317,
+            "time": 188.8735930735934,
+            "duration": 0.3409090909090909,
+            "measure": 80,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 318,
+            "time": 189.2145021645025,
+            "duration": 0.3409090909090909,
+            "measure": 80,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 319,
+            "time": 189.5554112554116,
+            "duration": 0.3409090909090909,
+            "measure": 80,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 320,
+            "time": 189.8963203463207,
+            "duration": 0.3409090909090909,
+            "measure": 80,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 321,
+            "time": 190.2372294372298,
+            "duration": 0.3409090909090909,
+            "measure": 81,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176,
+            "mark": "I"
+        },
+        {
+            "index": 322,
+            "time": 190.57813852813888,
+            "duration": 0.3409090909090909,
+            "measure": 81,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 323,
+            "time": 190.91904761904797,
+            "duration": 0.3409090909090909,
+            "measure": 81,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 324,
+            "time": 191.25995670995707,
+            "duration": 0.3409090909090909,
+            "measure": 81,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 325,
+            "time": 191.60086580086616,
+            "duration": 0.3409090909090909,
+            "measure": 82,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 326,
+            "time": 191.94177489177525,
+            "duration": 0.3409090909090909,
+            "measure": 82,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 327,
+            "time": 192.28268398268435,
+            "duration": 0.3409090909090909,
+            "measure": 82,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 328,
+            "time": 192.62359307359344,
+            "duration": 0.3409090909090909,
+            "measure": 82,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 329,
+            "time": 192.96450216450253,
+            "duration": 0.3409090909090909,
+            "measure": 83,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 330,
+            "time": 193.30541125541163,
+            "duration": 0.3409090909090909,
+            "measure": 83,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 331,
+            "time": 193.64632034632072,
+            "duration": 0.3409090909090909,
+            "measure": 83,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 332,
+            "time": 193.98722943722981,
+            "duration": 0.3409090909090909,
+            "measure": 83,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 333,
+            "time": 194.3281385281389,
+            "duration": 0.3409090909090909,
+            "measure": 84,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 334,
+            "time": 194.669047619048,
+            "duration": 0.3409090909090909,
+            "measure": 84,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 335,
+            "time": 195.0099567099571,
+            "duration": 0.3409090909090909,
+            "measure": 84,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 336,
+            "time": 195.3508658008662,
+            "duration": 0.3409090909090909,
+            "measure": 84,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 337,
+            "time": 195.69177489177528,
+            "duration": 0.3409090909090909,
+            "measure": 85,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 338,
+            "time": 196.03268398268438,
+            "duration": 0.3409090909090909,
+            "measure": 85,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 339,
+            "time": 196.37359307359347,
+            "duration": 0.3409090909090909,
+            "measure": 85,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 340,
+            "time": 196.71450216450256,
+            "duration": 0.3409090909090909,
+            "measure": 85,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 341,
+            "time": 197.05541125541166,
+            "duration": 0.3409090909090909,
+            "measure": 86,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 342,
+            "time": 197.39632034632075,
+            "duration": 0.3409090909090909,
+            "measure": 86,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 343,
+            "time": 197.73722943722984,
+            "duration": 0.3409090909090909,
+            "measure": 86,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 344,
+            "time": 198.07813852813894,
+            "duration": 0.3409090909090909,
+            "measure": 86,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 345,
+            "time": 198.41904761904803,
+            "duration": 0.3409090909090909,
+            "measure": 87,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 346,
+            "time": 198.75995670995712,
+            "duration": 0.3409090909090909,
+            "measure": 87,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 347,
+            "time": 199.10086580086622,
+            "duration": 0.3409090909090909,
+            "measure": 87,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 348,
+            "time": 199.4417748917753,
+            "duration": 0.3409090909090909,
+            "measure": 87,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 349,
+            "time": 199.7826839826844,
+            "duration": 0.3409090909090909,
+            "measure": 88,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 350,
+            "time": 200.1235930735935,
+            "duration": 0.3409090909090909,
+            "measure": 88,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 351,
+            "time": 200.4645021645026,
+            "duration": 0.3409090909090909,
+            "measure": 88,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 352,
+            "time": 200.80541125541168,
+            "duration": 0.3409090909090909,
+            "measure": 88,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 353,
+            "time": 201.14632034632078,
+            "duration": 0.3409090909090909,
+            "measure": 89,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176,
+            "mark": "J"
+        },
+        {
+            "index": 354,
+            "time": 201.48722943722987,
+            "duration": 0.3409090909090909,
+            "measure": 89,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 355,
+            "time": 201.82813852813896,
+            "duration": 0.3409090909090909,
+            "measure": 89,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 356,
+            "time": 202.16904761904806,
+            "duration": 0.3409090909090909,
+            "measure": 89,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 357,
+            "time": 202.50995670995715,
+            "duration": 0.3409090909090909,
+            "measure": 90,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 358,
+            "time": 202.85086580086625,
+            "duration": 0.3409090909090909,
+            "measure": 90,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 359,
+            "time": 203.19177489177534,
+            "duration": 0.3409090909090909,
+            "measure": 90,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 360,
+            "time": 203.53268398268443,
+            "duration": 0.3409090909090909,
+            "measure": 90,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 361,
+            "time": 203.87359307359353,
+            "duration": 0.3409090909090909,
+            "measure": 91,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 362,
+            "time": 204.21450216450262,
+            "duration": 0.3409090909090909,
+            "measure": 91,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 363,
+            "time": 204.5554112554117,
+            "duration": 0.3409090909090909,
+            "measure": 91,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 364,
+            "time": 204.8963203463208,
+            "duration": 0.3409090909090909,
+            "measure": 91,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 365,
+            "time": 205.2372294372299,
+            "duration": 0.3409090909090909,
+            "measure": 92,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 366,
+            "time": 205.578138528139,
+            "duration": 0.3409090909090909,
+            "measure": 92,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 367,
+            "time": 205.9190476190481,
+            "duration": 0.3409090909090909,
+            "measure": 92,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 368,
+            "time": 206.25995670995718,
+            "duration": 0.3409090909090909,
+            "measure": 92,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 369,
+            "time": 206.60086580086627,
+            "duration": 0.3409090909090909,
+            "measure": 93,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 370,
+            "time": 206.94177489177537,
+            "duration": 0.3409090909090909,
+            "measure": 93,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 371,
+            "time": 207.28268398268446,
+            "duration": 0.3409090909090909,
+            "measure": 93,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 372,
+            "time": 207.62359307359355,
+            "duration": 0.3409090909090909,
+            "measure": 93,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 373,
+            "time": 207.96450216450265,
+            "duration": 0.3409090909090909,
+            "measure": 94,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 374,
+            "time": 208.30541125541174,
+            "duration": 0.3409090909090909,
+            "measure": 94,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 375,
+            "time": 208.64632034632083,
+            "duration": 0.3409090909090909,
+            "measure": 94,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 376,
+            "time": 208.98722943722993,
+            "duration": 0.3409090909090909,
+            "measure": 94,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 377,
+            "time": 209.32813852813902,
+            "duration": 0.3409090909090909,
+            "measure": 95,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 378,
+            "time": 209.66904761904811,
+            "duration": 0.3409090909090909,
+            "measure": 95,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 379,
+            "time": 210.0099567099572,
+            "duration": 0.3409090909090909,
+            "measure": 95,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 380,
+            "time": 210.3508658008663,
+            "duration": 0.3409090909090909,
+            "measure": 95,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 381,
+            "time": 210.6917748917754,
+            "duration": 0.3409090909090909,
+            "measure": 96,
+            "beat": 1,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 382,
+            "time": 211.0326839826845,
+            "duration": 0.3409090909090909,
+            "measure": 96,
+            "beat": 2,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 383,
+            "time": 211.37359307359358,
+            "duration": 0.3409090909090909,
+            "measure": 96,
+            "beat": 3,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        },
+        {
+            "index": 384,
+            "time": 211.71450216450268,
+            "duration": 0.3409090909090909,
+            "measure": 96,
+            "beat": 4,
+            "unit": 1,
+            "qpm": 176,
+            "markedQpm": 176
+        }
+    ]
+}
