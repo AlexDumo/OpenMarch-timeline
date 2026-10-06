@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     flagsInside,
     isolatedTimelineName,
+    isWholePageWindow,
     passedSets,
 } from "../TimelineIsolationBar";
 
@@ -45,5 +46,27 @@ describe("the field line's words (UI-12)", () => {
         expect(passedSets(["2"])).toBe("page 2's set");
         expect(passedSets(["1", "2"])).toBe("pages 1 and 2's sets");
         expect(passedSets(["1", "2", "3"])).toBe("pages 1, 2 and 3's sets");
+    });
+});
+
+describe("the field line's quiet case (UI-12 review)", () => {
+    it("is quiet for home and for exactly a page box's range", () => {
+        expect(isWholePageWindow({ kind: "home" }, PAGES)).toBe(true);
+        expect(
+            isWholePageWindow({ kind: "range", start: 9, end: 17 }, PAGES),
+        ).toBe(true);
+    });
+
+    it("is loud for part of a page, a range across a flag, past the last flag, or nothing", () => {
+        expect(
+            isWholePageWindow({ kind: "range", start: 13, end: 17 }, PAGES),
+        ).toBe(false);
+        expect(
+            isWholePageWindow({ kind: "range", start: 9, end: 25 }, PAGES),
+        ).toBe(false);
+        expect(
+            isWholePageWindow({ kind: "range", start: 25, end: 29 }, PAGES),
+        ).toBe(false);
+        expect(isWholePageWindow({ kind: "none" }, PAGES)).toBe(false);
     });
 });

@@ -10,6 +10,7 @@ import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import {
     isolatedTimeline,
     useTimelineSelectionStore,
+    type TimelineEditSelection,
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
 
@@ -86,6 +87,24 @@ export function flagsInside(
     );
 }
 
+/**
+ * The window is an ordinary page's: home, or exactly a page box's range. The field line stays
+ * quiet for it (UI-12); anything else is unusual.
+ */
+export function isWholePageWindow(
+    selection: TimelineEditSelection,
+    pages: readonly FlagPage[],
+): boolean {
+    if (selection.kind === "home") return true;
+    if (selection.kind !== "range") return false;
+    return pageFlags(pages).some(
+        (f) =>
+            f.range !== null &&
+            f.range.start === selection.start &&
+            f.range.end === selection.end,
+    );
+}
+
 /** "page 3's set", "pages 3 and 4's sets", "pages 3, 4 and 5's sets" */
 export const passedSets = (names: readonly string[]) =>
     names.length === 1
@@ -124,7 +143,7 @@ export function TimelineFromStartBadge() {
             : range
               ? isolatedTimelineName(range, pages)
               : "";
-    const wholePage = name.endsWith("'s move");
+    const wholePage = isWholePageWindow(selection, pages);
     const unusual =
         fromStartShown || pinShown || through.length > 0 || !wholePage;
     const sentence =
