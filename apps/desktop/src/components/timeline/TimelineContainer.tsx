@@ -77,15 +77,14 @@ export default function TimelineContainer() {
 
     // With the file's timeline dev flag on, the timeline replaces the page timeline and its controls.
     // Editing beats (the focused timeline) still uses the page timeline. The audio player stays
-    // mounted, hidden, because it runs playback and the timeline reads its clock.
+    // mounted, headless, because it runs playback and the timeline reads its clock. The timeline
+    // draws its own waveform lane, so the player builds no wavesurfer or markers here.
     if (timelineMode && uiSettings.focussedComponent !== "timeline") {
         return (
             // UI-12: perspective and fullscreen live on the field's zoom widget in timeline mode
             <div className="flex gap-8" data-testid="timeline-mode-container">
                 <TimelineModePanel />
-                <div style={{ display: "none" }}>
-                    <AudioPlayer />
-                </div>
+                <AudioPlayer headless />
             </div>
         );
     }
