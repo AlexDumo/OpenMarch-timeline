@@ -70,11 +70,12 @@ export function useTimelineDrillEdits({
     const drillEdits = useMemo<TimelineDrillEdits | undefined>(() => {
         if (!enabled) return undefined;
         return {
-            onRemoveCounts: (range) =>
+            onRemoveCounts: (range, measure) =>
                 open({
                     kind: "remove",
                     start: Math.max(1, range.startBeatIndex),
                     end: range.endBeatIndex,
+                    ...(measure ? { measure } : {}),
                 }),
             onAddCountsAtFlag: (pageId) => {
                 const page = pages.find((p) => p.id === pageId);

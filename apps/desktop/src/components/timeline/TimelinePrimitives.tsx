@@ -1967,12 +1967,10 @@ export const useTimelinePointer = ({
                     event.target instanceof Element &&
                     event.target.closest("[data-timeline-scrub]") != null;
                 const startBeat = pointerBeat(event);
-                // UI-12: a plain drag scrubs; Ctrl+drag (Cmd on macOS) draws a range
+                // UI-12: a plain drag scrubs; Ctrl+drag (Cmd on macOS) draws a range, also from
+                // the playhead, where Go to leaves it
                 gesture.current = {
-                    mode:
-                        onPlayhead || !onRangeSelect || !drawing
-                            ? "scrub"
-                            : "press",
+                    mode: !onRangeSelect || !drawing ? "scrub" : "press",
                     startClientX: event.clientX,
                     startBeat,
                     lastBeat: null,

@@ -255,7 +255,11 @@ export const TimelineRehearsalMarkers = ({
                     }
                     {...handle?.props}
                     title={title}
-                    onClick={() => {
+                    onClick={(event) => {
+                        // A pointer click only seeks: it doesn't leave the tab focused, where
+                        // Backspace or Delete (meant for a tap or the canvas) would remove it.
+                        // Tab to it to rename or remove it from the keyboard.
+                        if (event.detail > 0) event.currentTarget.blur();
                         if (handle?.consumeClick()) return;
                         onSeek?.(measure.atBeat);
                     }}

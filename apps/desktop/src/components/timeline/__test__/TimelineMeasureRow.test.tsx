@@ -79,6 +79,19 @@ describe("rehearsal tabs", () => {
         expect(onSeek).toHaveBeenCalledWith(8);
     });
 
+    it("a click seeks without leaving the tab where Backspace would remove it", () => {
+        const { measureRow, onSeek } = renderRow();
+        const tab = screen.getByTestId("timeline-rehearsal-tab");
+        tab.focus();
+        fireEvent.click(tab, { detail: 1 });
+        expect(onSeek).toHaveBeenCalledWith(8);
+        expect(document.activeElement).not.toBe(tab);
+        // Focused from the keyboard, Delete still removes it
+        tab.focus();
+        fireEvent.keyDown(tab, { key: "Delete" });
+        expect(measureRow.onSetMark).toHaveBeenCalledWith(3, null);
+    });
+
     it("double-click renames inline; Enter commits, Esc cancels", () => {
         const { measureRow } = renderRow();
         fireEvent.doubleClick(screen.getByTestId("timeline-rehearsal-tab"));
@@ -299,6 +312,57 @@ describe("the measure row's menu", () => {
         fireEvent.contextMenu(screen.getByTestId("timeline-rehearsal-tab"));
         fireEvent.click(screen.getByTestId("measure-row-remove-mark"));
         expect(measureRow.onSetMark).toHaveBeenCalledWith(3, null);
+    });
+
+    it("offers Remove mN's counts on a plain measure number, with a lowercase m (E10)", () => {
+        const onRemoveCounts = vi.fn();
+        renderRow({ addSelectedMarchers: { onRemoveCounts } });
+        // m5's number, on its downbeat tick
+        rightClickRow(16);
+        const item = screen.getByTestId("timeline-range-menu-remove-counts");
+        expect(item).toHaveTextContent("Remove m5’s counts…");
+        // Nothing drawn: the menu says how to draw a cut
+        expect(
+            screen.getByTestId("timeline-range-menu-cut-hint"),
+        ).toHaveTextContent("Ctrl+drag across measures to remove counts");
+        fireEvent.click(item);
+        expect(onRemoveCounts).toHaveBeenCalledWith(
+            expect.objectContaining({
+                range: { startBeatIndex: 16, endBeatIndex: 20 },
+                measure: "m5",
+            }),
+        );
+    });
+
+    it("on a tab, names the measure in lowercase too", () => {
+        renderRow({ addSelectedMarchers: { onRemoveCounts: vi.fn() } });
+        fireEvent.contextMenu(screen.getByTestId("timeline-rehearsal-tab"));
+        expect(
+            screen.getByTestId("timeline-range-menu-remove-counts"),
+        ).toHaveTextContent("Remove m3’s counts…");
+    });
+
+    it("inside a drawn range, Remove counts… acts on the range wherever the right-click lands", () => {
+        const onRemoveCounts = vi.fn();
+        const range = { startBeatIndex: 8, endBeatIndex: 16 };
+        renderRow({
+            addSelectedMarchers: { onRemoveCounts },
+            selection: { kind: "range", range },
+        });
+        // On the measure row, on m3's tab
+        fireEvent.contextMenu(screen.getByTestId("timeline-rehearsal-tab"), {
+            clientX: 8 * 16,
+            clientY: 36,
+        });
+        const item = screen.getByTestId("timeline-range-menu-remove-counts");
+        expect(item).toHaveTextContent("Remove counts…");
+        expect(
+            screen.queryByTestId("timeline-range-menu-cut-hint"),
+        ).not.toBeInTheDocument();
+        fireEvent.click(item);
+        expect(onRemoveCounts).toHaveBeenCalledWith(
+            expect.objectContaining({ cut: range }),
+        );
     });
 
     it("doesn't open on the measure row without commands", () => {
