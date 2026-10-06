@@ -639,9 +639,12 @@ describe("typed rows stay typed until something else changes them (FX-4)", () =>
             measures,
             marks: w.marks,
         });
-        const sections = typedSections(rows);
-        expect(sections).toEqual([
+        const sections = typedSections(rows).slice(0, 1);
+        // A row added in the map (a mark without a source, as files before FX-4 saved them) is
+        // typed too (DE-2)
+        expect(typedSections(rows)).toEqual([
             { from: 1, to: 5, tempo: "♩=176", measures: "m1" },
+            { from: 5, to: 9, tempo: "♩=120", measures: "m2" },
         ]);
         const inside = [...w.durations];
         inside[2] *= 1.1;
@@ -653,8 +656,8 @@ describe("typed rows stay typed until something else changes them (FX-4)", () =>
         expect(overriddenSections(sections, w.durations, later)).toEqual([]);
         // An imported row isn't protected
         const imported = new Map<number, TempoMapMark>([
-            ...w.marks,
             [0, { ...w.marks.get(0)!, source: "import" }],
+            [1, { source: "import" }],
         ]);
         expect(
             typedSections(

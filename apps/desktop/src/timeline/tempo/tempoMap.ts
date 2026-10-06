@@ -791,11 +791,12 @@ export interface TypedSection {
 
 /**
  * The sections an Align drag must not rescale without saying so: rows typed in the map (not
- * imported) that still play at their typed tempo (FX-5).
+ * imported) that still play at their typed tempo (FX-5). A mark without a source was typed: files
+ * saved before marks had one only ever got them from the map (DE-2).
  */
 export const typedSections = (rows: readonly TempoMapRow[]): TypedSection[] =>
     rows
-        .filter((r) => r.source === "typed" && r.exact)
+        .filter((r) => r.typed && r.source !== "import" && r.exact)
         .map((r) => ({
             from: r.from,
             to: r.to,

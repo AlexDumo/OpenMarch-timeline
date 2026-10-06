@@ -91,6 +91,15 @@ export interface AlignPreview {
     readonly overrides?: readonly TypedSection[];
     /** Released over a typed section: waiting for Override or Keep typed */
     readonly confirming?: boolean;
+    /**
+     * Drawn stopped at a typed section: the edit as dragged, which rescales it and needs Override
+     * (DE-1). This preview itself is what Keep typed writes.
+     */
+    readonly wanted?: AlignPreview;
+    /** While confirming: what Keep typed writes (the drag stopped at the typed section) */
+    readonly keep?: AlignPreview;
+    /** Written by Keep typed: the section kept, for the toast when nothing else moved */
+    readonly keptTyped?: TypedSection;
 }
 
 interface AlignGesture {
@@ -212,78 +221,100 @@ export function useAlignEdit({
             const times = countTimes(a.durations);
             const ghostTime = times[index] ?? 0;
             const units = a.tempoMap?.units;
+            const typed = a.tempoMap?.sections ?? [];
             const overridesOf = (next: readonly number[]) =>
-                overriddenSections(
-                    a.tempoMap?.sections ?? [],
-                    a.durations,
-                    next,
-                );
-            if (kind === "hold") {
-                const result = alignHold({
+                overriddenSections(typed, a.durations, next);
+            /**
+             * The edit as dragged (`keepTyped` false) or stopping at typed sections (true). A drag
+             * that would rescale a typed section is drawn stopped, and on release asks (DE-1).
+             */
+            const build = (
+                keepTyped: boolean,
+                stoppedAt: readonly TypedSection[],
+            ): AlignPreview | null => {
+                if (kind === "hold") {
+                    const result = alignHold({
+                        durations: a.durations,
+                        index,
+                        toTime,
+                        synced: a.synced,
+                        scope: sc,
+                        flags: fl,
+                        typed,
+                        keepTyped,
+                    });
+                    if (!result) return null;
+                    const overrides = keepTyped
+                        ? []
+                        : overridesOf(result.durations);
+                    return {
+                        overrides,
+                        kind,
+                        index,
+                        durations: result.durations,
+                        origin: 0,
+                        effect: result.effect,
+                        chip: holdChip({
+                            before: a.durations,
+                            result,
+                            index,
+                            pages: p,
+                            synced: a.synced,
+                            t: tr,
+                            units,
+                            overrides,
+                            stoppedAt,
+                            measures: latest.current.measures,
+                        }),
+                        ghostTime,
+                        synced: [...a.synced],
+                        anchor,
+                    };
+                }
+                const result = alignMove({
                     durations: a.durations,
                     index,
                     toTime,
                     synced: a.synced,
                     scope: sc,
                     flags: fl,
+                    typed,
+                    keepTyped,
                 });
-                if (!result) return null;
-                const overrides = overridesOf(result.durations);
+                const overrides = keepTyped
+                    ? []
+                    : overridesOf(result.durations);
                 return {
                     overrides,
                     kind,
                     index,
                     durations: result.durations,
-                    origin: 0,
+                    origin: result.originShift,
                     effect: result.effect,
-                    chip: holdChip({
+                    chip: moveChip({
                         before: a.durations,
                         result,
                         index,
                         pages: p,
+                        audioOffsetSeconds: a.audioOffsetSeconds,
+                        head,
                         synced: a.synced,
                         t: tr,
                         units,
                         overrides,
-                        measures: latest.current.measures,
+                        stoppedAt,
                     }),
                     ghostTime,
-                    synced: [...a.synced],
+                    synced: syncedWith(a.synced, index, sync),
                     anchor,
                 };
-            }
-            const result = alignMove({
-                durations: a.durations,
-                index,
-                toTime,
-                synced: a.synced,
-                scope: sc,
-                flags: fl,
-            });
-            const overrides = overridesOf(result.durations);
-            return {
-                overrides,
-                kind,
-                index,
-                durations: result.durations,
-                origin: result.originShift,
-                effect: result.effect,
-                chip: moveChip({
-                    before: a.durations,
-                    result,
-                    index,
-                    pages: p,
-                    audioOffsetSeconds: a.audioOffsetSeconds,
-                    head,
-                    synced: a.synced,
-                    t: tr,
-                    units,
-                    overrides,
-                }),
-                ghostTime,
-                synced: syncedWith(a.synced, index, sync),
-                anchor,
             };
+            const wanted = build(false, []);
+            const overrides = wanted?.overrides ?? [];
+            if (!wanted || overrides.length === 0) return wanted;
+            // Drawn stopped at the typed section; the drag as made waits for the release (DE-1)
+            const kept = build(true, overrides);
+            return kept ? { ...kept, overrides: [], wanted } : wanted;
         },
         [],
     );
@@ -295,6 +326,17 @@ export function useAlignEdit({
                 setPreview(null);
                 return;
             }
+            // A drag stopped at a typed section asks first, drawn as dragged (DE-1)
+            if (next.wanted && !confirmed) {
+                const { wanted, ...kept } = next;
+                setPreview({
+                    ...wanted,
+                    anchor: next.anchor ?? shown.current?.anchor ?? null,
+                    confirming: true,
+                    keep: kept,
+                });
+                return;
+            }
             const changed =
                 next.origin !== 0 ||
                 next.durations.some((d, i) => d !== a.durations[i]);
@@ -302,7 +344,15 @@ export function useAlignEdit({
             // it says so, since at a low zoom a small correction can land back on the old place
             if (!changed) {
                 setPreview(null);
-                toast.info(latest.current.t("tempo.align.chip.noChange"));
+                const typed = next.keptTyped;
+                toast.info(
+                    typed
+                        ? latest.current.t("tempo.align.override.kept", {
+                              tempo: typed.tempo,
+                              measures: typed.measures,
+                          })
+                        : latest.current.t("tempo.align.chip.noChange"),
+                );
                 return;
             }
             // A typed tempo changes only when the user says so (FX-5)
@@ -528,10 +578,23 @@ export function useAlignEdit({
     const confirm = useCallback(() => {
         const waiting = shown.current;
         if (waiting?.confirming)
-            commit({ ...waiting, confirming: false }, true);
+            commit({ ...waiting, confirming: false, keep: undefined }, true);
     }, [commit]);
 
-    return { preview, dragProps, cancel, commit, confirm };
+    /** Keep typed: writes the drag stopped at the typed section's edge, or nothing (DE-1) */
+    const keepTyped = useCallback(() => {
+        const waiting = shown.current;
+        if (!waiting?.confirming) return;
+        const kept = waiting.keep;
+        const first = waiting.overrides?.[0];
+        if (!kept) {
+            setPreview(null);
+            return;
+        }
+        commit({ ...kept, keptTyped: first }, true);
+    }, [commit]);
+
+    return { preview, dragProps, cancel, commit, confirm, keepTyped };
 }
 
 /**
@@ -994,16 +1057,19 @@ export function TimelineAlignChip({ preview }: { preview: AlignPreview }) {
 }
 
 /**
- * After a drag or nudge over a typed section (FX-5): the edit waits, drawn, until Override
- * (Enter) writes it or Keep typed (Esc, or a press elsewhere) drops it.
+ * After a drag or nudge over a typed section (FX-5, DE-1): the edit waits, drawn as dragged, until
+ * Override (Enter) writes it or Keep typed writes it stopped at the typed section's edge (often
+ * nothing). Esc, or a press elsewhere, drops it.
  */
 export function TimelineAlignConfirm({
     preview,
     onConfirm,
+    onKeep,
     onCancel,
 }: {
     preview: AlignPreview;
     onConfirm: () => void;
+    onKeep: () => void;
     onCancel: () => void;
 }) {
     const t = alignT;
@@ -1057,7 +1123,7 @@ export function TimelineAlignConfirm({
                 <button
                     type="button"
                     data-testid="timeline-align-keep-typed"
-                    onClick={onCancel}
+                    onClick={onKeep}
                     className="rounded-4 hover:bg-fg-2 focus-visible:ring-accent px-8 py-2 outline-hidden focus-visible:ring-2"
                 >
                     {t("tempo.align.override.keep")}
@@ -1094,6 +1160,8 @@ export function TimelineAlignTempoPrompt({
     const current = countTempo(align.durations, page.start);
     const [value, setValue] = useState(current === null ? "" : String(current));
     const [error, setError] = useState<string | null>(null);
+    // A tempo that changes a typed section is written on a second Enter (DE-3)
+    const [overriding, setOverriding] = useState<TypedSection | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
     // A press outside closes it (not blur: the menu that opened it hands focus back as it closes)
     useEffect(() => {
@@ -1106,11 +1174,13 @@ export function TimelineAlignTempoPrompt({
     }, [onClose]);
     const submit = () => {
         const bpm = Number(value);
+        const typed = align.tempoMap?.sections ?? [];
         const result = typedPageTempo({
             durations: align.durations,
             page,
             bpm,
             synced: align.synced,
+            typed,
         });
         if (!result) {
             setError(
@@ -1119,6 +1189,15 @@ export function TimelineAlignTempoPrompt({
                     max: TYPED_TEMPO_CEILING_BPM,
                 }),
             );
+            return;
+        }
+        const overrides = overriddenSections(
+            typed,
+            align.durations,
+            result.durations,
+        );
+        if (overrides.length > 0 && !overriding) {
+            setOverriding(overrides[0]!);
             return;
         }
         void align.onRetime({
@@ -1152,6 +1231,7 @@ export function TimelineAlignTempoPrompt({
                     onChange={(event) => {
                         setValue(event.target.value);
                         setError(null);
+                        setOverriding(null);
                     }}
                     onKeyDown={(event) => {
                         event.stopPropagation();
@@ -1161,6 +1241,17 @@ export function TimelineAlignTempoPrompt({
                 />
             </label>
             {error && <p className="text-red text-[11px]">{error}</p>}
+            {overriding && (
+                <p
+                    data-testid="timeline-align-tempo-override"
+                    className="text-yellow max-w-[260px] text-[11px]"
+                >
+                    {t("tempo.align.override.tempoAgain", {
+                        tempo: overriding.tempo,
+                        measures: overriding.measures,
+                    })}
+                </p>
+            )}
         </form>,
         document.body,
     );

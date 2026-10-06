@@ -44,6 +44,7 @@ import {
     countAtTime,
     countTimes,
     nextMultiplier,
+    overriddenSections,
     planTapTheBeat,
     showLineUpStrip,
     suggestTapAgain,
@@ -54,6 +55,7 @@ import {
     tapPlausibility,
     tapProgress,
     tempoFromTaps,
+    typedSections,
     type TapMultiplier,
     type TapStart,
     type TapTempo,
@@ -68,6 +70,7 @@ import {
 } from "@/db-functions/tempo";
 import { getLivePlaybackPosition } from "./audio/AudioPlayer";
 import { isTyping } from "./timelineHotkeys";
+import { useTempoMapState } from "./useTempoMapState";
 import {
     musicPastCountsSentence,
     perMinute,
@@ -389,6 +392,7 @@ function TapTheBeatPanelBody() {
     const fit = useMemo(() => tempoFromTaps(taps), [taps]);
     const progress = tapProgress(taps.length, fit);
     const durations = useMemo(() => beats.map((b) => b.duration), [beats]);
+    const map = useTempoMapState();
     const synced = useMemo(
         () =>
             syncedOrdinals(
@@ -636,6 +640,18 @@ function TapTheBeatPanelBody() {
     // 276 per minute is likelier eighths than the music's count: ask, don't say "steady" (FB-6)
     const implausible = shownBpm !== null ? tapPlausibility(shownBpm) : null;
     const movesSynced = shownPlan?.unsynced.length ?? 0;
+    // Taps that change a tempo typed in the map say so on Apply, which overrides it (DE-3)
+    const typedOverride = useMemo(
+        () =>
+            plan && !applied
+                ? (overriddenSections(
+                      typedSections(map.state.rows),
+                      durations,
+                      plan.durations,
+                  )[0] ?? null)
+                : null,
+        [applied, durations, map.state.rows, plan],
+    );
     const hereDisabled = atHome && hereFrom === null && startKind !== "here";
     // Far from where the taps were applied: offer a new run from the playhead (FB-4)
     const farFromTaps =
@@ -880,7 +896,8 @@ function TapTheBeatPanelBody() {
                     data-testid="tap-sentence"
                     className={clsx(
                         // Moving synced counts is not small print (Jo)
-                        movesSynced > 0 && "text-yellow font-medium",
+                        (movesSynced > 0 || typedOverride) &&
+                            "text-yellow font-medium",
                     )}
                 >
                     {tapPlanSentence({
@@ -968,11 +985,16 @@ function TapTheBeatPanelBody() {
                             disabled={!plan || busy}
                             onClick={() => void apply()}
                         >
-                            {movesSynced > 0
-                                ? t("tempo.tapTheBeat.applyMovesSynced", {
-                                      count: movesSynced,
+                            {typedOverride
+                                ? t("tempo.tapTheBeat.applyOverridesTyped", {
+                                      tempo: typedOverride.tempo,
+                                      measures: typedOverride.measures,
                                   })
-                                : t("tempo.tapTheBeat.apply")}
+                                : movesSynced > 0
+                                  ? t("tempo.tapTheBeat.applyMovesSynced", {
+                                        count: movesSynced,
+                                    })
+                                  : t("tempo.tapTheBeat.apply")}
                         </Button>
                     )}
                 </div>

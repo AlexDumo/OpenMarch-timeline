@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
     isPlaying: true,
     apply: vi.fn(async () => [] as number[]),
     dismiss: vi.fn(async () => {}),
+    measures: [] as unknown[],
 }));
 
 vi.mock("@/global/database/db", () => ({ db: {} }));
@@ -68,7 +69,14 @@ const PAGES = [
     { id: 2, name: "2", beats: BEATS.slice(1) },
 ];
 vi.mock("@/hooks", () => ({
-    useTimingObjects: () => ({ beats: BEATS, pages: PAGES, measures: [] }),
+    useTimingObjects: () => ({
+        beats: BEATS,
+        pages: PAGES,
+        measures: mocks.measures,
+    }),
+}));
+vi.mock("@/hooks/queries/useTempo", () => ({
+    useTempoSyncedBeatIds: () => [],
 }));
 vi.mock("@/db-functions/tempo", () => ({
     readCountDurationsInTransaction: async () => ({
@@ -239,6 +247,27 @@ describe("tapping and applying", () => {
         expect(screen.getByTestId("tap-sentence")).toHaveTextContent(
             "Count 1 is at 0:01.84 in the music",
         );
+    });
+
+    it("says Apply overrides a tempo typed in the map (DE-3)", () => {
+        // m1–4, 4 counts each, typed ♩=120 at m1 (as files before marks had a source saved it)
+        mocks.measures = [0, 1, 2, 3].map((i) => ({
+            number: i + 1,
+            rehearsalMark: null,
+            counts: 4,
+            startBeat: BEATS[1 + i * 4],
+        }));
+        useTapTheBeatStore.getState().setOpen(true);
+        render(
+            withSettings(<TapTheBeatPanel />, {
+                tempoMapMarks: [{ beatId: 101 }],
+            }),
+        );
+        for (let i = 0; i < 8; i++) tapAt(1 + (i * 60) / 132);
+        expect(screen.getByTestId("tap-apply")).toHaveTextContent(
+            "Apply (overrides typed ♩=120, m1–4)",
+        );
+        mocks.measures = [];
     });
 
     it("asks for more taps, drops the last on Backspace and asks to play first", () => {

@@ -243,6 +243,64 @@ export function spanLimits(
     return [old * Math.min(lo, 1), old * Math.max(hi, 1)];
 }
 
+/** Counts that keep their lengths through an edit (typed tempo sections the user keeps, DE-1). */
+export type FixedCounts = ReadonlySet<number>;
+
+const hasFixed = (fixed: FixedCounts | undefined, from: number, to: number) => {
+    if (!fixed || fixed.size === 0) return false;
+    for (let i = from; i < to; i++) if (fixed.has(i)) return true;
+    return false;
+};
+
+/**
+ * `spanLimits` when the counts in `fixed` keep their lengths: only the others stretch, so with
+ * none of them the span can't change at all.
+ */
+export function spanLimitsKeeping(
+    durations: CountDurations,
+    from: number,
+    to: number,
+    fixed?: FixedCounts,
+): [number, number] {
+    if (!hasFixed(fixed, from, to)) return spanLimits(durations, from, to);
+    const free = [];
+    let fixedSpan = 0;
+    for (let i = from; i < to; i++)
+        if (fixed!.has(i)) fixedSpan += durations[i];
+        else free.push(durations[i]);
+    if (free.length === 0) return [fixedSpan, fixedSpan];
+    const [min, max] = spanLimits(free, 0, free.length);
+    return [fixedSpan + min, fixedSpan + max];
+}
+
+/**
+ * `respaceProportional` when the counts in `fixed` keep their lengths: the others take up the
+ * rest of `newSpan`, keeping their relative lengths. Does not clamp.
+ */
+export function respaceKeeping(
+    durations: CountDurations,
+    from: number,
+    to: number,
+    newSpan: number,
+    fixed?: FixedCounts,
+): number[] {
+    if (!hasFixed(fixed, from, to))
+        return respaceProportional(durations, from, to, newSpan);
+    assertRange(durations, from, to);
+    const out = durations.slice();
+    const free: number[] = [];
+    let fixedSpan = 0;
+    for (let i = from; i < to; i++)
+        if (fixed!.has(i)) fixedSpan += durations[i];
+        else free.push(i);
+    if (free.length === 0) return out;
+    const old = free.reduce((sum, i) => sum + durations[i], 0);
+    const rest = newSpan - fixedSpan;
+    for (const i of free)
+        out[i] = old > 0 ? durations[i] * (rest / old) : rest / free.length;
+    return out;
+}
+
 /** The last synced count before `index`, or 1 (count 1 is always synced). */
 export function previousSynced(synced: SyncedCounts, index: number): number {
     let best = 1;
@@ -340,8 +398,9 @@ function boundBefore(
     from: number,
     to: number,
     start: number,
+    fixed?: FixedCounts,
 ): Bound {
-    const [min, max] = spanLimits(durations, from, to);
+    const [min, max] = spanLimitsKeeping(durations, from, to, fixed);
     return {
         lo: start + min,
         hi: start + max,
@@ -357,8 +416,9 @@ function boundAfter(
     from: number,
     to: number,
     end: number,
+    fixed?: FixedCounts,
 ): Bound {
-    const [min, max] = spanLimits(durations, from, to);
+    const [min, max] = spanLimitsKeeping(durations, from, to, fixed);
     return {
         lo: end - max,
         hi: end - min,
@@ -382,6 +442,11 @@ export interface MoveCountArgs {
      * view's page scope passes the previous page flag, synced or not). Default: count 1.
      */
     respaceFrom?: number;
+    /**
+     * Counts that keep their lengths (DE-1, "Keep typed"): only the other counts in a re-spaced
+     * range stretch, and with none of them the count can't move that way.
+     */
+    fixed?: FixedCounts;
 }
 
 export interface MoveCountResult extends RetimeResult {
@@ -409,6 +474,7 @@ export function moveCount({
     synced = [],
     after = "respaceToNextSynced",
     respaceFrom,
+    fixed,
 }: MoveCountArgs): MoveCountResult {
     assertIndex(durations, index, "index");
     if (!Number.isFinite(toTime)) throw new RangeError(`toTime must be finite`);
@@ -424,20 +490,20 @@ export function moveCount({
 
     const bounds: Bound[] = [];
     if (prev !== null)
-        bounds.push(boundBefore(durations, prev, index, times[prev]));
+        bounds.push(boundBefore(durations, prev, index, times[prev], fixed));
     if (next !== null)
-        bounds.push(boundAfter(durations, index, next, times[next]));
+        bounds.push(boundAfter(durations, index, next, times[next], fixed));
     const c = clampToBounds(toTime, bounds, times[index]);
     const t = c.time;
 
     let out = durations.slice();
     const respaced: CountRange[] = [];
     if (prev !== null) {
-        out = respaceProportional(out, prev, index, t - times[prev]);
+        out = respaceKeeping(out, prev, index, t - times[prev], fixed);
         respaced.push({ from: prev, to: index });
     }
     if (next !== null) {
-        out = respaceProportional(out, index, next, times[next] - t);
+        out = respaceKeeping(out, index, next, times[next] - t, fixed);
         respaced.push({ from: index, to: next });
     }
     const moved = t - times[index];
@@ -474,6 +540,8 @@ export interface HoldCountArgs {
      * stays inside its page). Ignored unless it is after `index + 1`.
      */
     absorbUntil?: number;
+    /** Counts that keep their lengths (DE-1): a fixed count can't be held, nor absorb a hold */
+    fixed?: FixedCounts;
 }
 
 /**
@@ -489,6 +557,7 @@ export function holdCount({
     synced = [],
     after = "respaceToNextSynced",
     absorbUntil,
+    fixed,
 }: HoldCountArgs): RetimeResult {
     assertIndex(durations, index, "index");
     if (!Number.isFinite(newDuration))
@@ -510,34 +579,41 @@ export function holdCount({
             : syncedNext;
 
     // Work in the end time of the held count, so the shared clamp applies
+    const kept = fixed?.has(index) ?? false;
     const bounds: Bound[] = [
         {
-            lo: times[index] + Math.min(MIN_COUNT_SECONDS, old),
-            hi: times[index] + Math.max(MAX_COUNT_SECONDS, old),
+            lo: kept
+                ? times[index] + old
+                : times[index] + Math.min(MIN_COUNT_SECONDS, old),
+            hi: kept
+                ? times[index] + old
+                : times[index] + Math.max(MAX_COUNT_SECONDS, old),
             loReason: "minCount",
             hiReason: "maxCount",
             side: "before",
         },
     ];
     if (next !== null)
-        bounds.push(boundAfter(durations, index + 1, next, times[next]));
+        bounds.push(boundAfter(durations, index + 1, next, times[next], fixed));
     const c = clampToBounds(
         times[index] + newDuration,
         bounds,
         times[index + 1],
     );
-    const d = c.time - times[index];
+    // A kept count keeps its exact length, not one rebuilt from times
+    const d = kept ? old : c.time - times[index];
 
     const out = durations.slice();
     out[index] = d;
     const respaced: CountRange[] = [{ from: index, to: index + 1 }];
     let result = out;
     if (next !== null && next > index + 1) {
-        result = respaceProportional(
+        result = respaceKeeping(
             out,
             index + 1,
             next,
             times[next] - c.time,
+            fixed,
         );
         respaced.push({ from: index + 1, to: next });
     }
