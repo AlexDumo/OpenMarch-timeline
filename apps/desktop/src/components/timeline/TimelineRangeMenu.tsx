@@ -83,6 +83,14 @@ export const markedRangeAt = (
     };
 };
 
+/** An extra entry for a target, such as the Align view's "Even out page 5" */
+export interface TimelineMenuExtraItem {
+    readonly id: string;
+    readonly label: string;
+    /** Gets where the menu was opened, in client pixels */
+    readonly onSelect: (at: { readonly x: number; readonly y: number }) => void;
+}
+
 /**
  * The menu as an `onContextMenu` handler for the timeline surface and an element to render next
  * to it, so the surface's markup doesn't change. `resolveRange` gives the range under the
@@ -91,9 +99,14 @@ export const markedRangeAt = (
 export function useTimelineRangeMenu({
     menu,
     resolveRange,
+    extraItems,
 }: {
     menu?: TimelineAddMarchersMenu<TimelineMenuTarget>;
     resolveRange: (event: MouseEvent<HTMLElement>) => TimelineMenuTarget | null;
+    /** Entries after the others for a target (none for most) */
+    extraItems?: (
+        target: TimelineMenuTarget,
+    ) => readonly TimelineMenuExtraItem[];
 }): {
     onContextMenu: (event: MouseEvent<HTMLElement>) => void;
     element: ReactNode;
@@ -104,18 +117,24 @@ export function useTimelineRangeMenu({
         y: number;
     } | null>(null);
     const onContextMenu = (event: MouseEvent<HTMLElement>) => {
-        if (!menu) return;
+        if (!menu && !extraItems) return;
         const target = resolveRange(event);
         if (!target) return;
-        // Nothing to offer here: no add, and no page box to delete the flag of
+        // Nothing to offer here: no add, no page box to delete the flag of, and no extra entry
         const canDelete =
-            menu.onDeleteFlag !== undefined && target.pageId !== undefined;
-        if (!menu.onAdd && !canDelete) return;
+            menu?.onDeleteFlag !== undefined && target.pageId !== undefined;
+        if (
+            !menu?.onAdd &&
+            !canDelete &&
+            (extraItems?.(target).length ?? 0) === 0
+        )
+            return;
         event.preventDefault();
         setOpen({ target, x: event.clientX, y: event.clientY });
     };
     const disabledReason = menu?.disabledReason ?? null;
-    const element = menu && open && (
+    const extras = open ? (extraItems?.(open.target) ?? []) : [];
+    const element = open && (
         <DropdownMenu.Root
             open
             modal={false}
@@ -136,17 +155,17 @@ export function useTimelineRangeMenu({
                     align="start"
                     className="bg-modal text-text rounded-6 border-stroke shadow-modal z-50 flex min-w-[180px] flex-col gap-4 border p-4 backdrop-blur-md"
                 >
-                    {menu.onAdd && (
+                    {menu?.onAdd && (
                         <DropdownMenu.Item
                             disabled={disabledReason !== null}
-                            onSelect={() => menu.onAdd?.(open.target)}
+                            onSelect={() => menu?.onAdd?.(open.target)}
                             className="rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50"
                         >
                             <UserPlusIcon size={14} />
                             Add selected marchers
                         </DropdownMenu.Item>
                     )}
-                    {menu.onAdd && disabledReason !== null && (
+                    {menu?.onAdd && disabledReason !== null && (
                         <p
                             data-testid="timeline-range-menu-reason"
                             className="text-text-subtitle px-8 pb-4 text-[11px]"
@@ -154,11 +173,23 @@ export function useTimelineRangeMenu({
                             {disabledReason}
                         </p>
                     )}
-                    {menu.onDeleteFlag && open.target.pageId !== undefined && (
+                    {extras.map((item) => (
+                        <DropdownMenu.Item
+                            key={item.id}
+                            data-testid={`timeline-range-menu-${item.id}`}
+                            onSelect={() =>
+                                item.onSelect({ x: open.x, y: open.y })
+                            }
+                            className="rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none"
+                        >
+                            {item.label}
+                        </DropdownMenu.Item>
+                    ))}
+                    {menu?.onDeleteFlag && open.target.pageId !== undefined && (
                         <DropdownMenu.Item
                             data-testid="timeline-range-menu-delete-flag"
                             onSelect={() =>
-                                menu.onDeleteFlag?.(open.target.pageId!)
+                                menu?.onDeleteFlag?.(open.target.pageId!)
                             }
                             className="rounded-4 data-[highlighted]:bg-fg-2 text-red flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none"
                         >

@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AddedPageFlag } from "@/db-functions/pageFlags";
 import {
     deletePageFlagsMutationOptions,
@@ -22,7 +22,16 @@ import {
     selectionOfPage,
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    useTimelineMode,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
+import {
+    useRetimeBeats,
+    useSetTempoSyncedBeatIds,
+    useTempoSyncedBeatIds,
+} from "@/hooks/queries/useTempo";
+import { durationsByBeatId } from "@/db-functions/tempo";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import {
@@ -30,10 +39,11 @@ import {
     TimelinePreviewButtons,
     TimelineSoundButton,
 } from "./TimelineControls";
-import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useTempoLabFlag, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     Timeline,
     TimelineWaveformProvider,
+    type TimelineAlign,
     type TimelineInput,
     type TimelineSelection,
 } from "./Timeline";
@@ -174,6 +184,11 @@ export default function TimelineModePanel() {
         () => timelinesOffPages(timelines, pages),
         [timelines, pages],
     );
+    const align = useTimelineAlign({
+        beats,
+        envelope,
+        keyBlocked: selectedMarcherIds.size > 0,
+    });
     const commands = useTimelineCommands({
         database: db,
         timelines,
@@ -276,6 +291,7 @@ export default function TimelineModePanel() {
                     onAddPageFlag={
                         addPageFlag.insertion ? addPageFlag.add : undefined
                     }
+                    align={align}
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
                             pages,
@@ -296,6 +312,78 @@ export default function TimelineModePanel() {
             </TimelineWaveformProvider>
         </div>
     );
+}
+
+/**
+ * The Align view's data and writes (E7), when the Tempo lab flag `alignView` is on: the counts'
+ * lengths, the synced counts (stored by beat id) as count indexes, and a retime written as one
+ * undo entry with the offset and synced counts. A press of A doesn't toggle it while marchers are
+ * selected, where A moves them.
+ */
+function useTimelineAlign({
+    beats,
+    envelope,
+    keyBlocked,
+}: {
+    beats: readonly { readonly id: number; readonly duration: number }[];
+    envelope: TimelineAlign["envelope"];
+    keyBlocked: boolean;
+}): TimelineAlign | undefined {
+    const enabled = useTempoLabFlag("alignView") === true;
+    const on = useTimelineSelectionStore((s) => s.alignView);
+    const syncedIds = useTempoSyncedBeatIds();
+    const { data: settings } = useQuery(workspaceSettingsQueryOptions());
+    const { mutateAsync: retime } = useRetimeBeats();
+    const { mutate: setSyncedIds } = useSetTempoSyncedBeatIds();
+    const durations = useMemo(() => beats.map((b) => b.duration), [beats]);
+    const synced = useMemo(() => {
+        const indexOf = new Map(beats.map((b, i) => [b.id, i]));
+        return syncedIds
+            .flatMap((id) => {
+                const index = indexOf.get(id);
+                return index === undefined ? [] : [index];
+            })
+            .sort((a, b) => a - b);
+    }, [beats, syncedIds]);
+    const audioOffsetSeconds = settings?.audioOffsetSeconds ?? 0;
+    return useMemo(() => {
+        if (!enabled) return undefined;
+        const idsOf = (indexes: readonly number[]) =>
+            indexes.flatMap((i) => (beats[i] ? [beats[i].id] : []));
+        return {
+            on,
+            onToggle: (next) =>
+                useTimelineSelectionStore.getState().setAlignView(next),
+            keyBlocked,
+            durations,
+            synced,
+            audioOffsetSeconds,
+            envelope,
+            onRetime: ({ durations: next, originShift, synced: nextSynced }) =>
+                retime({
+                    newDurationsByBeatId: durationsByBeatId(
+                        beats.map((b) => b.id),
+                        next,
+                    ),
+                    originShift,
+                    syncedBeatIds: idsOf(nextSynced),
+                }).catch(() => {
+                    // The mutation already told the user (`tempo.retimeError`)
+                }),
+            onSetSynced: (next) => setSyncedIds(idsOf(next)),
+        };
+    }, [
+        audioOffsetSeconds,
+        beats,
+        durations,
+        enabled,
+        envelope,
+        keyBlocked,
+        on,
+        retime,
+        setSyncedIds,
+        synced,
+    ]);
 }
 
 /**

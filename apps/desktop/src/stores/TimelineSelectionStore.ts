@@ -145,6 +145,12 @@ export interface TimelineSelectionState {
     readonly loopPreview: boolean;
     /** A gesture is moving the playhead: an unpinned S waits for it to end (UI-12 review) */
     readonly scrubbing: boolean;
+    /**
+     * The Align view (E7, Tempo lab `alignView`): the timeline in seconds, where a page flag drag
+     * retimes counts. Only the user turns it on or off (A, or its button); opening a show turns it
+     * off, since it changes what a flag drag does.
+     */
+    readonly alignView: boolean;
 
     /**
      * Isolates the stored timeline `timelineId`: the window becomes its range with the playhead at
@@ -221,7 +227,9 @@ export interface TimelineSelectionState {
     readonly toggleLoopPreview: (loop?: boolean) => void;
     /** Used by `useTimelinePlaybackDriver` only. */
     readonly setShowEndBeat: (showEndBeat: number | null) => void;
-    /** Opening a show: home, playhead at 0, nothing loaded, From start off. */
+    /** Turns the Align view on or off (`!alignView` without an argument). */
+    readonly setAlignView: (on?: boolean) => void;
+    /** Opening a show: home, playhead at 0, nothing loaded, From start and Align off. */
     readonly reset: () => void;
 }
 
@@ -439,6 +447,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             playFromStart: false,
             loopPreview: false,
             scrubbing: false,
+            alignView: false,
             isolate: (timelineId, restore) =>
                 set((s) => {
                     if (s.isolation?.timelineId === timelineId) return {};
@@ -760,6 +769,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             toggleLoopPreview: (loop) =>
                 set((s) => ({ loopPreview: loop ?? !s.loopPreview })),
             setShowEndBeat: (showEndBeat) => set({ showEndBeat }),
+            setAlignView: (on) =>
+                set((s) => ({ alignView: on ?? !s.alignView })),
             reset: () =>
                 set((s) => ({
                     ...windowFields(0, false, 0, s.pageBoxes),
@@ -770,6 +781,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     playback: null,
                     playFromStart: false,
                     scrubbing: false,
+                    alignView: false,
                 })),
         };
     },

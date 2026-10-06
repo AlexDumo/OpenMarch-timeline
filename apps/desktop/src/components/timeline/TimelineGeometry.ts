@@ -104,16 +104,23 @@ export const beatToX = (
     startBeat = 0,
 ) => (beat - startBeat) * pixelsPerBeat;
 
+/**
+ * The markers that keep `minimumSpacingPx` from the last one kept, in order. `pixelsPerBeat` is a
+ * fixed width per count, or a beat's x on another axis (the Align view's seconds).
+ */
 export const filterMarkersByMinimumSpacing = <T extends TimelineMarker>(
     markers: readonly T[],
-    pixelsPerBeat: number,
+    pixelsPerBeat: number | ((beat: BeatPosition) => number),
     minimumSpacingPx = 32,
 ): T[] => {
     const ordered = [...markers].sort((a, b) => a.atBeat - b.atBeat);
     let lastVisibleX = Number.NEGATIVE_INFINITY;
 
     return ordered.filter((marker) => {
-        const markerX = marker.atBeat * pixelsPerBeat;
+        const markerX =
+            typeof pixelsPerBeat === "function"
+                ? pixelsPerBeat(marker.atBeat)
+                : marker.atBeat * pixelsPerBeat;
         if (markerX - lastVisibleX < minimumSpacingPx) return false;
         lastVisibleX = markerX;
         return true;

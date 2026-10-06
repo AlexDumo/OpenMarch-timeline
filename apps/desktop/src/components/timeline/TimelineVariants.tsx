@@ -6,12 +6,17 @@ import {
     useRef,
     useState,
     type MouseEvent,
+    type ReactNode,
 } from "react";
 import { PlusIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
 import {
-    beatToX,
+    TimelineCountLinesCanvas,
+    TimelineEnvelopeCanvas,
+    TimelineGridCanvas,
+    TimelineWaveformCanvas,
+} from "./TimelineCanvas";
+import {
     clamp,
     getPageSnapBeats,
     getWindowCountLabel,
@@ -36,11 +41,47 @@ import {
     useElementWidth,
     useTimelinePointer,
 } from "./TimelinePrimitives";
-import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
+import {
+    markedRangeAt,
+    useTimelineRangeMenu,
+    type TimelineMenuExtraItem,
+    type TimelineMenuTarget,
+} from "./TimelineRangeMenu";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
+import {
+    ALIGN_MAX_PX_PER_SECOND,
+    ALIGN_MIN_PX_PER_SECOND,
+    alignPixelsPerSecond,
+    countsAxis,
+    scrollKeepingBeat,
+    secondsAxis,
+    type TimelineXAxis,
+} from "./timelineAxis";
+import {
+    alignFlags,
+    alignPages as toAlignPages,
+    countTempo,
+    evenOutPage,
+    formatShowTime,
+    formatTempo,
+    viewTimes,
+    type AlignPage,
+} from "./timelineAlign";
+import {
+    alignT,
+    TimelineAlignChip,
+    TimelineAlignFlags,
+    TimelineAlignPreviewLayer,
+    TimelineAlignTempoPrompt,
+    TimelineAlignTicks,
+    TimelineAlignTimeLine,
+    TimelineAlignToggle,
+    useAlignEdit,
+} from "./TimelineAlignView";
 import type {
     TimelineCommonProps,
     TimelineNavigation,
+    TimelinePageMarker,
     TimelineSelection,
 } from "./TimelineViewModel";
 
@@ -60,12 +101,13 @@ const FIT_BACK_MARGIN = 1.05;
 export function fitBackZoom(
     zoomBeforeFit: number | null,
     fitValue: number,
+    maxScale = TIMELINE_MAX_PX_PER_BEAT,
 ): number {
     const back =
         zoomBeforeFit !== null && zoomBeforeFit > fitValue * FIT_BACK_MARGIN
             ? zoomBeforeFit
             : Math.max(TIMELINE_DEFAULT_PX_PER_BEAT, fitValue * 2);
-    return Math.min(back, TIMELINE_MAX_PX_PER_BEAT);
+    return Math.min(back, maxScale);
 }
 
 /** How much one pixel of wheel or pinch delta zooms */
@@ -80,6 +122,9 @@ const WHEEL_ZOOM_RATE = 0.0025;
  * - Fit (or Shift+Z) fits the show; again goes back, about the playhead. Zooming out stops at the
  *   fitted zoom, so a show never shows as a sliver; while fitted it stays fitted as the viewport or
  *   the show changes (`fitted`, remembered by the caller).
+ *
+ * The Align view uses it in seconds: `pixelsPerBeat` is then px/s and `beatCount` the seconds the
+ * surface spans, with its own `minScale` and `maxScale`.
  */
 const useTimelineZoom = ({
     viewportRef,
@@ -90,6 +135,8 @@ const useTimelineZoom = ({
     onPixelsPerBeatChange,
     fitted: rememberedFitted,
     onFittedChange,
+    minScale = TIMELINE_MIN_PX_PER_BEAT,
+    maxScale = TIMELINE_MAX_PX_PER_BEAT,
 }: {
     viewportRef: React.RefObject<HTMLDivElement | null>;
     pixelsPerBeat: number;
@@ -99,21 +146,33 @@ const useTimelineZoom = ({
     onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
     fitted?: boolean;
     onFittedChange?: (fitted: boolean) => void;
+    minScale?: number;
+    maxScale?: number;
 }) => {
     const viewportWidth = useElementWidth(viewportRef);
     const fitValue =
         beatCount > 0 && viewportWidth > 0
             ? clamp(
                   Math.max(0, viewportWidth - leadingInset) / beatCount,
-                  TIMELINE_MIN_PX_PER_BEAT,
-                  TIMELINE_MAX_PX_PER_BEAT,
+                  minScale,
+                  maxScale,
               )
             : null;
-    const minimum = fitValue ?? TIMELINE_MIN_PX_PER_BEAT;
+    const minimum = fitValue ?? minScale;
     const isFitted =
         fitValue !== null && Math.abs(pixelsPerBeat - fitValue) < 0.01;
-    const latest = useRef({ pixelsPerBeat, minimum, onPixelsPerBeatChange });
-    latest.current = { pixelsPerBeat, minimum, onPixelsPerBeatChange };
+    const latest = useRef({
+        pixelsPerBeat,
+        minimum,
+        maxScale,
+        onPixelsPerBeatChange,
+    });
+    latest.current = {
+        pixelsPerBeat,
+        minimum,
+        maxScale,
+        onPixelsPerBeatChange,
+    };
     /** The beat to keep at `anchorPx` once `pixelsPerBeat` lands on `next` */
     const pendingScroll = useRef<{
         next: number;
@@ -139,10 +198,11 @@ const useTimelineZoom = ({
             const {
                 pixelsPerBeat: current,
                 minimum: floor,
+                maxScale: ceiling,
                 onPixelsPerBeatChange: change,
             } = latest.current;
             if (!viewport || !change) return;
-            const bounded = clamp(next, floor, TIMELINE_MAX_PX_PER_BEAT);
+            const bounded = clamp(next, floor, ceiling);
             if (Math.abs(bounded - current) < 0.001) return;
             pendingScroll.current = {
                 next: bounded,
@@ -252,7 +312,7 @@ const useTimelineZoom = ({
         const viewport = viewportRef.current;
         if (!viewport || !onPixelsPerBeatChange || fitValue === null) return;
         if (isFitted) {
-            const back = fitBackZoom(zoomBeforeFit.current, fitValue);
+            const back = fitBackZoom(zoomBeforeFit.current, fitValue, maxScale);
             zoomBeforeFit.current = null;
             // Back about the playhead, where the work is
             zoomTo(back, viewport.clientWidth / 2, playheadBeat);
@@ -264,6 +324,7 @@ const useTimelineZoom = ({
     }, [
         fitValue,
         isFitted,
+        maxScale,
         onPixelsPerBeatChange,
         pixelsPerBeat,
         playheadBeat,
@@ -343,66 +404,78 @@ const transportNavigation = (props: TimelineCommonProps) =>
  * resizing its clip, so the canvases are never redrawn for it.
  */
 function TimelineWaveformLane({
-    waveform,
+    canvas,
     top,
     width,
     height,
-    pixelsPerBeat,
+    axis,
     positionBeat,
     livePositionBeat,
+    children,
 }: {
-    waveform: TimelineCommonProps["model"]["waveform"];
+    /** The waveform in one tone: per count on the normal axis, in seconds in the Align view */
+    canvas: (tone: "played" | "rest") => ReactNode;
     top: number;
     width: number;
     height: number;
-    pixelsPerBeat: number;
+    axis: TimelineXAxis;
     positionBeat: number;
     livePositionBeat?: () => number | null;
+    /** Drawn over the waveform, such as the Align view's count lines */
+    children?: ReactNode;
 }) {
     const playedRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         const played = playedRef.current;
         if (!played) return;
         if (!livePositionBeat) {
-            played.style.width = `${Math.max(0, positionBeat * pixelsPerBeat)}px`;
+            played.style.width = `${Math.max(0, axis.x(positionBeat))}px`;
             return;
         }
         let frame = 0;
         const update = () => {
             const beat = livePositionBeat() ?? positionBeat;
-            played.style.width = `${Math.max(0, beat * pixelsPerBeat)}px`;
+            played.style.width = `${Math.max(0, axis.x(beat))}px`;
             frame = requestAnimationFrame(update);
         };
         update();
         return () => cancelAnimationFrame(frame);
-    }, [livePositionBeat, pixelsPerBeat, positionBeat]);
+    }, [axis, livePositionBeat, positionBeat]);
     return (
         <div
             className="rounded-4 pointer-events-none absolute left-0 overflow-hidden"
             style={{ top, width, height }}
         >
-            <TimelineWaveformCanvas
-                waveform={waveform}
-                width={width}
-                height={height}
-                pixelsPerBeat={pixelsPerBeat}
-                tone="rest"
-            />
+            {canvas("rest")}
             <div
                 ref={playedRef}
                 className="absolute inset-y-0 left-0 overflow-hidden"
             >
-                <TimelineWaveformCanvas
-                    waveform={waveform}
-                    width={width}
-                    height={height}
-                    pixelsPerBeat={pixelsPerBeat}
-                    tone="played"
-                />
+                {canvas("played")}
             </div>
+            {children}
         </div>
     );
 }
+
+/** The Align view's px/s on entering it, before any zoom (no playhead count to keep) */
+const ALIGN_DEFAULT_PX_PER_SECOND = 32;
+/** The Align surface stays under this many pixels, so its canvases fit at 2× density */
+const ALIGN_MAX_SURFACE_PX = 16000;
+
+/** The most px/s the Align view zooms to for a surface `extent` seconds long */
+const alignMaxScale = (extent: number) =>
+    Math.max(
+        ALIGN_MIN_PX_PER_SECOND,
+        Math.min(
+            ALIGN_MAX_PX_PER_SECOND,
+            extent > 0
+                ? ALIGN_MAX_SURFACE_PX / extent
+                : ALIGN_MAX_PX_PER_SECOND,
+        ),
+    );
+
+const NO_SYNCED: readonly number[] = [];
 
 function TimelineSurface({
     density,
@@ -416,6 +489,7 @@ function TimelineSurface({
         selectedTarget,
         showTransport = true,
         className,
+        align,
     } = props;
     const expanded = density === "expanded";
     const viewportRef = useRef<HTMLDivElement>(null);
@@ -432,19 +506,108 @@ function TimelineSurface({
             }),
         [model.beatCount, model.pages],
     );
-    const width = model.beatCount * pixelsPerBeat;
     const initialPageWidth = model.pages.some((page) => page.isInitial)
         ? TIMELINE_INITIAL_PAGE_WIDTH
         : 0;
-    const surfaceWidth = width + initialPageWidth;
+
+    // The Align view (E7): the same lanes on a seconds axis. Off, nothing below changes the view.
+    const alignOn = align?.on === true;
+    const alignOffset = align?.offset ?? 0;
+    const alignDurations = align?.durations;
+    const envelope = align?.envelope ?? null;
+    const envelopeSeconds = envelope
+        ? envelope.peaks.length / envelope.rate
+        : 0;
+    const baseTimes = useMemo(
+        () => (alignDurations ? viewTimes(alignDurations, alignOffset) : null),
+        [alignDurations, alignOffset],
+    );
+    const alignPages = useMemo(
+        () => toAlignPages(model.pages, model.beatCount, alignOffset),
+        [alignOffset, model.beatCount, model.pages],
+    );
+    const timesUsable =
+        baseTimes !== null && baseTimes.length === model.beatCount + 1;
+    const showAlign = alignOn && timesUsable;
+    const rawExtent = timesUsable
+        ? Math.max(baseTimes[baseTimes.length - 1] ?? 0, envelopeSeconds)
+        : 0;
+    const alignCeiling = alignMaxScale(rawExtent);
+    const [ownPixelsPerSecond, setPixelsPerSecond] = useState(() =>
+        timesUsable
+            ? alignPixelsPerSecond(
+                  pixelsPerBeat,
+                  alignDurations?.[Math.round(positionBeat) + alignOffset] ??
+                      null,
+              )
+            : ALIGN_DEFAULT_PX_PER_SECOND,
+    );
+    const pixelsPerSecond = Math.min(ownPixelsPerSecond, alignCeiling);
+    const baseAxis = useMemo(
+        () =>
+            showAlign
+                ? secondsAxis({
+                      times: baseTimes,
+                      pixelsPerSecond,
+                      minExtent: envelopeSeconds,
+                  })
+                : countsAxis(pixelsPerBeat, model.beatCount),
+        [
+            baseTimes,
+            envelopeSeconds,
+            model.beatCount,
+            pixelsPerBeat,
+            pixelsPerSecond,
+            showAlign,
+        ],
+    );
+    const t = alignT;
+    const playheadTime = baseAxis.toUnit(positionBeat);
+    const alignEdit = useAlignEdit({
+        align,
+        pages: alignPages,
+        pixelsPerSecond,
+        playheadTime,
+        viewportRef,
+        t,
+    });
+    const preview = showAlign ? alignEdit.preview : null;
+    // While dragging, the counts draw where the edit puts them; the music stays put
+    const axis = useMemo(
+        () =>
+            preview
+                ? secondsAxis({
+                      times: viewTimes(preview.durations, alignOffset),
+                      pixelsPerSecond,
+                      origin: preview.origin,
+                      minExtent: baseAxis.extent,
+                  })
+                : baseAxis,
+        [alignOffset, baseAxis, pixelsPerSecond, preview],
+    );
+    // Leaving Align drops a drag in progress
+    const cancelAlignEdit = alignEdit.cancel;
+    useEffect(() => {
+        if (!showAlign) cancelAlignEdit();
+    }, [cancelAlignEdit, showAlign]);
+
+    const width = axis.width;
+    const surfaceWidth = Math.max(width, baseAxis.width) + initialPageWidth;
     // UI-12: the ruler (28px) and the measure row; then the waveform, when audio is loaded, so it
     // stays put as clips come and go; then the clip rows, one always kept (with no chrome), so the
     // first off-page clip doesn't move the ruler right after the drag that made it
     const railHeight = expanded ? 20 : 17;
-    const showWaveform = model.waveform.peaksByBeat.some(
-        (peaks) => peaks.length > 0,
-    );
-    const waveformHeight = expanded ? 32 : 12;
+    const showWaveform = showAlign
+        ? envelope !== null
+        : model.waveform.peaksByBeat.some((peaks) => peaks.length > 0);
+    // The Align view's waveform is what's being edited, so it's taller (11-ui.md A)
+    const waveformHeight = showAlign
+        ? expanded
+            ? 64
+            : 24
+        : expanded
+          ? 32
+          : 12;
     const audioTop = 28 + railHeight + 2;
     const trackTop = showWaveform ? audioTop + waveformHeight + 4 : audioTop;
     const rowPitch = expanded ? 22 : 12;
@@ -477,14 +640,92 @@ function TimelineSurface({
         : false;
     const zoom = useTimelineZoom({
         viewportRef,
-        pixelsPerBeat,
-        beatCount: model.beatCount,
+        pixelsPerBeat: showAlign ? pixelsPerSecond : pixelsPerBeat,
+        beatCount: showAlign ? baseAxis.extent : model.beatCount,
         leadingInset: initialPageWidth,
-        playheadBeat: positionBeat,
-        onPixelsPerBeatChange: props.onPixelsPerBeatChange,
-        fitted: props.zoomFitted,
-        onFittedChange: props.onZoomFittedChange,
+        playheadBeat: showAlign ? playheadTime : positionBeat,
+        onPixelsPerBeatChange: showAlign
+            ? setPixelsPerSecond
+            : props.onPixelsPerBeatChange,
+        // Align has its own zoom; the remembered Fit is the normal timeline's
+        fitted: showAlign ? undefined : props.zoomFitted,
+        onFittedChange: showAlign ? undefined : props.onZoomFittedChange,
+        ...(showAlign
+            ? { minScale: ALIGN_MIN_PX_PER_SECOND, maxScale: alignCeiling }
+            : {}),
     });
+
+    // Switching axes keeps the playhead at the same screen x (11-ui.md A)
+    const lastAxis = useRef(baseAxis);
+    useLayoutEffect(() => {
+        const before = lastAxis.current;
+        lastAxis.current = baseAxis;
+        const viewport = viewportRef.current;
+        if (!viewport || before.kind === baseAxis.kind) return;
+        viewport.scrollLeft = scrollKeepingBeat({
+            beat: positionBeat,
+            before,
+            after: baseAxis,
+            scrollLeft: viewport.scrollLeft,
+        });
+        // Only on a switch; the playhead is read as it is then
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [baseAxis]);
+
+    // A toggles Align (never while typing, in a menu, or when the key is someone else's)
+    const toggleAlign = useCallback(
+        (on: boolean) => {
+            if (!align) return;
+            if (on && !align.on && timesUsable)
+                setPixelsPerSecond(
+                    Math.min(
+                        alignPixelsPerSecond(
+                            pixelsPerBeat,
+                            align.durations[
+                                Math.min(
+                                    Math.floor(positionBeat),
+                                    model.beatCount - 1,
+                                ) + alignOffset
+                            ] ?? null,
+                        ),
+                        alignCeiling,
+                    ),
+                );
+            align.onToggle(on);
+        },
+        [
+            align,
+            alignCeiling,
+            alignOffset,
+            model.beatCount,
+            pixelsPerBeat,
+            positionBeat,
+            timesUsable,
+        ],
+    );
+    const alignKeyBlocked = align?.keyBlocked === true;
+    useEffect(() => {
+        if (!align) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (
+                event.key.toLowerCase() !== "a" ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.altKey ||
+                event.shiftKey ||
+                event.repeat ||
+                alignKeyBlocked ||
+                isTyping(event.target) ||
+                overlayOpen()
+            )
+                return;
+            event.preventDefault();
+            toggleAlign(!align.on);
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [align, alignKeyBlocked, toggleAlign]);
+
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = (next: TimelineSelection) =>
         props.onSelectionChange?.(next);
@@ -506,7 +747,7 @@ function TimelineSurface({
             ? (range) =>
                   onSelectionChange({ kind: "range", range, drawn: true })
             : undefined,
-        pixelsPerBeat,
+        axis,
         beatCount: model.beatCount,
         snapBeats,
     });
@@ -526,10 +767,45 @@ function TimelineSurface({
         ...props,
         onNavigate: transportNavigation(props),
     };
+    // Align: "Even out page 5" and "Tempo… [120]" on a page box (11-ui.md B)
+    const [tempoPrompt, setTempoPrompt] = useState<{
+        page: AlignPage;
+        x: number;
+        y: number;
+    } | null>(null);
+    const closeTempoPrompt = useCallback(() => setTempoPrompt(null), []);
+    const alignMenuItems = (
+        target: TimelineMenuTarget,
+    ): TimelineMenuExtraItem[] => {
+        if (!showAlign || !align || target.pageId === undefined) return [];
+        const page = alignPages.find((p) => String(p.id) === target.pageId);
+        if (!page || page.end <= page.start) return [];
+        const bpm = formatTempo(align.durations, page.start, page.end);
+        return [
+            {
+                id: "even-out",
+                label: t("tempo.align.evenOut", { page: page.label }),
+                onSelect: () =>
+                    void align.onRetime({
+                        durations: evenOutPage(align.durations, page),
+                        originShift: 0,
+                        synced: align.synced,
+                    }),
+            },
+            {
+                id: "tempo",
+                label: t("tempo.align.tempoItem", { bpm: bpm ?? "–" }),
+                // After the menu has closed and handed focus back
+                onSelect: ({ x, y }) =>
+                    setTimeout(() => setTempoPrompt({ page, x, y }), 0),
+            },
+        ];
+    };
     // The right-click menu's target: a page box or clip under the pointer, else a dragged range
     // the pointer is inside (UI-9 Adding marchers, Creating a timeline)
     const rangeMenu = useTimelineRangeMenu({
         menu: props.addSelectedMarchers,
+        extraItems: align ? alignMenuItems : undefined,
         resolveRange: (event: MouseEvent<HTMLElement>) => {
             const marked = markedRangeAt(event.target);
             if (marked) return marked;
@@ -538,15 +814,73 @@ function TimelineSurface({
                 '[data-testid="timeline-pointer-surface"]',
             );
             if (!surface) return null;
-            const beat =
-                (event.clientX - surface.getBoundingClientRect().left) /
-                pixelsPerBeat;
+            const beat = axis.beatAt(
+                event.clientX - surface.getBoundingClientRect().left,
+            );
             return beat >= selectionRange.startBeatIndex &&
                 beat <= selectionRange.endBeatIndex
                 ? { range: selectionRange }
                 : null;
         },
     });
+
+    // Align's pieces: which counts are downbeats and flags, and the page tempo notes
+    const downbeats = useMemo(
+        () => new Set(model.measures.map((measure) => measure.atBeat)),
+        [model.measures],
+    );
+    const flags = useMemo(() => alignFlags(alignPages), [alignPages]);
+    const flagCounts = useMemo(
+        () => new Set(flags.map((flag) => flag.index)),
+        [flags],
+    );
+    const shownDurations = preview?.durations ?? alignDurations;
+    const pageNote =
+        showAlign && shownDurations
+            ? (page: TimelinePageMarker) => {
+                  const p = alignPages.find((ap) => ap.id === page.id);
+                  return p ? formatTempo(shownDurations, p.start, p.end) : null;
+              }
+            : undefined;
+    const readoutTempo =
+        showAlign && alignDurations
+            ? countTempo(
+                  alignDurations,
+                  Math.min(Math.floor(positionBeat), model.beatCount - 1) +
+                      alignOffset,
+              )
+            : null;
+    const markHandle =
+        showAlign && align
+            ? (beat: number) => {
+                  const index = beat + alignOffset;
+                  if (index < 1 || index > align.durations.length) return null;
+                  const measure = model.measures.find((m) => m.atBeat === beat);
+                  const head = measure?.rehearsalMark?.trim() || undefined;
+                  let moved = false;
+                  const handlers = alignEdit.dragProps("move", index, head);
+                  return {
+                      props: {
+                          ...handlers,
+                          onPointerMove: (
+                              event: React.PointerEvent<HTMLElement>,
+                          ) => {
+                              moved = true;
+                              handlers.onPointerMove(event);
+                          },
+                          title: t("tempo.align.markHandle", {
+                              label: head ?? "",
+                              time: formatShowTime(axis.toUnit(beat), true),
+                          }),
+                      },
+                      consumeClick: () => {
+                          const was = moved;
+                          moved = false;
+                          return was;
+                      },
+                  };
+              }
+            : undefined;
 
     return (
         <TimelineShell
@@ -575,12 +909,29 @@ function TimelineSurface({
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
                         }
                         fitted={zoom.fitted}
+                        alignControl={
+                            align
+                                ? (wide) => (
+                                      <TimelineAlignToggle
+                                          on={align.on}
+                                          onToggle={toggleAlign}
+                                          showLabel={wide}
+                                      />
+                                  )
+                                : undefined
+                        }
+                        readoutNote={
+                            readoutTempo !== null
+                                ? `${readoutTempo} BPM`
+                                : undefined
+                        }
                     />
                 ) : undefined
             }
         >
             <div
-                className="relative"
+                className={clsx("relative", showAlign && "bg-accent/[0.04]")}
+                data-align={showAlign || undefined}
                 style={{ width: surfaceWidth, height: timelineHeight }}
                 onContextMenu={rangeMenu.onContextMenu}
                 onDoubleClick={(event) => {
@@ -601,7 +952,7 @@ function TimelineSurface({
                     <TimelineGridCanvas
                         width={width}
                         height={timelineHeight}
-                        pixelsPerBeat={pixelsPerBeat}
+                        axis={axis}
                         measures={model.measures}
                         lineTop={28}
                         topTickY={34}
@@ -610,14 +961,14 @@ function TimelineSurface({
                     />
                     <TimelinePageLines
                         pages={model.pages}
-                        pixelsPerBeat={pixelsPerBeat}
+                        axis={axis}
                         height={timelineHeight}
                     />
                     <TimelineRuler
                         pages={model.pages}
                         measures={model.measures}
                         beatCount={model.beatCount}
-                        pixelsPerBeat={pixelsPerBeat}
+                        axis={axis}
                         selection={selection}
                         onSelectionChange={onSelectionChange}
                         onSeek={props.onSeek}
@@ -625,13 +976,21 @@ function TimelineSurface({
                         showMeasures={expanded}
                         seekSnapBeats={seekSnapBeats}
                         positionBeat={positionBeat}
+                        pageNote={pageNote}
+                        labelsTop={showAlign}
                     />
+                    {showAlign && (
+                        <TimelineAlignTimeLine
+                            extent={baseAxis.extent}
+                            pixelsPerSecond={pixelsPerSecond}
+                        />
+                    )}
                     {rows.flatMap((row, rowIndex) =>
                         row.map((track) => (
                             <TimelineTrackClip
                                 key={track.id}
                                 track={track}
-                                pixelsPerBeat={pixelsPerBeat}
+                                axis={axis}
                                 top={
                                     trackTop +
                                     rowIndex * rowPitch -
@@ -667,25 +1026,104 @@ function TimelineSurface({
                     )}
                     {showWaveform && (
                         <TimelineWaveformLane
-                            waveform={model.waveform}
+                            canvas={(tone) =>
+                                showAlign && envelope ? (
+                                    <TimelineEnvelopeCanvas
+                                        envelope={envelope}
+                                        pixelsPerSecond={pixelsPerSecond}
+                                        width={width}
+                                        height={waveformHeight}
+                                        tone={tone}
+                                    />
+                                ) : (
+                                    <TimelineWaveformCanvas
+                                        waveform={model.waveform}
+                                        width={width}
+                                        height={waveformHeight}
+                                        pixelsPerBeat={pixelsPerBeat}
+                                        tone={tone}
+                                    />
+                                )
+                            }
                             top={audioTop}
                             width={width}
                             height={waveformHeight}
-                            pixelsPerBeat={pixelsPerBeat}
+                            axis={axis}
                             positionBeat={positionBeat}
                             livePositionBeat={
                                 props.isPlaying
                                     ? props.livePositionBeat
                                     : undefined
                             }
-                        />
+                        >
+                            {showAlign && (
+                                <TimelineCountLinesCanvas
+                                    axis={axis}
+                                    downbeats={downbeats}
+                                    width={width}
+                                    height={waveformHeight}
+                                />
+                            )}
+                        </TimelineWaveformLane>
+                    )}
+                    {showAlign && align && (
+                        <>
+                            <TimelineAlignTicks
+                                axis={axis}
+                                offset={alignOffset}
+                                durations={shownDurations ?? align.durations}
+                                pages={alignPages}
+                                flagCounts={flagCounts}
+                                top={28}
+                                height={railHeight}
+                                dragProps={alignEdit.dragProps}
+                            />
+                            <TimelineAlignFlags
+                                flags={flags}
+                                axis={axis}
+                                offset={alignOffset}
+                                synced={align.synced ?? NO_SYNCED}
+                                preview={preview}
+                                dragProps={alignEdit.dragProps}
+                                onSetSynced={align.onSetSynced}
+                                formatTime={(seconds) =>
+                                    formatShowTime(seconds, true)
+                                }
+                            />
+                            {preview && (
+                                <>
+                                    <TimelineAlignPreviewLayer
+                                        preview={preview}
+                                        axis={axis}
+                                        offset={alignOffset}
+                                        pixelsPerSecond={pixelsPerSecond}
+                                        top={28}
+                                        height={Math.max(
+                                            0,
+                                            timelineHeight - 28,
+                                        )}
+                                    />
+                                    <TimelineAlignChip preview={preview} />
+                                </>
+                            )}
+                            {tempoPrompt && (
+                                <TimelineAlignTempoPrompt
+                                    page={tempoPrompt.page}
+                                    x={tempoPrompt.x}
+                                    y={tempoPrompt.y}
+                                    align={align}
+                                    onClose={closeTempoPrompt}
+                                />
+                            )}
+                        </>
                     )}
                     <TimelineRehearsalMarkers
                         model={model}
-                        pixelsPerBeat={pixelsPerBeat}
+                        axis={axis}
                         top={expanded ? 30 : 29}
                         compact={!expanded}
                         onSeek={props.onSeek}
+                        dragHandle={markHandle}
                     />
                     <TimelinePlayhead
                         model={model}
@@ -693,14 +1131,14 @@ function TimelineSurface({
                         livePositionBeat={
                             props.isPlaying ? props.livePositionBeat : undefined
                         }
-                        pixelsPerBeat={pixelsPerBeat}
+                        axis={axis}
                         height={timelineHeight}
                         beatCount={model.beatCount}
                         anchorRef={playheadRef}
                         onSeek={props.onSeek}
                         isPlaying={props.isPlaying}
                     />
-                    {props.onAddPageFlag && !props.isPlaying && (
+                    {props.onAddPageFlag && !props.isPlaying && !showAlign && (
                         <button
                             type="button"
                             data-testid="timeline-add-page-flag"
@@ -711,7 +1149,7 @@ function TimelineSurface({
                             onClick={props.onAddPageFlag}
                             className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
                             style={{
-                                left: beatToX(positionBeat, pixelsPerBeat) + 8,
+                                left: axis.x(positionBeat) + 8,
                             }}
                         >
                             <PlusIcon size={10} weight="bold" />
@@ -723,13 +1161,13 @@ function TimelineSurface({
                             aria-hidden="true"
                             className="bg-accent/15 border-accent pointer-events-none absolute top-28 z-30 border-x"
                             style={{
-                                left:
-                                    pointer.rangePreview.startBeatIndex *
-                                    pixelsPerBeat,
-                                width:
-                                    (pointer.rangePreview.endBeatIndex -
-                                        pointer.rangePreview.startBeatIndex) *
-                                    pixelsPerBeat,
+                                left: axis.x(
+                                    pointer.rangePreview.startBeatIndex,
+                                ),
+                                width: axis.span(
+                                    pointer.rangePreview.startBeatIndex,
+                                    pointer.rangePreview.endBeatIndex,
+                                ),
                                 height: Math.max(0, timelineHeight - 28),
                             }}
                         />
@@ -755,7 +1193,7 @@ function TimelineSurface({
                             pinTop={expanded ? 29 : 28}
                             pinSize={expanded ? 18 : 14}
                             beatCount={model.beatCount}
-                            pixelsPerBeat={pixelsPerBeat}
+                            axis={axis}
                             height={timelineHeight}
                             snapBeats={snapBeats}
                             onCommit={
@@ -776,11 +1214,11 @@ function TimelineSurface({
                             className="absolute z-40 flex flex-col gap-4"
                             style={{
                                 left:
-                                    (countFollowsStart
-                                        ? displayedSelectionRange.startBeatIndex
-                                        : displayedSelectionRange.endBeatIndex) *
-                                        pixelsPerBeat +
-                                    (countRendersToLeft ? -6 : 6),
+                                    axis.x(
+                                        countFollowsStart
+                                            ? displayedSelectionRange.startBeatIndex
+                                            : displayedSelectionRange.endBeatIndex,
+                                    ) + (countRendersToLeft ? -6 : 6),
                                 top: expanded ? 31 : 29,
                                 alignItems: countRendersToLeft
                                     ? "flex-end"

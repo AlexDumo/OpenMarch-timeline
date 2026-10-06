@@ -1342,6 +1342,35 @@
         "title": "Tags"
     },
     "tempo": {
+        "align": {
+            "button": "Align",
+            "buttonOff": "Leave Align (A)",
+            "chip": {
+                "clampFast": "can't get faster than 400 BPM",
+                "clampSlow": "can't hold a count longer than 30 s",
+                "held": "{count} held · {from} → {to} s",
+                "musicAfter": "Music starts {seconds} s after count 1",
+                "musicBefore": "Music starts {seconds} s before count 1",
+                "musicOnCountOne": "Music starts on count 1",
+                "respacedTo": "{pages} {from} → {to} up to synced {synced}",
+                "shifted": "{pages} move {seconds} s",
+                "upToSynced": "up to synced {synced}"
+            },
+            "countOneHandle": "Count 1 at {time}. Drag onto the music to set where the music starts. Alt: no snapping.",
+            "evenOut": "Even out page {page}",
+            "flagHandle": "Page {page} flag at {time}. Drag onto the music to change page {page}'s tempo. Shift: don't sync it. Alt: no snapping. Arrow keys nudge it.",
+            "markHandle": "{label} at {time}. Drag onto the music. Click to go there.",
+            "markSynced": "Mark as synced",
+            "onTooltip": "Align is on: the timeline is in seconds. Drag a page's flag or a rehearsal mark onto the music; drag a count tick to hold the count before it. A or ✕ to leave.",
+            "synced": "Synced to the music",
+            "syncedToast": "Page {page} is now synced to the music: later fixes won't move it. Right-click its flag to unsync.",
+            "tempoItem": "Tempo… ({bpm})",
+            "tempoPrompt": "Page {page} tempo (BPM)",
+            "tempoRange": "Type a tempo from {min} to {max} BPM",
+            "tickHandle": "Drag to hold the count before this one, as for a fermata. Alt: no snapping.",
+            "tooltip": "Align counts to the music (A). Shows the timeline in seconds: drag a page's flag onto the music.",
+            "unsync": "Unsync"
+        },
         "retimeError": "Couldn't change when the counts land",
         "syncError": "Couldn't change which counts are synced"
     },

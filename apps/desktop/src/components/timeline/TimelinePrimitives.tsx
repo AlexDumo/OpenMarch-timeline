@@ -15,6 +15,7 @@ import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import {
+    type ComponentPropsWithoutRef,
     type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
@@ -26,7 +27,6 @@ import {
     useState,
 } from "react";
 import {
-    beatToX,
     clamp,
     clientXToBeat,
     filterMarkersByMinimumSpacing,
@@ -43,6 +43,7 @@ import {
     snapRangeOffset,
 } from "./TimelineGeometry";
 import { timelineRangeTargetProps } from "./TimelineRangeMenu";
+import type { TimelineXAxis } from "./timelineAxis";
 import type {
     BeatPosition,
     TimelineBeatRange,
@@ -128,8 +129,17 @@ export function TimelineTransport({
     viewControls,
     onSeek,
     onSelectionChange,
+    alignControl,
+    readoutNote,
 }: {
     model: TimelineViewModel;
+    /**
+     * The Align view's toggle (E7), which never folds; `wide` says whether its label fits (the
+     * header is at least 900px wide)
+     */
+    alignControl?: (wide: boolean) => ReactNode;
+    /** Said after the readout's page, such as the Align view's tempo ("120 BPM") */
+    readoutNote?: string | null;
     /** The playback clock; the app passes its audio clock */
     clock?: ReactNode;
     positionBeat: BeatPosition;
@@ -254,6 +264,14 @@ export function TimelineTransport({
                 {/* UI-13: a minimum width, so the transport doesn't shift as the count changes */}
                 <span className="min-w-[15ch] shrink-0">
                     {readoutText.page}
+                    {readoutNote && (
+                        <span
+                            data-testid="timeline-readout-note"
+                            className="text-text-subtitle"
+                        >
+                            {` · ${readoutNote}`}
+                        </span>
+                    )}
                 </span>
                 {!tight && readoutText.measure && (
                     <span className="text-text-subtitle truncate">
@@ -339,6 +357,7 @@ export function TimelineTransport({
                 {readout}
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
+                {alignControl?.(width >= 900)}
                 {folded ? (
                     <Popover.Root>
                         <Popover.Trigger asChild>
@@ -487,7 +506,7 @@ const useRulerScrub = (
         | ((beat: BeatPosition, options?: TimelineSeekOptions) => void)
         | undefined,
     beatCount: number,
-    pixelsPerBeat: number,
+    axis: TimelineXAxis,
     seekSnapBeats: readonly number[],
 ) => {
     const drag = useRef<{
@@ -504,18 +523,19 @@ const useRulerScrub = (
         clientX: number,
         surface: Element,
         event: { readonly altKey: boolean },
-    ) =>
-        snapSeekBeat(
-            clamp(
-                (clientX - surface.getBoundingClientRect().left) /
-                    pixelsPerBeat,
-                0,
-                beatCount,
-            ),
+    ) => {
+        const beat = clamp(
+            axis.beatAt(clientX - surface.getBoundingClientRect().left),
+            0,
+            beatCount,
+        );
+        return snapSeekBeat(
+            beat,
             seekSnapBeats,
-            pixelsPerBeat,
+            axis.pxPerBeatAt(beat),
             isPageSnapDisabled(event),
         );
+    };
     const scrubTo = (clientX: number, event: { readonly altKey: boolean }) => {
         const current = drag.current;
         if (!current) return;
@@ -600,16 +620,38 @@ const useRulerScrub = (
  * measure numbers under it, so the box and the weight tell them apart. Hidden when the box is too
  * narrow to read it, when zoomed far out (UI-12).
  */
-const PageBoxLabel = ({ label, width }: { label: string; width: number }) =>
+const PageBoxLabel = ({
+    label,
+    width,
+    note,
+}: {
+    label: string;
+    width: number;
+    /** A dim note after the name, such as the Align view's tempo ("5 · 120"), when there's room */
+    note?: string | null;
+}) =>
     width >= label.length * 7 + 10 ? (
-        <span className="sticky right-8 font-semibold">{label}</span>
+        <span className="sticky right-8 font-semibold">
+            {label}
+            {note && width >= ALIGN_NOTE_MIN_PX && (
+                <span
+                    data-testid="timeline-page-note"
+                    className="text-text-subtitle font-normal"
+                >
+                    {` · ${note}`}
+                </span>
+            )}
+        </span>
     ) : null;
+
+/** How wide a page box must be to show its note (11-ui.md A: the BPM at 56px) */
+const ALIGN_NOTE_MIN_PX = 56;
 
 export const TimelineRuler = ({
     pages,
     measures,
     beatCount,
-    pixelsPerBeat,
+    axis,
     selection,
     onSelectionChange,
     onSeek,
@@ -617,11 +659,13 @@ export const TimelineRuler = ({
     showMeasures = true,
     seekSnapBeats = [],
     positionBeat,
+    pageNote,
+    labelsTop = false,
 }: {
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
     beatCount: number;
-    pixelsPerBeat: number;
+    axis: TimelineXAxis;
     selection?: TimelineSelection;
     onSelectionChange?: (selection: TimelineSelection) => void;
     /** Dragging along the page boxes scrubs (UI-12); a click still selects the box */
@@ -633,6 +677,10 @@ export const TimelineRuler = ({
     seekSnapBeats?: readonly number[];
     /** The playhead; a show without measures numbers the counts of its page (UI-13) */
     positionBeat?: BeatPosition;
+    /** A dim note after a page's name, such as its tempo in the Align view */
+    pageNote?: (page: TimelinePageMarker) => string | null;
+    /** Page names at the top of the boxes, leaving room for the Align view's time line */
+    labelsTop?: boolean;
 }) => {
     // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
     const tabBeats = measures
@@ -643,18 +691,12 @@ export const TimelineRuler = ({
             (measure) =>
                 !measure.rehearsalMark?.trim() &&
                 tabBeats.every(
-                    (beat) =>
-                        Math.abs(beat - measure.atBeat) * pixelsPerBeat >= 26,
+                    (beat) => Math.abs(axis.span(measure.atBeat, beat)) >= 26,
                 ),
         ),
-        pixelsPerBeat,
+        axis.kind === "counts" ? axis.scale : axis.x,
     );
-    const scrub = useRulerScrub(
-        onSeek,
-        beatCount,
-        pixelsPerBeat,
-        seekSnapBeats,
-    );
+    const scrub = useRulerScrub(onSeek, beatCount, axis, seekSnapBeats);
     const initialPage = pages.find((page) => page.isInitial);
     const orderedPages = pages
         .filter((page) => !page.isInitial)
@@ -675,12 +717,13 @@ export const TimelineRuler = ({
             : null;
     const pageCounts =
         countsAt?.total != null && countsAt.startBeat != null
-            ? getVisiblePageCounts(countsAt.total, pixelsPerBeat).map(
-                  (count) => ({
-                      count,
-                      atBeat: (countsAt.startBeat ?? 0) + count,
-                  }),
-              )
+            ? getVisiblePageCounts(
+                  countsAt.total,
+                  axis.pxPerBeatAt(countsAt.startBeat),
+              ).map((count) => ({
+                  count,
+                  atBeat: (countsAt.startBeat ?? 0) + count,
+              }))
             : [];
     const selectPage = (page: TimelinePageMarker) => {
         if (page.isInitial) {
@@ -698,7 +741,7 @@ export const TimelineRuler = ({
                 className="border-stroke bg-fg-2 rounded-6 absolute top-0 h-28 overflow-clip border font-mono"
                 style={{
                     left: -initialPageWidth,
-                    width: beatCount * pixelsPerBeat + initialPageWidth,
+                    width: axis.width + initialPageWidth,
                 }}
             >
                 {initialPage && (
@@ -747,27 +790,29 @@ export const TimelineRuler = ({
                                 // macOS ctrl+click opens the context menu (UI-9: no selection change)
                                 if (!event.ctrlKey) selectPage(page);
                             }}
-                            className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
+                            className={clsx(
+                                "border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset",
+                                labelsTop
+                                    ? "items-start pt-1 leading-[14px]"
+                                    : "items-center",
+                            )}
                             style={{
                                 left:
                                     initialPageWidth +
-                                    beatToX(
-                                        range.startBeatIndex,
-                                        pixelsPerBeat,
-                                    ),
-                                width:
-                                    (range.endBeatIndex -
-                                        range.startBeatIndex) *
-                                    pixelsPerBeat,
+                                    axis.x(range.startBeatIndex),
+                                width: axis.span(
+                                    range.startBeatIndex,
+                                    range.endBeatIndex,
+                                ),
                             }}
                         >
                             <PageBoxLabel
                                 label={page.label}
-                                width={
-                                    (range.endBeatIndex -
-                                        range.startBeatIndex) *
-                                    pixelsPerBeat
-                                }
+                                width={axis.span(
+                                    range.startBeatIndex,
+                                    range.endBeatIndex,
+                                )}
+                                note={pageNote?.(page)}
                             />
                         </button>
                     );
@@ -786,8 +831,7 @@ export const TimelineRuler = ({
                             key={measure.id}
                             className="text-text absolute top-4 text-[10px] leading-none whitespace-nowrap opacity-75"
                             style={{
-                                left:
-                                    beatToX(measure.atBeat, pixelsPerBeat) + 3,
+                                left: axis.x(measure.atBeat) + 3,
                             }}
                         >
                             {measure.label.replace(/^m/i, "")}
@@ -799,7 +843,7 @@ export const TimelineRuler = ({
                             data-testid="timeline-page-count"
                             className="text-text absolute top-4 -translate-x-full text-[10px] leading-none whitespace-nowrap opacity-75"
                             style={{
-                                left: beatToX(atBeat, pixelsPerBeat) - 2,
+                                left: axis.x(atBeat) - 2,
                             }}
                         >
                             {count}
@@ -813,11 +857,11 @@ export const TimelineRuler = ({
 
 export const TimelinePageLines = ({
     pages,
-    pixelsPerBeat,
+    axis,
     height,
 }: {
     pages: readonly TimelinePageMarker[];
-    pixelsPerBeat: number;
+    axis: TimelineXAxis;
     height: number;
 }) => (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0">
@@ -828,7 +872,7 @@ export const TimelinePageLines = ({
                     key={page.id}
                     className="bg-text absolute top-28 w-px opacity-[0.24]"
                     style={{
-                        left: Math.round(beatToX(page.atBeat, pixelsPerBeat)),
+                        left: Math.round(axis.x(page.atBeat)),
                         height: Math.max(0, height - 28),
                     }}
                 />
@@ -838,7 +882,7 @@ export const TimelinePageLines = ({
 
 export const TimelineTrackClip = ({
     track,
-    pixelsPerBeat,
+    axis,
     top,
     height,
     selected,
@@ -851,7 +895,7 @@ export const TimelineTrackClip = ({
     barHeight,
 }: {
     track: TimelineTrack;
-    pixelsPerBeat: number;
+    axis: TimelineXAxis;
     top: number;
     height: number;
     selected: boolean;
@@ -887,8 +931,8 @@ export const TimelineTrackClip = ({
     }, [range?.endBeatIndex, range?.startBeatIndex]);
 
     if (!range) return null;
-    const left = (range.startBeatIndex + previewOffset) * pixelsPerBeat;
-    const width = (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
+    const left = axis.x(range.startBeatIndex + previewOffset);
+    const width = axis.span(range.startBeatIndex, range.endBeatIndex);
     const canMove = onRangeCommit != null && beatCount != null;
     const getOffset = (
         clientX: number,
@@ -897,9 +941,12 @@ export const TimelineTrackClip = ({
     ) => {
         const requested = snapRangeOffset({
             range,
-            offset: (clientX - startClientX) / pixelsPerBeat,
+            offset: axis.beatOffset(
+                range.startBeatIndex,
+                clientX - startClientX,
+            ),
             snapBeats: snapDisabled ? [] : snapBeats,
-            pixelsPerBeat,
+            pixelsPerBeat: axis.pxPerBeatAt(range.startBeatIndex),
         });
         const minimum = -range.startBeatIndex;
         const maximum = Math.max(minimum, beatCount! - range.endBeatIndex);
@@ -1039,12 +1086,14 @@ export const TimelineTrackClip = ({
                                 top: (height - barHeight) / 2,
                                 height: barHeight,
                             }),
-                            left:
-                                (span.startBeatIndex - range.startBeatIndex) *
-                                pixelsPerBeat,
-                            width:
-                                (span.endBeatIndex - span.startBeatIndex) *
-                                pixelsPerBeat,
+                            left: axis.span(
+                                range.startBeatIndex,
+                                span.startBeatIndex,
+                            ),
+                            width: axis.span(
+                                span.startBeatIndex,
+                                span.endBeatIndex,
+                            ),
                             backgroundColor: span.active
                                 ? `color-mix(in srgb, ${track.color} 82%, var(--color-bg-1))`
                                 : `color-mix(in srgb, ${track.color} 12%, transparent)`,
@@ -1087,7 +1136,7 @@ export const TimelineSelectionRange = ({
     pinTop = 30,
     pinSize = 18,
     beatCount,
-    pixelsPerBeat,
+    axis,
     height,
     snapBeats = [],
     onCommit,
@@ -1113,7 +1162,7 @@ export const TimelineSelectionRange = ({
     pinTop?: number;
     pinSize?: number;
     beatCount: number;
-    pixelsPerBeat: number;
+    axis: TimelineXAxis;
     height: number;
     /** Page lines the dragged flag snaps to (ui.md UI-2); Alt turns snapping off */
     snapBeats?: readonly number[];
@@ -1152,14 +1201,15 @@ export const TimelineSelectionRange = ({
             dragging = true,
         ) => {
             const bounds = surface.getBoundingClientRect();
+            const beat = clamp(
+                axis.beatAt(clientX - bounds.left),
+                0,
+                beatCount,
+            );
             const requested = snapBoundary({
-                beat: clamp(
-                    (clientX - bounds.left) / pixelsPerBeat,
-                    0,
-                    beatCount,
-                ),
+                beat,
                 snapBeats: snapDisabled ? [] : snapBeats,
-                pixelsPerBeat,
+                pixelsPerBeat: axis.pxPerBeatAt(beat),
             });
             const current = previewRef.current;
             const next =
@@ -1189,7 +1239,7 @@ export const TimelineSelectionRange = ({
             });
             return next;
         },
-        [beatCount, onInteractionChange, pixelsPerBeat, snapBeats],
+        [axis, beatCount, onInteractionChange, snapBeats],
     );
 
     const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -1309,7 +1359,7 @@ export const TimelineSelectionRange = ({
 
     const flag = (kind: "start" | "end", beatIndex: number) => {
         // Whole pixels, so the stem and the pennant blur on the same pixels
-        const x = Math.round(beatToX(beatIndex, pixelsPerBeat));
+        const x = Math.round(axis.x(beatIndex));
         if (kind === "end")
             return (
                 <button
@@ -1418,8 +1468,8 @@ export const TimelineSelectionRange = ({
     };
 
     // Rounded like the flag, so the window and the From start bar start on the stem's pixel
-    const startX = Math.round(beatToX(preview.startBeatIndex, pixelsPerBeat));
-    const endX = Math.round(beatToX(preview.endBeatIndex, pixelsPerBeat));
+    const startX = Math.round(axis.x(preview.startBeatIndex));
+    const endX = Math.round(axis.x(preview.endBeatIndex));
     return (
         // No z-index here: one would make a stacking context, and the start pennant must rise
         // above the playhead (z-50), which is outside it. Each child sets its own instead.
@@ -1493,22 +1543,32 @@ export const TimelineSelectionRange = ({
  */
 export const TimelineRehearsalMarkers = ({
     model,
-    pixelsPerBeat,
+    axis,
     top,
     compact = false,
     onSeek,
+    dragHandle,
 }: {
     model: TimelineViewModel;
-    pixelsPerBeat: number;
+    axis: TimelineXAxis;
     top: number;
     compact?: boolean;
     onSeek?: (beat: BeatPosition) => void;
+    /**
+     * In the Align view a tab is also a handle that drags its measure onto the music; the click
+     * that follows a drag doesn't seek (`consumeClick`)
+     */
+    dragHandle?: (beat: BeatPosition) => {
+        readonly props: ComponentPropsWithoutRef<"button">;
+        readonly consumeClick: () => boolean;
+    } | null;
 }) => (
     <div className="pointer-events-none absolute inset-0 z-20">
         {model.measures.flatMap((measure) => {
             const label = measure.rehearsalMark?.trim();
             if (!label) return [];
             const number = measure.label.replace(/^m/i, "");
+            const handle = dragHandle?.(measure.atBeat) ?? null;
             return [
                 <button
                     key={measure.id}
@@ -1516,13 +1576,18 @@ export const TimelineRehearsalMarkers = ({
                     data-timeline-interactive="true"
                     aria-label={`Rehearsal ${label}, measure ${number}`}
                     title={`Rehearsal ${label}, measure ${number}`}
-                    onClick={() => onSeek?.(measure.atBeat)}
+                    {...handle?.props}
+                    onClick={() => {
+                        if (handle?.consumeClick()) return;
+                        onSeek?.(measure.atBeat);
+                    }}
                     className={clsx(
                         "border-text-subtitle bg-bg-1 text-text rounded-r-4 pointer-events-auto absolute flex h-16 min-w-16 items-center justify-center border border-l-2 px-3 font-mono leading-none font-semibold",
                         compact ? "text-[9px]" : "text-[10px]",
+                        handle && "cursor-col-resize touch-none",
                     )}
                     style={{
-                        left: beatToX(measure.atBeat, pixelsPerBeat),
+                        left: axis.x(measure.atBeat),
                         top,
                     }}
                 >
@@ -1588,7 +1653,7 @@ export const TimelinePlayhead = ({
     model,
     positionBeat,
     livePositionBeat,
-    pixelsPerBeat,
+    axis,
     height,
     beatCount,
     anchorRef,
@@ -1602,7 +1667,7 @@ export const TimelinePlayhead = ({
      * animation frame by setting its own `left`, without re-rendering the timeline.
      */
     livePositionBeat?: () => number | null;
-    pixelsPerBeat: number;
+    axis: TimelineXAxis;
     height: number;
     beatCount: number;
     anchorRef: RefObject<HTMLButtonElement | null>;
@@ -1612,7 +1677,7 @@ export const TimelinePlayhead = ({
 }) => {
     const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
-    const left = Math.round(beatToX(positionBeat, pixelsPerBeat));
+    const left = Math.round(axis.x(positionBeat));
     // Where React last put the line; read when following stops (see below)
     const restingLeft = useRef(left);
     restingLeft.current = left;
@@ -1625,7 +1690,7 @@ export const TimelinePlayhead = ({
             // Device pixels while playing: crisp, and still smooth on a high-density screen
             const ratio = window.devicePixelRatio || 1;
             if (beat !== null)
-                element.style.left = `${Math.round(beatToX(beat, pixelsPerBeat) * ratio) / ratio}px`;
+                element.style.left = `${Math.round(axis.x(beat) * ratio) / ratio}px`;
             frame = requestAnimationFrame(follow);
         };
         frame = requestAnimationFrame(follow);
@@ -1634,7 +1699,7 @@ export const TimelinePlayhead = ({
             // React only writes `left` when its value changes, so put the line back itself
             element.style.left = `${restingLeft.current}px`;
         };
-    }, [anchorRef, livePositionBeat, pixelsPerBeat]);
+    }, [anchorRef, axis, livePositionBeat]);
 
     return (
         <button
@@ -1771,14 +1836,14 @@ export const isRangeModifier = (event: {
 export const useTimelinePointer = ({
     onSeek,
     onRangeSelect,
-    pixelsPerBeat,
+    axis,
     beatCount,
     snapBeats = [],
     seekSnapBeats = [],
 }: {
     onSeek?: (beat: number, options?: TimelineSeekOptions) => void;
     onRangeSelect?: (range: TimelineBeatRange) => void;
-    pixelsPerBeat: number;
+    axis: TimelineXAxis;
     beatCount: number;
     snapBeats?: readonly number[];
     /** Downbeats and page lines a click or scrub lands on when near (UI-12) */
@@ -1804,19 +1869,27 @@ export const useTimelinePointer = ({
             fromBeat: startBeat,
             toBeat: pointerBeat(event),
             snapBeats: isPageSnapDisabled(event) ? [] : snapBeats,
-            pixelsPerBeat,
+            pixelsPerBeat: axis.pxPerBeatAt(startBeat),
             beatCount,
         });
     const beatAtClientX = useCallback(
         (element: Element, clientX: number) =>
-            clientXToBeat({
-                clientX,
-                surfaceLeft: element.getBoundingClientRect().left,
-                pixelsPerBeat,
-                startBeat: 0,
-                beatCount,
-            }),
-        [beatCount, pixelsPerBeat],
+            axis.kind === "counts"
+                ? clientXToBeat({
+                      clientX,
+                      surfaceLeft: element.getBoundingClientRect().left,
+                      pixelsPerBeat: axis.scale,
+                      startBeat: 0,
+                      beatCount,
+                  })
+                : clamp(
+                      axis.beatAt(
+                          clientX - element.getBoundingClientRect().left,
+                      ),
+                      0,
+                      Math.max(beatCount, 0),
+                  ),
+        [axis, beatCount],
     );
     const pointerBeat = useCallback(
         (event: ReactPointerEvent<HTMLElement>) =>
@@ -1832,7 +1905,7 @@ export const useTimelinePointer = ({
             const snapped = snapSeekBeat(
                 beat,
                 seekSnapBeats,
-                pixelsPerBeat,
+                axis.pxPerBeatAt(beat),
                 isPageSnapDisabled(event),
             );
             if (gesture.current && seekGesture !== undefined)
@@ -1844,7 +1917,7 @@ export const useTimelinePointer = ({
                     : { gesture: seekGesture },
             );
         },
-        [onSeek, pixelsPerBeat, seekSnapBeats],
+        [axis, onSeek, seekSnapBeats],
     );
 
     const end = () => {

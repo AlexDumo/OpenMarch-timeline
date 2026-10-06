@@ -22,6 +22,7 @@ import type {
 } from "./TimelineRangeMenu";
 import type {
     TimelineActivitySpan,
+    TimelineAlign,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineNavigation,
@@ -149,6 +150,8 @@ export interface TimelineProps {
      * range in spec beats (a clip's stored range).
      */
     readonly onOpenRange?: (range: TimelineBeatRange) => void;
+    /** The Align view (E7); without it, there is none */
+    readonly align?: TimelineAlign;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -442,6 +445,7 @@ export function Timeline(props: TimelineProps) {
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,
+        align: props.align && { ...props.align, offset: axis.offset },
     };
 
     return props.mode === "expanded" ? (
@@ -453,6 +457,8 @@ export function Timeline(props: TimelineProps) {
 
 export type {
     TimelineActivitySpan,
+    TimelineAlign,
+    TimelineAlignEdit,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineSeekGesture,

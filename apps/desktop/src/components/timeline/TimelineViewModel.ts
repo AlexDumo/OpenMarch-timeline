@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { AudioEnvelope } from "@/timeline/timelineWaveform";
 import type {
     TimelineAddMarchersMenu,
     TimelineMenuTarget,
@@ -184,9 +185,45 @@ export interface TimelineScaleProps {
     readonly onZoomFittedChange?: (fitted: boolean) => void;
 }
 
+/** A retime from the Align view, in spec count indexes, written as one undo entry */
+export interface TimelineAlignEdit {
+    /** Every count's new length, by ordinal (`beats` order) */
+    readonly durations: readonly number[];
+    /** How far count 1 moved against the music (`RetimeResult.originShift`) */
+    readonly originShift: number;
+    /** The synced counts afterwards */
+    readonly synced: readonly number[];
+}
+
+/**
+ * The Align view (E7, Tempo lab `alignView`; docs/tempo/README.md). Counts are spec count
+ * indexes, as in `@/timeline/tempo`. Without it, the timeline has no Align view.
+ */
+export interface TimelineAlign {
+    /** Whether the Align view is on; only the user changes it (`onToggle`) */
+    readonly on: boolean;
+    readonly onToggle: (on: boolean) => void;
+    /** A key press doesn't toggle it, as when A moves the selected marchers */
+    readonly keyBlocked?: boolean;
+    /** Every count's length in seconds, by ordinal */
+    readonly durations: readonly number[];
+    /** The counts already on the music, ascending */
+    readonly synced: readonly number[];
+    /** The audio offset: positive pads silence before the music */
+    readonly audioOffsetSeconds: number;
+    /** The music, on the show's clock */
+    readonly envelope: AudioEnvelope | null;
+    /** Writes a retime; resolves once the timeline shows it (or it failed) */
+    readonly onRetime: (edit: TimelineAlignEdit) => Promise<unknown> | void;
+    /** Replaces the synced counts */
+    readonly onSetSynced: (synced: readonly number[]) => void;
+}
+
 export interface TimelineCommonProps
     extends TimelineInteractionProps, TimelineScaleProps {
     readonly model: TimelineViewModel;
+    /** The Align view, with the view axis's hidden beats (spec index = view beat + `offset`) */
+    readonly align?: TimelineAlign & { readonly offset: number };
     readonly showTransport?: boolean;
     /** The playback clock shown in the transport. The app passes its audio clock; stories pass none. */
     readonly transportClock?: ReactNode;

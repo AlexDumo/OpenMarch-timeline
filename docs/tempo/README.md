@@ -15,15 +15,16 @@ Everything in the tempo core is in the timing layer.
 
 ## Where the code lives
 
-| Piece                                  | Path                                                                                                                                   |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Pure retiming, tap tempo and read-outs | `apps/desktop/src/timeline/tempo/` (its [README](../../apps/desktop/src/timeline/tempo/README.md) lists every function)                |
-| Show time to count and back            | `apps/desktop/src/timeline/timeMap.ts`                                                                                                 |
-| Write path (one transaction, one undo) | `apps/desktop/src/db-functions/tempo.ts`: `retimeBeats`, `retimeBeatsInTransaction`, `setTempoSyncedBeatIds`, `readTempoSyncedBeatIds` |
-| React Query hooks                      | `apps/desktop/src/hooks/queries/useTempo.ts`: `useRetimeBeats`, `useSetTempoSyncedBeatIds`, `useTempoSyncedBeatIds`                    |
-| Synced counts (prototype)              | `tempoSyncedBeatIds` in the file's workspace settings ([ADR draft](adr-synced-counts.md))                                              |
-| Audio offset                           | `audioOffsetSeconds` in the file's workspace settings; positive pads silence before the music                                          |
-| Tempo lab flags                        | `tempoLab` in `apps/desktop/src/stores/UiSettingsStore.ts`; Settings → Tempo lab (experimental)                                        |
+| Piece                                  | Path                                                                                                                                                                       |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pure retiming, tap tempo and read-outs | `apps/desktop/src/timeline/tempo/` (its [README](../../apps/desktop/src/timeline/tempo/README.md) lists every function)                                                    |
+| Show time to count and back            | `apps/desktop/src/timeline/timeMap.ts`                                                                                                                                     |
+| Write path (one transaction, one undo) | `apps/desktop/src/db-functions/tempo.ts`: `retimeBeats`, `retimeBeatsInTransaction`, `setTempoSyncedBeatIds`, `readTempoSyncedBeatIds`                                     |
+| React Query hooks                      | `apps/desktop/src/hooks/queries/useTempo.ts`: `useRetimeBeats`, `useSetTempoSyncedBeatIds`, `useTempoSyncedBeatIds`                                                        |
+| Synced counts (prototype)              | `tempoSyncedBeatIds` in the file's workspace settings ([ADR draft](adr-synced-counts.md))                                                                                  |
+| Audio offset                           | `audioOffsetSeconds` in the file's workspace settings; positive pads silence before the music                                                                              |
+| Align view (E7, flag `alignView`)      | `apps/desktop/src/components/timeline/`: `timelineAxis.ts` (counts or seconds axis), `timelineAlign.ts` (drag, snap, chip), `TimelineAlignView.tsx` (handles, chip, ticks) |
+| Tempo lab flags                        | `tempoLab` in `apps/desktop/src/stores/UiSettingsStore.ts`; Settings → Tempo lab (experimental)                                                                            |
 
 ## Undo
 
