@@ -83,6 +83,7 @@ const PLAY_ICON = <PlayIcon size={18} weight="fill" />;
 const STOP_ICON = <StopIcon size={16} />;
 const SKIP_FORWARD_ICON = <SkipForwardIcon size={16} />;
 const FIT_ICON = <ArrowsOutLineHorizontalIcon size={16} />;
+const HOUSE_ICON = <HouseIcon size={14} aria-hidden="true" />;
 
 const TransportButton = memo(function TransportButton({
     label,
@@ -765,7 +766,7 @@ export const TimelineRuler = memo(function TimelineRuler({
                         style={{ width: initialPageWidth }}
                     >
                         {/* UI-13: a house, so home's "0" isn't read as a count or a measure */}
-                        <HouseIcon size={14} aria-hidden="true" />
+                        {HOUSE_ICON}
                     </button>
                 )}
                 {pageBoxes.map(({ page, range }) => {

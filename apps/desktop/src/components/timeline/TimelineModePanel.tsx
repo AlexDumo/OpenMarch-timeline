@@ -145,20 +145,6 @@ export default function TimelineModePanel() {
                 : null,
         [envelope, beats],
     );
-    // The zoom changes every frame of a pinch: keep it here, and save it once the gesture settles
-    const [pixelsPerBeat, setPixelsPerBeat] = useState(
-        () => useUiSettingsStore.getState().uiSettings.timelinePixelsPerBeat,
-    );
-    useEffect(() => {
-        const timeout = setTimeout(
-            () =>
-                useUiSettingsStore
-                    .getState()
-                    .setTimelinePixelsPerBeat(pixelsPerBeat),
-            400,
-        );
-        return () => clearTimeout(timeout);
-    }, [pixelsPerBeat]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );
@@ -238,8 +224,6 @@ export default function TimelineModePanel() {
             <TimelineWaveformProvider waveform={waveform ?? NO_WAVEFORM}>
                 <PlayingTimeline
                     mode={compact ? "collapsed" : "expanded"}
-                    pixelsPerBeat={pixelsPerBeat}
-                    onPixelsPerBeatChange={setPixelsPerBeat}
                     zoomFitted={zoomFitted}
                     onZoomFittedChange={setZoomFitted}
                     className="w-full"
@@ -306,16 +290,42 @@ export default function TimelineModePanel() {
 }
 
 /**
- * The timeline fed by the audio playback. The playback position changes once a beat while
- * playing, so it is read here, under the panel: a beat re-renders the timeline, not the panel and
- * its queries.
+ * The timeline fed by the audio playback, with its zoom. The playback position changes once a
+ * beat while playing, and the zoom every frame of a pinch, so both are kept here, under the
+ * panel: they re-render the timeline, not the panel and its queries.
  */
-function PlayingTimeline(props: Omit<TimelineProps, "playback">) {
+function PlayingTimeline(
+    props: Omit<
+        TimelineProps,
+        "playback" | "pixelsPerBeat" | "onPixelsPerBeatChange"
+    >,
+) {
     const playback = useTimelinePlayback({
         beats: props.beats,
         pages: props.pages,
     });
-    return <Timeline {...props} playback={playback} />;
+    // The zoom changes every frame of a pinch: keep it here, and save it once the gesture settles
+    const [pixelsPerBeat, setPixelsPerBeat] = useState(
+        () => useUiSettingsStore.getState().uiSettings.timelinePixelsPerBeat,
+    );
+    useEffect(() => {
+        const timeout = setTimeout(
+            () =>
+                useUiSettingsStore
+                    .getState()
+                    .setTimelinePixelsPerBeat(pixelsPerBeat),
+            400,
+        );
+        return () => clearTimeout(timeout);
+    }, [pixelsPerBeat]);
+    return (
+        <Timeline
+            {...props}
+            playback={playback}
+            pixelsPerBeat={pixelsPerBeat}
+            onPixelsPerBeatChange={setPixelsPerBeat}
+        />
+    );
 }
 
 /**
