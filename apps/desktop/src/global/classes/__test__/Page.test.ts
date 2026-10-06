@@ -586,7 +586,9 @@ describe("Page", () => {
             expect(result[0].isSubset).toBe(false);
             expect(result[0].duration).toBe(2000);
             expect(result[0].beats).toHaveLength(2);
-            expect(result[0].measures).toHaveLength(1);
+            // Its counts land on beats 2 and 3, m1 beat 2 and m2 beat 1: the page's flag is the
+            // next page's first beat (docs/tempo/count-convention.md), so both measures
+            expect(result[0].measures).toHaveLength(2);
             expect(result[0].previousPageId).toBeNull();
             expect(result[0].nextPageId).toBe(2);
 
@@ -702,7 +704,9 @@ describe("Page", () => {
             expect(result[0].isSubset).toBe(false);
             expect(result[0].duration).toBe(2000);
             expect(result[0].beats).toHaveLength(2);
-            expect(result[0].measures).toHaveLength(1);
+            // Its counts land on beats 2 and 3, m1 beat 2 and m2 beat 1: the page's flag is the
+            // next page's first beat (docs/tempo/count-convention.md), so both measures
+            expect(result[0].measures).toHaveLength(2);
             expect(result[0].previousPageId).toBeNull();
             expect(result[0].nextPageId).toBe(2);
 
@@ -795,14 +799,17 @@ describe("Page", () => {
             // Assertions for page names
             expect(result[0].name).toBe("0");
             expect(result[0].counts).toBe(2);
-            expect(result[0].measureBeatToStartOn).toBe(1);
-            expect(result[0].measureBeatToEndOn).toBe(2);
+            // Count 1 is the page's second beat and its flag the next page's first: m1 beats 2-3
+            // (docs/tempo/count-convention.md)
+            expect(result[0].measureBeatToStartOn).toBe(2);
+            expect(result[0].measureBeatToEndOn).toBe(3);
             expect(result[0].measures).toEqual(mockMeasures);
             expect(result[0].beats).toEqual([mockBeats[1], mockBeats[2]]);
             expect(result[0].isSubset).toBe(false);
 
             expect(result[1].name).toBe("0A");
             expect(result[1].counts).toBe(1);
+            // Its one count is the end of the show, which no beat starts on: named by the last beat
             expect(result[1].measureBeatToStartOn).toBe(3);
             expect(result[1].measureBeatToEndOn).toBe(3);
             expect(result[1].measures).toEqual(mockMeasures);

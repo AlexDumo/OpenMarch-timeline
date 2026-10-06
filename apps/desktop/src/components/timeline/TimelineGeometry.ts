@@ -169,15 +169,26 @@ const latestMarkerAt = (
         .sort((a, b) => b.atBeat - a.atBeat)[0];
 
 /**
- * The measure and its beat under a position, counted from the measure's downbeat (beat 1), or
- * null when the show has no measure there.
+ * The beat line a position belongs to: the one at or before it (docs/tempo/count-convention.md).
+ * Every surface that names a moment (the readout, the drill sheet, the video) uses this rule, so a
+ * playhead between two lines names the count and the beat it has passed, never the next ones. The
+ * tolerance keeps a live position a hair short of a line (15.9999999) on that line.
+ */
+export const getBeatLineAt = (positionBeat: BeatPosition) =>
+    Math.floor(positionBeat + 1e-6);
+
+/**
+ * The measure and its beat at a position's beat line, counted from the measure's downbeat (beat
+ * 1), or null when the show has no measure there. A line is named by the beat that starts on it,
+ * so a page flag on m9's downbeat is "m9 beat 1"; the end of the show, which no beat starts on, is
+ * named by the last beat.
  */
 export const getMeasureAt = (
     model: Pick<TimelineViewModel, "measures" | "beatCount">,
     positionBeat: BeatPosition,
 ): { readonly measure: string; readonly beat: number } | null => {
     const beat = clamp(
-        Math.floor(positionBeat),
+        getBeatLineAt(positionBeat),
         0,
         Math.max(model.beatCount - 1, 0),
     );
@@ -192,7 +203,9 @@ export const getMeasureAt = (
 /**
  * The page and count at a playhead, counted as designers count them (UI-12): a page's counts run
  * from 1 on the beat after the previous flag to N on its own flag, so the playhead on page 3's
- * flag is "Pg 3, count 8". Home (before the first timed page) is the initial page, count 0.
+ * flag is "Pg 3, count 8". Between two beat lines the playhead is on the count it has passed
+ * (`getBeatLineAt`), as the measure is. Home (before the first timed page) is the initial page,
+ * count 0.
  */
 export const getPageCountAt = (
     model: Pick<TimelineViewModel, "pages">,
@@ -209,7 +222,7 @@ export const getPageCountAt = (
     /** At home, before the first timed page (UI-13) */
     readonly home?: boolean;
 } => {
-    const beat = Math.round(positionBeat);
+    const beat = getBeatLineAt(positionBeat);
     const timed = model.pages
         .filter((page) => !page.isInitial)
         .sort((a, b) => a.atBeat - b.atBeat);

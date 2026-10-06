@@ -189,3 +189,19 @@ fixture list and how to score).
 - **Alternatives:** the note in the Music modal (Dana doesn't open it); a toast on open (lost to
   interruptions); extending automatically when audio is added (a hidden structural change).
 - **Validate:** V-42, V-43.
+## T-8 One rule for which count a moment belongs to (count-parity, E2)
+
+- **Context:** the timeline readout, the PDF drill sheet and the video overlay named different
+  counts and measures for the same moment (on m5's downbeat the video was one count ahead of the
+  timeline). See [count-convention.md](count-convention.md).
+- **Choice:** count k of a page is the k-th beat line after its start flag, so the flag is the
+  last count. A line is named by the beat that starts on it; a moment belongs to the line at or
+  before it. Applied to the readout, the PDF measure range and the video overlay; the go-to box
+  already agreed.
+- **Alternatives:** counts as the beats a page spans (keeps "5 - 8" on sheets, but reverses UI-12
+  and UI-13, which put a page's last count on its flag); or a mixed rule that keeps the sheet's
+  span range (two answers for one page).
+- **Validate:** owner decides whether "5(2) - 9(1)" on drill sheets is acceptable; Sam's script
+  (print page 12, scrub to its count 1 and 16, render the video, read all three) finds zero
+  mismatches. Note T-3 calls the show's first beat "count 1"; under this rule the first page's
+  count 1 is the second beat line, so the two docs should settle one word.
