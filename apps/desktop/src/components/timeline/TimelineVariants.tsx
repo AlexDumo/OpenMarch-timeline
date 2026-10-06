@@ -1388,6 +1388,32 @@ function TimelineSurface({
                             </div>
                         </div>
                     )}
+                    {showWaveform && expanded && props.waveformAction && (
+                        // Full width, so the action can stick to the viewport's right edge
+                        <div
+                            className="pointer-events-none absolute left-0 z-10 flex justify-end"
+                            style={{
+                                top: audioTop + 4,
+                                width,
+                                height: Math.min(22, waveformHeight - 8),
+                            }}
+                        >
+                            <div
+                                className="sticky right-8 inline-flex h-full"
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onDoubleClick={(e) => e.stopPropagation()}
+                                onContextMenu={(e) => e.stopPropagation()}
+                            >
+                                {props.waveformAction}
+                            </div>
+                        </div>
+                    )}
+                    {props.countOverlay?.({
+                        toX: (count) =>
+                            axis.x(count - (props.beatOffset ?? alignOffset)),
+                        top: 28,
+                        height: Math.max(0, timelineHeight - 28),
+                    })}
                     <TimelineRehearsalMarkers
                         model={model}
                         axis={axis}

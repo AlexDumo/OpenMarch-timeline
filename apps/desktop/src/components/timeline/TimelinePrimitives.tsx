@@ -422,7 +422,7 @@ export const TimelineShell = ({
                 ref={viewportRef}
                 data-testid="timeline-viewport"
                 // The scrollbar's track is always there, so zooming never changes the height
-                className="min-w-0 overflow-x-scroll overflow-y-hidden"
+                className="group/timeline min-w-0 overflow-x-scroll overflow-y-hidden"
             >
                 {children}
             </div>

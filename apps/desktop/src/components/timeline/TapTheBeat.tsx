@@ -41,9 +41,17 @@ import { showEndTime } from "@/timeline/timeMap";
 import {
     addTap,
     canApplyTaps,
+    countAtTime,
+    countTimes,
     nextMultiplier,
     planTapTheBeat,
     showLineUpStrip,
+    suggestTapAgain,
+    syncedAfterTaps,
+    TAP_AGAIN_COUNTS,
+    tapGhostCounts,
+    tapPlanClickTimes,
+    tapPlausibility,
     tapProgress,
     tempoFromTaps,
     type TapMultiplier,
@@ -79,19 +87,49 @@ export function handlerDelaySeconds(
     return late > 0 && late < 1 ? late : 0;
 }
 
-/** Whether the panel is open; the strip and the Sound entry open it. */
+/** Whether the panel is open; the strip, the lane button and the Sound entry open it. */
 export const useTapTheBeatStore = create<{
     readonly open: boolean;
-    readonly setOpen: (open: boolean) => void;
+    /** Open on From here (the lane's "Tap again from here") */
+    readonly openHere: boolean;
+    readonly setOpen: (open: boolean, here?: boolean) => void;
 }>((set) => ({
     open: false,
-    setOpen: (open) => set({ open }),
+    openHere: false,
+    setOpen: (open, here = false) => set({ open, openHere: open && here }),
+}));
+
+/**
+ * What the timeline draws for Tap the beat (FB-4): the taps so far and the counts as the plan
+ * would put them (`tapGhostCounts`, spec count positions on the current timing) while the panel
+ * previews, and the range Apply changed, flashed once (`key` restarts it).
+ */
+export interface TapTimelinePreview {
+    /** Tap times, in the current show time */
+    readonly taps: readonly number[];
+    readonly ghost: ReturnType<typeof tapGhostCounts> | null;
+}
+export const useTapPreviewStore = create<{
+    readonly preview: TapTimelinePreview | null;
+    readonly flash: {
+        readonly from: number;
+        readonly to: number;
+        readonly key: number;
+    } | null;
+    readonly setPreview: (preview: TapTimelinePreview | null) => void;
+    readonly setFlash: (from: number, to: number) => void;
+}>((set) => ({
+    preview: null,
+    flash: null,
+    setPreview: (preview) => set({ preview }),
+    setFlash: (from, to) => set({ flash: { from, to, key: Date.now() } }),
 }));
 
 /** How many counts before the playhead "From here" starts playing, so tapping can settle. */
 export const PRE_ROLL_COUNTS = 8;
 
 const openPanel = () => useTapTheBeatStore.getState().setOpen(true);
+const openPanelHere = () => useTapTheBeatStore.getState().setOpen(true, true);
 
 /** Whether the show has music in the timeline (the waveform lane's envelope is loaded). */
 const useHasMusic = () => useAudioEnvelopeStore((s) => s.envelope !== null);
@@ -102,13 +140,24 @@ const useMusicSeconds = () =>
         s.envelope ? s.envelope.peaks.length / s.envelope.rate : null,
     );
 
-/** Whether the line-up strip shows (`showLineUpStrip`), from the flag, the music and the file. */
+/** Whether the Align view is showing (its flag on and toggled on) */
+const useAlignShowing = () => {
+    const enabled = useTempoLabFlag("alignView") === true;
+    const on = useTimelineSelectionStore((s) => s.alignView);
+    return enabled && on;
+};
+
+/**
+ * Whether the line-up strip shows (`showLineUpStrip`), from the flag, the music and the file. Not
+ * in Align, where it would cover the start of the music (a pickup, Jo); the lane button stands in.
+ */
 export function useLineUpStripVisible(): boolean {
     const enabled = useTempoLabFlag("tapTheBeat");
     const hasAudio = useHasMusic();
     const { data: settings } = useQuery(workspaceSettingsQueryOptions(enabled));
     const open = useTapTheBeatStore((s) => s.open);
-    if (!settings || open) return false;
+    const align = useAlignShowing();
+    if (!settings || open || align) return false;
     return showLineUpStrip({
         enabled,
         hasAudio,
@@ -158,6 +207,61 @@ export function LineUpStrip() {
                 {t("tempo.tapTheBeat.strip.dismiss")}
             </button>
         </div>
+    );
+}
+
+/**
+ * The way back to Tap the beat once the strip is gone (FB-3): a small button at the right of the
+ * waveform lane. In Normal view it shows while the pointer is over the timeline, so it adds no
+ * permanent header button; it stays visible in Align, and when the paused playhead is far past the
+ * last synced count it reads "Tap again from here" and stays visible.
+ */
+export function TapTheBeatLaneButton() {
+    const enabled = useTempoLabFlag("tapTheBeat");
+    const hasAudio = useHasMusic();
+    const open = useTapTheBeatStore((s) => s.open);
+    const stripVisible = useLineUpStripVisible();
+    const align = useAlignShowing();
+    const { beats } = useTimingObjects()!;
+    const { isPlaying } = useIsPlaying()!;
+    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    const { data: settings } = useQuery(workspaceSettingsQueryOptions(enabled));
+    const { t } = useTolgee();
+    const synced = useMemo(
+        () =>
+            syncedOrdinals(
+                beats.map((b) => b.id),
+                settings?.tempoSyncedBeatIds ?? [],
+            ),
+        [beats, settings?.tempoSyncedBeatIds],
+    );
+    if (!enabled || !hasAudio || open || stripVisible) return null;
+    const again = !isPlaying && suggestTapAgain(playheadBeat, synced);
+    return (
+        <button
+            type="button"
+            data-testid="tap-the-beat-lane"
+            data-suggest={again || undefined}
+            title={again ? t("tempo.tapTheBeat.laneTapAgainTitle") : undefined}
+            onClick={(e) => {
+                e.currentTarget.blur();
+                if (again) openPanelHere();
+                else openPanel();
+            }}
+            className={clsx(
+                "border-stroke bg-bg-1/90 text-accent rounded-4 hover:bg-accent/10 focus-visible:ring-accent pointer-events-auto flex h-full items-center gap-4 border px-6 text-[11px] font-medium whitespace-nowrap shadow-sm outline-hidden backdrop-blur-sm transition-opacity focus-visible:opacity-100 focus-visible:ring-2",
+                !align &&
+                    !again &&
+                    "opacity-0 group-hover/timeline:opacity-100",
+            )}
+        >
+            <HandTapIcon size={14} />
+            {t(
+                again
+                    ? "tempo.tapTheBeat.laneTapAgain"
+                    : "tempo.tapTheBeat.laneButton",
+            )}
+        </button>
     );
 }
 
@@ -211,17 +315,18 @@ const syncedOrdinals = (
 async function writePlan(
     base: ShowCountDurations,
     plan: TapTheBeatPlan,
-    syncedIds: readonly number[],
+    synced: readonly number[],
     originShift: number,
 ) {
-    const unsynced = new Set(plan.unsynced.map((i) => base.beatIds[i]));
+    // Where the taps put counts on the music becomes synced, so later fixes keep it (FB-1)
+    const next = syncedAfterTaps(synced, plan, base.durations.length);
     await applyTapTheBeat({
         db,
         newDurationsByBeatId: durationsByBeatId(base.beatIds, plan.durations),
         originShift,
-        ...(unsynced.size > 0
-            ? { syncedBeatIds: syncedIds.filter((id) => !unsynced.has(id)) }
-            : {}),
+        syncedBeatIds: next.flatMap((i) =>
+            base.beatIds[i] !== undefined ? [base.beatIds[i]] : [],
+        ),
     });
 }
 
@@ -251,9 +356,13 @@ function TapTheBeatPanelBody() {
     const isMetronomeOn = useMetronomeStore((s) => s.isMetronomeOn);
     const { t } = useTolgee();
 
+    const openHere = useTapTheBeatStore((s) => s.openHere);
+    // From here needs a playhead past the start: at home it would retime from count 1 (Jo)
+    const atHome = playheadBeat <= 1;
     const [startKind, setStartKind] = useState<"start" | "here">(() =>
-        playheadBeat > 1 ? "here" : "start",
+        (openHere || playheadBeat > 1) && !atHome ? "here" : "start",
     );
+    const [clicks, setClicks] = useState(false);
     const [taps, setTaps] = useState<number[]>([]);
     const [multiplier, setMultiplier] = useState<TapMultiplier>(1);
     const [applied, setApplied] = useState<Applied | null>(null);
@@ -298,6 +407,29 @@ function TapTheBeatPanelBody() {
                 : null,
         [applied, durations, fit, multiplier, start, synced, taps.length],
     );
+
+    // The timeline draws the taps and where the plan would put the counts (FB-4)
+    useEffect(() => {
+        useTapPreviewStore.getState().setPreview(
+            applied || taps.length === 0
+                ? null
+                : {
+                      taps,
+                      ghost: plan ? tapGhostCounts(durations, plan) : null,
+                  },
+        );
+    }, [applied, durations, plan, taps]);
+    useEffect(() => () => useTapPreviewStore.getState().setPreview(null), []);
+
+    // Clicks on the plan's counts, before applying (FB-5): scheduled on their own clock from the
+    // live position when playback starts, since the metronome follows the stored counts
+    useEffect(() => {
+        if (!clicks || !isPlaying || !plan || applied) return;
+        return schedulePlanClicks(plan, getLivePlaybackPosition());
+    }, [applied, clicks, isPlaying, plan]);
+    useEffect(() => {
+        if (!isPlaying) setClicks(false);
+    }, [isPlaying]);
 
     /**
      * A tap from an input event: when it happened in the music, not when the handler ran. A busy
@@ -353,14 +485,22 @@ function TapTheBeatPanelBody() {
             window.removeEventListener("keydown", onKey, { capture: true });
     }, []);
 
-    const chooseStart = (kind: "start" | "here") => {
-        if (kind === startKind) return;
+    const chooseStart = useCallback((kind: "start" | "here") => {
         setStartKind(kind);
         setHereFrom(null);
         setTaps([]);
         setApplied(null);
         setMultiplier(1);
-    };
+        setHint(null);
+    }, []);
+
+    // "Tap again from here" from the lane while the panel is open starts a new run there
+    useEffect(() => {
+        if (!openHere) return;
+        useTapTheBeatStore.setState({ openHere: false });
+        if (useTimelineSelectionStore.getState().playheadBeat > 1)
+            chooseStart("here");
+    }, [chooseStart, openHere]);
 
     /**
      * Plays from 0:00 (From the start), or from the playhead with a pre-roll of up to
@@ -403,7 +543,9 @@ function TapTheBeatPanelBody() {
                 synced: ordinals,
             });
             if (!fresh) return;
-            await writePlan(base, fresh, syncedIds, fresh.originShift);
+            await writePlan(base, fresh, ordinals, fresh.originShift);
+            const end = fresh.heldFrom ?? base.durations.length;
+            useTapPreviewStore.getState().setFlash(fresh.fromCount, end);
             setApplied({
                 base,
                 fit,
@@ -439,8 +581,13 @@ function TapTheBeatPanelBody() {
                 synced: applied.synced,
             });
             if (!replanned) return;
-            const syncedIds = await readTempoSyncedBeatIds(db);
-            await writePlan(applied.base, replanned, syncedIds, 0);
+            await writePlan(applied.base, replanned, applied.synced, 0);
+            useTapPreviewStore
+                .getState()
+                .setFlash(
+                    replanned.fromCount,
+                    replanned.heldFrom ?? applied.base.durations.length,
+                );
             setApplied({ ...applied, multiplier: next, plan: replanned });
             setMultiplier(next);
             await refresh();
@@ -455,6 +602,13 @@ function TapTheBeatPanelBody() {
 
     /** Plays from where tapping started with the metronome on, to hear the counts on the music. */
     const playWithClicks = () => {
+        // Before applying, the clicks are the plan's, not the metronome's (which follows the
+        // stored counts)
+        if (!applied) {
+            setClicks(true);
+            if (!isPlaying) play();
+            return;
+        }
         if (!isMetronomeOn) useMetronomeStore.getState().setMetronomeOn(true);
         if (isPlaying) return;
         const store = useTimelineSelectionStore.getState();
@@ -476,6 +630,15 @@ function TapTheBeatPanelBody() {
     const shownPlan = applied?.plan ?? plan;
     const shownBpm = shownPlan?.bpm ?? (fit ? fit.bpm * multiplier : null);
     const currentMultiplier = applied?.multiplier ?? multiplier;
+    // 276 per minute is likelier eighths than the music's count: ask, don't say "steady" (FB-5)
+    const implausible = shownBpm !== null ? tapPlausibility(shownBpm) : null;
+    const movesSynced = shownPlan?.unsynced.length ?? 0;
+    const hereDisabled = atHome && hereFrom === null && startKind !== "here";
+    // Far from where the taps were applied: offer a new run from the playhead (FB-3)
+    const farFromTaps =
+        applied !== null &&
+        Math.abs(playheadBeat - applied.plan.tapped.to) >= TAP_AGAIN_COUNTS &&
+        playheadBeat > 1;
     // The envelope is on the show's clock, offset included, so after applying it is compared
     // with the new counts as they are
     const pastCounts =
@@ -516,15 +679,21 @@ function TapTheBeatPanelBody() {
                             type="button"
                             role="radio"
                             aria-checked={startKind === kind}
+                            disabled={kind === "here" && hereDisabled}
+                            title={
+                                kind === "here" && hereDisabled
+                                    ? t("tempo.tapTheBeat.fromHereAtHome")
+                                    : undefined
+                            }
                             onClick={(e) => {
                                 e.currentTarget.blur();
-                                chooseStart(kind);
+                                if (kind !== startKind) chooseStart(kind);
                             }}
                             className={clsx(
-                                "rounded-4 px-8 py-1",
+                                "rounded-4 px-8 py-1 disabled:opacity-50",
                                 startKind === kind
                                     ? "bg-accent/15 text-accent"
-                                    : "hover:text-accent",
+                                    : "enabled:hover:text-accent",
                             )}
                         >
                             {label}
@@ -546,6 +715,11 @@ function TapTheBeatPanelBody() {
                     {startKind === "start"
                         ? t("tempo.tapTheBeat.instructionsStart")
                         : t("tempo.tapTheBeat.instructionsHere")}
+                </p>
+            )}
+            {!applied && hereDisabled && taps.length === 0 && (
+                <p className="text-text-subtitle text-[11px]">
+                    {t("tempo.tapTheBeat.fromHereAtHome")}
                 </p>
             )}
 
@@ -620,7 +794,40 @@ function TapTheBeatPanelBody() {
                         {t(`tempo.tapTheBeat.${hint ?? "waiting"}`)}
                     </span>
                 )}
-                {!applied && progress.kind !== "waiting" && (
+                {!applied && progress.kind !== "waiting" && implausible && (
+                    <span
+                        data-testid="tap-implausible"
+                        className="text-yellow ml-auto flex items-center gap-4 font-medium"
+                    >
+                        {t(
+                            implausible === "fast"
+                                ? "tempo.tapTheBeat.implausibleFast"
+                                : "tempo.tapTheBeat.implausibleSlow",
+                        )}
+                        <Button
+                            variant="secondary"
+                            size="compact"
+                            disabled={busy}
+                            onClick={() =>
+                                void changeMultiplier(
+                                    implausible === "fast" ? "down" : "up",
+                                )
+                            }
+                            title={t(
+                                implausible === "fast"
+                                    ? "tempo.tapTheBeat.half"
+                                    : "tempo.tapTheBeat.double",
+                            )}
+                        >
+                            {t(
+                                implausible === "fast"
+                                    ? "tempo.tapTheBeat.halveIt"
+                                    : "tempo.tapTheBeat.doubleIt",
+                            )}
+                        </Button>
+                    </span>
+                )}
+                {!applied && progress.kind !== "waiting" && !implausible && (
                     <span
                         className={clsx(
                             "ml-auto",
@@ -666,7 +873,13 @@ function TapTheBeatPanelBody() {
             )}
 
             {shownPlan && (
-                <p data-testid="tap-sentence">
+                <p
+                    data-testid="tap-sentence"
+                    className={clsx(
+                        // Moving synced counts is not small print (Jo)
+                        movesSynced > 0 && "text-yellow font-medium",
+                    )}
+                >
                     {tapPlanSentence({
                         t,
                         plan: shownPlan,
@@ -680,7 +893,22 @@ function TapTheBeatPanelBody() {
                     {applied && ` ${t("tempo.tapTheBeat.undoHint")}`}
                 </p>
             )}
+            {shownPlan && !applied && (
+                <p className="text-text-subtitle text-[11px]">
+                    {t("tempo.tapTheBeat.previewOnTimeline")}
+                </p>
+            )}
+            {applied && (
+                <p className="text-text-subtitle">
+                    {t("tempo.tapTheBeat.syncedKept")}
+                </p>
+            )}
             {pastCounts && <p className="text-text-subtitle">{pastCounts}</p>}
+            {farFromTaps && (
+                <p className="text-text-subtitle">
+                    {t("tempo.tapTheBeat.suggestHere")}
+                </p>
+            )}
 
             <div className="flex items-center gap-8">
                 {taps.length > 0 && !applied && (
@@ -695,36 +923,40 @@ function TapTheBeatPanelBody() {
                         <Button
                             variant="ghost"
                             size="compact"
-                            onClick={startOver}
+                            data-testid="tap-again"
+                            onClick={() =>
+                                farFromTaps ? chooseStart("here") : startOver()
+                            }
                         >
                             {t(
-                                applied
-                                    ? "tempo.tapTheBeat.tapAgain"
-                                    : "tempo.tapTheBeat.startOver",
+                                farFromTaps
+                                    ? "tempo.tapTheBeat.tapAgainHere"
+                                    : applied
+                                      ? "tempo.tapTheBeat.tapAgain"
+                                      : "tempo.tapTheBeat.startOver",
                             )}
                         </Button>
                     )}
+                    {/* Hear it before applying it, and again after (FB-5) */}
+                    {(applied || plan) && (
+                        <Button
+                            variant="secondary"
+                            size="compact"
+                            data-testid="tap-play-clicks"
+                            onClick={(e) => {
+                                e.currentTarget.blur();
+                                playWithClicks();
+                            }}
+                            className="flex items-center gap-6"
+                        >
+                            <MetronomeIcon size={16} />
+                            {t("tempo.tapTheBeat.playWithClicks")}
+                        </Button>
+                    )}
                     {applied ? (
-                        <>
-                            <Button
-                                variant="secondary"
-                                size="compact"
-                                onClick={(e) => {
-                                    e.currentTarget.blur();
-                                    playWithClicks();
-                                }}
-                                className="flex items-center gap-6"
-                            >
-                                <MetronomeIcon size={16} />
-                                {t("tempo.tapTheBeat.playWithClicks")}
-                            </Button>
-                            <Button
-                                size="compact"
-                                onClick={() => setOpen(false)}
-                            >
-                                {t("tempo.tapTheBeat.done")}
-                            </Button>
-                        </>
+                        <Button size="compact" onClick={() => setOpen(false)}>
+                            {t("tempo.tapTheBeat.done")}
+                        </Button>
                     ) : (
                         <Button
                             size="compact"
@@ -732,13 +964,48 @@ function TapTheBeatPanelBody() {
                             disabled={!plan || busy}
                             onClick={() => void apply()}
                         >
-                            {t("tempo.tapTheBeat.apply")}
+                            {movesSynced > 0
+                                ? t("tempo.tapTheBeat.applyMovesSynced", {
+                                      count: movesSynced,
+                                  })
+                                : t("tempo.tapTheBeat.apply")}
                         </Button>
                     )}
                 </div>
             </div>
         </div>
     );
+}
+
+/**
+ * Plays a short click on each of the plan's counts from show time `from` (the live position now),
+ * up to two minutes ahead. Returns a stop function.
+ */
+function schedulePlanClicks(plan: TapTheBeatPlan, from: number): () => void {
+    const Context =
+        typeof window !== "undefined" ? window.AudioContext : undefined;
+    if (!Context) return () => {};
+    let context: AudioContext;
+    try {
+        context = new Context();
+    } catch {
+        return () => {};
+    }
+    const start = context.currentTime + 0.02;
+    for (const time of tapPlanClickTimes(plan, from)) {
+        const at = time - from;
+        if (at > 120) break;
+        const osc = context.createOscillator();
+        const gain = context.createGain();
+        osc.frequency.value = 1500;
+        gain.gain.setValueAtTime(0.0001, start + at);
+        gain.gain.exponentialRampToValueAtTime(0.4, start + at + 0.002);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + at + 0.05);
+        osc.connect(gain).connect(context.destination);
+        osc.start(start + at);
+        osc.stop(start + at + 0.06);
+    }
+    return () => void context.close().catch(() => {});
 }
 
 /** One dot per tap, newest on the right; taps left out of the fit are hollow. */
@@ -777,5 +1044,84 @@ function TapDots({
                 );
             })}
         </span>
+    );
+}
+
+/**
+ * Tap the beat on the timeline (FB-4): while the panel previews, the taps as ticks at the top of
+ * the waveform lane and dashed lines where the plan would put each changed count, on the current
+ * axis (Normal or Align); after Apply, the changed range flashes once. Positions are spec count
+ * indexes; `toX` maps them (fractional) to the lane's pixels.
+ */
+export function TapTimelineOverlay({
+    toX,
+    top,
+    height,
+}: {
+    /** A spec count position (fractional) to x */
+    toX: (count: number) => number;
+    top: number;
+    height: number;
+}) {
+    const { beats } = useTimingObjects()!;
+    const times = useMemo(
+        () => countTimes(beats.map((b) => b.duration)),
+        [beats],
+    );
+    const timeToX = (seconds: number) => toX(countAtTime(times, seconds));
+    const preview = useTapPreviewStore((s) => s.preview);
+    const flash = useTapPreviewStore((s) => s.flash);
+    const flashRef = useRef<HTMLSpanElement>(null);
+    useEffect(() => {
+        const element = flashRef.current;
+        if (!element || !flash) return;
+        const animation = element.animate?.(
+            [{ opacity: 0.45 }, { opacity: 0 }],
+            { duration: 1600, easing: "ease-out", fill: "forwards" },
+        );
+        return () => animation?.cancel();
+    }, [flash]);
+    return (
+        <>
+            {preview && (
+                <div
+                    aria-hidden="true"
+                    data-testid="tap-timeline-preview"
+                    className="pointer-events-none absolute inset-x-0 z-[26]"
+                    style={{ top, height }}
+                >
+                    {preview.ghost?.counts.map((c) => (
+                        <span
+                            key={c.index}
+                            className="border-accent absolute top-0 h-full border-l border-dashed opacity-80"
+                            style={{ left: toX(c.at) }}
+                        />
+                    ))}
+                    {preview.taps.map((time, i) => (
+                        <span
+                            key={i}
+                            data-testid="tap-timeline-tap"
+                            className="bg-accent absolute top-0 h-6 w-[3px] -translate-x-1/2 rounded-full"
+                            style={{ left: timeToX(time) }}
+                        />
+                    ))}
+                </div>
+            )}
+            {flash && (
+                <span
+                    key={flash.key}
+                    ref={flashRef}
+                    aria-hidden="true"
+                    data-testid="tap-timeline-flash"
+                    className="bg-accent pointer-events-none absolute z-[26] opacity-0"
+                    style={{
+                        left: toX(flash.from),
+                        width: Math.max(0, toX(flash.to) - toX(flash.from)),
+                        top,
+                        height,
+                    }}
+                />
+            )}
+        </>
     );
 }

@@ -9,8 +9,14 @@ import {
     nextMultiplier,
     planTapTheBeat,
     showLineUpStrip,
+    suggestTapAgain,
+    syncedAfterTaps,
+    tapGhostCounts,
+    tapPlanClickTimes,
+    tapPlausibility,
     tapProgress,
 } from "../tapTheBeat";
+import { moveCount } from "../retime";
 
 /** A show: the fixed zero-length count 0, then `n` counts of `each` seconds. */
 const flat = (n: number, each: number) => [
@@ -314,5 +320,104 @@ describe("addTap", () => {
     it("starts a new run after a jump back or a long gap", () => {
         expect(addTap([1, 1.5, 2], 0.4)).toEqual([0.4]);
         expect(addTap([1, 1.5, 2], 5.5)).toEqual([5.5]);
+    });
+});
+
+describe("what tapping keeps safe (FB-1)", () => {
+    it("syncs where the taps start and end, from the start", () => {
+        const durations = flat(64, 0.5);
+        const plan = planTapTheBeat({
+            durations,
+            start: { kind: "start" },
+            fit: fitOf(taps(8, 60 / 138, 1.6)),
+        })!;
+        expect(plan.tapped).toEqual({ from: 1, to: 8 });
+        expect(syncedAfterTaps([], plan, durations.length)).toEqual([8]);
+    });
+
+    it("from here, also syncs the playhead's count, so earlier pages stay", () => {
+        const durations = flat(64, 0.5);
+        const plan = planTapTheBeat({
+            durations,
+            start: { kind: "here", count: 33 },
+            fit: fitOf(taps(8, 0.45, 16.2)),
+        })!;
+        const synced = syncedAfterTaps([5], plan, durations.length);
+        expect(synced).toContain(33);
+        expect(synced).toContain(plan.tapped.from);
+        expect(synced).toContain(plan.tapped.to);
+        expect(synced[0]).toBe(5);
+        // A later Align drag of a flag past the taps re-spaces back to the last tap at most
+        const after = moveCount({
+            durations: plan.durations,
+            index: 57,
+            toTime: countTimes(plan.durations)[57]! + 1,
+            synced,
+        });
+        for (let i = 0; i < plan.tapped.to; i++)
+            expect(after.durations[i]).toBe(plan.durations[i]);
+    });
+
+    it("drops synced counts the taps moved", () => {
+        const durations = flat(64, 0.5);
+        const plan = planTapTheBeat({
+            durations,
+            start: { kind: "start" },
+            fit: fitOf(taps(8, 0.4, 0)),
+            synced: [4],
+        })!;
+        expect(plan.unsynced).toEqual([4]);
+        expect(syncedAfterTaps([4], plan, durations.length)).not.toContain(4);
+    });
+});
+
+describe("tapPlausibility", () => {
+    it("flags a likely wrong pulse", () => {
+        expect(tapPlausibility(276)).toBe("fast");
+        expect(tapPlausibility(46)).toBe("slow");
+        expect(tapPlausibility(138)).toBeNull();
+        expect(tapPlausibility(60)).toBeNull();
+        expect(tapPlausibility(200)).toBeNull();
+    });
+});
+
+describe("drawing a plan before applying it", () => {
+    it("puts each changed count where it would land on today's timing", () => {
+        // 120 now; the taps say 138 from 1.6 s
+        const durations = flat(32, 0.5);
+        const plan = planTapTheBeat({
+            durations,
+            start: { kind: "start" },
+            fit: fitOf(taps(8, 60 / 138, 1.6)),
+        })!;
+        const { counts, changed } = tapGhostCounts(durations, plan);
+        expect(changed).toEqual({ from: 1, to: 33 });
+        // Count 1 lands 1.6 s in: 3.2 counts of 0.5 s after today's count 1
+        expect(counts[0]).toEqual({ index: 1, at: expect.closeTo(4.2, 9) });
+        // Count 5 lands at 1.6 + 4 × 60/138 s
+        const five = counts.find((c) => c.index === 5)!;
+        expect(five.at).toBeCloseTo(1 + (1.6 + (4 * 60) / 138) / 0.5, 9);
+    });
+
+    it("clicks fall on the plan's counts from the playhead on", () => {
+        const durations = flat(16, 0.5);
+        const plan = planTapTheBeat({
+            durations,
+            start: { kind: "start" },
+            fit: fitOf(taps(8, 0.4, 1)),
+        })!;
+        const clicks = tapPlanClickTimes(plan, 2);
+        expect(clicks[0]).toBeCloseTo(2.2, 9);
+        expect(clicks[1]).toBeCloseTo(2.6, 9);
+    });
+});
+
+describe("suggestTapAgain", () => {
+    it("suggests tapping again far past the last synced count", () => {
+        expect(suggestTapAgain(161, [8])).toBe(true);
+        expect(suggestTapAgain(30, [8])).toBe(false);
+        expect(suggestTapAgain(161, [150])).toBe(false);
+        // Nobody lined anything up yet: the strip asks instead
+        expect(suggestTapAgain(161, [])).toBe(false);
     });
 });

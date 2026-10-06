@@ -15,21 +15,29 @@ const K = "tempo.tapTheBeat";
 
 type NamedPage = FlagPage & { readonly name: string };
 
-/** "page 2, count 5" for count `ordinal` (a beat index); "count 5" when no page box holds it. */
+/**
+ * A count tick named as the transport names it (UI-13, docs/tempo/count-convention.md): "Pg 2 ct
+ * 4" for the 4th count after page 2's start, so a page's flag is its last count ("Pg 10 ct 16"),
+ * never "page 11, count 1". "the start" for the show's start, "count 40" past the last page.
+ */
 export function countLabel(
     t: Translate,
     pages: readonly NamedPage[],
     ordinal: number,
 ): string {
-    const box = pageFlags(pages).find(
-        (f) => f.range && f.range.start <= ordinal && ordinal < f.range.end,
+    const flags = pageFlags(pages);
+    const box = flags.find(
+        (f) => f.range && f.range.start < ordinal && ordinal <= f.range.end,
     );
-    return box?.range
-        ? t(`${K}.countOnPage`, {
-              page: box.page.name,
-              count: ordinal - box.range.start + 1,
-          })
-        : t(`${K}.countAlone`, { count: ordinal });
+    if (box?.range)
+        return t(`${K}.countOnPage`, {
+            page: box.page.name,
+            count: ordinal - box.range.start,
+        });
+    const first = flags.find((f) => f.range)?.range;
+    if (ordinal <= 1 || (first && ordinal <= first.start))
+        return t(`${K}.countStart`);
+    return t(`${K}.countAlone`, { count: ordinal });
 }
 
 /** "132": the tempo for people, rounded to a whole count per minute. */

@@ -50,6 +50,7 @@ import {
     Timeline,
     TimelineWaveformProvider,
     type TimelineAlign,
+    type TimelineCountOverlay,
     type TimelineInput,
     type TimelinePunchTapConfig,
     type TimelineSelection,
@@ -74,6 +75,8 @@ import { useTimelineDrillEdits } from "./useTimelineDrillEdits";
 import {
     handlerDelaySeconds,
     LineUpStrip,
+    TapTheBeatLaneButton,
+    TapTimelineOverlay,
     useTapTheBeatStore,
 } from "./TapTheBeat";
 import { getLivePlaybackPosition } from "./audio/AudioPlayer";
@@ -84,6 +87,11 @@ import {
 } from "@/timeline/timelineTransport";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
+
+/** Tap the beat's preview and flash over the timeline (FB-4) */
+const renderTapOverlay: TimelineCountOverlay = (geometry) => (
+    <TapTimelineOverlay {...geometry} />
+);
 
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
@@ -321,6 +329,8 @@ export default function TimelineModePanel() {
                         </>
                     }
                     waveformNotice={<LineUpStrip />}
+                    waveformAction={<TapTheBeatLaneButton />}
+                    countOverlay={renderTapOverlay}
                     selection={selection}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}

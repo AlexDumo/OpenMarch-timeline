@@ -39,8 +39,11 @@ const plan = (over: Partial<TapTheBeatPlan>): TapTheBeatPlan => ({
 
 describe("countLabel", () => {
     it("names counts by page", () => {
-        expect(countLabel(t, PAGES, 1)).toBe("page 2, count 1");
-        expect(countLabel(t, PAGES, 11)).toBe("page 3, count 3");
+        // As the transport reads them: a flag is the last count of the page it closes
+        expect(countLabel(t, PAGES, 2)).toBe("Pg 2 ct 1");
+        expect(countLabel(t, PAGES, 9)).toBe("Pg 2 ct 8");
+        expect(countLabel(t, PAGES, 11)).toBe("Pg 3 ct 2");
+        expect(countLabel(t, PAGES, 1)).toBe("the start");
         expect(countLabel(t, PAGES, 40)).toBe("count 40");
     });
 });
@@ -78,9 +81,9 @@ describe("tapPlanSentence", () => {
             pages: PAGES,
             applied: false,
         });
-        expect(text).toContain("From page 3, count 3, counts will run");
+        expect(text).toContain("From Pg 3 ct 2, counts will run");
         expect(text).toContain(
-            "The synced count at page 3, count 6 and everything after it stay on the music.",
+            "The synced count at Pg 3 ct 5 and everything after it stay on the music.",
         );
         expect(text).toContain("kept within limits");
     });

@@ -30,6 +30,7 @@ import type {
     TimelineAlign,
     TimelineAppendCounts,
     TimelineBeatRange,
+    TimelineCountOverlay,
     TimelineCreateTrackRequest,
     TimelineMusicPastEnd,
     TimelineNavigation,
@@ -125,6 +126,10 @@ export interface TimelineProps {
     readonly transportViewControls?: ReactNode;
     /** A notice over the waveform lane, such as Tap the beat's line-up strip */
     readonly waveformNotice?: ReactNode;
+    /** A small action at the waveform lane's right edge, such as Tap the beat's way back */
+    readonly waveformAction?: ReactNode;
+    /** Drawn over the lanes, given where a spec count position is (Tap the beat's preview) */
+    readonly countOverlay?: TimelineCountOverlay;
     readonly showTransport?: boolean;
     /** The zoom, in pixels per beat; without it the timeline keeps its own (starting at 16) */
     readonly pixelsPerBeat?: number;
@@ -529,6 +534,9 @@ export function Timeline(props: TimelineProps) {
         transportSecondary: props.transportSecondary,
         transportViewControls: props.transportViewControls,
         waveformNotice: props.waveformNotice,
+        waveformAction: props.waveformAction,
+        countOverlay: props.countOverlay,
+        beatOffset: axis.offset,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,
@@ -545,6 +553,7 @@ export function Timeline(props: TimelineProps) {
 export type {
     TimelineActivitySpan,
     TimelineAlign,
+    TimelineCountOverlay,
     TimelineAlignEdit,
     TimelinePunchTapConfig,
     TimelineBeatRange,
