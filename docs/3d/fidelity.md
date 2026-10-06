@@ -123,15 +123,17 @@ Rules for all fidelity and branding work:
 ## 1b. Field branding
 
 **Built now (OpenMarch branding).** On turf, the OpenMarch logo is
-painted at midfield in plain white paint, as large as fits inside the middle
-hash rows (15 yards wide on a high school field, narrower between NFL
-hashes), reading from the home side and over the 50 line. The default end
-zones are the white marcher mark followed by `OPENMARCH`, in white on the
-brand violet (`DEFAULT_VENUE_PARAMS`). The mark only appears when the end-zone
-text is OpenMarch; any other text is painted alone. Shows that already saved
-venue settings keep their stored end-zone values. Code:
-`core/field/brandMark.ts`, `planCenterLogo` in `turfPlan.ts`, `paintLogo` and
-`paintText` in `paint.ts`.
+painted at midfield in white paint with a light turf-colored shadow, as large
+as fits inside the middle hash rows (15 yards wide on a high school field,
+narrower between NFL hashes), reading from the home side and over the 50
+line. The default end zones are solid brand violet with a white border line
+one yard in, and the white marcher mark followed by `OPENMARCH`, with a dark
+violet drop shadow and outline (`DEFAULT_VENUE_PARAMS`). The mark only
+appears when the end-zone text is OpenMarch. Fine and coarse grain is laid
+over the whole turf, paint included. Shows that already saved venue settings
+keep their stored end-zone values. Other end-zone styles (stripes, argyle,
+fade, outline, pinstripe) exist behind `endZoneStyle` for the branding
+setting below. Code: `core/field/brandMark.ts`, `turfPlan.ts`, `paint.ts`.
 
 **Feature for later: show-defined center logo and end-zone artwork.** Venue
 params grow a small branding block, still "small params" under ADR 0002 D-5:
