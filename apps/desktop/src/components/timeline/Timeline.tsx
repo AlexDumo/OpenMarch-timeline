@@ -122,6 +122,8 @@ export interface TimelineProps {
     readonly transportSecondary?: ReactNode;
     /** View controls at the transport's end, such as Compact */
     readonly transportViewControls?: ReactNode;
+    /** A notice over the waveform lane, such as Tap the beat's line-up strip */
+    readonly waveformNotice?: ReactNode;
     readonly showTransport?: boolean;
     /** The zoom, in pixels per beat; without it the timeline keeps its own (starting at 16) */
     readonly pixelsPerBeat?: number;
@@ -523,6 +525,7 @@ export function Timeline(props: TimelineProps) {
         onUnpinStart: props.onUnpinStart,
         transportSecondary: props.transportSecondary,
         transportViewControls: props.transportViewControls,
+        waveformNotice: props.waveformNotice,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,

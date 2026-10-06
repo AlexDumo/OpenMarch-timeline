@@ -65,6 +65,12 @@ rejected }` or null. It ignores the first tap when there are four or more, count
 interval as a missed tap, drops double taps and rejects taps more than `TAP_OUTLIER_FRACTION` (¼)
 of a beat off the fitted line.
 
+`tapTheBeat.ts` (E6): `planTapTheBeat({ durations, start, fit, multiplier, synced })` turns a
+`tempoFromTaps` fit into new durations from the start (count 1 on the first tap, `originShift`) or
+from the playhead's count, scaling everything after the taps by one factor (decisions TB-1).
+`tapProgress`, `canApplyTaps`, `nextMultiplier`, `addTap` and `showLineUpStrip` drive the panel and
+the waveform lane's strip; the write is `applyTapTheBeat` in `@/db-functions/tapTheBeat`.
+
 `tempoReadout.ts`: `bpmOfRange(durations, from, to)` (average BPM or null),
 `isEvenRange(durations, from, to)` ("=" vs "≈"), and `pageTempos(durations, pageStarts, end?)`.
 

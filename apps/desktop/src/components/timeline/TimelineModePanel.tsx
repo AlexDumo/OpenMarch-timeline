@@ -63,6 +63,7 @@ import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { useTimelineMeasureRow } from "./useTimelineMeasureRow";
 import { useTimelineDrillEdits } from "./useTimelineDrillEdits";
+import { LineUpStrip } from "./TapTheBeat";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
@@ -294,6 +295,7 @@ export default function TimelineModePanel() {
                             <TimelineCompactButton />
                         </>
                     }
+                    waveformNotice={<LineUpStrip />}
                     selection={selection}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}

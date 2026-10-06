@@ -245,6 +245,11 @@ export interface TimelineCommonProps
      * view beats. Without it, flags have no grips.
      */
     readonly pageFlagMove?: TimelinePageFlagMove;
+    /**
+     * A notice over the waveform lane's left edge, such as Tap the beat's "Counts aren't lined up
+     * with the music yet" (Tempo lab, E6). Shown only in the full timeline, with audio loaded.
+     */
+    readonly waveformNotice?: ReactNode;
 }
 
 export interface TimelineRangeChange extends TimelineBeatRange {

@@ -453,3 +453,45 @@ fixture list and how to score).
   it (free in `RegisteredActionsHandler`; Alt+T is Focus timeline). It's a non-modal panel on
   the right, so the timeline and field stay visible and playable. With the flag off there is no
   menu and no shortcut.
+  Tap the beat (E6) entries are numbered TB-n so they don't collide with other workers' T-n; the
+  lead renumbers on merge.
+
+## TB-1 Tapping scales; it doesn't flatten (tap-beat, 2026-10-06)
+
+- **Context:** Dana taps 8 beats near the start; the show's later counts may hold score tempo
+  changes (Marcus) or a slower letter C (the kit's `steady`).
+- **Choice:** `planTapTheBeat` matches the tapped stretch to the taps on average and scales every
+  later count by the same factor, so relative lengths survive. The first synced count after the
+  taps stays on the music, with the counts before it re-spaced. From the start, count 1 goes to
+  the fitted first tap (`originShift`); from here, the playhead's count stays and absorbs up to
+  half a beat of phase.
+- **Alternatives:** `setRangeBpm` to the end (one tempo everywhere: wrong for any score with a
+  tempo change); only the tapped stretch changes (later music drifts against counts).
+- **Validate:** V-54.
+
+## TB-2 Applying is never refused; it needs four taps
+
+- **Choice:** Apply is enabled from four taps whatever the confidence ("Keep going…" is advice,
+  not a gate); the count limits clamp, and the sentence says so. One undo entry includes the
+  offset and the strip's dismissal, so Ctrl+Z brings the strip back with the old timing.
+- **Validate:** V-55.
+
+## TB-3 ×2 / ÷2 after applying is a new undo entry
+
+- **Choice:** before Apply, ×2/÷2 only change the preview. After, they re-plan from the show as it
+  was before the first apply and write again (offset unchanged), as a second undo entry, rather
+  than undoing and redoing.
+- **Alternatives:** hide ×2/÷2 after Apply; replace the first undo entry.
+
+## TB-4 Taps use the input event's time
+
+- **Context:** on a loaded machine the main thread ran key handlers 300 ms late during playback
+  (measured in the headless capture), which made taps uneven and the tempo wrong.
+- **Choice:** a tap is `livePosition - (now - event.timeStamp)`, ignored past one second.
+- **Validate:** V-55 on a slow laptop.
+
+## TB-5 Where the entry points live
+
+- **Choice:** the strip sits over the waveform lane's left edge (full timeline only; compact has
+  no room) and sticks to the viewport. "Tap the beat…" is in the Sound popover. The panel floats
+  over the bottom of the field so the field and timeline stay visible. No header button.

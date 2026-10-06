@@ -60,6 +60,11 @@ export const workspaceSettingsSchema = z.object({
             }),
         )
         .optional(),
+    /**
+     * Tempo prototype ("Tap the beat", E6): the timeline's "Counts aren't lined up with the music
+     * yet" strip was dismissed for this file, or the user tapped the beat. Absent means not yet.
+     */
+    tempoLineUpDismissed: z.boolean().optional(),
 });
 
 export type WorkspaceSettings = z.infer<typeof workspaceSettingsSchema>;
