@@ -134,4 +134,24 @@ describe("timeline viewport canvases", () => {
             actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
         }
     });
+
+    it("redraws at the new device pixel ratio when the screen's changes", async () => {
+        const { ref } = makeViewport(1000);
+        const { container } = render(grid(ref));
+        await flushMicrotasks();
+        expect(drawnSpan(container).pixelWidth).toBe(
+            drawnSpan(container).cssWidth,
+        );
+        ratio = 2;
+        expect(mediaListeners.length).toBeGreaterThan(0);
+        act(() => {
+            for (const listener of [...mediaListeners]) listener();
+        });
+        await flushMicrotasks();
+        expect(drawnSpan(container).pixelWidth).toBe(
+            2 * drawnSpan(container).cssWidth,
+        );
+        // Still listening at the new ratio
+        expect(mediaListeners.length).toBeGreaterThan(0);
+    });
 });

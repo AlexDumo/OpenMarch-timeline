@@ -25,9 +25,9 @@ import type { TimelineMarker, TimelineWaveform } from "./TimelineViewModel";
  *
  * - The window moves, and the canvas redraws, only when a scroll comes within half the overscan
  *   of its edge.
- * - A change of zoom, size, data or theme redraws once, in a microtask queued from the layout
- *   effect: after the whole commit (and the zoom's own scroll fix-up) and before the browser
- *   paints, so a zoom never shows a stale or stretched frame and draws once.
+ * - A change of zoom, size, data, theme or device pixel ratio redraws once, in a microtask
+ *   queued from the layout effect: after the whole commit (and the zoom's own scroll fix-up) and
+ *   before the browser paints, so a zoom never shows a stale or stretched frame and draws once.
  * - Colors are read once per theme, not on every draw.
  */
 
@@ -56,6 +56,42 @@ const subscribeToTheme = (listener: () => void) => {
         if (themeListeners.size > 0) return;
         themeObserver?.disconnect();
         themeObserver = null;
+    };
+};
+
+/**
+ * Calls the listeners when the device pixel ratio changes (the window moves to a screen with
+ * another scale), so each canvas redraws at the new resolution. A `resolution` media query matches
+ * only one ratio, so it is watched again at the new ratio after each change.
+ */
+const ratioListeners = new Set<() => void>();
+let stopWatchingRatio: (() => void) | null = null;
+const watchRatio = () => {
+    if (
+        typeof window === "undefined" ||
+        typeof window.matchMedia !== "function"
+    )
+        return;
+    const query = window.matchMedia(
+        `(resolution: ${window.devicePixelRatio || 1}dppx)`,
+    );
+    const onChange = () => {
+        stopWatchingRatio?.();
+        stopWatchingRatio = null;
+        if (ratioListeners.size > 0) watchRatio();
+        for (const notify of ratioListeners) notify();
+    };
+    query.addEventListener("change", onChange);
+    stopWatchingRatio = () => query.removeEventListener("change", onChange);
+};
+const subscribeToPixelRatio = (listener: () => void) => {
+    ratioListeners.add(listener);
+    if (!stopWatchingRatio) watchRatio();
+    return () => {
+        ratioListeners.delete(listener);
+        if (ratioListeners.size > 0) return;
+        stopWatchingRatio?.();
+        stopWatchingRatio = null;
     };
 };
 
@@ -205,6 +241,7 @@ const useViewportCanvas = ({
     );
 
     useEffect(() => subscribeToTheme(invalidate), [invalidate]);
+    useEffect(() => subscribeToPixelRatio(invalidate), [invalidate]);
 
     // One listener and one observer for the canvas's life; they call the latest draw
     useEffect(() => {
