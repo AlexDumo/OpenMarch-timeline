@@ -367,6 +367,25 @@ describe("the measure row's menu", () => {
         expect(measureRow.onSetMark).toHaveBeenCalledWith(3, null);
     });
 
+    it("on a tab, with Tap the beat: Tap from here seeks to the mark and opens it (D4)", () => {
+        const onTapFrom = vi.fn();
+        const { onSeek } = renderRow({
+            measureRow: { ...commands(), onTapFrom },
+        });
+        fireEvent.contextMenu(screen.getByTestId("timeline-rehearsal-tab"));
+        const item = screen.getByTestId("measure-row-tap-from");
+        expect(item).toHaveTextContent(/^Tap from here \(\w+\)$/);
+        fireEvent.click(item);
+        expect(onSeek).toHaveBeenCalledWith(8);
+        expect(onTapFrom).toHaveBeenCalledTimes(1);
+        // Without Tap the beat, the menu doesn't offer it
+        renderRow();
+        fireEvent.contextMenu(
+            screen.getAllByTestId("timeline-rehearsal-tab")[1]!,
+        );
+        expect(screen.queryByTestId("measure-row-tap-from")).toBeNull();
+    });
+
     it("offers Remove mN's counts on a plain measure number, with a lowercase m (E10)", () => {
         const onRemoveCounts = vi.fn();
         renderRow({ addSelectedMarchers: { onRemoveCounts } });

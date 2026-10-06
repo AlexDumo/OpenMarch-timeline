@@ -3,6 +3,7 @@ import {
     ArrowRightIcon,
     CaretRightIcon,
     CheckIcon,
+    HandTapIcon,
     MinusIcon,
     PencilSimpleIcon,
     PlusIcon,
@@ -77,6 +78,11 @@ export interface TimelineMeasureRowCommands {
      * measure row in the Normal view). Without it, tabs don't drag there.
      */
     readonly onMoveMark?: (from: MeasureId, to: MeasureId) => void;
+    /**
+     * Opens Tap the beat on From here, after the menu seeks to a rehearsal mark ("Tap from here
+     * (C)", D4). Without it, the tab's menu doesn't offer it.
+     */
+    readonly onTapFrom?: () => void;
 }
 
 /** What was right-clicked on the measure row, in view beats */
@@ -203,7 +209,7 @@ export const rehearsalTabTitle = (mark: string, measure: string) =>
 export const rehearsalTabMoveTitle = (mark: string, measure: string) =>
     measureRowText(
         "tab.titleMove",
-        "Rehearsal {mark}, measure {measure}. Drag along the measure row to move the mark to another measure (the music stays put; in Align, dragging it retimes the music instead). Double-click to rename, R to add one.",
+        "Rehearsal {mark}, measure {measure}. Drag along the measure row to move the mark to another measure (the music stays put; in Line up with music, dragging it retimes the music instead). Double-click to rename, R to add one.",
         { mark, measure },
     );
 
@@ -978,6 +984,26 @@ export function MeasureRowMenuItems({
                 <ArrowRightIcon size={14} />
                 {measureRowText("menu.goToMark", "Go to {mark}", { mark })}
             </DropdownMenu.Item>,
+            ...(commands.onTapFrom
+                ? [
+                      <DropdownMenu.Item
+                          key="tap-from"
+                          data-testid="measure-row-tap-from"
+                          className={itemClass}
+                          onSelect={() => {
+                              onSeek?.(measure.atBeat);
+                              commands.onTapFrom?.();
+                          }}
+                      >
+                          <HandTapIcon size={14} />
+                          {measureRowText(
+                              "menu.tapFromMark",
+                              "Tap from here ({mark})",
+                              { mark },
+                          )}
+                      </DropdownMenu.Item>,
+                  ]
+                : []),
         );
     else
         items.push(

@@ -8,6 +8,9 @@ import { measureKeys } from "@/hooks/queries/useMeasures";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import type { MeasureLineEdit } from "@/timeline/measureLines";
 import { conToastError } from "@/utilities/utils";
+import { useTempoLabFlag } from "@/stores/UiSettingsStore";
+import { useAudioEnvelopeStore } from "@/timeline/timelineWaveform";
+import { openTapTheBeatHere } from "./TapTheBeat";
 import type { TimelineMeasureRowCommands } from "./TimelineMeasureRow";
 import { measureRowText } from "./measureRowText";
 
@@ -30,13 +33,17 @@ const droppedMarksMessage = (
  * The measure row's writes for the app's timeline (tempo E8): each command is one
  * `editMeasureLines` edit, so one undo entry that changes only `measures` rows. Removing a mark
  * says so with an Undo button, and so does an edit that took marks away with their lines. Beats
- * are spec beats (`Timeline` converts).
+ * are spec beats (`Timeline` converts). With Tap the beat on and music loaded, a rehearsal tab's menu
+ * also offers "Tap from here (C)" (D4).
  */
 export function useTimelineMeasureRow(
     measures: readonly Measure[],
 ): TimelineMeasureRowCommands {
     const queryClient = useQueryClient();
     const { mutate: performHistoryAction } = usePerformHistoryAction();
+    const tapTheBeat = useTempoLabFlag("tapTheBeat") === true;
+    const hasMusic = useAudioEnvelopeStore((s) => s.envelope !== null);
+    const canTap = tapTheBeat && hasMusic;
     const { mutate } = useMutation({
         mutationFn: (edit: MeasureLineEdit) => editMeasureLines({ db, edit }),
         onSettled: () =>
@@ -105,6 +112,7 @@ export function useTimelineMeasureRow(
                     beats,
                     until,
                 }),
+            onTapFrom: canTap ? openTapTheBeatHere : undefined,
         };
-    }, [measures, mutate, performHistoryAction]);
+    }, [canTap, measures, mutate, performHistoryAction]);
 }

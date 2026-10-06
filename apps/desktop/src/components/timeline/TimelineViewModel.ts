@@ -274,12 +274,11 @@ export interface TimelineAlign {
     };
 }
 
-/** What punch-in tap needs from the app: playback, the live clock, and where to report */
+/**
+ * What punch-in tap needs from the app: playback, the live clock, and where to report. A take is
+ * applied with Done (Enter), on leaving Align, or when another tool opens (DT-1).
+ */
 export interface TimelinePunchTapConfig {
-    /** When taps are written: when playback stops, or with Apply (Enter) */
-    readonly apply: "stop" | "drafts";
-    /** What a tap sets: the next page flag, or the next count */
-    readonly unit: "page" | "count";
     /**
      * Where the music was when an input event happened, in seconds on the show's clock (the
      * event's `timeStamp`, on the `performance.now()` clock, corrects for a late handler)
@@ -289,8 +288,12 @@ export interface TimelinePunchTapConfig {
     readonly play: (from: number) => boolean;
     /** Another tool has T now, such as Tap the beat's open panel */
     readonly blocked?: () => boolean;
+    /** Another tool is open now (Tap the beat's panel): opening it applies the take */
+    readonly otherToolOpen?: boolean;
     /** After the taps were written, with "Lined up pages 12–18 to your taps." */
     readonly onApplied?: (message: string) => void;
+    /** A take that couldn't be applied on leaving (it would change a typed tempo), and why */
+    readonly onNotice?: (message: string) => void;
 }
 
 export interface TimelineCommonProps

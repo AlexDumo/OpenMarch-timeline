@@ -16,12 +16,11 @@ export interface TempoLabFlags {
     alignDragScope: "page" | "toSynced";
     /** Tap the beat: a few taps set the tempo and where count 1 starts */
     tapTheBeat: boolean;
-    /** Punch-in tap: T taps page starts or counts while playing */
+    /**
+     * Punch-in tap: T taps page starts (or every count, on slow or uneven pages) while playing.
+     * Taps are a take applied with Done; `tapApply` and `tapUnit` were retired (decisions DT-1, DT-2).
+     */
     punchInTap: boolean;
-    /** When punch-in taps are written: on stop, or kept as drafts until Enter */
-    tapApply: "stop" | "drafts";
-    /** What a punch-in tap marks: page starts or every count */
-    tapUnit: "page" | "count";
     /** Tempo map: a table of tempo marks at measures */
     tempoMap: boolean;
     /** Drags and taps snap to attacks found in the music */
@@ -37,8 +36,6 @@ export const defaultTempoLab: TempoLabFlags = {
     alignDragScope: "page",
     tapTheBeat: false,
     punchInTap: false,
-    tapApply: "stop",
-    tapUnit: "page",
     tempoMap: false,
     snapToAttacks: false,
     drillChoices: false,
@@ -52,8 +49,6 @@ const TEMPO_LAB_CHOICES: {
     alignDragScope: ["page", "toSynced"],
     tapTheBeat: [false, true],
     punchInTap: [false, true],
-    tapApply: ["stop", "drafts"],
-    tapUnit: ["page", "count"],
     tempoMap: [false, true],
     snapToAttacks: [false, true],
     drillChoices: [false, true],
