@@ -35,6 +35,7 @@ import {
     Timeline,
     TimelineWaveformProvider,
     type TimelineInput,
+    type TimelineProps,
     type TimelineSelection,
 } from "./Timeline";
 import {
@@ -91,7 +92,6 @@ export const toTimelineSelection = (
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
-    const playback = useTimelinePlayback({ beats, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     // UI-10: the start flag follows the page boxes
     useEffect(() => {
@@ -236,7 +236,7 @@ export default function TimelineModePanel() {
             }}
         >
             <TimelineWaveformProvider waveform={waveform ?? NO_WAVEFORM}>
-                <Timeline
+                <PlayingTimeline
                     mode={compact ? "collapsed" : "expanded"}
                     pixelsPerBeat={pixelsPerBeat}
                     onPixelsPerBeatChange={setPixelsPerBeat}
@@ -247,7 +247,6 @@ export default function TimelineModePanel() {
                     pages={pages}
                     measures={measures}
                     timelines={offPage}
-                    playback={playback}
                     transportClock={clock}
                     transportAccessories={PREVIEW_BUTTONS}
                     transportSecondary={SOUND_BUTTON}
@@ -304,6 +303,19 @@ export default function TimelineModePanel() {
             </TimelineWaveformProvider>
         </div>
     );
+}
+
+/**
+ * The timeline fed by the audio playback. The playback position changes once a beat while
+ * playing, so it is read here, under the panel: a beat re-renders the timeline, not the panel and
+ * its queries.
+ */
+function PlayingTimeline(props: Omit<TimelineProps, "playback">) {
+    const playback = useTimelinePlayback({
+        beats: props.beats,
+        pages: props.pages,
+    });
+    return <Timeline {...props} playback={playback} />;
 }
 
 /**
