@@ -371,6 +371,7 @@ describe("getWindowCountLabel (UI-13)", () => {
 
 describe("parseTimelineGoTo (UI-12)", () => {
     const model = {
+        beatCount: 11,
         pages: [
             { id: "p0", label: "0", atBeat: 0, isInitial: true },
             { id: "p1", label: "1", atBeat: 0, isInitial: false },
@@ -391,8 +392,7 @@ describe("parseTimelineGoTo (UI-12)", () => {
             kind: "beat",
             beat: 6,
         });
-        // A count past the measure's end stays inside it
-        expect(parseTimelineGoTo("m1.9", model)).toEqual({
+        expect(parseTimelineGoTo("m1.4", model)).toEqual({
             kind: "beat",
             beat: 3,
         });
@@ -415,5 +415,19 @@ describe("parseTimelineGoTo (UI-12)", () => {
         expect(parseTimelineGoTo("m9", model)).toBeNull();
         expect(parseTimelineGoTo("", model)).toBeNull();
         expect(parseTimelineGoTo("zz", model)).toBeNull();
+    });
+
+    it("misses a count the measure doesn't have, rather than guessing (UI-12 review)", () => {
+        expect(parseTimelineGoTo("m1.0", model)).toBeNull();
+        // Measure 1 runs to measure 2, beats 0-3
+        expect(parseTimelineGoTo("m1.5", model)).toBeNull();
+        expect(parseTimelineGoTo("m1.9", model)).toBeNull();
+        // The last measure runs to the show's end: beats 8-10
+        expect(parseTimelineGoTo("m3.3", model)).toEqual({
+            kind: "beat",
+            beat: 10,
+        });
+        expect(parseTimelineGoTo("m3.4", model)).toBeNull();
+        expect(parseTimelineGoTo("m3.40", model)).toBeNull();
     });
 });

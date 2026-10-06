@@ -512,7 +512,7 @@ export type TimelineGoTo =
 
 /**
  * Reads what a designer types in the transport's go-to box (UI-12), on the view axis:
- * - "m23" or "m23.3": measure 23 (count 3 of it);
+ * - "m23" or "m23.3": measure 23 (count 3 of it, which must be one the measure has);
  * - "p7", "pg 7" or "page 7": page 7;
  * - "C": rehearsal mark C (letters match marks first);
  * - "7" or "2A": the page with that name.
@@ -520,7 +520,7 @@ export type TimelineGoTo =
  */
 export const parseTimelineGoTo = (
     text: string,
-    model: Pick<TimelineViewModel, "pages" | "measures">,
+    model: Pick<TimelineViewModel, "beatCount" | "pages" | "measures">,
 ): TimelineGoTo | null => {
     const typed = text.trim().toLowerCase().replace(/\s+/g, "");
     if (!typed) return null;
@@ -534,13 +534,12 @@ export const parseTimelineGoTo = (
         );
         if (index < 0) return null;
         const start = sorted[index]!.atBeat;
-        const next = sorted[index + 1]?.atBeat;
-        const count = measure[2] ? Number(measure[2]) - 1 : 0;
-        const beat =
-            next === undefined
-                ? start + count
-                : Math.min(start + count, Math.max(start, next - 1));
-        return { kind: "beat", beat };
+        // The measure runs to the next one, or the last to the show's end
+        const length = (sorted[index + 1]?.atBeat ?? model.beatCount) - start;
+        const count = measure[2] ? Number(measure[2]) : 1;
+        // A count the measure doesn't have is a miss, not a guess (m23.0, m23.9 in 4/4)
+        if (count < 1 || count > length) return null;
+        return { kind: "beat", beat: start + count - 1 };
     }
     const pageOf = (name: string) =>
         model.pages.find((p) => String(p.label).toLowerCase() === name);
