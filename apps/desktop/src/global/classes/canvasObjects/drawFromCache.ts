@@ -1,5 +1,6 @@
 // cspell:ignore statefull
 import { fabric } from "fabric";
+import type { AtlasSlot, CacheAtlas } from "./cacheAtlas";
 
 /**
  * A playback frame without Fabric's per-object bookkeeping.
@@ -21,6 +22,9 @@ import { fabric } from "fabric";
  * zoom matches the canvas zoom and retina scale, and its size (and, for text, every
  * dimension-affecting property) is what it was when Fabric last validated the cache. Offscreen
  * culling follows Fabric's `skipOffscreen` rule on the object's bounding coords.
+ *
+ * With a `CacheAtlas`, the caches are drawn from copies in one shared canvas instead of one canvas
+ * each, which costs Chrome's GPU path much less (see `cacheAtlas.ts`).
  */
 
 /** What an object's cache was validated for, by a full Fabric render. */
@@ -187,23 +191,63 @@ const recordCache = (
     obj.__drawnFromCache = rec;
 };
 
+/** Per-frame scratch: each object's reusable cache (null: draw through Fabric) and atlas slot */
+const frameCaches: (HTMLCanvasElement | null)[] = [];
+const frameSlots: (AtlasSlot | null)[] = [];
+
+/**
+ * Finds the objects drawn from their caches this frame and, with an atlas, copies any cache that
+ * is new or changed into it first, so the atlas doesn't change between draws from it. If the atlas
+ * had to be refilled part way, the pass runs again, since the slots before the refill are gone.
+ */
+const prepareFrame = (
+    objects: readonly (fabric.Object | undefined)[],
+    zoom: number,
+    canvas: CanvasInternals,
+    atlas: CacheAtlas | null,
+) => {
+    frameCaches.length = objects.length;
+    frameSlots.length = objects.length;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const resets = atlas?.resets ?? 0;
+        for (let i = 0; i < objects.length; i++) {
+            const obj = objects[i] as CachedObject | undefined;
+            let cache: HTMLCanvasElement | null = null;
+            let slot: AtlasSlot | null = null;
+            if (obj && obj.visible && obj.opacity !== 0) {
+                cache = reusableCache(obj, zoom);
+                if (cache && atlas && !isOffscreen(obj, canvas))
+                    slot = atlas.slotFor(obj, cache);
+            }
+            frameCaches[i] = cache;
+            frameSlots[i] = slot;
+        }
+        if (!atlas || atlas.resets === resets) return;
+    }
+    // Still refilling: draw every cache from its own canvas this frame
+    frameSlots.fill(null);
+};
+
 /**
  * Draws `objects` in order onto `ctx`, which holds the viewport transform, as Fabric's
- * `_renderObjects` would, reusing valid object caches directly.
+ * `_renderObjects` would, reusing valid object caches directly, from their copies in `atlas` when
+ * given.
  */
 export function renderObjectsFromCaches(
     canvas: fabric.StaticCanvas,
     ctx: CanvasRenderingContext2D,
     objects: readonly (fabric.Object | undefined)[],
+    atlas: CacheAtlas | null = null,
 ): void {
     const internals = canvas as CanvasInternals;
     const zoom = canvas.getZoom() * internals.getRetinaScaling();
+    prepareFrame(objects, zoom, internals, atlas);
+    const atlasCanvas = atlas?.canvas;
 
-    for (const object of objects) {
-        if (!object) continue;
-        const obj = object as CachedObject;
-        if (!obj.visible || obj.opacity === 0) continue;
-        const cache = reusableCache(obj, zoom);
+    for (let i = 0; i < objects.length; i++) {
+        const obj = objects[i] as CachedObject | undefined;
+        if (!obj || !obj.visible || obj.opacity === 0) continue;
+        const cache = frameCaches[i];
         if (!cache) {
             obj.render(ctx);
             recordCache(obj, zoom, internals);
@@ -211,12 +255,33 @@ export function renderObjectsFromCaches(
         }
         if (isOffscreen(obj, internals)) continue;
         // The context calls Fabric's render makes for a cached object, in the same order, so the
-        // GPU composes the same matrices and the pixels match exactly
+        // GPU composes the same matrices and the pixels match
         ctx.save();
         ctx.transform(1, 0, 0, 1, obj.left!, obj.top!);
         ctx.globalAlpha *= obj.opacity!;
         ctx.scale(1 / obj.zoomX!, 1 / obj.zoomY!);
-        ctx.drawImage(cache, -obj.cacheTranslationX!, -obj.cacheTranslationY!);
+        const slot = frameSlots[i];
+        if (slot && atlasCanvas)
+            ctx.drawImage(
+                atlasCanvas,
+                slot.x,
+                slot.y,
+                slot.w,
+                slot.h,
+                -obj.cacheTranslationX!,
+                -obj.cacheTranslationY!,
+                slot.w,
+                slot.h,
+            );
+        else
+            ctx.drawImage(
+                cache,
+                -obj.cacheTranslationX!,
+                -obj.cacheTranslationY!,
+            );
         ctx.restore();
     }
+    // Don't hold on to the objects between frames
+    frameCaches.fill(null);
+    frameSlots.fill(null);
 }

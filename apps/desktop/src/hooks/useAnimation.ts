@@ -307,9 +307,11 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
-            if (liveCoordsStale && canvas)
+            if (liveCoordsStale && canvas) {
                 for (const marcher of canvas.getLiveCanvasMarchers())
                     marcher.setCoords();
+                canvas.endPlaybackFrames();
+            }
         };
     }, [
         isPlaying,

@@ -129,6 +129,41 @@ describe("OpenMarchCanvas.renderPlaybackFrame", () => {
         expect(result.differing).toBe(0);
     });
 
+    it("shows a cache that a normal render redrew between playback frames", () => {
+        const { canvas, marchers } = setup();
+        canvas.renderPlaybackFrame();
+        canvas.renderPlaybackFrame();
+        marchers[0]!.dotObject.set({ fill: "rgb(10, 200, 30)" });
+        // Fabric redraws the cache here, so the playback frame finds it clean
+        canvas.renderAll();
+        const expected = pixels(canvas);
+        canvas.renderPlaybackFrame();
+        expect(pixels(canvas)).toEqual(expected);
+    });
+
+    it("draws every marcher and label from the shared atlas", () => {
+        const { canvas, marchers } = setup();
+        canvas.renderPlaybackFrame();
+        canvas.renderPlaybackFrame();
+        for (const m of marchers) {
+            expect(
+                (m as unknown as { __atlasSlot?: unknown }).__atlasSlot,
+            ).toBeTruthy();
+            expect(
+                (m.textLabel as unknown as { __atlasSlot?: unknown })
+                    .__atlasSlot,
+            ).toBeTruthy();
+        }
+    });
+
+    it("draws the same after the atlas is freed and refilled", () => {
+        const { canvas, marchers } = setup();
+        canvas.renderPlaybackFrame();
+        canvas.endPlaybackFrames();
+        marchers[2]!.setLiveCoordinates({ x: 77.7, y: 33.3 });
+        expect(compare(canvas).differing).toBe(0);
+    });
+
     it("hides what renderAll hides, and culls offscreen objects", () => {
         const { canvas, marchers } = setup();
         canvas.renderPlaybackFrame();
