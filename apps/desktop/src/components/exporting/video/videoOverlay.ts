@@ -1,4 +1,5 @@
 import Measure from "@/global/classes/Measure";
+import type Beat from "@/global/classes/Beat";
 import Page from "@/global/classes/Page";
 import { recolorMarcherIconSvg } from "@/assets/open-march-marcher";
 import { getVideoThemeColors, type VideoTheme } from "./videoTheme";
@@ -64,6 +65,7 @@ export interface OverlayFormatBounds {
     countDigits: number;
     measureDigits: number;
     clockMinuteDigits: number;
+    /** Characters of the widest tempo, such as 5 for "152.5" */
     tempoDigits: number;
     /** Max digit length of page number portions (e.g. "12" in "12A") */
     setNumberDigits: number;
@@ -83,6 +85,7 @@ export interface OverlayState {
     measureNumber: number | null;
     /** Most recent rehearsal mark at or before the current measure */
     rehearsalMark: string | null;
+    /** The tempo the current beat is counted at (`countTempoBpm`) */
     tempoBpm: number | null;
     timeSeconds: number;
     totalSeconds: number;
@@ -162,10 +165,15 @@ export class OverlayTimeline {
             }
         }
 
-        // Tempo from the beat currently sounding
+        // Tempo from the beat currently sounding, at its measure's count tempo
         const currentBeat = page.beats[count - 1];
-        const tempoBpm = currentBeat?.duration
-            ? Math.round(60 / currentBeat.duration)
+        const tempoBpm = currentBeat
+            ? countTempoBpm(
+                  currentBeat,
+                  measure && measure.timestamp <= timeSeconds
+                      ? measure
+                      : undefined,
+              )
             : null;
 
         return {
@@ -187,6 +195,73 @@ export class OverlayTimeline {
             formatBounds: this.formatBounds,
         };
     }
+}
+
+/** Two beat durations closer than this are the same length */
+const SAME_DURATION_SECONDS = 1e-6;
+
+/**
+ * The short beat's length when a measure is mixed meter, such as 7/8 as 2+2+3: exactly two beat
+ * lengths, the long one 1.5 times the short one (as `measureIsMixedMeter` in TempoGroup.ts decides
+ * it). Null otherwise.
+ */
+function mixedMeterShortBeat(beats: readonly Beat[]): number | null {
+    const lengths: number[] = [];
+    for (const beat of beats)
+        if (
+            !lengths.some(
+                (length) =>
+                    Math.abs(length - beat.duration) < SAME_DURATION_SECONDS,
+            )
+        )
+            lengths.push(beat.duration);
+    if (lengths.length !== 2) return null;
+    const short = Math.min(...lengths);
+    const long = Math.max(...lengths);
+    return short > 0 && Math.abs(long / short - 1.5) < 1e-3 ? short : null;
+}
+
+/**
+ * The tempo a beat is counted at, in beats per minute, to two decimals so an exact tempo such as
+ * 152.5 shows as itself. In a mixed-meter measure every beat reads the short beat's tempo, as the
+ * tempo is written (♩=176 for 7/8 as 2+2+3), so the long beat doesn't make it jump. Null for a
+ * beat with no length.
+ */
+export function countTempoBpm(
+    beat: Beat,
+    measure: Measure | undefined,
+): number | null {
+    if (!(beat.duration > 0)) return null;
+    const inMeasure = measure?.beats?.some(
+        (other) => other === beat || other.id === beat.id,
+    );
+    const short = inMeasure ? mixedMeterShortBeat(measure!.beats) : null;
+    return Math.round((60 / (short ?? beat.duration)) * 100) / 100;
+}
+
+/** A tempo as the overlay writes it: "152.5", "176", "117.33" */
+export function formatTempo(bpm: number): string {
+    return String(Math.round(bpm * 100) / 100);
+}
+
+/** The widest tempo the show's overlay can write, in characters (at least 3, as "120") */
+function maxTempoChars(pages: Page[], measures: Measure[]): number {
+    const sorted = [...measures].sort((a, b) => a.timestamp - b.timestamp);
+    let widest = 3;
+    let cursor = -1;
+    const beats = pages
+        .flatMap((page) => page.beats)
+        .sort((a, b) => a.timestamp - b.timestamp);
+    for (const beat of beats) {
+        while (
+            cursor < sorted.length - 1 &&
+            sorted[cursor + 1].timestamp <= beat.timestamp
+        )
+            cursor++;
+        const bpm = countTempoBpm(beat, sorted[cursor]);
+        if (bpm != null) widest = Math.max(widest, formatTempo(bpm).length);
+    }
+    return widest;
 }
 
 export function computeFormatBounds(
@@ -222,7 +297,7 @@ export function computeFormatBounds(
         countDigits,
         measureDigits,
         clockMinuteDigits,
-        tempoDigits: 3,
+        tempoDigits: maxTempoChars(pages, measures),
         setNumberDigits,
         setSuffixChars: Math.min(setSuffixChars, 2),
     };
@@ -367,7 +442,7 @@ export function buildOverlaySegments(
     }
     if (options.showTempo && state.tempoBpm !== null) {
         segments.push({
-            text: `${padIntegerSpaced(state.tempoBpm, tempoDigits)} bpm`,
+            text: `${formatTempo(state.tempoBpm).padStart(tempoDigits, " ")} bpm`,
             layoutText: `${digitTemplate(tempoDigits)} bpm`,
             bold: false,
         });
