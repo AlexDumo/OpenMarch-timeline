@@ -16,10 +16,15 @@ import {
 
 interface UseAnimationProps {
     canvas: OpenMarchCanvas | null;
+    /**
+     * Timeline mode: called each playback frame with the live beat, before the frame renders, to
+     * style the marchers there (`useTimelineAppearance`)
+     */
+    onTimelineBeat?: (beat: number) => unknown;
 }
 
 // eslint-disable-next-line max-lines-per-function
-export const useAnimation = ({ canvas }: UseAnimationProps) => {
+export const useAnimation = ({ canvas, onTimelineBeat }: UseAnimationProps) => {
     const { pages, beats } = useTimingObjects()!;
     const timelineMode = useTimelineMode();
     const pagesById: Record<number, Page> = useMemo(() => {
@@ -206,8 +211,9 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
             if (!canvas) return;
             const buffer = (timelineBufferRef.current ??=
                 new TimelinePositionBuffer());
+            const beat = playbackBeat(beats, timeMilliseconds);
             // Not ready (or rebuilding with a new marcher count): leave marchers where they are
-            if (buffer.fill(playbackBeat(beats, timeMilliseconds))) {
+            if (buffer.fill(beat)) {
                 const coords = { x: 0, y: 0 };
                 buffer.forEachMarcher(
                     canvas.getCanvasMarchers(),
@@ -218,12 +224,13 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
                     },
                 );
             }
+            onTimelineBeat?.(beat);
             canvas.requestRenderAll();
             // The resolver has a position at every beat; the end of the show stops playback
             // through useTimelinePlaybackDriver (UI-9)
             return true;
         },
-        [canvas, beats],
+        [canvas, beats, onTimelineBeat],
     );
 
     const setMarcherPositionsAtTime = timelineMode
