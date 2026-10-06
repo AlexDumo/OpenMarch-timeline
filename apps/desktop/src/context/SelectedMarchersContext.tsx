@@ -12,6 +12,13 @@ import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { useSelectedPage } from "./SelectedPageContext";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { appearanceIsHidden } from "@/entity-components/appearance";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { useMarcherAppearanceSteps } from "@/hooks/useMarcherAppearanceSteps";
+import { hiddenMarcherIdsAtBeat } from "@/services/appearance/appearanceSteps";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 
 // Define the type for the context value
 type SelectedMarcherContextProps = {
@@ -40,11 +47,21 @@ export function SelectedMarchersProvider({
     const selectedPageContext = useSelectedPage();
     const selectedPage = selectedPageContext?.selectedPage ?? null;
     const queryClient = useQueryClient();
+    // Hidden marchers can't be selected. Page mode reads the selected page's appearances; timeline
+    // mode samples the appearance steps at the beat the paused canvas shows, as the canvas draws
+    // them (UI-9, `useTimelineAppearance`)
+    const timelineMode = useTimelineMode();
     const { data: marcherAppearances } = useQuery({
         ...marcherAppearancesQueryOptions(selectedPage?.id, queryClient),
-        enabled: selectedPage !== null,
+        enabled: selectedPage !== null && !timelineMode,
     });
+    const appearanceSteps = useMarcherAppearanceSteps(timelineMode);
+    const beat = useTimelineSelectionStore(displayedBeat);
     const hiddenMarcherIds: Set<number> = useMemo(() => {
+        if (timelineMode)
+            return appearanceSteps
+                ? hiddenMarcherIdsAtBeat(appearanceSteps, beat)
+                : new Set();
         if (marcherAppearances == null) return new Set();
         const hiddenMarcherIds = new Set(
             Object.entries(marcherAppearances)
@@ -54,7 +71,7 @@ export function SelectedMarchersProvider({
                 .map((marcherAppearance) => parseInt(marcherAppearance[0])),
         );
         return hiddenMarcherIds;
-    }, [marcherAppearances]);
+    }, [timelineMode, appearanceSteps, beat, marcherAppearances]);
 
     // Update the selected marcher if the marchers list changes. This refreshes the information of the selected marcher
     useEffect(() => {
