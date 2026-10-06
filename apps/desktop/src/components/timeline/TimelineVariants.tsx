@@ -75,8 +75,8 @@ const NO_PEAKS: readonly (readonly number[])[] = [];
 const APPEND_COUNTS_WIDTH = 84;
 const APPEND_COUNTS_ROOM = APPEND_COUNTS_WIDTH + 16;
 
-/** The room kept after the last count for the note that the music runs on (E1) */
-const MUSIC_PAST_END_NOTE_WIDTH = 440;
+/** About how wide the note that the music runs on is, and the room kept for it (E1) */
+const MUSIC_PAST_END_NOTE_WIDTH = 420;
 
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
@@ -504,7 +504,12 @@ function TimelineSurface({
         pixelsPerBeat,
         beatCount: model.beatCount + peaksPastEnd.length,
         leadingInset: initialPageWidth,
-        trailingInset: props.appendCounts ? APPEND_COUNTS_ROOM : 0,
+        // Fitted, the note and its Extend button stay in view
+        trailingInset: props.musicPastEnd
+            ? MUSIC_PAST_END_NOTE_WIDTH
+            : props.appendCounts
+              ? APPEND_COUNTS_ROOM
+              : 0,
         playheadBeat: positionBeat,
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
         fitted: props.zoomFitted,
@@ -535,14 +540,11 @@ function TimelineSurface({
             : atFlag;
     })();
     const showAppendCounts = props.appendCounts != null && !props.isPlaying;
-    // The note sits in the waveform lane past the last count; compact, the lane is too thin, so
-    // it sits in the top row, after **+ N counts** when that is at the end too
-    const musicNoteTop = expanded ? audioTop + (waveformHeight - 22) / 2 : 4;
+    // The note sits in the top row past the last count, over no page boxes and clear of the
+    // music drawn below it, after **+ N counts** when that is at the end too
     const musicNoteLeft =
         initialPageWidth +
-        (!expanded &&
-        showAppendCounts &&
-        appendCountsX + APPEND_COUNTS_WIDTH > width
+        (showAppendCounts && appendCountsX + APPEND_COUNTS_WIDTH > width
             ? appendCountsX + APPEND_COUNTS_WIDTH + 8
             : width + 8);
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
@@ -923,7 +925,7 @@ function TimelineSurface({
                     <div
                         data-testid="timeline-music-past-end"
                         className="border-stroke bg-bg-1 text-text rounded-6 absolute z-[55] flex h-22 items-center gap-8 border px-8 text-[11px] whitespace-nowrap shadow-sm"
-                        style={{ left: musicNoteLeft, top: musicNoteTop }}
+                        style={{ left: musicNoteLeft, top: 3 }}
                     >
                         <span>{props.musicPastEnd.message}</span>
                         <button

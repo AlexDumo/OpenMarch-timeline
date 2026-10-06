@@ -9,6 +9,7 @@ import {
     measuresToCoverAudio,
     musicEndSeconds,
     musicRunsPastCounts,
+    MUSIC_END_TOLERANCE_SECONDS,
 } from "../showLength";
 import { waveformWithPastEnd, WAVEFORM_FLOOR_DB } from "../timelineWaveform";
 
@@ -133,6 +134,16 @@ describe("countsToReach", () => {
         ).toBe(222);
     });
 
+    it("doesn't add a measure for the last few milliseconds of the music", () => {
+        expect(
+            countsToReach({
+                continuation: fourFour,
+                endSeconds: 40,
+                untilSeconds: 40.004,
+            }),
+        ).toBe(0);
+    });
+
     it("adds nothing when the show is long enough", () => {
         expect(
             countsToReach({
@@ -178,9 +189,13 @@ describe("countsToReach", () => {
                             endSeconds,
                         );
                     let fewest = 0;
-                    while (timeAfter(fewest) < untilSeconds - 1e-6) fewest++;
+                    while (
+                        timeAfter(fewest) <
+                        untilSeconds - MUSIC_END_TOLERANCE_SECONDS
+                    )
+                        fewest++;
                     expect(timeAfter(k)).toBeGreaterThanOrEqual(
-                        untilSeconds - 1e-6,
+                        untilSeconds - MUSIC_END_TOLERANCE_SECONDS,
                     );
                     expect(k).toBeGreaterThanOrEqual(fewest);
                     if (!continuation.measured || fewest === 0)

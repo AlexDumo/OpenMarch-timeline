@@ -17,6 +17,13 @@ export const FALLBACK_BEAT_DURATION = 0.5;
 /** The fewest counts a show without measures starts with (8 pages of 16, the wizard's Skip) */
 export const MIN_SHOW_COUNTS = 128;
 
+/**
+ * How far short of the end of the music the counts may end and still reach it: the music's end
+ * is only known to an envelope slot (5 ms), and a float sum over hundreds of counts lands a hair
+ * off an exact end. Far less than any count.
+ */
+export const MUSIC_END_TOLERANCE_SECONDS = 0.05;
+
 /** How the counts after a show's last count go on: its last tempo and its last measure's meter. */
 export interface CountContinuation {
     /** Whether the show has measures, so appended counts get measure lines */
@@ -97,15 +104,17 @@ export function countsToReach({
     continuation,
     endSeconds,
     untilSeconds,
+    toleranceSeconds = MUSIC_END_TOLERANCE_SECONDS,
     maxCounts = 20_000,
 }: {
     continuation: CountContinuation;
     endSeconds: number;
     untilSeconds: number;
+    /** How far short of `untilSeconds` the show may end and still reach it */
+    toleranceSeconds?: number;
     maxCounts?: number;
 }): number {
-    // A float sum over hundreds of counts lands a hair short of an exact end
-    const target = untilSeconds - 1e-6;
+    const target = untilSeconds - toleranceSeconds;
     let time = endSeconds;
     let k = 0;
     while (time < target && k < maxCounts) time += continuation.durationAt(k++);
