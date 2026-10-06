@@ -13,6 +13,7 @@ import { transactionWithHistory } from "./history";
 import { readPageGrid, sameGrid } from "./timelineRipple";
 import type { DbConnection, DbTransaction } from "./types";
 import { updateWorkspaceSettingsWithHistoryInTransaction } from "./workspaceSettings";
+import type { WorkspaceSettings } from "@/settings/workspaceSettings";
 
 /** A retime the write path refused. `code` says why. */
 export class TempoWriteError extends Error {
@@ -81,7 +82,14 @@ export interface RetimeBeatsArgs {
     originShift?: number;
     /** Replaces the synced beat ids (`tempoSyncedBeatIds`) in the same undo entry. */
     syncedBeatIds?: readonly number[];
+    /** Replaces the tempo map's typed rows (`tempoMapMarks`) in the same undo entry. */
+    tempoMapMarks?: TempoMapMarkSetting[];
 }
+
+/** A tempo map row as stored in the workspace settings. */
+export type TempoMapMarkSetting = NonNullable<
+    WorkspaceSettings["tempoMapMarks"]
+>[number];
 
 const entriesOf = (
     m: RetimeBeatsArgs["newDurationsByBeatId"],
@@ -103,6 +111,7 @@ export async function retimeBeatsInTransaction({
     newDurationsByBeatId,
     originShift = 0,
     syncedBeatIds,
+    tempoMapMarks,
 }: RetimeBeatsArgs & { tx: DbTransaction }): Promise<number[]> {
     const before = await readPageGrid(tx);
     const current = await readCountDurationsInTransaction(tx);
@@ -147,9 +156,16 @@ export async function retimeBeatsInTransaction({
             "bad-duration",
             `count 1 can't move by ${originShift} seconds`,
         );
-    if (originShift !== 0 || syncedBeatIds !== undefined) {
+    if (
+        originShift !== 0 ||
+        syncedBeatIds !== undefined ||
+        tempoMapMarks !== undefined
+    ) {
         const known = new Set(current.beatIds);
         const synced = syncedBeatIds?.filter((id) => known.has(id));
+        const marks = tempoMapMarks
+            ?.filter((m) => known.has(m.beatId))
+            .sort((a, b) => a.beatId - b.beatId);
         await updateWorkspaceSettingsWithHistoryInTransaction({
             tx,
             update: (s) => ({
@@ -162,6 +178,7 @@ export async function retimeBeatsInTransaction({
                               (a, b) => a - b,
                           ),
                       }),
+                ...(marks === undefined ? {} : { tempoMapMarks: marks }),
             }),
         });
     }
@@ -190,8 +207,9 @@ async function retimeChangesAnything({
     newDurationsByBeatId,
     originShift = 0,
     syncedBeatIds,
+    tempoMapMarks,
 }: RetimeBeatsArgs & { db: DbConnection }): Promise<boolean> {
-    if (originShift !== 0) return true;
+    if (originShift !== 0 || tempoMapMarks !== undefined) return true;
     const current = await readCountDurationsInTransaction(db);
     const durationOf = new Map(
         current.beatIds.map((id, i) => [id, current.durations[i]]),
