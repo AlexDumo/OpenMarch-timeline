@@ -5,9 +5,9 @@
  * with `?view=3d` and gets its own read-only preload (`preload/view3d.ts`).
  *
  * Sync (ADR 0002 D-4): main relays the editor's clock, selection and
- * invalidations to the window, and the window's `hello` and venue-change
- * requests to the editor, without reading the payloads. It tells the editor
- * whether the window is open with `view3d:window-state`.
+ * invalidations to the window, and the window's `hello`, venue-change and
+ * playback requests to the editor, without reading the payloads. It tells
+ * the editor whether the window is open with `view3d:window-state`.
  */
 import { BrowserWindow, ipcMain, shell } from "electron";
 import { basename, extname } from "node:path";
@@ -15,6 +15,7 @@ import * as DatabaseServices from "../database/database.services";
 import { isReadOnlySql, isView3dSqlReadMethod } from "./view3dSql";
 import {
     VIEW3D_HELLO_CHANNEL,
+    VIEW3D_PLAYBACK_REQUEST_CHANNEL,
     VIEW3D_PUBLISH_CHANNELS,
     VIEW3D_VENUE_CHANGE_REQUEST_CHANNEL,
     VIEW3D_WINDOW_STATE_CHANNEL,
@@ -106,7 +107,14 @@ function sendWindowState(open: boolean) {
 export function initView3dWindow(windowConfig: View3dWindowConfig) {
     config = windowConfig;
 
-    ipcMain.handle("view3d:open", () => openView3dWindow());
+    ipcMain.handle("view3d:open", (_event, options: unknown) =>
+        openView3dWindow({
+            background:
+                typeof options === "object" &&
+                options !== null &&
+                (options as { background?: unknown }).background === true,
+        }),
+    );
     ipcMain.handle("view3d:sql-read", handleSqlRead);
 
     // Editor → window: clock, selection and invalidate, relayed as they are.
@@ -125,17 +133,17 @@ export function initView3dWindow(windowConfig: View3dWindowConfig) {
         getEditorWebContents()?.send(VIEW3D_HELLO_CHANNEL);
     });
 
-    // Window → editor: the editor validates and writes the settings.
-    ipcMain.on(
+    // Window → editor: the editor validates and writes the settings, or
+    // checks and runs the playback action.
+    for (const channel of [
         VIEW3D_VENUE_CHANGE_REQUEST_CHANNEL,
-        (event, payload: unknown) => {
+        VIEW3D_PLAYBACK_REQUEST_CHANNEL,
+    ]) {
+        ipcMain.on(channel, (event, payload: unknown) => {
             if (!isView3dSender(event.sender)) return;
-            getEditorWebContents()?.send(
-                VIEW3D_VENUE_CHANGE_REQUEST_CHANNEL,
-                payload,
-            );
-        },
-    );
+            getEditorWebContents()?.send(channel, payload);
+        });
+    }
 }
 
 function buildQuery(): Record<string, string> {
@@ -151,12 +159,19 @@ function buildQuery(): Record<string, string> {
 /**
  * Opens the 3D View window, or focuses it if it's already open.
  *
+ * With `background`, used when the app opens it with a show, a new window
+ * shows without taking focus from the editor, and an open one is left as
+ * it is.
+ *
  * @returns false when no show is open, so there is nothing to show.
  */
-export function openView3dWindow(): boolean {
+export function openView3dWindow({
+    background = false,
+}: { background?: boolean } = {}): boolean {
     if (!config || !DatabaseServices.databaseIsReady()) return false;
 
     if (view3dWindow && !view3dWindow.isDestroyed()) {
+        if (background) return true;
         if (view3dWindow.isMinimized()) view3dWindow.restore();
         view3dWindow.show();
         view3dWindow.focus();
@@ -175,6 +190,7 @@ export function openView3dWindow(): boolean {
         minWidth: 640,
         minHeight: 400,
         backgroundColor: colors.color,
+        show: !background,
         autoHideMenuBar: true,
         frame: config.frame,
         titleBarStyle: "hidden",
@@ -194,6 +210,7 @@ export function openView3dWindow(): boolean {
         },
     });
     view3dWindow = created;
+    if (background) created.once("ready-to-show", () => created.showInactive());
 
     created.on("closed", () => {
         if (view3dWindow === created) view3dWindow = null;

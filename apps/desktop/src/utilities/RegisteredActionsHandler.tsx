@@ -36,6 +36,7 @@ import { requestOpenNewShowDialog } from "@/utilities/openNewShowDialog";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
 import { AlertDialogAction, AlertDialogCancel, Button } from "@openmarch/ui";
 import { CircleNotchIcon } from "@phosphor-icons/react";
+import { isView3dPlaybackAction } from "@/view3d/sync/protocol";
 
 /**
  * The interface for the registered actions. This exists so it is easy to see what actions are available.
@@ -1507,6 +1508,21 @@ function RegisteredActionsHandler() {
             window.removeEventListener("keydown", handleKeyDown);
         };
     }, [handleKeyDown]);
+
+    /**
+     * Playback buttons and shortcuts in the 3D View window run the same
+     * actions as the editor's own (ADR 0002 D-4, `view3d:playback-request`).
+     */
+    const triggerActionRef = useRef(triggerAction);
+    triggerActionRef.current = triggerAction;
+    useEffect(() => {
+        if (!window.electron?.onView3dPlaybackRequest) return;
+        return window.electron.onView3dPlaybackRequest((request) => {
+            if (isView3dPlaybackAction(request?.action)) {
+                triggerActionRef.current(RegisteredActionsEnum[request.action]);
+            }
+        });
+    }, []);
 
     /**
      * Register the button refs for the keyboard shortcuts

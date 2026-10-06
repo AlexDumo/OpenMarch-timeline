@@ -3,7 +3,11 @@
  * `window.view3d.requestVenueChange` (ui.md UI-2). The editor validates them
  * again and saves them with undo.
  */
-import type { LightingPreset, VenueKitId } from "@/view3d/core/types";
+import type {
+    LightingPreset,
+    VenueKitId,
+    VenueParams,
+} from "@/view3d/core/types";
 import {
     lightingForKit,
     parseVenueSettings,
@@ -13,7 +17,8 @@ import {
 export type VenueChange =
     | { kind: "kit"; kit: VenueKitId }
     | { kind: "lighting"; lighting: LightingPreset }
-    | { kind: "crowd"; crowd: boolean };
+    | { kind: "crowd"; crowd: boolean }
+    | { kind: "params"; params: Partial<VenueParams> };
 
 /**
  * Applies one change to the current settings and validates the result.
@@ -40,10 +45,23 @@ export function applyVenueChange(
             });
         case "crowd":
             return parseVenueSettings({ ...current, crowd: change.crowd });
+        case "params":
+            return parseVenueSettings({
+                ...current,
+                params: { ...current.params, ...change.params },
+            });
     }
 }
 
 /** True when the settings differ in anything the overlay can change. */
 export function venueChanged(a: VenueSettings, b: VenueSettings): boolean {
-    return a.kit !== b.kit || a.lighting !== b.lighting || a.crowd !== b.crowd;
+    return (
+        a.kit !== b.kit ||
+        a.lighting !== b.lighting ||
+        a.crowd !== b.crowd ||
+        a.params.homeColor !== b.params.homeColor ||
+        a.params.awayColor !== b.params.awayColor ||
+        a.params.endZoneText !== b.params.endZoneText ||
+        a.params.endZoneColor !== b.params.endZoneColor
+    );
 }

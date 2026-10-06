@@ -2,14 +2,16 @@
 /**
  * 3D View end to end (ADR 0002 Verification, docs/3d P4.3): open the window
  * from the editor; play, pause and seek in the editor and check the window's
- * show time follows within 50 ms; change the venue from the window, undo and
- * redo it in the editor, and check it persists after reopening the show; and
+ * show time follows within 50 ms; step and play from the window's buttons
+ * and keys; change the venue from the window's settings panel, undo and redo
+ * it in the editor, and check it persists after reopening the show; and
  * check the window makes no network requests.
  *
  * Headless CI may have no WebGL. The window then shows a fallback message
  * instead of the scene, so the sync and venue checks read the overlay's DOM
- * (the readout and the venue and lighting pickers), and the scene wrapper's
- * `data-kit` / `data-lighting` are checked only when WebGL is available.
+ * (the readout and the settings panel's venue and lighting pickers), and the
+ * scene wrapper's `data-kit` / `data-lighting` are checked only when WebGL is
+ * available.
  */
 import { test } from "../fixtures.mjs";
 import { expect, type Page } from "playwright/test";
@@ -263,6 +265,9 @@ async function openView3d(
     await expect(view3d.getByTestId("view3d-overlay")).toBeVisible({
         timeout: 20_000,
     });
+    // The venue and lighting pickers live in the settings panel.
+    await view3d.getByTestId("view3d-settings-button").click();
+    await expect(view3d.getByTestId("view3d-settings")).toBeVisible();
     return view3d;
 }
 
@@ -395,7 +400,32 @@ test("3D View follows the editor and saves the venue", async ({
     await expectWindowPage(view3d, "2");
     await expectPausedInSync(editor, view3d);
 
-    // Venue and lighting from the window's overlay.
+    // Playback from the window: its buttons and the editor's shortcuts run
+    // the editor's own actions, and the window follows the result.
+    await view3d.getByTestId("view3d-next-page").click();
+    await expectWindowPage(view3d, "3");
+    await expect(view3d.getByTestId("view3d-next-page")).toBeDisabled();
+    await view3d.getByTestId("view3d-previous-page").click();
+    await expectWindowPage(view3d, "2");
+    await view3d.keyboard.press("Shift+KeyQ");
+    await expectWindowPage(view3d, "0");
+    await view3d.keyboard.press("Shift+KeyE");
+    await expectWindowPage(view3d, "3");
+    await view3d.keyboard.press("KeyQ");
+    await expectWindowPage(view3d, "2");
+    await expectPausedInSync(editor, view3d);
+    // Space plays and pauses, even with a window button focused.
+    await view3d.keyboard.press("Space");
+    await expect(view3d.getByTestId("view3d-sync-readout")).toHaveAttribute(
+        "data-playing",
+        "true",
+    );
+    await view3d.keyboard.press("Space");
+    await expectPausedInSync(editor, view3d);
+    await selectPage(editor, "2");
+    await expectWindowPage(view3d, "2");
+
+    // Venue and lighting from the window's settings panel.
     const initialKit = (await pickerValue(view3d, "view3d-venue-picker"))!;
     const initialLighting = (await pickerValue(
         view3d,

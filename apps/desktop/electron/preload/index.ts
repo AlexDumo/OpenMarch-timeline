@@ -25,6 +25,7 @@ import type { HistoryResponse } from "@/db-functions";
 // View preload.
 import type {
     View3dPayloads,
+    View3dPlaybackRequest,
     View3dPublishChannel,
     View3dVenueChangeRequest,
 } from "../../src/view3d/sync/protocol";
@@ -299,8 +300,13 @@ const APP_API = {
     },
 
     // 3D View
-    /** Opens the 3D View window, or focuses it. Resolves false when no show is open. */
-    openView3d: () => ipcRenderer.invoke("view3d:open") as Promise<boolean>,
+    /**
+     * Opens the 3D View window, or focuses it. With `background`, it opens
+     * without taking focus and leaves an open window alone. Resolves false
+     * when no show is open.
+     */
+    openView3d: (options?: { background?: boolean }) =>
+        ipcRenderer.invoke("view3d:open", options) as Promise<boolean>,
     /** Sends a clock, selection or invalidate to the 3D View, through main. */
     publishToView3d: <C extends View3dPublishChannel>(
         channel: C,
@@ -338,6 +344,19 @@ const APP_API = {
         ipcRenderer.on("view3d:venue-change-request", listener);
         return () => {
             ipcRenderer.removeListener("view3d:venue-change-request", listener);
+        };
+    },
+    /** The 3D View asks for a playback action. The payload is unchecked. */
+    onView3dPlaybackRequest: (
+        callback: (request: View3dPlaybackRequest) => void,
+    ) => {
+        const listener = (
+            _event: IpcRendererEvent,
+            request: View3dPlaybackRequest,
+        ) => callback(request);
+        ipcRenderer.on("view3d:playback-request", listener);
+        return () => {
+            ipcRenderer.removeListener("view3d:playback-request", listener);
         };
     },
 

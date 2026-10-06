@@ -16,25 +16,22 @@ with `packages/ui` components, not with the demo's CSS.
 
 ## UI-2 Layout
 
-Everything floats over a full-window canvas.
+Everything floats over a full-window canvas. The scene gets the space: only
+the controls used while watching stay on screen, and choices made once per
+show or per computer live in the settings panel (UI-7). Revised 2026-10-05,
+replacing the first layout's venue and lighting bars and the wide camera bar.
 
-- **Top left: venue picker.** Shows the kit names: High school, Big high
-  school, College bowl, Pro dome, Indoor gym, Field only. Use a segmented
-  control when it fits and a Select when the window is narrow. Changing it
-  sends a venue-change request. The editor saves it with undo, so Ctrl+Z in the
-  editor reverts it.
-- **Top right:**
-  - lighting presets for the current kit (segmented);
-  - Crowd toggle (`Users` icon);
-  - Fullscreen (`CornersOut` icon).
-
-  Lighting and crowd are saved with the show, through the same request.
-
-- **Bottom: camera bar.** The kit's named cameras, then "Pick a seat"
-  (`Armchair` icon).
-- **Bottom left: readout.** Set (page) name and count, from the selection and
-  clock. A second line shows eye height and distance to the field center, in
-  the field's measurement system (feet or meters).
+- **Top left: camera.** One menu button (`VideoCamera` icon) names the
+  current camera, or "Free view" after orbiting. It lists the kit's named
+  cameras with their number keys; choosing the current one again flies back
+  to it. "Pick a seat" (`Armchair` icon) sits beside it, in kits with stands.
+- **Top right:** Fullscreen (`CornersOut` icon) and View settings (`GearSix`
+  icon), which opens the settings panel under them.
+- **Bottom left: playback, then the readout.**
+  - Previous page, Play or Pause, Next page (UI-4).
+  - The readout: set (page) name and count, from the selection and clock. A
+    second line shows eye height and distance to the field center, in the
+    field's measurement system (feet or meters).
 - **Styling:**
   - Floating panels use the existing overlay pattern (`border-stroke`,
     `bg-modal`, `backdrop-blur-32`, `rounded-6`, `shadow-modal`).
@@ -62,30 +59,71 @@ Everything floats over a full-window canvas.
 - **Top-down** matches the 2D canvas orientation: front at the bottom, side 1
   on the left.
 - **Keyboard:**
-  - 1–9 select cameras in bar order;
+  - 1–9 select cameras in menu order;
   - F toggles fullscreen;
   - C toggles the crowd;
-  - Esc cancels pick-a-seat or exits fullscreen.
+  - Esc cancels pick-a-seat, else closes the settings panel, else exits
+    fullscreen.
 
 ## UI-4 Following the editor
 
 - Performers move with the editor's playback. When paused, they hold the
   selected page's positions, like the 2D canvas.
-- The window has no play controls in the MVP. The editor drives it.
+- The editor owns playback. The window's playback buttons and keys ask the
+  editor to run its own action (`view3d:playback-request`, ADR 0002 D-4), so
+  they behave exactly like the editor's timeline buttons, including being
+  disabled while playing or at the first or last page. The window follows the
+  clock and selection the editor then sends. This lets a designer present
+  from the 3D View, for example on a projector, without reaching for the
+  editor.
+- **Keys**, the editor's own: Space plays or pauses; Q and E go to the
+  previous and next page; Shift+Q and Shift+E go to the first and last page.
+  Space works even when a window button has focus, so a click never steals
+  it; it doesn't apply in text fields or an open menu.
 - Selected marchers show an accent ring.
 - If the editor closes the show, the window closes.
 
 ## UI-5 Fullscreen (projector mode)
 
 - Fullscreen hides the overlay after 3 seconds without pointer movement, and
-  shows it again on movement. The readout stays visible, larger, in the
-  bottom-left.
+  shows it again on movement. It doesn't hide while the settings panel is
+  open. The readout stays visible, larger, in the bottom-left.
 
 ## UI-6 Strings
 
 All strings go through Tolgee under `view3d.*`, for example
 `view3d.camera.pressBox`, `view3d.kit.pro` and `view3d.lighting.roofClosed`.
 Add the English values to `apps/desktop/i18n/en.json`.
+
+## UI-7 Settings panel
+
+The View settings button opens a panel at the top right, under the button.
+It doesn't block the scene, so the viewer can orbit while trying a look; the
+X, the button again or Esc close it. It has three sections:
+
+- **This show**: the venue, saved in the show file and undoable in the
+  editor (the hint says so):
+  - the venue kits, two per row;
+  - the kit's lighting presets;
+  - in kits with stands: a Crowd switch and, while the crowd shows, the
+    home and visitors colors it wears (`params.homeColor`, `awayColor`);
+  - except in the gym: the end-zone lettering and its color
+    (`params.endZoneText`, `endZoneColor`). The text saves on Enter or when
+    focus leaves, and each color when its picker closes, so one edit is one
+    undo step. Empty text means no lettering.
+- **This computer**: graphics, saved in the window's local storage, never
+  in the show. Quality is Automatic (default), Low or High. Automatic starts on
+  High and drops to Low once when frames are slow (P5.1); a hint then says
+  so. Low and High are fixed. The fidelity brief's later Graphics work
+  (Medium, Advanced rows) extends this section.
+- **Keyboard and mouse**: every key and pointer gesture the window knows.
+
+## UI-8 Opening with the show
+
+The editor's Settings > General has "Open 3D View when a show opens" (app
+setting `view3dAutoOpen`, off by default). When it's on, the editor opens the
+window each time it loads a show, including at app launch, without taking
+focus from the editor.
 
 ## Not in the MVP
 

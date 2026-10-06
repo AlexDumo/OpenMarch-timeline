@@ -1,66 +1,97 @@
 /**
- * The 3D View window's overlay (ui.md UI-2, UI-5, UI-6), floating over the
- * scene:
+ * The 3D View window's overlay (ui.md UI-2, UI-4, UI-5, UI-6), floating over
+ * the scene:
  *
- * - top left: the venue picker;
- * - top right: lighting, crowd and fullscreen;
- * - bottom: the readout, then the camera bar.
+ * - top left: the camera menu and Pick a seat;
+ * - top right: fullscreen and the settings button, with the settings panel
+ *   under them when open;
+ * - bottom left: playback controls, then the readout.
  *
  * In fullscreen, everything but the readout hides after 3 s without pointer
- * movement, and the readout grows. F toggles fullscreen and C the crowd; the
- * camera rig (P3.2) owns 1–9 and Esc for pick-a-seat.
+ * movement (not while the settings panel is open), and the readout grows.
+ *
+ * Keys: Space, Q, E, Shift+Q and Shift+E run the editor's playback actions,
+ * F toggles fullscreen and C the crowd. Esc closes the settings panel, then
+ * leaves fullscreen. The camera rig (P3.2) owns 1–9, and Esc for
+ * pick-a-seat.
  */
 import { useEffect, useRef, useState } from "react";
 import { useTranslate } from "@tolgee/react";
-import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
+import {
+    CornersInIcon,
+    CornersOutIcon,
+    GearSixIcon,
+} from "@phosphor-icons/react";
 import clsx from "clsx";
 import { useCameraStore } from "../camera/cameraStore";
 import { CameraBar } from "./CameraBar";
-import { Panel, PanelSeparator, ToggleButton } from "./Panel";
+import { Panel, ToggleButton } from "./Panel";
+import { playbackActionForKey } from "./playback";
 import { Readout } from "./Readout";
+import { SettingsPanel } from "./SettingsPanel";
+import { TransportBar } from "./TransportBar";
 import { useFullscreen, usePointerIdle } from "./useFullscreen";
-import {
-    CrowdToggle,
-    LightingControl,
-    VenuePicker,
-    useVenueRequest,
-} from "./VenueControls";
-
-/** Below this overlay width, the venue picker becomes a Select. */
-export const COMPACT_VENUE_WIDTH = 1040;
-
-/** The overlay's width, tracked with a ResizeObserver. */
-function useWidth(ref: React.RefObject<HTMLElement | null>): number {
-    const [width, setWidth] = useState(() => window.innerWidth);
-    useEffect(() => {
-        const el = ref.current;
-        if (!el) return;
-        const observer = new ResizeObserver(([entry]) =>
-            setWidth(entry.contentRect.width),
-        );
-        observer.observe(el);
-        return () => observer.disconnect();
-    }, [ref]);
-    return width;
-}
+import { useVenueRequest } from "./VenueControls";
 
 /** True when a key press is meant for a text field or another control. */
 export function isTypingTarget(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
     return (
         target.isContentEditable ||
-        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+        // An open menu uses Space and Enter to choose.
+        !!target.closest('[role="menu"]')
     );
 }
 
 /**
- * F toggles fullscreen and C the crowd. Esc leaves fullscreen unless the rig
- * used it to cancel pick-a-seat.
+ * Space, Q and E (with or without Shift) ask the editor to play, pause or
+ * step, with the editor's own shortcuts. This listens in the capture phase
+ * and cancels the key, so Space never also presses the focused button.
  */
-function useOverlayShortcuts(toggleFullscreen: () => void) {
+function usePlaybackShortcuts() {
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (isTypingTarget(event.target)) return;
+            const action = playbackActionForKey(event);
+            if (!action) return;
+            event.preventDefault();
+            // Holding Q or E steps through pages; holding Space doesn't flicker.
+            if (event.repeat && action === "playPause") return;
+            window.view3d.requestPlayback(action);
+        };
+        window.addEventListener("keydown", onKeyDown, { capture: true });
+        return () =>
+            window.removeEventListener("keydown", onKeyDown, {
+                capture: true,
+            });
+    }, []);
+}
+
+/**
+ * F toggles fullscreen and C the crowd. Esc closes the settings panel, else
+ * leaves fullscreen, unless the rig used it to cancel pick-a-seat.
+ */
+function useOverlayShortcuts(
+    toggleFullscreen: () => void,
+    settingsOpen: boolean,
+    closeSettings: () => void,
+) {
     const { settings, request } = useVenueRequest();
-    const latest = useRef({ settings, request, toggleFullscreen });
-    latest.current = { settings, request, toggleFullscreen };
+    const latest = useRef({
+        settings,
+        request,
+        toggleFullscreen,
+        settingsOpen,
+        closeSettings,
+    });
+    latest.current = {
+        settings,
+        request,
+        toggleFullscreen,
+        settingsOpen,
+        closeSettings,
+    };
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -73,21 +104,28 @@ function useOverlayShortcuts(toggleFullscreen: () => void) {
             )
                 return;
             const key = event.key.toLowerCase();
-            const { settings, request, toggleFullscreen } = latest.current;
+            const current = latest.current;
             if (key === "f") {
                 event.preventDefault();
-                toggleFullscreen();
-            } else if (key === "c" && settings) {
+                current.toggleFullscreen();
+            } else if (key === "c" && current.settings) {
                 event.preventDefault();
-                request({ kind: "crowd", crowd: !settings.crowd });
+                current.request({
+                    kind: "crowd",
+                    crowd: !current.settings.crowd,
+                });
             } else if (
                 key === "escape" &&
-                document.fullscreenElement &&
                 !event.defaultPrevented &&
                 // The rig cancels pick-a-seat on this Esc instead.
                 !useCameraStore.getState().pickMode
             ) {
-                void document.exitFullscreen();
+                if (current.settingsOpen) {
+                    event.preventDefault();
+                    current.closeSettings();
+                } else if (document.fullscreenElement) {
+                    void document.exitFullscreen();
+                }
             }
         };
         window.addEventListener("keydown", onKeyDown);
@@ -97,11 +135,12 @@ function useOverlayShortcuts(toggleFullscreen: () => void) {
 
 export default function View3dOverlay() {
     const { t } = useTranslate();
-    const rootRef = useRef<HTMLDivElement>(null);
-    const width = useWidth(rootRef);
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const { isFullscreen, toggleFullscreen } = useFullscreen();
-    const hidden = usePointerIdle(isFullscreen);
-    useOverlayShortcuts(toggleFullscreen);
+    const hidden = usePointerIdle(isFullscreen && !settingsOpen);
+    const closeSettings = () => setSettingsOpen(false);
+    usePlaybackShortcuts();
+    useOverlayShortcuts(toggleFullscreen, settingsOpen, closeSettings);
 
     const fade = clsx(
         "motion-safe:transition-opacity motion-safe:duration-300",
@@ -112,10 +151,10 @@ export default function View3dOverlay() {
             ? "view3d.overlay.exitFullscreen"
             : "view3d.overlay.enterFullscreen",
     );
+    const settingsLabel = t("view3d.settings.title");
 
     return (
         <div
-            ref={rootRef}
             className={clsx(
                 "pointer-events-none absolute inset-0 z-10 flex flex-col justify-between gap-8 p-8",
                 hidden && "cursor-none",
@@ -126,39 +165,52 @@ export default function View3dOverlay() {
         >
             <div
                 className={clsx(
-                    "flex flex-wrap items-start justify-between gap-8",
+                    "flex min-h-0 flex-1 items-start justify-between gap-8",
                     fade,
                 )}
             >
-                <Panel label={t("view3d.overlay.venue")}>
-                    <VenuePicker compact={width < COMPACT_VENUE_WIDTH} />
-                </Panel>
-                <Panel>
-                    <LightingControl />
-                    <PanelSeparator />
-                    <CrowdToggle />
-                    <ToggleButton
-                        pressed={isFullscreen}
-                        onClick={toggleFullscreen}
-                        icon={
-                            isFullscreen ? (
-                                <CornersInIcon size={16} />
-                            ) : (
-                                <CornersOutIcon size={16} />
-                            )
-                        }
-                        label={fullscreenLabel}
-                        tooltip={fullscreenLabel}
-                        iconOnly
-                        testId="view3d-fullscreen"
-                    />
-                </Panel>
-            </div>
-            <div className="flex min-w-0 flex-col items-start gap-8">
-                <Readout large={isFullscreen} />
-                <div className={clsx("flex max-w-full min-w-0", fade)}>
-                    <CameraBar />
+                <CameraBar />
+                <div className="flex max-h-full min-h-0 flex-col items-end gap-8">
+                    <Panel>
+                        <ToggleButton
+                            pressed={isFullscreen}
+                            onClick={toggleFullscreen}
+                            icon={
+                                isFullscreen ? (
+                                    <CornersInIcon size={16} />
+                                ) : (
+                                    <CornersOutIcon size={16} />
+                                )
+                            }
+                            label={fullscreenLabel}
+                            tooltip={fullscreenLabel}
+                            iconOnly
+                            testId="view3d-fullscreen"
+                        />
+                        <ToggleButton
+                            pressed={settingsOpen}
+                            onClick={() => setSettingsOpen((open) => !open)}
+                            icon={<GearSixIcon size={16} />}
+                            label={settingsLabel}
+                            tooltip={settingsLabel}
+                            tooltipSide="left"
+                            iconOnly
+                            testId="view3d-settings-button"
+                        />
+                    </Panel>
+                    {settingsOpen && (
+                        <SettingsPanel
+                            onClose={closeSettings}
+                            className="min-h-0"
+                        />
+                    )}
                 </div>
+            </div>
+            <div className="flex min-w-0 items-end gap-8">
+                <div className={fade}>
+                    <TransportBar />
+                </div>
+                <Readout large={isFullscreen} />
             </div>
         </div>
     );
