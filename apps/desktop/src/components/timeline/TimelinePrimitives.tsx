@@ -1806,25 +1806,38 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
         pixelsPerBeat,
         !livePositionBeat,
     );
-    useEffect(() => {
+    // While playing, puts the line at the live position
+    const placeLive = useCallback(() => {
+        const element = anchorRef.current;
+        const beat = livePositionBeat?.() ?? null;
+        if (!element || beat === null) return;
+        // Device pixels while playing: crisp, and still smooth on a high-density screen
+        const ratio = window.devicePixelRatio || 1;
+        element.style.left = `${Math.round(beatToX(beat, pixelsPerBeat) * ratio) / ratio}px`;
+    }, [anchorRef, livePositionBeat, pixelsPerBeat]);
+    // Layout effects, as the played waveform's: a commit inside an animation frame (a zoom's
+    // flushSync) writes the resting `left` and paints in that same frame, so the live position is
+    // put back before paint rather than in the next frame
+    useLayoutEffect(() => {
         const element = anchorRef.current;
         if (!livePositionBeat || !element) return;
         let frame = 0;
         const follow = () => {
-            const beat = livePositionBeat();
-            // Device pixels while playing: crisp, and still smooth on a high-density screen
-            const ratio = window.devicePixelRatio || 1;
-            if (beat !== null)
-                element.style.left = `${Math.round(beatToX(beat, pixelsPerBeat) * ratio) / ratio}px`;
+            placeLive();
             frame = requestAnimationFrame(follow);
         };
-        frame = requestAnimationFrame(follow);
+        follow();
         return () => {
             cancelAnimationFrame(frame);
             // React only writes `left` when its value changes, so put the line back itself
             element.style.left = `${restingLeft.current}px`;
         };
-    }, [anchorRef, livePositionBeat, pixelsPerBeat]);
+    }, [anchorRef, livePositionBeat, placeLive]);
+    // After any other commit while playing, such as a new `positionBeat`, React may have written
+    // the resting `left`
+    useLayoutEffect(() => {
+        if (livePositionBeat) placeLive();
+    });
 
     return (
         <button
