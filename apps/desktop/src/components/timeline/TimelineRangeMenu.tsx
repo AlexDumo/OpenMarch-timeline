@@ -2,13 +2,15 @@ import { useState, type MouseEvent, type ReactNode } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { FlagIcon, UserPlusIcon } from "@phosphor-icons/react";
 import type { TimelineBeatRange } from "./TimelineViewModel";
+import type { TimelineMeasureRowTarget } from "./TimelineMeasureRow";
 
 /**
  * The timeline's right-click menu (ui.md UI-9 Adding marchers, P8.14). It offers **Add selected
  * marchers** on a page box, a clip (its timeline) or a dragged range, for the range under the
  * pointer. Opening it doesn't change the timeline selection: the marchers to add are picked first,
  * where they can be selected. On a page box it also offers **Delete page flag** (UI-9 Deleting a
- * flag, P8.15).
+ * flag, P8.15). On the measure row it offers measure lines, marks and beats instead (tempo E8,
+ * `MeasureRowMenuItems`).
  */
 
 /**
@@ -25,6 +27,11 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      * Without it, the menu has no delete entry.
      */
     readonly onDeleteFlag?: (pageId: string | number) => void;
+    /**
+     * The measure row's entries (tempo E8) for a measure-row target. Without it, a right-click on
+     * the measure row offers nothing there.
+     */
+    readonly measureRowItems?: (target: TimelineMeasureRowTarget) => ReactNode;
 }
 
 /**
@@ -36,6 +43,8 @@ export interface TimelineMenuTarget {
     readonly range: TimelineBeatRange;
     readonly trackId?: string;
     readonly pageId?: string;
+    /** A count, measure or rehearsal tab on the measure row */
+    readonly measureRow?: TimelineMeasureRowTarget;
 }
 
 /**
@@ -107,10 +116,14 @@ export function useTimelineRangeMenu({
         if (!menu) return;
         const target = resolveRange(event);
         if (!target) return;
-        // Nothing to offer here: no add, and no page box to delete the flag of
-        const canDelete =
-            menu.onDeleteFlag !== undefined && target.pageId !== undefined;
-        if (!menu.onAdd && !canDelete) return;
+        if (target.measureRow) {
+            if (!menu.measureRowItems) return;
+        } else {
+            // Nothing to offer here: no add, and no page box to delete the flag of
+            const canDelete =
+                menu.onDeleteFlag !== undefined && target.pageId !== undefined;
+            if (!menu.onAdd && !canDelete) return;
+        }
         event.preventDefault();
         setOpen({ target, x: event.clientX, y: event.clientY });
     };
@@ -134,9 +147,13 @@ export function useTimelineRangeMenu({
                 <DropdownMenu.Content
                     data-testid="timeline-range-menu"
                     align="start"
+                    // Focus stays where the command puts it, such as the measure row's input
+                    onCloseAutoFocus={(event) => event.preventDefault()}
                     className="bg-modal text-text rounded-6 border-stroke shadow-modal z-50 flex min-w-[180px] flex-col gap-4 border p-4 backdrop-blur-md"
                 >
-                    {menu.onAdd && (
+                    {open.target.measureRow &&
+                        menu.measureRowItems?.(open.target.measureRow)}
+                    {!open.target.measureRow && menu.onAdd && (
                         <DropdownMenu.Item
                             disabled={disabledReason !== null}
                             onSelect={() => menu.onAdd?.(open.target)}
@@ -146,26 +163,30 @@ export function useTimelineRangeMenu({
                             Add selected marchers
                         </DropdownMenu.Item>
                     )}
-                    {menu.onAdd && disabledReason !== null && (
-                        <p
-                            data-testid="timeline-range-menu-reason"
-                            className="text-text-subtitle px-8 pb-4 text-[11px]"
-                        >
-                            {disabledReason}
-                        </p>
-                    )}
-                    {menu.onDeleteFlag && open.target.pageId !== undefined && (
-                        <DropdownMenu.Item
-                            data-testid="timeline-range-menu-delete-flag"
-                            onSelect={() =>
-                                menu.onDeleteFlag?.(open.target.pageId!)
-                            }
-                            className="rounded-4 data-[highlighted]:bg-fg-2 text-red flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none"
-                        >
-                            <FlagIcon size={14} />
-                            Delete page flag
-                        </DropdownMenu.Item>
-                    )}
+                    {!open.target.measureRow &&
+                        menu.onAdd &&
+                        disabledReason !== null && (
+                            <p
+                                data-testid="timeline-range-menu-reason"
+                                className="text-text-subtitle px-8 pb-4 text-[11px]"
+                            >
+                                {disabledReason}
+                            </p>
+                        )}
+                    {!open.target.measureRow &&
+                        menu.onDeleteFlag &&
+                        open.target.pageId !== undefined && (
+                            <DropdownMenu.Item
+                                data-testid="timeline-range-menu-delete-flag"
+                                onSelect={() =>
+                                    menu.onDeleteFlag?.(open.target.pageId!)
+                                }
+                                className="rounded-4 data-[highlighted]:bg-fg-2 text-red flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none"
+                            >
+                                <FlagIcon size={14} />
+                                Delete page flag
+                            </DropdownMenu.Item>
+                        )}
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
         </DropdownMenu.Root>

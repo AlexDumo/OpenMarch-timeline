@@ -3,6 +3,7 @@ import type {
     TimelineAddMarchersMenu,
     TimelineMenuTarget,
 } from "./TimelineRangeMenu";
+import type { TimelineMeasureRowCommands } from "./TimelineMeasureRow";
 
 export type TimelineTrackId = string | number;
 
@@ -205,6 +206,11 @@ export interface TimelineInteractionProps {
     readonly musicPastEnd?: TimelineMusicPastEnd;
     /** Double-clicking a page box or clip opens (isolates) its range, in view beats here */
     readonly onOpenRange?: (target: TimelineMenuTarget) => void;
+    /**
+     * Editing rehearsal marks and measure lines on the measure row (tempo E8), in view beats here.
+     * Without it, the row only shows them.
+     */
+    readonly measureRow?: TimelineMeasureRowCommands;
 }
 
 export interface TimelineScaleProps {

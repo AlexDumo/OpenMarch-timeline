@@ -1381,6 +1381,56 @@
         },
         "label": "Timeline",
         "masterVolume": "Master Volume",
+        "measureRow": {
+            "editor": {
+                "addedHint": "Added {mark}. Type a name and press Enter, or keep going",
+                "beatsFromLabel": "Beats per measure from measure {measure}",
+                "beatsHint": "Moves measure lines only. Counts and drill don't change",
+                "beatsLabel": "Beats in measure {measure}",
+                "markHint": "Enter to save, Esc to cancel. Empty removes the mark",
+                "markLabel": "Rehearsal mark for measure {measure}",
+                "newHint": "A rehearsal mark sits on a measure line, and there is none here. Enter starts a measure at this count",
+                "newLabel": "Rehearsal mark at this count"
+            },
+            "menu": {
+                "addMark": "Add a rehearsal mark to m{measure}…",
+                "addMarkAtCount": "Add a rehearsal mark here…",
+                "beatsFrom": "Beats per measure from here",
+                "beatsIn": "Beats in m{measure}",
+                "countHeader": "Count {count} of measure {measure}",
+                "goToMark": "Go to {mark}",
+                "joinNext": "Join with m{next} (remove its line)",
+                "laterKeep": "Later measures keep their beats",
+                "laterKeepOff": "Only m{next} changes. Counts and drill don't change.",
+                "laterKeepOn": "Moves every later measure line. Counts and drill don't change.",
+                "markSuffix": " · rehearsal {mark}",
+                "measureHeader": "Measure {measure} · {beats, plural, one {# beat} other {# beats}}",
+                "noMeasureHeader": "Count {count}, no measure",
+                "other": "Other…",
+                "removeLine": "Remove measure line (join with m{previous})",
+                "removeLineMark": "Also removes rehearsal {mark}",
+                "removeMark": "Remove rehearsal mark {mark}",
+                "renameMark": "Rename {mark}…",
+                "startMeasure": "Start a measure here",
+                "startMeasureHint": "m{measure} becomes {before} + {after} beats",
+                "toEnd": "To the end of the show",
+                "untilMark": "Up to {mark} (m{measure})"
+            },
+            "number": {
+                "label": "Measure {measure}. Add a rehearsal mark",
+                "title": "Measure {measure}. Click to add a rehearsal mark, or press R at the playhead"
+            },
+            "tab": {
+                "label": "Rehearsal {mark}, measure {measure}. Enter renames it, Delete removes it",
+                "title": "Rehearsal {mark}, measure {measure}. Double-click to rename, R to add one."
+            },
+            "toast": {
+                "droppedMarks": "Removed rehearsal {marks} with {count, plural, one {its measure line} other {their measure lines}}",
+                "failed": "The measure row couldn't change: {error}",
+                "removedMark": "Removed rehearsal mark {mark}",
+                "undo": "Undo"
+            }
+        },
         "music": {
             "add": "Add Music"
         },
