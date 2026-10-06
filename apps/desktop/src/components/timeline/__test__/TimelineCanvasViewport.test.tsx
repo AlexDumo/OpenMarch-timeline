@@ -1,4 +1,5 @@
 import { act, cleanup, render } from "@testing-library/react";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TimelineGridCanvas } from "../TimelineCanvas";
 
@@ -97,5 +98,40 @@ describe("timeline viewport canvases", () => {
         const next = drawnSpan(container);
         expect(next.left).toBeGreaterThan(0);
         expect(next.right - viewport.scrollLeft - 1000).toBeGreaterThan(250);
+    });
+
+    it("redraws when the viewport is wider than the last draw used", async () => {
+        const { viewport, ref } = makeViewport(1000);
+        // The layout settles wider right after the first draw reads the width, before the
+        // passive effect that starts observing reads it
+        let reads = 0;
+        Object.defineProperty(viewport, "clientWidth", {
+            configurable: true,
+            get: () => (reads++ === 0 ? 1000 : 4000),
+        });
+        const actEnvironment = globalThis as {
+            IS_REACT_ACT_ENVIRONMENT?: boolean;
+        };
+        // Outside act(), so the first draw (a microtask after the layout effects) runs before the
+        // passive effects, as in the browser
+        actEnvironment.IS_REACT_ACT_ENVIRONMENT = false;
+        const host = document.createElement("div");
+        document.body.appendChild(host);
+        const root = createRoot(host);
+        try {
+            root.render(grid(ref));
+            await vi.waitFor(() => expect(observers).toHaveLength(1));
+            expect(drawnSpan(host).right).toBe(2000);
+            // The observer's first notification, at the settled width
+            observers[0].callback(
+                [],
+                observers[0] as unknown as ResizeObserver,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(drawnSpan(host).right).toBeGreaterThanOrEqual(4000);
+        } finally {
+            root.unmount();
+            actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+        }
     });
 });

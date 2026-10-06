@@ -154,6 +154,8 @@ const useViewportCanvas = ({
     const latest = useRef({ viewportRef, layerLeft, width, height, paint });
     latest.current = { viewportRef, layerLeft, width, height, paint };
     const drawn = useRef<TimelineSpan | null>(null);
+    /** The viewport width the last draw sized its window for */
+    const drawnForWidth = useRef<number | null>(null);
     const queued = useRef(false);
 
     /** Draws the window around the viewport; unless `force`, only if the viewport nears its edge */
@@ -181,6 +183,7 @@ const useViewportCanvas = ({
                 return;
             const span = getCanvasWindow({ ...visible, overscan });
             drawn.current = span;
+            drawnForWidth.current = visible.visibleWidth;
             const context = prepareCanvas(canvas, span, height);
             if (context) paint(context, span, color);
         },
@@ -212,11 +215,10 @@ const useViewportCanvas = ({
         viewport.addEventListener("scroll", onScroll, { passive: true });
         let observer: ResizeObserver | undefined;
         if (typeof ResizeObserver !== "undefined") {
-            let lastWidth = viewport.clientWidth;
+            // Against the width the last draw used, not the width now: the first draw comes
+            // before this effect, and the layout can settle in between
             observer = new ResizeObserver(() => {
-                const next = viewport.clientWidth;
-                if (next === lastWidth) return;
-                lastWidth = next;
+                if (viewport.clientWidth === drawnForWidth.current) return;
                 invalidate();
             });
             observer.observe(viewport);
