@@ -193,6 +193,7 @@ describe("Tempo lab flags", () => {
             tempoMap: false,
             snapToAttacks: false,
             drillChoices: false,
+            reimportInPlace: false,
         });
     });
 

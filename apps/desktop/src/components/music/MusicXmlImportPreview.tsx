@@ -19,6 +19,9 @@ import {
     warningText,
     type PreviewTranslate,
 } from "./musicXmlPreview";
+import MusicXmlReimportSection, {
+    type MusicXmlReimportState,
+} from "./MusicXmlReimportSection";
 
 /** Whether the import would go through, from a rolled-back trial run. */
 export type MusicXmlDryRunState =
@@ -36,6 +39,10 @@ interface MusicXmlImportPreviewProps {
     importing: boolean;
     onImport: () => void;
     onCancel: () => void;
+    /** With Tempo lab `reimportInPlace` and bars that line up: update the show in place */
+    reimport?: MusicXmlReimportState;
+    /** With Tempo lab `reimportInPlace`: the show has measures, but none line up with the file */
+    noMatch?: boolean;
 }
 
 /**
@@ -53,6 +60,8 @@ export default function MusicXmlImportPreview({
     importing,
     onImport,
     onCancel,
+    reimport,
+    noMatch = false,
 }: MusicXmlImportPreviewProps) {
     const { t: tolgeeT } = useTolgee();
     const t: PreviewTranslate = (key, params) => tolgeeT(key, params ?? {});
@@ -62,6 +71,7 @@ export default function MusicXmlImportPreview({
         [report, showAll],
     );
     const refused = dryRun.status === "refused";
+    const inPlace = reimport?.mode === "reimport";
 
     return (
         <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
@@ -165,7 +175,20 @@ export default function MusicXmlImportPreview({
                     <T keyName="music.xmlPreview.showAll" />
                 </label>
 
-                {pageCount > 1 && !refused && (
+                {inPlace && reimport && (
+                    <MusicXmlReimportSection reimport={reimport} />
+                )}
+                {!inPlace && reimport && (
+                    <WarningNote>
+                        <T keyName="music.xmlPreview.reimport.replaceWarning" />
+                    </WarningNote>
+                )}
+                {!inPlace && noMatch && (
+                    <InfoNote>
+                        <T keyName="music.xmlPreview.reimport.noMatch" />
+                    </InfoNote>
+                )}
+                {!inPlace && pageCount > 1 && !refused && (
                     <InfoNote>
                         <T
                             keyName="music.xmlPreview.pagesMove"
@@ -173,12 +196,12 @@ export default function MusicXmlImportPreview({
                         />
                     </InfoNote>
                 )}
-                {dryRun.status === "checking" && (
+                {!inPlace && dryRun.status === "checking" && (
                     <InfoNote>
                         <T keyName="music.xmlPreview.checking" />
                     </InfoNote>
                 )}
-                {refused && (
+                {!inPlace && refused && (
                     <DangerNote>
                         <span data-testid="musicxml-preview-refused">
                             <T
@@ -188,27 +211,60 @@ export default function MusicXmlImportPreview({
                         </span>
                     </DangerNote>
                 )}
-                {report.summary.warnings > 0 && !refused && (
+                {report.summary.warnings > 0 && (inPlace || !refused) && (
                     <WarningNote>
                         <T keyName="music.xmlPreview.warningsHint" />
                     </WarningNote>
                 )}
 
                 <div className="flex justify-end gap-8">
+                    {inPlace && reimport && (
+                        <Button
+                            variant="ghost"
+                            className="mr-auto"
+                            onClick={reimport.onReplaceEverything}
+                            data-testid="musicxml-reimport-replace"
+                        >
+                            <T keyName="music.xmlPreview.reimport.replaceEverything" />
+                        </Button>
+                    )}
+                    {!inPlace && reimport && (
+                        <Button
+                            variant="ghost"
+                            className="mr-auto"
+                            onClick={reimport.onBack}
+                        >
+                            <T keyName="music.xmlPreview.reimport.back" />
+                        </Button>
+                    )}
                     <Button variant="secondary" onClick={onCancel}>
                         <T keyName="music.xmlPreview.cancel" />
                     </Button>
-                    <Button
-                        onClick={onImport}
-                        disabled={importing || dryRun.status !== "ok"}
-                        data-testid="musicxml-preview-import"
-                    >
-                        {importing ? (
-                            <T keyName="music.importing" />
-                        ) : (
-                            <T keyName="music.xmlPreview.import" />
-                        )}
-                    </Button>
+                    {inPlace && reimport ? (
+                        <Button
+                            onClick={reimport.onUpdate}
+                            disabled={reimport.updating || !reimport.changes}
+                            data-testid="musicxml-reimport-update"
+                        >
+                            {reimport.updating ? (
+                                <T keyName="music.xmlPreview.reimport.updating" />
+                            ) : (
+                                <T keyName="music.xmlPreview.reimport.update" />
+                            )}
+                        </Button>
+                    ) : (
+                        <Button
+                            onClick={onImport}
+                            disabled={importing || dryRun.status !== "ok"}
+                            data-testid="musicxml-preview-import"
+                        >
+                            {importing ? (
+                                <T keyName="music.importing" />
+                            ) : (
+                                <T keyName="music.xmlPreview.import" />
+                            )}
+                        </Button>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>

@@ -23,6 +23,8 @@ export interface TempoLabFlags {
     snapToAttacks: boolean;
     /** Edits that add or remove counts ask what the drill should do, with a preview */
     drillChoices: boolean;
+    /** Re-importing a MusicXML updates timing and labels on the existing counts (E12) */
+    reimportInPlace: boolean;
 }
 
 export const defaultTempoLab: TempoLabFlags = {
@@ -34,6 +36,7 @@ export const defaultTempoLab: TempoLabFlags = {
     tempoMap: false,
     snapToAttacks: false,
     drillChoices: false,
+    reimportInPlace: false,
 };
 
 const TEMPO_LAB_CHOICES: {
@@ -47,6 +50,7 @@ const TEMPO_LAB_CHOICES: {
     tempoMap: [false, true],
     snapToAttacks: [false, true],
     drillChoices: [false, true],
+    reimportInPlace: [false, true],
 };
 
 /**

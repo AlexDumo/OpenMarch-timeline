@@ -37,6 +37,11 @@ import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
 import { updateWorkspaceSettingsWithHistoryInTransaction } from "@/db-functions/workspaceSettings";
 import { timelineErrorMessage } from "@/timeline/timelineErrorMessages";
 import { firstMeasureNumber } from "./musicXmlPreview";
+import { applyMusicXmlReimport } from "@/db-functions/musicXmlReimport";
+import type {
+    ReimportScoreMeasure,
+    ReimportTiming,
+} from "@/timeline/tempo/reimport";
 
 // Types and interfaces
 export type MusicXmlImportData = {
@@ -310,6 +315,36 @@ const useMusicXmlMutation = <TArgs>(
 export const useImportMusicXml = () => {
     return useMusicXmlMutation(
         (data: MusicXmlImportData) => _importMusicXmlFile({ data }),
+        "music.importError",
+    );
+};
+
+/**
+ * Re-imports a file in place (Tempo lab `reimportInPlace`, E12): the bars that line up with the
+ * show get the file's timing (unless `timing` is "keep") and marks, as one undo entry.
+ */
+export const useReimportMusicXml = () => {
+    return useMusicXmlMutation(
+        async ({
+            fileName,
+            score,
+            timing,
+        }: {
+            fileName: string;
+            score: ReimportScoreMeasure[];
+            timing: ReimportTiming;
+        }): Promise<ImportResult> => {
+            const result = await applyMusicXmlReimport({ db, score, timing });
+            return {
+                success: true,
+                message: tolgee.t(
+                    result.changed
+                        ? "music.xmlPreview.reimport.success"
+                        : "music.xmlPreview.reimport.unchanged",
+                    { fileName },
+                ),
+            };
+        },
         "music.importError",
     );
 };

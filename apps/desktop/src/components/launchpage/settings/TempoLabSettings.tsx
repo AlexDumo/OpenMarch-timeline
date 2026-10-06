@@ -17,6 +17,7 @@ const SWITCHES: readonly BooleanFlag[] = [
     "tempoMap",
     "snapToAttacks",
     "drillChoices",
+    "reimportInPlace",
 ];
 
 /** Two-way choices, with their options. Shown after the switch they refine. */
