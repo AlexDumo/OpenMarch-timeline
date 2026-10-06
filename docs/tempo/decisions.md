@@ -1051,7 +1051,8 @@ fixture list and how to score).
 - **Context:** with every-count taps on a rubato show, nearly every tag went amber against the
   35% rule (PT-3), so Jo stopped reading them.
 - **Choice:** each tap's span per count is compared with the span just before and just after it
-  (at a take's edge, the two on its one side). It's "Missed a tap?" when at least 1.7× longer than
+  (at a take's edge, the two on its one side), and with the median of up to three spans each side
+  (so a normal tap between a fermata and a missed tap isn't odd). It's "Missed a tap?" when at least 1.7× longer than
   all of them, "An extra tap?" when that much shorter, or when it and the next span are both short
   but add up to about one (a stray tap mid-count). More than 2.6× longer than either side is a
   hold (fermata, caesura) and isn't amber. A sudden new tempo is out of step with one side only,

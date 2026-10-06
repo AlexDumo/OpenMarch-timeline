@@ -308,13 +308,22 @@ export interface SuspectTap {
     readonly beforeBpm: number;
 }
 
+/** The middle value (the mean of the middle two) */
+const median = (values: readonly number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 1
+        ? sorted[mid]!
+        : (sorted[mid - 1]! + sorted[mid]!) / 2;
+};
+
 /**
  * Taps out of step with their neighbors (DT-4). Each tap's span (from the tap before it, per
  * count) is compared with the spans beside it: the one just before and the one just after, or at
- * the edge of a take the two on its one side. It's suspect when it's at least `MISSED_TAP_RATIO`
- * times longer than all of them (a missed tap), or that much shorter (an extra tap), so a rit.,
- * an accel. or a sudden new tempo isn't. A span more than `HELD_SPAN_RATIO` times longer than
- * one of them is a hold, not a miss. A stray tap in the middle of a count makes two short spans
+ * the edge of a take the two on its one side, and with the median of up to three spans each side.
+ * It's suspect when it's at least `MISSED_TAP_RATIO` times longer than all of them (a missed
+ * tap), or that much shorter (an extra tap), so a rit., an accel. or a sudden new tempo isn't. A
+ * span more than `HELD_SPAN_RATIO` times longer than one of them is a hold, not a miss. A stray tap in the middle of a count makes two short spans
  * in a row; the first is suspect when both are short against the spans around the pair. Suspect
  * taps stay (rubato is real); they're only drawn amber.
  */
@@ -359,7 +368,11 @@ export function suspectTaps({
             present([at(k - 1), at(k - 2)]) ??
             present([at(k + 1), at(k + 2)]);
         if (sides) {
-            const ratios = sides.map((s) => span / s);
+            // Against the wider trend too, so a normal tap between a hold and a miss isn't odd
+            const around = median(
+                [-3, -2, -1, 1, 2, 3].flatMap((d) => at(k + d) ?? []),
+            );
+            const ratios = [...sides, around].map((s) => span / s);
             if (ratios.every((r) => r >= ratio)) {
                 // Far longer than either side: a fermata or a caesura
                 if (ratios.some((r) => r > held)) return;

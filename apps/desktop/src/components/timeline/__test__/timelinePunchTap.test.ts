@@ -242,6 +242,12 @@ describe("mistakes", () => {
             suspectTaps({ taps: at([0.5, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1]) })
                 .size,
         ).toBe(0);
+        // A normal count between a fermata and a missed tap is no extra tap; the miss is amber
+        expect([
+            ...suspectTaps({
+                taps: at([0.8, 0.8, 0.8, 3.2, 0.8, 0.8, 1.6, 0.8, 0.8, 0.8]),
+            }).keys(),
+        ]).toEqual([7]);
         // A fermata three times as long as the counts around it
         expect(
             suspectTaps({ taps: at([0.5, 0.5, 0.5, 1.6, 0.5, 0.5]) }).size,
