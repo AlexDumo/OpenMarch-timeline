@@ -18,8 +18,10 @@ import LassoListeners from "@/components/canvas/listeners/LassoListeners";
 import { startTimelineResolver, stopTimelineResolver } from "../timelineStore";
 import {
     readStoredTimelineMemberships,
+    storedTimelineMembershipsFromTables,
     useTimelineSelectionHost,
 } from "../useTimelineSelectionHost";
+import { readTimelineViewTables } from "../useTimelineTracks";
 import {
     useDeselectDimmedMarchers,
     useTimelineDimming,
@@ -120,6 +122,12 @@ describeDbTests("the stored timelines the selection resolves to", (it) => {
             membership(1, 1, 9, [1, 2]),
             membership(2, 9, 17, []),
         ]);
+        // The host derives the same from the rows the timeline views share
+        expect(
+            storedTimelineMembershipsFromTables(
+                await readTimelineViewTables(db),
+            ),
+        ).toEqual(timelines);
     });
 
     it("keeps them current after a commit and its undo, and clears them when disabled", async ({
