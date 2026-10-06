@@ -171,6 +171,9 @@ export default function AudioPlayer() {
     // is none), not the selected page. Every cursor or playhead write restarts playback from it,
     // which is how a preview loops back to its start.
     const timelineMode = useTimelineMode();
+    // In timeline mode, mute silences the music only, so the metronome can count through it
+    // (UI-12); page mode's mute still silences both
+    const metroMuted = audioMuted && !timelineMode;
     const playheadBeat = useTimelineSelectionStore(displayedBeat);
     const playheadRevision = useTimelineSelectionStore(
         (s) => s.playheadRevision,
@@ -465,9 +468,8 @@ export default function AudioPlayer() {
 
             const metroSource = audioContext.createBufferSource();
             metroGainNode.current = audioContext.createGain();
-            // Mute silences the music only, so the metronome can count through it (UI-12); the
-            // volume still scales both
-            const masterVolume = calculateMasterVolume(audioVolume, false);
+            // The volume scales both; mute reaches the metronome only in page mode (metroMuted)
+            const masterVolume = calculateMasterVolume(audioVolume, metroMuted);
             // Read metronome settings at playback start, live changes update gain below without restarting
             const { isMetronomeOn: metronomeOn, volume: metronomeVolume } =
                 useMetronomeStore.getState();
@@ -529,6 +531,7 @@ export default function AudioPlayer() {
         timelineMode,
         audioVolume,
         audioMuted,
+        metroMuted,
     ]);
 
     // Initialize WaveSurfer and load waveform data
@@ -584,13 +587,13 @@ export default function AudioPlayer() {
     // Update metronome on/off state and volume
     useEffect(() => {
         if (metroGainNode.current) {
-            const masterVolume = calculateMasterVolume(audioVolume, false);
+            const masterVolume = calculateMasterVolume(audioVolume, metroMuted);
             metroGainNode.current.gain.value =
                 isMetronomeOn && masterVolume > 0
                     ? volumeAdjustment(volume) * masterVolume
                     : 0;
         }
-    }, [audioVolume, isMetronomeOn, volume]);
+    }, [audioVolume, metroMuted, isMetronomeOn, volume]);
 
     useEffect(() => {
         if (audioGainNode.current) {

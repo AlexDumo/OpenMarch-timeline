@@ -436,7 +436,8 @@ from it. The spec still wins on the model; this file decides presentation.
     clock and the readout; then Fit and Compact at the right. On a panel under 640px wide Sound,
     the clock, Fit and Compact fold into "⋯" (Bitwig's rule); Play, the page buttons, From start
     and the readout never leave. Sound is one popover for the music's mute, the volume and the
-    metronome (Ctrl+M stays): mute silences the music only, so the metronome can count through it.
+    metronome (Ctrl+M stays): in timeline mode mute silences the music only, so the metronome can
+    count through it (page mode's mute still silences both).
     Shift+click on Previous or Next goes to the first or last page (Shift+Q/E stay). Tooltips name
     the shortcuts.
   - **The readout is a go-to box.** Click it, or press G, and type a page ("7", "2A", "pg 7"), a
