@@ -1155,3 +1155,106 @@ fixture list and how to score).
   page that gets the counts. Stored text, English, like a typed clip name; supersedes FE-6's name.
 - **Alternatives:** keep them out of the clip lanes (bigger change; FE-6).
 - **Validate:** V-98.
+
+## DE-1 Typed sections stop an Align drag; under "Its page" later pages slide past them (decision round D1)
+
+- **Context:** Sam's capture (20261006-152208-critic-sam-drag-v2): dragging page 2's flag inside a
+  typed ♩=176 re-timed it to ≈195 with only a toast, and pages 3–4 re-spaced "up to synced Pg 4
+  ct 16" instead of sliding. Two causes: his marks were saved before marks had a source, so
+  nothing was protected (DE-2); and the page scope (FB-2) only limited the re-spacing before the
+  dragged flag, while after it the next synced count, a typed row's edge (TM-3), held the rest.
+- **Choice:**
+  - A drag, hold or nudge that would give a typed count another length is drawn stopped at the
+    typed section: only the untyped counts in the re-spaced range stretch, and with none the flag
+    doesn't move. The chip says "Stops at typed ♩=176 (m1–16): release to override or keep it".
+  - On release the edit as dragged is drawn and asks: **Override** (Enter) writes it; **Keep
+    typed** writes the stopped version (or nothing, with a toast saying the typed tempo was kept);
+    Esc or a press elsewhere drops it.
+  - With the "Its page" scope, the counts after the flag slide (keep their tempos) when
+    re-spacing them up to the next synced count would rescale a typed section. They still
+    re-space up to a synced count with only untyped counts in between. "Back to synced" keeps
+    E7's rule, with the same Override / Keep typed.
+- **Alternatives:** Alt-drag to go past the stop (the resolution allowed it; not done because Alt
+  already means "no snapping" and an unsnapped drag would then silently override); keep drawing
+  the drag as made and only ask on release (FX-5); always slide later pages under "Its page".
+- **Validate:** V-101, V-102.
+
+## DE-2 Marks without a source are typed
+
+- **Context:** `source` arrived with FX-4. Files typed before that (Sam's corps show) have marks
+  with only a meter and unit, so `typedSections` protected nothing.
+- **Choice:** a mark protects its row unless it says `source: "import"`. Before FX-3 only the map
+  wrote marks, so a mark without a source was typed. Rows added with "Add a row at" are typed
+  too, as they always were.
+- **Alternatives:** migrate stored marks; protect only marks with a typed tempo.
+- **Validate:** V-101 (on `sam-typed.dots`).
+
+## DE-3 Tempo…, Even out and Tap the beat ask before changing a typed tempo
+
+- **Choice:** "Tempo…" on a page that changes a typed section shows "This changes ♩=176 you typed
+  for m1–16. Press Enter again to override it, or Esc." and later pages slide rather than
+  re-space a typed section. "Even out page N" over a typed section (a typed rit.) shows a warning
+  toast with an Override action. Tap the beat's Apply reads "Apply (overrides typed ♩=176,
+  m1–16)" with the sentence in amber. Punch-in taps are the tap worker's (tempo/decide-tap); the
+  Align Override prompt (`TimelineAlignConfirm`, `useAlignEdit().keepTyped`) is reusable.
+- **Alternatives:** refuse outright; a modal.
+- **Validate:** V-103.
+
+## DE-4 A tempo map edit that changes nothing writes nothing
+
+- **Context:** Marcus typed ♩.=86, then "86", then "6/8"; two Ctrl+Z left the map at ♩.=86. Undo
+  did reach the app (the map passes Ctrl/⌘ keys through, FX-1); the two no-op edits had each
+  written an undo entry, because a retime with marks always wrote.
+- **Choice:** the map compares the edit (durations, marks as stored, synced counts) with the show
+  and writes nothing when they match ("m63 I: 6/8 ♩.=86 (already so: nothing changed)").
+  `retimeBeats` also skips marks equal to the stored ones, so no caller can make an empty undo
+  entry.
+- **Validate:** V-104.
+
+## DE-5 Meters as written for shows without marks (rules)
+
+- **Context:** imported or kit shows from before FX-3 have no marks: the map showed 6/8 as "2/4
+  ♩=88", 12/8 as 4/4, the pickup as "1/4", 3/2 as 6/4.
+- **Rules** (only for measures no mark gives a meter; `guessMeter` in `tempoMap.ts`):
+  1. **Pickup:** the show's first measure has one count and the next measure has more: it is the
+     last count of the next measure's meter ("4/4 pickup").
+  2. **Compound:** a measure whose counts are all the same length, each 1.5× (within 0.1%) the
+     previous measure's last count, where that measure is counted in plain ♩ and isn't a pickup:
+     n counts of ♩. (2 → 6/8, 3 → 9/8, 4 → 12/8). This is how a ♩.=♩ change is timed.
+  3. **Carry:** a measure after a compound one with as many counts stays compound, unless its
+     count is ⅔ of the previous one (back to ♩=♩.).
+  4. Otherwise `inferMeter` as before (2:2:3 shapes, else n/4). 3/2 and 2/2 can't be told from
+     6/4 and 4/4 by counts; typing "3/2" (or "2/2") in a meter cell over quarter counts now keeps
+     it as written, counted in ♩.
+- Inferring never changes timing; it names counts. Guessed meters show a "?" whose tooltip says
+  why; a click stores the meter as read from the score (`source: "import"`: it protects no tempo
+  and a re-import may replace it). A wrong compound guess (a real ♩=120 → ♩=80) is fixed by typing
+  the meter.
+- **Alternatives:** a new `source: "confirmed"` (a file format change older builds would reject);
+  ask on open.
+- **Validate:** V-105.
+
+## DE-6 ● is explained, and ● edges are never "lined up"
+
+- **Choice:** the map has a legend line ("● a tempo or meter typed here or read from the score;
+  ○ typed, then changed by a drag or taps. ● edges hold still but aren't lined up with the
+  music.") and each dot's tooltip ends "● typed here or read from the score". Synced counts that
+  are a ● row's edge don't count as lined up: the "Counts aren't lined up with the music yet"
+  strip still shows, "Tap again from here" ignores them, re-import already did (FX-6), and an Align
+  flag held only by a ● edge says "Holds still: a tempo starts here in the tempo map…" instead of
+  "Synced to the music". A flag synced in Align that sits on a ● edge reads as typed (they can't be
+  told apart without a storage change; owner ADR).
+- **Validate:** V-106.
+
+## DE-7 Tempo map: every rehearsal mark, count 1's place, from the Music panel (D7 prerequisites)
+
+- **Choice:** the map adds a row at each rehearsal mark inside a row (display rows; typed
+  sections and synced edges still come from the real rows). Typing at a letter's row changes that
+  row only. "Count 1 at [0.500] s in the music" under the table writes the audio offset with the
+  same retime (one undo entry; the whole show moves; negative is before the music starts). The
+  Music panel shows "Open the tempo map" next to Tempo Groups when the Tempo lab `tempoMap` flag
+  is on and the file is in the timeline mode. Regrouping 7/8 2+2+3 ↔ 3+2+2 from the meter cell
+  works (tests); changing the number of counts stays refused. Tempo Groups stay.
+- **Alternatives:** split rows at letters in `deriveTempoMap` itself (it would cut typed sections
+  and their protection).
+- **Validate:** V-107.
