@@ -5,6 +5,7 @@ import Pathway, { DEFAULT_PATHWAY_STROKE_WIDTH } from "./Pathway";
 import Midpoint from "./Midpoint";
 import TimelinePathway from "./TimelinePathway";
 import TimelineFocusLayer from "./TimelineFocusLayer";
+import { cacheAtViewportResolution } from "./viewportRasterCache";
 import type { FocusScene } from "@/timeline/timelineFocusScene";
 import type TimelineShapeOverlay from "./TimelineShapeOverlay";
 import { FieldProperties } from "@openmarch/core";
@@ -1707,7 +1708,11 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             gridLines,
             halfLines,
         });
+        // Off so the grid draws from a canvas-sized bitmap that is redrawn only on zoom, pan,
+        // resize or a new grid (cacheAtViewportResolution), sharp at any zoom. Fabric's own object
+        // cache is switched on only while a wheel zoom is in progress (_applyZoom).
         this.staticGridRef.objectCaching = false;
+        cacheAtViewportResolution(this.staticGridRef, this);
 
         this.add(this.staticGridRef);
         this.sendToBack(this.staticGridRef);
