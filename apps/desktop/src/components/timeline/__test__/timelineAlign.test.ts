@@ -500,6 +500,19 @@ describe("page tempo", () => {
         expect(heldCounts(held, [pages[0]!])).toEqual(new Set([4]));
     });
 
+    it("hatches only counts held on purpose: 2× the page and standing out (DT-6)", () => {
+        const page = { id: 1, label: "1", start: 1, end: 9 };
+        // A wobble from tapping every count is no hold, even at 1.9×
+        const wobble = [0, 0.5, 0.55, 0.45, 0.95, 0.5, 0.48, 0.52, 0.5];
+        expect(heldCounts(wobble, [page])).toEqual(new Set());
+        // A rit. to 3× at the page's end isn't one either: no count stands out from its neighbors
+        const rit = [0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.75, 1.1, 1.5];
+        expect(heldCounts(rit, [page])).toEqual(new Set());
+        // A fermata is
+        const fermata = [0, 0.5, 0.5, 0.5, 1.6, 0.5, 0.5, 0.5, 0.5];
+        expect(heldCounts(fermata, [page])).toEqual(new Set([4]));
+    });
+
     it("types a tempo for a page, keeping a later synced count on the music", () => {
         const result = typedPageTempo({
             durations,

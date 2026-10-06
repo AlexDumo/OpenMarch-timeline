@@ -697,14 +697,20 @@ export function holdChip({
     };
 }
 
+/** A count is drawn held when it's at least this many times its page's median count (DT-6) */
+export const HELD_COUNT_FACTOR = 2;
+/** …and this many times the shorter of the counts on either side of it, so a rit. isn't */
+export const HELD_NEIGHBOR_FACTOR = 1.5;
+
 /**
- * Counts that are held (a fermata): noticeably longer than the usual count of their page, so the
- * Align view can hatch them. Spec count indexes.
+ * Counts that are held (a fermata): at least `factor` times the median count of their page, and
+ * standing out from the counts beside them, so the Align view can hatch them. A wobble from
+ * tapping every count, or a slow rit., isn't a hold (DT-6). Spec count indexes.
  */
 export function heldCounts(
     durations: CountDurations,
     pages: readonly AlignPage[],
-    factor = 1.6,
+    factor = HELD_COUNT_FACTOR,
 ): Set<number> {
     const held = new Set<number>();
     for (const page of pages) {
@@ -714,8 +720,18 @@ export function heldCounts(
             .sort((a, b) => a - b);
         if (lengths.length < 2) continue;
         const median = lengths[Math.floor(lengths.length / 2)]!;
-        for (let i = page.start; i < page.end; i++)
-            if (durations[i]! > median * factor) held.add(i);
+        for (let i = page.start; i < page.end; i++) {
+            const d = durations[i]!;
+            if (d < median * factor) continue;
+            const beside = [durations[i - 1], durations[i + 1]].filter(
+                (n): n is number => n !== undefined && n > 0,
+            );
+            if (
+                beside.length === 0 ||
+                d >= Math.min(...beside) * HELD_NEIGHBOR_FACTOR
+            )
+                held.add(i);
+        }
     }
     return held;
 }
