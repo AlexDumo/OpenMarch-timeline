@@ -680,6 +680,27 @@ function TimelineSurface({
                             }
                         />
                     )}
+                    {showWaveform && expanded && props.waveformNotice && (
+                        // Full width, so the notice can stick to the viewport's left edge
+                        <div
+                            className="pointer-events-none absolute left-0 z-10"
+                            style={{
+                                top: audioTop + 2,
+                                width,
+                                height: waveformHeight - 4,
+                            }}
+                        >
+                            <div
+                                className="sticky left-8 inline-flex h-full"
+                                // The notice's buttons are not a seek on the lane under them
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onDoubleClick={(e) => e.stopPropagation()}
+                                onContextMenu={(e) => e.stopPropagation()}
+                            >
+                                {props.waveformNotice}
+                            </div>
+                        </div>
+                    )}
                     <TimelineRehearsalMarkers
                         model={model}
                         pixelsPerBeat={pixelsPerBeat}

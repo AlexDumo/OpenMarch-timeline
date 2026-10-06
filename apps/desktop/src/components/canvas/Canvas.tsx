@@ -42,6 +42,7 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineDimming } from "@/timeline/useTimelineDimming";
+import { TapTheBeatPanel } from "@/components/timeline/TapTheBeat";
 import TimelineIsolationBar, {
     TimelineFromStartBadge,
 } from "@/components/timeline/TimelineIsolationBar";
@@ -774,6 +775,7 @@ export default function Canvas({
         >
             {timelineMode && <TimelineIsolationBar />}
             {timelineMode && <TimelineFromStartBadge />}
+            {timelineMode && <TapTheBeatPanel />}
             {pages.length > 0 || canvas ? (
                 <div
                     ref={innerDivRef}

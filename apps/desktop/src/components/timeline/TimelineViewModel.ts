@@ -202,6 +202,11 @@ export interface TimelineCommonProps
     readonly transportSecondary?: ReactNode;
     /** View controls at the transport's end, such as Compact (UI-12); they fold too */
     readonly transportViewControls?: ReactNode;
+    /**
+     * A notice over the waveform lane's left edge, such as Tap the beat's "Counts aren't lined up
+     * with the music yet" (Tempo lab, E6). Shown only in the full timeline, with audio loaded.
+     */
+    readonly waveformNotice?: ReactNode;
 }
 
 export interface TimelineRangeChange extends TimelineBeatRange {

@@ -45,6 +45,7 @@ import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { timeAtBeat } from "@/timeline/timeMap";
 import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
+import { LineUpStrip } from "./TapTheBeat";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
@@ -244,6 +245,7 @@ export default function TimelineModePanel() {
                     transportAccessories={<TimelinePreviewButtons />}
                     transportSecondary={<TimelineSoundButton />}
                     transportViewControls={<TimelineCompactButton />}
+                    waveformNotice={<LineUpStrip />}
                     selection={selection}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
