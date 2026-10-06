@@ -8,8 +8,11 @@
  * - `invalidate` for every query the editor invalidates (writes, undo, redo
  *   and rolled-back transactions all end in `invalidateQueries`).
  *
- * It answers the window's `hello` and handles its venue-change requests.
- * With no window open it does nothing.
+ * It answers the window's `hello` and handles its venue-change requests
+ * (playback requests go to `RegisteredActionsHandler`, which owns the
+ * actions). With no window open it does nothing, except that it opens the
+ * window when the show opens if the app setting
+ * `VIEW3D_AUTO_OPEN_SETTING` is on.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -29,6 +32,7 @@ import { updateVenueSettingsMutationOptions } from "@/hooks/queries/useVenueSett
 import { venueSettingsSchema } from "@/view3d/core/venueSettings";
 import type Page from "@/global/classes/Page";
 import {
+    VIEW3D_AUTO_OPEN_SETTING,
     VIEW3D_CLOCK_CHANNEL,
     VIEW3D_INVALIDATE_CHANNEL,
     VIEW3D_SELECTION_CHANNEL,
@@ -178,6 +182,25 @@ export function useView3dPublisher() {
         ];
         return () => cleanups.forEach((cleanup) => cleanup());
     }, [sendClock, sendSelection, updateVenue]);
+
+    // Opens the window with the show when the app setting asks for it, in
+    // the background so the editor keeps focus. This runs after the effect
+    // above, so the window-state push and the window's hello aren't missed.
+    useEffect(() => {
+        const electron = window.electron;
+        if (!electron?.openView3d) return;
+        let cancelled = false;
+        void Promise.resolve(
+            electron.invoke("settings:get", VIEW3D_AUTO_OPEN_SETTING),
+        ).then((autoOpen) => {
+            if (!cancelled && autoOpen === true) {
+                void electron.openView3d({ background: true });
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     // Clock: on play, pause and page change (a seek selects a page), and a
     // heartbeat while playing.

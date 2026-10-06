@@ -1,18 +1,11 @@
 /**
- * Venue picker, lighting presets and the crowd toggle (ui.md UI-2). Every
- * change goes to the editor through `window.view3d.requestVenueChange` with
- * the full, validated settings; the editor saves it with undo, and the
- * relayed invalidation updates the scene.
+ * Venue picker and lighting presets for the settings panel (ui.md UI-2), and
+ * the hook every venue control uses. Every change goes to the editor through
+ * `window.view3d.requestVenueChange` with the full, validated settings; the
+ * editor saves it with undo, and the relayed invalidation updates the scene.
  */
 import { useCallback } from "react";
 import { useTranslate } from "@tolgee/react";
-import { UsersIcon } from "@phosphor-icons/react";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTriggerButton,
-} from "@openmarch/ui";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import type { LightingPreset, VenueKitId } from "@/view3d/core/types";
 import {
@@ -21,7 +14,7 @@ import {
     lightingForKit,
     type VenueSettings,
 } from "@/view3d/core/venueSettings";
-import { PanelLabel, Segmented, ToggleButton } from "./Panel";
+import { Segmented } from "./Panel";
 import {
     applyVenueChange,
     venueChanged,
@@ -55,48 +48,22 @@ export function useVenueRequest(): {
     return { settings, request };
 }
 
-/** Segmented kit names when wide, a Select when narrow. */
-export function VenuePicker({ compact }: { compact: boolean }) {
+/** The venue kits, two to a row. */
+export function VenuePicker() {
     const { t } = useTranslate();
     const { settings, request } = useVenueRequest();
-    const label = t("view3d.overlay.venue");
-    const onChange = (kit: VenueKitId) => request({ kind: "kit", kit });
-    const options = VENUE_KIT_IDS.map((kit) => ({
-        value: kit,
-        label: t(`view3d.kit.${kit}`),
-    }));
-
     return (
-        <>
-            <PanelLabel>{label}</PanelLabel>
-            {compact ? (
-                <Select
-                    value={settings?.kit}
-                    onValueChange={(kit) => onChange(kit as VenueKitId)}
-                    disabled={!settings}
-                >
-                    <SelectTriggerButton
-                        label={label}
-                        className="h-28 min-w-[10rem] justify-between gap-8 border-0 bg-transparent px-10"
-                    />
-                    <SelectContent>
-                        {options.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            ) : (
-                <Segmented
-                    value={settings?.kit ?? null}
-                    options={options}
-                    onChange={onChange}
-                    label={label}
-                    testId="view3d-venue-picker"
-                />
-            )}
-        </>
+        <Segmented
+            value={settings?.kit ?? null}
+            options={VENUE_KIT_IDS.map((kit) => ({
+                value: kit,
+                label: t(`view3d.kit.${kit}`),
+            }))}
+            onChange={(kit: VenueKitId) => request({ kind: "kit", kit })}
+            label={t("view3d.overlay.venue")}
+            testId="view3d-venue-picker"
+            className="grid! grid-cols-2 [&>*]:justify-start"
+        />
     );
 }
 
@@ -120,24 +87,6 @@ export function LightingControl() {
             }
             label={t("view3d.overlay.lighting")}
             testId="view3d-lighting-picker"
-        />
-    );
-}
-
-/** Shows or hides the crowd; saved with the show. */
-export function CrowdToggle() {
-    const { t } = useTranslate();
-    const { settings, request } = useVenueRequest();
-    const on = settings?.crowd ?? false;
-    return (
-        <ToggleButton
-            pressed={on}
-            disabled={!settings}
-            onClick={() => request({ kind: "crowd", crowd: !on })}
-            icon={<UsersIcon size={16} />}
-            label={t("view3d.overlay.crowd")}
-            tooltip={t("view3d.overlay.crowdTooltip")}
-            testId="view3d-crowd-toggle"
         />
     );
 }

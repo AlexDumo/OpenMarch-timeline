@@ -14,7 +14,8 @@
  * - crowd: kit, crowd toggle, team colors, quality;
  * - lighting: applied to the environment and the kit, never rebuilds.
  *
- * Quality starts `high`. After 3 seconds below 30 fps the scene switches to
+ * Quality follows the viewer's choice (`qualityPreference.ts`). In `auto`
+ * it starts `high`, and after 3 seconds below 30 fps the scene switches to
  * `low` once and logs it (`qualityFallback.ts`, P5.1).
  *
  * What it built is published in `useView3dSceneStore` (`sceneStore.ts`) for
@@ -286,14 +287,19 @@ function SceneContents({
 
     // Automatic fallback (design.md §9): 3 s below 30 fps switches to low
     // quality once. It never switches back on its own.
+    // Only in `auto`; choosing a mode in the settings panel measures afresh.
     const fallbackRef = useRef(createQualityFallbackState());
+    const qualityMode = useView3dSceneStore((s) => s.qualityMode);
+    useEffect(() => {
+        fallbackRef.current = createQualityFallbackState();
+    }, [qualityMode]);
     useFrame((_, dt) => {
         const store = useView3dSceneStore.getState();
-        if (store.quality !== "high") return;
+        if (store.qualityMode !== "auto" || store.quality !== "high") return;
         if (stepQualityFallback(fallbackRef.current, dt)) {
             // eslint-disable-next-line no-console -- design.md §9 asks for a log line
             console.info(FALLBACK_LOG_MESSAGE);
-            store.setQuality("low");
+            store._autoLower();
         }
     });
 

@@ -48,8 +48,9 @@ export function PanelSeparator() {
 }
 
 /**
- * An on/off button in a panel, like Crowd and Pick a seat. Pressed shows a
- * soft accent fill. With `iconOnly`, the label is only the accessible name.
+ * A button in a panel, like Pick a seat or Play. With `pressed` it is an
+ * on/off toggle, and pressed shows a soft accent fill. With `iconOnly`, the
+ * label is only the accessible name.
  */
 export function ToggleButton({
     pressed,
@@ -57,15 +58,18 @@ export function ToggleButton({
     icon,
     label,
     tooltip,
+    tooltipSide = "bottom",
     iconOnly = false,
     disabled,
     testId,
 }: {
-    pressed: boolean;
+    /** Undefined for a plain action button that has no on/off state. */
+    pressed?: boolean;
     onClick: () => void;
     icon: ReactNode;
     label: string;
     tooltip?: string;
+    tooltipSide?: "top" | "bottom" | "left" | "right";
     iconOnly?: boolean;
     disabled?: boolean;
     testId?: string;
@@ -78,7 +82,7 @@ export function ToggleButton({
             aria-pressed={pressed}
             aria-label={label}
             tooltipText={tooltip}
-            tooltipSide="bottom"
+            tooltipSide={tooltipSide}
             disabled={disabled}
             onClick={onClick}
             data-testid={testId}
@@ -111,12 +115,15 @@ export function Segmented<T extends string>({
     onChange,
     label,
     testId,
+    className,
 }: {
     value: T | null;
     options: readonly SegmentOption<T>[];
     onChange: (value: T) => void;
     label: string;
     testId?: string;
+    /** Layout for the group, for example a grid instead of a row. */
+    className?: string;
 }) {
     return (
         <ToggleGroup
@@ -128,7 +135,10 @@ export function Segmented<T extends string>({
             }}
             aria-label={label}
             data-testid={testId}
-            className="h-auto! shrink-0 gap-2 border-0! bg-transparent! bg-none!"
+            className={clsx(
+                "h-auto! shrink-0 gap-2 border-0! bg-transparent! bg-none!",
+                className,
+            )}
         >
             {options.map((option) => (
                 <ToggleGroupItem

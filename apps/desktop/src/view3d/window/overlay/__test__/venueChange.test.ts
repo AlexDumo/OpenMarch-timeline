@@ -46,6 +46,27 @@ describe("applyVenueChange", () => {
         expect(next.lighting).toBe("day");
     });
 
+    it("merges params, keeping the ones not given", () => {
+        const next = applyVenueChange(hsDusk, {
+            kind: "params",
+            params: { endZoneText: "EAGLES", homeColor: "#00aa00" },
+        });
+        expect(next.params).toEqual({
+            ...hsDusk.params,
+            endZoneText: "EAGLES",
+            homeColor: "#00aa00",
+        });
+    });
+
+    it("rejects a color that isn't #rrggbb", () => {
+        expect(() =>
+            applyVenueChange(hsDusk, {
+                kind: "params",
+                params: { awayColor: "red" },
+            }),
+        ).toThrow();
+    });
+
     it("throws on settings that aren't valid", () => {
         expect(() =>
             applyVenueChange(hsDusk, {
@@ -57,10 +78,19 @@ describe("applyVenueChange", () => {
 });
 
 describe("venueChanged", () => {
-    it("compares kit, lighting and crowd", () => {
+    it("compares kit, lighting, crowd and params", () => {
         expect(venueChanged(hsDusk, { ...hsDusk })).toBe(false);
         expect(venueChanged(hsDusk, { ...hsDusk, crowd: false })).toBe(true);
         expect(venueChanged(hsDusk, { ...hsDusk, lighting: "day" })).toBe(true);
         expect(venueChanged(hsDusk, { ...hsDusk, kit: "bighs" })).toBe(true);
+        expect(
+            venueChanged(hsDusk, {
+                ...hsDusk,
+                params: { ...hsDusk.params, endZoneText: "AWAY" },
+            }),
+        ).toBe(true);
+        expect(
+            venueChanged(hsDusk, { ...hsDusk, params: { ...hsDusk.params } }),
+        ).toBe(false);
     });
 });
