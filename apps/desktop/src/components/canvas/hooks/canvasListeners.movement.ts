@@ -31,17 +31,6 @@ export const useMovementListeners = ({
     );
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
 
-    // MarcherPage queries
-    const { data: marcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.id),
-    );
-    const { data: previousMarcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.previousPageId!),
-    );
-    const { data: nextMarcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.nextPageId!),
-    );
-
     // Timeline mode (P7.10): once the resolver is ready, the paths come from it
     // (useTimelinePathRender) and a drag leaves them alone, as page mode's redraw from the stored
     // rows does; they follow once the move is written. Redrawing here would put back the straight
@@ -51,6 +40,22 @@ export const useMovementListeners = ({
         (s) => s.status === "ready",
     );
     const drawFromResolver = timelineMode && timelineResolverReady;
+
+    // MarcherPage queries. The previous and next pages' rows only feed the page-mode path redraw
+    // below, so they aren't read once the resolver draws the paths.
+    const { data: marcherPages } = useQuery(
+        marcherPagesByPageQueryOptions(selectedPage?.id),
+    );
+    const { data: previousMarcherPages } = useQuery(
+        marcherPagesByPageQueryOptions(
+            drawFromResolver ? null : selectedPage?.previousPageId,
+        ),
+    );
+    const { data: nextMarcherPages } = useQuery(
+        marcherPagesByPageQueryOptions(
+            drawFromResolver ? null : selectedPage?.nextPageId,
+        ),
+    );
 
     const frameRef = useRef<number | null>(null);
 
