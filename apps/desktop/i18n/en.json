@@ -1380,7 +1380,7 @@
         "tempoLab.tapUnit.description": "Tap page starts for steady music, or every count for rubato.",
         "tempoLab.tapUnit.page": "Page starts",
         "tempoLab.tempoMap": "Tempo map",
-        "tempoLab.tempoMap.description": "A table of tempo marks at measures, such as \"m30 ♩ = 152.5\".",
+        "tempoLab.tempoMap.description": "A table of tempo marks at measures, such as 152.5 BPM from m30.",
         "title": "Settings",
         "tolgeeApiKeyPlaceholder": "Tolgee API Key",
         "tolgeeDevToolsToggle": "Tolgee In-Context Translating"

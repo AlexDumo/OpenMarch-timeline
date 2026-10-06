@@ -67,6 +67,7 @@ export default function TempoLabSettings() {
             control={
                 <ToggleGroup
                     id={`tempo-lab-${flag}`}
+                    className="shrink-0"
                     type="single"
                     value={tempoLab[flag]}
                     onValueChange={(value: string) => {
@@ -75,7 +76,11 @@ export default function TempoLabSettings() {
                     }}
                 >
                     {CHOICES[flag].map((option) => (
-                        <ToggleGroupItem key={option} value={option}>
+                        <ToggleGroupItem
+                            key={option}
+                            value={option}
+                            className="whitespace-nowrap"
+                        >
                             <T
                                 keyName={`settings.tempoLab.${flag}.${option}`}
                             />
