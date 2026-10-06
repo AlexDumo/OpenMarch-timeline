@@ -317,6 +317,12 @@ export default class OpenMarchCanvas extends fabric.Canvas {
 
         this.requestRenderAll();
 
+        const dropLiveMarchers = (e: fabric.IEvent) => {
+            if (e.target instanceof CanvasMarcher) this._liveMarchers = null;
+        };
+        this.on("object:added", dropLiveMarchers);
+        this.on("object:removed", dropLiveMarchers);
+
         this.on("selection:created", this.handleSelection);
         this.on("selection:updated", this.handleSelection);
         this.on("selection:cleared", this.handleSelection);
@@ -2357,6 +2363,18 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         return active
             ? this.getActiveObjectsByType(CanvasMarcher)
             : this.getObjectsByType(CanvasMarcher);
+    }
+
+    /** The canvas marchers for `getLiveCanvasMarchers`; null after one is added or removed */
+    private _liveMarchers: readonly CanvasMarcher[] | null = null;
+
+    /**
+     * Every CanvasMarcher on the canvas, kept between calls so the playback loop doesn't walk
+     * every canvas object each frame. Rebuilt after a marcher is added or removed. The order is
+     * not kept in step with z-order changes; use `getCanvasMarchers` where order matters.
+     */
+    getLiveCanvasMarchers(): readonly CanvasMarcher[] {
+        return (this._liveMarchers ??= this.getCanvasMarchers());
     }
 
     /**

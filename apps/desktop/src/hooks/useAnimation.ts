@@ -165,13 +165,13 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
         setCurrentCollision(selectedPage);
     }, [selectedPage, getCollisionsForSelectedPage, setCurrentCollision]);
 
-    // Set marcher positions at a specific time
-    const setPageMarcherPositionsAtTime = useCallback(
+    // Move the marchers to their positions at a time, without drawing
+    const placePageMarchersAtTime = useCallback(
         (timeMilliseconds: number) => {
             if (!canvas) return;
             let output = true;
 
-            const canvasMarchers = canvas.getCanvasMarchers();
+            const canvasMarchers = canvas.getLiveCanvasMarchers();
             for (const canvasMarcher of canvasMarchers) {
                 const timeline = marcherTimelines.get(
                     canvasMarcher.marcherObj.id,
@@ -193,7 +193,6 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
                 }
             }
 
-            canvas.requestRenderAll();
             return output;
         },
         [canvas, marcherTimelines],
@@ -201,7 +200,7 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
 
     // Timeline mode (P5.4): one reused buffer, filled from the resolver each frame
     const timelineBufferRef = useRef<TimelinePositionBuffer | null>(null);
-    const setTimelineMarcherPositionsAtTime = useCallback(
+    const placeTimelineMarchersAtTime = useCallback(
         (timeMilliseconds: number) => {
             if (!canvas) return;
             const buffer = (timelineBufferRef.current ??=
@@ -210,7 +209,7 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
             if (buffer.fill(playbackBeat(beats, timeMilliseconds))) {
                 const coords = { x: 0, y: 0 };
                 buffer.forEachMarcher(
-                    canvas.getCanvasMarchers(),
+                    canvas.getLiveCanvasMarchers(),
                     (canvasMarcher, x, y) => {
                         coords.x = x;
                         coords.y = y;
@@ -218,7 +217,6 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
                     },
                 );
             }
-            canvas.requestRenderAll();
             // The resolver has a position at every beat; the end of the show stops playback
             // through useTimelinePlaybackDriver (UI-9)
             return true;
@@ -226,9 +224,19 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
         [canvas, beats],
     );
 
-    const setMarcherPositionsAtTime = timelineMode
-        ? setTimelineMarcherPositionsAtTime
-        : setPageMarcherPositionsAtTime;
+    const placeMarchersAtTime = timelineMode
+        ? placeTimelineMarchersAtTime
+        : placePageMarchersAtTime;
+
+    // Set marcher positions at a specific time, and draw them on the next frame
+    const setMarcherPositionsAtTime = useCallback(
+        (timeMilliseconds: number) => {
+            const output = placeMarchersAtTime(timeMilliseconds);
+            canvas?.requestRenderAll();
+            return output;
+        },
+        [canvas, placeMarchersAtTime],
+    );
 
     // Update the selected page based on playback timestamp
     const updateSelectedPage = useCallback(
@@ -262,14 +270,19 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
 
     // Animate the canvas based on playback timestamp
     useEffect(() => {
+        // setLiveCoordinates skips the control corners; refresh them once playback stops
+        let liveCoordsStale = false;
+
         // Helper to sync the animation with the live playback position
         const animate = () => {
             if (!canvas) return;
 
             try {
                 const currentTime = getLivePlaybackPosition() * 1000; // s to ms
-                const continueAnimation =
-                    setMarcherPositionsAtTime(currentTime);
+                const continueAnimation = placeMarchersAtTime(currentTime);
+                liveCoordsStale = true;
+                // Draw now, in this frame; requestRenderAll would draw a frame late
+                canvas.renderAll();
                 // Timeline mode: useTimelinePlaybackDriver loops and stops; no page follows playback
                 if (!timelineMode) void updateSelectedPage(currentTime);
                 animationFrameRef.current = requestAnimationFrame(animate);
@@ -294,11 +307,14 @@ export const useAnimation = ({ canvas }: UseAnimationProps) => {
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
+            if (liveCoordsStale && canvas)
+                for (const marcher of canvas.getLiveCanvasMarchers())
+                    marcher.setCoords();
         };
     }, [
         isPlaying,
         canvas,
-        setMarcherPositionsAtTime,
+        placeMarchersAtTime,
         updateSelectedPage,
         timelineMode,
         marcherTimelines,
