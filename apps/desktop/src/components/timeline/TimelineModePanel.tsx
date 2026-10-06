@@ -25,6 +25,7 @@ import {
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
+import { TempoMapMenu } from "./TempoMapPanel";
 import {
     TimelineCompactButton,
     TimelinePreviewButtons,
@@ -243,7 +244,12 @@ export default function TimelineModePanel() {
                     }
                     transportAccessories={<TimelinePreviewButtons />}
                     transportSecondary={<TimelineSoundButton />}
-                    transportViewControls={<TimelineCompactButton />}
+                    transportViewControls={
+                        <>
+                            <TempoMapMenu />
+                            <TimelineCompactButton />
+                        </>
+                    }
                     selection={selection}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
