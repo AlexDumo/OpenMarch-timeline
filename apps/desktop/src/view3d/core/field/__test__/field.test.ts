@@ -20,6 +20,7 @@ import {
     type FieldSurfaceInput,
     type FieldSurfaceStyle,
 } from "..";
+import { OPENMARCH_LOGO } from "../brandMark";
 import { FIVE_YARDS } from "../turfPlan";
 
 beforeAll(() => setTexturePainting(false));
@@ -124,6 +125,35 @@ describe("turf on football fields", () => {
                         expect(t.text).toBe("OPENMARCH");
                         expect(Math.abs(t.rotation)).toBeCloseTo(Math.PI / 2);
                     }
+            });
+
+            it("puts the OpenMarch logo on the center line", () => {
+                const logos = p.items.filter((i) => i.role === "centerLogo");
+                expect(logos).toHaveLength(1);
+                const [logo] = logos;
+                if (logo.type !== "logo") throw new Error("not a logo");
+                expect(logo.x).toBe(0);
+                expect(logo.z).toBeCloseTo(
+                    (p.footprint.minZ + p.footprint.maxZ) / 2,
+                    6,
+                );
+                expect(logo.rotation).toBe(0);
+                // fits between the middle hash rows, at most 15 yards wide
+                const height = (logo.width * 128) / 230;
+                const mid = (p.footprint.minZ + p.footprint.maxZ) / 2;
+                for (const h of p.items.filter((i) => i.role === "hash"))
+                    if (h.type === "rect" && Math.abs(h.minX) < 1)
+                        expect(
+                            Math.abs((h.minZ + h.maxZ) / 2 - mid),
+                        ).toBeGreaterThan(height / 2);
+                expect(logo.width).toBeLessThanOrEqual(3 * FIVE_YARDS + 1e-9);
+                // painted over the center yard line, under the numbers
+                const at = (role: FieldRole) =>
+                    p.items.findIndex((i) => i.role === role);
+                expect(p.items.indexOf(logo)).toBeGreaterThan(
+                    p.items.findLastIndex((i) => i.role === "yardLine"),
+                );
+                expect(p.items.indexOf(logo)).toBeLessThan(at("yardNumber"));
             });
 
             it("has 20 mowing stripes between the goal lines", () => {
@@ -255,6 +285,8 @@ describe("theme style mirrors the 2D canvas", () => {
         expect(count(p, "border")).toBe(4);
         expect(count(p, "endZone")).toBe(0);
         expect(count(p, "stripe")).toBe(0);
+        // the theme is the show's 2D field, so no venue branding
+        expect(count(p, "centerLogo")).toBe(0);
         const bg = p.items[0];
         expect(bg.type === "rect" && bg.color).toBe("rgba(255, 255, 255, 1)");
     });
@@ -305,6 +337,7 @@ describe("tarp style", () => {
         expect(count(p, "dot")).toBe(7 * 4);
         expect(count(p, "image")).toBe(0);
         expect(count(p, "yardLine")).toBe(0);
+        expect(count(p, "centerLogo")).toBe(0);
         expectInside(p, fieldFootprint(fp));
     });
 
@@ -351,6 +384,27 @@ describe("painting", () => {
         expect(rec.named("fill")).toHaveLength(count(p, "arrow"));
         for (const c of rec.named("fillRect"))
             for (const v of c.args) expect(Number.isFinite(v)).toBe(true);
+    });
+
+    it("paints the center logo's paths, outline first", () => {
+        const fp = T.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
+        const p = plan(fp, "turf");
+        const layout = textureLayout(p.footprint, 4096);
+        const rec = recordingContext();
+        const had = "Path2D" in globalThis;
+        const original = (globalThis as { Path2D?: unknown }).Path2D;
+        (globalThis as { Path2D?: unknown }).Path2D = class {
+            constructor(public d: string) {}
+        };
+        try {
+            paintPlan(rec.g, p, layout);
+        } finally {
+            if (had) (globalThis as { Path2D?: unknown }).Path2D = original;
+            else delete (globalThis as { Path2D?: unknown }).Path2D;
+        }
+        const paths = OPENMARCH_LOGO.paths.length;
+        expect(rec.named("stroke")).toHaveLength(paths);
+        expect(rec.named("fill")).toHaveLength(count(p, "arrow") + paths);
     });
 
     it("maps the back of the field to the top of the texture", () => {

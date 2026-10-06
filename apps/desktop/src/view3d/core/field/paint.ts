@@ -1,6 +1,13 @@
 import type { FieldFootprint } from "@openmarch/core";
 import { TEXTURE_FONT } from "../environment";
-import type { FieldPlan, PlanArrow, PlanItem, PlanText } from "./plan";
+import { OPENMARCH_LOGO } from "./brandMark";
+import type {
+    FieldPlan,
+    PlanArrow,
+    PlanItem,
+    PlanLogo,
+    PlanText,
+} from "./plan";
 
 /** A texture's pixel grid over the footprint. */
 export interface TextureLayout {
@@ -96,7 +103,41 @@ function paintItem(
         case "tarpArt":
             paintTarpArt(g, layout);
             return;
+        case "logo":
+            paintLogo(g, item, X(item.x), Y(item.z), s);
+            return;
     }
+}
+
+/** Outline width around the logo's shapes, in meters. */
+const LOGO_OUTLINE = 0.08;
+
+/**
+ * Paints the logo's SVG paths: an outline in `outline` first, then the
+ * shapes in `color`. Needs `Path2D`, which test DOMs may lack.
+ */
+function paintLogo(
+    g: CanvasRenderingContext2D,
+    logo: PlanLogo,
+    px: number,
+    py: number,
+    s: number,
+): void {
+    if (typeof Path2D === "undefined") return;
+    const k = (logo.width * s) / OPENMARCH_LOGO.width;
+    const paths = OPENMARCH_LOGO.paths.map((d) => new Path2D(d));
+    g.save();
+    g.translate(px, py);
+    g.rotate(logo.rotation);
+    g.scale(k, k);
+    g.translate(-OPENMARCH_LOGO.width / 2, -OPENMARCH_LOGO.height / 2);
+    g.lineJoin = "round";
+    g.lineWidth = (2 * LOGO_OUTLINE * s) / k;
+    g.strokeStyle = logo.outline;
+    for (const p of paths) g.stroke(p);
+    g.fillStyle = logo.color;
+    for (const p of paths) g.fill(p);
+    g.restore();
 }
 
 function paintText(

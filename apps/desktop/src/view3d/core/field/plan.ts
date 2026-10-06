@@ -33,7 +33,8 @@ export type FieldRole =
     | "endZoneText"
     | "arrow"
     | "image"
-    | "tarpArt";
+    | "tarpArt"
+    | "centerLogo";
 
 export interface PlanRect {
     type: "rect";
@@ -89,6 +90,24 @@ export interface PlanImage {
     opacity: number;
 }
 
+/**
+ * A logo painted flat on the field, centered on (x, z). The art comes from
+ * `brandMark.ts`; the plan only says where it goes and how big it is.
+ */
+export interface PlanLogo {
+    type: "logo";
+    role: "centerLogo";
+    x: number;
+    z: number;
+    /** Width of the logo in meters; the height follows its aspect. */
+    width: number;
+    /** Same convention as `PlanText.rotation`. */
+    rotation: number;
+    color: string;
+    /** Paint drawn around the shapes so the logo reads on the turf. */
+    outline: string;
+}
+
 /** The generated tarp's background artwork (gradient, glow and arcs). */
 export interface PlanTarpArt {
     type: "tarpArt";
@@ -100,7 +119,8 @@ export type PlanItem =
     | PlanText
     | PlanArrow
     | PlanImage
-    | PlanTarpArt;
+    | PlanTarpArt
+    | PlanLogo;
 
 export interface FieldPlan {
     style: FieldSurfaceStyle;

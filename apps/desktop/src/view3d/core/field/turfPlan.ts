@@ -11,6 +11,7 @@ import {
     type NumberBand,
     type PlanContext,
 } from "./plan";
+import { OPENMARCH_LOGO } from "./brandMark";
 
 /** Turf colors, from the reference demo's `fieldTexture`. */
 export const TURF = {
@@ -32,7 +33,11 @@ const MIN_END_ZONE = 8;
 /**
  * The `turf` style (stadium kits): green turf with 5-yard mowing stripes,
  * white lines at the real checkpoints, hashes, yard numbers with direction
- * arrows, and end-zone paint and text when the field has end zones.
+ * arrows, end-zone paint and text when the field has end zones, and the
+ * OpenMarch logo at midfield.
+ *
+ * Turf is the venue's own look, not the show's 2D field theme: only the
+ * `theme` style (blank kit) paints with `FieldTheme` colors.
  */
 export function planTurf(ctx: PlanContext): void {
     const f = ctx.footprint;
@@ -47,6 +52,7 @@ export function planTurf(ctx: PlanContext): void {
     if (!ctx.fieldProperties.useHashes)
         for (const yc of visible(ctx.fieldProperties.yCheckpoints))
             pushLineX(ctx, "yLine", TURF.paint, checkpointWorld(ctx, yc), LINE);
+    planCenterLogo(ctx, play);
     planHashesAndTicks(ctx, xs, play);
     planTurfNumbers(ctx);
     pushBorder(ctx, TURF.paint, BORDER);
@@ -127,6 +133,44 @@ function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
             maxLength: depth * 0.82,
         });
     }
+}
+
+/** Widest midfield logo: fifteen yards, like a large college logo. */
+const LOGO_MAX_WIDTH = 3 * FIVE_YARDS;
+/** Narrower than this, the logo is skipped. */
+const LOGO_MIN_WIDTH = FIVE_YARDS;
+
+/**
+ * The OpenMarch logo at the middle of the center line, reading from the
+ * front sideline, as large as fits inside the hash rows nearest the middle
+ * (or in the middle third of a field without hashes). Skipped on fields too small to
+ * hold it.
+ */
+function planCenterLogo(ctx: PlanContext, play: PlayingRegion): void {
+    const f = ctx.footprint;
+    const midZ = (f.minZ + f.maxZ) / 2;
+    const hashZs = ctx.fieldProperties.useHashes
+        ? realHashes(ctx).map((c) => checkpointWorld(ctx, c))
+        : [];
+    const back = Math.max(f.minZ, ...hashZs.filter((z) => z < midZ - 1e-6));
+    const front = Math.min(f.maxZ, ...hashZs.filter((z) => z > midZ + 1e-6));
+    const room = hashZs.length
+        ? front - back - 2 * MARK
+        : (f.maxZ - f.minZ) / 3;
+    const aspect = OPENMARCH_LOGO.width / OPENMARCH_LOGO.height;
+    const width = Math.min(LOGO_MAX_WIDTH, room * aspect);
+    if (width < LOGO_MIN_WIDTH) return;
+    if (play.minX > -width || play.maxX < width) return;
+    ctx.items.push({
+        type: "logo",
+        role: "centerLogo",
+        x: 0,
+        z: midZ,
+        width,
+        rotation: 0,
+        color: OPENMARCH_LOGO.color,
+        outline: TURF.paint,
+    });
 }
 
 /**
