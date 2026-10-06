@@ -290,7 +290,7 @@ export const useAnimation = ({ canvas, onTimelineBeat }: UseAnimationProps) => {
                 const continueAnimation = placeMarchersAtTime(currentTime);
                 liveCoordsStale = true;
                 // Draw now, in this frame; requestRenderAll would draw a frame late
-                canvas.renderAll();
+                canvas.renderPlaybackFrame();
                 // Timeline mode: useTimelinePlaybackDriver loops and stops; no page follows playback
                 if (!timelineMode) void updateSelectedPage(currentTime);
                 animationFrameRef.current = requestAnimationFrame(animate);
@@ -315,9 +315,11 @@ export const useAnimation = ({ canvas, onTimelineBeat }: UseAnimationProps) => {
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
-            if (liveCoordsStale && canvas)
+            if (liveCoordsStale && canvas) {
                 for (const marcher of canvas.getLiveCanvasMarchers())
                     marcher.setCoords();
+                canvas.endPlaybackFrames();
+            }
         };
     }, [
         isPlaying,

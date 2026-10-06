@@ -9,6 +9,8 @@ import {
     cacheAtViewportResolution,
     cacheFitsAtFullResolution,
 } from "./viewportRasterCache";
+import { renderObjectsFromCaches } from "./drawFromCache";
+import { CacheAtlas } from "./cacheAtlas";
 import type { FocusScene } from "@/timeline/timelineFocusScene";
 import type TimelineShapeOverlay from "./TimelineShapeOverlay";
 import { FieldProperties } from "@openmarch/core";
@@ -2416,6 +2418,52 @@ export default class OpenMarchCanvas extends fabric.Canvas {
      */
     getLiveCanvasMarchers(): readonly CanvasMarcher[] {
         return (this._liveMarchers ??= this.getCanvasMarchers());
+    }
+
+    /** Set while `renderPlaybackFrame` draws */
+    private _drawingPlaybackFrame = false;
+    /** Copies of the object caches that playback frames draw from; freed by `endPlaybackFrames` */
+    private _playbackAtlas = new CacheAtlas();
+
+    /**
+     * `renderAll` for the playback loop: objects whose Fabric cache is still valid are drawn
+     * straight from it, without Fabric's per-object save, matrix and cache checks
+     * (`renderObjectsFromCaches`). The picture is the same as `renderAll`'s.
+     */
+    renderPlaybackFrame(): void {
+        this._drawingPlaybackFrame = true;
+        try {
+            this.renderAll();
+        } finally {
+            this._drawingPlaybackFrame = false;
+        }
+    }
+
+    /** Frees what `renderPlaybackFrame` kept for the next frame, once playback stops */
+    endPlaybackFrames(): void {
+        this._playbackAtlas.release();
+    }
+
+    /** Fabric's object loop, replaced for `renderPlaybackFrame` on the visible canvas */
+    _renderObjects(
+        ctx: CanvasRenderingContext2D,
+        objects: (fabric.Object | undefined)[],
+    ): void {
+        if (
+            this._drawingPlaybackFrame &&
+            ctx === (this as { contextContainer?: unknown }).contextContainer
+        ) {
+            renderObjectsFromCaches(this, ctx, objects, this._playbackAtlas);
+            return;
+        }
+        (
+            fabric.StaticCanvas.prototype as unknown as {
+                _renderObjects(
+                    ctx: CanvasRenderingContext2D,
+                    objects: (fabric.Object | undefined)[],
+                ): void;
+            }
+        )._renderObjects.call(this, ctx, objects);
     }
 
     /**
