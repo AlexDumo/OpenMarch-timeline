@@ -255,6 +255,27 @@ export interface TimelineAlign {
     readonly onRetime: (edit: TimelineAlignEdit) => Promise<unknown> | void;
     /** Replaces the synced counts */
     readonly onSetSynced: (synced: readonly number[]) => void;
+    /** Punch-in tap (E9, Tempo lab `punchInTap`); without it, Align has no Tap */
+    readonly punchTap?: TimelinePunchTapConfig;
+}
+
+/** What punch-in tap needs from the app: playback, the live clock, and where to report */
+export interface TimelinePunchTapConfig {
+    /** When taps are written: when playback stops, or with Apply (Enter) */
+    readonly apply: "stop" | "drafts";
+    /** What a tap sets: the next page flag, or the next count */
+    readonly unit: "page" | "count";
+    /**
+     * Where the music was when an input event happened, in seconds on the show's clock (the
+     * event's `timeStamp`, on the `performance.now()` clock, corrects for a late handler)
+     */
+    readonly liveTime: (eventTimeStamp: number) => number;
+    /** Plays from spec count `from` (a count-in); false when nothing can play */
+    readonly play: (from: number) => boolean;
+    /** Another tool has T now, such as Tap the beat's open panel */
+    readonly blocked?: () => boolean;
+    /** After the taps were written, with "Lined up pages 12–18 to your taps." */
+    readonly onApplied?: (message: string) => void;
 }
 
 export interface TimelineCommonProps

@@ -542,6 +542,7 @@ export function TimelineAlignFlags({
     preview,
     dragProps,
     onSetSynced,
+    onFlagClick,
     formatTime,
 }: {
     flags: readonly AlignFlag[];
@@ -551,6 +552,8 @@ export function TimelineAlignFlags({
     preview: AlignPreview | null;
     dragProps: ReturnType<typeof useAlignEdit>["dragProps"];
     onSetSynced: (synced: readonly number[]) => void;
+    /** A click that didn't drag (punch-in tap retargets to the flag, E9) */
+    onFlagClick?: (index: number) => void;
     formatTime: (seconds: number) => string;
 }) {
     const t = alignT;
@@ -560,6 +563,7 @@ export function TimelineAlignFlags({
         y: number;
     } | null>(null);
     const syncedSet = new Set(synced);
+    const pressX = useRef(0);
     return (
         <>
             {flags.map((flag) => {
@@ -585,6 +589,22 @@ export function TimelineAlignFlags({
                         aria-label={`${label}${isSynced ? `. ${t("tempo.align.synced")}` : ""}`}
                         title={`${label}${isSynced ? `\n${t("tempo.align.synced")}` : ""}`}
                         {...dragProps("move", flag.index, undefined)}
+                        onPointerDownCapture={(event) => {
+                            pressX.current = event.clientX;
+                        }}
+                        onClick={
+                            onFlagClick
+                                ? (event) => {
+                                      // Not the click that ends a drag
+                                      if (
+                                          Math.abs(
+                                              event.clientX - pressX.current,
+                                          ) < ALIGN_DRAG_PX
+                                      )
+                                          onFlagClick(flag.index);
+                                  }
+                                : undefined
+                        }
                         onContextMenu={(event) => {
                             event.preventDefault();
                             event.stopPropagation();

@@ -546,6 +546,7 @@ export type {
     TimelineActivitySpan,
     TimelineAlign,
     TimelineAlignEdit,
+    TimelinePunchTapConfig,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineSeekGesture,

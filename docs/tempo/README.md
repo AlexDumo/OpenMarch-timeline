@@ -15,17 +15,18 @@ Everything in the tempo core is in the timing layer.
 
 ## Where the code lives
 
-| Piece                                  | Path                                                                                                                                                                       |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pure retiming, tap tempo and read-outs | `apps/desktop/src/timeline/tempo/` (its [README](../../apps/desktop/src/timeline/tempo/README.md) lists every function)                                                    |
-| Show time to count and back            | `apps/desktop/src/timeline/timeMap.ts`                                                                                                                                     |
-| Write path (one transaction, one undo) | `apps/desktop/src/db-functions/tempo.ts`: `retimeBeats`, `retimeBeatsInTransaction`, `setTempoSyncedBeatIds`, `readTempoSyncedBeatIds`                                     |
-| React Query hooks                      | `apps/desktop/src/hooks/queries/useTempo.ts`: `useRetimeBeats`, `useSetTempoSyncedBeatIds`, `useTempoSyncedBeatIds`                                                        |
-| Tempo map (E11)                        | `apps/desktop/src/components/timeline/TempoMapPanel.tsx`; typed rows in `tempoMapMarks` (workspace settings)                                                               |
-| Synced counts (prototype)              | `tempoSyncedBeatIds` in the file's workspace settings ([ADR draft](adr-synced-counts.md))                                                                                  |
-| Audio offset                           | `audioOffsetSeconds` in the file's workspace settings; positive pads silence before the music                                                                              |
-| Align view (E7, flag `alignView`)      | `apps/desktop/src/components/timeline/`: `timelineAxis.ts` (counts or seconds axis), `timelineAlign.ts` (drag, snap, chip), `TimelineAlignView.tsx` (handles, chip, ticks) |
-| Tempo lab flags                        | `tempoLab` in `apps/desktop/src/stores/UiSettingsStore.ts`; Settings → Tempo lab (experimental)                                                                            |
+| Piece                                  | Path                                                                                                                                                                                                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Pure retiming, tap tempo and read-outs | `apps/desktop/src/timeline/tempo/` (its [README](../../apps/desktop/src/timeline/tempo/README.md) lists every function)                                                                                |
+| Show time to count and back            | `apps/desktop/src/timeline/timeMap.ts`                                                                                                                                                                 |
+| Write path (one transaction, one undo) | `apps/desktop/src/db-functions/tempo.ts`: `retimeBeats`, `retimeBeatsInTransaction`, `setTempoSyncedBeatIds`, `readTempoSyncedBeatIds`                                                                 |
+| React Query hooks                      | `apps/desktop/src/hooks/queries/useTempo.ts`: `useRetimeBeats`, `useSetTempoSyncedBeatIds`, `useTempoSyncedBeatIds`                                                                                    |
+| Tempo map (E11)                        | `apps/desktop/src/components/timeline/TempoMapPanel.tsx`; typed rows in `tempoMapMarks` (workspace settings)                                                                                           |
+| Synced counts (prototype)              | `tempoSyncedBeatIds` in the file's workspace settings ([ADR draft](adr-synced-counts.md))                                                                                                              |
+| Audio offset                           | `audioOffsetSeconds` in the file's workspace settings; positive pads silence before the music                                                                                                          |
+| Align view (E7, flag `alignView`)      | `apps/desktop/src/components/timeline/`: `timelineAxis.ts` (counts or seconds axis), `timelineAlign.ts` (drag, snap, chip), `TimelineAlignView.tsx` (handles, chip, ticks)                             |
+| Punch-in tap (E9, flag `punchInTap`)   | `apps/desktop/src/components/timeline/`: `timelinePunchTap.ts` (targets, drafts, Backspace, amber), `TimelinePunchTap.tsx` (keys, Tap button, chip, drafts layer); app side in `TimelineModePanel.tsx` |
+| Tempo lab flags                        | `tempoLab` in `apps/desktop/src/stores/UiSettingsStore.ts`; Settings → Tempo lab (experimental)                                                                                                        |
 
 ## Undo
 
@@ -39,16 +40,16 @@ Music modal, the workspace settings dialog) are still not undoable.
 
 Per user, all off by default (`useTempoLabFlag(flag)` reads one):
 
-| Flag            | Values               | Turns on                                                                         |
-| --------------- | -------------------- | -------------------------------------------------------------------------------- |
-| `tapTheBeat`    | boolean              | Tap a few counts to set the tempo and where count 1 starts (E6)                  |
-| `alignView`     | boolean              | Counts over the real waveform on a seconds axis; drag a flag onto the music (E7) |
-| `punchInTap`    | boolean              | T taps page starts or counts while playing (E9)                                  |
-| `tapApply`      | `"stop"`, `"drafts"` | Punch-in taps apply on stop, or stay drafts until Enter                          |
-| `tapUnit`       | `"page"`, `"count"`  | Punch-in taps mark page starts or every count                                    |
-| `tempoMap`      | boolean              | A table of tempo marks at measures (E11)                                         |
-| `snapToAttacks` | boolean              | Drags and taps snap to attacks in the music (E5)                                 |
-| `drillChoices`  | boolean              | Cuts and inserts ask what the drill does, with a preview (E10)                   |
+| Flag            | Values               | Turns on                                                                          |
+| --------------- | -------------------- | --------------------------------------------------------------------------------- |
+| `tapTheBeat`    | boolean              | Tap a few counts to set the tempo and where count 1 starts (E6)                   |
+| `alignView`     | boolean              | Counts over the real waveform on a seconds axis; drag a flag onto the music (E7)  |
+| `punchInTap`    | boolean              | In Align, T taps the next page flag (or count) onto the music, from any page (E9) |
+| `tapApply`      | `"stop"`, `"drafts"` | Punch-in taps apply on stop, or stay drafts until Enter                           |
+| `tapUnit`       | `"page"`, `"count"`  | Punch-in taps mark page starts or every count                                     |
+| `tempoMap`      | boolean              | A table of tempo marks at measures (E11)                                          |
+| `snapToAttacks` | boolean              | Drags and taps snap to attacks in the music (E5)                                  |
+| `drillChoices`  | boolean              | Cuts and inserts ask what the drill does, with a preview (E10)                    |
 
 ## Test-show kit
 
