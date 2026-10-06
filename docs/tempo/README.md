@@ -45,9 +45,7 @@ Per user, all off by default (`useTempoLabFlag(flag)` reads one):
 | `tapTheBeat`     | boolean                | Tap a few counts to set the tempo and where count 1 starts (E6)                                |
 | `alignView`      | boolean                | Counts over the real waveform on a seconds axis; drag a flag onto the music (E7)               |
 | `alignDragScope` | `"page"`, `"toSynced"` | What an Align flag drag re-spaces: its page (default), or back to the last synced count (FB-2) |
-| `punchInTap`     | boolean                | In Align, T taps the next page flag (or count) onto the music, from any page (E9)              |
-| `tapApply`       | `"stop"`, `"drafts"`   | Punch-in taps apply on stop, or stay drafts until Enter                                        |
-| `tapUnit`        | `"page"`, `"count"`    | Punch-in taps mark page starts or every count                                                  |
+| `punchInTap`     | boolean                | In Align, T taps page flags (each count on slow or uneven pages) as a take; Done applies it    |
 | `tempoMap`       | boolean                | A table of tempo marks at measures (E11)                                                       |
 | `snapToAttacks`  | boolean                | Drags and taps snap to attacks in the music (E5)                                               |
 | `drillChoices`   | boolean                | Cuts and inserts ask what the drill does, with a preview (E10)                                 |
