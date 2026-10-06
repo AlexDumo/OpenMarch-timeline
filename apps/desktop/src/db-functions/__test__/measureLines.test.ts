@@ -76,6 +76,32 @@ describeDbTests("measureLines", (it) => {
         );
 
         testWithHistory(
+            "moves a mark to another measure as one undo entry",
+            async ({ db, marchersAndPages: _, expectNumberOfChanges }) => {
+                const before = await beatsAndPages(db);
+                const m19 = await measureIdAt(db, 73);
+                const m20 = await measureIdAt(db, 77);
+                await editMeasureLines({
+                    db,
+                    edit: { kind: "mark", measureId: m19, mark: "G" },
+                });
+                const state = await expectNumberOfChanges.getDatabaseState(db);
+                await editMeasureLines({
+                    db,
+                    edit: {
+                        kind: "moveMark",
+                        fromMeasureId: m19,
+                        toMeasureId: m20,
+                    },
+                });
+                expect((await lines(db))[18]).toEqual([73, null]);
+                expect((await lines(db))[19]).toEqual([77, "G"]);
+                expect(await beatsAndPages(db)).toEqual(before);
+                await expectNumberOfChanges.test(db, 1, state);
+            },
+        );
+
+        testWithHistory(
             "marks a count without a measure by starting one there",
             async ({ db, marchersAndPages: _, expectNumberOfChanges }) => {
                 const state = await expectNumberOfChanges.getDatabaseState(db);

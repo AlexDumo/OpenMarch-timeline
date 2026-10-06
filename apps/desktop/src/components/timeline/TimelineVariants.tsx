@@ -1474,6 +1474,7 @@ function TimelineSurface({
                                 : null
                         }
                         onEdit={measureRow ? editing.editMark : undefined}
+                        onMove={showAlign ? undefined : measureRow?.onMoveMark}
                         onRemove={
                             measureRow
                                 ? (measure) =>

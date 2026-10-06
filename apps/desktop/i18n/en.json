@@ -1460,7 +1460,7 @@
             "countOneHandle": "Count 1 at {time}. Drag onto the music to set where the music starts. Alt: no snapping.",
             "evenOut": "Even out page {page}",
             "flagHandle": "Page {page} flag at {time}. Drag onto the music to change page {page}'s tempo. Shift: don't sync it. Alt: no snapping. Arrow keys nudge it.",
-            "markHandle": "{label} at {time}. Drag onto the music. Click to go there.",
+            "markHandle": "{label} at {time}. Drag onto the music: this retimes the counts (in the Normal view, dragging the mark moves it to another measure instead). Click to go there.",
             "markSynced": "Mark as synced",
             "onTooltip": "Align is on: the timeline is in seconds. Drag a page's flag or a rehearsal mark onto the music; drag a count tick to hold the count before it. A or ✕ to leave.",
             "synced": "Synced to the music",
@@ -1770,7 +1770,9 @@
             },
             "tab": {
                 "label": "Rehearsal {mark}, measure {measure}. Enter renames it, Delete removes it",
-                "title": "Rehearsal {mark}, measure {measure}. Double-click to rename, R to add one."
+                "moveTaken": "Measure {measure} already has {mark}",
+                "title": "Rehearsal {mark}, measure {measure}. Double-click to rename, R to add one.",
+                "titleMove": "Rehearsal {mark}, measure {measure}. Drag along the measure row to move the mark to another measure (the music stays put; in Align, dragging it retimes the music instead). Double-click to rename, R to add one."
             },
             "toast": {
                 "alreadyMarked": "{mark} is already at m{measure}. Pause and double-click it to rename it.",

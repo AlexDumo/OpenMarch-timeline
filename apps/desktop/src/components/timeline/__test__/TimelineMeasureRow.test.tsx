@@ -17,6 +17,18 @@ vi.mock("sonner", () => ({
 
 afterEach(cleanup);
 
+// jsdom has no PointerEvent, so fireEvent's pointer events would lose clientX
+if (typeof window.PointerEvent === "undefined") {
+    class TestPointerEvent extends MouseEvent {
+        readonly pointerId: number;
+        constructor(type: string, init: PointerEventInit = {}) {
+            super(type, init);
+            this.pointerId = init.pointerId ?? 1;
+        }
+    }
+    window.PointerEvent = TestPointerEvent as unknown as typeof PointerEvent;
+}
+
 /** m1–m8 of 4 counts over 32; B at m3 */
 const model: TimelineViewModel = {
     ...timelineStoryModel,
@@ -90,6 +102,47 @@ describe("rehearsal tabs", () => {
         tab.focus();
         fireEvent.keyDown(tab, { key: "Delete" });
         expect(measureRow.onSetMark).toHaveBeenCalledWith(3, null);
+    });
+
+    it("drags along the measure row to move the mark to another measure (Normal view)", () => {
+        const onMoveMark = vi.fn();
+        const { onSeek } = renderRow({
+            measureRow: { ...commands(), onMoveMark },
+        });
+        const tab = screen.getByTestId("timeline-rehearsal-tab");
+        expect(tab.getAttribute("title")).toMatch(/Drag along the measure row/);
+        // B is m3 at view beat 8 (x = 128); drag it 4 counts later, onto m4
+        fireEvent.pointerDown(tab, { button: 0, clientX: 128 });
+        fireEvent.pointerMove(tab, { clientX: 190 });
+        expect(
+            screen.getByTestId("timeline-rehearsal-tab-ghost"),
+        ).toHaveTextContent("B → m4");
+        fireEvent.pointerUp(tab, { clientX: 190 });
+        fireEvent.click(tab, { detail: 1 });
+        expect(onMoveMark).toHaveBeenCalledWith(3, 4);
+        // The drag's click doesn't seek
+        expect(onSeek).not.toHaveBeenCalled();
+    });
+
+    it("won't drop a mark onto a measure that has one", () => {
+        const onMoveMark = vi.fn();
+        renderRow({
+            model: {
+                ...model,
+                measures: model.measures.map((m) =>
+                    m.id === 4 ? { ...m, rehearsalMark: "C" } : m,
+                ),
+            },
+            measureRow: { ...commands(), onMoveMark },
+        });
+        const [b] = screen.getAllByTestId("timeline-rehearsal-tab");
+        fireEvent.pointerDown(b!, { button: 0, clientX: 128 });
+        fireEvent.pointerMove(b!, { clientX: 190 });
+        expect(
+            screen.getByTestId("timeline-rehearsal-tab-ghost"),
+        ).toHaveAttribute("data-blocked", "true");
+        fireEvent.pointerUp(b!, { clientX: 190 });
+        expect(onMoveMark).not.toHaveBeenCalled();
     });
 
     it("double-click renames inline; Enter commits, Esc cancels", () => {

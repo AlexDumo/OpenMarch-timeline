@@ -193,6 +193,44 @@ describe("planMeasureLineEdit", () => {
         });
     });
 
+    describe("moveMark", () => {
+        it("moves a mark to a measure without one, leaving lines and beats alone", () => {
+            const lines = linesEvery(4, 4, { 1: "G" });
+            const after = run(lines, {
+                kind: "moveMark",
+                fromMeasureId: 2,
+                toMeasureId: 3,
+            });
+            expect(after.map((l) => l.mark)).toEqual([null, null, "G", null]);
+            expect(beatsOf(after)).toEqual(beatsOf(lines));
+        });
+
+        it("refuses a measure that has its own mark, and skips no-ops", () => {
+            const lines = linesEvery(4, 4, { 1: "G", 2: "H" });
+            expect(() =>
+                planMeasureLineEdit(lines, bounds, {
+                    kind: "moveMark",
+                    fromMeasureId: 2,
+                    toMeasureId: 3,
+                }),
+            ).toThrow(/already has rehearsal mark H/);
+            expect(
+                planMeasureLineEdit(lines, bounds, {
+                    kind: "moveMark",
+                    fromMeasureId: 2,
+                    toMeasureId: 2,
+                }).updates,
+            ).toEqual([]);
+            expect(
+                planMeasureLineEdit(lines, bounds, {
+                    kind: "moveMark",
+                    fromMeasureId: 1,
+                    toMeasureId: 4,
+                }).updates,
+            ).toEqual([]);
+        });
+    });
+
     describe("setBeats", () => {
         // m1..m8 of 4 beats over beats 1–32, D at m6
         const lines = linesEvery(4, 8, { 5: "D" });
