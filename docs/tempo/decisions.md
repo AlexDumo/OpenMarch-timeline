@@ -820,3 +820,91 @@ fixture list and how to score).
 - A ruler page box shows its tempo note only when name and note fit on one line, so it no
   longer wraps onto the time line (Dana B4, Jo bug 6). `formatShowTime` no longer reads "1:16.10"
   (Jo bug 2).
+
+## FE-1 Undo refreshes after every history write (fix pass, Priya blocker)
+
+- **Context:** count edits (cut, add counts, page flag grips) commit through
+  `transactionWithHistory` outside a TanStack mutation. The app refreshed `canUndo` only on
+  mutation events, so Undo stayed greyed out and Ctrl+Z said there was nothing to undo.
+- **Choice:** `transactionWithHistory` notifies `subscribeHistoryWrites` listeners after it
+  commits; `refreshHistoryOnWrites` (App) invalidates the history queries on those and on
+  mutations. Every write is covered, whoever calls it, so new tempo paths can't regress this.
+- **Alternatives:** route every commit through `useMutation`; invalidate `historyKeys` in each
+  caller (the drill-edit dialog does too, as a belt).
+- **Validate:** `historyWrites.test.ts` (one test per write path); V-82.
+
+## FE-2 A cut keeps its first rehearsal mark, and says how measures renumber (fix pass)
+
+- **Context:** a cut silently deleted marks on removed measures (F at m41) and renumbered every
+  measure after it.
+- **Choice:** by default (`marks: "move"`) the first mark on a removed measure moves to the first
+  measure after the cut, unless that measure has its own; other marks in the cut go. The dialog
+  offers "Keep F on the first measure after the cut" / "Remove F", and the report's summary lists
+  marks that move or go, "Later measures renumber: m57–96 become m41–80", and marks whose number
+  changes ("G m65 → m49"). The cut's measures go in the dialog's subtitle ("m41–56 (Pg 11 ct 1 –
+  Pg 14 ct 16): 64 counts"). Add counts reports renumbering the same way.
+- **Alternatives:** always drop (as before); move every mark (two marks on one measure).
+- **Validate:** V-83.
+
+## FE-3 "Did the recording lose these counts too?" on a cut (fix pass)
+
+- **Choice:** asked only when audio is loaded; default yes (their time goes with them). No keeps
+  the music where it is: the counts after the cut, to the end of the page that then holds them,
+  slow down evenly to fill the cut's seconds, so every later page keeps its time. The report shows
+  the tempo change ("Pg 11 gets slower: 120 → 24 BPM"), flagged as a warning when over half.
+- **Alternatives:** spread the time over the rest of the show (the end lines up, nothing else
+  does); a long hold on the last count before the cut; leave a gap (counts can't have one).
+- **Validate:** V-84. Open question: is "No" ever what a drill writer wants, or is it only "the
+  new recording isn't here yet"? If the latter, "Yes" plus a note may be enough.
+
+## FE-4 Starting a cut (fix pass)
+
+- **Choice:** any measure number (its downbeat tick), measure or tab offers "Remove m49's
+  counts…" (lowercase m everywhere); a right-click anywhere inside a drawn range (ruler, measure
+  row, waveform, clips) offers Remove counts… for the range; a right-click on empty space opens a
+  menu with Add counts at the playhead…; Ctrl/⌘+drag that starts on the
+  playhead draws a range (it used to scrub); with nothing drawn the menu says "Ctrl+drag across
+  measures to remove counts". The range is cleared after a count edit.
+- **Alternatives:** a "Remove measures…" dialog with from/to fields (Priya's suggestion; more
+  typing, but closer to how she thinks; not built).
+- **Validate:** V-85.
+
+## FE-5 Big steps and big tempo changes are warnings (fix pass)
+
+- **Choice:** a squeezed or stretched move is a warning (red, "!", "big steps, check this move")
+  when its largest step becomes bigger than 5 to 5, or gets more than half as long again while
+  bigger than 8 to 5; a step that was already a sprint and barely changes isn't flagged again. A
+  page tempo that changes by more than half is a warning too. The summary (marks, renumbering,
+  show length) sits under the dialog's title, above the choices; the clip lines follow in a box
+  up to 38% of the window, and the dialog may grow to 88% of it.
+- **Validate:** V-86. The thresholds are guesses for show tempo; a slow ballad tolerates bigger
+  steps.
+
+## FE-6 Holds are named after their measure (fix pass)
+
+- **Choice:** holding moves an add-with-hold makes are named "Hold (vamp m70)" (stored text,
+  English, like a typed clip name).
+- **Alternatives:** keep page moves and holds out of the clip lanes (bigger change; the page's
+  own move still shows as a clip once its page box grows).
+
+## FE-7 Align menus and the mixed-tempo chip (fix pass)
+
+- **Context:** a mouse click on Mark as synced fell through the portal to the pointer surface
+  (React events bubble through portals), which moved the playhead and captured the pointer, so the item was
+  never chosen.
+- **Choice:** the Align flag menu and the timeline's right-click menu stop pointer, click and
+  context-menu events at their content. A flag drag that re-spaces pages whose tempos differ by
+  1.5× or more turns the chip amber: "Pg 1–16 · avg 92 → 94 · includes 168 and 72 BPM sections,
+  all re-spaced alike". The drag's scope is unchanged (another worker owns it).
+- **Validate:** V-87.
+
+## FE-8 Moving a rehearsal mark by dragging its tab (fix pass)
+
+- **Choice:** in the Normal view a tab drags along the measure row and drops on the nearest
+  measure: a label-only edit (`moveMark`), one undo; a measure with a mark of its own refuses
+  (red ghost). In Align the tab drag still retimes; both tooltips say so. A pointer click on a
+  tab seeks and leaves it unfocused, so Backspace (Jo's "drop the last tap") can't remove it;
+  keyboard focus still renames (Enter) or removes (Delete).
+- **Alternatives:** the same gesture in both views (two meanings for one gesture remain); a
+  "Move G to…" menu item.
+- **Validate:** V-88.
