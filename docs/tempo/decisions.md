@@ -495,3 +495,12 @@ fixture list and how to score).
 - **Choice:** the strip sits over the waveform lane's left edge (full timeline only; compact has
   no room) and sticks to the viewport. "Tap the beat…" is in the Sound popover. The panel floats
   over the bottom of the field so the field and timeline stay visible. No header button.
+
+## TB-6 From here plays with a pre-roll
+
+- **Context:** Dana's E2 asks for a pre-roll before "here" so her taps have settled by the
+  playhead.
+- **Choice:** Play from here starts 8 counts before the playhead. Taps in the pre-roll set the tempo
+  but never move counts before the playhead. The playhead's count is fixed when Play or the first
+  tap happens, because pausing a play-on run moves the playhead (UI-12).
+- **Alternatives:** two measures (needs the meter; counts are what the panel knows); no pre-roll.

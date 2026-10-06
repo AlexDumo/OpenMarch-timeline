@@ -7,7 +7,17 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+    afterEach,
+    beforeAll,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+} from "vitest";
+import { TolgeeProvider } from "@tolgee/react";
+import tolgee from "@/global/singletons/Tolgee";
 import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
 import { defaultTempoLab, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -87,11 +97,19 @@ const withSettings = (
         ...settings,
     });
     return (
-        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        <TolgeeProvider tolgee={tolgee} fallback="Loading...">
+            <QueryClientProvider client={client}>
+                {children}
+            </QueryClientProvider>
+        </TolgeeProvider>
     );
 };
 
 const ENVELOPE = { peaks: new Float32Array(200 * 20), rate: 200 };
+
+beforeAll(async () => {
+    await tolgee.run();
+});
 
 beforeEach(() => {
     setFlag(true);
@@ -239,6 +257,31 @@ describe("tapping and applying", () => {
         expect(
             screen.getByText("Play the music first, then tap along."),
         ).toBeInTheDocument();
+    });
+
+    it("keeps From here on the count tapping began at, after the playhead moves", async () => {
+        useTimelineSelectionStore.getState().selectRange(1, 9);
+        useTapTheBeatStore.getState().setOpen(true);
+        render(withSettings(<TapTheBeatPanel />));
+        expect(
+            screen.getByRole("radio", { name: "From here" }),
+        ).toHaveAttribute("aria-checked", "true");
+        // The playhead's count 9 starts at 4 s; tap from there at 120 per minute
+        for (let i = 0; i < 8; i++) tapAt(4 + i * 0.5);
+        // Pausing a play-on run moves the playhead (UI-12)
+        void act(() => useTimelineSelectionStore.getState().selectRange(9, 16));
+        expect(screen.getByTestId("tap-sentence")).toHaveTextContent(
+            "From page 2, count 9",
+        );
+        await act(async () => {
+            fireEvent.click(screen.getByTestId("tap-apply"));
+        });
+        const args = mocks.apply.mock.calls[0]![0] as unknown as {
+            newDurationsByBeatId: Map<number, number>;
+            originShift: number;
+        };
+        expect(args.originShift).toBe(0);
+        expect(args.newDurationsByBeatId.get(101)).toBe(0.5);
     });
 
     it("÷2 halves a tempo tapped on every half count", () => {
