@@ -873,6 +873,8 @@ const TimelineSurface = memo(function TimelineSurface({
                             snapBeats={snapBeats}
                             onCommit={commitSelection}
                             onInteractionChange={selectionInteraction.set}
+                            positionBeat={positionBeat}
+                            scrubLine={pointer.scrubLine}
                         />
                     )}
                     {selectionRange && (

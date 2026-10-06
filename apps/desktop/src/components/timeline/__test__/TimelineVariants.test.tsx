@@ -1060,6 +1060,11 @@ describe("a calmer timeline (UI-12)", () => {
                 <ExpandedTimeline
                     {...commonProps}
                     positionBeat={position}
+                    // The window [S, P), with the start flag on beat 2
+                    selection={{
+                        kind: "range",
+                        range: { startBeatIndex: 2, endBeatIndex: position },
+                    }}
                     showTransport={false}
                     onSeek={(beat, options) => {
                         onSeek(beat, options);
@@ -1080,13 +1085,21 @@ describe("a calmer timeline (UI-12)", () => {
         expect(onSeek).toHaveBeenLastCalledWith(6, { gesture: "drag" });
         expect(playhead).toHaveStyle({ left: "96px" });
         expect(playhead.style.transform).toBe("translateX(4px)");
+        // The window's tint keeps up with the line: 64px from the start flag (32px) to 96px,
+        // stretched to 68px
+        const tint = screen
+            .getByTestId("timeline-selection-range")
+            .querySelector("span")!;
+        expect(tint).toHaveStyle({ left: "32px", width: "64px" });
+        expect(tint.style.transform).toBe(`scaleX(${68 / 64})`);
         // Within the same beat the line still moves
         press(surface, "pointermove", 102);
         expect(playhead.style.transform).toBe("translateX(6px)");
         press(surface, "pointerup", 102);
         expect(onSeek).toHaveBeenLastCalledWith(6, { gesture: "end" });
-        // Released, the line settles on the beat
+        // Released, the line and the window settle on the beat
         expect(playhead.style.transform).toBe("");
+        expect(tint.style.transform).toBe("");
         expect(playhead).toHaveStyle({ left: "96px" });
     });
 

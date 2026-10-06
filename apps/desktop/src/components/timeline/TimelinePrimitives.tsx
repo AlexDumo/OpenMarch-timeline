@@ -1157,6 +1157,8 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     snapBeats = [],
     onCommit,
     onInteractionChange,
+    positionBeat,
+    scrubLine,
 }: {
     range: TimelineBeatRange;
     /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
@@ -1186,8 +1188,14 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     onInteractionChange?: (
         interaction: TimelineSelectionInteraction | null,
     ) => void;
+    /** The playhead (view beats): while a scrub is down, a window ending on it keeps up with
+     * the scrub's line (`scrubLine`, `useScrubStretch`) */
+    positionBeat?: number;
+    scrubLine?: TimelineLiveValue<number | null>;
 }) {
     const [preview, setPreview] = useState(range);
+    const tintRef = useRef<HTMLSpanElement>(null);
+    const barRef = useRef<HTMLSpanElement>(null);
     const previewRef = useRef(range);
     const dragRef = useRef<{
         kind: "start" | "end";
@@ -1488,6 +1496,16 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     // Rounded like the flag, so the window and the From start bar start on the stem's pixel
     const startX = Math.round(beatToX(preview.startBeatIndex, pixelsPerBeat));
     const endX = Math.round(beatToX(preview.endBeatIndex, pixelsPerBeat));
+    const endsOnPlayhead =
+        positionBeat !== undefined && preview.endBeatIndex === positionBeat;
+    useScrubStretch(
+        [tintRef, barRef],
+        endsOnPlayhead ? scrubLine : undefined,
+        positionBeat ?? 0,
+        startX,
+        endX,
+        pixelsPerBeat,
+    );
     return (
         // No z-index here: one would make a stacking context, and the start pennant must rise
         // above the playhead (z-50), which is outside it. Each child sets its own instead.
@@ -1496,10 +1514,11 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             className="pointer-events-none absolute inset-0"
         >
             <span
+                ref={tintRef}
                 aria-hidden="true"
                 className={clsx(
                     // 1px down, inside the ruler's border, like the flag and the page boxes
-                    "absolute top-px z-30",
+                    "absolute top-px z-30 origin-left",
                     fromStart ? "bg-yellow/12" : "bg-accent/8",
                 )}
                 style={{
@@ -1528,8 +1547,9 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     }}
                 >
                     <span
+                        ref={barRef}
                         className={clsx(
-                            "absolute top-px h-3 transition-[height] duration-100 group-hover:h-5",
+                            "absolute top-px h-3 origin-left transition-[height] duration-100 group-hover:h-5",
                             START_INK.bg,
                         )}
                         style={{
@@ -1691,6 +1711,43 @@ export const useScrubFollow = (
         const x = Math.round(beatToX(beat, pixelsPerBeat) * ratio) / ratio;
         element.style.transform = `translateX(${x - restingLeft}px)`;
     }, [paused, pixelsPerBeat, positionBeat, ref, restingLeft, scrubLine]);
+    useLayoutEffect(apply, [apply]);
+    useEffect(() => scrubLine?.subscribe(apply), [apply, scrubLine]);
+};
+
+/**
+ * Stretches flat fills that run from `startX` to the playhead (`endX`, for `positionBeat`) to
+ * where a scrub draws the line, with a transform (scaleX from the left edge), so the window keeps
+ * up with the line between beats. Cleared, as `useScrubFollow`, with the scrub.
+ */
+const useScrubStretch = (
+    refs: readonly RefObject<HTMLElement | null>[],
+    scrubLine: TimelineLiveValue<number | null> | undefined,
+    positionBeat: number,
+    startX: number,
+    endX: number,
+    pixelsPerBeat: number,
+) => {
+    const apply = useCallback(() => {
+        const line = scrubLine?.get() ?? null;
+        let transform = "";
+        if (line !== null && endX > startX) {
+            const ratio = window.devicePixelRatio || 1;
+            const x =
+                Math.round(
+                    beatToX(scrubLineNear(line, positionBeat), pixelsPerBeat) *
+                        ratio,
+                ) / ratio;
+            transform = `scaleX(${Math.max(0, x - startX) / (endX - startX)})`;
+        }
+        for (const ref of refs) {
+            const element = ref.current;
+            if (element && element.style.transform !== transform)
+                element.style.transform = transform;
+        }
+        // The refs are fixed for the caller's lifetime
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [endX, pixelsPerBeat, positionBeat, scrubLine, startX]);
     useLayoutEffect(apply, [apply]);
     useEffect(() => scrubLine?.subscribe(apply), [apply, scrubLine]);
 };
