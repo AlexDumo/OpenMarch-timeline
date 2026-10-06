@@ -140,12 +140,14 @@ export interface DrillImpactLine {
 }
 
 /**
- * A step worth a warning: bigger than 5 to 5 (`stepAfter` below 5 steps per five yards), or more
- * than half as long again as it was while bigger than 8 to 5.
+ * A step worth a warning: one that becomes bigger than 5 to 5 (`stepAfter` below 5 steps per five
+ * yards when it wasn't before), or gets more than half as long again while bigger than 8 to 5. A
+ * step that was already that big and barely changes isn't flagged again.
  */
 export const isBigStep = (stepBefore: number | undefined, stepAfter: number) =>
     Number.isFinite(stepAfter) &&
-    (stepAfter < BIG_STEP_TO_FIVE ||
+    ((stepAfter < BIG_STEP_TO_FIVE &&
+        (stepBefore === undefined || stepBefore >= BIG_STEP_TO_FIVE)) ||
         (stepAfter < 8 &&
             stepBefore !== undefined &&
             Number.isFinite(stepBefore) &&
@@ -185,6 +187,7 @@ const stepsChange = (move: DrillMoveImpact, t: DrillTranslate) =>
         : "";
 
 /** One clip's line */
+// eslint-disable-next-line max-lines-per-function
 export function moveLine(
     move: DrillMoveImpact,
     t: DrillTranslate,
@@ -287,6 +290,7 @@ export function moveLine(
  * pages, then a summary of moves that only shift, then tempo. `limit` caps the clip lines (the
  * rest are summed up in one line).
  */
+// eslint-disable-next-line max-lines-per-function
 export function impactLines(
     impact: DrillImpact,
     t: DrillTranslate,

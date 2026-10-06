@@ -67,6 +67,8 @@ export interface TimelineMenuTarget {
      * counts…** acts on it
      */
     readonly cut?: TimelineBeatRange;
+    /** Empty space: only Add counts at the playhead… and the hint on drawing a cut */
+    readonly blank?: boolean;
 }
 
 /**
@@ -162,6 +164,7 @@ const countEditsFor = <T,>(
     // their own, whose range isn't a cut, nor a count that isn't a measure's downbeat
     const remove =
         menu.onRemoveCounts !== undefined &&
+        !target.blank &&
         (target.cut !== undefined ||
             (target.pageId === undefined &&
                 target.trackId === undefined &&
@@ -200,7 +203,7 @@ export function useTimelineRangeMenu({
     } | null>(null);
     const menu = givenMenu ?? (extraItems ? NO_MENU : undefined);
     const extrasFor = (target: TimelineMenuTarget) =>
-        target.measureRow ? [] : (extraItems?.(target) ?? []);
+        target.measureRow || target.blank ? [] : (extraItems?.(target) ?? []);
     const onContextMenu = (event: MouseEvent<HTMLElement>) => {
         if (!menu) return;
         const target = resolveRange(event);
@@ -213,7 +216,7 @@ export function useTimelineRangeMenu({
             const canDelete =
                 menu.onDeleteFlag !== undefined && target.pageId !== undefined;
             if (
-                !menu.onAdd &&
+                (!menu.onAdd || target.blank) &&
                 !canDelete &&
                 !countEditsFor(menu, target).any &&
                 extrasFor(target).length === 0
@@ -252,17 +255,20 @@ export function useTimelineRangeMenu({
                 >
                     {open.target.measureRow &&
                         menu.measureRowItems?.(open.target.measureRow)}
-                    {!open.target.measureRow && menu.onAdd && (
-                        <DropdownMenu.Item
-                            disabled={disabledReason !== null}
-                            onSelect={() => menu.onAdd?.(open.target)}
-                            className="rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50"
-                        >
-                            <UserPlusIcon size={14} />
-                            Add selected marchers
-                        </DropdownMenu.Item>
-                    )}
                     {!open.target.measureRow &&
+                        !open.target.blank &&
+                        menu.onAdd && (
+                            <DropdownMenu.Item
+                                disabled={disabledReason !== null}
+                                onSelect={() => menu.onAdd?.(open.target)}
+                                className="rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50"
+                            >
+                                <UserPlusIcon size={14} />
+                                Add selected marchers
+                            </DropdownMenu.Item>
+                        )}
+                    {!open.target.measureRow &&
+                        !open.target.blank &&
                         menu.onAdd &&
                         disabledReason !== null && (
                             <p
@@ -298,7 +304,7 @@ export function useTimelineRangeMenu({
                                 Delete page flag
                             </DropdownMenu.Item>
                         )}
-                    {counts?.any && (
+                    {counts?.any && !open.target.blank && (
                         <DropdownMenu.Separator className="bg-stroke my-2 h-px" />
                     )}
                     {counts?.remove && (

@@ -125,26 +125,29 @@ const TONE: Record<DrillImpactLine["tone"], string> = {
 };
 
 /**
- * The report: the summary (marks, renumbering, show length) first and always in view, then the
- * clip and page lines, in a box that grows with the dialog before it scrolls
+ * The report in two parts: the summary (marks, renumbering, show length), shown under the title
+ * so it is in view before any choice, and the clip and page lines, in a box that grows with the
+ * dialog before it scrolls
  */
-function ImpactList({ impact }: { impact: DrillImpact }) {
-    const lines = impactLines(impact, t);
-    const summary = lines.filter((line) => line.summary);
-    const details = lines.filter((line) => !line.summary);
-    return (
-        <div className="flex flex-col gap-6">
-            {summary.length > 0 && (
-                <Lines testId="drill-edit-summary" lines={summary} />
-            )}
-            {details.length > 0 && (
-                <Lines
-                    testId="drill-edit-impact"
-                    lines={details}
-                    className="max-h-[38vh] overflow-y-auto"
-                />
-            )}
-        </div>
+function ImpactList({
+    impact,
+    part,
+}: {
+    impact: DrillImpact;
+    part: "summary" | "details";
+}) {
+    const lines = impactLines(impact, t).filter(
+        (line) => !!line.summary === (part === "summary"),
+    );
+    if (lines.length === 0) return null;
+    return part === "summary" ? (
+        <Lines testId="drill-edit-summary" lines={lines} />
+    ) : (
+        <Lines
+            testId="drill-edit-impact"
+            lines={lines}
+            className="max-h-[38vh] overflow-y-auto"
+        />
     );
 }
 
@@ -528,7 +531,8 @@ export default function DrillEditDialog({
         <Dialog open onOpenChange={(open) => !open && onClose()}>
             <DialogContent
                 data-testid="drill-edit-dialog"
-                className="w-[460px] max-w-[95vw]"
+                // Taller than the default dialog: the summary, the choices and the report
+                className="max-h-[88vh]! w-[480px] max-w-[95vw]"
                 aria-describedby={undefined}
             >
                 <DialogTitle>{title}</DialogTitle>
@@ -538,6 +542,7 @@ export default function DrillEditDialog({
                     </span>
                 </DialogDescription>
                 <div className="flex flex-col gap-14 overflow-y-auto">
+                    {impact && <ImpactList impact={impact} part="summary" />}
                     {request.kind === "add" && (
                         <>
                             <label className="flex items-center gap-8 text-[12px]">
@@ -756,7 +761,7 @@ export default function DrillEditDialog({
                             )}
                         </span>
                         {impact ? (
-                            <ImpactList impact={impact} />
+                            <ImpactList impact={impact} part="details" />
                         ) : error ? (
                             <div
                                 role="alert"

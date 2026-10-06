@@ -157,6 +157,9 @@ describe("drill edit words", () => {
         expect(isBigStep(8, 5.5)).toBe(false);
         expect(isBigStep(9, 5.5)).toBe(true);
         expect(isBigStep(undefined, 6)).toBe(false);
+        // Already a sprint, and barely changing: not flagged again
+        expect(isBigStep(1.9, 1.8)).toBe(false);
+        expect(isBigStep(Infinity, 4)).toBe(true);
         const impact: DrillImpact = {
             countsBefore: 96,
             countsAfter: 80,

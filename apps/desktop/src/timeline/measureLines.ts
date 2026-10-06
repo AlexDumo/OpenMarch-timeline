@@ -113,6 +113,7 @@ const assertBeats = (beats: number) => {
  * The row writes for `edit` on `lines`. Throws for an edit the measure row never offers (an
  * unknown measure, measure 1's line, a beat outside the show), which is a caller's mistake.
  */
+// eslint-disable-next-line max-lines-per-function
 export function planMeasureLineEdit(
     lines: readonly MeasureLine[],
     bounds: MeasureLineBounds,

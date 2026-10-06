@@ -387,6 +387,31 @@ describe("the measure row's menu", () => {
         );
     });
 
+    it("on empty space, offers Add counts at the playhead… and how to draw a cut", () => {
+        const onAddCountsAtPlayhead = vi.fn();
+        renderRow({
+            addSelectedMarchers: {
+                onRemoveCounts: vi.fn(),
+                onAddCountsAtPlayhead,
+                onAdd: vi.fn(),
+            },
+        });
+        // Below the measure row, on the waveform
+        fireEvent.contextMenu(screen.getByTestId("timeline-pointer-surface"), {
+            clientX: 10 * 16,
+            clientY: 70,
+        });
+        const menu = screen.getByTestId("timeline-range-menu");
+        expect(menu).toHaveTextContent("Add counts at the playhead…");
+        expect(menu).toHaveTextContent(
+            "Ctrl+drag across measures to remove counts",
+        );
+        expect(menu).not.toHaveTextContent("Add selected marchers");
+        expect(
+            screen.queryByTestId("timeline-range-menu-remove-counts"),
+        ).not.toBeInTheDocument();
+    });
+
     it("on a tab, names the measure in lowercase too", () => {
         renderRow({ addSelectedMarchers: { onRemoveCounts: vi.fn() } });
         fireEvent.contextMenu(screen.getByTestId("timeline-rehearsal-tab"));

@@ -1058,7 +1058,26 @@ function TimelineSurface({
             // A drawn range under the pointer is the cut whatever else is there: ruler, measure
             // row, waveform or a clip
             const cut = drawnRangeAt(event);
-            if (!target) return cut ? { range: cut, cut } : null;
+            if (!target) {
+                if (cut) return { range: cut, cut };
+                // Empty space, with count edits on: a menu that can add counts at the playhead
+                // and says how to draw a cut
+                if (!props.addSelectedMarchers?.onRemoveCounts) return null;
+                const surface = event.currentTarget.querySelector(
+                    '[data-testid="timeline-pointer-surface"]',
+                );
+                if (!surface) return null;
+                const beat = Math.floor(
+                    axis.beatAt(
+                        event.clientX - surface.getBoundingClientRect().left,
+                    ),
+                );
+                if (beat < 0 || beat >= model.beatCount) return null;
+                return {
+                    range: { startBeatIndex: beat, endBeatIndex: beat + 1 },
+                    blank: true,
+                };
+            }
             return cut ? { ...target, cut } : target;
         },
     });
