@@ -227,6 +227,39 @@ export function appearanceStackAtBeat(
     return stacks[found]!;
 }
 
+/**
+ * Every beat at which any marcher's appearance changes, ascending and without repeats. Between two
+ * of them nobody's appearance changes, so a reader can follow the appearance by the index of the
+ * last one at or before a beat (`changeIndexAtBeat`) instead of by every beat.
+ */
+export function appearanceChangeBeats(
+    steps: AppearanceStepsByMarcherId,
+): number[] {
+    const all = new Set<number>();
+    for (const marcherSteps of steps.values())
+        for (const beat of marcherSteps.beats) all.add(beat);
+    return [...all].sort((a, b) => a - b);
+}
+
+/**
+ * How many of `changeBeats` are at or before `beat` (with the same float tolerance as
+ * `appearanceStackAtBeat`): it changes only when the appearance of someone can.
+ */
+export function changeIndexAtBeat(
+    changeBeats: readonly number[],
+    beat: number,
+): number {
+    const b = beat + FLAG_EPSILON;
+    let lo = 0;
+    let hi = changeBeats.length;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (changeBeats[mid]! <= b) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+}
+
 /** The marchers whose appearance at `beat` is hidden, so they can't be selected. */
 export function hiddenMarcherIdsAtBeat(
     steps: AppearanceStepsByMarcherId,

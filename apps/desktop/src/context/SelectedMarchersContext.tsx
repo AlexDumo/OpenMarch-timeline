@@ -14,7 +14,11 @@ import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppear
 import { appearanceIsHidden } from "@/entity-components/appearance";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useMarcherAppearanceSteps } from "@/hooks/useMarcherAppearanceSteps";
-import { hiddenMarcherIdsAtBeat } from "@/services/appearance/appearanceSteps";
+import {
+    appearanceChangeBeats,
+    changeIndexAtBeat,
+    hiddenMarcherIdsAtBeat,
+} from "@/services/appearance/appearanceSteps";
 import {
     displayedBeat,
     useTimelineSelectionStore,
@@ -56,11 +60,21 @@ export function SelectedMarchersProvider({
         enabled: selectedPage !== null && !timelineMode,
     });
     const appearanceSteps = useMarcherAppearanceSteps(timelineMode);
-    const beat = useTimelineSelectionStore(displayedBeat);
+    const changeBeats = useMemo(
+        () => (appearanceSteps ? appearanceChangeBeats(appearanceSteps) : []),
+        [appearanceSteps],
+    );
+    // Re-render only when the displayed beat crosses an appearance change, not on every beat
+    const changeIndex = useTimelineSelectionStore((s) =>
+        changeIndexAtBeat(changeBeats, displayedBeat(s)),
+    );
     const hiddenMarcherIds: Set<number> = useMemo(() => {
         if (timelineMode)
             return appearanceSteps
-                ? hiddenMarcherIdsAtBeat(appearanceSteps, beat)
+                ? hiddenMarcherIdsAtBeat(
+                      appearanceSteps,
+                      changeIndex > 0 ? changeBeats[changeIndex - 1]! : 0,
+                  )
                 : new Set();
         if (marcherAppearances == null) return new Set();
         const hiddenMarcherIds = new Set(
@@ -71,7 +85,13 @@ export function SelectedMarchersProvider({
                 .map((marcherAppearance) => parseInt(marcherAppearance[0])),
         );
         return hiddenMarcherIds;
-    }, [timelineMode, appearanceSteps, beat, marcherAppearances]);
+    }, [
+        timelineMode,
+        appearanceSteps,
+        changeBeats,
+        changeIndex,
+        marcherAppearances,
+    ]);
 
     // Update the selected marcher if the marchers list changes. This refreshes the information of the selected marcher
     useEffect(() => {

@@ -4,6 +4,8 @@ import type Marcher from "@/global/classes/Marcher";
 import type Page from "@/global/classes/Page";
 import type { SectionAppearance, TagAppearance } from "@/db-functions";
 import {
+    appearanceChangeBeats,
+    changeIndexAtBeat,
     appearanceFlagsKey,
     appearanceStackAtBeat,
     buildAppearanceSteps,
@@ -256,6 +258,20 @@ describe("appearanceStackAtBeat", () => {
                 byPage.get(exportPage.id),
             );
         }
+    });
+});
+
+describe("appearanceChangeBeats and changeIndexAtBeat", () => {
+    it("lists every beat where someone's appearance changes, and counts those crossed", () => {
+        const changes = appearanceChangeBeats(build());
+        expect(changes).toEqual([0, 9, 17]);
+        expect(changeIndexAtBeat(changes, -1)).toBe(0);
+        expect(changeIndexAtBeat(changes, 0)).toBe(1);
+        expect(changeIndexAtBeat(changes, 8.99)).toBe(1);
+        expect(changeIndexAtBeat(changes, 9 - 1e-9)).toBe(2);
+        expect(changeIndexAtBeat(changes, 12)).toBe(2);
+        expect(changeIndexAtBeat(changes, 100)).toBe(3);
+        expect(changeIndexAtBeat([], 5)).toBe(0);
     });
 });
 
