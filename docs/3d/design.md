@@ -226,7 +226,7 @@ approved reference, converted to meters (1 ft = 0.3048 m).
   editor contexts.
 - The window's Drizzle instance uses `window.view3d.sqlRead` as its proxy, so
   the existing query options work unchanged. Writes go only through
-  `requestVenueChange`.
+  `requestVenueChange`, and playback only through `requestPlayback`.
 - **Publisher (editor):** `useView3dPublisher()` is mounted once in the editor.
   It sends:
   - `clock` on play, pause, seek and page change, and every second while
@@ -237,7 +237,10 @@ approved reference, converted to meters (1 ft = 0.3048 m).
 
   It answers `hello` and handles `venue-change-request`. It does nothing when
   no 3D View window is open (main tells it with `view3d:window-state`, a
-  boolean push).
+  boolean push), except open the window with a show when the app setting
+  `view3dAutoOpen` is on. `RegisteredActionsHandler` handles
+  `playback-request` by running the same registered action as the editor's
+  playback buttons.
 
 - **Window store:** the anchor, the selection and a `showMs()` reader built on
   `showTimeAt`. Components read it in `useFrame`, not through React renders.

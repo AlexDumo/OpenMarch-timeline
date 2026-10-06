@@ -315,8 +315,10 @@ relative to the tier's cap. Keep today's sampler (0.5 s windows, frames over
 
 ### UI
 
-A `SlidersHorizontal` button joins the top-right panel after Fullscreen and
-opens a popover (hidden with the overlay in fullscreen):
+Since 2026-10-05 the window has a View settings panel ([ui.md](ui.md) UI-7)
+whose Graphics section holds Quality (Automatic, Low, High, in the window's
+local storage). This UI grows inside that section rather than as a separate
+popover; the sketch below is otherwise unchanged:
 
 ```text
 ┌ Graphics ─────────────────────────────────────────── ✕ ┐
