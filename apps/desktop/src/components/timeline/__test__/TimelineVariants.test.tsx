@@ -305,7 +305,7 @@ describe("timeline views", () => {
         }
     });
 
-    it("shows counts for any concrete selection range", () => {
+    it("shows the window's counts only when it starts off a page line (UI-13)", () => {
         const onCreateTrack = vi.fn();
         const { rerender } = render(
             <ExpandedTimeline
@@ -318,9 +318,10 @@ describe("timeline views", () => {
             />,
         );
 
+        // From a page line, the window's count is the playhead's count, which the transport shows
         expect(
-            screen.getByTestId("timeline-selection-count"),
-        ).toHaveTextContent("8 counts");
+            screen.queryByTestId("timeline-selection-count"),
+        ).not.toBeInTheDocument();
 
         rerender(
             <ExpandedTimeline
@@ -334,8 +335,8 @@ describe("timeline views", () => {
             />,
         );
         expect(
-            screen.getByTestId("timeline-selection-count"),
-        ).toHaveTextContent("16 counts");
+            screen.queryByTestId("timeline-selection-count"),
+        ).not.toBeInTheDocument();
         expect(
             screen.queryByRole("button", { name: "Create Track" }),
         ).not.toBeInTheDocument();
@@ -471,9 +472,11 @@ describe("timeline views", () => {
         });
         expect(actions).toHaveStyle({ left: "150px", transform: "" });
         const create = screen.getByRole("button", { name: "Create Track" });
+        // UI-13: released on page 1's start line, the window's count is the playhead's, so it hides
         expect(
-            screen.getByTestId("timeline-selection-count").nextElementSibling,
-        ).toBe(create);
+            screen.queryByTestId("timeline-selection-count"),
+        ).not.toBeInTheDocument();
+        expect(actions.firstElementChild).toBe(create);
         fireEvent.click(create);
         expect(onCreateTrack).toHaveBeenCalledWith({
             target: { id: "marcher-1", type: "marcher" },
@@ -602,7 +605,7 @@ describe("timeline views", () => {
         }
     });
 
-    it("uses the playhead as the only hover detail and scrubs on drag", () => {
+    it("scrubs on drag, with no hover tooltip over the transport (UI-13)", () => {
         const onSeek = vi.fn();
         render(
             <ExpandedTimeline
@@ -625,15 +628,10 @@ describe("timeline views", () => {
         expect(screen.getAllByTestId("timeline-playhead")).toHaveLength(1);
 
         fireEvent.pointerEnter(playhead);
-        const detail = screen.getByRole("tooltip");
-        expect(detail).toHaveTextContent("Pg 2 · m3.4");
-        expect(surface.contains(detail)).toBe(false);
-        fireEvent.pointerLeave(playhead);
         expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-        fireEvent.focus(playhead);
-        expect(screen.getByRole("tooltip")).toBeInTheDocument();
-        fireEvent.blur(playhead);
-        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+        expect(playhead).toHaveAccessibleName(
+            "Playback position: Page 2, count 3 of 8, measure 3 beat 4",
+        );
 
         fireEvent(
             surface,
@@ -643,7 +641,7 @@ describe("timeline views", () => {
                 clientX: 64,
             }),
         );
-        expect(screen.getByRole("tooltip")).toBeInTheDocument();
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
         fireEvent(
             surface,
             new MouseEvent("pointermove", { bubbles: true, clientX: 96 }),
@@ -962,22 +960,23 @@ describe("review follow-ups", () => {
         });
     });
 
-    it("names the given page in the transport and playhead labels", () => {
+    it("names the page ending on a flag in the transport and the playhead alike (UI-13)", () => {
         render(
             <ExpandedTimeline
                 {...commonProps}
                 positionBeat={16}
-                pageLabel="2"
                 showTransport
             />,
         );
-        // Beat 16 is page 2A's first beat, but the caller names page 2
-        const transport = screen.getByRole("group", { name: "Transport" });
-        expect(transport).toHaveTextContent("Pg 2");
-        expect(transport).not.toHaveTextContent("Pg 2A");
+        // Beat 16 is page 2's flag and page 2A's first beat: both name page 2, its last count
+        expect(screen.getByTestId("timeline-readout")).toHaveTextContent(
+            "Pg 2 · ct 8/8m5 beat 1",
+        );
         expect(
             screen.getByRole("button", { name: /^Playback position:/ }),
-        ).toHaveAccessibleName("Playback position: Pg 2 · m5.1");
+        ).toHaveAccessibleName(
+            "Playback position: Page 2, count 8 of 8, measure 5 beat 1",
+        );
     });
 });
 
@@ -1202,7 +1201,7 @@ describe("a calmer timeline (UI-12)", () => {
             />,
         );
         expect(screen.getByTestId("timeline-readout")).toHaveTextContent(
-            "Pg 1 · ct 8",
+            "Pg 1 · ct 8/8",
         );
     });
 

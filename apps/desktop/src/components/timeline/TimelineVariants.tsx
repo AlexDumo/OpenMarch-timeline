@@ -14,6 +14,7 @@ import {
     beatToX,
     clamp,
     getPageSnapBeats,
+    getWindowCountLabel,
     getSelectionRange,
     getTrackRange,
     sameRange,
@@ -25,7 +26,6 @@ import {
     TIMELINE_MIN_PX_PER_BEAT,
     TimelinePageLines,
     TimelinePlayhead,
-    TimelinePlayheadDetail,
     TimelineRehearsalMarkers,
     TimelineRuler,
     TimelineSelectionRange,
@@ -395,8 +395,6 @@ function TimelineSurface({
     const expanded = density === "expanded";
     const viewportRef = useRef<HTMLDivElement>(null);
     const playheadRef = useRef<HTMLButtonElement>(null);
-    const [playheadHovered, setPlayheadHovered] = useState(false);
-    const [playheadFocused, setPlayheadFocused] = useState(false);
     const rows = useMemo(
         () => packTimelineTracks(model.tracks),
         [model.tracks],
@@ -487,14 +485,18 @@ function TimelineSurface({
         beatCount: model.beatCount,
         snapBeats,
     });
+    // UI-13: the window's count shows while a handle is dragged, or when the window starts off a
+    // page line; from a page line, it is the playhead's count, which the transport already shows
+    const showWindowCount =
+        displayedSelectionRange != null &&
+        (selectionDragging ||
+            !snapBeats.includes(displayedSelectionRange.startBeatIndex));
     const showCreateTrack =
         selection?.kind === "range" &&
         selectedTarget != null &&
         selectionRange != null &&
         props.onCreateTrack != null &&
         !selectionDragging;
-    const showPlayheadDetail =
-        playheadHovered || playheadFocused || pointer.isDragging;
     const transportProps = {
         ...props,
         onNavigate: transportNavigation(props),
@@ -597,6 +599,7 @@ function TimelineSurface({
                         initialPageWidth={initialPageWidth}
                         showMeasures={expanded}
                         seekSnapBeats={seekSnapBeats}
+                        positionBeat={positionBeat}
                     />
                     {rows.flatMap((row, rowIndex) =>
                         row.map((track) => (
@@ -665,13 +668,10 @@ function TimelineSurface({
                         livePositionBeat={
                             props.isPlaying ? props.livePositionBeat : undefined
                         }
-                        pageLabel={props.pageLabel}
                         pixelsPerBeat={pixelsPerBeat}
                         height={timelineHeight}
                         beatCount={model.beatCount}
                         anchorRef={playheadRef}
-                        onHoverChange={setPlayheadHovered}
-                        onFocusChange={setPlayheadFocused}
                         onSeek={props.onSeek}
                     />
                     {props.onAddPageFlag && !props.isPlaying && (
@@ -691,15 +691,6 @@ function TimelineSurface({
                             <PlusIcon size={10} weight="bold" />
                         </button>
                     )}
-                    <TimelinePlayheadDetail
-                        model={model}
-                        positionBeat={positionBeat}
-                        pageLabel={props.pageLabel}
-                        pixelsPerBeat={pixelsPerBeat}
-                        height={timelineHeight}
-                        anchorRef={playheadRef}
-                        visible={showPlayheadDetail}
-                    />
                     {pointer.rangePreview && (
                         <div
                             data-testid="timeline-range-preview"
@@ -773,19 +764,22 @@ function TimelineSurface({
                                     : undefined,
                             }}
                         >
-                            <span
-                                data-testid="timeline-selection-count"
-                                className={clsx(
-                                    "border-stroke bg-bg-1 text-text rounded-6 border font-mono whitespace-nowrap",
-                                    expanded
-                                        ? "px-8 py-2 text-[10px]"
-                                        : "px-6 py-0 text-[9px]",
-                                )}
-                            >
-                                {displayedSelectionRange.endBeatIndex -
-                                    displayedSelectionRange.startBeatIndex}{" "}
-                                counts
-                            </span>
+                            {showWindowCount && (
+                                <span
+                                    data-testid="timeline-selection-count"
+                                    className={clsx(
+                                        "border-stroke bg-bg-1 text-text rounded-6 border font-mono whitespace-nowrap",
+                                        expanded
+                                            ? "px-8 py-2 text-[10px]"
+                                            : "px-6 py-0 text-[9px]",
+                                    )}
+                                >
+                                    {getWindowCountLabel(
+                                        model,
+                                        displayedSelectionRange,
+                                    )}
+                                </span>
+                            )}
                             {showCreateTrack && selectedTarget && (
                                 <button
                                     type="button"

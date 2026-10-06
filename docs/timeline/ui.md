@@ -417,7 +417,7 @@ from it. The spec still wins on the model; this file decides presentation.
     cross them. Rehearsal marks are tabs in the measure row, in place of their measure's number;
     they are never thinned away when zoomed out, and numbers near them give way. Page labels hide
     when their box is too narrow to read them.
-  - **One readout,** in the transport: "Pg 3 · ct 8 m7.1". The count is counted to the page's flag,
+  - **One readout** (superseded by UI-13), in the transport: "Pg 3 · ct 8 m7.1". The count is counted to the page's flag,
     as page counts are, so the playhead on page 3's flag is count 8 of page 3. Past the last flag it
     reads "Pg 6 · +4". The paused clock shows the time at the playhead.
   - **The transport is the timeline's header row** (project owner, 2026-10-05, after reviewing
@@ -488,6 +488,37 @@ from it. The spec still wins on the model; this file decides presentation.
     (backlog), timeline zoom keys besides Shift+Z (Ctrl+= and Ctrl+- are the app's page zoom),
     viewport-sized canvases for long shows at high zoom, and computing the waveform's envelope in
     the audio worker.
+
+- **UI-13: page, count and measure, told apart (project owner, 2026-10-05).** The owner found the
+  page, measure and count display unclear. A review of the running app found page and measure
+  numbers both bare digits one row apart (home's "0" over measures "1 2 3 4"), a readout running
+  three numbers together ("Pg 2 · ct 7 m6.4"), broken text with no measure ("m–.1" at home,
+  "m—.32" in a show without measures), no count numbers on the timeline, a window badge ("7
+  counts") repeating the readout's count with another meaning, and a playhead tooltip that covered
+  the readout and, while playing, named the next page on a flag. A UX review of the first proposal
+  cut it back: no new row, no "16 ct" page lengths, no "m" back on the ruler, and one vocabulary.
+  Supersedes UI-12's **One readout** text, and its playhead tooltip.
+  - **Page boxes** keep their bare label at the flag (no "Pg": the box and a heavier weight tell it
+    from the numbers under it; project owner), sticking to the viewport's edge while the flag is
+    scrolled away, so a long page always shows its name. Home is a house, not "0".
+  - **The readout** is "Pg 2 · ct 7/16", then a dim "m4 beat 4". The "/16" says whose count it is;
+    a measure's beat counts from its downbeat, so on a flag it reads "ct 16/16 m7 beat 1". Home
+    reads "Home"; past the last flag, "After pg 4 · +4". The measure part is left out when the show
+    has none there, and below 500px (project owner: musicians count by measure, so it stays as long
+    as it fits). Screen readers hear "Page 2, count 7 of 16, measure 4 beat 4". It keeps a minimum
+    width, so the transport doesn't shift as the count changes.
+  - **No playhead tooltip.** The readout is the one place the position is written; the playhead's
+    accessible name spells it out. Both read `getPageCountAt`, so they always name the same page.
+  - **Counts without measures.** A show with no measures numbers the counts of the playhead's page
+    in the measure row, each just left of the beat tick it lands on, so the last count sits on the
+    flag. Beat ticks stay on every beat (project owner). Numbers thin by doubling steps from the
+    page's start (2, 4, 8…) as zoom drops, always keeping the flag's count. Compact keeps the
+    ticks, not the numbers.
+  - **The window badge** shows only while a handle is dragged or when the window starts off a page
+    line; from a page line its length is the playhead's count, which the readout shows. It uses the
+    field line's words: "counts 3–6" inside one page box, or "12 counts" when it passes a flag.
+  - Deferred (UX review): counts along the selected page box in shows with measures, a count
+    under the pointer while hovering, and thinning to downbeats in odd meters.
 
 ## Mapping the spec onto the view model
 

@@ -73,8 +73,6 @@ export interface TimelinePlayback {
     readonly positionBeat: number;
     /** While playing, the live spec beat, fractional, for a smooth playhead; `null` when there is none */
     readonly liveBeat?: () => number | null;
-    /** Names the page in the transport and playhead labels, such as the selected page while paused */
-    readonly pageLabel?: string;
     readonly isPlaying: boolean;
     /** Seek to a whole beat index, already clamped to the show */
     readonly onSeek?: (beatIndex: number) => void;
@@ -411,7 +409,6 @@ export function Timeline(props: TimelineProps) {
         model,
         positionBeat,
         livePositionBeat,
-        pageLabel: playback.pageLabel,
         isPlaying: playback.isPlaying,
         pixelsPerBeat,
         selection,

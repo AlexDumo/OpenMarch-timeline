@@ -7,7 +7,6 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
-import { pageAtPlayhead } from "@/timeline/timelinePlayhead";
 import {
     jumpTimelinePages,
     jumpTimelinePlayback,
@@ -79,10 +78,6 @@ export function useTimelinePlayback({
             liveBeat,
             positionBeat:
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
-            // A page is named by its end flag, so on a flag the label names the page ending there
-            pageLabel: isPlaying
-                ? undefined
-                : pageAtPlayhead(pages, playheadBeat)?.name,
             isPlaying,
             // UI-12: while playing, a click, scrub or page button jumps playback there
             onSeek: (beatIndex) => {

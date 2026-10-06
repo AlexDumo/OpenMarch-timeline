@@ -2,6 +2,7 @@ import * as Popover from "@radix-ui/react-popover";
 import {
     ArrowsOutLineHorizontalIcon,
     DotsThreeIcon,
+    HouseIcon,
     PauseIcon,
     PushPinIcon,
     StopIcon,
@@ -20,22 +21,20 @@ import {
     type RefObject,
     useCallback,
     useEffect,
-    useLayoutEffect,
     useRef,
     useState,
 } from "react";
-import { createPortal } from "react-dom";
 import {
     beatToX,
     clamp,
     clientXToBeat,
     filterMarkersByMinimumSpacing,
-    getFrameContext,
     getPageCountAt,
+    getPlayheadReadout,
+    getVisiblePageCounts,
     getPageRange,
     parseTimelineGoTo,
     getSelectionRange,
-    getPlayheadLabel,
     getTrackRange,
     sameRange,
     isPageSnapDisabled,
@@ -155,8 +154,7 @@ export function TimelineTransport({
     const width = useElementWidth(rowRef);
     const folded = width > 0 && width < TRANSPORT_FOLD_PX;
     const tight = width > 0 && width < TRANSPORT_TIGHT_PX;
-    const frame = getFrameContext(model, positionBeat);
-    const at = getPageCountAt(model, positionBeat);
+    const readoutText = getPlayheadReadout(model, positionBeat);
     const mod = isMac() ? "⌘" : "Ctrl";
     const [goTo, setGoTo] = useState<string | null>(null);
     const [goToFailed, setGoToFailed] = useState(false);
@@ -248,16 +246,17 @@ export function TimelineTransport({
                 data-testid="timeline-readout"
                 disabled={!canGoTo}
                 onClick={openGoTo}
-                title={`Page ${at.pageLabel}, ${at.after ? `${at.count} counts after its flag` : `count ${at.count}`} (measure ${frame.measureAndCount.slice(1)}). Click or press G to go to a page, measure or rehearsal mark`}
-                className="text-text rounded-4 enabled:hover:bg-fg-2 flex h-22 min-w-0 items-baseline gap-6 overflow-hidden px-4 font-mono text-[11px] leading-[22px] whitespace-nowrap"
+                aria-label={`${readoutText.spoken}. Go to a page, measure or rehearsal mark`}
+                title={`${readoutText.spoken}. Click or press G to go to a page, measure or rehearsal mark`}
+                className="text-text rounded-4 enabled:hover:bg-fg-2 flex h-22 min-w-0 items-baseline gap-8 overflow-hidden px-4 font-mono text-[11px] leading-[22px] whitespace-nowrap"
             >
-                <span className="shrink-0">
-                    Pg {at.pageLabel} ·{" "}
-                    {at.after ? `+${at.count}` : `ct ${at.count}`}
+                {/* UI-13: a minimum width, so the transport doesn't shift as the count changes */}
+                <span className="min-w-[15ch] shrink-0">
+                    {readoutText.page}
                 </span>
-                {!tight && (
+                {!tight && readoutText.measure && (
                     <span className="text-text-subtitle truncate">
-                        {frame.measureAndCount}
+                        {readoutText.measure}
                     </span>
                 )}
             </button>
@@ -495,6 +494,17 @@ const useRulerScrub = (
     };
 };
 
+/**
+ * A page box's name (UI-13), at its flag, sticking to the viewport's edge while the flag is
+ * scrolled out of view, so a long page always shows its name. Set heavier than the counts and
+ * measure numbers under it, so the box and the weight tell them apart. Hidden when the box is too
+ * narrow to read it, when zoomed far out (UI-12).
+ */
+const PageBoxLabel = ({ label, width }: { label: string; width: number }) =>
+    width >= label.length * 7 + 10 ? (
+        <span className="sticky right-8 font-semibold">{label}</span>
+    ) : null;
+
 export const TimelineRuler = ({
     pages,
     measures,
@@ -506,6 +516,7 @@ export const TimelineRuler = ({
     initialPageWidth,
     showMeasures = true,
     seekSnapBeats = [],
+    positionBeat,
 }: {
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
@@ -520,6 +531,8 @@ export const TimelineRuler = ({
     showMeasures?: boolean;
     /** Downbeats and page lines a scrub lands on when near (UI-12) */
     seekSnapBeats?: readonly number[];
+    /** The playhead; a show without measures numbers the counts of its page (UI-13) */
+    positionBeat?: BeatPosition;
 }) => {
     // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
     const tabBeats = measures
@@ -554,6 +567,21 @@ export const TimelineRuler = ({
         page.isInitial
             ? selection?.kind === "home"
             : sameRange(pageRange(page), selectedRange);
+    // UI-13: with no measures, the row under the boxes numbers the counts of the playhead's page,
+    // each just left of the tick it lands on, so a page's last count sits on its flag
+    const countsAt =
+        showMeasures && measures.length === 0 && positionBeat != null
+            ? getPageCountAt({ pages }, positionBeat)
+            : null;
+    const pageCounts =
+        countsAt?.total != null && countsAt.startBeat != null
+            ? getVisiblePageCounts(countsAt.total, pixelsPerBeat).map(
+                  (count) => ({
+                      count,
+                      atBeat: (countsAt.startBeat ?? 0) + count,
+                  }),
+              )
+            : [];
     const selectPage = (page: TimelinePageMarker) => {
         if (page.isInitial) {
             onSelectionChange?.({ kind: "home" });
@@ -566,7 +594,8 @@ export const TimelineRuler = ({
         <>
             <div
                 data-testid="timeline-page-ruler"
-                className="border-stroke bg-fg-2 rounded-6 absolute top-0 h-28 overflow-hidden border font-mono"
+                // Clipped without being a scroll container, so labels can stick to the viewport
+                className="border-stroke bg-fg-2 rounded-6 absolute top-0 h-28 overflow-clip border font-mono"
                 style={{
                     left: -initialPageWidth,
                     width: beatCount * pixelsPerBeat + initialPageWidth,
@@ -578,6 +607,7 @@ export const TimelineRuler = ({
                         data-timeline-interactive="true"
                         data-testid="timeline-initial-page"
                         aria-label={`Page ${initialPage.label}`}
+                        title={`Home: page ${initialPage.label}'s set`}
                         aria-pressed={isSelected(initialPage)}
                         {...scrub.handlers}
                         onClick={(event) => {
@@ -587,7 +617,8 @@ export const TimelineRuler = ({
                         className="border-stroke text-text focus-visible:ring-accent absolute top-0 left-0 flex h-full items-center justify-center border-r text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
                         style={{ width: initialPageWidth }}
                     >
-                        {initialPage.label}
+                        {/* UI-13: a house, so home's "0" isn't read as a count or a measure */}
+                        <HouseIcon size={14} aria-hidden="true" />
                     </button>
                 )}
                 {orderedPages.map((page) => {
@@ -630,12 +661,14 @@ export const TimelineRuler = ({
                                     pixelsPerBeat,
                             }}
                         >
-                            {/* Too narrow to read when zoomed far out: the label hides (UI-12) */}
-                            {(range.endBeatIndex - range.startBeatIndex) *
-                                pixelsPerBeat >=
-                            String(page.label).length * 7 + 10
-                                ? page.label
-                                : null}
+                            <PageBoxLabel
+                                label={page.label}
+                                width={
+                                    (range.endBeatIndex -
+                                        range.startBeatIndex) *
+                                    pixelsPerBeat
+                                }
+                            />
                         </button>
                     );
                 })}
@@ -658,6 +691,18 @@ export const TimelineRuler = ({
                             }}
                         >
                             {measure.label.replace(/^m/i, "")}
+                        </span>
+                    ))}
+                    {pageCounts.map(({ count, atBeat }) => (
+                        <span
+                            key={count}
+                            data-testid="timeline-page-count"
+                            className="text-text absolute top-4 -translate-x-full text-[10px] leading-none whitespace-nowrap opacity-75"
+                            style={{
+                                left: beatToX(atBeat, pixelsPerBeat) - 2,
+                            }}
+                        >
+                            {count}
                         </span>
                     ))}
                 </div>
@@ -1387,113 +1432,14 @@ export const TimelineRehearsalMarkers = ({
     </div>
 );
 
-export const TimelinePlayheadDetail = ({
-    model,
-    positionBeat,
-    pageLabel,
-    pixelsPerBeat,
-    height,
-    anchorRef,
-    visible,
-}: {
-    model: TimelineViewModel;
-    positionBeat: BeatPosition;
-    pageLabel?: string;
-    pixelsPerBeat: number;
-    height: number;
-    anchorRef: RefObject<HTMLButtonElement | null>;
-    visible: boolean;
-}) => {
-    const detailRef = useRef<HTMLDivElement>(null);
-    const [position, setPosition] = useState<{
-        left: number;
-        top: number;
-    } | null>(null);
-    const updatePosition = useCallback(() => {
-        const anchor = anchorRef.current;
-        const detail = detailRef.current;
-        if (!anchor || !detail) return;
-        const anchorRect = anchor.getBoundingClientRect();
-        const detailRect = detail.getBoundingClientRect();
-        const centeredLeft =
-            anchorRect.left + anchorRect.width / 2 - detailRect.width / 2;
-        const maximumLeft = Math.max(
-            8,
-            window.innerWidth - detailRect.width - 8,
-        );
-        const next = {
-            left: clamp(centeredLeft, 8, maximumLeft),
-            top: Math.max(8, anchorRect.top - detailRect.height - 8),
-        };
-        setPosition((current) =>
-            current?.left === next.left && current.top === next.top
-                ? current
-                : next,
-        );
-    }, [anchorRef]);
-
-    useLayoutEffect(() => {
-        if (!visible) {
-            setPosition(null);
-            return;
-        }
-        updatePosition();
-        const observer =
-            typeof ResizeObserver === "undefined"
-                ? null
-                : new ResizeObserver(updatePosition);
-        if (anchorRef.current) observer?.observe(anchorRef.current);
-        if (detailRef.current) observer?.observe(detailRef.current);
-        window.addEventListener("resize", updatePosition);
-        window.addEventListener("scroll", updatePosition, true);
-        return () => {
-            observer?.disconnect();
-            window.removeEventListener("resize", updatePosition);
-            window.removeEventListener("scroll", updatePosition, true);
-        };
-    }, [
-        anchorRef,
-        height,
-        pixelsPerBeat,
-        positionBeat,
-        updatePosition,
-        visible,
-    ]);
-
-    if (!visible) return null;
-    const isDark = anchorRef.current?.closest(".dark") != null;
-    return createPortal(
-        <div
-            ref={detailRef}
-            role="tooltip"
-            data-testid="timeline-playhead-detail"
-            className={clsx(
-                "bg-accent text-text-invert rounded-4 pointer-events-none fixed z-[100] px-6 py-4 font-mono text-[11px] leading-none whitespace-nowrap shadow-sm",
-                isDark && "dark",
-            )}
-            style={{
-                left: position?.left ?? 0,
-                top: position?.top ?? 0,
-                visibility: position ? "visible" : "hidden",
-            }}
-        >
-            {getPlayheadLabel(model, positionBeat, pageLabel)}
-        </div>,
-        document.body,
-    );
-};
-
 export const TimelinePlayhead = ({
     model,
     positionBeat,
     livePositionBeat,
-    pageLabel,
     pixelsPerBeat,
     height,
     beatCount,
     anchorRef,
-    onHoverChange,
-    onFocusChange,
     onSeek,
 }: {
     model: TimelineViewModel;
@@ -1503,13 +1449,10 @@ export const TimelinePlayhead = ({
      * animation frame by setting its own `left`, without re-rendering the timeline.
      */
     livePositionBeat?: () => number | null;
-    pageLabel?: string;
     pixelsPerBeat: number;
     height: number;
     beatCount: number;
     anchorRef: RefObject<HTMLButtonElement | null>;
-    onHoverChange: (hovered: boolean) => void;
-    onFocusChange: (focused: boolean) => void;
     onSeek?: (beat: BeatPosition) => void;
 }) => {
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
@@ -1543,12 +1486,8 @@ export const TimelinePlayhead = ({
             type="button"
             data-testid="timeline-playhead"
             data-timeline-scrub="true"
-            aria-label={`Playback position: ${getPlayheadLabel(model, positionBeat, pageLabel)}`}
+            aria-label={`Playback position: ${getPlayheadReadout(model, positionBeat).spoken}`}
             onPointerDown={(event) => event.preventDefault()}
-            onPointerEnter={() => onHoverChange(true)}
-            onPointerLeave={() => onHoverChange(false)}
-            onFocus={() => onFocusChange(true)}
-            onBlur={() => onFocusChange(false)}
             onKeyDown={(event) => {
                 const delta =
                     event.key === "ArrowLeft"
