@@ -51,6 +51,7 @@ import {
     TimelineWaveformProvider,
     type TimelineAlign,
     type TimelineInput,
+    type TimelinePunchTapConfig,
     type TimelineSelection,
 } from "./Timeline";
 import {
@@ -70,7 +71,17 @@ import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { useTimelineMeasureRow } from "./useTimelineMeasureRow";
 import { useTimelineDrillEdits } from "./useTimelineDrillEdits";
-import { LineUpStrip } from "./TapTheBeat";
+import {
+    handlerDelaySeconds,
+    LineUpStrip,
+    useTapTheBeatStore,
+} from "./TapTheBeat";
+import { getLivePlaybackPosition } from "./audio/AudioPlayer";
+import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
+import {
+    startTimelinePlayback,
+    startTimelinePlayOn,
+} from "@/timeline/timelineTransport";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
@@ -213,10 +224,12 @@ export default function TimelineModePanel() {
         () => timelinesOffPages(timelines, pages),
         [timelines, pages],
     );
+    const punchTap = useTimelinePunchTap(beats.length);
     const align = useTimelineAlign({
         beats,
         envelope,
         keyBlocked: selectedMarcherIds.size > 0,
+        punchTap,
     });
     // Tempo E8: rehearsal marks and measure lines on the measure row
     const measureRow = useTimelineMeasureRow(measures);
@@ -378,10 +391,12 @@ function useTimelineAlign({
     beats,
     envelope,
     keyBlocked,
+    punchTap,
 }: {
     beats: readonly { readonly id: number; readonly duration: number }[];
     envelope: TimelineAlign["envelope"];
     keyBlocked: boolean;
+    punchTap: TimelinePunchTapConfig | undefined;
 }): TimelineAlign | undefined {
     const enabled = useTempoLabFlag("alignView") === true;
     const on = useTimelineSelectionStore((s) => s.alignView);
@@ -425,8 +440,10 @@ function useTimelineAlign({
                     // The mutation already told the user (`tempo.retimeError`)
                 }),
             onSetSynced: (next) => setSyncedIds(idsOf(next)),
+            punchTap,
         };
     }, [
+        punchTap,
         audioOffsetSeconds,
         beats,
         durations,
@@ -437,6 +454,55 @@ function useTimelineAlign({
         retime,
         setSyncedIds,
         synced,
+    ]);
+}
+
+/**
+ * Punch-in tap's app side (E9), when the Tempo lab flag `punchInTap` is on: the live clock, a
+ * count-in (or the user's own From start window and loop, UI-11), and the "Lined up" toast with
+ * Undo. Tap the beat's open panel keeps T.
+ */
+function useTimelinePunchTap(
+    showEndBeat: number,
+): TimelinePunchTapConfig | undefined {
+    const enabled = useTempoLabFlag("punchInTap") === true;
+    const apply = useTempoLabFlag("tapApply");
+    const unit = useTempoLabFlag("tapUnit");
+    const { setIsPlaying } = useIsPlaying()!;
+    const { mutate: performHistoryAction } = usePerformHistoryAction();
+    const { t } = useTolgee();
+    return useMemo(() => {
+        if (!enabled) return undefined;
+        return {
+            apply,
+            unit,
+            liveTime: (stamp) =>
+                getLivePlaybackPosition() - handlerDelaySeconds(stamp),
+            play: (from) => {
+                const store = useTimelineSelectionStore.getState();
+                // From start on is the user's own window (and loop): play that, as Space does
+                if (store.playFromStart)
+                    return startTimelinePlayback(showEndBeat, setIsPlaying);
+                store.cue(from);
+                return startTimelinePlayOn(showEndBeat, setIsPlaying);
+            },
+            blocked: () => useTapTheBeatStore.getState().open,
+            onApplied: (message) =>
+                toast.success(message, {
+                    action: {
+                        label: t("tempo.punchTap.undo"),
+                        onClick: () => performHistoryAction("undo"),
+                    },
+                }),
+        };
+    }, [
+        apply,
+        enabled,
+        performHistoryAction,
+        setIsPlaying,
+        showEndBeat,
+        t,
+        unit,
     ]);
 }
 

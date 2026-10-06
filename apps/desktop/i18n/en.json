@@ -1483,6 +1483,26 @@
             "unsyncedOne": "The synced count at {count} moves with the taps.",
             "waiting": "Waiting for taps…",
             "whereStarts": "Where tapping starts"
+        },
+        "punchTap": {
+            "applied": "Lined up the show to your taps.",
+            "appliedPage": "Lined up page {page} to your taps.",
+            "appliedPages": "Lined up pages {from}–{to} to your taps.",
+            "apply": "Apply",
+            "applyTooltip": "Apply the taps as one undo (Enter)",
+            "button": "Tap",
+            "countOne": "count 1",
+            "discard": "Discard",
+            "discardTooltip": "Discard the taps (Esc twice)",
+            "draftTag": "Tap {n} → {target} · {time}. Click to tap again from here.",
+            "escAgain": "Esc again to discard {count, plural, one {# tap} other {# taps}}",
+            "next": "Next tap → {target}",
+            "noTarget": "No flag left to tap",
+            "suspect": "Missed a tap? {target} would be {bpm} BPM (the part before was {was}). Backspace drops the last tap; click a flag to tap again from there.",
+            "tapsAndNext": "{count, plural, one {# tap} other {# taps}} · {next}",
+            "tooltipCount": "Tap along to line up every count (T). Paused, T plays from 8 counts before the next count; playing, each tap puts the next count on the music. Space plays, T taps. Backspace drops the last tap.",
+            "tooltipPage": "Tap along to line up page flags (T). Paused, T plays from a page before the next flag; playing, each tap puts the next flag on the music. Space plays, T taps. Backspace drops the last tap.",
+            "undo": "Undo"
         }
     },
     "tempoGroup": {

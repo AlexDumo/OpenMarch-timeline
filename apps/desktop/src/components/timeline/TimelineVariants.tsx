@@ -86,6 +86,11 @@ import {
     TimelineAlignToggle,
     useAlignEdit,
 } from "./TimelineAlignView";
+import {
+    TimelinePunchTapControls,
+    TimelinePunchTapLayer,
+    usePunchTap,
+} from "./TimelinePunchTap";
 import type {
     TimelineCommonProps,
     TimelineNavigation,
@@ -608,6 +613,29 @@ function TimelineSurface({
                 : baseAxis,
         [alignOffset, baseAxis, pixelsPerSecond, preview],
     );
+    // E9: punch-in tap, drawn over the stored timing so the playhead stays on the music
+    const punch = usePunchTap({
+        align,
+        pages: alignPages,
+        active: showAlign,
+        isPlaying: props.isPlaying ?? false,
+        positionBeat,
+        selectionStart:
+            selection?.kind === "range" ? selection.range.startBeatIndex : null,
+    });
+    const punchPreview = punch?.preview ?? null;
+    const punchAxis = useMemo(
+        () =>
+            punchPreview
+                ? secondsAxis({
+                      times: viewTimes(punchPreview.durations, alignOffset),
+                      pixelsPerSecond,
+                      origin: punchPreview.origin,
+                      minExtent: baseAxis.extent,
+                  })
+                : null,
+        [alignOffset, baseAxis.extent, pixelsPerSecond, punchPreview],
+    );
     // Leaving Align drops a drag in progress
     const cancelAlignEdit = alignEdit.cancel;
     useEffect(() => {
@@ -1082,11 +1110,18 @@ function TimelineSurface({
                         alignControl={
                             align
                                 ? (wide) => (
-                                      <TimelineAlignToggle
-                                          on={align.on}
-                                          onToggle={toggleAlign}
-                                          showLabel={wide}
-                                      />
+                                      <>
+                                          {punch && (
+                                              <TimelinePunchTapControls
+                                                  punch={punch}
+                                              />
+                                          )}
+                                          <TimelineAlignToggle
+                                              on={align.on}
+                                              onToggle={toggleAlign}
+                                              showLabel={wide}
+                                          />
+                                      </>
                                   )
                                 : undefined
                         }
@@ -1259,10 +1294,31 @@ function TimelineSurface({
                                 preview={preview}
                                 dragProps={alignEdit.dragProps}
                                 onSetSynced={align.onSetSynced}
+                                onFlagClick={punch?.retarget}
                                 formatTime={(seconds) =>
                                     formatShowTime(seconds, true)
                                 }
                             />
+                            {punch && punchPreview && punchAxis && !preview && (
+                                <TimelineAlignPreviewLayer
+                                    preview={punchPreview}
+                                    axis={punchAxis}
+                                    offset={alignOffset}
+                                    pixelsPerSecond={pixelsPerSecond}
+                                    top={28}
+                                    height={Math.max(0, timelineHeight - 28)}
+                                />
+                            )}
+                            {punch && (
+                                <TimelinePunchTapLayer
+                                    punch={punch}
+                                    axis={axis}
+                                    previewAxis={punchAxis}
+                                    offset={alignOffset}
+                                    pixelsPerSecond={pixelsPerSecond}
+                                    height={timelineHeight}
+                                />
+                            )}
                             {preview && (
                                 <>
                                     <TimelineAlignPreviewLayer
