@@ -626,7 +626,7 @@ const RULER_BOX_PADDING_PX = 16;
 
 /**
  * What a page box in the ruler has room for: its name, and its note (" · 120") only when both
- * fit on one line. A note that wrapped dropped onto the Align view's time line (FB-7).
+ * fit on one line. A note that wrapped dropped onto the Align view's time line (FB-11).
  */
 export function pageBoxLabelFits(
     label: string,

@@ -229,7 +229,7 @@ export function formatMinutesSeconds(seconds: number): string {
 }
 
 /**
- * Where "Add pages every N counts to the end" puts flags (docs/tempo/decisions.md FB-6): every
+ * Where "Add pages every N counts to the end" puts flags (docs/tempo/decisions.md FB-7): every
  * `counts` counts after the last flag while the counts last, and a last, shorter page on the end
  * of the show when counts are left over, so the pages cover the whole song. Flags are spec beat
  * positions (the end of the show is the beat count). Empty when no count lies past the last flag.

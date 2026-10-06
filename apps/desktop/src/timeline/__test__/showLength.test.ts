@@ -331,7 +331,7 @@ describe("the waveform past the last count", () => {
     });
 });
 
-describe("pageFlagsToEnd (FB-6)", () => {
+describe("pageFlagsToEnd (FB-7)", () => {
     it("puts a flag every N counts, and a shorter last page on the end", () => {
         expect(pageFlagsToEnd(49, 97, 16)).toEqual([65, 81, 97]);
         expect(pageFlagsToEnd(49, 100, 16)).toEqual([65, 81, 97, 100]);

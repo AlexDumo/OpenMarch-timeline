@@ -35,7 +35,7 @@ export const appendPageOfCountsMutationOptions = (
         onError: (e) => toastTimelineError(e),
     });
 
-/** Adds a page every `counts` counts to the end of the show (FB-6). Resolves to the pages added. */
+/** Adds a page every `counts` counts to the end of the show (FB-7). Resolves to the pages added. */
 export const appendPagesToEndMutationOptions = (
     qc: QueryClient,
     onAdded?: (pages: number) => void,

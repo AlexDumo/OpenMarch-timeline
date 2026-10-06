@@ -100,7 +100,7 @@ export const useTapTheBeatStore = create<{
 }));
 
 /**
- * What the timeline draws for Tap the beat (FB-4): the taps so far and the counts as the plan
+ * What the timeline draws for Tap the beat (FB-5): the taps so far and the counts as the plan
  * would put them (`tapGhostCounts`, spec count positions on the current timing) while the panel
  * previews, and the range Apply changed, flashed once (`key` restarts it).
  */
@@ -211,7 +211,7 @@ export function LineUpStrip() {
 }
 
 /**
- * The way back to Tap the beat once the strip is gone (FB-3): a small button at the right of the
+ * The way back to Tap the beat once the strip is gone (FB-4): a small button at the right of the
  * waveform lane. In Normal view it shows while the pointer is over the timeline, so it adds no
  * permanent header button; it stays visible in Align, and when the paused playhead is far past the
  * last synced count it reads "Tap again from here" and stays visible.
@@ -408,7 +408,7 @@ function TapTheBeatPanelBody() {
         [applied, durations, fit, multiplier, start, synced, taps.length],
     );
 
-    // The timeline draws the taps and where the plan would put the counts (FB-4)
+    // The timeline draws the taps and where the plan would put the counts (FB-5)
     useEffect(() => {
         useTapPreviewStore.getState().setPreview(
             applied || taps.length === 0
@@ -421,7 +421,7 @@ function TapTheBeatPanelBody() {
     }, [applied, durations, plan, taps]);
     useEffect(() => () => useTapPreviewStore.getState().setPreview(null), []);
 
-    // Clicks on the plan's counts, before applying (FB-5): scheduled on their own clock from the
+    // Clicks on the plan's counts, before applying (FB-6): scheduled on their own clock from the
     // live position when playback starts, since the metronome follows the stored counts
     useEffect(() => {
         if (!clicks || !isPlaying || !plan || applied) return;
@@ -630,11 +630,11 @@ function TapTheBeatPanelBody() {
     const shownPlan = applied?.plan ?? plan;
     const shownBpm = shownPlan?.bpm ?? (fit ? fit.bpm * multiplier : null);
     const currentMultiplier = applied?.multiplier ?? multiplier;
-    // 276 per minute is likelier eighths than the music's count: ask, don't say "steady" (FB-5)
+    // 276 per minute is likelier eighths than the music's count: ask, don't say "steady" (FB-6)
     const implausible = shownBpm !== null ? tapPlausibility(shownBpm) : null;
     const movesSynced = shownPlan?.unsynced.length ?? 0;
     const hereDisabled = atHome && hereFrom === null && startKind !== "here";
-    // Far from where the taps were applied: offer a new run from the playhead (FB-3)
+    // Far from where the taps were applied: offer a new run from the playhead (FB-4)
     const farFromTaps =
         applied !== null &&
         Math.abs(playheadBeat - applied.plan.tapped.to) >= TAP_AGAIN_COUNTS &&
@@ -937,7 +937,7 @@ function TapTheBeatPanelBody() {
                             )}
                         </Button>
                     )}
-                    {/* Hear it before applying it, and again after (FB-5) */}
+                    {/* Hear it before applying it, and again after (FB-6) */}
                     {(applied || plan) && (
                         <Button
                             variant="secondary"
@@ -1048,7 +1048,7 @@ function TapDots({
 }
 
 /**
- * Tap the beat on the timeline (FB-4): while the panel previews, the taps as ticks at the top of
+ * Tap the beat on the timeline (FB-5): while the panel previews, the taps as ticks at the top of
  * the waveform lane and dashed lines where the plan would put each changed count, on the current
  * axis (Normal or Align); after Apply, the changed range flashes once. Positions are spec count
  * indexes; `toX` maps them (fractional) to the lane's pixels.

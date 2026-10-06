@@ -116,7 +116,7 @@ describe("+ N counts after the last page (E1)", () => {
         expect(onAppend).toHaveBeenCalledTimes(1);
     });
 
-    it("offers pages to the end next to it when counts run on (FB-6)", () => {
+    it("offers pages to the end next to it when counts run on (FB-7)", () => {
         const onPages = vi.fn();
         show({
             appendCounts: {

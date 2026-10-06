@@ -108,7 +108,7 @@ export interface TimelineAppendCounts {
     /** Its tooltip and accessible name, such as "Add a page of 16 counts after the last page" */
     readonly title: string;
     readonly onAppend: () => void;
-    /** "Add pages every 16 counts to the end", when counts run on past the last page (FB-6) */
+    /** "Add pages every 16 counts to the end", when counts run on past the last page (FB-7) */
     readonly toEnd?: {
         readonly label: string;
         readonly title: string;
@@ -314,9 +314,9 @@ export interface TimelineCommonProps
      * with the music yet" (Tempo lab, E6). Shown only in the full timeline, with audio loaded.
      */
     readonly waveformNotice?: ReactNode;
-    /** A small action at the waveform lane's right edge (Tap the beat's way back, FB-3) */
+    /** A small action at the waveform lane's right edge (Tap the beat's way back, FB-4) */
     readonly waveformAction?: ReactNode;
-    /** Drawn over the lanes (Tap the beat's preview and flash, FB-4) */
+    /** Drawn over the lanes (Tap the beat's preview and flash, FB-5) */
     readonly countOverlay?: TimelineCountOverlay;
     /** Spec beats hidden before view beat 0 (spec = view + offset) */
     readonly beatOffset?: number;

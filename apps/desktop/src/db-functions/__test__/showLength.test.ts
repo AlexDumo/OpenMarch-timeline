@@ -136,7 +136,7 @@ const ORIGINAL = [
 ];
 
 describeDbTests("counts past the end of the show (E1)", (it) => {
-    describe("pages every N counts to the end (FB-6)", () => {
+    describe("pages every N counts to the end (FB-7)", () => {
         it("adds a page every 16 counts over the counts past the last flag, as one undo", async ({
             db,
             marchersAndPages: _,

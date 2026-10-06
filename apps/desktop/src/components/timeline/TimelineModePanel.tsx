@@ -90,7 +90,7 @@ import {
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
-/** Tap the beat's preview and flash over the timeline (FB-4) */
+/** Tap the beat's preview and flash over the timeline (FB-5) */
 const renderTapOverlay: TimelineCountOverlay = (geometry) => (
     <TapTimelineOverlay {...geometry} />
 );
@@ -564,7 +564,7 @@ function useShowLengthControls({
     );
     const countsEnd = showEndTime(beats);
     // Counts already past the last flag (a show made from an MP3): the pill adds a page over them,
-    // and says so, and one more offers pages to the end (FB-6)
+    // and says so, and one more offers pages to the end (FB-7)
     const countsPast = beats.length - lastFlag;
     const overExisting = countsPast >= counts;
     const appendCounts = hidden

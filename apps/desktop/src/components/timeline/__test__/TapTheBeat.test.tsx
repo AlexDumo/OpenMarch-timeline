@@ -290,7 +290,7 @@ describe("tapping and applying", () => {
         render(withSettings(<TapTheBeatPanel />));
         for (let i = 0; i < 8; i++) tapAt(i * 0.25);
         expect(screen.getByTestId("tap-bpm")).toHaveTextContent("≈ 240");
-        // 240 isn't called steady: the panel asks, with ÷2 next to the question (FB-5)
+        // 240 isn't called steady: the panel asks, with ÷2 next to the question (FB-6)
         expect(screen.getByTestId("tap-implausible")).toHaveTextContent(
             "Did you tap twice per count?",
         );

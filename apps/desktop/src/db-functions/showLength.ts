@@ -151,7 +151,7 @@ export async function appendPageOfCounts({
 }
 
 /**
- * **Add pages every N counts to the end** (FB-6), inside a `transactionWithHistory`: a flag every
+ * **Add pages every N counts to the end** (FB-7), inside a `transactionWithHistory`: a flag every
  * `counts` counts after the last page's flag while the show's counts last (`pageFlagsToEnd`), so a
  * show whose counts already cover the music gets pages to its end in one step. Adds no counts;
  * each flag is added as **+** adds one. Returns the pages added (0 when no counts lie past the
@@ -172,7 +172,7 @@ export async function appendPagesToEndInTransaction({
     return flags.length;
 }
 
-/** **Add pages every N counts to the end** (FB-6) as one undoable edit */
+/** **Add pages every N counts to the end** (FB-7) as one undoable edit */
 export async function appendPagesToEnd({
     db,
     counts,

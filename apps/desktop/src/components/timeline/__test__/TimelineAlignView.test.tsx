@@ -299,7 +299,7 @@ describe("the Align view (E7)", () => {
     });
 });
 
-describe("page box labels (FB-7)", () => {
+describe("page box labels (FB-11)", () => {
     it("show the tempo note only when name and note fit on one line", () => {
         expect(pageBoxLabelFits("1", 62, "120")).toEqual({
             label: true,
