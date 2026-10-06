@@ -5,6 +5,11 @@ import type { TimelineMeasureRowCommands } from "../TimelineMeasureRow";
 import type { TimelineViewModel } from "../TimelineViewModel";
 import { timelineStoryModel } from "../TimelineStoryFixtures";
 
+const toasts = vi.hoisted(() => ({ info: vi.fn(), error: vi.fn() }));
+vi.mock("sonner", () => ({
+    toast: Object.assign(vi.fn(), toasts),
+}));
+
 /**
  * Tempo E8: rehearsal marks and measure lines on the measure row. The commands are the timeline's
  * callbacks, so the test only checks what the row sends; the writes are `measureLines` tests.
@@ -107,6 +112,36 @@ describe("rehearsal tabs", () => {
         fireEvent.keyDown(tab, { key: "Enter" });
         expect(input().value).toBe("B");
         expect(onSeek).not.toHaveBeenCalled();
+    });
+});
+
+describe("duplicate marks (FB-9)", () => {
+    it("a name another measure has is refused, with the input kept open", () => {
+        toasts.error.mockClear();
+        const { measureRow } = renderRow();
+        // R at m6 offers C; typing B (m3's mark) is refused
+        fireEvent.keyDown(window, { key: "r" });
+        fireEvent.change(input(), { target: { value: "b" } });
+        fireEvent.keyDown(input(), { key: "Enter" });
+        expect(measureRow.onSetMark).not.toHaveBeenCalled();
+        expect(toasts.error).toHaveBeenCalledWith("There's already a B at m3");
+        expect(input().value).toBe("b");
+    });
+
+    it("R while playing on a marked measure says so instead of a rename box", () => {
+        toasts.info.mockClear();
+        const { measureRow } = renderRow({
+            positionBeat: 9,
+            isPlaying: true,
+        });
+        fireEvent.keyDown(window, { key: "r" });
+        expect(measureRow.onSetMark).not.toHaveBeenCalled();
+        expect(
+            screen.queryByTestId("timeline-measure-row-input"),
+        ).not.toBeInTheDocument();
+        expect(toasts.info).toHaveBeenCalledWith(
+            expect.stringContaining("B is already at m3"),
+        );
     });
 });
 

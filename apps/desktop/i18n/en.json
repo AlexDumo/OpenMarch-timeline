@@ -1748,7 +1748,9 @@
                 "title": "Rehearsal {mark}, measure {measure}. Double-click to rename, R to add one."
             },
             "toast": {
+                "alreadyMarked": "{mark} is already at m{measure}. Pause and double-click it to rename it.",
                 "droppedMarks": "Removed rehearsal {marks} with {count, plural, one {its measure line} other {their measure lines}}",
+                "duplicateMark": "There's already a {mark} at m{measure}",
                 "failed": "The measure row couldn't change: {error}",
                 "removedMark": "Removed rehearsal mark {mark}",
                 "undo": "Undo"
