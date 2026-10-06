@@ -45,6 +45,7 @@ import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { timeAtBeat } from "@/timeline/timeMap";
 import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
+import { useTimelineMeasureRow } from "./useTimelineMeasureRow";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
@@ -82,6 +83,7 @@ export const toTimelineSelection = (
  * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15). Neither Create Track
  * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
+ * The measure row edits rehearsal marks and measure lines (tempo E8, `useTimelineMeasureRow`).
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
@@ -174,6 +176,8 @@ export default function TimelineModePanel() {
         () => timelinesOffPages(timelines, pages),
         [timelines, pages],
     );
+    // Tempo E8: rehearsal marks and measure lines on the measure row
+    const measureRow = useTimelineMeasureRow(measures);
     const commands = useTimelineCommands({
         database: db,
         timelines,
@@ -247,6 +251,7 @@ export default function TimelineModePanel() {
                     selection={selection}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
+                    measureRow={measureRow}
                     onPlayFromStartOff={() =>
                         useTimelineSelectionStore
                             .getState()

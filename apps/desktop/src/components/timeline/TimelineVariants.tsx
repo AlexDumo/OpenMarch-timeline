@@ -26,7 +26,6 @@ import {
     TIMELINE_MIN_PX_PER_BEAT,
     TimelinePageLines,
     TimelinePlayhead,
-    TimelineRehearsalMarkers,
     TimelineRuler,
     TimelineSelectionRange,
     type TimelineSelectionInteraction,
@@ -36,7 +35,19 @@ import {
     useElementWidth,
     useTimelinePointer,
 } from "./TimelinePrimitives";
-import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
+import {
+    markedRangeAt,
+    useTimelineRangeMenu,
+    type TimelineAddMarchersMenu,
+    type TimelineMenuTarget,
+} from "./TimelineRangeMenu";
+import {
+    MeasureRowMenuItems,
+    measureRowTargetAt,
+    TimelineMeasureRowEditor,
+    TimelineRehearsalMarkers,
+    useMeasureRowEditing,
+} from "./TimelineMeasureRow";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import type {
     TimelineCommonProps,
@@ -526,11 +537,54 @@ function TimelineSurface({
         ...props,
         onNavigate: transportNavigation(props),
     };
-    // The right-click menu's target: a page box or clip under the pointer, else a dragged range
-    // the pointer is inside (UI-9 Adding marchers, Creating a timeline)
+    // Tempo E8: rehearsal marks and measure lines on the measure row
+    const measureRow = props.measureRow;
+    const markTop = expanded ? 30 : 29;
+    const editing = useMeasureRowEditing({
+        model,
+        commands: measureRow,
+        positionBeat,
+        livePositionBeat: props.livePositionBeat,
+        isPlaying: props.isPlaying,
+        onPlayingChange: props.onPlayingChange,
+    });
+    const menu: TimelineAddMarchersMenu<TimelineMenuTarget> | undefined =
+        measureRow
+            ? {
+                  ...props.addSelectedMarchers,
+                  measureRowItems: (target) => (
+                      <MeasureRowMenuItems
+                          target={target}
+                          model={model}
+                          commands={measureRow}
+                          onEditor={editing.setEditor}
+                          onEditMark={editing.editMark}
+                          onSeek={props.onSeek}
+                      />
+                  ),
+              }
+            : props.addSelectedMarchers;
+    // The right-click menu's target: the measure row's count, measure or tab under the pointer;
+    // else a page box or clip under the pointer, else a dragged range the pointer is inside (UI-9
+    // Adding marchers, Creating a timeline)
     const rangeMenu = useTimelineRangeMenu({
-        menu: props.addSelectedMarchers,
+        menu,
         resolveRange: (event: MouseEvent<HTMLElement>) => {
+            const pointerSurface = event.currentTarget.querySelector(
+                '[data-testid="timeline-pointer-surface"]',
+            );
+            const onRow =
+                measureRow && pointerSurface
+                    ? measureRowTargetAt({
+                          event,
+                          surface: pointerSurface,
+                          model,
+                          pixelsPerBeat,
+                          rowTop: 28,
+                          rowHeight: railHeight + 2,
+                      })
+                    : null;
+            if (onRow) return { range: onRow.range, measureRow: onRow.target };
             const marked = markedRangeAt(event.target);
             if (marked) return marked;
             if (selection?.kind !== "range" || !selectionRange) return null;
@@ -625,6 +679,9 @@ function TimelineSurface({
                         showMeasures={expanded}
                         seekSnapBeats={seekSnapBeats}
                         positionBeat={positionBeat}
+                        onMeasureClick={
+                            measureRow ? editing.editMark : undefined
+                        }
                     />
                     {rows.flatMap((row, rowIndex) =>
                         row.map((track) => (
@@ -683,10 +740,34 @@ function TimelineSurface({
                     <TimelineRehearsalMarkers
                         model={model}
                         pixelsPerBeat={pixelsPerBeat}
-                        top={expanded ? 30 : 29}
+                        top={markTop}
                         compact={!expanded}
                         onSeek={props.onSeek}
+                        editingMeasureId={
+                            editing.editor && "measureId" in editing.editor
+                                ? editing.editor.measureId
+                                : null
+                        }
+                        onEdit={measureRow ? editing.editMark : undefined}
+                        onRemove={
+                            measureRow
+                                ? (measure) =>
+                                      measureRow.onSetMark(measure.id, null)
+                                : undefined
+                        }
                     />
+                    {editing.editor && (
+                        <TimelineMeasureRowEditor
+                            key={editing.editorKey}
+                            editor={editing.editor}
+                            model={model}
+                            pixelsPerBeat={pixelsPerBeat}
+                            top={markTop}
+                            onCommit={editing.commit}
+                            onCancel={editing.cancel}
+                            onPassKey={editing.passKey}
+                        />
+                    )}
                     <TimelinePlayhead
                         model={model}
                         positionBeat={positionBeat}

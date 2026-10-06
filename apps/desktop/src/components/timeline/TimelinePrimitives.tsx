@@ -43,6 +43,7 @@ import {
     snapRangeOffset,
 } from "./TimelineGeometry";
 import { timelineRangeTargetProps } from "./TimelineRangeMenu";
+import { measureRowText } from "./measureRowText";
 import type {
     BeatPosition,
     TimelineBeatRange,
@@ -617,6 +618,7 @@ export const TimelineRuler = ({
     showMeasures = true,
     seekSnapBeats = [],
     positionBeat,
+    onMeasureClick,
 }: {
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
@@ -633,6 +635,8 @@ export const TimelineRuler = ({
     seekSnapBeats?: readonly number[];
     /** The playhead; a show without measures numbers the counts of its page (UI-13) */
     positionBeat?: BeatPosition;
+    /** Clicking a measure number names its rehearsal mark (tempo E8); without it, numbers are text */
+    onMeasureClick?: (measure: TimelineMeasureMarker) => void;
 }) => {
     // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
     const tabBeats = measures
@@ -778,21 +782,45 @@ export const TimelineRuler = ({
                 // mark instead (TimelineRehearsalMarkers)
                 // Each number starts just right of its bar line, so the line doesn't cross it
                 <div
-                    aria-hidden="true"
+                    aria-hidden={onMeasureClick ? undefined : "true"}
                     className="pointer-events-none absolute inset-x-0 top-[31px] h-16 font-mono"
                 >
-                    {visibleMeasures.map((measure) => (
-                        <span
-                            key={measure.id}
-                            className="text-text absolute top-4 text-[10px] leading-none whitespace-nowrap opacity-75"
-                            style={{
-                                left:
-                                    beatToX(measure.atBeat, pixelsPerBeat) + 3,
-                            }}
-                        >
-                            {measure.label.replace(/^m/i, "")}
-                        </span>
-                    ))}
+                    {visibleMeasures.map((measure) => {
+                        const number = measure.label.replace(/^m/i, "");
+                        const left = beatToX(measure.atBeat, pixelsPerBeat) + 3;
+                        return onMeasureClick ? (
+                            // Tempo E8: a number is a place to name a rehearsal mark
+                            <button
+                                key={measure.id}
+                                type="button"
+                                data-timeline-interactive="true"
+                                data-testid="timeline-measure-number"
+                                aria-label={measureRowText(
+                                    "number.label",
+                                    "Measure {measure}. Add a rehearsal mark",
+                                    { measure: number },
+                                )}
+                                title={measureRowText(
+                                    "number.title",
+                                    "Measure {measure}. Click to add a rehearsal mark, or press R at the playhead",
+                                    { measure: number },
+                                )}
+                                onClick={() => onMeasureClick(measure)}
+                                className="text-text rounded-2 hover:bg-fg-2 focus-visible:ring-accent pointer-events-auto absolute top-1 px-1 py-[3px] text-[10px] leading-none whitespace-nowrap opacity-75 outline-hidden hover:opacity-100 focus-visible:ring-2"
+                                style={{ left: left - 1 }}
+                            >
+                                {number}
+                            </button>
+                        ) : (
+                            <span
+                                key={measure.id}
+                                className="text-text absolute top-4 text-[10px] leading-none whitespace-nowrap opacity-75"
+                                style={{ left }}
+                            >
+                                {number}
+                            </span>
+                        );
+                    })}
                     {pageCounts.map(({ count, atBeat }) => (
                         <span
                             key={count}
@@ -1485,53 +1513,6 @@ export const TimelineSelectionRange = ({
         </div>
     );
 };
-
-/**
- * Rehearsal marks as tabs in the measure row (UI-12; they sat on the waveform lane before), in
- * place of their measure's number. Clicking one seeks there. Thinned like the measure numbers, so
- * they don't pile up when zoomed out.
- */
-export const TimelineRehearsalMarkers = ({
-    model,
-    pixelsPerBeat,
-    top,
-    compact = false,
-    onSeek,
-}: {
-    model: TimelineViewModel;
-    pixelsPerBeat: number;
-    top: number;
-    compact?: boolean;
-    onSeek?: (beat: BeatPosition) => void;
-}) => (
-    <div className="pointer-events-none absolute inset-0 z-20">
-        {model.measures.flatMap((measure) => {
-            const label = measure.rehearsalMark?.trim();
-            if (!label) return [];
-            const number = measure.label.replace(/^m/i, "");
-            return [
-                <button
-                    key={measure.id}
-                    type="button"
-                    data-timeline-interactive="true"
-                    aria-label={`Rehearsal ${label}, measure ${number}`}
-                    title={`Rehearsal ${label}, measure ${number}`}
-                    onClick={() => onSeek?.(measure.atBeat)}
-                    className={clsx(
-                        "border-text-subtitle bg-bg-1 text-text rounded-r-4 pointer-events-auto absolute flex h-16 min-w-16 items-center justify-center border border-l-2 px-3 font-mono leading-none font-semibold",
-                        compact ? "text-[9px]" : "text-[10px]",
-                    )}
-                    style={{
-                        left: beatToX(measure.atBeat, pixelsPerBeat),
-                        top,
-                    }}
-                >
-                    {label}
-                </button>,
-            ];
-        })}
-    </div>
-);
 
 /** How long after the last arrow key a run of steps ends, so the start flag follows once */
 const ARROW_STEPS_SETTLE_MS = 300;

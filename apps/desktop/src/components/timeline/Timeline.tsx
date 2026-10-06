@@ -20,6 +20,7 @@ import type {
     TimelineAddMarchersMenu,
     TimelineMenuTarget,
 } from "./TimelineRangeMenu";
+import type { TimelineMeasureRowCommands } from "./TimelineMeasureRow";
 import type {
     TimelineActivitySpan,
     TimelineBeatRange,
@@ -149,6 +150,11 @@ export interface TimelineProps {
      * range in spec beats (a clip's stored range).
      */
     readonly onOpenRange?: (range: TimelineBeatRange) => void;
+    /**
+     * Rehearsal marks and measure lines edited on the measure row (tempo E8), in spec beats.
+     * Without it, the row only shows them.
+     */
+    readonly measureRow?: TimelineMeasureRowCommands;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -413,6 +419,14 @@ export function Timeline(props: TimelineProps) {
             addSelectedMarchers?.onAdd &&
             ((target) => addSelectedMarchers.onAdd?.(specRangeOf(target))),
     };
+    // The measure row's beats are view beats inside; a count at view beat v is spec beat v + offset
+    const { measureRow } = props;
+    const viewMeasureRow: TimelineMeasureRowCommands | undefined =
+        measureRow && {
+            ...measureRow,
+            onStartMeasure: (beat, mark) =>
+                measureRow.onStartMeasure(axis.toSpec(beat), mark),
+        };
     const commonProps = {
         model,
         positionBeat,
@@ -434,6 +448,7 @@ export function Timeline(props: TimelineProps) {
         addSelectedMarchers: addMarchersMenu,
         onAddPageFlag: props.onAddPageFlag,
         onOpenRange: onOpenRange && openRange,
+        measureRow: viewMeasureRow,
         onTimelineRangeCommit: commitRange,
         onPlayFromStartOff: props.onPlayFromStartOff,
         onUnpinStart: props.onUnpinStart,
