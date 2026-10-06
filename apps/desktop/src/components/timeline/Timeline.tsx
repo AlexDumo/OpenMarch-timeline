@@ -180,8 +180,11 @@ export interface TimelineDrillEdits {
     readonly onAddCountsAtFlag: (pageId: number) => void;
     /** **Add counts at the playhead…** */
     readonly onAddCountsAtPlayhead: () => void;
-    /** A dragged page flag grip let go at `toBeat` */
-    readonly onMovePageFlag: (pageId: number, toBeat: number) => void;
+    /** A dragged page flag grip let go at `toBeat`; resolves once the move is written */
+    readonly onMovePageFlag: (
+        pageId: number,
+        toBeat: number,
+    ) => void | Promise<unknown>;
     /** What moving the flag there would do, for the drag's readout */
     readonly previewPageFlagMove?: (
         pageId: number,
@@ -472,17 +475,24 @@ export function Timeline(props: TimelineProps) {
                 measureRow.onStartMeasure(axis.toSpec(beat), mark),
         };
     // Flag grips work in view beats; the commands get spec beats
-    const pageFlagMove: TimelinePageFlagMove | undefined = drillEdits && {
-        onMove: (pageId, toBeat) =>
-            drillEdits.onMovePageFlag(Number(pageId), axis.toSpec(toBeat)),
-        preview: drillEdits.previewPageFlagMove
-            ? (pageId, toBeat) =>
-                  drillEdits.previewPageFlagMove!(
-                      Number(pageId),
-                      axis.toSpec(toBeat),
-                  )
-            : undefined,
-    };
+    const pageFlagMove = useMemo<TimelinePageFlagMove | undefined>(
+        () =>
+            drillEdits && {
+                onMove: (pageId, toBeat) =>
+                    drillEdits.onMovePageFlag(
+                        Number(pageId),
+                        axis.toSpec(toBeat),
+                    ),
+                preview: drillEdits.previewPageFlagMove
+                    ? (pageId, toBeat) =>
+                          drillEdits.previewPageFlagMove!(
+                              Number(pageId),
+                              axis.toSpec(toBeat),
+                          )
+                    : undefined,
+            },
+        [axis, drillEdits],
+    );
     const commonProps = {
         model,
         pageFlagMove,

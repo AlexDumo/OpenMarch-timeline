@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import {
+    useQuery,
+    useQueryClient,
+    type QueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import clsx from "clsx";
 import {
@@ -17,6 +21,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/global/database/db";
 import {
     commitDrillEdit,
+    pageForAddedCounts,
     previewDrillEdit,
     type DrillEdit,
     type DrillEditPreview,
@@ -39,6 +44,7 @@ import {
 } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "@/hooks/queries/usePages";
 import { measureKeys } from "@/hooks/queries/useMeasures";
+import { getUtilityQueryOptions } from "@/hooks/queries/useUtility";
 
 /**
  * The **Remove counts…** and **Add counts…** dialogs (tempo experiment E10, Tempo lab
@@ -71,7 +77,12 @@ export type DrillEditRequest =
       };
 
 /** Pages as `drillNames` needs them, with the app's own page names */
-export const namedPages = (pages: readonly Page[]) => {
+/**
+ * Pages as `drillNames` needs them, with the app's own page names. The last page runs to its flag
+ * (`start + last_page_counts`) even past the show's last count, as the count edits see it
+ * (`withLastFlag`), so Hold is offered on the same flags the edit accepts.
+ */
+export const namedPages = (pages: readonly Page[], lastPageCounts?: number) => {
     const grid: NamedGridPage[] = [];
     const names = new Map<number, string>();
     for (const page of pages) {
@@ -81,6 +92,12 @@ export const namedPages = (pages: readonly Page[]) => {
         names.set(page.id, page.name);
     }
     grid.sort((a, b) => a.start - b.start);
+    const last = grid[grid.length - 1];
+    if (last && last.id !== 0 && lastPageCounts !== undefined)
+        grid[grid.length - 1] = {
+            ...last,
+            end: Math.max(last.end, last.start + lastPageCounts),
+        };
     return { grid, names };
 };
 
@@ -170,7 +187,7 @@ function Choice<V extends string>({
 }
 
 /** Previews `edit` after a short pause, and again whenever it changes */
-const usePreview = (edit: DrillEdit | null) => {
+const usePreview = (edit: DrillEdit | null, channel: string) => {
     const [state, setState] = useState<{
         key: string;
         preview: DrillEditPreview;
@@ -180,8 +197,9 @@ const usePreview = (edit: DrillEdit | null) => {
         if (!edit) return;
         let stale = false;
         const timer = setTimeout(() => {
-            void previewDrillEdit({ db, edit }).then((preview) => {
-                if (!stale) setState({ key, preview });
+            void previewDrillEdit({ db, edit, channel }).then((preview) => {
+                // Null: a newer preview on this channel replaced it
+                if (!stale && preview) setState({ key, preview });
             });
         }, PREVIEW_DELAY_MS);
         return () => {
@@ -201,7 +219,7 @@ export default function DrillEditDialog({
     beatCount,
     onClose,
     onShowRange,
-    onRetarget,
+    onReopen,
 }: {
     request: DrillEditRequest;
     pages: readonly Page[];
@@ -210,15 +228,21 @@ export default function DrillEditDialog({
     /** Selects a range on the timeline (to show the clip a refusal names) */
     onShowRange?: (start: number, end: number) => void;
     /** Opens the dialog again for another request (a refusal's alternative) */
-    onRetarget?: (request: DrillEditRequest) => void;
+    onReopen?: (request: DrillEditRequest) => void;
 }) {
     const queryClient = useQueryClient();
-    const { grid, names } = useMemo(() => namedPages(pages), [pages]);
+    const lastPageCounts = useQuery(getUtilityQueryOptions()).data
+        ?.last_page_counts;
+    const { grid, names } = useMemo(
+        () => namedPages(pages, lastPageCounts),
+        [pages, lastPageCounts],
+    );
     const [count, setCount] = useState(4);
     const [recording, setRecording] = useState<"has" | "sameTime">("has");
+    // As the edit decides it: the page that gets the counts ends at them
     const onFlag =
         request.kind === "add" &&
-        grid.some((p) => p.id !== 0 && p.end === request.at);
+        pageForAddedCounts(grid, request.at)?.end === request.at;
     const [hold, setHold] = useState<"hold" | "stretch">(
         onFlag ? "hold" : "stretch",
     );
@@ -250,20 +274,16 @@ export default function DrillEditDialog({
             : edit?.kind === "addCounts" && onFlag
               ? { ...edit, crossing: hold === "hold" ? "stretch" : "hold" }
               : null;
-    const preview = usePreview(edit);
-    const otherPreview = usePreview(other);
+    const preview = usePreview(edit, "drill-edit");
+    const otherPreview = usePreview(other, "drill-edit-other");
 
-    const owner = useMemo(() => {
-        if (request.kind !== "add") return null;
-        return (
-            grid.find(
-                (p) =>
-                    p.id !== 0 && p.start < request.at && request.at <= p.end,
-            ) ??
-            grid.find((p) => p.id !== 0 && p.start === request.at) ??
-            null
-        );
-    }, [grid, request]);
+    const owner = useMemo(
+        () =>
+            request.kind === "add"
+                ? pageForAddedCounts(grid, request.at)
+                : null,
+        [grid, request],
+    );
     const ownerName = owner ? (names.get(owner.id) ?? "?") : null;
 
     // Title and where
@@ -363,7 +383,7 @@ export default function DrillEditDialog({
                     ),
                 },
             ),
-            apply: () => onRetarget?.({ kind: "remove", ...cut }),
+            apply: () => onReopen?.({ kind: "remove", ...cut }),
         })),
         ...(subject?.clip && clipRange && onShowRange
             ? [
@@ -594,6 +614,17 @@ export default function DrillEditDialog({
                                     </div>
                                 )}
                             </div>
+                        ) : !edit ? (
+                            <span
+                                role="alert"
+                                data-testid="drill-edit-invalid"
+                                className="text-red text-[12px]"
+                            >
+                                {t(
+                                    "timeline.drillEdits.add.countInvalid",
+                                    "Enter a whole number of counts from 1 to 512.",
+                                )}
+                            </span>
                         ) : (
                             <span className="text-text-subtitle text-[12px]">
                                 {t("timeline.drillEdits.checking", "Checking…")}
@@ -654,6 +685,7 @@ function useAlternativeCuts({
             for (const c of candidates) {
                 const result = await previewDrillEdit({
                     db,
+                    channel: `drill-edit-alternative-${c.start}`,
                     edit: {
                         kind: "removeCounts",
                         ...c,
@@ -661,7 +693,7 @@ function useAlternativeCuts({
                         inside: "delete",
                     },
                 });
-                if (result.ok) ok.push(c);
+                if (result?.ok) ok.push(c);
             }
             if (!stale) setFound(ok);
         })();
