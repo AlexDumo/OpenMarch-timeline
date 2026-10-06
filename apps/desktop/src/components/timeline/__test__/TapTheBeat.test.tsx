@@ -75,9 +75,17 @@ vi.mock("@/hooks", () => ({
         measures: mocks.measures,
     }),
 }));
-vi.mock("@/hooks/queries/useTempo", () => ({
-    useTempoSyncedBeatIds: () => [],
-}));
+// The real hook's module needs the database; this reads the same settings
+vi.mock("@/hooks/queries/useTempo", async () => {
+    const { useQuery } = await import("@tanstack/react-query");
+    const { workspaceSettingsQueryOptions } =
+        await import("@/hooks/queries/useWorkspaceSettings");
+    return {
+        useTempoSyncedBeatIds: () =>
+            useQuery(workspaceSettingsQueryOptions()).data
+                ?.tempoSyncedBeatIds ?? [],
+    };
+});
 vi.mock("@/db-functions/tempo", () => ({
     readCountDurationsInTransaction: async () => ({
         beatIds: BEATS.map((b) => b.id),
@@ -157,6 +165,23 @@ describe("the line-up strip", () => {
         arrange();
         render(withSettings(<LineUpStrip />, settings));
         expect(screen.queryByTestId("tempo-line-up-strip")).toBeNull();
+    });
+
+    it("still shows when only a typed tempo map row's edges are synced (DE-6)", () => {
+        mocks.measures = [0, 1, 2, 3].map((i) => ({
+            number: i + 1,
+            rehearsalMark: null,
+            counts: 4,
+            startBeat: BEATS[1 + i * 4],
+        }));
+        render(
+            withSettings(<LineUpStrip />, {
+                tempoSyncedBeatIds: [101],
+                tempoMapMarks: [{ beatId: 101, bpm: 120, source: "typed" }],
+            }),
+        );
+        expect(screen.getByTestId("tempo-line-up-strip")).toBeInTheDocument();
+        mocks.measures = [];
     });
 
     it("dismisses for this file", () => {

@@ -1075,7 +1075,8 @@ export function TimelineAlignConfirm({
 }: {
     preview: AlignPreview;
     onConfirm: () => void;
-    onKeep: () => void;
+    /** Keep typed; without it, Keep typed drops the edit like Esc (punch-in taps) */
+    onKeep?: () => void;
     onCancel: () => void;
 }) {
     const t = alignT;
@@ -1129,7 +1130,7 @@ export function TimelineAlignConfirm({
                 <button
                     type="button"
                     data-testid="timeline-align-keep-typed"
-                    onClick={onKeep}
+                    onClick={onKeep ?? onCancel}
                     className="rounded-4 hover:bg-fg-2 focus-visible:ring-accent px-8 py-2 outline-hidden focus-visible:ring-2"
                 >
                     {t("tempo.align.override.keep")}
