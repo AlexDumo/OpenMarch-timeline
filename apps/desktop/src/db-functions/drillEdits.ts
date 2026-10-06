@@ -1092,7 +1092,8 @@ async function addCountsInTransaction(
                 lastPageCounts: owner.end - owner.start + count,
             });
     }
-    if (edit.crossing === "hold") await nameHoldsInTransaction(tx, before, at);
+    if (edit.crossing === "hold")
+        await nameHoldsInTransaction(tx, before, at, owner);
 
     if (edit.recording === "sameTime" && owner) {
         // The page keeps its length in time: every beat of it, old and new, gets shorter alike
@@ -1117,36 +1118,45 @@ async function addCountsInTransaction(
 }
 
 /**
- * Names the holding moves an add-with-hold made after the measure they start in, "Hold (vamp
- * m70)", so they don't read as breakaways nobody made ("Timeline 29"). Stored text, like a
- * clip name the user types.
+ * Names the clips an add-with-hold made after the page that gets the counts (DN-4): the page's
+ * own move, which the ripple turns into a clip ending at the flag, "Pg 16 move", and the holds
+ * from the flag, "Pg 16 hold". Unnamed, they read as breakaways nobody made ("Timeline 16",
+ * "Timeline 29"; Priya). Stored text, like a clip name the user types.
  */
 async function nameHoldsInTransaction(
     tx: DbTransaction,
     before: DrillState,
     at: number,
+    owner: GridPage | null,
 ) {
     const known = new Set(before.timelines.map((l) => l.id));
     const made = (await tx.select().from(schema.timelines).all()).filter(
         (l) => !known.has(l.id) && l.name === null,
     );
     if (made.length === 0) return;
-    const state = await readDrillState(tx);
-    const lines = state.measures ?? [];
-    const index = lines.findLastIndex((m) => m.start <= at);
-    const name =
-        index >= 0
-            ? `Hold (vamp m${(state.measureOffset ?? 1) + index})`
-            : "Hold (vamp)";
-    await tx
-        .update(schema.timelines)
-        .set({ name })
-        .where(
-            inArray(
-                schema.timelines.id,
-                made.map((l) => l.id),
-            ),
-        );
+    const page = owner ? pageNamesOf(before.grid.pages).get(owner.id) : null;
+    const ordinalOf = new Map(
+        (
+            await tx
+                .select({ id: schema.beats.id })
+                .from(schema.beats)
+                .orderBy(asc(schema.beats.position), asc(schema.beats.id))
+                .all()
+        ).map((b, i) => [b.id, i]),
+    );
+    // The page's move starts before the new counts; the holds start on them
+    const isMove = (l: (typeof made)[number]) =>
+        (ordinalOf.get(l.start_beat) ?? at) < at;
+    for (const kind of ["move", "hold"] as const) {
+        const ids = made
+            .filter((l) => isMove(l) === (kind === "move"))
+            .map((l) => l.id);
+        if (ids.length === 0) continue;
+        await tx
+            .update(schema.timelines)
+            .set({ name: page ? `Pg ${page} ${kind}` : `Added counts ${kind}` })
+            .where(inArray(schema.timelines.id, ids));
+    }
 }
 
 async function moveFlagInTransaction(
