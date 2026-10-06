@@ -531,7 +531,14 @@ function TimelineSurface({
                         model={model}
                         clock={props.transportClock}
                         accessories={props.transportAccessories}
+                        secondary={props.transportSecondary}
                         viewControls={props.transportViewControls}
+                        onSeek={props.onSeek}
+                        onSelectionChange={
+                            props.onSelectionChange
+                                ? onSelectionChange
+                                : undefined
+                        }
                         positionBeat={positionBeat}
                         isPlaying={transportProps.isPlaying}
                         onPlayingChange={transportProps.onPlayingChange}
@@ -541,7 +548,6 @@ function TimelineSurface({
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
                         }
                         fitted={zoom.fitted}
-                        compact={!expanded}
                     />
                 ) : undefined
             }

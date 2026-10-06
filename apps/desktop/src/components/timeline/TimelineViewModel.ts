@@ -184,7 +184,9 @@ export interface TimelineCommonProps
     readonly onPlayFromStartOff?: () => void;
     /** Unpins the start flag (UI-12), from its pin */
     readonly onUnpinStart?: () => void;
-    /** Controls at the end of the transport's readout row: Fit, compact, fullscreen (UI-12) */
+    /** Transport controls that fold into "⋯" on a narrow panel, such as Sound (UI-12) */
+    readonly transportSecondary?: ReactNode;
+    /** View controls at the transport's end, such as Compact (UI-12); they fold too */
     readonly transportViewControls?: ReactNode;
 }
 

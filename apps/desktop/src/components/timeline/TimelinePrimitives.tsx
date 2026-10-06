@@ -1,5 +1,7 @@
+import * as Popover from "@radix-ui/react-popover";
 import {
     ArrowsOutLineHorizontalIcon,
+    DotsThreeIcon,
     PauseIcon,
     PushPinIcon,
     StopIcon,
@@ -31,6 +33,7 @@ import {
     getFrameContext,
     getPageCountAt,
     getPageRange,
+    parseTimelineGoTo,
     getSelectionRange,
     getPlayheadLabel,
     getTrackRange,
@@ -94,12 +97,19 @@ const TransportButton = ({
     </button>
 );
 
+/** Below this width the transport folds its secondary controls into "⋯" (Bitwig's rule) */
+const TRANSPORT_FOLD_PX = 640;
+/** Below this width the readout drops the measure */
+const TRANSPORT_TIGHT_PX = 500;
+
 /**
- * The transport (UI-12): Previous, Play, Stop, Next, then the caller's accessories (From start
- * with Loop, Sound), under one readout line of the clock, the page and count, the measure, and
- * the view controls (Fit, then the caller's compact and fullscreen toggles). Shift+click on
- * Previous or Next goes to the first or last page (as Shift+Q/E do). Compact puts it on one line.
- * While playing, page navigation jumps playback to the flag.
+ * The transport (UI-12): the timeline panel's one header row, as animation tools do it (Figma's
+ * Motion timeline, Rive, Blender). Previous, Play, Stop, Next; the caller's pinned accessories
+ * (From start with Loop) and secondary ones (Sound); the clock and the readout, which is also the
+ * go-to box (click it or press G, then type a page, "m23" or a rehearsal mark); then Fit and the
+ * caller's view controls (Compact). Play, the page buttons, From start and the readout never
+ * leave: on a narrow panel the rest folds into "⋯". Shift+click on Previous or Next goes to the
+ * first or last page (as Shift+Q/E do). While playing, page navigation jumps playback to the flag.
  */
 export function TimelineTransport({
     model,
@@ -112,8 +122,10 @@ export function TimelineTransport({
     onFit,
     fitted = false,
     accessories,
+    secondary,
     viewControls,
-    compact = false,
+    onSeek,
+    onSelectionChange,
 }: {
     model: TimelineViewModel;
     /** The playback clock; the app passes its audio clock */
@@ -128,131 +140,246 @@ export function TimelineTransport({
     onFit?: () => void;
     /** The show is fitted, so Fit goes back */
     fitted?: boolean;
-    /** Controls after Next, such as From start, Loop and Sound */
+    /** Controls after Next that never fold, such as From start and Loop */
     accessories?: ReactNode;
-    /** Controls at the end of the readout, such as compact and fullscreen */
+    /** Controls after those that fold into "⋯" on a narrow panel, such as Sound */
+    secondary?: ReactNode;
+    /** View controls at the row's end, such as Compact; they fold too */
     viewControls?: ReactNode;
-    compact?: boolean;
+    /** The go-to box seeks to a measure or rehearsal mark (view beats) */
+    onSeek?: (beat: BeatPosition) => void;
+    /** The go-to box selects a page, as clicking its box does */
+    onSelectionChange?: (selection: TimelineSelection) => void;
 }) {
+    const rowRef = useRef<HTMLDivElement>(null);
+    const width = useElementWidth(rowRef);
+    const folded = width > 0 && width < TRANSPORT_FOLD_PX;
+    const tight = width > 0 && width < TRANSPORT_TIGHT_PX;
     const frame = getFrameContext(model, positionBeat);
     const at = getPageCountAt(model, positionBeat);
     const mod = isMac() ? "⌘" : "Ctrl";
-    // While playing, the page buttons jump playback (UI-12)
+    const [goTo, setGoTo] = useState<string | null>(null);
+    const [goToFailed, setGoToFailed] = useState(false);
+    const canGoTo = onSeek != null || onSelectionChange != null;
+    const openGoTo = useCallback(() => {
+        if (!canGoTo) return;
+        setGoTo("");
+        setGoToFailed(false);
+    }, [canGoTo]);
+    // G opens the go-to box
+    useEffect(() => {
+        if (!canGoTo) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (
+                event.key.toLowerCase() !== "g" ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.altKey ||
+                event.shiftKey ||
+                (event.target instanceof HTMLElement &&
+                    (event.target.isContentEditable ||
+                        ["INPUT", "TEXTAREA", "SELECT"].includes(
+                            event.target.tagName,
+                        )))
+            )
+                return;
+            event.preventDefault();
+            openGoTo();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [canGoTo, openGoTo]);
+    const submitGoTo = (text: string) => {
+        const target = parseTimelineGoTo(text, model);
+        if (!target) {
+            setGoToFailed(true);
+            return;
+        }
+        if (target.kind === "beat") onSeek?.(target.beat);
+        else {
+            const page = model.pages.find((p) => p.id === target.pageId);
+            const ordered = model.pages
+                .filter((p) => !p.isInitial)
+                .sort((a, b) => a.atBeat - b.atBeat);
+            const range = page
+                ? getPageRange({
+                      pages: ordered,
+                      pageId: page.id,
+                      beatCount: model.beatCount,
+                  })
+                : null;
+            if (page?.isInitial) onSelectionChange?.({ kind: "home" });
+            else if (range) onSelectionChange?.({ kind: "range", range });
+        }
+        setGoTo(null);
+    };
     const navigate = onNavigate
         ? (shift: TimelineNavigation, plain: TimelineNavigation) =>
               (event: ReactMouseEvent) =>
                   onNavigate(event.shiftKey ? shift : plain)
         : undefined;
-    const readout = (
-        <span
-            data-testid="timeline-readout"
-            className="text-text flex min-w-0 items-baseline gap-6 overflow-hidden font-mono text-[11px] leading-none whitespace-nowrap"
-            title={`Page ${at.pageLabel}, ${at.after ? `${at.count} counts after its flag` : `count ${at.count}`} (measure ${frame.measureAndCount.slice(1)})`}
-        >
-            <span className="shrink-0">
-                Pg {at.pageLabel} ·{" "}
-                {at.after ? `+${at.count}` : `ct ${at.count}`}
-            </span>
-            <span className="truncate">{frame.measureAndCount}</span>
-        </span>
-    );
-    const view = (
-        <div className="ml-auto flex items-center gap-4">
-            {onFit && (
-                <TransportButton
-                    label="Fit the show"
-                    title={`Fit the show (Shift+Z). Press again to go back. Pinch or ${mod}+scroll to zoom`}
-                    pressed={fitted}
-                    onClick={onFit}
-                >
-                    <ArrowsOutLineHorizontalIcon size={16} />
-                </TransportButton>
-            )}
-            {viewControls}
-        </div>
-    );
-    const buttons = (
-        <div className="flex items-center gap-6">
-            <TransportButton
-                label="Previous page"
-                title="Previous page (Q). Shift+click or Shift+Q: first page"
-                onClick={navigate?.("first-page", "previous-page")}
-            >
-                <SkipBackIcon size={18} />
-            </TransportButton>
-            <TransportButton
-                label={isPlaying ? "Pause" : "Play"}
-                title={isPlaying ? "Pause (Space)" : "Play (Space)"}
-                pressed={isPlaying}
-                onClick={
-                    onPlayingChange
-                        ? () => onPlayingChange(!isPlaying)
-                        : undefined
-                }
-            >
-                {isPlaying ? (
-                    <PauseIcon size={20} weight="fill" />
-                ) : (
-                    <PlayIcon size={20} weight="fill" />
+    const readout =
+        goTo !== null ? (
+            <input
+                autoFocus
+                data-testid="timeline-go-to"
+                aria-label="Go to a page, measure or rehearsal mark"
+                aria-invalid={goToFailed || undefined}
+                placeholder="Page, m23 or C"
+                value={goTo}
+                onChange={(event) => {
+                    setGoTo(event.target.value);
+                    setGoToFailed(false);
+                }}
+                onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === "Enter") submitGoTo(goTo);
+                    if (event.key === "Escape") setGoTo(null);
+                }}
+                onBlur={() => setGoTo(null)}
+                className={clsx(
+                    "bg-bg-1 text-text rounded-4 h-22 w-[150px] min-w-0 border px-6 font-mono text-[11px] outline-hidden",
+                    goToFailed ? "border-red" : "border-accent",
                 )}
-            </TransportButton>
-            {onStop && (
-                <TransportButton
-                    label="Stop"
-                    title="Stop (Shift+Space)"
-                    onClick={onStop}
-                >
-                    <StopIcon size={18} />
-                </TransportButton>
-            )}
-            <TransportButton
-                label="Next page"
-                title="Next page (E). Shift+click or Shift+E: last page"
-                onClick={navigate?.("last-page", "next-page")}
+            />
+        ) : (
+            <button
+                type="button"
+                data-testid="timeline-readout"
+                disabled={!canGoTo}
+                onClick={openGoTo}
+                title={`Page ${at.pageLabel}, ${at.after ? `${at.count} counts after its flag` : `count ${at.count}`} (measure ${frame.measureAndCount.slice(1)}). Click or press G to go to a page, measure or rehearsal mark`}
+                className="text-text rounded-4 enabled:hover:bg-fg-2 flex h-22 min-w-0 items-baseline gap-6 overflow-hidden px-4 font-mono text-[11px] leading-[22px] whitespace-nowrap"
             >
-                <SkipForwardIcon size={18} />
-            </TransportButton>
-            {accessories != null && (
-                <div className="border-stroke ml-2 flex items-center gap-6 border-l pl-8">
-                    {accessories}
-                </div>
-            )}
-        </div>
+                <span className="shrink-0">
+                    Pg {at.pageLabel} ·{" "}
+                    {at.after ? `+${at.count}` : `ct ${at.count}`}
+                </span>
+                {!tight && (
+                    <span className="text-text-subtitle truncate">
+                        {frame.measureAndCount}
+                    </span>
+                )}
+            </button>
+        );
+    const fit = onFit && (
+        <TransportButton
+            label="Fit the show"
+            title={`Fit the show (Shift+Z). Press again to go back. Pinch or ${mod}+scroll to zoom`}
+            pressed={fitted}
+            onClick={onFit}
+        >
+            <ArrowsOutLineHorizontalIcon size={16} />
+        </TransportButton>
+    );
+    const divider = (
+        <span aria-hidden="true" className="bg-stroke h-16 w-px shrink-0" />
     );
     return (
-        <aside
+        <div
+            ref={rowRef}
+            role="group"
+            aria-label="Transport"
             data-testid="timeline-transport"
-            className={clsx(
-                "border-stroke bg-fg-1 rounded-6 flex shrink-0 border px-12",
-                compact
-                    ? "items-center gap-12 py-4"
-                    : "w-[324px] flex-col justify-center gap-8 py-8",
-            )}
+            className="border-stroke flex h-32 min-w-0 shrink-0 items-center gap-6 border-b px-6"
         >
-            {/* Play comes first in tab order; the readout row is drawn above it */}
-            {compact ? (
+            <div className="flex shrink-0 items-center gap-2">
+                <TransportButton
+                    label="Previous page"
+                    title="Previous page (Q). Shift+click or Shift+Q: first page"
+                    onClick={navigate?.("first-page", "previous-page")}
+                >
+                    <SkipBackIcon size={16} />
+                </TransportButton>
+                <TransportButton
+                    label={isPlaying ? "Pause" : "Play"}
+                    title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+                    pressed={isPlaying}
+                    onClick={
+                        onPlayingChange
+                            ? () => onPlayingChange(!isPlaying)
+                            : undefined
+                    }
+                >
+                    {isPlaying ? (
+                        <PauseIcon size={18} weight="fill" />
+                    ) : (
+                        <PlayIcon size={18} weight="fill" />
+                    )}
+                </TransportButton>
+                {onStop && (
+                    <TransportButton
+                        label="Stop"
+                        title="Stop (Shift+Space)"
+                        onClick={onStop}
+                    >
+                        <StopIcon size={16} />
+                    </TransportButton>
+                )}
+                <TransportButton
+                    label="Next page"
+                    title="Next page (E). Shift+click or Shift+E: last page"
+                    onClick={navigate?.("last-page", "next-page")}
+                >
+                    <SkipForwardIcon size={16} />
+                </TransportButton>
+            </div>
+            {(accessories != null || (secondary != null && !folded)) && (
                 <>
-                    {buttons}
-                    <div className="text-text-subtitle flex min-w-0 items-center gap-8">
-                        {clock}
-                        {readout}
-                    </div>
-                    {view}
-                </>
-            ) : (
-                <>
-                    <div className="order-2">{buttons}</div>
-                    <div className="text-text-subtitle order-1 flex min-w-0 items-center gap-8">
-                        {clock}
-                        {readout}
-                        {view}
+                    {divider}
+                    <div className="flex shrink-0 items-center gap-6">
+                        {accessories}
+                        {!folded && secondary}
                     </div>
                 </>
             )}
-        </aside>
+            {divider}
+            <div className="text-text-subtitle flex min-w-0 items-center gap-8">
+                {!folded && clock}
+                {readout}
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+                {folded ? (
+                    <Popover.Root>
+                        <Popover.Trigger asChild>
+                            <button
+                                type="button"
+                                aria-label="More controls"
+                                title="More: sound, the clock, Fit and Compact"
+                                className="rounded-4 text-text enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden focus-visible:ring-2"
+                            >
+                                <DotsThreeIcon size={18} weight="bold" />
+                            </button>
+                        </Popover.Trigger>
+                        <Popover.Portal>
+                            <Popover.Content
+                                side="top"
+                                align="end"
+                                sideOffset={6}
+                                className="border-stroke bg-modal text-text shadow-modal rounded-8 z-50 flex items-center gap-8 border px-8 py-6"
+                            >
+                                {clock}
+                                {secondary}
+                                {fit}
+                                {viewControls}
+                            </Popover.Content>
+                        </Popover.Portal>
+                    </Popover.Root>
+                ) : (
+                    <>
+                        {fit}
+                        {viewControls}
+                    </>
+                )}
+            </div>
+        </div>
     );
 }
 
+/**
+ * The timeline panel (UI-12): one card, its transport as the header row and the timeline under
+ * it, edge to edge, so the controls never take the timeline's width.
+ */
 export const TimelineShell = ({
     transport,
     children,
@@ -264,9 +391,14 @@ export const TimelineShell = ({
     viewportRef: RefObject<HTMLDivElement | null>;
     className?: string;
 }) => (
-    <div className={clsx("flex min-w-0 gap-8 font-sans", className)}>
+    <div
+        className={clsx(
+            "border-stroke bg-fg-1 text-text rounded-6 flex min-w-0 flex-col overflow-visible border font-sans",
+            className,
+        )}
+    >
         {transport}
-        <section className="border-stroke bg-fg-1 text-text rounded-6 min-w-0 flex-1 overflow-visible border p-6">
+        <section className="min-w-0 px-6 pt-4">
             <div
                 ref={viewportRef}
                 data-testid="timeline-viewport"

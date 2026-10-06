@@ -410,3 +410,55 @@ export const validateTimelineViewModel = (
     }
     return errors;
 };
+
+/** Where the transport's go-to box sends the playhead (UI-12) */
+export type TimelineGoTo =
+    | { readonly kind: "page"; readonly pageId: TimelinePageMarker["id"] }
+    | { readonly kind: "beat"; readonly beat: BeatPosition };
+
+/**
+ * Reads what a designer types in the transport's go-to box (UI-12), on the view axis:
+ * - "m23" or "m23.3": measure 23 (count 3 of it);
+ * - "p7", "pg 7" or "page 7": page 7;
+ * - "C": rehearsal mark C (letters match marks first);
+ * - "7" or "2A": the page with that name.
+ * Case and spaces don't matter. `null` when nothing matches.
+ */
+export const parseTimelineGoTo = (
+    text: string,
+    model: Pick<TimelineViewModel, "pages" | "measures">,
+): TimelineGoTo | null => {
+    const typed = text.trim().toLowerCase().replace(/\s+/g, "");
+    if (!typed) return null;
+    const measureName = (label: string) =>
+        label.replace(/^m/i, "").toLowerCase();
+    const measure = typed.match(/^m(\d+)(?:[.:](\d+))?$/);
+    if (measure) {
+        const sorted = [...model.measures].sort((a, b) => a.atBeat - b.atBeat);
+        const index = sorted.findIndex(
+            (m) => measureName(m.label) === measure[1],
+        );
+        if (index < 0) return null;
+        const start = sorted[index]!.atBeat;
+        const next = sorted[index + 1]?.atBeat;
+        const count = measure[2] ? Number(measure[2]) - 1 : 0;
+        const beat =
+            next === undefined
+                ? start + count
+                : Math.min(start + count, Math.max(start, next - 1));
+        return { kind: "beat", beat };
+    }
+    const pageOf = (name: string) =>
+        model.pages.find((p) => String(p.label).toLowerCase() === name);
+    const prefixed = typed.match(/^(?:page|pg|p)(.+)$/);
+    if (prefixed) {
+        const page = pageOf(prefixed[1]!);
+        if (page) return { kind: "page", pageId: page.id };
+    }
+    const mark = model.measures.find(
+        (m) => m.rehearsalMark?.trim().toLowerCase() === typed,
+    );
+    if (mark) return { kind: "beat", beat: mark.atBeat };
+    const page = pageOf(typed);
+    return page ? { kind: "page", pageId: page.id } : null;
+};

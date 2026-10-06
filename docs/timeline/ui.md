@@ -420,13 +420,26 @@ from it. The spec still wins on the model; this file decides presentation.
   - **One readout,** in the transport: "Pg 3 · ct 8 m7.1". The count is counted to the page's flag,
     as page counts are, so the playhead on page 3's flag is count 8 of page 3. Past the last flag it
     reads "Pg 6 · +4". The paused clock shows the time at the playhead.
-  - **The transport:** Previous, Play, Stop, Next; then From start with Loop as one pair (Loop
-    only works with From start on, so it sits beside it, disabled while off, and doesn't come and
-    go); then **Sound**, one popover for the music's mute, the volume and the metronome (Ctrl+M
-    stays). Mute silences the music only, so the metronome can count through it; the volume scales
-    both. Shift+click on Previous or Next goes to the first or last page (Shift+Q/E stay). Play
-    comes first in tab order, and tooltips name the shortcuts. The readout row ends with the view
-    controls: Fit, Compact and Fullscreen; compact keeps the clock.
+  - **The transport is the timeline's header row** (project owner, 2026-10-05, after reviewing
+    four layouts in mockups and a survey of DAWs, editors, animation and drill tools). A side card
+    took 324px of a 935px row at 1280 wide, and 566px with fullscreen's Perspective card. Animation
+    tools, whose canvas is what you edit, put the transport in the timeline's one header row (Figma's
+    Motion timeline, Rive, Blender, Unity), and no tool spends two rows; so the timeline is now
+    edge to edge under a 32px row: Previous, Play, Stop, Next; From start with Loop; **Sound**; the
+    clock and the readout; then Fit and Compact at the right. On a panel under 640px wide Sound,
+    the clock, Fit and Compact fold into "⋯" (Bitwig's rule); Play, the page buttons, From start
+    and the readout never leave. Sound is one popover for the music's mute, the volume and the
+    metronome (Ctrl+M stays): mute silences the music only, so the metronome can count through it.
+    Shift+click on Previous or Next goes to the first or last page (Shift+Q/E stay). Tooltips name
+    the shortcuts.
+  - **The readout is a go-to box.** Click it, or press G, and type a page ("7", "2A", "pg 7"), a
+    measure ("m23", or "m23.3" for its count 3) or a rehearsal mark ("C"); Enter goes there (a page
+    selects its box), Esc cancels, and a miss is marked rather than guessed.
+  - **Fullscreen and Perspective are on the field's zoom widget,** since they change the field's
+    view, not the timeline's (video editors keep view controls with the viewer). Perspective is a
+    popover with the slider and a reset; its button shows the angle whenever it isn't 0°, and it is
+    disabled, not hidden, outside fullscreen, where the field isn't tilted. Page mode keeps its old
+    layout until Phase 10.
   - **While playing,** a click or scrub on the timeline, and the page buttons, jump playback there
     and play on, as in a DAW; the playhead stays put. A preview jumped outside its window plays on;
     isolation keeps the jump inside the isolated range.
@@ -438,12 +451,12 @@ from it. The spec still wins on the model; this file decides presentation.
     show never shows as a sliver; the zoom is saved once a gesture settles, and a fitted timeline
     opens the next show fitted. The scrollbar's track is always there, so zooming never changes
     the strip's height. The zoom in and out buttons are gone.
-  - **Compact** is an explicit transport button, lit while on and remembered for every show
-    (`timelineCompact`). Nothing turns it on or off by itself, as UI-11 asks of modes. Compact is
-    one strip: the transport on one line with the clock; the ruler; a measure row with the
-    rehearsal tabs, the window's count and the start flag's pin; a 12px waveform; and clips as 6px
-    bars in 12px rows whose hit areas never overlap. It leaves out the measure numbers. Everything
-    else (the window, the start flag, the From start bar, the playhead and **+**) is the same.
+  - **Compact** is an explicit button in the transport, lit while on and remembered for every show
+    (`timelineCompact`). Nothing turns it on or off by itself, as UI-11 asks of modes, and it never
+    moves or hides the transport (every surveyed tool keeps its transport visible however short the
+    timeline is): only the rows under the header shrink, to the ruler, a measure row with the
+    rehearsal tabs, the window's count and the start flag's pin, a 12px waveform, and clips as 6px
+    bars in 12px rows whose hit areas never overlap. It leaves out the measure numbers.
   - **A plain drag scrubs; Ctrl+drag draws a range** (project owner, 2026-10-05: the ruler scrub
     "feels right", and ranges go behind a modifier). A drag anywhere on the timeline moves the
     playhead with the pointer; a press on a page box that doesn't move still selects the box.
@@ -469,8 +482,8 @@ from it. The spec still wins on the model; this file decides presentation.
     (pinned when that isn't a flag) and the playhead to its end, as a page box does. A press that
     doesn't move is a click, so it never snaps the clip to a page line, and a drag doesn't also
     select it.
-  - Not changed: From start is still off when a show opens. Follow-ups: a "Go to" field
-    (rehearsal letter, measure, page), jumping between rehearsal marks, a visible way into the beat
+  - Not changed: From start is still off when a show opens. Follow-ups: jumping between rehearsal
+    marks, a visible way into the beat
     editor in timeline mode, a hint for double-click isolation, a one-time hint for Ctrl+drag
     (backlog), timeline zoom keys besides Shift+Z (Ctrl+= and Ctrl+- are the app's page zoom),
     viewport-sized canvases for long shows at high zoom, and computing the waveform's envelope in

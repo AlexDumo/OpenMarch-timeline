@@ -3,6 +3,7 @@ import {
     clientXToNearestBeat,
     filterMarkersByMinimumSpacing,
     getPageCountAt,
+    parseTimelineGoTo,
     getPageRange,
     getPageSnapBeats,
     getPlayheadLabel,
@@ -283,5 +284,54 @@ describe("getPageCountAt (UI-12)", () => {
             pageLabel: "0",
             count: 0,
         });
+    });
+});
+
+describe("parseTimelineGoTo (UI-12)", () => {
+    const model = {
+        pages: [
+            { id: "p0", label: "0", atBeat: 0, isInitial: true },
+            { id: "p1", label: "1", atBeat: 0, isInitial: false },
+            { id: "p2a", label: "2A", atBeat: 8, isInitial: false },
+        ],
+        measures: [
+            { id: "m1", label: "M1", atBeat: 0 },
+            { id: "m2", label: "M2", atBeat: 4, rehearsalMark: "B" },
+            { id: "m3", label: "M3", atBeat: 8 },
+        ],
+    };
+    it("reads measures, pages and rehearsal marks as designers type them", () => {
+        expect(parseTimelineGoTo("m2", model)).toEqual({
+            kind: "beat",
+            beat: 4,
+        });
+        expect(parseTimelineGoTo("M2.3", model)).toEqual({
+            kind: "beat",
+            beat: 6,
+        });
+        // A count past the measure's end stays inside it
+        expect(parseTimelineGoTo("m1.9", model)).toEqual({
+            kind: "beat",
+            beat: 3,
+        });
+        expect(parseTimelineGoTo("b", model)).toEqual({
+            kind: "beat",
+            beat: 4,
+        });
+        expect(parseTimelineGoTo("2a", model)).toEqual({
+            kind: "page",
+            pageId: "p2a",
+        });
+        expect(parseTimelineGoTo("pg 1", model)).toEqual({
+            kind: "page",
+            pageId: "p1",
+        });
+        expect(parseTimelineGoTo("page 0", model)).toEqual({
+            kind: "page",
+            pageId: "p0",
+        });
+        expect(parseTimelineGoTo("m9", model)).toBeNull();
+        expect(parseTimelineGoTo("", model)).toBeNull();
+        expect(parseTimelineGoTo("zz", model)).toBeNull();
     });
 });

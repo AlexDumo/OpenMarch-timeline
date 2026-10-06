@@ -1,7 +1,6 @@
 import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CornersInIcon, CornersOutIcon } from "@phosphor-icons/react";
 import type { AddedPageFlag } from "@/db-functions/pageFlags";
 import {
     deletePageFlagsMutationOptions,
@@ -25,7 +24,6 @@ import {
 } from "@/timeline/timelinePlayhead";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
-import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { AudioClock } from "./Clock";
 import {
     TimelineCompactButton,
@@ -47,26 +45,6 @@ import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { timeAtBeat } from "@/timeline/timeMap";
 import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
-
-/** The page timeline's fullscreen toggle, for the timeline's transport */
-function FullscreenButton() {
-    const { isFullscreen, toggleFullscreen } = useFullscreenStore();
-    return (
-        <button
-            className="rounded-4 text-text enabled:hover:text-accent enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center duration-150 ease-out focus-visible:ring-2 focus-visible:outline-none"
-            onClick={toggleFullscreen}
-            aria-label="Toggle timeline fullscreen"
-            aria-pressed={isFullscreen}
-            title={isFullscreen ? "Show the panels" : "Give the field the room"}
-        >
-            {isFullscreen ? (
-                <CornersInIcon size={16} />
-            ) : (
-                <CornersOutIcon size={16} />
-            )}
-        </button>
-    );
-}
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
@@ -263,18 +241,9 @@ export default function TimelineModePanel() {
                     transportClock={
                         <AudioClock pausedSeconds={pausedSeconds} />
                     }
-                    transportAccessories={
-                        <>
-                            <TimelinePreviewButtons />
-                            <TimelineSoundButton />
-                        </>
-                    }
-                    transportViewControls={
-                        <>
-                            <TimelineCompactButton />
-                            <FullscreenButton />
-                        </>
-                    }
+                    transportAccessories={<TimelinePreviewButtons />}
+                    transportSecondary={<TimelineSoundButton />}
+                    transportViewControls={<TimelineCompactButton />}
                     selection={selection}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}

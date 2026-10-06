@@ -972,7 +972,7 @@ describe("review follow-ups", () => {
             />,
         );
         // Beat 16 is page 2A's first beat, but the caller names page 2
-        const transport = screen.getByRole("complementary");
+        const transport = screen.getByRole("group", { name: "Transport" });
         expect(transport).toHaveTextContent("Pg 2");
         expect(transport).not.toHaveTextContent("Pg 2A");
         expect(
@@ -1256,5 +1256,54 @@ describe("where a click or scrub lands (UI-12)", () => {
         expect(snapSeekBeat(15.7, [12, 16], 2, true)).toBe(16);
         // Zoomed out, 6px spans several beats
         expect(snapSeekBeat(14, [12, 16], 2, false)).toBe(12);
+    });
+});
+
+describe("the transport's go-to box (UI-12)", () => {
+    it("jumps to a page, a measure or a rehearsal mark, and says when nothing matches", () => {
+        const onSeek = vi.fn();
+        const onSelectionChange = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onSeek={onSeek}
+                onSelectionChange={onSelectionChange}
+            />,
+        );
+        const go = (text: string) => {
+            fireEvent.click(screen.getByTestId("timeline-readout"));
+            const input = screen.getByTestId("timeline-go-to");
+            fireEvent.change(input, { target: { value: text } });
+            fireEvent.keyDown(input, { key: "Enter" });
+        };
+        go("2");
+        expect(onSelectionChange).toHaveBeenLastCalledWith({
+            kind: "range",
+            range: { startBeatIndex: 8, endBeatIndex: 16 },
+        });
+        go("a");
+        expect(onSeek).toHaveBeenLastCalledWith(24);
+        go("nope");
+        expect(screen.getByTestId("timeline-go-to")).toHaveAttribute(
+            "aria-invalid",
+            "true",
+        );
+        fireEvent.keyDown(screen.getByTestId("timeline-go-to"), {
+            key: "Escape",
+        });
+        expect(screen.queryByTestId("timeline-go-to")).toBeNull();
+    });
+
+    it("opens with G", () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onSeek={vi.fn()}
+            />,
+        );
+        fireEvent.keyDown(window, { key: "g" });
+        expect(screen.getByTestId("timeline-go-to")).toBeInTheDocument();
     });
 });

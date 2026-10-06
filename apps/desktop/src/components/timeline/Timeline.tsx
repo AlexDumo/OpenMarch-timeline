@@ -106,7 +106,9 @@ export interface TimelineProps {
     readonly transportClock?: ReactNode;
     /** Extra transport controls, such as volume, the metronome and fullscreen */
     readonly transportAccessories?: ReactNode;
-    /** View controls at the end of the transport's readout row, such as compact and fullscreen */
+    /** Transport controls that fold into "⋯" on a narrow panel, such as Sound */
+    readonly transportSecondary?: ReactNode;
+    /** View controls at the transport's end, such as Compact */
     readonly transportViewControls?: ReactNode;
     readonly showTransport?: boolean;
     /** The zoom, in pixels per beat; without it the timeline keeps its own (starting at 16) */
@@ -430,6 +432,7 @@ export function Timeline(props: TimelineProps) {
         onTimelineRangeCommit: commitRange,
         onPlayFromStartOff: props.onPlayFromStartOff,
         onUnpinStart: props.onUnpinStart,
+        transportSecondary: props.transportSecondary,
         transportViewControls: props.transportViewControls,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
