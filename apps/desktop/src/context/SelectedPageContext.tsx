@@ -4,6 +4,7 @@ import {
     useCallback,
     useContext,
     useEffect,
+    useMemo,
     useRef,
     useState,
 } from "react";
@@ -64,12 +65,15 @@ export function SelectedPageProvider({ children }: { children: ReactNode }) {
         [pages],
     );
 
-    // Create the context value object
-    const contextValue: SelectedPageContextProps = {
-        selectedPage,
-        setSelectedPage: setSelectedPageFromId,
-        setPageToSelect,
-    };
+    // Memoised so a provider render that changes none of these doesn't re-render every consumer
+    const contextValue: SelectedPageContextProps = useMemo(
+        () => ({
+            selectedPage,
+            setSelectedPage: setSelectedPageFromId,
+            setPageToSelect,
+        }),
+        [selectedPage, setSelectedPageFromId, setPageToSelect],
+    );
 
     return (
         <SelectedPageContext.Provider value={contextValue}>

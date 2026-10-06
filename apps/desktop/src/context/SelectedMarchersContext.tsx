@@ -84,11 +84,11 @@ export function SelectedMarchersProvider({
         }
     }, [hiddenMarcherIds, selectedMarchers]);
 
-    // Create the context value object
-    const contextValue: SelectedMarcherContextProps = {
-        selectedMarchers,
-        setSelectedMarchers,
-    };
+    // Memoised so a provider render (a page change re-renders it) doesn't re-render every consumer
+    const contextValue: SelectedMarcherContextProps = useMemo(
+        () => ({ selectedMarchers, setSelectedMarchers }),
+        [selectedMarchers],
+    );
 
     return (
         <SelectedMarcherContext.Provider value={contextValue}>
