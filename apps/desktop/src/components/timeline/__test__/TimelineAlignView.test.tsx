@@ -395,6 +395,21 @@ describe("typed sections in Align (FX-5)", () => {
         expect(durations[5]).not.toBe(align.durations[5]);
     });
 
+    it("a press on the prompt's buttons doesn't scrub the timeline under it", async () => {
+        const { align, onSeek } = renderAlign({ tempoMap: typed });
+        const handle = flag(9);
+        await drag(handle);
+        fireEvent.pointerUp(handle, { clientX: 110, pointerId: 1 });
+        onSeek.mockClear();
+        const keep = screen.getByTestId("timeline-align-keep-typed");
+        fireEvent.pointerDown(keep, { button: 0, clientX: 300, pointerId: 2 });
+        fireEvent.pointerUp(keep, { button: 0, clientX: 300, pointerId: 2 });
+        fireEvent.click(keep);
+        expect(onSeek).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("timeline-align-confirm")).toBeNull();
+        expect(align.onRetime).not.toHaveBeenCalled();
+    });
+
     it("writes a drag that leaves the typed section alone at once", async () => {
         const { align } = renderAlign({
             tempoMap: {

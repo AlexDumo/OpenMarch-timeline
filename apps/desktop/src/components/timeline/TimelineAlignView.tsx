@@ -1103,6 +1103,11 @@ export function TimelineAlignConfirm({
             })}
             tabIndex={-1}
             data-testid="timeline-align-confirm"
+            // A portal still bubbles through React to the timeline, whose press scrubs and
+            // takes the pointer, so the buttons never got their click
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
                 event.stopPropagation();
                 if (event.key === "Enter") {
@@ -1218,6 +1223,8 @@ export function TimelineAlignTempoPrompt({
         <form
             ref={formRef}
             data-testid="timeline-align-tempo"
+            // Not a press on the timeline (a portal bubbles through React)
+            onPointerDown={(event) => event.stopPropagation()}
             className="bg-modal text-text border-stroke shadow-modal rounded-6 fixed z-[70] flex flex-col gap-4 border p-8 text-[12px]"
             style={{ left: x, top: y }}
             onSubmit={(event) => {
