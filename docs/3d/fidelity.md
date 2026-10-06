@@ -14,6 +14,44 @@ Read [design.md](design.md) for the module layout and
 [ADR 0002](../adr/0002-3d-view.md) for decisions already made. Nothing here
 reopens those. It adds to them.
 
+> [!IMPORTANT]
+> **The 2D field theme and the 3D venue surface are separate things.** The
+> field theme (`FieldTheme` colors, set in the editor) is an editing aid for
+> the 2D canvas. The 3D surface is the venue's own look: real turf, paint,
+> branding, and in future surface presets and shaders. Nothing in this brief
+> changes the field theme, and 3D surface work must not read or write it.
+> See [§1a](#1a-the-2d-field-theme-is-not-the-3d-surface).
+
+## 0. Scope after review (2026-10-05)
+
+A review of the first draft changed the plan. Where a later section
+disagrees with this one, this one wins.
+
+- **Measure before building tiers.** No frame time here is measured, and the
+  real-hardware check (V6) is still open. Build only the work that holds up
+  whatever the numbers say (below), then run the pro dome with 300
+  performers on the owner's machine, then design Medium, the ladder and the
+  panel from real numbers.
+- **First slice:** (1) detect a software renderer before the first frame and
+  start on low, removing today's 6 s slideshow and rebuild hitch; (2) the
+  day-one look: sky-baked environment lighting, blob shadows, fitted shadow
+  frustum, AgX; (3) baked turf grain in the existing canvas.
+- **Merge `3d/figures` first.** It changes `Performers.tsx` and
+  `sceneStore.ts`, where blob shadows and performer detail go.
+- **Persistence: the window's local storage, as ADR 0002 already says.** No
+  `electron-store`, new IPC or ADR amendment for v1 (§4 is superseded).
+- **A smaller panel.** v1 is the four presets plus at most "Show frame rate",
+  "Pause drawing when nothing moves" and crowd density. Advanced rows come
+  later if people ask.
+- **Photo quality changes live settings only** (render scale, anti-aliasing,
+  shadow map size). The field texture and grass blades need a rebuild, so a
+  picture must not depend on them.
+- **Night by default only once poles light the field** (P6.5). Until then
+  `hs` stays on day.
+- **Parked:** near-camera grass blades, N8AO and light cones.
+- **The paint/grass split is its own package**, scoped to the turf style, with
+  screenshot checks; the `theme` style is untouched (§1a).
+
 ## 1. Where we are, and why it reads as a tech demo
 
 Paths are under `apps/desktop/src/view3d/`.
@@ -54,6 +92,57 @@ Paths are under `apps/desktop/src/view3d/`.
   (`core/environment/materials.ts:45-55`), a crowd of tinted boxes
   (`core/environment/crowd.ts:161-173`), kit lights that cast no shadows
   (`core/environment/lightPole.ts:53`).
+
+## 1a. The 2D field theme is not the 3D surface
+
+Today, by style (`core/field/index.ts`, `planField`):
+
+| Surface style | Used by                 | Reads `FieldTheme`? | Reads the show's field image? |
+| ------------- | ----------------------- | ------------------- | ----------------------------- |
+| `turf`        | hs, bighs, college, pro | no                  | no                            |
+| `tarp`        | gym                     | background only     | yes, as the floor art         |
+| `theme`       | blank                   | yes, fully          | yes                           |
+
+Rules for all fidelity and branding work:
+
+1. **The field theme belongs to the 2D editor.** It exists so lines and
+   labels read well while editing. It is not a venue's paint scheme, and it
+   is never extended for 3D needs.
+2. **Venue surfaces own their look.** Turf colors, mowing patterns, paint,
+   end zones, logos and surface presets (§5) live in the 3D code and the
+   venue params, never in `FieldTheme`.
+3. **The blank kit is the one deliberate mirror.** Its `theme` style shows
+   the 2D field in 3D, so it keeps painting with the theme and gets no
+   branding, stripes or surface shader.
+4. **The gym tarp keeps the show's image**, because a guard floor's art is
+   the performance surface. Tarp material work (weave, roughness) must not
+   change how that image looks.
+5. Tests pin this: the theme and tarp styles plan no `centerLogo`, and turf
+   plans no theme colors.
+
+## 1b. Field branding
+
+**Built now (OpenMarch branding).** On turf, the OpenMarch logo is
+painted at midfield in the brand violet with a white outline, as large as
+fits inside the middle hash rows (15 yards wide on a high school field,
+narrower between NFL hashes), reading from the home side and over the 50
+line. The default end zones are `OPENMARCH` in white on the brand violet
+(`DEFAULT_VENUE_PARAMS`). Shows that already saved venue settings keep their
+stored end-zone values. Code: `core/field/brandMark.ts`, `planCenterLogo` in
+`turfPlan.ts`, `paintLogo` in `paint.ts`.
+
+**Feature for later: show-defined center logo and end-zone artwork.** Venue
+params grow a small branding block, still "small params" under ADR 0002 D-5:
+
+- Center: none, the OpenMarch mark, or text (one or two lines) with fill and
+  outline colors.
+- End zones: text, fill color, text color, outline color; optionally
+  different text per end zone.
+- Edited from the 3D View venue controls, with a live preview on the field.
+- Uploaded logo images are a separate decision: an image is not a small
+  param, so it needs a storage choice (and likely an ADR note) first.
+- Branding applies to turf only, and later to hardwood and tarp surfaces if
+  they get their own branding slots. Never through `FieldTheme` (§1a).
 
 ## 2. Benchmark
 
@@ -300,7 +389,8 @@ opts)`. Move stripes out of the canvas and compute the band from world x
    unverified; a procedural Blender fallback is feasible.
 4. **Sky environment map** (all tiers, see §6). Prerequisite for a wet field
    and for hardwood.
-5. **Split paint from grass.** The canvas becomes paint only: transparent
+5. **Split paint from grass** (turf only; the `theme` style and the tarp's
+   show image are untouched, §1a). The canvas becomes paint only: transparent
    background, premultiplied alpha as coverage; end zones, logos and the
    background image stay in it; grass moves to the shader. Blend
    `mix(grass, paint, a · (0.82 + 0.18 · detail))` so grass shows through at
@@ -521,12 +611,13 @@ still export.
 Each with the recommended answer.
 
 1. _Photoreal or stylized?_ Stylized-realistic maquette (§3).
-2. _Default look for stadium kits?_ Friday night lights for all; `hs`
-   currently defaults to day.
+2. _Default look for stadium kits?_ Friday night lights for all, once poles
+   light the field (P6.5); `hs` stays on day until then.
 3. _How many tiers?_ Low, Medium, High plus Automatic, with an Advanced
    disclosure. Presentation and export force High. No Ultra preset.
-4. _Where do fidelity settings live?_ Per machine in `electron-store`, with a
-   small ADR 0002 amendment. Looks stay with the show, as lighting does today.
+4. _Where do fidelity settings live?_ Decided in review: the window's local
+   storage, per ADR 0002 as written. Looks stay with the show, as lighting
+   does today.
 5. _May the low tier have shadows?_ Yes: blob contact shadows on every tier.
 6. _Tone mapping?_ AgX, with Neutral as the fallback if color matching the
    2D editor matters more than lamp roll-off.
@@ -534,8 +625,9 @@ Each with the recommended answer.
    Yes, in Phase 7, after the no-dependency Phase 6 ships.
 8. _Ship GPU benchmark data (`detect-gpu`) for Automatic?_ No; start on
    Medium and let the ladder correct. Revisit with evidence.
-9. _Custom school branding (midfield logo, end-zone art)?_ Yes, later,
-   through the existing field-image path. No bundled logos.
+9. _Custom school branding (midfield logo, end-zone art)?_ Decided:
+   OpenMarch branding now (§1b); show-defined text and colors later through
+   venue params, never the field theme or the field image.
 10. _Video export now?_ No; stills in Phase 8, revisit after.
 
 ## 10. Unverified and risks
