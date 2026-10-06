@@ -2,6 +2,8 @@ import { renderHook, act } from "@testing-library/react";
 import {
     UiSettings,
     defaultSettings,
+    defaultTempoLab,
+    mergeTempoLab,
     useUiSettingsStore,
 } from "../UiSettingsStore";
 import { ElectronApi } from "electron/preload";
@@ -177,5 +179,46 @@ describe("uiSettings Store", () => {
         );
         expectedSettings.lockX = false;
         expect(result.current.uiSettings).toEqual(expectedSettings);
+    });
+});
+
+describe("Tempo lab flags", () => {
+    it("are all off by default", () => {
+        expect(defaultSettings.tempoLab).toEqual({
+            alignView: false,
+            tapTheBeat: false,
+            punchInTap: false,
+            tapApply: "stop",
+            tapUnit: "page",
+            tempoMap: false,
+            snapToAttacks: false,
+            drillChoices: false,
+        });
+    });
+
+    it("keep stored values and drop unknown or invalid ones", () => {
+        expect(mergeTempoLab(undefined)).toEqual(defaultTempoLab);
+        expect(
+            mergeTempoLab({
+                alignView: true,
+                tapApply: "drafts",
+                tapUnit: "measure",
+                tempoMap: "yes",
+                retired: true,
+            }),
+        ).toEqual({ ...defaultTempoLab, alignView: true, tapApply: "drafts" });
+    });
+
+    it("sets one flag and saves it", () => {
+        const { result } = renderHook(() => useUiSettingsStore());
+        act(() => result.current.setTempoLabFlag("tapUnit", "count"));
+        expect(result.current.uiSettings.tempoLab.tapUnit).toBe("count");
+        expect(result.current.uiSettings.tempoLab.alignView).toBe(false);
+        const saved = JSON.parse(
+            (localStorage.setItem as ReturnType<typeof vi.fn>).mock.calls.at(
+                -1,
+            )![1] as string,
+        ) as UiSettings;
+        expect(saved.tempoLab.tapUnit).toBe("count");
     });
 });
