@@ -13,6 +13,7 @@ import {
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
+import { isTyping, overlayOpen } from "./timelineHotkeys";
 import {
     type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
@@ -166,7 +167,7 @@ export function TimelineTransport({
         setGoTo("");
         setGoToFailed(false);
     }, [canGoTo]);
-    // G opens the go-to box
+    // G opens the go-to box, unless a text field, popover, menu or dialog has the keys
     useEffect(() => {
         if (!canGoTo) return;
         const onKeyDown = (event: KeyboardEvent) => {
@@ -176,11 +177,9 @@ export function TimelineTransport({
                 event.metaKey ||
                 event.altKey ||
                 event.shiftKey ||
-                (event.target instanceof HTMLElement &&
-                    (event.target.isContentEditable ||
-                        ["INPUT", "TEXTAREA", "SELECT"].includes(
-                            event.target.tagName,
-                        )))
+                event.repeat ||
+                isTyping(event.target) ||
+                overlayOpen()
             )
                 return;
             event.preventDefault();

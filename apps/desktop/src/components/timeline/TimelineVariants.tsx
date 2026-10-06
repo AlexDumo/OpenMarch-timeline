@@ -37,6 +37,7 @@ import {
     useTimelinePointer,
 } from "./TimelinePrimitives";
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
+import { isTyping, overlayOpen } from "./timelineHotkeys";
 import type {
     TimelineCommonProps,
     TimelineNavigation,
@@ -69,11 +70,6 @@ export function fitBackZoom(
 
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
-
-const isTypingTarget = (target: EventTarget | null) =>
-    target instanceof HTMLElement &&
-    (target.isContentEditable ||
-        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
 /**
  * The timeline's zoom (UI-12), native to trackpads and wheels:
@@ -275,7 +271,7 @@ const useTimelineZoom = ({
         zoomTo,
     ]);
 
-    // Shift+Z fits, or goes back
+    // Shift+Z fits, or goes back, unless a text field, popover, menu or dialog has the keys
     useEffect(() => {
         if (!onPixelsPerBeatChange) return;
         const onKeyDown = (event: KeyboardEvent) => {
@@ -285,7 +281,9 @@ const useTimelineZoom = ({
                 event.ctrlKey ||
                 event.metaKey ||
                 event.altKey ||
-                isTypingTarget(event.target)
+                event.repeat ||
+                isTyping(event.target) ||
+                overlayOpen()
             )
                 return;
             event.preventDefault();

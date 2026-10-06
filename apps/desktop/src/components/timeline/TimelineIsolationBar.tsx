@@ -4,6 +4,7 @@ import { Button } from "@openmarch/ui";
 import { FlagIcon, PushPinSlashIcon, XIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
+import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useTimingObjects } from "@/hooks";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import {
@@ -42,17 +43,6 @@ export function isolatedTimelineName(
         ? `Page ${first.page.name}, counts ${from}–${to}`
         : `Page ${first.page.name} count ${from} to page ${last.page.name} count ${to}`;
 }
-
-/** A popover, menu or dialog is open: its Esc closes it, and nothing else */
-const overlayOpen = () =>
-    document.querySelector(
-        '[data-radix-popper-content-wrapper], [role="menu"], [role="dialog"][data-state="open"], [role="alertdialog"]',
-    ) !== null;
-
-const isTyping = (target: EventTarget | null) =>
-    target instanceof HTMLElement &&
-    (target.isContentEditable ||
-        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
 /**
  * Esc ends isolation (V-14), and after that turns **From start** off (UI-11): the first Esc

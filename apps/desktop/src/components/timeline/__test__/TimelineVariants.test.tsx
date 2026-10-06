@@ -1497,6 +1497,35 @@ describe("Fit (UI-12 review)", () => {
         expect(onZoom).toHaveBeenLastCalledWith(20);
         expect(onFittedChange).not.toHaveBeenCalled();
     });
+
+    it("leaves Shift+Z to an open dialog, and ignores a held key", () => {
+        const onZoom = vi.fn();
+        render(
+            <Zoomed
+                initial={32}
+                fitted={false}
+                onZoom={onZoom}
+                onFittedChange={vi.fn()}
+            />,
+        );
+        act(() => {
+            fireEvent.keyDown(window, {
+                key: "Z",
+                shiftKey: true,
+                repeat: true,
+            });
+        });
+        const dialog = document.createElement("div");
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("data-state", "open");
+        document.body.appendChild(dialog);
+        try {
+            shiftZ();
+        } finally {
+            dialog.remove();
+        }
+        expect(onZoom).not.toHaveBeenCalled();
+    });
 });
 
 describe("fitBackZoom (UI-12 review)", () => {
@@ -1509,5 +1538,28 @@ describe("fitBackZoom (UI-12 review)", () => {
         expect(fitBackZoom(10.2, 10)).toBe(20);
         expect(fitBackZoom(null, 4)).toBe(16);
         expect(fitBackZoom(null, 50)).toBe(64);
+    });
+});
+
+describe("G behind overlays (UI-12 review)", () => {
+    it("leaves G to an open menu", () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onSeek={vi.fn()}
+            />,
+        );
+        const menu = document.createElement("div");
+        menu.setAttribute("role", "menu");
+        document.body.appendChild(menu);
+        try {
+            fireEvent.keyDown(window, { key: "g" });
+        } finally {
+            menu.remove();
+        }
+        expect(screen.queryByTestId("timeline-go-to")).toBeNull();
+        fireEvent.keyDown(window, { key: "g" });
+        expect(screen.getByTestId("timeline-go-to")).toBeInTheDocument();
     });
 });
