@@ -1,8 +1,8 @@
 import type { ComponentType, ReactNode } from "react";
 import { skipInTimelineMode } from "@/test/timelineMode";
-import { afterEach, describe, expect } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import { sql } from "drizzle-orm";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { transactionWithHistory } from "@/db-functions/history";
 import {
@@ -33,6 +33,8 @@ import {
 } from "../timelineStore";
 import { useTimelineStaticRender } from "../useTimelineStaticRender";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useIsPlaying } from "@/context/IsPlayingContext";
 
 /**
  * Timeline-mode rendering (docs/timeline/phases/05-rendering.md P5.4 and P5.5) against a real
@@ -464,6 +466,148 @@ describeDbTests("timeline rendering", (it) => {
             }
             expect(playbackBeat(beats, 4000)).toBe(9);
             expectAt(coordsById(canvas)[2]!, [70, 80], "the end of page 2");
+        });
+
+        describe("page crossings while playing", () => {
+            // Animation frames run only when a test says so
+            let frames: FrameRequestCallback[] = [];
+            const runFrame = () => {
+                const queued = frames;
+                frames = [];
+                for (const callback of queued) callback(performance.now());
+            };
+            const stubFrames = () => {
+                frames = [];
+                vi.stubGlobal(
+                    "requestAnimationFrame",
+                    (callback: FrameRequestCallback) => frames.push(callback),
+                );
+                vi.stubGlobal("cancelAnimationFrame", () => {
+                    frames = [];
+                });
+            };
+            afterEach(() => {
+                vi.unstubAllGlobals();
+            });
+
+            const renderPlayback = (
+                canvas: OpenMarchCanvas,
+                wrapper: ComponentType<{ children: ReactNode }>,
+            ) =>
+                renderHook(
+                    () => ({
+                        animation: useAnimation({ canvas }),
+                        timelineMode: useTimelineMode(),
+                        timing: useTimingObjects()!,
+                        selection: useSelectedPage()!,
+                        playing: useIsPlaying()!,
+                    }),
+                    { wrapper },
+                );
+
+            /**
+             * Plays a frame, crosses into another page, plays another, then stops: the end-of-
+             * playback work (control corners, the frame atlas) runs once, at the stop
+             */
+            const playAcrossPages = (
+                canvas: OpenMarchCanvas,
+                result: {
+                    current: ReturnType<
+                        typeof renderPlayback
+                    >["result"]["current"];
+                },
+            ) => {
+                const { pages } = result.current.timing;
+                const endFrames = vi.spyOn(canvas, "endPlaybackFrames");
+                const marcher = canvas.getCanvasMarchers()[0]!;
+                const setCoords = vi.spyOn(marcher, "setCoords");
+                stubFrames();
+                act(() => {
+                    result.current.selection.setSelectedPage(pages[1]!);
+                });
+                act(() => {
+                    result.current.playing.setIsPlaying(true);
+                });
+                act(() => {
+                    runFrame();
+                });
+                expect(result.current.playing.isPlaying).toBe(true);
+                act(() => {
+                    result.current.selection.setSelectedPage(pages[2]!);
+                });
+                act(() => {
+                    runFrame();
+                });
+                act(() => {
+                    result.current.selection.setSelectedPage(pages[1]!);
+                });
+                act(() => {
+                    runFrame();
+                });
+                expect(result.current.playing.isPlaying).toBe(true);
+                expect(endFrames).not.toHaveBeenCalled();
+                expect(setCoords).not.toHaveBeenCalled();
+                act(() => {
+                    result.current.playing.setIsPlaying(false);
+                });
+                expect(endFrames).toHaveBeenCalledTimes(1);
+                expect(setCoords).toHaveBeenCalledTimes(1);
+            };
+
+            it("page mode keeps its frame state until playback stops", async ({
+                db,
+                wrapper,
+            }) => {
+                await seedShow(db);
+                await setTimelineMode(db, false);
+                const { pages } = await readTiming(db);
+                await transactionWithHistory(db, "seedMarcherPages", (tx) =>
+                    tx.insert(schema.marcher_pages).values(
+                        pages.flatMap((page, i) =>
+                            MARCHER_IDS.map((marcher_id) => ({
+                                marcher_id,
+                                page_id: page.id,
+                                x: 10 * i + marcher_id,
+                                y: 10 * i,
+                            })),
+                        ),
+                    ),
+                );
+                const canvas = await createCanvasWithMarchers(db);
+                const { result } = renderPlayback(canvas, wrapper);
+                await waitFor(() => {
+                    expect(result.current.timelineMode).toBe(false);
+                    expect(result.current.timing.pages).toHaveLength(3);
+                });
+                act(() => {
+                    result.current.selection.setSelectedPage(
+                        result.current.timing.pages[1]!,
+                    );
+                });
+                // The page path has keyframes once the marcher_pages around the page load
+                await waitFor(() =>
+                    expect(
+                        result.current.animation.setMarcherPositionsAtTime(0),
+                    ).toBe(true),
+                );
+                playAcrossPages(canvas, result);
+            });
+
+            it("timeline mode keeps its frame state until playback stops", async ({
+                db,
+                wrapper,
+            }) => {
+                await seedShow(db);
+                await setTimelineMode(db, true);
+                await startTimelineResolver(db);
+                const canvas = await createCanvasWithMarchers(db);
+                const { result } = renderPlayback(canvas, wrapper);
+                await waitFor(() => {
+                    expect(result.current.timelineMode).toBe(true);
+                    expect(result.current.timing.pages).toHaveLength(3);
+                });
+                playAcrossPages(canvas, result);
+            });
         });
 
         it("with the flag on, leaves marchers in place while the resolver isn't ready", async ({

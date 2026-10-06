@@ -276,11 +276,26 @@ export const useAnimation = ({ canvas, onTimelineBeat }: UseAnimationProps) => {
         [pages, canvas, selectedPage, pagesById, setSelectedPage, setIsPlaying],
     );
 
+    // The effect below restarts whenever its inputs change, which in page mode is every page
+    // playback enters (the selected page and the keyframes around it). Its end-of-playback work
+    // (every marcher's setCoords, freeing the frame atlas) runs only when playback really stops:
+    // `isPlaying` goes false, the canvas changes, or the hook unmounts.
+    const playingNow = useRef(isPlaying);
+    playingNow.current = isPlaying;
+    const canvasNow = useRef(canvas);
+    canvasNow.current = canvas;
+    const unmounted = useRef(false);
+    useEffect(() => {
+        unmounted.current = false;
+        return () => {
+            unmounted.current = true;
+        };
+    }, []);
+    // setLiveCoordinates skips the control corners; refreshed once playback stops
+    const liveCoordsStale = useRef(false);
+
     // Animate the canvas based on playback timestamp
     useEffect(() => {
-        // setLiveCoordinates skips the control corners; refresh them once playback stops
-        let liveCoordsStale = false;
-
         // Helper to sync the animation with the live playback position
         const animate = () => {
             if (!canvas) return;
@@ -288,7 +303,7 @@ export const useAnimation = ({ canvas, onTimelineBeat }: UseAnimationProps) => {
             try {
                 const currentTime = getLivePlaybackPosition() * 1000; // s to ms
                 const continueAnimation = placeMarchersAtTime(currentTime);
-                liveCoordsStale = true;
+                liveCoordsStale.current = true;
                 // Draw now, in this frame; requestRenderAll would draw a frame late
                 canvas.renderPlaybackFrame();
                 // Timeline mode: useTimelinePlaybackDriver loops and stops; no page follows playback
@@ -315,7 +330,12 @@ export const useAnimation = ({ canvas, onTimelineBeat }: UseAnimationProps) => {
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
-            if (liveCoordsStale && canvas) {
+            const continuing =
+                playingNow.current &&
+                canvasNow.current === canvas &&
+                !unmounted.current;
+            if (liveCoordsStale.current && canvas && !continuing) {
+                liveCoordsStale.current = false;
                 for (const marcher of canvas.getLiveCanvasMarchers())
                     marcher.setCoords();
                 canvas.endPlaybackFrames();
