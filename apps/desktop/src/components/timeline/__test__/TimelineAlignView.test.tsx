@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExpandedTimeline } from "../TimelineVariants";
+import { pageBoxLabelFits } from "../TimelinePrimitives";
 import { timelineStoryModel } from "../TimelineStoryFixtures";
 import { alignMove } from "../timelineAlign";
 import type { TimelineAlign } from "../TimelineViewModel";
@@ -295,5 +296,23 @@ describe("the Align view (E7)", () => {
         // Count 3 (the 3rd count) now lasts 1.5 s; nothing new is synced
         expect(edit.durations[3]).toBeCloseTo(1.5, 9);
         expect(edit.synced).toEqual([]);
+    });
+});
+
+describe("page box labels (FB-7)", () => {
+    it("show the tempo note only when name and note fit on one line", () => {
+        expect(pageBoxLabelFits("1", 62, "120")).toEqual({
+            label: true,
+            note: false,
+        });
+        expect(pageBoxLabelFits("1", 80, "120")).toEqual({
+            label: true,
+            note: true,
+        });
+        expect(pageBoxLabelFits("12A", 20, "120")).toEqual({
+            label: false,
+            note: false,
+        });
+        expect(pageBoxLabelFits("4", 200, null).note).toBe(false);
     });
 });
