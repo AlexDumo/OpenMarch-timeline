@@ -96,3 +96,17 @@ describe("a scrub that never gets its release", () => {
         expect(ends).toEqual([[8, { gesture: "end" }]]);
     });
 });
+
+describe("a read-only timeline (no onSeek)", () => {
+    it("doesn't move its line under the pointer", () => {
+        render(<ExpandedTimeline {...commonProps} />);
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        const playhead = screen.getByTestId("timeline-playhead");
+        press(surface, "pointerdown", 3 * 16);
+        expect(playhead.style.transform).toBe("");
+        press(surface, "pointermove", 7 * 16 + 3);
+        expect(playhead.style.transform).toBe("");
+        press(surface, "pointerup", 7 * 16 + 3);
+        expect(playhead).toHaveStyle({ left: `${11 * 16}px` });
+    });
+});

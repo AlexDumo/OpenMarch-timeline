@@ -2085,8 +2085,9 @@ export const useTimelinePointer = ({
             if (gesture.current && seekGesture !== undefined)
                 gesture.current.lastBeat = snapped;
             // During a scrub the line follows the pointer between beats; the seek below only
-            // goes out when the beat changes (`seekTimeline`)
-            if (seekGesture === "press" || seekGesture === "drag")
+            // goes out when the beat changes (`seekTimeline`). A timeline that can't seek
+            // (read-only) keeps its line where it is.
+            if (onSeek && (seekGesture === "press" || seekGesture === "drag"))
                 scrubLine.set(
                     scrubLineBeat(
                         beat,
