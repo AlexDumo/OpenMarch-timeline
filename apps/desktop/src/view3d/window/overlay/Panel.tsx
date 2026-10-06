@@ -33,15 +33,6 @@ export function Panel({
     );
 }
 
-/** A small uppercase mono label inside a panel. */
-export function PanelLabel({ children }: { children: ReactNode }) {
-    return (
-        <span className="text-sub text-text/60 shrink-0 px-6 font-mono tracking-wide uppercase">
-            {children}
-        </span>
-    );
-}
-
 /** A thin vertical rule between groups in a panel. */
 export function PanelSeparator() {
     return <span className="bg-stroke mx-4 w-px self-stretch" aria-hidden />;

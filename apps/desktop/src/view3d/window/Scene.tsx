@@ -287,12 +287,14 @@ function SceneContents({
 
     // Automatic fallback (design.md §9): 3 s below 30 fps switches to low
     // quality once. It never switches back on its own.
-    // Only in `auto`; choosing a mode in the settings panel measures afresh.
+    // Only in `auto`. Choosing a mode in the settings panel, which also
+    // clears `autoLowered`, measures afresh.
     const fallbackRef = useRef(createQualityFallbackState());
     const qualityMode = useView3dSceneStore((s) => s.qualityMode);
+    const autoLowered = useView3dSceneStore((s) => s.autoLowered);
     useEffect(() => {
         fallbackRef.current = createQualityFallbackState();
-    }, [qualityMode]);
+    }, [qualityMode, autoLowered]);
     useFrame((_, dt) => {
         const store = useView3dSceneStore.getState();
         if (store.qualityMode !== "auto" || store.quality !== "high") return;

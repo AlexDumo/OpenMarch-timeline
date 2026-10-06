@@ -188,7 +188,7 @@ export function useView3dPublisher() {
     // above, so the window-state push and the window's hello aren't missed.
     useEffect(() => {
         const electron = window.electron;
-        if (!electron?.openView3d) return;
+        if (!electron?.openView3d || !electron.invoke) return;
         let cancelled = false;
         void Promise.resolve(
             electron.invoke("settings:get", VIEW3D_AUTO_OPEN_SETTING),
