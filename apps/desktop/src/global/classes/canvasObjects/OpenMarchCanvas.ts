@@ -1221,6 +1221,11 @@ export default class OpenMarchCanvas extends fabric.Canvas {
      * marcher's `coordinate`, so `refreshMarchers` returns marchers to it. Marchers missing from
      * the buffer stay where they are.
      *
+     * A marcher the user is dragging (the target of Fabric's transform in progress, or one of its
+     * selection) isn't moved: only its `coordinate` is updated, so it stays under the pointer and
+     * a refused move still returns it to this render's position. A draw can land mid-drag, such
+     * as the full update 300 ms after an arrow-key run.
+     *
      * @param pageId the page drawn, stamped on each `coordinate` so its `page_id` isn't left over
      * from an earlier page render (P7.2). Timeline writes don't read it, but other canvas code may.
      */
@@ -1230,25 +1235,28 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     ) => {
         CanvasMarcher.theme = this.fieldProperties.theme;
 
+        const held = this.heldObjects();
         const moved: CanvasMarcher[] = [];
         positions.forEachMarcher(
             this.getCanvasMarchers(),
             (canvasMarcher, x, y) => {
-                canvasMarcher.setMarcherCoords(
-                    {
-                        ...canvasMarcher.coordinate,
-                        ...(pageId !== undefined ? { page_id: pageId } : {}),
-                        x,
-                        y,
-                        // Timeline mode has no shape locks (P7.11): a page-era lock from an
-                        // earlier marcher_pages render must not stop a drag that P7.2 can write
-                        isLocked: false,
-                        lockedReason: "",
-                    },
-                    true,
-                    undefined,
-                    { bringToFront: false },
-                );
+                const coordinate = {
+                    ...canvasMarcher.coordinate,
+                    ...(pageId !== undefined ? { page_id: pageId } : {}),
+                    x,
+                    y,
+                    // Timeline mode has no shape locks (P7.11): a page-era lock from an
+                    // earlier marcher_pages render must not stop a drag that P7.2 can write
+                    isLocked: false,
+                    lockedReason: "",
+                };
+                if (held?.has(canvasMarcher)) {
+                    canvasMarcher.coordinate = coordinate;
+                    return;
+                }
+                canvasMarcher.setMarcherCoords(coordinate, true, undefined, {
+                    bringToFront: false,
+                });
                 moved.push(canvasMarcher);
             },
         );
@@ -1259,6 +1267,24 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         this.bringAllControlPointsTooFront();
         this.requestRenderAll();
     };
+
+    /**
+     * The objects a drag, scale or rotate in progress holds: the transform's target, or each
+     * object of a held selection. Null when nothing is held.
+     */
+    private heldObjects(): ReadonlySet<fabric.Object> | null {
+        const target = (
+            this as unknown as {
+                _currentTransform?: { target?: fabric.Object } | null;
+            }
+        )._currentTransform?.target;
+        if (!target) return null;
+        return new Set(
+            target instanceof fabric.ActiveSelection
+                ? target.getObjects()
+                : [target],
+        );
+    }
 
     refreshMarchers = () => {
         const canvasMarchers = this.getCanvasMarchers();
