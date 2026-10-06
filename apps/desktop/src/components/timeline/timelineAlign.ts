@@ -5,6 +5,7 @@
  * the timeline's view beats are `index - offset`.
  */
 import {
+    bpmOfRange,
     countTimes,
     formatUnitTempo,
     holdCount,
@@ -530,6 +531,7 @@ const clampPart = (result: RetimeResult, t: AlignTranslate) =>
  * count 1 "Music starts 1.84 s before count 1". `head` names what is dragged; without it, the
  * pages that re-space before it.
  */
+// eslint-disable-next-line max-lines-per-function
 export function moveChip({
     before,
     result,
