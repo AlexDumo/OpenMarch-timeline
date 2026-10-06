@@ -568,18 +568,7 @@ export function moveChip({
     if (override) parts.push(override);
     if (index === 1) {
         // The music now starts this long before count 1 (negative: after it)
-        const lead = result.originShift - audioOffsetSeconds;
-        parts.push(
-            Math.abs(lead) < 0.005
-                ? t("tempo.align.chip.musicOnCountOne")
-                : lead > 0
-                  ? t("tempo.align.chip.musicBefore", {
-                        seconds: lead.toFixed(2),
-                    })
-                  : t("tempo.align.chip.musicAfter", {
-                        seconds: (-lead).toFixed(2),
-                    }),
-        );
+        parts.push(musicLeadText(result.originShift - audioOffsetSeconds, t));
     } else {
         const left = result.effect.respaced.find((r) => r.to === index);
         const label =
@@ -632,20 +621,28 @@ export function moveChip({
         text: parts.filter(Boolean).join(" · "),
         amber: result.clamped || mixedWarning || overrides.length > 0,
     };
+}
 
-    /** "Overrides typed ♩=176 (m1–16)", or "… and 2 more typed sections" */
-    function overridePart(
-        overrides: readonly TypedSection[],
-        t: AlignTranslate,
-    ): string | null {
-        if (overrides.length === 0) return null;
-        const first = overrides[0]!;
-        return t("tempo.align.chip.overridesTyped", {
-            tempo: first.tempo,
-            measures: first.measures,
-            more: overrides.length - 1,
-        });
-    }
+/** Where the music starts against count 1, `lead` seconds before it (negative: after) */
+const musicLeadText = (lead: number, t: AlignTranslate) =>
+    Math.abs(lead) < 0.005
+        ? t("tempo.align.chip.musicOnCountOne")
+        : lead > 0
+          ? t("tempo.align.chip.musicBefore", { seconds: lead.toFixed(2) })
+          : t("tempo.align.chip.musicAfter", { seconds: (-lead).toFixed(2) });
+
+/** "Overrides typed ♩=176 (m1–16)", or "… and 2 more typed sections" */
+function overridePart(
+    overrides: readonly TypedSection[],
+    t: AlignTranslate,
+): string | null {
+    if (overrides.length === 0) return null;
+    const first = overrides[0]!;
+    return t("tempo.align.chip.overridesTyped", {
+        tempo: first.tempo,
+        measures: first.measures,
+        more: overrides.length - 1,
+    });
 }
 
 /** The chip while holding the count before tick `index`: "Pg 5 ct 4 held · 0.50 → 1.85 s" */
