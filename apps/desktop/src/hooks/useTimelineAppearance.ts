@@ -136,7 +136,16 @@ export function useTimelinePausedAppearance({
             const at = displayedBeat(state);
             if (at === styled) return;
             styled = at;
-            if (applyAt(at) > 0) canvas.requestRenderAll();
+            // Inside the store's write, as useTimelineStaticRender: a failed restyle mustn't
+            // reach the seek that made it, or stop the store's other listeners
+            try {
+                if (applyAt(at) > 0) canvas.requestRenderAll();
+            } catch (error) {
+                console.error(
+                    "Error styling the marchers at the playhead",
+                    error,
+                );
+            }
         });
     }, [canvas, isPlaying, applyAt]);
 }

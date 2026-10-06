@@ -62,4 +62,34 @@ describe("useTimelinePausedAppearance", () => {
         });
         expect(applyAt).not.toHaveBeenCalled();
     });
+
+    it("a failed restyle doesn't stop the store's other listeners", () => {
+        const canvas = fakeCanvas();
+        const applyAt = vi.fn((beat: number) => {
+            if (beat === 7) throw new Error("bad appearance");
+            return 0;
+        });
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        renderHook(() =>
+            useTimelinePausedAppearance({ canvas, isPlaying: false, applyAt }),
+        );
+        const later = vi.fn();
+        const unsubscribe = useTimelineSelectionStore.subscribe(later);
+        try {
+            expect(() =>
+                act(() => {
+                    useTimelineSelectionStore.setState({
+                        playheadBeat: 7,
+                        cursorBeat: null,
+                    });
+                }),
+            ).not.toThrow();
+            expect(applyAt).toHaveBeenLastCalledWith(7);
+            expect(later).toHaveBeenCalled();
+            expect(error).toHaveBeenCalled();
+        } finally {
+            unsubscribe();
+            error.mockRestore();
+        }
+    });
 });

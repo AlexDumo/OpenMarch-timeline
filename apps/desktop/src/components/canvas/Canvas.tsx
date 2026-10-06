@@ -34,6 +34,7 @@ import { useTimingObjects } from "@/hooks";
 import { useSelectionStore } from "@/stores/SelectionStore";
 import { useSelectionListeners } from "./hooks/canvasListeners.selection";
 import { useMovementListeners } from "./hooks/canvasListeners.movement";
+import { useCanvasUiSettings } from "./hooks/useCanvasUiSettings";
 import { useRenderMarcherShapes } from "./hooks/shapes";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { ShapePath } from "@/global/classes/canvasObjects/ShapePath";
@@ -435,14 +436,7 @@ export default function Canvas({
     }, [canvas, setAlignmentEventMarchers, setAlignmentEventNewMarcherPages]);
 
     // Set the canvas UI settings to the global UI settings
-    useEffect(() => {
-        if (!canvas) return;
-        canvas.setUiSettings(useUiSettingsStore.getState().uiSettings);
-        return useUiSettingsStore.subscribe((state, prevState) => {
-            if (state.uiSettings !== prevState.uiSettings)
-                canvas.setUiSettings(state.uiSettings);
-        });
-    }, [canvas]);
+    useCanvasUiSettings(canvas);
 
     // Render the marchers when the selected page or the marcher pages change
     useEffect(() => {
