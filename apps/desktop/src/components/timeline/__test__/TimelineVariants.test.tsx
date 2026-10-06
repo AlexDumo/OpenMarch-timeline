@@ -1090,7 +1090,7 @@ describe("a calmer timeline (UI-12)", () => {
         expect(playhead).toHaveStyle({ left: "96px" });
     });
 
-    it("a scrub's line stays within half a beat of a playhead that can't follow", () => {
+    it("a scrub's line stays on a playhead that can't follow", () => {
         // As inside an isolated range: the owner holds the playhead on beat 11
         render(
             <ExpandedTimeline
@@ -1103,8 +1103,7 @@ describe("a calmer timeline (UI-12)", () => {
         const playhead = screen.getByTestId("timeline-playhead");
         press(surface, "pointerdown", 3 * 16);
         press(surface, "pointermove", 4 * 16);
-        // Beat 10.5 is 168px, 8px left of the line's 176px
-        expect(playhead.style.transform).toBe("translateX(-8px)");
+        expect(playhead.style.transform).toBe("translateX(0px)");
         press(surface, "pointerup", 4 * 16);
         expect(playhead.style.transform).toBe("");
     });

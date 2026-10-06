@@ -1656,12 +1656,12 @@ const useArrowKeySteps = (
 
 /**
  * Where a scrub's line is drawn, given the beat the playhead is on (`positionBeat`, view beats):
- * the line (`scrubLineBeat`), kept within half a beat of the playhead. That is always where the
- * line is when the playhead is the pointer's nearest beat; when the playhead can't follow (held
- * inside an isolated range, or at either end of the show) the line stays with it.
+ * the line (`scrubLineBeat`) while the playhead is on its nearest beat, as it is whenever the
+ * playhead follows the pointer; on the playhead when it can't follow (held inside an isolated
+ * range), so the line never leaves it.
  */
 export const scrubLineNear = (line: number, positionBeat: number) =>
-    clamp(line, positionBeat - 0.5, positionBeat + 0.5);
+    Math.abs(line - positionBeat) <= 0.5 ? line : positionBeat;
 
 /**
  * Moves an element drawn at the playhead (`restingLeft`, where React put it for `positionBeat`)
