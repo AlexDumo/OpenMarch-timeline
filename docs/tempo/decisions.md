@@ -940,7 +940,7 @@ fixture list and how to score).
   measure, every meter change and every tempo marking: the meter as counted (from the parser's
   count lengths), the score's own text as `label` when it counts differently ("3/2" counted in ♩,
   "3/4+3/8"), and the marking's unit and tempo (from the quarter tempo the counts use). A marked
-  measure shorter than its meter is a pickup ("4/4 pickup, 1 count"), counted as the meter's last
+  measure shorter than its meter is a pickup ("4/4 pickup"), counted as the meter's last
   counts. A re-import gives paired bars the file's marks, drops import marks the file no longer
   has, and keeps typed rows when the show keeps its timing. Separately, a dotted unit typed over
   counts read as plain quarters (no meter typed or imported) makes them compound: ♩.=86 over "2/4"

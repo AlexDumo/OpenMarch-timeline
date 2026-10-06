@@ -740,14 +740,12 @@ export function retimeArgsOf({
 
 /**
  * The meter cell's text: the score's own signature when it is counted differently ("3/2"), and a
- * short first measure as a pickup ("4/4 pickup, 1 count").
+ * short marked measure as a pickup ("4/4 pickup").
  */
 export function meterText(row: TempoMapRow): string {
     const meter = row.label ?? formatMeter(row.meter);
-    if (!row.partial) return meter;
-    // A short measure is a row of its own
-    const own = row.to - row.from;
-    return `${meter} pickup, ${own} ${own === 1 ? "count" : "counts"}`;
+    // The Counts column says how many: the cell stays narrow
+    return row.partial ? `${meter} pickup` : meter;
 }
 
 /** A row's tempo: "♩=152.5" when it plays at a written tempo, "♩≈185" when not. */

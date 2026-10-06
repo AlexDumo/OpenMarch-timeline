@@ -344,6 +344,11 @@ export function TempoMapTable({
                 addRef.current?.focus();
                 return;
         }
+        // Space (play, elsewhere) does nothing here: no tempo or meter starts with it
+        if (event.key === " ") {
+            event.preventDefault();
+            return;
+        }
         // Typing starts an edit, as in a spreadsheet
         if (
             event.key.length === 1 &&

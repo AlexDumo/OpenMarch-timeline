@@ -676,7 +676,7 @@ describe("meters as the score writes them (FX-3)", () => {
             [0, { meter: meter("4/4"), unit: "q", bpm: 132, source: "import" }],
         ]);
         const rows = deriveTempoMap({ durations: d, measures, marks });
-        expect(rows.map(meterText)).toEqual(["4/4 pickup, 1 count", "4/4"]);
+        expect(rows.map(meterText)).toEqual(["4/4 pickup", "4/4"]);
         expect(rows[0].exact).toBe(true);
         expect(rows[1].meterInferred).toBe(false);
     });

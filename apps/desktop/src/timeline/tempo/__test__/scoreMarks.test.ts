@@ -51,7 +51,7 @@ describe("scoreTempoMarks (FX-3)", () => {
             "corps-musescore.musicxml",
         ])
             expect(importedMap(file)).toEqual([
-                "m0 4/4 pickup, 1 count ♩=176",
+                "m0 4/4 pickup ♩=176",
                 "m1 A 4/4 ♩=176",
                 "m17 C 7/8 2+2+3 ♩=176",
                 "m25 D 5/8 3+2 ♩=176",

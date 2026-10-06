@@ -61,12 +61,16 @@ describe("the tempo map panel (FX-1)", () => {
         const app = vi.fn();
         window.addEventListener("keydown", app);
         const grid = screen.getByTestId("tempo-map-grid");
+        // Space neither plays nor starts an edit
+        fireEvent.keyDown(grid, { key: " " });
+        expect(screen.queryByTestId("tempo-map-editor")).toBeNull();
         for (const key of [" ", "r", "w", "a", "s", "d", "ArrowRight"])
             fireEvent.keyDown(grid, { key });
         fireEvent.keyDown(screen.getByLabelText("Close the tempo map"), {
             key: " ",
         });
         expect(app).not.toHaveBeenCalled();
+
         // Undo still reaches the app
         fireEvent.keyDown(grid, { key: "z", ctrlKey: true });
         expect(app).toHaveBeenCalledTimes(1);
