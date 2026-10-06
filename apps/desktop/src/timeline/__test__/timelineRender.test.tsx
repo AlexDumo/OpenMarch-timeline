@@ -301,9 +301,31 @@ describeDbTests("timeline rendering", (it) => {
                 store.seek(beat);
                 expectAtBeat(beat);
             }
+            // Each beat of the scrub only moved the marchers; the end updates their coordinates
+            const marcher1 = () =>
+                canvas.getCanvasMarchers().find((m) => m.marcherObj.id === 1)!;
+            expectAt(
+                marcher1().coordinate as { x: number; y: number },
+                resolver.positionAt(1, 9),
+                "coordinate during the scrub",
+            );
             store.seek(17);
             store.endScrub();
             expectAtBeat(17);
+            expectAt(
+                marcher1().coordinate as { x: number; y: number },
+                resolver.positionAt(1, 17),
+                "coordinate once the scrub ends",
+            );
+            // A scrub that ends on the beat it last drew still gets the full update
+            store.beginScrub();
+            store.seek(13);
+            store.endScrub();
+            expectAt(
+                marcher1().coordinate as { x: number; y: number },
+                resolver.positionAt(1, 13),
+                "coordinate after a scrub ending on its last beat",
+            );
             expect(renders).toBe(rendersBefore);
             store.reset();
         });

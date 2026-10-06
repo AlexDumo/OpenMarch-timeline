@@ -23,7 +23,8 @@ import {
  * With `followPlayhead`, it draws at the beat the timeline shows (`displayedBeat`: the paused
  * playhead, or a held preview frame) and follows it through a store subscription, so a scrub
  * redraws the marchers as each beat changes, in the same task as the pointer move, without
- * re-rendering the component that holds the canvas.
+ * re-rendering the component that holds the canvas. While a scrub is down (`scrubbing`) each beat
+ * only moves the marchers, as playback does; the full update follows when it ends.
  *
  * @param redrawKey anything whose change means the canvas marchers were re-created, such as the
  * marcher visuals
@@ -61,29 +62,55 @@ export function useTimelineStaticRender({
     useEffect(() => {
         if (!enabled || !canvas || !selectedPage || isPlaying) return;
         const buffer = (bufferRef.current ??= new TimelinePositionBuffer());
-        const draw = (at: number) => {
-            if (!buffer.fill(at)) return;
+        const fill = (at: number) => {
+            if (!buffer.fill(at)) return false;
             applyIsolationPlan(
                 buffer.buffer,
                 buffer.marcherIds,
                 at,
                 isolationPlan,
             );
-            canvas.renderMarcherPositions(buffer, selectedPage.id);
+            return true;
+        };
+        const draw = (at: number) => {
+            if (fill(at))
+                canvas.renderMarcherPositions(buffer, selectedPage.id);
+        };
+        // During a scrub, the beats it passes move the marchers as playback does
+        // (`setLiveCoordinates`); the full update (coordinates, page, z-order, control corners)
+        // comes once, when the scrub ends
+        const drawLive = (at: number) => {
+            if (!fill(at)) return;
+            const coords = { x: 0, y: 0 };
+            buffer.forEachMarcher(
+                canvas.getLiveCanvasMarchers(),
+                (canvasMarcher, x, y) => {
+                    coords.x = x;
+                    coords.y = y;
+                    canvasMarcher.setLiveCoordinates(coords);
+                },
+            );
+            canvas.requestRenderAll();
         };
         if (!followPlayhead) {
             draw(beat ?? pageEndBeat(selectedPage));
             return;
         }
-        let drawn = displayedBeat(useTimelineSelectionStore.getState());
+        const initial = useTimelineSelectionStore.getState();
+        let drawn = displayedBeat(initial);
+        let scrubbing = initial.scrubbing;
         draw(drawn);
         return useTimelineSelectionStore.subscribe((state) => {
             const at = displayedBeat(state);
-            if (at === drawn) return;
+            const moved = at !== drawn;
+            const ended = scrubbing && !state.scrubbing;
             drawn = at;
+            scrubbing = state.scrubbing;
+            if (!moved && !ended) return;
             // Called inside the store's write: a failed draw mustn't stop its other listeners
             try {
-                draw(at);
+                if (scrubbing) drawLive(at);
+                else draw(at);
             } catch (error) {
                 console.error(
                     "Error drawing the marchers at the playhead",
