@@ -4,7 +4,19 @@ import * as schema from "@om-electron/database/migrations/schema";
 import { isTimelineModeEnabled } from "@/settings/workspaceSettings";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import { DbTransaction } from "./types";
-import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
+import {
+    mapDbErrors,
+    refuse,
+    TimelineWriteError,
+    type TimelineRefusalSubject,
+} from "./timelineErrors";
+import {
+    clipRefOf,
+    countSpanOf,
+    labelsInDrillOrder,
+    pageNamesOf,
+    readMarcherLabels,
+} from "./drillNames";
 import {
     createTimelineTransitionsInTransaction,
     deleteTimelineTransitionsInTransaction,
@@ -95,6 +107,8 @@ export interface GridPage {
     id: number;
     start: number;
     end: number;
+    /** Whether it is a subset page ("2A"), for naming it; `readPageGrid` fills it in */
+    isSubset?: boolean;
 }
 
 /** Where every beat and page sits, by ordinal. */
@@ -120,7 +134,11 @@ export async function readPageGrid(tx: DbTransaction): Promise<PageGrid> {
     const beatIds = beats.map((b) => b.id);
     const ordinal = new Map(beatIds.map((id, i) => [id, i]));
     const pageRows = await tx
-        .select({ id: schema.pages.id, start_beat: schema.pages.start_beat })
+        .select({
+            id: schema.pages.id,
+            start_beat: schema.pages.start_beat,
+            is_subset: schema.pages.is_subset,
+        })
         .from(schema.pages)
         .all();
     const utility = await tx
@@ -130,17 +148,24 @@ export async function readPageGrid(tx: DbTransaction): Promise<PageGrid> {
     const lastPageCounts = utility?.lastPageCounts ?? DEFAULT_LAST_PAGE_COUNTS;
     const placed = pageRows
         .filter((p) => ordinal.has(p.start_beat))
-        .map((p) => ({ id: p.id, start: ordinal.get(p.start_beat)! }))
+        .map((p) => ({
+            id: p.id,
+            start: ordinal.get(p.start_beat)!,
+            isSubset: p.is_subset === 1,
+        }))
         .sort((a, b) => a.start - b.start);
     const n = beatIds.length;
     const pages = placed.map((p, i): GridPage => {
         const next = placed[i + 1];
-        if (p.id === 0) return { id: p.id, start: p.start, end: p.start + 1 };
+        const isSubset = p.isSubset;
+        if (p.id === 0)
+            return { id: p.id, start: p.start, end: p.start + 1, isSubset };
         const last = next ? next.start : Math.min(p.start + lastPageCounts, n);
         return {
             id: p.id,
             start: p.start,
             end: last > p.start ? last : p.start + 1,
+            isSubset,
         };
     });
     return { beatIds, pages };
@@ -273,14 +298,98 @@ const union = (a: Range, b: Range): Range => [
 
 const sameRange = (a: Range, b: Range) => a[0] === b[0] && a[1] === b[1];
 
-const checkBeats = (r: Range, what: string) => {
+/**
+ * The row a refusal is about, by id and old range, so `describeRefusal` can name it in drill words
+ * (pages, counts, the clip's name, the marcher) once the plan has failed.
+ */
+interface RefusedRow {
+    reason: TimelineRefusalSubject["reason"];
+    timelineId?: number;
+    marcherId?: number;
+    range: Range;
+}
+
+/** The refused row of each refusal the plan throws */
+const refusedRows = new WeakMap<TimelineWriteError, RefusedRow>();
+
+/** Throws a refusal about `row` */
+const refuseRow = (code: string, message: string, row: RefusedRow): never => {
+    const error = new TimelineWriteError(code, message);
+    refusedRows.set(error, row);
+    throw error;
+};
+
+const checkBeats = (
+    r: Range,
+    what: string,
+    row: Omit<RefusedRow, "reason">,
+) => {
     if (r[0] >= r[1])
-        refuse(
+        refuseRow(
+            "E-ARGS",
             `this change would leave ${what} with no beats; delete or shorten it first`,
+            { reason: "noCounts", ...row },
         );
     if (r[0] < 0 || r[1] > MAX_BEAT)
         refuse(`this change would move ${what} outside beats 0 to ${MAX_BEAT}`);
 };
+
+/**
+ * `error` again with its subject in drill words: the clip (its page, name or marchers), where it
+ * ran before the edit, and the marcher. Names come from the grid before the edit.
+ */
+async function describeRefusal({
+    tx,
+    error,
+    row,
+    before,
+    timelines,
+    transitions,
+    assignments,
+}: {
+    tx: DbTransaction;
+    error: TimelineWriteError;
+    row: RefusedRow;
+    before: PageGrid;
+    timelines: readonly (typeof schema.timelines.$inferSelect)[];
+    transitions: readonly (typeof schema.timeline_transitions.$inferSelect)[];
+    assignments: readonly (typeof schema.timeline_assignments.$inferSelect)[];
+}): Promise<TimelineWriteError> {
+    const labels = await readMarcherLabels(tx);
+    const names = pageNamesOf(before.pages);
+    const timeline = timelines.find((l) => l.id === row.timelineId);
+    let clip: TimelineRefusalSubject["clip"];
+    if (timeline) {
+        const ids = new Set(
+            transitions
+                .filter((t) => t.timeline_id === timeline.id)
+                .map((t) => t.id),
+        );
+        const marchers = new Set(
+            assignments
+                .filter((a) => ids.has(a.transition_id))
+                .map((a) => a.marcher_id),
+        );
+        clip = clipRefOf({
+            timeline,
+            pages: before.pages,
+            names,
+            marcherLabels: labelsInDrillOrder(marchers, labels),
+        });
+    }
+    const subject: TimelineRefusalSubject = {
+        reason: row.reason,
+        span: countSpanOf(before.pages, names, row.range[0], row.range[1]),
+        ...(clip ? { clip } : {}),
+        ...(row.marcherId !== undefined
+            ? { marcher: labels.get(row.marcherId) ?? `#${row.marcherId}` }
+            : {}),
+        ...(row.timelineId !== undefined ? { timelineId: row.timelineId } : {}),
+    };
+    return new TimelineWriteError(error.code, error.message, error.details, {
+        subject,
+    });
+}
 
 /**
  * A page move of `page`: what the converter writes for a page, and what a holding move for an
@@ -288,7 +397,7 @@ const checkBeats = (r: Range, what: string) => {
  * are all at layer 0 and cover the whole transition. Only these go when their page goes; any other
  * transition (a track the user made) stays, and the edit is refused if it would lose its beats.
  */
-const isPageMove = (
+export const isPageMove = (
     t: { start_beat: number; end_beat: number; dest_shape_id: number | null },
     rows: readonly { start_beat: number; end_beat: number; layer: number }[],
     page: GridPage,
@@ -372,64 +481,111 @@ export async function rippleTimelineToPageGridInTransaction({
     );
     const rippled = timelines.filter((l) => !emptied.has(l.id));
 
-    // Plan every new range
+    // Plan every new range. A refusal names its row in drill words (`describeRefusal`)
     const newTimeline = new Map<number, Range>();
-    for (const l of rippled)
-        newTimeline.set(l.id, map.range(l.start_beat, l.end_beat));
     const newTransition = new Map<number, Range>();
-    for (const t of transitions) {
-        if (removed.has(t.id)) continue;
-        const r = map.range(t.start_beat, t.end_beat);
-        checkBeats(r, moveName(t));
-        const l = newTimeline.get(t.timeline_id)!;
-        if (r[0] < l[0] || r[1] > l[1])
-            throw new TimelineWriteError(
-                "E-T1",
-                `this change would put ${moveName(t)} outside its timeline`,
-            );
-        newTransition.set(t.id, r);
-    }
-    // Checked after the transitions, so a refusal names the move rather than its timeline
-    for (const l of rippled)
-        checkBeats(
-            newTimeline.get(l.id)!,
-            `${timelineName.get(l.id)} (beats ${describe(l)})`,
-        );
-    const kept = assignments.filter((a) => !removed.has(a.transition_id));
     const newAssignment = new Map<number, Range>();
-    for (const a of kept) {
-        const r = map.range(a.start_beat, a.end_beat);
-        checkBeats(
-            r,
-            `marcher ${a.marcher_id}'s part over beats ${describe(a)}`,
-        );
-        const t = newTransition.get(a.transition_id)!;
-        if (r[0] < t[0] || r[1] > t[1])
-            throw new TimelineWriteError(
-                "E-A1",
-                `this change would move marcher ${a.marcher_id}'s part over beats ${describe(a)} outside its move`,
-            );
-        newAssignment.set(a.id, r);
+    const kept = assignments.filter((a) => !removed.has(a.transition_id));
+    const chains = new Map<string, typeof kept>();
+    try {
+        planRanges();
+    } catch (error) {
+        const row =
+            error instanceof TimelineWriteError
+                ? refusedRows.get(error)
+                : undefined;
+        if (!row) throw error;
+        throw await describeRefusal({
+            tx,
+            error: error as TimelineWriteError,
+            row,
+            before,
+            timelines,
+            transitions,
+            assignments,
+        });
     }
 
-    // I-A3: each marcher's rows at one layer stay apart and in order
-    const chains = new Map<string, typeof kept>();
-    for (const a of kept) {
-        const key = `${a.marcher_id}:${a.layer}`;
-        const chain = chains.get(key);
-        if (chain) chain.push(a);
-        else chains.set(key, [a]);
-    }
-    for (const chain of chains.values()) {
-        chain.sort((a, b) => a.start_beat - b.start_beat);
-        for (let i = 1; i < chain.length; i++) {
-            const prev = newAssignment.get(chain[i - 1]!.id)!;
-            const cur = newAssignment.get(chain[i]!.id)!;
-            if (prev[1] > cur[0])
-                throw new TimelineWriteError(
-                    "E-A3",
-                    `this change would overlap marcher ${chain[i]!.marcher_id}'s parts over beats ${describe(chain[i - 1]!)} and ${describe(chain[i]!)}`,
+    // eslint-disable-next-line max-lines-per-function
+    function planRanges() {
+        for (const l of rippled)
+            newTimeline.set(l.id, map.range(l.start_beat, l.end_beat));
+        for (const t of transitions) {
+            if (removed.has(t.id)) continue;
+            const r = map.range(t.start_beat, t.end_beat);
+            const row = {
+                timelineId: t.timeline_id,
+                range: [t.start_beat, t.end_beat] as Range,
+            };
+            checkBeats(r, moveName(t), row);
+            const l = newTimeline.get(t.timeline_id)!;
+            if (r[0] < l[0] || r[1] > l[1])
+                refuseRow(
+                    "E-T1",
+                    `this change would put ${moveName(t)} outside its timeline`,
+                    { reason: "outsideTimeline", ...row },
                 );
+            newTransition.set(t.id, r);
+        }
+        // Checked after the transitions, so a refusal names the move rather than its timeline
+        for (const l of rippled)
+            checkBeats(
+                newTimeline.get(l.id)!,
+                `${timelineName.get(l.id)} (beats ${describe(l)})`,
+                { timelineId: l.id, range: [l.start_beat, l.end_beat] },
+            );
+        const timelineOf = new Map(
+            transitions.map((t) => [t.id, t.timeline_id]),
+        );
+        for (const a of kept) {
+            const r = map.range(a.start_beat, a.end_beat);
+            const row = {
+                timelineId: timelineOf.get(a.transition_id),
+                marcherId: a.marcher_id,
+                range: [a.start_beat, a.end_beat] as Range,
+            };
+            checkBeats(
+                r,
+                `marcher ${a.marcher_id}'s part over beats ${describe(a)}`,
+                row,
+            );
+            const t = newTransition.get(a.transition_id)!;
+            if (r[0] < t[0] || r[1] > t[1])
+                refuseRow(
+                    "E-A1",
+                    `this change would move marcher ${a.marcher_id}'s part over beats ${describe(a)} outside its move`,
+                    { reason: "outsideMove", ...row },
+                );
+            newAssignment.set(a.id, r);
+        }
+
+        // I-A3: each marcher's rows at one layer stay apart and in order
+        for (const a of kept) {
+            const key = `${a.marcher_id}:${a.layer}`;
+            const chain = chains.get(key);
+            if (chain) chain.push(a);
+            else chains.set(key, [a]);
+        }
+        for (const chain of chains.values()) {
+            chain.sort((a, b) => a.start_beat - b.start_beat);
+            for (let i = 1; i < chain.length; i++) {
+                const prev = newAssignment.get(chain[i - 1]!.id)!;
+                const cur = newAssignment.get(chain[i]!.id)!;
+                if (prev[1] > cur[0])
+                    refuseRow(
+                        "E-A3",
+                        `this change would overlap marcher ${chain[i]!.marcher_id}'s parts over beats ${describe(chain[i - 1]!)} and ${describe(chain[i]!)}`,
+                        {
+                            reason: "overlap",
+                            marcherId: chain[i]!.marcher_id,
+                            timelineId: timelineOf.get(chain[i]!.transition_id),
+                            range: [
+                                chain[i - 1]!.start_beat,
+                                chain[i]!.end_beat,
+                            ],
+                        },
+                    );
+            }
         }
     }
 
@@ -595,15 +751,30 @@ async function addHoldingMoves(tx: DbTransaction, page: GridPage) {
             if (!busy) rows.push(row);
         }
         if (rows.length === 0) continue;
-        const points = rows.map((row) => {
+        const points = rows.map((row): XY => {
             const [x, y] = resolver.positionAt(row.marcherId, m);
-            const point: XY = [x, y];
-            if (!validateDestination(point).ok)
-                refuse(
-                    `marcher ${row.marcherId} is outside the field's bounds at beat ${m}`,
-                );
-            return point;
+            return [x, y];
         });
+        const off = points.findIndex((p) => !validateDestination(p).ok);
+        if (off >= 0) {
+            const marcherId = rows[off]!.marcherId;
+            const grid = await readPageGrid(tx);
+            const names = pageNamesOf(grid.pages);
+            throw new TimelineWriteError(
+                "E-ARGS",
+                `marcher ${marcherId} is outside the field's bounds at beat ${m}`,
+                [],
+                {
+                    subject: {
+                        reason: "offField",
+                        marcher:
+                            (await readMarcherLabels(tx)).get(marcherId) ??
+                            `#${marcherId}`,
+                        span: countSpanOf(grid.pages, names, m, e),
+                    },
+                },
+            );
+        }
 
         if (timelineId === undefined) {
             // One timeline per range (C-12): a stored timeline over the page (say, one made by

@@ -1412,6 +1412,112 @@
         "controls": {
             "label": "Playback Controls"
         },
+        "drillEdits": {
+            "add": {
+                "cantHoldHere": "Only at a page flag: here marchers are partway through a move. Add the counts at the end of the page to hold.",
+                "commit": "Add {n, plural, one {# count} other {# counts}}",
+                "count": "Counts",
+                "hold": "Hold marchers for these counts",
+                "holdHint": "Moves arrive on their count as now, then hold.",
+                "marchers": "Moves that end here",
+                "recording": "Does the recording have these counts?",
+                "recordingHas": "Yes: the music got longer",
+                "recordingHasHint": "Same tempo; everything after them plays later.",
+                "recordingNot": "No: fit them into the same time",
+                "recordingNotHint": "Pg {page} keeps its length in seconds, so its counts get faster.",
+                "recordingNotNoPage": "Past the last flag there is no page to fit them into.",
+                "stretch": "Stretch the move over them",
+                "stretchHint": "Same set, more counts: smaller steps.",
+                "titleFlag": "Add counts at the end of Pg {page}",
+                "titlePlayhead": "Add counts at the playhead",
+                "where": "After {span}",
+                "whereStart": "At the start of the show"
+            },
+            "cancel": "Cancel",
+            "checking": "Checking…",
+            "clip": {
+                "marchers": "the move of {list}",
+                "marchersMore": "the move of {list} and {more} more",
+                "named": "“{name}”",
+                "page": "Pg {page}’s move",
+                "unknown": "a move"
+            },
+            "counts": "{n, plural, one {# count} other {# counts}}",
+            "earlier": "earlier",
+            "flag": {
+                "handle": "Page {page} flag. Drag to move it: moves that land on it follow, and Page {page} takes counts from the next page or gives them to it.",
+                "movesFollow": "{n, plural, one {# move follows} other {# moves follow}} the flag",
+                "noMoves": "No move lands on this flag.",
+                "readoutBoth": "{own} · Pg {page}: {from} → {to}",
+                "readoutPage": "Pg {page}: {from} → {to} counts"
+            },
+            "later": "later",
+            "menu": {
+                "addAtFlag": "Add counts at the end of this page…",
+                "addAtPlayhead": "Add counts at the playhead…",
+                "remove": "Remove counts…",
+                "removeMeasure": "Remove {measure}’s counts…"
+            },
+            "moreMoves": "{n, plural, one {# more move changes} other {# more moves change}}",
+            "move": {
+                "cantHold": " (marchers are partway through it there)",
+                "cantSkip": " (it runs on past the cut, and marchers can’t jump)",
+                "deleted": "{clip} ({where}) goes",
+                "deletedInCut": "{clip} ({where}) is only in these counts and is deleted with them",
+                "holds": "Marchers hold on {where}",
+                "shifted": "{clip}: moves {n, plural, one {# count} other {# counts}} {direction}",
+                "squeezed": "{clip}: squeezed from {from} to {to} counts, same set",
+                "steps": " · largest step {from} → {to}",
+                "stopsEarly": "{clip}: stops where marchers are when the cut starts ({where}), so its set is skipped",
+                "stretched": "{clip}: stretched from {from} to {to} counts"
+            },
+            "noDrillChange": "No move changes.",
+            "page": {
+                "counts": "Pg {page}: {from} → {to} counts",
+                "removed": "Pg {page} goes: all of its counts are cut"
+            },
+            "refusal": {
+                "noCounts": "{clip} ({where}) is only in the counts this removes, so it would have no counts left. Delete or shorten it first, or remove fewer counts.",
+                "offField": "{marcher} is off the field at {where}, so marchers can’t hold there. Move {marcher} onto the field first.",
+                "outsideMove": "{marcher}’s part in {clip} ({where}) would end up outside that move. Shorten {marcher}’s part first.",
+                "outsideTimeline": "{clip} ({where}) can’t follow this change without coming apart. Move or shorten it first.",
+                "overlap": "{marcher} would have two moves at once around {where} ({clip}). Move one of them first."
+            },
+            "remove": {
+                "cantSkip": "Not here: every move that crosses the cut runs on past it, and marchers can’t jump to where they’d be after it.",
+                "commit": "Remove {n, plural, one {# count} other {# counts}}",
+                "commitDeleting": "Remove {n, plural, one {# count} other {# counts}} and delete {m, plural, one {# move} other {# moves}}",
+                "crossing": "Moves that cross the cut",
+                "instead": "Remove {span} instead",
+                "skip": "Skip that part of the move",
+                "skipHint": "Marchers stop where they are when the cut starts; that set is skipped.",
+                "squeeze": "Squeeze the move into fewer counts",
+                "squeezeHint": "Marchers still reach their set, with bigger steps.",
+                "title": "Remove counts",
+                "titleMeasure": "Remove {measure}’s counts",
+                "where": "{span}: {n, plural, one {# count} other {# counts}}"
+            },
+            "renumbered": "Later pages renumber: Pg {from} becomes Pg {to}",
+            "shiftedMixed": "{n, plural, one {# other move moves} other {# other moves move}}, unchanged",
+            "shiftedSummary": "{n, plural, one {# later move moves} other {# later moves move}} {counts} {direction}, unchanged",
+            "showClip": "Show {clip}",
+            "span": {
+                "count": "Pg {page} count {count}",
+                "counts": "Pg {page} counts {from}–{to}",
+                "pages": "Pg {startPage} ct {startCount} – Pg {endPage} ct {endCount}"
+            },
+            "step": {
+                "hold": "hold",
+                "tiny": "tiny",
+                "toFive": "{steps} to 5"
+            },
+            "timing": {
+                "faster": "Pg {page} gets faster: {from} → {to} BPM",
+                "slower": "Pg {page} gets slower: {from} → {to} BPM"
+            },
+            "total": "Show: {from} → {to} counts",
+            "whatHappens": "What happens to the drill"
+        },
         "errors": {
             "assignmentDoesNotFit": "That marcher's move doesn't fit the transition: it must stay inside the transition's range, and use a slot the transition has.",
             "assignmentOutsideTransition": "A marcher's move must stay inside its transition. Adjust the transition's range, or the move's.",

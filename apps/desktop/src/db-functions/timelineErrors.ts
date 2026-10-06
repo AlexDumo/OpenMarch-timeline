@@ -1,4 +1,34 @@
 import type { ValidationError, ValidationResult } from "@openmarch/core";
+import type { CountSpan, DrillClipRef } from "./drillNames";
+
+/**
+ * What a page or beat edit's refusal is about, in drill words (tempo experiment E10), so the
+ * toast can name the clip, its pages and counts and the marcher instead of beat ordinals and
+ * timeline ids (`timelineErrorMessage`). The error's own message keeps the ordinals for the log.
+ */
+export interface TimelineRefusalSubject {
+    /**
+     * - `noCounts`: a row would be left with no beats (`E-ARGS`)
+     * - `outsideTimeline`: a move would leave its timeline (`E-T1`)
+     * - `outsideMove`: a marcher's part would leave its move (`E-A1`)
+     * - `overlap`: two of a marcher's rows at one layer would overlap (`E-A3`)
+     * - `offField`: a marcher to hold is off the field (`E-ARGS`, holding moves)
+     */
+    readonly reason:
+        | "noCounts"
+        | "outsideTimeline"
+        | "outsideMove"
+        | "overlap"
+        | "offField";
+    /** The clip, when the refusal is about one */
+    readonly clip?: DrillClipRef;
+    /** Where the row runs, before the edit */
+    readonly span?: CountSpan;
+    /** The marcher, when the refusal is about one */
+    readonly marcher?: string;
+    /** The timeline row's id, for selecting it (the clip's timeline) */
+    readonly timelineId?: number;
+}
 
 /**
  * A rejected timeline write (spec section 6). `code` is the spec's error code: `E-S1`, `E-P1`,
@@ -12,12 +42,14 @@ import type { ValidationError, ValidationResult } from "@openmarch/core";
 export class TimelineWriteError extends Error {
     readonly code: string;
     readonly details: ValidationError[];
+    /** The refusal in drill words, when the write path knows it (`TimelineRefusalSubject`) */
+    readonly subject?: TimelineRefusalSubject;
 
     constructor(
         code: string,
         message: string,
         details: ValidationError[] = [],
-        options?: { cause?: unknown },
+        options?: { cause?: unknown; subject?: TimelineRefusalSubject },
     ) {
         super(
             message.startsWith("E-") ? message : `${code}: ${message}`,
@@ -26,6 +58,7 @@ export class TimelineWriteError extends Error {
         this.name = "TimelineWriteError";
         this.code = code;
         this.details = details;
+        if (options?.subject) this.subject = options.subject;
     }
 }
 

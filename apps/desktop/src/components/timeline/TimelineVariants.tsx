@@ -1,3 +1,4 @@
+import { TimelinePageFlagHandles } from "./TimelinePageFlagHandles";
 import {
     useCallback,
     useEffect,
@@ -629,6 +630,31 @@ function TimelineSurface({
     // The right-click menu's target: the measure row's count, measure or tab under the pointer;
     // else a page box or clip under the pointer, else a dragged range the pointer is inside (UI-9
     // Adding marchers, Creating a timeline)
+    // The right-click menu's target: a page box or clip under the pointer, else a dragged range
+    // the pointer is inside (UI-9 Adding marchers, Creating a timeline)
+    const measureRangeAt = (
+        event: MouseEvent<HTMLElement>,
+        rowHeight: number,
+    ) => {
+        const surface = event.currentTarget.querySelector(
+            '[data-testid="timeline-pointer-surface"]',
+        );
+        if (!surface) return null;
+        const bounds = surface.getBoundingClientRect();
+        const y = event.clientY - bounds.top;
+        if (y < 28 || y > 28 + rowHeight) return null;
+        const beat = (event.clientX - bounds.left) / pixelsPerBeat;
+        const ordered = [...model.measures].sort((a, b) => a.atBeat - b.atBeat);
+        const index = ordered.findLastIndex((m) => m.atBeat <= beat);
+        if (index < 0) return null;
+        const start = ordered[index]!.atBeat;
+        const end = ordered[index + 1]?.atBeat ?? model.beatCount;
+        if (end <= start || beat > end) return null;
+        return {
+            range: { startBeatIndex: start, endBeatIndex: end },
+            measure: ordered[index]!.label.replace(/^m/i, "m"),
+        };
+    };
     const rangeMenu = useTimelineRangeMenu({
         menu,
         resolveRange: (event: MouseEvent<HTMLElement>) => {
@@ -649,6 +675,11 @@ function TimelineSurface({
             if (onRow) return { range: onRow.range, measureRow: onRow.target };
             const marked = markedRangeAt(event.target);
             if (marked) return marked;
+            // The measure row: the measure under the pointer, for count edits (E10)
+            const measure = props.addSelectedMarchers?.onRemoveCounts
+                ? measureRangeAt(event, railHeight)
+                : null;
+            if (measure) return measure;
             if (selection?.kind !== "range" || !selectionRange) return null;
             const surface = event.currentTarget.querySelector(
                 '[data-testid="timeline-pointer-surface"]',
@@ -797,6 +828,15 @@ function TimelineSurface({
                                     ? props.livePositionBeat
                                     : undefined
                             }
+                        />
+                    )}
+                    {props.pageFlagMove && (
+                        <TimelinePageFlagHandles
+                            pages={model.pages}
+                            measures={model.measures}
+                            beatCount={model.beatCount}
+                            pixelsPerBeat={pixelsPerBeat}
+                            move={props.pageFlagMove}
                         />
                     )}
                     <TimelineRehearsalMarkers

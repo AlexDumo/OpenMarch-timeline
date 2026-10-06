@@ -61,6 +61,7 @@ import {
 import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { useTimelineMeasureRow } from "./useTimelineMeasureRow";
+import { useTimelineDrillEdits } from "./useTimelineDrillEdits";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
@@ -228,6 +229,12 @@ export default function TimelineModePanel() {
         musicEnd,
         hidden: isPlaying || holding,
     });
+    // Tempo lab `drillChoices` (E10): count edits that ask what the drill should do
+    const counts = useTimelineDrillEdits({
+        pages,
+        beatCount: beats.length,
+        isPlaying,
+    });
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
     const { mutate: deletePageFlags } = useMutation(
         deletePageFlagsMutationOptions(queryClient),
@@ -316,6 +323,7 @@ export default function TimelineModePanel() {
                     }
                     appendCounts={showLength.appendCounts}
                     musicPastEnd={showLength.musicPastEnd}
+                    drillEdits={counts.drillEdits}
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
                             pages,
@@ -334,6 +342,7 @@ export default function TimelineModePanel() {
                     }}
                 />
             </TimelineWaveformProvider>
+            {counts.dialog}
         </div>
     );
 }

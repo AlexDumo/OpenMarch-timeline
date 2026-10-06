@@ -1,3 +1,4 @@
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { withTimelinePageRipple } from "@/db-functions/timelineRipple";
 import {
     checkAndDrainTimelineChangesInTransaction,
@@ -17,7 +18,6 @@ import {
 import { updatePagesInTransaction } from "@/db-functions";
 import { db } from "@/global/database/db";
 import { useMutation } from "@tanstack/react-query";
-import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     Measure as ParserMeasure,
@@ -295,7 +295,7 @@ const useMusicXmlMutation = <TArgs>(
             }
         },
         onError: (error) => {
-            conToastError(tolgee.t(errorKey), error);
+            toastTimelineError(error, tolgee.t(errorKey));
         },
     });
 };
