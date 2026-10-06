@@ -757,8 +757,32 @@ export default class CanvasMarcher
         this.left = newCanvasCoords.x;
         this.top = newCanvasCoords.y;
 
-        this.updateTextLabelPosition();
-        this.setCoords();
+        // One update of the marcher and one of its label, skipping the control corners: the
+        // bounding coords keep offscreen culling and hit tests right, and the corners (only used
+        // for a selected object's controls) come back with the next full setCoords, which
+        // setMarcherCoords and the end of playback do.
+        super.setCoords(true);
+        if (
+            !this.group &&
+            !this.angle &&
+            this.scaleX === 1 &&
+            this.scaleY === 1 &&
+            !this.flipX &&
+            !this.flipY
+        ) {
+            // The dot sits exactly on the database coordinate (databaseCoordsToCanvasCoords)
+            this.textLabel.left = coords.x + CanvasMarcher.gridOffset;
+            this.textLabel.top =
+                coords.y +
+                CanvasMarcher.gridOffset -
+                CanvasMarcher.dotRadius * 2.2;
+        } else {
+            const absoluteCoords = this.getAbsoluteCoords();
+            this.textLabel.left = absoluteCoords.x;
+            this.textLabel.top =
+                absoluteCoords.y - CanvasMarcher.dotRadius * 2.2;
+        }
+        this.textLabel.setCoords(true);
     }
 
     /**
