@@ -1206,15 +1206,22 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         moved: boolean;
     } | null>(null);
 
-    useEffect(() => {
+    // A new range replaces the preview in the same render, not in an effect after it: an effect
+    // ran after the frame was painted, so the window trailed the playhead by a frame on every beat
+    const [shownRange, setShownRange] = useState(range);
+    if (
+        range.startBeatIndex !== shownRange.startBeatIndex ||
+        range.endBeatIndex !== shownRange.endBeatIndex
+    ) {
         const next = {
             startBeatIndex: range.startBeatIndex,
             endBeatIndex: range.endBeatIndex,
         };
+        setShownRange(range);
         dragRef.current = null;
         previewRef.current = next;
         setPreview(next);
-    }, [range.endBeatIndex, range.startBeatIndex]);
+    }
 
     const updatePreview = useCallback(
         (
