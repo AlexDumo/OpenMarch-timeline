@@ -152,7 +152,15 @@ describe("tempo", () => {
         expect(report.measures[0]!.beats[0]!.duration).toBe(0.5);
     });
 
-    it("warns about a metric modulation it can't time, and keeps the tempo", () => {
+    it("counts x/2 in halves when the tempo is marked in halves", () => {
+        const xml = score(
+            measure(1, time(3, 2) + sibeliusTempo("half", 0, 60) + rest(6)),
+        );
+        expect(durations(xml)[0]).toEqual([1, 1, 1]);
+        expect(parseMusicXml(xml)[0]!.meter!.inQuarters).toBeUndefined();
+    });
+
+    it("reads a metric modulation with no number as new note = old note, with a warning", () => {
         const xml = score(
             measure(
                 1,
@@ -165,8 +173,12 @@ describe("tempo", () => {
                         rest(6),
                 ),
         );
-        expect(codes(xml)).toEqual(["metric-modulation"]);
-        expect(durations(xml)[1]).toEqual(Array(4).fill(0.75));
+        const report = parseMusicXmlWithReport(xml);
+        expect(report.warnings.map((w) => w.message)).toEqual([
+            "m2: Metric modulation ♩. = ♩ has no number; read as the new note lasting as long as the old one: ♩. = 120",
+        ]);
+        // The new dotted quarter lasts as long as the old quarter: 0.5 s
+        expect(durations(xml)[1]).toEqual(Array(4).fill(0.5));
     });
 });
 
@@ -192,8 +204,8 @@ describe("meters", () => {
         ["3/4", 3, 4, 3, [1, 1, 1]],
         ["5/4", 5, 4, 5, [1, 1, 1, 1, 1]],
         ["7/4", 7, 4, 7, [1, 1, 1, 1, 1, 1, 1]],
-        ["2/2", 2, 2, 4, [2, 2]],
-        ["3/2", 3, 2, 6, [2, 2, 2]],
+        ["2/2 (♩ marked)", 2, 2, 4, [1, 1, 1, 1]],
+        ["3/2 (♩ marked)", 3, 2, 6, [1, 1, 1, 1, 1, 1]],
         ["6/8", 6, 8, 3, [1.5, 1.5]],
         ["9/8", 9, 8, 4.5, [1.5, 1.5, 1.5]],
         ["12/8", 12, 8, 6, [1.5, 1.5, 1.5, 1.5]],

@@ -19,7 +19,7 @@ export type ParseWarningCode =
     | "invalid-tempo"
     /** An approximate tempo ("c. 132") was read as its number */
     | "approximate-tempo"
-    /** A metric modulation (♩. = ♩) with no number; the previous tempo is kept */
+    /** A metric modulation (♩. = ♩) with no number; read as "new note = old note" */
     | "metric-modulation"
     /** A tempo word ("Allegro") with no number in its measure */
     | "tempo-word-without-number"
@@ -74,7 +74,7 @@ const MESSAGES: Record<ParseWarningCode, string> = {
     "invalid-tempo": 'Tempo "{text}" isn\'t a number; kept {kept}',
     "approximate-tempo": "Approximate tempo read as {tempo}",
     "metric-modulation":
-        "Metric modulation ({text}) has no number; kept {kept}",
+        "Metric modulation {text} has no number; read as the new note lasting as long as the old one: {tempo}",
     "tempo-word-without-number":
         '"{text}" has no metronome number; the tempo doesn\'t change',
     "no-tempo": "No tempo marking in the file; all counts use {tempo}",

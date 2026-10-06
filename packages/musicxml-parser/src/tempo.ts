@@ -97,6 +97,10 @@ const UNIT_LABEL: Record<BeatUnit, string> = {
 export const formatBpm = (bpm: number): string =>
     String(Math.round(bpm * 100) / 100);
 
+/** A note value the way a score prints it: "♩", "♩.", "half". */
+export const formatBeatUnit = (unit: BeatUnit, dots = 0): string =>
+    UNIT_LABEL[unit] + ".".repeat(dots);
+
 /** A marking the way a score prints it: "♩ = 132", "♩. = 88", "c. ♩ = 132", "half = 66". */
 export function formatTempoMarking(marking: TempoMarking): string {
     const unit = UNIT_LABEL[marking.beatUnit] + ".".repeat(marking.dots);

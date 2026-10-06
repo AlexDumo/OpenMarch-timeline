@@ -112,6 +112,14 @@ describe("labels", () => {
                 assumedGrouping: false,
             }),
         ).toBe("6/8");
+        expect(
+            meterLabel({
+                text: "3/2",
+                counts: [1, 1, 1, 1, 1, 1],
+                assumedGrouping: false,
+                inQuarters: true,
+            }),
+        ).toBe("3/2 (in ♩)");
     });
 
     it("translates a rit. that wasn't applied with its reason", () => {

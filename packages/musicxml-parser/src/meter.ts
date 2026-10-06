@@ -11,6 +11,8 @@
  *    here two eighth pairs and an eighth triple (short, short, long).
  * 2. **Whole, half and quarter denominators (x/1, x/2, x/4) count the denominator.** 4/4 is four
  *    quarter counts, 2/2 two half-note counts, 3/2 three half-note counts, 6/4 six quarters.
+ *    One exception: x/2 counts quarters while the tempo in effect is marked in quarters (a 3/2
+ *    bar inside a ♩ = 176 section is six quarter counts; cut time marked half = 120 is two).
  * 3. **Eighths and shorter (x/8, x/16, …) count in groups of 2 and 3 of the denominator.**
  *    - 6/8, 9/8, 12/8 (any multiple of 3) are compound: one dotted-quarter count per three
  *      eighths. 3/8 is one dotted-quarter count.
@@ -36,6 +38,8 @@ export interface Meter {
     grouping?: string;
     /** True when the file gave no grouping and `grouping` is the rule's guess */
     assumedGrouping: boolean;
+    /** True for an x/2 meter counted in quarters because the tempo is marked in quarters */
+    inQuarters?: boolean;
 }
 
 /** One `<beats>`/`<beat-type>` pair from a `<time>` element. */
@@ -62,11 +66,15 @@ export function defaultGroups(n: number): number[] {
 }
 
 /** Counts for one `<beats>`/`<beat-type>` pair, or undefined when the rule doesn't cover it. */
-function countsForPart(part: TimeSignaturePart):
+function countsForPart(
+    part: TimeSignaturePart,
+    quarterMarked: boolean,
+):
     | {
           groups: number[];
           counts: number[];
           explicit: boolean;
+          inQuarters?: boolean;
       }
     | undefined {
     const beatType = Number(part.beatType.trim());
@@ -89,6 +97,13 @@ function countsForPart(part: TimeSignaturePart):
 
     const n = terms[0]!;
     // Rule 2: whole, half and quarter denominators count the denominator
+    if (beatType === 2 && quarterMarked)
+        return {
+            groups: Array(n * 2).fill(1),
+            counts: Array(n * 2).fill(1),
+            explicit: false,
+            inQuarters: true,
+        };
     if (beatType <= 4)
         return {
             groups: Array(n).fill(1),
@@ -111,14 +126,17 @@ function countsForPart(part: TimeSignaturePart):
  */
 export function meterFromTimeSignature(
     parts: TimeSignaturePart[],
+    { quarterMarked = false }: { quarterMarked?: boolean } = {},
 ): Meter | undefined {
     if (parts.length === 0) return undefined;
     const counts: number[] = [];
     const groups: number[] = [];
     let assumedGrouping = false;
+    let inQuarters = false;
     for (const part of parts) {
-        const result = countsForPart(part);
+        const result = countsForPart(part, quarterMarked);
         if (!result) return undefined;
+        if (result.inQuarters) inQuarters = true;
         counts.push(...result.counts);
         groups.push(...result.groups);
         const mixed = new Set(result.groups).size > 1;
@@ -133,6 +151,7 @@ export function meterFromTimeSignature(
         counts,
         grouping: allEqual ? undefined : groups.join("+"),
         assumedGrouping,
+        ...(inQuarters ? { inQuarters } : {}),
     };
 }
 

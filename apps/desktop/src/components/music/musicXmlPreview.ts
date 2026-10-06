@@ -30,9 +30,13 @@ export interface PreviewRow {
     notes: ParseWarning[];
 }
 
-/** "7/8 (2+2+3)" for a grouped meter (written 7/8 or 2+2+3/8), "6/8" otherwise. */
+/**
+ * "7/8 (2+2+3)" for a grouped meter (written 7/8 or 2+2+3/8), "3/2 (in ♩)" for an x/2 meter
+ * counted in quarters, "6/8" otherwise.
+ */
 export function meterLabel(meter: Meter): string {
     const parts = meter.text.split("/");
+    if (meter.inQuarters) return `${meter.text} (in ♩)`;
     if (!meter.grouping || parts.length !== 2) return meter.text;
     const total = meter.grouping
         .split("+")

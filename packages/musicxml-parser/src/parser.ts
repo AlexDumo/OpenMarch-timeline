@@ -7,6 +7,7 @@ import {
     type TimeSignaturePart,
 } from "./meter";
 import {
+    formatBeatUnit,
     formatBpm,
     formatTempoMarking,
     isBeatUnit,
@@ -16,6 +17,7 @@ import {
     readTempoText,
     readTempoWords,
     unitQuarters,
+    type BeatUnit,
     type TempoMarking,
     type TempoWords,
 } from "./tempo";
@@ -85,9 +87,15 @@ export interface MusicXmlParseResult {
 type RawEvent = { pos: number; seq: number } & (
     | { kind: "tempo"; marking: TempoMarking; needsUnit: boolean }
     | { kind: "invalid-tempo"; text: string }
-    | { kind: "modulation"; text: string }
+    | { kind: "modulation"; modulation: Modulation }
     | { kind: "words"; words: TempoWords }
 );
+
+/** A metric modulation printed as "new note = old note", like ♩. = ♩. */
+interface Modulation {
+    newUnit: { unit: BeatUnit; dots: number };
+    oldUnit: { unit: BeatUnit; dots: number };
+}
 
 interface RawMeasure {
     label: string;
@@ -133,7 +141,7 @@ function readMetronome(
 ):
     | { kind: "marking"; marking: TempoMarking }
     | { kind: "invalid"; text: string }
-    | { kind: "modulation"; text: string }
+    | { kind: "modulation"; modulation: Modulation }
     | undefined {
     const units = [
         ...metronome.matchAll(
@@ -163,12 +171,14 @@ function readMetronome(
             },
         };
     }
-    if (units.length >= 2)
+    const [left, right] = units;
+    if (left && right && isBeatUnit(left.unit) && isBeatUnit(right.unit))
         return {
             kind: "modulation",
-            text: units
-                .map((u) => `${u.unit}${".".repeat(u.dots)}`)
-                .join(" = "),
+            modulation: {
+                newUnit: { unit: left.unit, dots: left.dots },
+                oldUnit: { unit: right.unit, dots: right.dots },
+            },
         };
     if (perMinute !== undefined)
         return { kind: "invalid", text: decodeXml(perMinute) };
@@ -176,6 +186,7 @@ function readMetronome(
 }
 
 /** The tempo events of one `<direction>` at `pos`. */
+// eslint-disable-next-line max-lines-per-function
 function directionEvents(
     direction: string,
     pos: number,
@@ -195,8 +206,24 @@ function directionEvents(
         .join(" ")
         .trim();
     const textMarking = words ? readTempoText(words) : undefined;
-    const printed =
-        metronome?.kind === "marking" ? metronome.marking : textMarking;
+    // With a <sound tempo>, a printed modulation (♪ = ♪) still says which note the tempo is in
+    const modulationUnit =
+        sound !== undefined && metronome?.kind === "modulation"
+            ? metronome.modulation.newUnit
+            : undefined;
+    const printed: TempoMarking | undefined =
+        metronome?.kind === "marking"
+            ? metronome.marking
+            : modulationUnit && sound !== undefined
+              ? {
+                    quarterBpm: sound,
+                    beatUnit: modulationUnit.unit,
+                    dots: modulationUnit.dots,
+                    perMinute:
+                        sound /
+                        unitQuarters(modulationUnit.unit, modulationUnit.dots),
+                }
+              : textMarking;
 
     if (sound !== undefined) {
         // <sound tempo> is the playback truth, in quarters; the printed marking is only shown
@@ -241,7 +268,7 @@ function directionEvents(
             pos,
             seq: nextSeq(),
             kind: "modulation",
-            text: metronome.text,
+            modulation: metronome.modulation,
         });
     }
 
@@ -430,12 +457,30 @@ interface ResolvedMeasure {
 // eslint-disable-next-line max-lines-per-function
 function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
     let meter: Meter | undefined;
+    // The note value the tempo in effect is printed in (for counting x/2 meters)
+    let printedUnit: { unit: BeatUnit; dots: number } | undefined;
+    const notePrinted = (events: RawEvent[]) => {
+        for (const e of events) {
+            if (e.kind === "tempo" && !e.needsUnit)
+                printedUnit = {
+                    unit: e.marking.beatUnit,
+                    dots: e.marking.dots,
+                };
+            if (e.kind === "modulation") printedUnit = e.modulation.newUnit;
+        }
+    };
     return raws.map((raw, i) => {
         let meterChanged = false;
+        notePrinted(raw.events.filter((e) => e.pos < EPSILON));
         const read =
             raw.time?.kind === "read"
-                ? meterFromTimeSignature(raw.time.parts)
+                ? meterFromTimeSignature(raw.time.parts, {
+                      quarterMarked:
+                          printedUnit?.unit === "quarter" &&
+                          printedUnit.dots === 0,
+                  })
                 : undefined;
+        notePrinted(raw.events);
         if (raw.time && !read)
             warn("unknown-meter", "warning", i, {
                 meter: raw.time.text,
@@ -551,6 +596,21 @@ function walkTempos(
     let beforeRamp: TempoMarking | undefined;
     // A ramp's target keeps "a tempo" pointing at the tempo before the ramp
     const rampTargets = new Set<PlacedEvent>();
+    // Counts where a numbered tempo is written
+    const numberedAt = new Set(
+        placed.filter((e) => e.kind === "tempo").map((e) => e.count),
+    );
+    // Counts where "a tempo" or "Tempo I" is written: a ramp arriving there has no target
+    const backAt = new Set(
+        placed
+            .filter(
+                (e) =>
+                    e.kind === "words" &&
+                    (e.words.kind === "a-tempo" ||
+                        e.words.kind === "tempo-primo"),
+            )
+            .map((e) => e.count),
+    );
     const setTempo = (
         count: number,
         marking: TempoMarking,
@@ -592,15 +652,33 @@ function walkTempos(
             return;
         }
         if (e.kind === "modulation") {
+            // "♩. = ♩": the new ♩. lasts as long as the old ♩ did
+            const { newUnit, oldUnit } = e.modulation;
+            const perMinute =
+                current / unitQuarters(oldUnit.unit, oldUnit.dots);
+            const marking: TempoMarking = {
+                quarterBpm:
+                    perMinute * unitQuarters(newUnit.unit, newUnit.dots),
+                beatUnit: newUnit.unit,
+                dots: newUnit.dots,
+                perMinute,
+            };
+            setTempo(e.count, marking, e.measureIndex);
+            beforeRamp = undefined;
             warn("metric-modulation", "warning", e.measureIndex, {
-                text: e.text,
-                kept: keptTempo(),
+                text: `${formatBeatUnit(newUnit.unit, newUnit.dots)} = ${formatBeatUnit(oldUnit.unit, oldUnit.dots)}`,
+                tempo: formatTempoMarking(marking),
             });
             return;
         }
         const words = e.words;
         if (words.kind === "tempo-word") return;
         if (words.kind === "a-tempo" || words.kind === "tempo-primo") {
+            // A number on the same count already says which tempo
+            if (numberedAt.has(e.count)) {
+                beforeRamp = undefined;
+                return;
+            }
             const back = words.kind === "a-tempo" ? beforeRamp : firstMarking;
             if (back) {
                 setTempo(e.count, back, e.measureIndex);
@@ -632,7 +710,11 @@ function walkTempos(
             endCount: e.count,
         };
         let reason = "no-target";
-        if (next?.kind === "tempo") {
+        if (
+            next?.kind === "tempo" &&
+            !backAt.has(next.count) &&
+            Math.abs(next.marking.quarterBpm - current) > EPSILON
+        ) {
             const to = next.marking.quarterBpm;
             const towards =
                 words.kind === "slower" ? to < current : to > current;
@@ -747,6 +829,8 @@ function warnAboutStructure(
  *   `RAMP_TARGET_WINDOW_MEASURES` measures, as evenly changing tempos up to it; otherwise
  *   reported. "a tempo" goes back to the tempo before the last rit. or accel., "Tempo I" to the
  *   first tempo.
+ * - A metric modulation printed with no number (♩. = ♩) is read as "the new note lasts as long
+ *   as the old one", with a warning to check it.
  * - Measure numbers: each measure keeps the file's `number` attribute as `label` (and its
  *   integer value as `number`), so a pickup reads m0.
  */
