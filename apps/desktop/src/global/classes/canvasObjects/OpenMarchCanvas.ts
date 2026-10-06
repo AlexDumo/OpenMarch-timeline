@@ -1167,12 +1167,18 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         CanvasMarcher.theme = this.fieldProperties.theme;
 
         // update coordinate for every canvas marcher
+        const moved: CanvasMarcher[] = [];
         Object.values(marcherPages).forEach((marcherPage) => {
             const visual = marcherVisuals[marcherPage.marcher_id];
             if (!visual) return;
 
-            visual.getCanvasMarcher().setMarcherCoords(marcherPage);
+            const canvasMarcher = visual.getCanvasMarcher();
+            canvasMarcher.setMarcherCoords(marcherPage, true, undefined, {
+                bringToFront: false,
+            });
+            moved.push(canvasMarcher);
         });
+        this.bringObjectsToFront(moved);
 
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
@@ -1195,21 +1201,29 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     ) => {
         CanvasMarcher.theme = this.fieldProperties.theme;
 
+        const moved: CanvasMarcher[] = [];
         positions.forEachMarcher(
             this.getCanvasMarchers(),
             (canvasMarcher, x, y) => {
-                canvasMarcher.setMarcherCoords({
-                    ...canvasMarcher.coordinate,
-                    ...(pageId !== undefined ? { page_id: pageId } : {}),
-                    x,
-                    y,
-                    // Timeline mode has no shape locks (P7.11): a page-era lock from an earlier
-                    // marcher_pages render must not stop a drag that P7.2 can write
-                    isLocked: false,
-                    lockedReason: "",
-                });
+                canvasMarcher.setMarcherCoords(
+                    {
+                        ...canvasMarcher.coordinate,
+                        ...(pageId !== undefined ? { page_id: pageId } : {}),
+                        x,
+                        y,
+                        // Timeline mode has no shape locks (P7.11): a page-era lock from an
+                        // earlier marcher_pages render must not stop a drag that P7.2 can write
+                        isLocked: false,
+                        lockedReason: "",
+                    },
+                    true,
+                    undefined,
+                    { bringToFront: false },
+                );
+                moved.push(canvasMarcher);
             },
         );
+        this.bringObjectsToFront(moved);
 
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
@@ -1220,8 +1234,14 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     refreshMarchers = () => {
         const canvasMarchers = this.getCanvasMarchers();
         canvasMarchers.forEach((canvasMarcher) => {
-            canvasMarcher.setMarcherCoords(canvasMarcher.coordinate);
+            canvasMarcher.setMarcherCoords(
+                canvasMarcher.coordinate,
+                true,
+                undefined,
+                { bringToFront: false },
+            );
         });
+        this.bringObjectsToFront(canvasMarchers);
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
         this.requestRenderAll();
@@ -1263,12 +1283,33 @@ export default class OpenMarchCanvas extends fabric.Canvas {
      * Brings all of the canvasMarchers to the front of the canvas
      */
     sendCanvasMarchersToFront = () => {
-        const curCanvasMarchers: CanvasMarcher[] = this.getCanvasMarchers();
-        curCanvasMarchers.forEach((canvasMarcher) => {
-            this.bringToFront(canvasMarcher);
-        });
+        this.bringObjectsToFront(this.getCanvasMarchers());
         this.bringAllControlPointsTooFront();
     };
+
+    /**
+     * Moves `objects` to the top of the stacking order, in the order given, in one pass. The same
+     * order as calling `bringToFront` on each in turn, which walks every canvas object per call.
+     * Objects that aren't on this canvas are left out, as `setMarcherCoords` skips them.
+     */
+    bringObjectsToFront(objects: readonly fabric.Object[]): void {
+        if (objects.length === 0) return;
+        const raised = new Set<fabric.Object>();
+        for (const object of objects)
+            if (object.canvas === this) raised.add(object);
+        if (raised.size === 0) return;
+        const stack = this._objects;
+        const found = new Set<fabric.Object>();
+        let kept = 0;
+        for (const object of stack) {
+            if (raised.has(object)) found.add(object);
+            else stack[kept++] = object;
+        }
+        stack.length = kept;
+        // In the order given; anything not in the stack (already removed) stays out
+        for (const object of raised) if (found.has(object)) stack.push(object);
+        if (this.renderOnAddRemove) this.requestRenderAll();
+    }
 
     /**
      * Brings the specified canvasMarcher to the front of the canvas

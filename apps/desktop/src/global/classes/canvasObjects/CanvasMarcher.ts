@@ -612,11 +612,15 @@ export default class CanvasMarcher
      *
      * @param coordinate The MarcherPage object to set the coordinates from.
      * @param uiSettings Optional UI settings for coordinate rounding
+     * @param options.bringToFront `false` leaves the marcher where it is in the canvas's stacking
+     * order. Callers that move many marchers pass it and then raise them all in one pass
+     * (`OpenMarchCanvas.bringObjectsToFront`), since raising each one walks every canvas object.
      */
     setMarcherCoords(
         coordinate: CoordinateLike,
         updateMarcherPageObj = true,
         uiSettings?: UiSettings,
+        { bringToFront = true }: { bringToFront?: boolean } = {},
     ) {
         if (!this.canvas) return;
 
@@ -637,7 +641,7 @@ export default class CanvasMarcher
         this.top = newCanvasCoords.y;
 
         // This is needed for the canvas to register the change - http://fabricjs.com/fabric-gotchas
-        this.getCanvas().bringToFront(this);
+        if (bringToFront) this.getCanvas().bringToFront(this);
         this.setCoords();
         this.refreshLockedStatus();
     }
