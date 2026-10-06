@@ -139,7 +139,8 @@ export function consumeSuspendRequest(): boolean {
  * A seek from the timeline (UI-12 and its review). `gesture` is where it sits in a scrub
  * (`TimelineSeekGesture`); without one it is a single action.
  *
- * - Paused, it moves the playhead (`seek`). A scrub sends one seek per whole beat it passes.
+ * - Paused, it moves the playhead (`seek`). A scrub sends one seek per whole beat it passes, and
+ *   an unpinned start flag stays put until it ends, then follows once (`beginScrub`, `endScrub`).
  * - Playing, a click (a press that ends without moving off its beat), or a seek without a gesture,
  *   jumps playback there and plays on (`jumpTimelinePlayback`). A drag suspends playback
  *   (`suspendTimelinePlayback`) and the canvas follows the pointer; when it ends, playback resumes
@@ -165,7 +166,10 @@ export function seekTimeline(
         if (ended?.suspended)
             resumeTimelinePlayback(beats, beat, ended.suspended, setIsPlaying);
         else if (ended?.playing ?? isPlaying) jumpTimelinePlayback(beats, beat);
-        else state.seek(beat);
+        else {
+            state.seek(beat);
+            state.endScrub();
+        }
         return;
     }
     const whole = Math.round(beat);
@@ -173,6 +177,7 @@ export function seekTimeline(
     if (scrub.beat === whole) return;
     scrub.beat = whole;
     if (!scrub.playing) {
+        state.beginScrub();
         state.seek(beat);
         return;
     }

@@ -308,8 +308,14 @@ from it. The spec still wins on the model; this file decides presentation.
     cosmetic flags; **+** still adds one.
   - **The start flag follows navigation** (_lead default_). Unless pinned, S is
     the start of the page box holding P (the previous flag), recomputed when P
-    is moved by navigation: clicking or dragging on the ruler, page boxes,
-    page navigation, **+**. Play, Pause and Stop never move S.
+    is moved by navigation: clicking the ruler, page boxes, page navigation,
+    **+**. Since the UI-12 review it follows when the gesture ends, not during
+    it: a scrub or a drag along the page boxes leaves S where it was (without
+    pinning it) and S moves once, on release; arrow keys on the playhead move
+    it once they settle (300ms after the last tap, or when a held key comes
+    up). Play and Stop never move S; pausing a play-on run moves P, and an
+    unpinned S follows it (UI-12 review), so the window doesn't silently span
+    pages.
   - **Pinning** (_lead default_). Dragging the start handle, or dragging a
     range on empty timeline space, pins S where it is dropped (before P). A
     pinned S stays through navigation until P moves to or before it, which
@@ -374,7 +380,8 @@ from it. The spec still wins on the model; this file decides presentation.
     With no window (home) it plays on.
   - **Play (Space), From start off**, plays on from where you are (P, or a
     frame a paused preview holds) to the end of the show, as in UI-10. Pausing
-    it moves P to the paused beat and keeps S.
+    it moves P to the paused beat; an unpinned S follows P, a pinned one stays
+    (UI-12 review; it kept S until then).
   - **Loop** (transport button, no shortcut) repeats the preview. It only
     applies while From start is on. An isolated timeline previews its whole
     range with no roll and always loops, as before.
@@ -771,4 +778,6 @@ points (P7.2).
     if ever, it moves on its own. Today a pinned flag survives navigation
     (UI-10 _lead default_; since UI-12, until unpinned), so a forgotten pin can turn a drag into a move
     straight through several pages
-    (research/ownership/10-cross-page-windows.md §4.3, VALIDATION V-22).
+    (research/ownership/10-cross-page-windows.md §4.3, VALIDATION V-22). An unpinned flag no
+    longer chases the playhead page by page: since the UI-12 review it moves once, when a scrub,
+    page-box drag or run of arrow keys ends, and when a play-on run is paused (V-36).

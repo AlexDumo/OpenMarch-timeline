@@ -20,8 +20,9 @@ import { consumeStopRequest, consumeSuspendRequest } from "./timelineTransport";
  *   when the loop is on or a timeline is isolated, and otherwise ends with the cursor back on P.
  *   Pausing it holds the frame where it paused (the cursor) and leaves P alone.
  * - **Playing on** (P) stops at the end of the show; an isolated timeline loops over its range
- *   instead. Pausing it moves P to the last whole beat played and leaves the start flag where it
- *   is (`seekKeepingStart`), as in UI-10.
+ *   instead. Pausing it moves P to the last whole beat played (`seek`): an unpinned start flag
+ *   follows P, as it does when a scrub ends (UI-12 review), so the window doesn't silently span
+ *   pages; a pinned one stays.
  * - **Stop** (`stopTimelinePlayback`) puts the cursor back on P.
  * - A scrub's suspension (`suspendTimelinePlayback`, UI-12 review) pauses without writing P or the
  *   cursor: the scrub moves the cursor, and resumes playback when it ends.
@@ -77,7 +78,7 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
         }
         const beat = Math.min(Math.floor(live), beats.length);
         if (run.kind === "preview") store.cue(beat);
-        else store.seekKeepingStart(beat);
+        else store.seek(beat);
     }, [enabled, isPlaying, beats.length]);
 
     useEffect(() => {

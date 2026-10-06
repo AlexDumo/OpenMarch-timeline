@@ -224,6 +224,42 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().selection).toEqual({ kind: "range", start: 1, end: 5 });
     });
 
+    it("pausing a play-on run moves an unpinned start flag with the playhead; a pinned one stays (UI-12 review)", async ({
+        db,
+        wrapper,
+    }) => {
+        const { result } = await setUp(db, wrapper);
+        act(() => {
+            store().setPageBoxes([
+                { start: 1, end: 9 },
+                { start: 9, end: 17 },
+            ]);
+            store().selectRange(1, 9);
+        });
+        expect(store().startPinned).toBe(false);
+        audio.seconds = 6.1; // beat 13.2
+        play(result);
+        frame();
+        act(() => {
+            result.current.playing.setIsPlaying(false);
+        });
+        expect(store().playheadBeat).toBe(13);
+        expect(store().startBeat).toBe(9);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 13 });
+
+        act(() => {
+            store().selectRange(5, 9);
+        });
+        expect(store().startPinned).toBe(true);
+        play(result);
+        frame();
+        act(() => {
+            result.current.playing.setIsPlaying(false);
+        });
+        expect(store().playheadBeat).toBe(13);
+        expect(store().startBeat).toBe(5);
+    });
+
     it("does nothing before the audio has started", async ({ db, wrapper }) => {
         const { result } = await setUp(db, wrapper);
         act(() => {

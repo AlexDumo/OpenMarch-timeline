@@ -433,6 +433,75 @@ describe("unpinning the start flag (UI-12)", () => {
     });
 });
 
+describe("the start flag during a gesture (UI-12 review)", () => {
+    beforeEach(() => {
+        store().reset();
+        store().setPageBoxes(BOXES);
+    });
+
+    it("stays put while a scrub moves the playhead, without pinning", () => {
+        store().selectRange(9, 17);
+        store().beginScrub();
+        store().seek(21);
+        expect(store().startBeat).toBe(9);
+        expect(store().startPinned).toBe(false);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 21 });
+        // Back on or before S: the window falls back to the page box holding P, as after Stop
+        store().seek(5);
+        expect(store().startBeat).toBe(9);
+        expect(store().selection).toEqual({ kind: "range", start: 1, end: 5 });
+        store().seek(23);
+        expect(store().startBeat).toBe(9);
+    });
+
+    it("follows the playhead once when the scrub ends", () => {
+        store().selectRange(9, 17);
+        store().beginScrub();
+        store().seek(23);
+        const revision = store().playheadRevision;
+        store().endScrub();
+        expect(store().scrubbing).toBe(false);
+        expect(store().startBeat).toBe(17);
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 17,
+            end: 23,
+        });
+        // The playhead didn't move, so nothing restarts
+        expect(store().playheadRevision).toBe(revision);
+        // Not scrubbing: seeking follows at once again
+        store().seek(5);
+        expect(store().startBeat).toBe(1);
+    });
+
+    it("leaves a pinned S, and isolation's S, where they are", () => {
+        store().selectRange(5, 17);
+        store().beginScrub();
+        store().seek(21);
+        store().endScrub();
+        expect(store().startBeat).toBe(5);
+        expect(store().startPinned).toBe(true);
+        store().setStoredTimelines([timeline(1, 5, 17, [1])]);
+        store().isolate(1);
+        store().beginScrub();
+        store().seek(9);
+        store().endScrub();
+        expect(store().startBeat).toBe(5);
+    });
+
+    it("a page box, home or opening a show ends the gesture", () => {
+        store().beginScrub();
+        store().selectRange(9, 17);
+        expect(store().scrubbing).toBe(false);
+        store().beginScrub();
+        store().selectHome();
+        expect(store().scrubbing).toBe(false);
+        store().beginScrub();
+        store().reset();
+        expect(store().scrubbing).toBe(false);
+    });
+});
+
 describe("the playback cursor (UI-11)", () => {
     beforeEach(() => {
         store().reset();

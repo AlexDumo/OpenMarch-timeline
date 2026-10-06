@@ -1533,6 +1533,57 @@ export const TimelineRehearsalMarkers = ({
     </div>
 );
 
+/** How long after the last arrow key a run of steps ends, so the start flag follows once */
+const ARROW_STEPS_SETTLE_MS = 300;
+
+/**
+ * Arrow-key steps on the playhead as one gesture (UI-12 review): the first step is a `press`, the
+ * rest `drag`s, and the run ends 300ms after the last key, or when a held key is released, so an
+ * unpinned start flag follows once rather than page by page.
+ */
+const useArrowKeySteps = (
+    onSeek:
+        | ((beat: BeatPosition, options?: TimelineSeekOptions) => void)
+        | undefined,
+) => {
+    const run = useRef<{
+        beat: number;
+        held: boolean;
+        timer: ReturnType<typeof setTimeout>;
+    } | null>(null);
+    const onSeekRef = useRef(onSeek);
+    onSeekRef.current = onSeek;
+    const end = useCallback(() => {
+        const current = run.current;
+        if (!current) return;
+        run.current = null;
+        clearTimeout(current.timer);
+        onSeekRef.current?.(current.beat, { gesture: "end" });
+    }, []);
+    useEffect(() => end, [end]);
+    return {
+        end,
+        /** Steps from the run's beat, or from `from` when a new run starts */
+        step: (to: (from: number) => number, from: number, repeat: boolean) => {
+            const current = run.current;
+            if (current) clearTimeout(current.timer);
+            const beat = to(current?.beat ?? from);
+            run.current = {
+                beat,
+                held: (current?.held ?? false) || repeat,
+                timer: setTimeout(end, ARROW_STEPS_SETTLE_MS),
+            };
+            onSeekRef.current?.(beat, {
+                gesture: current ? "drag" : "press",
+            });
+        },
+        /** A key came up: a held key's run ends now; a tapped one waits for the next tap */
+        release: () => {
+            if (run.current?.held) end();
+        },
+    };
+};
+
 export const TimelinePlayhead = ({
     model,
     positionBeat,
@@ -1542,6 +1593,7 @@ export const TimelinePlayhead = ({
     beatCount,
     anchorRef,
     onSeek,
+    isPlaying = false,
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
@@ -1555,7 +1607,10 @@ export const TimelinePlayhead = ({
     beatCount: number;
     anchorRef: RefObject<HTMLButtonElement | null>;
     onSeek?: (beat: BeatPosition, options?: TimelineSeekOptions) => void;
+    /** While playing, each arrow key jumps playback on its own */
+    isPlaying?: boolean;
 }) => {
+    const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
     const left = Math.round(beatToX(positionBeat, pixelsPerBeat));
     // Where React last put the line; read when following stops (see below)
@@ -1598,8 +1653,23 @@ export const TimelinePlayhead = ({
                           : 0;
                 if (delta === 0 || !onSeek) return;
                 event.preventDefault();
-                onSeek(clamp(Math.round(positionBeat) + delta, 0, beatCount));
+                if (isPlaying) {
+                    onSeek(
+                        clamp(Math.round(positionBeat) + delta, 0, beatCount),
+                    );
+                    return;
+                }
+                keySteps.step(
+                    (from) => clamp(from + delta, 0, beatCount),
+                    Math.round(positionBeat),
+                    event.repeat,
+                );
             }}
+            onKeyUp={(event) => {
+                if (event.key === "ArrowLeft" || event.key === "ArrowRight")
+                    keySteps.release();
+            }}
+            onBlur={keySteps.end}
             className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
             style={{
                 left,

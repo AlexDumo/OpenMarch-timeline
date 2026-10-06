@@ -44,6 +44,21 @@ describe("scrubbing while paused", () => {
         seekTimeline(BEATS, 6, "end", paused);
     });
 
+    it("keeps an unpinned start flag until the scrub ends, then moves it once", () => {
+        store().selectRange(1, 9);
+        seekTimeline(BEATS, 9, "press", paused);
+        seekTimeline(BEATS, 12, "drag", paused);
+        seekTimeline(BEATS, 15, "drag", paused);
+        expect(store().startBeat).toBe(1);
+        expect(store().startPinned).toBe(false);
+        seekTimeline(BEATS, 15, "end", paused);
+        expect(store().startBeat).toBe(9);
+        expect(store().scrubbing).toBe(false);
+        // A click without a gesture moves it at once
+        seekTimeline(BEATS, 4, undefined, paused);
+        expect(store().startBeat).toBe(1);
+    });
+
     it("seeks without a gesture every time", () => {
         const revision = store().playheadRevision;
         seekTimeline(BEATS, 5, undefined, paused);

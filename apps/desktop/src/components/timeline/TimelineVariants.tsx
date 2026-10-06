@@ -673,6 +673,7 @@ function TimelineSurface({
                         beatCount={model.beatCount}
                         anchorRef={playheadRef}
                         onSeek={props.onSeek}
+                        isPlaying={props.isPlaying}
                     />
                     {props.onAddPageFlag && !props.isPlaying && (
                         <button

@@ -1062,6 +1062,60 @@ describe("a calmer timeline (UI-12)", () => {
         expect(onSeek).toHaveBeenLastCalledWith(7, { gesture: "end" });
     });
 
+    it("arrow keys on the playhead step as one gesture, ending when they settle (UI-12 review)", () => {
+        vi.useFakeTimers();
+        try {
+            const onSeek = vi.fn();
+            const { rerender } = render(
+                <ExpandedTimeline
+                    {...commonProps}
+                    showTransport={false}
+                    onSeek={onSeek}
+                />,
+            );
+            const playhead = screen.getByTestId("timeline-playhead");
+            fireEvent.keyDown(playhead, { key: "ArrowRight" });
+            fireEvent.keyUp(playhead, { key: "ArrowRight" });
+            fireEvent.keyDown(playhead, { key: "ArrowRight" });
+            expect(onSeek.mock.calls).toEqual([
+                [12, { gesture: "press" }],
+                [13, { gesture: "drag" }],
+            ]);
+            act(() => {
+                vi.advanceTimersByTime(300);
+            });
+            expect(onSeek).toHaveBeenLastCalledWith(13, { gesture: "end" });
+
+            // A held key ends when it comes up
+            onSeek.mockClear();
+            fireEvent.keyDown(playhead, { key: "ArrowLeft" });
+            fireEvent.keyDown(playhead, { key: "ArrowLeft", repeat: true });
+            fireEvent.keyUp(playhead, { key: "ArrowLeft" });
+            expect(onSeek.mock.calls).toEqual([
+                [10, { gesture: "press" }],
+                [9, { gesture: "drag" }],
+                [9, { gesture: "end" }],
+            ]);
+
+            // While playing, each key jumps on its own
+            onSeek.mockClear();
+            rerender(
+                <ExpandedTimeline
+                    {...commonProps}
+                    isPlaying
+                    showTransport={false}
+                    onSeek={onSeek}
+                />,
+            );
+            fireEvent.keyDown(screen.getByTestId("timeline-playhead"), {
+                key: "ArrowRight",
+            });
+            expect(onSeek.mock.calls).toEqual([[12]]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it("Ctrl+drag across the page boxes draws a range, and doesn't select a box", () => {
         const onSelectionChange = vi.fn();
         render(
