@@ -56,13 +56,13 @@ import { useTempoMapState } from "./useTempoMapState";
 /** The table's columns; only meter, tempo and rit./accel. are edited. */
 const COLUMNS = [
     { key: "measure", label: "Measure", editable: false, width: "w-[88px]" },
-    { key: "meter", label: "Meter", editable: true, width: "w-[100px]" },
+    { key: "meter", label: "Meter", editable: true, width: "w-[124px]" },
     { key: "tempo", label: "Tempo", editable: true, width: "w-[100px]" },
     {
         key: "ramp",
         label: "Rit./accel.",
         editable: true,
-        width: "min-w-[140px] flex-1",
+        width: "min-w-[116px] flex-1",
     },
     { key: "start", label: "Starts", editable: false, width: "w-[84px]" },
     { key: "counts", label: "Counts", editable: false, width: "w-[104px]" },
