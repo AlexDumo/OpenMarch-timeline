@@ -504,3 +504,69 @@ fixture list and how to score).
   but never move counts before the playhead. The playhead's count is fixed when Play or the first
   tap happens, because pausing a play-on run moves the playhead (UI-12).
 - **Alternatives:** two measures (needs the meter; counts are what the panel knows); no pre-roll.
+
+## RI-1 Bars line up by shape first, then by shared marks (re-import, E12)
+
+- **Context:** a corrected score must land on the show's existing counts. Counts carry no bar
+  numbers of their own, and arrangers both fix typos (same bars) and add or cut bars (v3).
+- **Choice:** `planReimport` (`timeline/tempo/reimport.ts`). If the show and the file have the
+  same number of bars with the same counts in each, bar N pairs with bar N whatever the marks say
+  ("same structure"). Otherwise bars line up at rehearsal marks both versions use exactly once (in
+  the same order), with the first bar lined up by measure number when that makes the stretch up
+  to the first mark the same length (a pickup added or dropped). Between two such marks, bars pair
+  one to one only if both versions have the same number of bars there; a bar whose count differs
+  is left out on its own. A stretch with a different number of bars is left alone entirely and
+  reported ("2 bars added before L: m77–82 here is m77–84 in the file"), because counts alone
+  can't tell where inside it the bars went, and pairing wrongly would put tempos on the wrong bars.
+- **Alternatives:** pair the longest equal prefix and suffix inside the stretch (would usually be
+  right for v3, silently wrong when bars go in near the start); match by measure number everywhere
+  (an insert renumbers everything after it); a sequence alignment on count lengths (identical 4/4
+  bars give no signal).
+- **Validate:** V-56.
+
+## RI-2 Paired bars get the file's count lengths; nothing else moves (re-import, E12)
+
+- **Choice:** a paired bar's counts get the file's durations through `retimeBeatsInTransaction`
+  (duration-only: same beat ids, same pages, so the ripple is a no-op and drill can't refuse it),
+  its rehearsal mark becomes the file's (added, removed or renamed), and the first measure's
+  number follows the file when the first bars pair. Unpaired bars and counts outside measures keep
+  their lengths and marks. Pages never move to measures (the full import moves page N to measure
+  N). Tempo map marks (`tempoMapMarks`) are kept as they are: they're keyed by beat id, which
+  survives. One transaction, one undo entry; a re-import that changes nothing writes nothing.
+- **Alternatives:** also add or remove counts for the bars that differ (that is E10's
+  insert/cut with its drill choices; a later step could call it from here).
+- **Validate:** V-56, the kit tests in `db-functions/__test__/musicXmlReimport.test.ts`.
+
+## RI-3 A synced show keeps its alignment by default (re-import, E12)
+
+- **Context:** synced counts mean someone lined the show up with the recording; the score's
+  timing would move them off it (Marcus's "this replaces your alignment to live.mp3").
+- **Choice:** when the show has synced counts, the preview says how many and how many the score's
+  timing would move, and asks: "Keep my alignment, update marks only" (default) or "Use the
+  score's timing". With the score's timing, counts it moves more than 1 ms are dropped from the
+  synced counts; the rest stay synced. Without synced counts there's no question and the score's
+  timing is used.
+- **Alternatives:** a third option that keeps synced counts put and re-spaces between them in the
+  score's proportions (keeps alignment and picks up a fixed rit. or 6/8 shape; cheap with
+  `respaceProportional`, left out to keep the choice to two); keep every synced id even if it
+  moved (then "synced" would be a lie).
+- **Validate:** V-57. Note that tempo-map rows also sync their edges (TM-3), so a show whose map
+  was typed reads as "lined up with the recording" here too.
+
+## RI-4 Update in place first, Replace everything one step further (re-import, E12)
+
+- **Context:** Priya: "a Replace everything import must never be one click away from her drill."
+- **Choice:** with the flag on and at least one bar pairing, the preview opens on the Re-import
+  summary with **Update show**. **Replace everything…** switches the dialog to the old import
+  (with its warning that alignment is lost and pages move, and its dry run), which still needs
+  Import. The dry run only runs once Replace everything is chosen. If nothing pairs, the old
+  import opens with a note saying so.
+- **Validate:** V-58.
+
+## RI-5 What the summary lists (re-import, E12)
+
+- **Choice:** "same bars and counts" or "N of the file's M bars line up"; tempo changes per run
+  of bars ("m41–48 (F): tempo 138 → 132", "≈" for uneven bars, at most 6 lines then "and N
+  more"); when the show ends now ("3:02 (was 3:00, +1.9 s)"); marks added, removed, renamed;
+  numbering; then the bars that don't line up, highlighted. Tempos are counts per minute, without
+  a note value (counts carry none; see TM-1).
