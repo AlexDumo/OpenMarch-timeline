@@ -866,11 +866,14 @@ describeDbTests("count edits: marks, measures and the recording", (it) => {
         await roundTrip(db, before);
     });
 
-    it("names the holds a vamp makes after their measure", async ({
+    it("names the clips a vamp makes after their page: its move and its hold (DN-4)", async ({
         db,
         marchersAndPages: _,
     }) => {
         await setUp(db);
+        const known = new Set(
+            (await db.select().from(schema.timelines).all()).map((l) => l.id),
+        );
         const impact = await previewThenCommit(db, {
             kind: "addCounts",
             at: 17,
@@ -883,7 +886,13 @@ describeDbTests("count edits: marks, measures and the recording", (it) => {
         const names = (await db.select().from(schema.timelines).all())
             .filter((l) => holds.some((h) => h.timelineId === l.id))
             .map((l) => l.name);
-        expect(new Set(names)).toEqual(new Set(["Hold (vamp m5)"]));
+        expect(new Set(names)).toEqual(new Set(["Pg 2 hold"]));
+        // Every clip the vamp made is named after the page, none "Timeline N"
+        const made = (await db.select().from(schema.timelines).all()).filter(
+            (l) => !known.has(l.id),
+        );
+        for (const l of made)
+            expect(["Pg 2 move", "Pg 2 hold"]).toContain(l.name);
         expect(impact.measures?.added).toEqual({ from: 5, to: 5 });
     });
 });

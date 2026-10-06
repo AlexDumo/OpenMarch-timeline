@@ -1085,3 +1085,73 @@ fixture list and how to score).
 - **Alternatives:** "Align to music" (Jo); hiding Align until after a first tap (Dana; rejected,
   Jo needs it first).
 - **Validate:** V-94.
+
+## DN-1 Drill sheets print the measures a page's counts are in; the inspector shows them exactly (D5)
+
+- **Context:** the E2 count convention printed a page from m5's downbeat to m9's as "5(2) -
+  9(1)". All five personas read that as a code or a typo; their sheets and students say "m5–8"
+  (Pyware's way). Sam also wants the set's downbeat visible somewhere.
+- **Choice:** `measureRangeString` prints the measures the page's counts are in, leaving out the
+  last one when the flag (the last count) is its downbeat: "5–8", "5" inside one measure, and the
+  pickup page "1–4" (was "1 - 5(1)"). Every sheet keeps the count total in its own Counts column
+  or row, so "m5–8 · 16 cts" is read across the row rather than written into one cell. The
+  inspector shows `measureRangeExact`, "m5 b2 – m9 b1", with the printed range in its hover
+  text. The drill chart PDF adds one grey line above the footer: "Measures: the measures each
+  move's counts are in. A set reached on a downbeat isn't counted, so 5–8 can set on m9 beat 1."
+  The coordinate sheets (HTML to PDF) have no free legend area, so they print the range only.
+- **E2:** counts, motion, the readout and the video are unchanged. `countParity.test.ts` still
+  checks that the sheet's first and last counts are the readout's, and now checks both texts
+  (printed and exact) against them.
+- **Alternatives:** "5(2) - 9(1)" (E2); "5–8 (sets m9)" in the cell (too wide for the compact
+  sheet's Ms column); a legend on the coordinate sheets' header (needs a layout change).
+- **Validate:** V-95.
+
+## DN-2 One name for a place (D6)
+
+- **Context:** one count had four names across the panel, chip, toast and transport (Dana), and a
+  flag named only by the page it closes reads one set early at a letter (Marcus, Priya).
+- **Choice:** one shared function, `placeName` (`components/timeline/placeName.ts`). On a flag:
+  "end of Pg 11 · Pg 12 starts", with the rehearsal mark on the flag's downbeat first ("C · end
+  of Pg 10 · Pg 11 starts"); the last flag is "end of Pg 6". Inside a page, unchanged: "Pg 2 · ct
+  7/16". Compact: "Pg 11 ct 16 → 12" and "Pg 2 ct 7" (letter kept: "C · Pg 10 ct 16 → 11").
+  - Full: the transport readout (and so go-to results), its screen-reader text ("Rehearsal C,
+    end of page 10, count 16, page 11 starts"), the synced toast, Tap the beat's sentences.
+  - Compact: the readout below 500px; Align's chips and the punch-in chip, which are one line of
+    parts joined by " · ", where the full form's own " · " would blur where a name ends.
+  - Hold chips lead with the music: "m5 beat 4 held · 0.50 → 1.85 s" (the place when there are no
+    measures).
+- **UI-13 note:** UI-13 says that on a flag the readout reads "ct 16/16 m7 beat 1". It now reads
+  "end of Pg 3 · Pg 4 starts" and "m7 beat 1"; the counting (a flag is its page's last count) is
+  unchanged. docs/timeline/ui.md is left as written; this entry supersedes that example.
+- **Not changed:** the cut and add dialogs' spans ("Pg 3 ct 1 – Pg 4 ct 2") and the window
+  badge, which name ranges, not places; the readout and chips stay untranslated English as they
+  were (Tap the beat's three count keys were dropped for the shared function).
+- **Alternatives:** "Pg 11 ct 16" only (Sam; one count off from how sets are called at a
+  letter); "Pg 12 ct 1" (moves the count convention); the full form in chips too.
+- **Validate:** V-96.
+
+## DN-3 "Move C here" on the measure row
+
+- **Context:** typing a letter another measure has was refused (FB-9), and R on a marked measure
+  opened a silent rename box (Dana, Priya: moving a mark took three steps and briefly left two Gs).
+- **Choice:** while naming a mark, a letter another measure has turns the hint into "C is at m12.
+  Enter moves it here" with a **Move C here** button; Enter or the button moves it (`moveMark`,
+  label only, one undo entry). On a measure that already has a mark, it says "…, replacing B", and
+  the move replaces B (`moveMark` `replace`), with the usual "Removed rehearsal mark B" toast and
+  Undo. Leaving the input (blur) never moves a mark. Where there is no measure to move it to (a
+  mark at a count with no measure line), the name is refused as before, in red in the hint. R on
+  a measure that already has a mark says so in the hint: "This measure already has B. Type a new
+  name to rename it, or Esc to keep it" (playing, the FB-9 toast stays).
+- **Alternatives:** a confirm dialog; allow duplicates with a warning; a "Move G to…" menu item.
+- **Validate:** V-97.
+
+## DN-4 A vamp's clips are named after their page
+
+- **Context:** after Add counts with Hold, the page's own move (now a clip ending at the flag)
+  and the hold showed as "Timeline 16" and "Timeline 29" (Priya). FE-6 named both "Hold (vamp
+  m70)", which also called the page's move a hold.
+- **Choice:** the clips an add-with-hold makes are named in the same transaction: the one that
+  starts before the new counts "Pg 16 move", the ones that start on them "Pg 16 hold", after the
+  page that gets the counts. Stored text, English, like a typed clip name; supersedes FE-6's name.
+- **Alternatives:** keep them out of the clip lanes (bigger change; FE-6).
+- **Validate:** V-98.

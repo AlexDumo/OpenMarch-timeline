@@ -76,6 +76,35 @@ describeDbTests("measureLines", (it) => {
         );
 
         testWithHistory(
+            "Move C here over a measure's own mark replaces it, as one undo entry (DN-3)",
+            async ({ db, marchersAndPages: _, expectNumberOfChanges }) => {
+                const m19 = await measureIdAt(db, 73);
+                const m20 = await measureIdAt(db, 77);
+                await editMeasureLines({
+                    db,
+                    edit: { kind: "mark", measureId: m19, mark: "G" },
+                });
+                await editMeasureLines({
+                    db,
+                    edit: { kind: "mark", measureId: m20, mark: "H" },
+                });
+                const state = await expectNumberOfChanges.getDatabaseState(db);
+                await editMeasureLines({
+                    db,
+                    edit: {
+                        kind: "moveMark",
+                        fromMeasureId: m19,
+                        toMeasureId: m20,
+                        replace: true,
+                    },
+                });
+                expect((await lines(db))[18]).toEqual([73, null]);
+                expect((await lines(db))[19]).toEqual([77, "G"]);
+                await expectNumberOfChanges.test(db, 1, state);
+            },
+        );
+
+        testWithHistory(
             "moves a mark to another measure as one undo entry",
             async ({ db, marchersAndPages: _, expectNumberOfChanges }) => {
                 const before = await beatsAndPages(db);

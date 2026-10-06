@@ -42,6 +42,7 @@ import {
     type AlignPage,
     type AlignTranslate,
 } from "./timelineAlign";
+import type { PlaceMeasure } from "./placeName";
 import type { TimelineXAxis } from "./timelineAxis";
 import type { TimelineAlign } from "./TimelineViewModel";
 import { timelineMenuContentGuards } from "./TimelineRangeMenu";
@@ -131,9 +132,12 @@ export function useAlignEdit({
     playheadTime,
     viewportRef,
     t,
+    measures,
 }: {
     align: AlignWithOffset | undefined;
     pages: readonly AlignPage[];
+    /** The measures in count indexes, so a hold is named by the music (D6) */
+    measures?: readonly PlaceMeasure[];
     pixelsPerSecond: number;
     playheadTime: number;
     viewportRef: React.RefObject<HTMLDivElement | null>;
@@ -156,6 +160,7 @@ export function useAlignEdit({
     const latest = useRef({
         align,
         pages,
+        measures,
         pixelsPerSecond,
         playheadTime,
         t,
@@ -165,6 +170,7 @@ export function useAlignEdit({
     latest.current = {
         align,
         pages,
+        measures,
         pixelsPerSecond,
         playheadTime,
         t,
@@ -239,6 +245,7 @@ export function useAlignEdit({
                         t: tr,
                         units,
                         overrides,
+                        measures: latest.current.measures,
                     }),
                     ghostTime,
                     synced: [...a.synced],
@@ -322,10 +329,14 @@ export function useAlignEdit({
                 next.synced.length > a.synced.length && next.kind === "move";
             if (newlySynced && !readToastShown()) {
                 writeToastShown();
-                // Named as the transport and the chip name it: "Pg 11 ct 16" (FB-3)
+                // Named as the transport and the chip name it (D6): "end of Pg 11 · Pg 12 starts"
                 toast.info(
                     latest.current.t("tempo.align.syncedToast", {
-                        place: countName(latest.current.pages, next.index),
+                        place: countName(
+                            latest.current.pages,
+                            next.index,
+                            "full",
+                        ),
                     }),
                 );
             }

@@ -5,8 +5,12 @@ import { conToastError } from "@/utilities/utils";
 import { DatabasePage, ModifiedPageArgs, NewPageArgs } from "@/db-functions";
 import { ModifyPagesRequest } from "@/hooks/queries/usePages";
 import { generatePageNames, getLastPageNumber } from "@openmarch/core";
-import { measureRangeString as _measureRangeString } from "./Page.utils";
+import {
+    measureRangeExact as _measureRangeExact,
+    measureRangeString as _measureRangeString,
+} from "./Page.utils";
 export const measureRangeString = _measureRangeString;
+export const measureRangeExact = _measureRangeExact;
 export { generatePageNames, getLastPageNumber };
 interface Page {
     /** The id of the page in the database

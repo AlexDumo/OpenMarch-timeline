@@ -272,7 +272,7 @@ describe("tapping and applying", () => {
         // Pausing a play-on run moves the playhead (UI-12)
         void act(() => useTimelineSelectionStore.getState().selectRange(9, 16));
         expect(screen.getByTestId("tap-sentence")).toHaveTextContent(
-            "From Pg 2 ct 8",
+            "From Pg 2 · ct 8/16",
         );
         await act(async () => {
             fireEvent.click(screen.getByTestId("tap-apply"));

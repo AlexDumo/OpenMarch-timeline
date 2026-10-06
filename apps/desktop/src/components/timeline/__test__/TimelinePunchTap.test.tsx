@@ -201,7 +201,9 @@ describe("punch-in tap (E9)", () => {
         expect(drafts()).toHaveLength(0);
         play();
         tapAt(8.3);
-        expect(chip()).toHaveTextContent("1 tap · Next tap → Pg 2A ct 8");
+        expect(chip()).toHaveTextContent(
+            "1 tap · Next tap → A · Pg 2A ct 8 → 4",
+        );
         tapAt(12.4);
         expect(drafts()).toHaveLength(2);
         expect(chip()).toHaveTextContent("2 taps · No flag left to tap");
@@ -231,7 +233,9 @@ describe("punch-in tap (E9)", () => {
         tapAt(12.4);
         key("Backspace");
         expect(drafts()).toHaveLength(1);
-        expect(chip()).toHaveTextContent("1 tap · Next tap → Pg 2A ct 8");
+        expect(chip()).toHaveTextContent(
+            "1 tap · Next tap → A · Pg 2A ct 8 → 4",
+        );
     });
 
     it("a slow page is tapped count by count, with an 8-count count-in", () => {
@@ -254,7 +258,9 @@ describe("punch-in tap (E9)", () => {
         tapAt(0);
         play();
         tapAt(slowTimes[17]!);
-        expect(chip()).toHaveTextContent("1 tap · Next tap → Pg 2A ct 8");
+        expect(chip()).toHaveTextContent(
+            "1 tap · Next tap → A · Pg 2A ct 8 → 4",
+        );
     });
 
     it("draws a tap out of step with the taps on both sides amber, and keeps it", () => {

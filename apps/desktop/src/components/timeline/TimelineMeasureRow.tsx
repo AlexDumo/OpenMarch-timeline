@@ -75,9 +75,14 @@ export interface TimelineMeasureRowCommands {
     ) => void;
     /**
      * Moves a measure's rehearsal mark to another measure that has none (a tab dragged along the
-     * measure row in the Normal view). Without it, tabs don't drag there.
+     * measure row in the Normal view), or with `replace` over the mark it has ("Move C here",
+     * DN-3). Without it, tabs don't drag there and a name another measure has is refused.
      */
-    readonly onMoveMark?: (from: MeasureId, to: MeasureId) => void;
+    readonly onMoveMark?: (
+        from: MeasureId,
+        to: MeasureId,
+        replace?: boolean,
+    ) => void;
     /**
      * Opens Tap the beat on From here, after the menu seeks to a rehearsal mark ("Tap from here
      * (C)", D4). Without it, the tab's menu doesn't offer it.
@@ -104,6 +109,8 @@ export type MeasureRowEditor =
           readonly original: string;
           /** R while playing already wrote `initial`; typing renames it */
           readonly addedWhilePlaying?: boolean;
+          /** R on a measure that already had this mark: the hint says so (DN-3) */
+          readonly existing?: boolean;
       }
     | {
           /** A mark at a count with no measure: it starts one there */
@@ -196,6 +203,63 @@ export const duplicateMarkMessage = (measure: TimelineMeasureMarker) =>
             measure: numberOf(measure),
         },
     );
+
+/**
+ * What a typed mark name means when another measure has it (DN-3): `move` offers "Move C here"
+ * (one label-only undo entry; `replaces` names the mark this measure loses), `taken` refuses it
+ * where there is no measure to move it to, or moving isn't wired. Null when the name is free or
+ * unchanged.
+ */
+export type MarkClash =
+    | {
+          readonly kind: "move";
+          readonly from: TimelineMeasureMarker;
+          readonly replaces: string | null;
+      }
+    | { readonly kind: "taken"; readonly from: TimelineMeasureMarker };
+
+export const markClash = (
+    editor: MeasureRowEditor,
+    text: string,
+    measures: readonly TimelineMeasureMarker[],
+    canMove: boolean,
+): MarkClash | null => {
+    if (editor.kind !== "mark" && editor.kind !== "new") return null;
+    const typed = text.trim();
+    if (!typed || (editor.kind === "mark" && typed === editor.original))
+        return null;
+    const from = measureWithMark(
+        measures,
+        typed,
+        editor.kind === "mark" ? editor.measureId : null,
+    );
+    if (!from) return null;
+    if (editor.kind === "new" || !canMove) return { kind: "taken", from };
+    return { kind: "move", from, replaces: editor.original || null };
+};
+
+/** "C is at m12. Enter moves it here" (and "replacing B"), or "There's already a C at m12" */
+const clashHint = (clash: MarkClash) =>
+    clash.kind === "taken"
+        ? duplicateMarkMessage(clash.from)
+        : clash.replaces
+          ? measureRowText(
+                "editor.moveHintReplace",
+                "{mark} is at m{measure}. Enter moves it here, replacing {replaces}",
+                {
+                    mark: markOf(clash.from) ?? "",
+                    measure: numberOf(clash.from),
+                    replaces: clash.replaces,
+                },
+            )
+          : measureRowText(
+                "editor.moveHint",
+                "{mark} is at m{measure}. Enter moves it here",
+                {
+                    mark: markOf(clash.from) ?? "",
+                    measure: numberOf(clash.from),
+                },
+            );
 
 /** Hover title on a rehearsal tab (11-ui.md D) */
 export const rehearsalTabTitle = (mark: string, measure: string) =>
@@ -511,10 +575,16 @@ const editorHint = (editor: MeasureRowEditor) => {
                       "Added {mark}. Type a name and press Enter, or keep going",
                       { mark: editor.initial },
                   )
-                : measureRowText(
-                      "editor.markHint",
-                      "Enter to save, Esc to cancel. Empty removes the mark",
-                  );
+                : editor.existing
+                  ? measureRowText(
+                        "editor.existingHint",
+                        "This measure already has {mark}. Type a new name to rename it, or Esc to keep it",
+                        { mark: editor.original },
+                    )
+                  : measureRowText(
+                        "editor.markHint",
+                        "Enter to save, Esc to cancel. Empty removes the mark",
+                    );
         case "new":
             return measureRowText(
                 "editor.newHint",
@@ -542,23 +612,28 @@ export function TimelineMeasureRowEditor({
     onCommit,
     onCancel,
     onPassKey,
+    canMoveMark = false,
 }: {
     editor: MeasureRowEditor;
     model: Pick<TimelineViewModel, "measures">;
     axis: TimelineXAxis;
     top: number;
-    onCommit: (text: string) => void;
+    /** `blur`: focus left the input, which never moves a mark */
+    onCommit: (text: string, how: "enter" | "blur") => void;
     onCancel: () => void;
     onPassKey?: (key: "r" | " ") => void;
+    /** A name another measure has offers "Move C here" (DN-3) */
+    canMoveMark?: boolean;
 }) {
     const [text, setText] = useState(editor.initial);
     const touched = useRef(false);
     const done = useRef(false);
     const numeric = editor.kind === "beats" || editor.kind === "beatsFrom";
-    const finish = (commit: boolean) => {
+    const clash = markClash(editor, text, model.measures, canMoveMark);
+    const finish = (commit: boolean, how: "enter" | "blur" = "enter") => {
         if (done.current) return;
         done.current = true;
-        if (commit) onCommit(text);
+        if (commit) onCommit(text, how);
         else onCancel();
     };
     return (
@@ -607,14 +682,35 @@ export function TimelineMeasureRowEditor({
                     }
                 }}
                 // Leaving a rename keeps what was typed; leaving anything else cancels it
-                onBlur={() => finish(editor.kind === "mark" && touched.current)}
+                onBlur={() =>
+                    finish(editor.kind === "mark" && touched.current, "blur")
+                }
                 className="border-accent bg-bg-1 text-text rounded-4 h-16 min-w-24 border px-3 font-mono text-[10px] leading-none font-semibold outline-hidden"
             />
             <span
                 id="timeline-measure-row-hint"
-                className="border-stroke bg-modal text-text-subtitle rounded-4 shadow-modal max-w-[260px] border px-6 py-2 text-[10px] leading-snug"
+                data-testid="timeline-measure-row-hint"
+                aria-live="polite"
+                className={clsx(
+                    "border-stroke bg-modal rounded-4 shadow-modal flex max-w-[260px] flex-col items-start gap-4 border px-6 py-2 text-[10px] leading-snug",
+                    clash?.kind === "taken" ? "text-red" : "text-text-subtitle",
+                )}
             >
-                {editorHint(editor)}
+                {clash ? clashHint(clash) : editorHint(editor)}
+                {clash?.kind === "move" && (
+                    <button
+                        type="button"
+                        data-testid="timeline-measure-row-move-mark"
+                        className="border-accent text-text rounded-4 hover:bg-fg-2 border px-6 py-1 text-[11px] font-medium"
+                        // Keeps the input focused, so its blur doesn't commit first
+                        onPointerDown={(event) => event.preventDefault()}
+                        onClick={() => finish(true)}
+                    >
+                        {measureRowText("editor.moveMark", "Move {mark} here", {
+                            mark: markOf(clash.from) ?? "",
+                        })}
+                    </button>
+                )}
             </span>
         </div>
     );
@@ -720,6 +816,8 @@ export function useMeasureRowEditing({
                 atBeat: measure.atBeat,
                 initial: current ?? suggestedMark(model, measure.atBeat),
                 original: current ?? "",
+                // Says the measure has a mark, rather than a silent rename box (DN-3)
+                existing: current != null,
             });
             return;
         }
@@ -758,31 +856,40 @@ export function useMeasureRowEditing({
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [addMarkAtPlayhead, commands]);
 
-    const commit = (text: string) => {
+    const commit = (text: string, how: "enter" | "blur" = "enter") => {
         const current = editor;
         setEditor(null);
         if (!current || !commands) return;
         const typed = text.trim();
-        // A name another measure has is refused, and the input stays open to fix it
-        const refuseDuplicate = (exceptId: MeasureId | null) => {
-            const taken = measureWithMark(
-                latest.current.model.measures,
-                typed,
-                exceptId,
-            );
-            if (!taken) return false;
-            toast.error(duplicateMarkMessage(taken));
+        const clash = markClash(
+            current,
+            typed,
+            latest.current.model.measures,
+            commands.onMoveMark != null,
+        );
+        if (clash?.kind === "move") {
+            // "Move C here" (DN-3): Enter or the button moves it; leaving the input doesn't
+            if (how === "enter")
+                commands.onMoveMark?.(
+                    clash.from.id,
+                    (current as { measureId: MeasureId }).measureId,
+                    clash.replaces != null,
+                );
+            return;
+        }
+        if (clash?.kind === "taken") {
+            // A name another measure has is refused, and the input stays open to fix it
+            toast.error(duplicateMarkMessage(clash.from));
             setEditor({ ...current, initial: typed } as MeasureRowEditor);
-            return true;
-        };
+            return;
+        }
         switch (current.kind) {
             case "mark":
                 if (typed === current.original) return;
-                if (typed && refuseDuplicate(current.measureId)) return;
                 commands.onSetMark(current.measureId, typed || null);
                 return;
             case "new":
-                if (!typed || refuseDuplicate(null)) return;
+                if (!typed) return;
                 commands.onStartMeasure(current.atBeat, typed);
                 return;
             case "beats":
@@ -824,6 +931,7 @@ export function useMeasureRowEditing({
         commit,
         cancel: () => setEditor(null),
         passKey,
+        canMoveMark: commands?.onMoveMark != null,
     };
 }
 

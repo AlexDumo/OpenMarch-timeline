@@ -7,6 +7,13 @@ import type {
     TimelineTrack,
     TimelineViewModel,
 } from "./TimelineViewModel";
+import {
+    formatPlace,
+    markAt,
+    placeMeasures,
+    spokenPlace,
+    type Place,
+} from "./placeName";
 
 export const clamp = (value: number, min: number, max: number) =>
     Math.min(Math.max(value, min), max);
@@ -267,33 +274,62 @@ export const getPageCountAt = (
 };
 
 /**
- * The playhead's page, count and measure, as the transport shows them (UI-13): "Pg 2 · ct 7/16"
- * and "m4 beat 4", or "Home", or "After pg 4 · +4". `spoken` spells them out for screen readers.
- * `measure` is null when the show has no measure there.
+ * Where the playhead is, as `placeName` names a place (D6), from `getPageCountAt`: on a flag it is
+ * the page's last count and where the next page starts, with the rehearsal mark on its downbeat.
+ * Null at home.
+ */
+export const getPlayheadPlace = (
+    model: Pick<TimelineViewModel, "pages" | "measures">,
+    positionBeat: BeatPosition,
+): Place | null => {
+    const at = getPageCountAt(model, positionBeat);
+    if (at.home) return null;
+    if (at.after) return { kind: "after", page: at.pageLabel, count: at.count };
+    if (at.total != null && at.count === at.total && at.startBeat != null) {
+        const flag = at.startBeat + at.total;
+        const next = model.pages.find((p) => !p.isInitial && p.atBeat === flag);
+        return {
+            kind: "flag",
+            page: at.pageLabel,
+            count: at.count,
+            next: next?.label ?? null,
+            mark: markAt(placeMeasures(model.measures), flag),
+        };
+    }
+    return {
+        kind: "count",
+        page: at.pageLabel,
+        count: at.count,
+        ...(at.total != null ? { total: at.total } : {}),
+    };
+};
+
+/**
+ * The playhead's page, count and measure, as the transport shows them (UI-13, D6): "Pg 2 · ct
+ * 7/16" and "m4 beat 4"; on a flag "C · end of Pg 10 · Pg 11 starts" and "m9 beat 1"; or "Home",
+ * or "After pg 4 · +4". `compact` is the page part for a narrow transport ("Pg 10 ct 16 → 11").
+ * `spoken` spells them out for screen readers. `measure` is null when the show has no measure
+ * there.
  */
 export const getPlayheadReadout = (
     model: Pick<TimelineViewModel, "pages" | "measures" | "beatCount">,
     positionBeat: BeatPosition,
 ) => {
+    const place = getPlayheadPlace(model, positionBeat);
     const at = getPageCountAt(model, positionBeat);
-    const measureAt = at.home ? null : getMeasureAt(model, positionBeat);
-    const page = at.home
-        ? "Home"
-        : at.after
-          ? `After pg ${at.pageLabel} · +${at.count}`
-          : `Pg ${at.pageLabel} · ct ${at.count}${at.total != null ? `/${at.total}` : ""}`;
+    const measureAt = place ? getMeasureAt(model, positionBeat) : null;
+    const page = place ? formatPlace(place) : "Home";
+    const compact = place ? formatPlace(place, "compact") : "Home";
     const measure = measureAt
         ? `m${measureAt.measure} beat ${measureAt.beat}`
         : null;
-    const spokenPage = at.home
-        ? `Home, page ${at.pageLabel}`
-        : at.after
-          ? `${at.count} counts after page ${at.pageLabel}`
-          : `Page ${at.pageLabel}, count ${at.count}${at.total != null ? ` of ${at.total}` : ""}`;
+    const spokenPage = place
+        ? spokenPlace(place)
+        : `Home, page ${at.pageLabel}`;
     const spoken = measureAt
         ? `${spokenPage}, measure ${measureAt.measure} beat ${measureAt.beat}`
         : spokenPage;
-    return { page, measure, spoken };
+    return { page, compact, measure, spoken };
 };
 
 /** The playhead's position in one line, as the transport's readout shows it (UI-13) */

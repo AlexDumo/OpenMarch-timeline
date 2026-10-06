@@ -12,7 +12,10 @@ import sanitizeHtml from "sanitize-html";
 
 import Store from "electron-store";
 import { getOrmConnection } from "../../database/database.services";
-import { measureRangeString as _measureRangeString } from "../../../src/global/classes/Page.utils";
+import {
+    MEASURE_RANGE_LEGEND,
+    measureRangeString as _measureRangeString,
+} from "../../../src/global/classes/Page.utils";
 import logoSvgRaw from "@/assets/open-march-logo.svg?raw";
 
 const store = new Store();
@@ -1157,6 +1160,19 @@ export class PDFExportService {
                 );
             } else {
                 yRight = notesStartY;
+            }
+
+            // D5: one line that says what "5–8" means, above the branding footer
+            if (page?.measures && page.measures.length > 0) {
+                const oldMargins = doc.page.margins;
+                doc.page.margins = { ...oldMargins, bottom: 0 };
+                doc.fillColor("#666666").fontSize(7).font("Helvetica");
+                doc.text(MEASURE_RANGE_LEGEND, marginSize, pageHeight - 32, {
+                    width: pageWidth - marginSize * 2,
+                    lineBreak: false,
+                });
+                doc.fillColor("black");
+                doc.page.margins = oldMargins;
             }
 
             // Footers are drawn in a single pass over all buffered pages

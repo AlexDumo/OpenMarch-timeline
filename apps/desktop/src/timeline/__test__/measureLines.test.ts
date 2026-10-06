@@ -231,6 +231,20 @@ describe("planMeasureLineEdit", () => {
         });
     });
 
+    describe("moveMark with replace (Move C here, DN-3)", () => {
+        it("drops the mark the measure had and takes the moved one", () => {
+            const lines = linesEvery(4, 4, { 1: "G", 2: "H" });
+            const after = run(lines, {
+                kind: "moveMark",
+                fromMeasureId: 2,
+                toMeasureId: 3,
+                replace: true,
+            });
+            expect(after.map((l) => l.mark)).toEqual([null, null, "G", null]);
+            expect(beatsOf(after)).toEqual(beatsOf(lines));
+        });
+    });
+
     describe("setBeats", () => {
         // m1..m8 of 4 beats over beats 1–32, D at m6
         const lines = linesEvery(4, 8, { 5: "D" });
