@@ -18,6 +18,44 @@ import {
 
 export const DEFAULT_DOT_RADIUS = 5;
 
+type CacheDims = {
+    width: number;
+    height: number;
+    zoomX: number;
+    zoomY: number;
+    capped?: boolean;
+};
+type TightCache = { _limitCacheSize(dims: CacheDims): CacheDims };
+
+/**
+ * Fabric's `_limitCacheSize` without its 256 px floor (`fabric.minCacheSideLimit`), for marchers
+ * and their labels. With the floor, a dot or label (about 12x12 and 29x26 px at the default zoom)
+ * is cached in, and drawn every playback frame from, a 256x256 canvas that is nearly all
+ * transparent. Without it the cache is the size Fabric works out for the object: its size at the
+ * current zoom plus Fabric's 2 px antialiasing margin (and the font size, for text). Fabric keeps
+ * the drawing at the same sub-pixel offset inside any cache size, so the picture is the same,
+ * except that on the GPU sampling the smaller bitmap can round a few antialiased edge pixels by
+ * 1/255. Caches over Fabric's upper limits are still scaled down by Fabric.
+ */
+export function limitCacheSizeTightly(
+    this: fabric.Object,
+    dims: CacheDims,
+): CacheDims {
+    const limits = fabric as unknown as {
+        maxCacheSideLimit: number;
+        perfLimitSizeTotal: number;
+    };
+    if (
+        dims.width <= limits.maxCacheSideLimit &&
+        dims.height <= limits.maxCacheSideLimit &&
+        dims.width * dims.height <= limits.perfLimitSizeTotal
+    )
+        return dims;
+    return (
+        fabric.Object.prototype as unknown as TightCache
+    )._limitCacheSize.call(this, dims);
+}
+
 /**
  * A CanvasMarcher is the object used on the canvas to represent a marcher.
  * It includes things such as the fabric objects and other canvas-specific properties.
@@ -235,6 +273,8 @@ export default class CanvasMarcher
             hasBorders: false,
             visible: labelVisible === true,
         });
+        (this.textLabel as unknown as TightCache)._limitCacheSize =
+            limitCacheSizeTightly;
 
         // Apply visibility to the marcher
         const isVisible = visible === true;
@@ -983,6 +1023,9 @@ export function setTranslatedCoords(obj: fabric.Object): boolean {
     internals.lineCoords = line;
     return true;
 }
+
+(CanvasMarcher.prototype as unknown as TightCache)._limitCacheSize =
+    limitCacheSizeTightly;
 
 const linearEasing = function (t: number, b: number, c: number, d: number) {
     return (c * t) / d + b;

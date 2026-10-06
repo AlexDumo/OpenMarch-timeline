@@ -57,7 +57,7 @@ const setup = () => {
     });
     canvas.add(midpoint);
     canvas.sendCanvasMarchersToFront();
-    return { canvas, marchers, line };
+    return { canvas, marchers, line, midpoint };
 };
 
 const pixels = (canvas: OpenMarchCanvas) => {
@@ -147,5 +147,43 @@ describe("OpenMarchCanvas.renderPlaybackFrame", () => {
         canvas.renderAll();
         canvas.toDataURL();
         expect(render).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe("marcher cache size", () => {
+    const limits = fabric as unknown as { minCacheSideLimit: number };
+    const cache = (obj: fabric.Object) =>
+        (obj as unknown as { _cacheCanvas: HTMLCanvasElement })._cacheCanvas;
+
+    it("caches marchers and labels at their own size, not Fabric's 256 px floor", () => {
+        const { canvas, marchers, midpoint } = setup();
+        canvas.renderAll();
+        expect(limits.minCacheSideLimit).toBe(256);
+        expect(cache(marchers[0]!).width).toBeLessThan(40);
+        expect(cache(marchers[0]!.textLabel).width).toBeLessThan(80);
+        // everything else keeps Fabric's sizes
+        expect(cache(midpoint).width).toBe(256);
+    });
+
+    it("draws the same picture as 256 px caches", () => {
+        const { canvas, marchers } = setup();
+        canvas.renderAll();
+        const tight = pixels(canvas);
+        for (const obj of marchers.flatMap((m) => [m, m.textLabel])) {
+            const wide = obj as unknown as {
+                _limitCacheSize: unknown;
+                _removeCacheCanvas(): void;
+            };
+            wide._limitCacheSize = (
+                fabric.Object.prototype as unknown as {
+                    _limitCacheSize: unknown;
+                }
+            )._limitCacheSize;
+            wide._removeCacheCanvas();
+            obj.dirty = true;
+        }
+        canvas.renderAll();
+        expect(cache(marchers[0]!).width).toBe(256);
+        expect(pixels(canvas)).toEqual(tight);
     });
 });
