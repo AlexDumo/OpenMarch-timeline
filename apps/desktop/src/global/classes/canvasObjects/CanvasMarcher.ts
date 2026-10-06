@@ -756,37 +756,49 @@ export default class CanvasMarcher
      * @param coords The new coordinates (in database terms) to set the marcher to.
      */
     setLiveCoordinates(coords: { x: number; y: number }) {
-        const newCanvasCoords = this.databaseCoordsToCanvasCoords(coords);
-
-        this.left = newCanvasCoords.x;
-        this.top = newCanvasCoords.y;
-
-        // One update of the marcher and one of its label, skipping the control corners: the
-        // bounding coords keep offscreen culling and hit tests right, and the corners (only used
-        // for a selected object's controls) come back with the next full setCoords, which
-        // setMarcherCoords and the end of playback do.
-        super.setCoords(true);
-        if (
+        const dot = this.dotObject;
+        // The dot sits exactly on the database coordinate (databaseCoordsToCanvasCoords)
+        const dotX = coords.x + CanvasMarcher.gridOffset;
+        const dotY = coords.y + CanvasMarcher.gridOffset;
+        const simple =
             !this.group &&
             !this.angle &&
             this.scaleX === 1 &&
             this.scaleY === 1 &&
             !this.flipX &&
-            !this.flipY
+            !this.flipY;
+        if (
+            simple &&
+            dot.originX === "center" &&
+            dot.originY === "center" &&
+            dot.left !== undefined &&
+            dot.top !== undefined
         ) {
-            // The dot sits exactly on the database coordinate (databaseCoordsToCanvasCoords)
-            this.textLabel.left = coords.x + CanvasMarcher.gridOffset;
-            this.textLabel.top =
-                coords.y +
-                CanvasMarcher.gridOffset -
-                CanvasMarcher.dotRadius * 2.2;
+            // databaseCoordsToCanvasCoords without a group, without its checks and objects
+            this.left = dotX - dot.left;
+            this.top = dotY - dot.top;
+        } else {
+            const newCanvasCoords = this.databaseCoordsToCanvasCoords(coords);
+            this.left = newCanvasCoords.x;
+            this.top = newCanvasCoords.y;
+        }
+
+        // One update of the marcher and one of its label, skipping the control corners: the
+        // bounding coords keep offscreen culling and hit tests right, and the corners (only used
+        // for a selected object's controls) come back with the next full setCoords, which
+        // setMarcherCoords and the end of playback do.
+        if (!setTranslatedCoords(this)) super.setCoords(true);
+        if (simple) {
+            this.textLabel.left = dotX;
+            this.textLabel.top = dotY - CanvasMarcher.dotRadius * 2.2;
         } else {
             const absoluteCoords = this.getAbsoluteCoords();
             this.textLabel.left = absoluteCoords.x;
             this.textLabel.top =
                 absoluteCoords.y - CanvasMarcher.dotRadius * 2.2;
         }
-        this.textLabel.setCoords(true);
+        if (!setTranslatedCoords(this.textLabel))
+            this.textLabel.setCoords(true);
     }
 
     /**
@@ -882,6 +894,94 @@ export default class CanvasMarcher
  */
 export function tempoToDuration(tempo: number) {
     return (60 / tempo) * 1000;
+}
+
+type Corners = {
+    tl: fabric.Point;
+    tr: fabric.Point;
+    bl: fabric.Point;
+    br: fabric.Point;
+};
+
+/** Corner sets made by `setTranslatedCoords`, which it updates in place on the next call */
+const liveCorners = new WeakSet<Corners>();
+
+/** `current` when `setTranslatedCoords` made it, otherwise a new corner set */
+const reusableCorners = (current: Corners | undefined): Corners => {
+    if (current && liveCorners.has(current)) return current;
+    const corners = {
+        tl: new fabric.Point(0, 0),
+        tr: new fabric.Point(0, 0),
+        bl: new fabric.Point(0, 0),
+        br: new fabric.Point(0, 0),
+    };
+    liveCorners.add(corners);
+    return corners;
+};
+
+/** fabric.util.transformPoint, into `out` */
+const transformInto = (out: fabric.Point, p: fabric.Point, t: number[]) => {
+    const x = p.x;
+    const y = p.y;
+    out.x = t[0] * x + t[2] * y + t[4];
+    out.y = t[1] * x + t[3] * y + t[5];
+};
+
+/**
+ * Fabric's `setCoords(true)` (bounding and line coords, no control corners) for an object that is
+ * only translated: no group or rotation, and a centred origin. Gives the same numbers without
+ * Fabric's matrices, works out the corners once instead of twice, and reuses the corner points
+ * it made on the previous call. Returns false, doing nothing, for any other object.
+ */
+export function setTranslatedCoords(obj: fabric.Object): boolean {
+    if (
+        obj.group ||
+        obj.angle ||
+        obj.originX !== "center" ||
+        obj.originY !== "center" ||
+        !obj.canvas
+    )
+        return false;
+    const internals = obj as unknown as {
+        _getTransformedDimensions(): { x: number; y: number };
+        lineCoords?: Corners;
+    };
+    const dim = internals._getTransformedDimensions();
+    const w = dim.x / 2;
+    const h = dim.y / 2;
+    const x = obj.left!;
+    const y = obj.top!;
+    // calcACoords: the corners through [1, 0, 0, 1, x, y]
+    const a = reusableCorners(obj.aCoords);
+    a.tl.x = -w + x;
+    a.tl.y = -h + y;
+    a.tr.x = w + x;
+    a.tr.y = -h + y;
+    a.bl.x = -w + x;
+    a.bl.y = h + y;
+    a.br.x = w + x;
+    a.br.y = h + y;
+    obj.aCoords = a;
+    // calcLineCoords: the same corners through the viewport, then the padding
+    const vpt = obj.getViewportTransform();
+    const line = reusableCorners(internals.lineCoords);
+    transformInto(line.tl, a.tl, vpt);
+    transformInto(line.tr, a.tr, vpt);
+    transformInto(line.bl, a.bl, vpt);
+    transformInto(line.br, a.br, vpt);
+    const padding = obj.padding;
+    if (padding) {
+        line.tl.x -= padding;
+        line.tl.y -= padding;
+        line.tr.x += padding;
+        line.tr.y -= padding;
+        line.bl.x -= padding;
+        line.bl.y += padding;
+        line.br.x += padding;
+        line.br.y += padding;
+    }
+    internals.lineCoords = line;
+    return true;
 }
 
 const linearEasing = function (t: number, b: number, c: number, d: number) {
