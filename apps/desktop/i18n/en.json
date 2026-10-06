@@ -1364,6 +1364,7 @@
                 "cantHoldHere": "Only at a page flag: here marchers are partway through a move. Add the counts at the end of the page to hold.",
                 "commit": "Add {n, plural, one {# count} other {# counts}}",
                 "count": "Counts",
+                "countInvalid": "Enter a whole number of counts from 1 to 512.",
                 "hold": "Hold marchers for these counts",
                 "holdHint": "Moves arrive on their count as now, then hold.",
                 "marchers": "Moves that end here",

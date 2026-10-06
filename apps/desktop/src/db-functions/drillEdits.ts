@@ -187,8 +187,79 @@ export interface DrillState {
     readonly durations: readonly number[];
 }
 
+/**
+ * `grid` with the last page running to its flag, `start + last_page_counts`, even where the show's
+ * counts end before it. `readPageGrid` stops it at the show's end (that is what the ripple maps
+ * rows against); count edits keep a flag that is past the end where it is.
+ */
+export function withLastFlag(grid: PageGrid, lastPageCounts: number): PageGrid {
+    const last = grid.pages[grid.pages.length - 1];
+    if (!last || last.id === 0) return grid;
+    const end = Math.max(last.end, last.start + lastPageCounts);
+    if (end === last.end) return grid;
+    return { ...grid, pages: [...grid.pages.slice(0, -1), { ...last, end }] };
+}
+
+/**
+ * Where measure lines go among `count` counts inserted before beat `at` (offsets into the new
+ * counts), so the meter carries on:
+ *
+ * - at a downbeat, the new counts are whole measures of the measure before's length (the first
+ *   measure's own length when there is none before), so later measures keep their beats;
+ * - after the show's last count, as appending does: the last measure is finished first, then
+ *   measures of the meter the last two measure lines set (the last measure's length when there is
+ *   only one);
+ * - partway through a measure, none: that measure gets the counts.
+ *
+ * `measureStarts` are ordinals of measures' first beats, in any order; `beatCount` counts beat 0.
+ */
+export function insertedMeasureStarts({
+    measureStarts,
+    beatCount,
+    at,
+    count,
+}: {
+    measureStarts: readonly number[];
+    beatCount: number;
+    at: number;
+    count: number;
+}): number[] {
+    const starts = [...new Set(measureStarts)]
+        .filter((m) => m >= 1 && m < beatCount)
+        .sort((a, b) => a - b);
+    if (starts.length === 0 || count < 1) return [];
+    let meter: number;
+    let phase = 0;
+    if (at >= beatCount) {
+        const last = starts[starts.length - 1]!;
+        const reference =
+            starts.length >= 2 ? starts[starts.length - 2]! : last;
+        meter = starts.length >= 2 ? last - reference : beatCount - last;
+        const lastCounts = beatCount - last;
+        phase = lastCounts < meter ? lastCounts : 0;
+    } else {
+        const index = starts.indexOf(at);
+        if (index < 0) return [];
+        meter =
+            index > 0
+                ? at - starts[index - 1]!
+                : (starts[index + 1] ?? beatCount) - at;
+    }
+    if (meter < 1) return [];
+    const out: number[] = [];
+    for (let k = 0; k < count; k++) if ((phase + k) % meter === 0) out.push(k);
+    return out;
+}
+
 export async function readDrillState(tx: DbTransaction): Promise<DrillState> {
-    const grid = await readPageGrid(tx);
+    const utility = await tx
+        .select({ lastPageCounts: schema.utility.last_page_counts })
+        .from(schema.utility)
+        .get();
+    const grid = withLastFlag(
+        await readPageGrid(tx),
+        utility?.lastPageCounts ?? 0,
+    );
     const beats = await tx
         .select({ duration: schema.beats.duration })
         .from(schema.beats)
@@ -705,13 +776,21 @@ async function addCountsInTransaction(
             : (beats[at]?.duration ?? 0) > 0
               ? beats[at]!.duration
               : 0.5;
-    const isDownbeat =
-        at < n &&
-        (await tx
-            .select({ id: schema.measures.id })
-            .from(schema.measures)
-            .where(eq(schema.measures.start_beat, beats[at]!.id))
-            .get()) !== undefined;
+    const ordinalOf = new Map(beats.map((b, i) => [b.id, i]));
+    const lineOffsets = insertedMeasureStarts({
+        measureStarts: (
+            await tx
+                .select({ start: schema.measures.start_beat })
+                .from(schema.measures)
+                .all()
+        ).flatMap((m) => {
+            const o = ordinalOf.get(m.start);
+            return o === undefined ? [] : [o];
+        }),
+        beatCount: n,
+        at,
+        count,
+    });
 
     let holdPageId: number | undefined;
     const created = await withTimelinePageRipple(tx, async () => {
@@ -723,11 +802,13 @@ async function addCountsInTransaction(
             })),
             startingPosition: previous.position,
         });
-        // The new counts are their own measure, so later measures keep their beats
-        if (isDownbeat)
+        // Measure lines carry the meter on, so later measures keep their beats
+        if (lineOffsets.length > 0)
             await createMeasuresInTransaction({
                 tx,
-                newItems: [{ start_beat: newBeats[0]!.id }],
+                newItems: lineOffsets.map((k) => ({
+                    start_beat: newBeats[k]!.id,
+                })),
             });
         if (edit.crossing === "hold") {
             // A page over the new counts, for the ripple's holding moves; it goes again below
@@ -796,7 +877,7 @@ async function moveFlagInTransaction(
     const { to } = edit;
     if (!Number.isInteger(to) || to <= page.start)
         refuse("a page flag can't move to or before the page's start");
-    if (next ? to >= next.end : to > grid.beatIds.length)
+    if (next ? to >= next.end : to > Math.max(grid.beatIds.length, page.end))
         refuse(
             next
                 ? "a page flag can't move to or past the next page's flag"
@@ -863,19 +944,33 @@ export async function applyDrillEditInTransaction(
 const ROLLBACK = Symbol("drill edit preview");
 
 /**
- * Runs `edit` in a transaction that is rolled back, and returns its report, or its refusal (the
- * ripple's, or the commit check's). Nothing reaches the file or the undo history. It waits for
- * other wrapped writes, so it sees the state the next edit would.
+ * Called after every preview's rollback with when its transaction began and ended (`Date.now()`).
+ * The renderer's queries share the one database connection, so a read that ran inside a
+ * preview's BEGIN..ROLLBACK saw rows that never existed; the app re-fetches what was read then
+ * (`useTimelineDrillEdits`). See docs/tempo/decisions.md for the real fix.
  */
-export async function previewDrillEdit({
-    db,
-    edit,
-}: {
-    db: DbConnection;
-    edit: DrillEdit;
-}): Promise<DrillEditPreview> {
+type RollbackListener = (window: { start: number; end: number }) => void;
+const rollbackListeners = new Set<RollbackListener>();
+
+/** Listens for previews' rollbacks; returns the unsubscribe. */
+export function onDrillPreviewRolledBack(listener: RollbackListener) {
+    rollbackListeners.add(listener);
+    return () => {
+        rollbackListeners.delete(listener);
+    };
+}
+
+/** No more than one preview runs at a time; each channel keeps only its newest waiting one */
+let previewRunning: Promise<unknown> = Promise.resolve();
+const waiting = new Map<string, symbol>();
+
+async function runPreview(
+    db: DbConnection,
+    edit: DrillEdit,
+): Promise<DrillEditPreview> {
     return await withTimelineWriteLock(async () => {
         let impact: DrillImpact | undefined;
+        const start = Date.now();
         try {
             await db.transaction(async (tx) => {
                 impact = await applyDrillEditInTransaction(tx, edit);
@@ -884,9 +979,41 @@ export async function previewDrillEdit({
             });
         } catch (error) {
             if (error !== ROLLBACK) return { ok: false, error };
+        } finally {
+            const window = { start, end: Date.now() };
+            for (const listener of rollbackListeners) listener(window);
         }
         return { ok: true, impact: impact! };
     });
+}
+
+/**
+ * Runs `edit` in a transaction that is rolled back, and returns its report, or its refusal (the
+ * ripple's, or the commit check's). Nothing reaches the file or the undo history. It waits for
+ * other wrapped writes, so it sees the state the next edit would.
+ *
+ * Previews run one at a time. A preview asked for on a `channel` while another waits on it
+ * replaces it, and the replaced one resolves to null without running, so a drag or typing only
+ * previews the latest value.
+ */
+export async function previewDrillEdit({
+    db,
+    edit,
+    channel = "default",
+}: {
+    db: DbConnection;
+    edit: DrillEdit;
+    channel?: string;
+}): Promise<DrillEditPreview | null> {
+    const ticket = Symbol(channel);
+    waiting.set(channel, ticket);
+    const run = previewRunning.then(async () => {
+        if (waiting.get(channel) !== ticket) return null;
+        waiting.delete(channel);
+        return await runPreview(db, edit);
+    });
+    previewRunning = run.catch(() => undefined);
+    return await run;
 }
 
 /** Runs `edit` as one undoable edit and returns its report. */

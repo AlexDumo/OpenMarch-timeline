@@ -68,3 +68,59 @@ Feel-based ones also have a row in
   Confidence is steadiness (RMS residual against 10% of a beat) times amount (seven fitted taps =
   full).
 - **Validate:** V-40, then E4 tap-lab data.
+
+## E10-1 Skip at a cut stops moves, it can't jump them (drill edits)
+
+- **Context:** "Skip that part of the move" should put marchers where they'd be after the cut. The
+  timeline model is continuous: a move starts where the previous one ended, so there is no jump.
+- **Choice:** skip changes only moves that run into the cut and end inside it: their destination
+  becomes the marchers' positions at the cut's first count (direct paths with one marcher per
+  slot and no higher layer there). Moves that run out of the cut or across it are squeezed, and
+  the report says why ("marchers can't jump").
+- **Alternatives:** split moves at the cut (shapes, arcs and per-slot rows make that a large
+  write); leave skip out.
+- **Validate:** Persona script, "cut 41–56, make the drill skip that part".
+
+## E10-2 Hold for added counts uses the ripple's holding moves, then takes the page out again
+
+- **Context:** at a page flag, "Hold marchers for these counts" should keep moves landing on their
+  count and hold until the flag. `addHoldingMoves` does that for an added page.
+- **Choice:** in one transaction: insert the counts plus a page over them (the ripple adds the
+  holds), then delete that page row without a ripple, so the owner page gets the counts and later
+  pages don't renumber. Hold is only offered at a flag; a move partway through there stretches.
+- **Validate:** "4-count vamp before the closer, hold everyone" plays as a hold.
+
+## E10-3 Defaults in the count dialogs
+
+- **Choice:** "Does the recording have these counts?" defaults to Yes (the arranger's vamp comes
+  with a recording that has it); at a flag, Hold is the default, elsewhere Stretch; a cut squeezes
+  by default; clips only in the cut are deleted with it, and the commit button says so.
+- **Validate:** as V-rows: which option directors pick first, unprompted.
+
+## E10-4 Page flag grips in the ruler's lower half
+
+- **Context:** UI-10 keeps a plain drag on the timeline a scrub. The start pennant (upper half of
+  the ruler) and the playhead sit on flags too.
+- **Choice:** a small grip standing on the ruler's bottom edge at each flag; only it moves a flag.
+  A drop is one undo; the readout shows both pages' counts and, after a pause, what the drill does.
+- **Validate:** owner hands-on; check grips don't clutter a zoomed-out show.
+
+## E10-5 Previews share the renderer's database connection
+
+- **Context:** a preview runs the edit in BEGIN..ROLLBACK on the one renderer connection, and the
+  SQL proxy queue serializes statements, not transactions. A query that fetches while a preview's
+  transaction is open reads rows that are then rolled back, and TanStack Query caches them.
+- **Choice (mitigation):** one preview at a time (a newer one on a channel replaces a waiting
+  one), under `withTimelineWriteLock` (so the resolver's reads wait), and after every rollback the
+  app re-fetches every query that was fetching or updated since the preview began.
+- **Real fix:** have the proxy queue hold a whole transaction (no other statement between BEGIN
+  and COMMIT/ROLLBACK), or run previews on a separate connection to a copy (for example an
+  in-memory `VACUUM INTO`, or a dedicated main-process connection).
+- **Validate:** no stale page boxes after dragging a flag grip for a while.
+
+## E10-6 Measure lines for added counts carry the meter on
+
+- **Choice:** at a downbeat the new counts are whole measures of the previous measure's length;
+  after the last count, the last measure is finished and the meter of the last two lines carries
+  on (as E1's `countContinuation`); partway through a measure that measure gets the counts.
+- **Validate:** adding 16 counts at a downbeat of a 4/4 show gives four 4-count measures.

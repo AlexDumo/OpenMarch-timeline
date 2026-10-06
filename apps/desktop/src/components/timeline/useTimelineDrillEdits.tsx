@@ -1,9 +1,19 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+    type ReactNode,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type Page from "@/global/classes/Page";
 import { db } from "@/global/database/db";
-import { commitDrillEdit, previewDrillEdit } from "@/db-functions/drillEdits";
+import {
+    commitDrillEdit,
+    onDrillPreviewRolledBack,
+    previewDrillEdit,
+} from "@/db-functions/drillEdits";
 import { useTempoLabFlag } from "@/stores/UiSettingsStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { impactSummary, tolgeeTranslate as t } from "@/timeline/drillEditText";
@@ -35,6 +45,20 @@ export function useTimelineDrillEdits({
     const enabled = useTempoLabFlag("drillChoices");
     const queryClient = useQueryClient();
     const [request, setRequest] = useState<DrillEditRequest | null>(null);
+
+    // A preview shares the database connection with the app's reads: a query that fetched while
+    // its transaction was open may hold rows that were rolled back. Fetch those again (any query
+    // fetching then, or updated since it began; docs/tempo/decisions.md has the real fix).
+    useEffect(() => {
+        if (!enabled) return;
+        return onDrillPreviewRolledBack(({ start }) => {
+            void queryClient.invalidateQueries({
+                predicate: (query) =>
+                    query.state.fetchStatus === "fetching" ||
+                    query.state.dataUpdatedAt >= start,
+            });
+        });
+    }, [enabled, queryClient]);
 
     const open = useCallback(
         (next: DrillEditRequest) => {
@@ -75,7 +99,7 @@ export function useTimelineDrillEdits({
                 }),
             onMovePageFlag: (pageId, toBeat) => {
                 if (isPlaying) return;
-                void commitDrillEdit({
+                return commitDrillEdit({
                     db,
                     edit: { kind: "moveFlag", pageId, to: toBeat },
                 })
@@ -89,7 +113,9 @@ export function useTimelineDrillEdits({
                 const preview = await previewDrillEdit({
                     db,
                     edit: { kind: "moveFlag", pageId, to: toBeat },
+                    channel: "page-flag",
                 });
+                if (!preview) return null;
                 if (!preview.ok)
                     return {
                         ok: false,
@@ -126,7 +152,7 @@ export function useTimelineDrillEdits({
                 pages={pages}
                 beatCount={beatCount}
                 onClose={() => setRequest(null)}
-                onRetarget={setRequest}
+                onReopen={setRequest}
                 onShowRange={(start, end) =>
                     useTimelineSelectionStore.getState().selectRange(start, end)
                 }

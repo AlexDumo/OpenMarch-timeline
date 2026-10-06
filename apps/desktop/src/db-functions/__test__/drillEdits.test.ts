@@ -15,8 +15,11 @@ import { readPageGrid } from "../timelineRipple";
 import { TimelineWriteError } from "../timelineErrors";
 import {
     commitDrillEdit,
+    insertedMeasureStarts,
+    onDrillPreviewRolledBack,
     previewDrillEdit,
     stepsPerFiveYards,
+    withLastFlag,
     type DrillEdit,
     type DrillImpact,
 } from "../drillEdits";
@@ -86,7 +89,7 @@ const previewThenCommit = async (
     edit: DrillEdit,
 ): Promise<DrillImpact> => {
     const before = await snapshot(db);
-    const preview = await previewDrillEdit({ db, edit });
+    const preview = (await previewDrillEdit({ db, edit }))!;
     if (!preview.ok) throw preview.error;
     expect(await snapshot(db), "a preview writes nothing").toEqual(before);
     const impact = await commitDrillEdit({ db, edit });
@@ -320,7 +323,7 @@ describeDbTests("count edits with drill choices (E10)", (it) => {
                 crossing: "squeeze",
                 inside: "keep",
             };
-            const refused = await previewDrillEdit({ db, edit });
+            const refused = (await previewDrillEdit({ db, edit }))!;
             expect(refused.ok).toBe(false);
             const error = (refused as { error: unknown }).error;
             expect(error).toBeInstanceOf(TimelineWriteError);
@@ -472,7 +475,7 @@ describeDbTests("count edits with drill choices (E10)", (it) => {
             marchersAndPages: _,
         }) => {
             await setUp(db);
-            const preview = await previewDrillEdit({
+            const preview = (await previewDrillEdit({
                 db,
                 edit: {
                     kind: "addCounts",
@@ -481,7 +484,7 @@ describeDbTests("count edits with drill choices (E10)", (it) => {
                     recording: "has",
                     crossing: "hold",
                 },
-            });
+            }))!;
             expect(preview.ok).toBe(false);
         });
 
@@ -491,7 +494,7 @@ describeDbTests("count edits with drill choices (E10)", (it) => {
         }) => {
             await setUp(db);
             for (const crossing of ["stretch", "hold"] as const) {
-                const preview = await previewDrillEdit({
+                const preview = (await previewDrillEdit({
                     db,
                     edit: {
                         kind: "addCounts",
@@ -500,7 +503,7 @@ describeDbTests("count edits with drill choices (E10)", (it) => {
                         recording: "has",
                         crossing,
                     },
-                });
+                }))!;
                 if (!preview.ok) throw preview.error;
                 expect(preview.impact.pages).toEqual([
                     {
@@ -569,13 +572,152 @@ describeDbTests("count edits with drill choices (E10)", (it) => {
             marchersAndPages: _,
         }) => {
             await setUp(db);
-            const preview = await previewDrillEdit({
+            const preview = (await previewDrillEdit({
                 db,
                 edit: { kind: "moveFlag", pageId: 2, to: 25 },
-            });
+            }))!;
             expect(preview.ok).toBe(false);
             expect(await timelineRanges(db)).toEqual(ORIGINAL);
         });
+    });
+
+    describe("a last flag past the show's last count", () => {
+        it("stays where it is when the page before it is moved", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const beats = (await db.select().from(schema.beats).all()).length;
+            // Page 6 starts on beat 41; its flag goes past the end of the counts
+            const lastPageCounts = beats - 41 + 4;
+            await db
+                .update(schema.utility)
+                .set({ last_page_counts: lastPageCounts });
+            await previewThenCommit(db, {
+                kind: "moveFlag",
+                pageId: 5,
+                to: 35,
+            });
+            const utility = await db.select().from(schema.utility).get();
+            expect(35 + utility!.last_page_counts).toBe(41 + lastPageCounts);
+        });
+
+        it("keeps its distance past the end when counts are removed before it", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const beats = (await db.select().from(schema.beats).all()).length;
+            const lastPageCounts = beats - 41 + 4;
+            await db
+                .update(schema.utility)
+                .set({ last_page_counts: lastPageCounts });
+            await previewThenCommit(db, {
+                kind: "removeCounts",
+                start: 11,
+                end: 13,
+                crossing: "squeeze",
+                inside: "keep",
+            });
+            const utility = await db.select().from(schema.utility).get();
+            expect(utility!.last_page_counts).toBe(lastPageCounts);
+        });
+    });
+
+    describe("previews", () => {
+        it("run one at a time, a newer one on a channel replaces a waiting one, and each rollback is announced", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const windows: { start: number; end: number }[] = [];
+            const stop = onDrillPreviewRolledBack((w) => windows.push(w));
+            const edit = (to: number): DrillEdit => ({
+                kind: "moveFlag",
+                pageId: 2,
+                to,
+            });
+            const [first, replaced, newest] = await Promise.all([
+                previewDrillEdit({ db, edit: edit(18), channel: "a" }),
+                previewDrillEdit({ db, edit: edit(19), channel: "b" }),
+                previewDrillEdit({ db, edit: edit(20), channel: "b" }),
+            ]);
+            stop();
+            expect(first?.ok).toBe(true);
+            expect(replaced).toBeNull();
+            expect(newest?.ok).toBe(true);
+            expect(windows).toHaveLength(2);
+            expect(windows[0]!.end).toBeLessThanOrEqual(windows[1]!.start);
+            expect(await timelineRanges(db)).toEqual(ORIGINAL);
+        });
+    });
+});
+
+describe("withLastFlag", () => {
+    it("runs the last page to start + last_page_counts past the show's end", () => {
+        const grid = {
+            beatIds: [0, 1, 2, 3, 4],
+            pages: [
+                { id: 0, start: 0, end: 1 },
+                { id: 1, start: 1, end: 5 },
+            ],
+        };
+        expect(withLastFlag(grid, 8).pages[1]!.end).toBe(9);
+        expect(withLastFlag(grid, 2).pages[1]!.end).toBe(5);
+    });
+});
+
+describe("insertedMeasureStarts", () => {
+    // Measures of 4 at beats 1, 5, 9; the show has 13 beats (beat 0 and 12 counts)
+    const measureStarts = [1, 5, 9];
+    it("at a downbeat, adds whole measures of the measure before's length", () => {
+        expect(
+            insertedMeasureStarts({
+                measureStarts,
+                beatCount: 13,
+                at: 9,
+                count: 16,
+            }),
+        ).toEqual([0, 4, 8, 12]);
+    });
+    it("after the last count, continues the meter", () => {
+        expect(
+            insertedMeasureStarts({
+                measureStarts,
+                beatCount: 13,
+                at: 13,
+                count: 4,
+            }),
+        ).toEqual([0]);
+        // A last measure of 2 counts is finished first
+        expect(
+            insertedMeasureStarts({
+                measureStarts,
+                beatCount: 11,
+                at: 11,
+                count: 6,
+            }),
+        ).toEqual([2]);
+    });
+    it("partway through a measure, adds no line", () => {
+        expect(
+            insertedMeasureStarts({
+                measureStarts,
+                beatCount: 13,
+                at: 7,
+                count: 4,
+            }),
+        ).toEqual([]);
+    });
+    it("in a show without measures, adds none", () => {
+        expect(
+            insertedMeasureStarts({
+                measureStarts: [],
+                beatCount: 13,
+                at: 13,
+                count: 4,
+            }),
+        ).toEqual([]);
     });
 });
 

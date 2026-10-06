@@ -33,7 +33,10 @@ import type {
 /** What dragging a flag to a beat does, in the commands' view beats */
 export interface TimelinePageFlagMove {
     /** Moves `pageId`'s flag to view beat `toBeat` (one edit) */
-    readonly onMove: (pageId: string | number, toBeat: number) => void;
+    readonly onMove: (
+        pageId: string | number,
+        toBeat: number,
+    ) => void | Promise<unknown>;
     /** What it would do to the drill, for the readout; null when it can't tell */
     readonly preview?: (
         pageId: string | number,
@@ -134,6 +137,20 @@ export function TimelinePageFlagHandles({
     const [preview, setPreview] = useState<TimelinePageFlagPreview | null>(
         null,
     );
+    // The latest commands, so a re-render with new ones doesn't restart the readout's preview
+    const moveRef = useRef(move);
+    moveRef.current = move;
+    // A move being written: arrow keys wait for it, so a held key can't send the same move twice
+    const committing = useRef(false);
+    const commit = (pageId: string | number, toBeat: number) => {
+        if (committing.current) return;
+        committing.current = true;
+        void Promise.resolve(moveRef.current.onMove(pageId, toBeat)).finally(
+            () => {
+                committing.current = false;
+            },
+        );
+    };
     const dragRef = useRef<{
         pageId: string | number;
         pointerId: number;
@@ -147,10 +164,11 @@ export function TimelinePageFlagHandles({
     // Once the pointer rests, ask what the move would do to the drill
     useEffect(() => {
         setPreview(null);
-        if (!drag || !move.preview) return;
+        const preview = moveRef.current.preview;
+        if (!drag || !preview) return;
         let stale = false;
         const timer = setTimeout(() => {
-            void move.preview?.(drag.pageId, drag.toBeat).then((result) => {
+            void preview(drag.pageId, drag.toBeat).then((result) => {
                 if (!stale) setPreview(result);
             });
         }, 180);
@@ -158,7 +176,7 @@ export function TimelinePageFlagHandles({
             stale = true;
             clearTimeout(timer);
         };
-    }, [drag, move]);
+    }, [drag]);
 
     const ordered = pages
         .filter((p) => !p.isInitial)
@@ -183,17 +201,17 @@ export function TimelinePageFlagHandles({
         return clamp(beat, bounds.min, bounds.max);
     };
 
-    const end = (commit: boolean) => {
+    const end = (keep: boolean) => {
         const current = dragRef.current;
         dragRef.current = null;
         setDrag(null);
         if (
-            commit &&
+            keep &&
             current &&
             current.moved &&
             current.toBeat !== current.fromBeat
         )
-            move.onMove(current.pageId, current.toBeat);
+            commit(current.pageId, current.toBeat);
     };
 
     return (
@@ -296,7 +314,8 @@ export function TimelinePageFlagHandles({
                                 bounds.min,
                                 bounds.max,
                             );
-                            if (toBeat !== flag) move.onMove(page.id, toBeat);
+                            if (event.repeat || committing.current) return;
+                            if (toBeat !== flag) commit(page.id, toBeat);
                         }}
                         className={clsx(
                             // The ruler's lower half: the start pennant (z-55) has the upper half, and the
