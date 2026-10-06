@@ -592,6 +592,7 @@
             "deletedFailed": "Page deletion failed",
             "deletedSuccessfully": "Page deleted successfully",
             "measures": "Measures",
+            "measuresPrinted": "From count 1 to the flag. Drill sheets print {printed}: the measures the counts are in, without a flag on a downbeat.",
             "notes": "Notes",
             "notesPlaceholder": "Add notes for this page...",
             "splitPage": "Split page",

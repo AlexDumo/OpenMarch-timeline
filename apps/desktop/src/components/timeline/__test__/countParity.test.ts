@@ -14,7 +14,10 @@ import type Beat from "@/global/classes/Beat";
 import { fromDatabaseMeasures } from "@/global/classes/Measure";
 import type Measure from "@/global/classes/Measure";
 import { fromDatabasePages } from "@/global/classes/Page.fromDatabase";
-import { measureRangeString } from "@/global/classes/Page.utils";
+import {
+    measureRangeExact,
+    measureRangeString,
+} from "@/global/classes/Page.utils";
 import type Page from "@/global/classes/Page";
 import { OverlayTimeline } from "@/components/exporting/video/videoOverlay";
 import { createTimelineViewModel } from "../Timeline";
@@ -196,28 +199,41 @@ const readoutNames = (model: TimelineViewModel, position: number): Named => {
     };
 };
 
-/** The PDF's measure range for a page: its first and last counts */
+/** The PDF's measure range for a page: its first and last counts, and both texts */
 const pdfNames = (page: Page) => {
     const first = page.measures![0]!;
     const last = page.measures![page.measures!.length - 1]!;
     return {
         first: { measure: first.number, beat: page.measureBeatToStartOn! },
         last: { measure: last.number, beat: page.measureBeatToEndOn! },
-        text: measureRangeString(page),
+        printed: measureRangeString(page),
+        exact: measureRangeExact(page),
     };
 };
 
-/** The PDF's notation for one count: "5" on a downbeat, "5(2)" otherwise */
-const pdfText = (first: Named, last: Named, lastMeasureCounts: number) => {
-    const start =
-        first.beat === 1
-            ? `${first.measure}`
-            : `${first.measure}(${first.beat})`;
+/**
+ * What the drill sheet prints for a page whose count 1 is `first` and whose flag is `last` (D5):
+ * the measures between them, without the flag's measure when the flag is its downbeat.
+ */
+const printedText = (
+    first: Named,
+    last: Named,
+    measures: readonly Measure[],
+) => {
     const end =
-        last.beat === lastMeasureCounts
-            ? `${last.measure}`
-            : `${last.measure}(${last.beat})`;
-    return start === end ? start : `${start} - ${end}`;
+        last.beat === 1 && last.measure !== first.measure
+            ? measures.filter((m) => m.number < last.measure).at(-1)!.number
+            : last.measure;
+    return first.measure === end
+        ? `${first.measure}`
+        : `${first.measure}–${end}`;
+};
+
+/** The inspector's exact range: "m5 b2 – m9 b1" */
+const exactText = (first: Named, last: Named) => {
+    const a = `m${first.measure} b${first.beat}`;
+    const b = `m${last.measure} b${last.beat}`;
+    return a === b ? a : `${a} – ${b}`;
 };
 
 // ---------------------------------------------------------------------------
@@ -298,14 +314,15 @@ const checkShow = (show: GeneratedShow) => {
             pageId: page.id,
         });
 
-        // The PDF names the page's first and last counts
+        // The PDF's range comes from the page's first and last counts: the inspector names them
+        // exactly, the sheet prints the measures they are in (D5)
         const first = expected(model, page.label, 1, page.atBeat + 1);
         const last = expected(model, page.label, total, page.endBeat!);
         const pdf = pdfNames(dbPage);
         expect(pdf.first).toEqual({ measure: first.measure, beat: first.beat });
         expect(pdf.last).toEqual({ measure: last.measure, beat: last.beat });
-        const lastMeasure = measures.find((m) => m.number === last.measure)!;
-        expect(pdf.text).toBe(pdfText(first, last, lastMeasure.counts));
+        expect(pdf.exact).toBe(exactText(first, last));
+        expect(pdf.printed).toBe(printedText(first, last, measures));
     }
 };
 
@@ -345,9 +362,11 @@ describe("one rule for counts across the readout, go-to, PDF and video (E2)", ()
             });
         });
 
-        it("prints the page's counts on the drill sheet: m5 beat 2 to m9 beat 1", () => {
-            expect(measureRangeString(pages[2]!)).toBe("5(2) - 9(1)");
-            expect(measureRangeString(pages[1]!)).toBe("1(2) - 5(1)");
+        it("prints m5–8 on the drill sheet, and m5 b2 – m9 b1 in the inspector (D5)", () => {
+            expect(measureRangeString(pages[2]!)).toBe("5–8");
+            expect(measureRangeExact(pages[2]!)).toBe("m5 b2 – m9 b1");
+            expect(measureRangeString(pages[1]!)).toBe("1–4");
+            expect(measureRangeExact(pages[1]!)).toBe("m1 b2 – m5 b1");
         });
 
         it("shows the video one count apart from nothing: page 1's last count on m5's downbeat", () => {
