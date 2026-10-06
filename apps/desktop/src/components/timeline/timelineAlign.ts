@@ -25,7 +25,18 @@ import {
     type RetimeResult,
     type TypedSection,
 } from "@/timeline/tempo";
-import type { TimelinePageMarker } from "./TimelineViewModel";
+import {
+    markAt,
+    musicAt,
+    placeMeasures,
+    placeName,
+    type PlaceMeasure,
+    type PlaceStyle,
+} from "./placeName";
+import type {
+    TimelineMeasureMarker,
+    TimelinePageMarker,
+} from "./TimelineViewModel";
 
 /** How close, in pixels, a dragged count must come to a snap target to land on it */
 export const ALIGN_SNAP_PX = 6;
@@ -41,6 +52,8 @@ export interface AlignPage {
     readonly label: string;
     readonly start: number;
     readonly end: number;
+    /** The rehearsal mark on the flag's downbeat, which names the flag (D6) */
+    readonly flagMark?: string | null;
 }
 
 /** Translation, as `useTolgee().t` gives it */
@@ -49,22 +62,38 @@ export type AlignTranslate = (
     params?: Record<string, string | number>,
 ) => string;
 
-/** The view model's timed pages as count ranges (view beat + `offset` = count index) */
+/**
+ * The view model's timed pages as count ranges (view beat + `offset` = count index), each with the
+ * rehearsal mark on its flag's downbeat when `measures` are given
+ */
 export function alignPages(
     pages: readonly TimelinePageMarker[],
     beatCount: number,
     offset: number,
+    measures: readonly TimelineMeasureMarker[] = [],
 ): AlignPage[] {
     const timed = pages
         .filter((page) => !page.isInitial)
         .sort((a, b) => a.atBeat - b.atBeat);
-    return timed.map((page, i) => ({
-        id: page.id,
-        label: page.label,
-        start: page.atBeat + offset,
-        end: (timed[i + 1]?.atBeat ?? page.endBeat ?? beatCount) + offset,
-    }));
+    const marks = placeMeasures(measures, offset);
+    return timed.map((page, i) => {
+        const end =
+            (timed[i + 1]?.atBeat ?? page.endBeat ?? beatCount) + offset;
+        return {
+            id: page.id,
+            label: page.label,
+            start: page.atBeat + offset,
+            end,
+            flagMark: markAt(marks, end),
+        };
+    });
 }
+
+/** The view model's measures in count indexes, for naming holds by the music (D6) */
+export const alignMeasures = (
+    measures: readonly TimelineMeasureMarker[],
+    offset: number,
+): PlaceMeasure[] => placeMeasures(measures, offset);
 
 /** The page whose flag is at count `index` (it ends there), if any */
 export const pageWithFlagAt = (
@@ -86,14 +115,26 @@ export function pagesLabel(
 }
 
 /**
- * A moment (a count tick) by its page and count, as the transport reads it (UI-13): the tick at
- * count `index` is count `index - start` of the page it ends in, so a page's last count sits on
- * its flag.
+ * A moment (a count tick) by its page and count, named as everywhere names it (D6, `placeName`).
+ * Chips are one tight line of parts joined by " · ", so they take the compact style by default:
+ * "Pg 5 ct 4", and on a flag "C · Pg 10 ct 16 → 11"; a toast passes "full" for "C · end of Pg 10
+ * · Pg 11 starts".
  */
-export function countName(pages: readonly AlignPage[], index: number): string {
-    const page = pages.find((p) => p.start < index && index <= p.end);
-    return page ? `Pg ${page.label} ct ${index - page.start}` : `ct ${index}`;
-}
+export const countName = (
+    pages: readonly AlignPage[],
+    index: number,
+    style: PlaceStyle = "compact",
+): string => placeName(pages, index, { style });
+
+/**
+ * The count held before tick `index`, by the music when there are measures ("m5 beat 4"), else
+ * by its place (D6: hold chips lead with the music)
+ */
+export const heldName = (
+    pages: readonly AlignPage[],
+    held: number,
+    measures?: readonly PlaceMeasure[],
+): string => musicAt(measures, held) ?? countName(pages, held);
 
 /** Each count's note and length in it (the tempo map's `countUnits`); none means plain ♩ */
 export type AlignUnits = readonly (CountUnit | undefined)[];
@@ -647,7 +688,7 @@ function overridePart(
     });
 }
 
-/** The chip while holding the count before tick `index`: "Pg 5 ct 4 held · 0.50 → 1.85 s" */
+/** The chip while holding the count before tick `index`: "m5 beat 4 held · 0.50 → 1.85 s" */
 export function holdChip({
     before,
     result,
@@ -657,6 +698,7 @@ export function holdChip({
     t,
     units,
     overrides = [],
+    measures,
 }: {
     before: CountDurations;
     result: RetimeResult;
@@ -666,6 +708,8 @@ export function holdChip({
     t: AlignTranslate;
     units?: AlignUnits;
     overrides?: readonly TypedSection[];
+    /** The measures in count indexes, to name the held count by the music */
+    measures?: readonly PlaceMeasure[];
 }): AlignChip {
     const held = index - 1;
     if (result.durations.every((d, i) => d === before[i]))
@@ -674,7 +718,7 @@ export function holdChip({
     const parts = [
         ...(override ? [override] : []),
         t("tempo.align.chip.held", {
-            count: countName(pages, held),
+            count: heldName(pages, held, measures),
             from: (before[held] ?? 0).toFixed(2),
             to: (result.durations[held] ?? 0).toFixed(2),
         }),

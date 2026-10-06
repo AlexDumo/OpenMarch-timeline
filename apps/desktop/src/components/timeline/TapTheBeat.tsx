@@ -350,7 +350,7 @@ export function TapTheBeatPanel() {
 // eslint-disable-next-line max-lines-per-function
 function TapTheBeatPanelBody() {
     const setOpen = useTapTheBeatStore((s) => s.setOpen);
-    const { beats, pages } = useTimingObjects()!;
+    const { beats, pages, measures } = useTimingObjects()!;
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
     const queryClient = useQueryClient();
     const { data: settings } = useQuery(workspaceSettingsQueryOptions());
@@ -887,6 +887,7 @@ function TapTheBeatPanelBody() {
                         t,
                         plan: shownPlan,
                         pages,
+                        measures,
                         applied: applied !== null,
                         audioOffsetSeconds:
                             applied?.offset ??

@@ -477,7 +477,7 @@ describe("applying", () => {
 describe("words", () => {
     it("names a target as the transport reads it", () => {
         expect(targetName(pages, 1, "count 1")).toBe("count 1");
-        expect(targetName(pages, 9, "count 1")).toBe("Pg 10 ct 8");
+        expect(targetName(pages, 9, "count 1")).toBe("Pg 10 ct 8 → 11");
         expect(targetName(pages, 12, "count 1")).toBe("Pg 11 ct 3");
     });
 

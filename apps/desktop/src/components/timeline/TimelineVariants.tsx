@@ -67,6 +67,7 @@ import {
 } from "./timelineAxis";
 import {
     alignFlags,
+    alignMeasures,
     alignPages as toAlignPages,
     countTempoText,
     evenOutPage,
@@ -556,8 +557,18 @@ function TimelineSurface({
         [alignDurations, alignOffset],
     );
     const alignPages = useMemo(
-        () => toAlignPages(model.pages, model.beatCount, alignOffset),
-        [alignOffset, model.beatCount, model.pages],
+        () =>
+            toAlignPages(
+                model.pages,
+                model.beatCount,
+                alignOffset,
+                model.measures,
+            ),
+        [alignOffset, model.beatCount, model.measures, model.pages],
+    );
+    const alignPlaceMeasures = useMemo(
+        () => alignMeasures(model.measures, alignOffset),
+        [alignOffset, model.measures],
     );
     const timesUsable =
         baseTimes !== null && baseTimes.length === model.beatCount + 1;
@@ -599,6 +610,7 @@ function TimelineSurface({
     const alignEdit = useAlignEdit({
         align,
         pages: alignPages,
+        measures: alignPlaceMeasures,
         pixelsPerSecond,
         playheadTime,
         viewportRef,

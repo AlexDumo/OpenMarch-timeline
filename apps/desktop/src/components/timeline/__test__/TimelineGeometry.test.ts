@@ -136,15 +136,19 @@ describe("timeline geometry", () => {
         ).toEqual(["measure-1", "measure-3", "measure-5", "measure-7"]);
     });
 
-    it("formats the playhead as page, count and measure (UI-13)", () => {
+    it("formats the playhead as page, count and measure (UI-13, D6)", () => {
         expect(getPlayheadLabel(timelineStoryModel, 0)).toBe("Home");
         expect(getPlayheadLabel(timelineStoryModel, 11)).toBe(
             "Pg 2 · ct 3/8 · m3 beat 4",
         );
-        // On a flag, the page ending there, as the transport counts it
+        // On a flag, the page ending there and the page starting there (D6)
         expect(getPlayheadLabel(timelineStoryModel, 16)).toBe(
-            "Pg 2 · ct 8/8 · m5 beat 1",
+            "end of Pg 2 · Pg 2A starts · m5 beat 1",
         );
+        expect(getPlayheadReadout(timelineStoryModel, 16)).toMatchObject({
+            compact: "Pg 2 ct 8 → 2A",
+            spoken: "End of page 2, count 8, page 2A starts, measure 5 beat 1",
+        });
         // The last page has no flag in this model, so no total
         expect(getPlayheadLabel(timelineStoryModel, 27)).toBe(
             "Pg 4 · ct 3 · m7 beat 4",

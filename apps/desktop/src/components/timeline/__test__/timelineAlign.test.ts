@@ -71,11 +71,13 @@ describe("pages and flags", () => {
         ]);
     });
 
-    it("names a moment as the readout does (UI-13)", () => {
+    it("names a moment as the readout does (UI-13, D6)", () => {
         expect(countName(pages, 4)).toBe("Pg 1 ct 3");
-        // A page's last count sits on its flag
-        expect(countName(pages, 9)).toBe("Pg 1 ct 8");
+        // A page's last count sits on its flag, where the next page starts
+        expect(countName(pages, 9)).toBe("Pg 1 ct 8 → 2");
+        expect(countName(pages, 9, "full")).toBe("end of Pg 1 · Pg 2 starts");
         expect(countName(pages, 10)).toBe("Pg 2 ct 1");
+        expect(countName(pages, 10, "full")).toBe("Pg 2 · ct 1/8");
     });
 });
 
@@ -213,7 +215,7 @@ describe("the chip", () => {
 
     it("says how far it re-spaces when a synced page holds the rest", () => {
         expect(chip(9, 4.31, [17]).text).toBe(
-            "Pg 1 · 120 → 111 · Pg 2 120 → 130 up to synced Pg 2 ct 8",
+            "Pg 1 · 120 → 111 · Pg 2 120 → 130 up to synced Pg 2 ct 8 → 2A",
         );
     });
 
@@ -299,8 +301,7 @@ describe("the chip", () => {
     it("names a synced flag by the page it closes, as the transport does (B2)", () => {
         // Page 2's flag (count 17) is synced; dragging page 1's flag re-spaces page 2 up to it
         const text = chip(9, 4.31, [17]).text;
-        expect(text).toContain("up to synced Pg 2 ct 8");
-        expect(text).not.toContain("Pg 2A");
+        expect(text).toContain("up to synced Pg 2 ct 8 → 2A");
     });
 
     it("says a drop that changes nothing changes nothing", () => {
@@ -320,6 +321,20 @@ describe("the chip", () => {
         expect(
             holdChip({ before: durations, result, index: 5, pages, t }).text,
         ).toBe("Pg 1 ct 3 held · 0.50 → 1.50 s · Pg 1–4 move +1.00 s");
+        // With measures, the held count is named by the music (D6)
+        expect(
+            holdChip({
+                before: durations,
+                result,
+                index: 5,
+                pages,
+                t,
+                measures: [
+                    { at: 1, number: "1" },
+                    { at: 5, number: "2" },
+                ],
+            }).text,
+        ).toBe("m1 beat 4 held · 0.50 → 1.50 s · Pg 1–4 move +1.00 s");
         // Count 1's tick has no count before it to hold
         expect(
             alignHold({ durations, index: 1, toTime: 3, synced: [] }),
@@ -433,7 +448,7 @@ describe("drag scope (FB-2)", () => {
                 synced: [],
                 t,
             }).text,
-        ).toContain("up to Pg 1 ct 8");
+        ).toContain("up to Pg 1 ct 8 → 2");
     });
 
     it("a hold on a page's last count re-spaces the next page", () => {

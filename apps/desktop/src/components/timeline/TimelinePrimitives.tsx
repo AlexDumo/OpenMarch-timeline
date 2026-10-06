@@ -263,7 +263,8 @@ export function TimelineTransport({
             >
                 {/* UI-13: a minimum width, so the transport doesn't shift as the count changes */}
                 <span className="min-w-[15ch] shrink-0">
-                    {readoutText.page}
+                    {/* D6: a narrow transport names a flag "Pg 11 ct 16 → 12" */}
+                    {tight ? readoutText.compact : readoutText.page}
                     {readoutNote && (
                         <span
                             data-testid="timeline-readout-note"

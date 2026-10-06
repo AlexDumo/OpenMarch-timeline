@@ -38,13 +38,25 @@ const plan = (over: Partial<TapTheBeatPlan>): TapTheBeatPlan => ({
 });
 
 describe("countLabel", () => {
-    it("names counts by page", () => {
-        // As the transport reads them: a flag is the last count of the page it closes
-        expect(countLabel(t, PAGES, 2)).toBe("Pg 2 ct 1");
-        expect(countLabel(t, PAGES, 9)).toBe("Pg 2 ct 8");
-        expect(countLabel(t, PAGES, 11)).toBe("Pg 3 ct 2");
-        expect(countLabel(t, PAGES, 1)).toBe("the start");
-        expect(countLabel(t, PAGES, 40)).toBe("count 40");
+    it("names counts as everywhere names them (D6)", () => {
+        expect(countLabel(PAGES, 2)).toBe("Pg 2 · ct 1/8");
+        expect(countLabel(PAGES, 11)).toBe("Pg 3 · ct 2/8");
+        // A flag is the end of its page and where the next starts
+        expect(countLabel(PAGES, 9)).toBe("end of Pg 2 · Pg 3 starts");
+        expect(countLabel(PAGES, 17)).toBe("end of Pg 3");
+        expect(countLabel(PAGES, 1)).toBe("the start");
+        expect(countLabel(PAGES, 40)).toBe("After pg 3 · +23");
+    });
+    it("puts the rehearsal mark on a flag's downbeat first", () => {
+        const measures = [
+            { number: 1, rehearsalMark: null, startBeat: { index: 1 } },
+            { number: 3, rehearsalMark: "C", startBeat: { index: 9 } },
+        ];
+        expect(countLabel(PAGES, 9, measures)).toBe(
+            "C · end of Pg 2 · Pg 3 starts",
+        );
+        // Mid-page, the place is named as before
+        expect(countLabel(PAGES, 2, measures)).toBe("Pg 2 · ct 1/8");
     });
 });
 
@@ -81,9 +93,9 @@ describe("tapPlanSentence", () => {
             pages: PAGES,
             applied: false,
         });
-        expect(text).toContain("From Pg 3 ct 2, counts will run");
+        expect(text).toContain("From Pg 3 · ct 2/8, counts will run");
         expect(text).toContain(
-            "The synced count at Pg 3 ct 5 and everything after it stay on the music.",
+            "The synced count at Pg 3 · ct 5/8 and everything after it stay on the music.",
         );
         expect(text).toContain("kept within limits");
     });

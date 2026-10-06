@@ -4,6 +4,7 @@
  */
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
 import { formatMusicTime, type TapTheBeatPlan } from "@/timeline/tempo";
+import { placeName } from "./placeName";
 
 /** Tolgee's `t` as these helpers use it. */
 export type Translate = (
@@ -15,29 +16,35 @@ const K = "tempo.tapTheBeat";
 
 type NamedPage = FlagPage & { readonly name: string };
 
+/** A measure as Tap the beat names flags by it: the ordinal of its downbeat, and its mark */
+export interface TapMeasure {
+    readonly number: number;
+    readonly rehearsalMark: string | null;
+    readonly startBeat: { readonly index: number };
+}
+
 /**
- * A count tick named as the transport names it (UI-13, docs/tempo/count-convention.md): "Pg 2 ct
- * 4" for the 4th count after page 2's start, so a page's flag is its last count ("Pg 10 ct 16"),
- * never "page 11, count 1". "the start" for the show's start, "count 40" past the last page.
+ * A count tick named as everywhere names it (D6, `placeName`): "Pg 2 · ct 4/16" for the 4th count
+ * after page 2's start; on a flag, "C · end of Pg 10 · Pg 11 starts", with the rehearsal mark on
+ * its downbeat; "the start" for the show's start, "After pg 4 · +4" past the last page.
  */
 export function countLabel(
-    t: Translate,
     pages: readonly NamedPage[],
     ordinal: number,
+    measures: readonly TapMeasure[] = [],
 ): string {
-    const flags = pageFlags(pages);
-    const box = flags.find(
-        (f) => f.range && f.range.start < ordinal && ordinal <= f.range.end,
+    const places = pageFlags(pages).flatMap((f) =>
+        f.range
+            ? [{ label: f.page.name, start: f.range.start, end: f.range.end }]
+            : [],
     );
-    if (box?.range)
-        return t(`${K}.countOnPage`, {
-            page: box.page.name,
-            count: ordinal - box.range.start,
-        });
-    const first = flags.find((f) => f.range)?.range;
-    if (ordinal <= 1 || (first && ordinal <= first.start))
-        return t(`${K}.countStart`);
-    return t(`${K}.countAlone`, { count: ordinal });
+    return placeName(places, ordinal, {
+        measures: measures.map((m) => ({
+            at: m.startBeat.index,
+            number: String(m.number),
+            rehearsalMark: m.rehearsalMark,
+        })),
+    });
 }
 
 /** "132": the tempo for people, rounded to a whole count per minute. */
@@ -54,10 +61,13 @@ export function tapPlanSentence({
     pages,
     applied,
     audioOffsetSeconds = 0,
+    measures = [],
 }: {
     t: Translate;
     plan: TapTheBeatPlan;
     pages: readonly NamedPage[];
+    /** The show's measures, so a flag is named with its rehearsal mark */
+    measures?: readonly TapMeasure[];
     applied: boolean;
     /** The audio offset before applying: show time `t` is `t - offset` in the music */
     audioOffsetSeconds?: number;
@@ -77,20 +87,20 @@ export function tapPlanSentence({
     else
         parts.push(
             t(`${K}.here.${tense}`, {
-                count: countLabel(t, pages, plan.fromCount),
+                count: countLabel(pages, plan.fromCount, measures),
                 bpm,
             }),
         );
     if (plan.heldFrom !== null)
         parts.push(
             t(`${K}.heldSynced`, {
-                count: countLabel(t, pages, plan.heldFrom),
+                count: countLabel(pages, plan.heldFrom, measures),
             }),
         );
     if (plan.unsynced.length === 1)
         parts.push(
             t(`${K}.unsyncedOne`, {
-                count: countLabel(t, pages, plan.unsynced[0]!),
+                count: countLabel(pages, plan.unsynced[0]!, measures),
             }),
         );
     else if (plan.unsynced.length > 1)

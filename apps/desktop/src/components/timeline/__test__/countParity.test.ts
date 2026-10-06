@@ -186,14 +186,24 @@ const readoutNames = (model: TimelineViewModel, position: number): Named => {
     const at = getPageCountAt(model, position);
     const measure = getMeasureAt(model, position)!;
     const readout = getPlayheadReadout(model, position);
-    // The text says the same as the parts it is made of
-    expect(readout.page).toBe(
-        `Pg ${at.pageLabel} · ct ${at.count}${at.total != null ? `/${at.total}` : ""}`,
+    // The compact text names the page and the count, also on a flag ("C · Pg 10 ct 16 → 11")
+    const compact = readout.compact.match(
+        /^(?:.+ · )?Pg (\S+) ct (\d+)(?: → (\S+))?$/,
     );
+    expect(compact, readout.compact).not.toBeNull();
+    const [, page, count, next] = compact!;
+    // The full text says the same (D6): a flag is the end of its page and where the next starts
+    if (at.total != null && at.count === at.total) {
+        expect(readout.page).toContain(`end of Pg ${page}`);
+        if (next) expect(readout.page).toContain(`Pg ${next} starts`);
+    } else
+        expect(readout.page).toBe(
+            `Pg ${page} · ct ${count}${at.total != null ? `/${at.total}` : ""}`,
+        );
     expect(readout.measure).toBe(`m${measure.measure} beat ${measure.beat}`);
     return {
-        page: at.pageLabel,
-        count: at.count,
+        page: page!,
+        count: Number(count),
         measure: Number(measure.measure),
         beat: measure.beat,
     };
@@ -357,7 +367,8 @@ describe("one rule for counts across the readout, go-to, PDF and video (E2)", ()
                 measure: "m5 beat 2",
             });
             expect(getPlayheadReadout(model, 32)).toMatchObject({
-                page: "Pg 2 · ct 16/16",
+                page: "end of Pg 2 · Pg 3 starts",
+                compact: "Pg 2 ct 16 → 3",
                 measure: "m9 beat 1",
             });
         });
