@@ -22,6 +22,7 @@ const SWITCHES: readonly BooleanFlag[] = [
 
 /** Two-way choices, with their options. Shown after the switch they refine. */
 const CHOICES = {
+    alignDragScope: ["page", "toSynced"],
     tapApply: ["stop", "drafts"],
     tapUnit: ["page", "count"],
 } as const satisfies {
@@ -114,10 +115,9 @@ export default function TempoLabSettings() {
                             />
                         }
                     />
+                    {flag === "alignView" && choiceRow("alignDragScope")}
                     {flag === "punchInTap" &&
-                        (Object.keys(CHOICES) as (keyof typeof CHOICES)[]).map(
-                            choiceRow,
-                        )}
+                        (["tapApply", "tapUnit"] as const).map(choiceRow)}
                 </div>
             ))}
         </div>

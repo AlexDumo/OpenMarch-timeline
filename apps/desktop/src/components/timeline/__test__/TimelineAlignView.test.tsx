@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExpandedTimeline } from "../TimelineVariants";
+import { pageBoxLabelFits } from "../TimelinePrimitives";
 import { timelineStoryModel } from "../TimelineStoryFixtures";
 import { alignMove } from "../timelineAlign";
 import type { TimelineAlign } from "../TimelineViewModel";
@@ -58,7 +59,10 @@ const envelope = {
     rate: 200,
 };
 
-const renderAlign = (overrides: Partial<TimelineAlign> = {}) => {
+const renderAlign = (
+    overrides: Partial<TimelineAlign> = {},
+    onSeek = vi.fn(),
+) => {
     const align = {
         on: true,
         onToggle: vi.fn(),
@@ -76,7 +80,7 @@ const renderAlign = (overrides: Partial<TimelineAlign> = {}) => {
             positionBeat={11}
             isPlaying={false}
             pixelsPerBeat={16}
-            onSeek={vi.fn()}
+            onSeek={onSeek}
             align={{ ...align, offset: 1 }}
         />,
     );
@@ -197,8 +201,9 @@ describe("the Align view (E7)", () => {
             clientX: 100,
             pointerId: 1,
         });
+        // Dropped back within 2 px of where it started (FB-8)
         fireEvent.pointerMove(handle, { clientX: 104, pointerId: 1 });
-        fireEvent.pointerUp(handle, { clientX: 104, pointerId: 1 });
+        fireEvent.pointerUp(handle, { clientX: 101, pointerId: 1 });
         expect(align.onRetime).not.toHaveBeenCalled();
 
         fireEvent.pointerDown(handle, {
@@ -208,10 +213,35 @@ describe("the Align view (E7)", () => {
         });
         fireEvent.pointerMove(handle, { clientX: 104, pointerId: 1 });
         fireEvent.pointerUp(handle, {
-            clientX: 104,
+            clientX: 101,
             pointerId: 1,
             altKey: true,
         });
+        expect(align.onRetime).toHaveBeenCalledTimes(1);
+    });
+
+    it("seeks on a click on a rehearsal tab, even with pointer jitter (Jo)", () => {
+        const onSeek = vi.fn();
+        const { align } = renderAlign({}, onSeek);
+        const tab = screen.getByTestId("timeline-rehearsal-tab");
+        fireEvent.pointerDown(tab, { button: 0, clientX: 50, pointerId: 1 });
+        fireEvent.pointerMove(tab, { clientX: 51, pointerId: 1 });
+        fireEvent.pointerUp(tab, { clientX: 51, pointerId: 1 });
+        fireEvent.click(tab, { clientX: 51 });
+        expect(onSeek).toHaveBeenCalledTimes(1);
+        expect(align.onRetime).not.toHaveBeenCalled();
+    });
+
+    it("keeps a 4 px correction instead of snapping it back (FB-8)", () => {
+        const { align } = renderAlign();
+        const handle = flag(9);
+        fireEvent.pointerDown(handle, {
+            button: 0,
+            clientX: 100,
+            pointerId: 1,
+        });
+        fireEvent.pointerMove(handle, { clientX: 104, pointerId: 1 });
+        fireEvent.pointerUp(handle, { clientX: 104, pointerId: 1 });
         expect(align.onRetime).toHaveBeenCalledTimes(1);
     });
 
@@ -266,5 +296,23 @@ describe("the Align view (E7)", () => {
         // Count 3 (the 3rd count) now lasts 1.5 s; nothing new is synced
         expect(edit.durations[3]).toBeCloseTo(1.5, 9);
         expect(edit.synced).toEqual([]);
+    });
+});
+
+describe("page box labels (FB-11)", () => {
+    it("show the tempo note only when name and note fit on one line", () => {
+        expect(pageBoxLabelFits("1", 62, "120")).toEqual({
+            label: true,
+            note: false,
+        });
+        expect(pageBoxLabelFits("1", 80, "120")).toEqual({
+            label: true,
+            note: true,
+        });
+        expect(pageBoxLabelFits("12A", 20, "120")).toEqual({
+            label: false,
+            note: false,
+        });
+        expect(pageBoxLabelFits("4", 200, null).note).toBe(false);
     });
 });

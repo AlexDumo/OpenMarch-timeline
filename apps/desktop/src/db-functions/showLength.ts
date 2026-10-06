@@ -4,6 +4,7 @@ import {
     continuedCounts,
     countContinuation,
     countsToReach,
+    pageFlagsToEnd,
     type CountContinuation,
 } from "@/timeline/showLength";
 import { createBeatsInTransaction } from "./beat";
@@ -146,6 +147,46 @@ export async function appendPageOfCounts({
         db,
         "appendPageOfCounts",
         async (tx) => await appendPageOfCountsInTransaction({ tx, counts }),
+    );
+}
+
+/**
+ * **Add pages every N counts to the end** (FB-7), inside a `transactionWithHistory`: a flag every
+ * `counts` counts after the last page's flag while the show's counts last (`pageFlagsToEnd`), so a
+ * show whose counts already cover the music gets pages to its end in one step. Adds no counts;
+ * each flag is added as **+** adds one. Returns the pages added (0 when no counts lie past the
+ * last flag).
+ */
+export async function appendPagesToEndInTransaction({
+    tx,
+    counts,
+}: {
+    tx: DbTransaction;
+    counts: number;
+}): Promise<number> {
+    if (!Number.isInteger(counts) || counts < 1)
+        refuse(`can't add pages every ${counts} counts`);
+    const { beatCount } = await readContinuation(tx);
+    const flags = pageFlagsToEnd(await lastFlagBeat(tx), beatCount, counts);
+    for (const beat of flags) await addPageFlagInTransaction({ tx, beat });
+    return flags.length;
+}
+
+/** **Add pages every N counts to the end** (FB-7) as one undoable edit */
+export async function appendPagesToEnd({
+    db,
+    counts,
+}: {
+    db: DbConnection;
+    counts: number;
+}): Promise<number> {
+    const { beatCount } = await db.transaction(readContinuation);
+    const last = await db.transaction(lastFlagBeat);
+    if (pageFlagsToEnd(last, beatCount, counts).length === 0) return 0;
+    return await transactionWithHistory(
+        db,
+        "appendPagesToEnd",
+        async (tx) => await appendPagesToEndInTransaction({ tx, counts }),
     );
 }
 

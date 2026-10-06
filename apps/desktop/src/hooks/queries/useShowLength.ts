@@ -1,6 +1,10 @@
 import { mutationOptions, QueryClient } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
-import { appendPageOfCounts, extendCountsTo } from "@/db-functions/showLength";
+import {
+    appendPageOfCounts,
+    appendPagesToEnd,
+    extendCountsTo,
+} from "@/db-functions/showLength";
 import type { AddedPageFlag } from "@/db-functions/pageFlags";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "./usePages";
@@ -27,6 +31,20 @@ export const appendPageOfCountsMutationOptions = (
         onSuccess: async (added) => {
             await invalidateShowLength(qc);
             onAdded?.(added);
+        },
+        onError: (e) => toastTimelineError(e),
+    });
+
+/** Adds a page every `counts` counts to the end of the show (FB-7). Resolves to the pages added. */
+export const appendPagesToEndMutationOptions = (
+    qc: QueryClient,
+    onAdded?: (pages: number) => void,
+) =>
+    mutationOptions({
+        mutationFn: (counts: number) => appendPagesToEnd({ db, counts }),
+        onSuccess: async (pages) => {
+            await invalidateShowLength(qc);
+            onAdded?.(pages);
         },
         onError: (e) => toastTimelineError(e),
     });

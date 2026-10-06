@@ -2,6 +2,7 @@ import {
     act,
     cleanup,
     fireEvent,
+    within,
     render,
     screen,
 } from "@testing-library/react";
@@ -271,7 +272,7 @@ describe("tapping and applying", () => {
         // Pausing a play-on run moves the playhead (UI-12)
         void act(() => useTimelineSelectionStore.getState().selectRange(9, 16));
         expect(screen.getByTestId("tap-sentence")).toHaveTextContent(
-            "From page 2, count 9",
+            "From Pg 2 ct 8",
         );
         await act(async () => {
             fireEvent.click(screen.getByTestId("tap-apply"));
@@ -289,8 +290,28 @@ describe("tapping and applying", () => {
         render(withSettings(<TapTheBeatPanel />));
         for (let i = 0; i < 8; i++) tapAt(i * 0.25);
         expect(screen.getByTestId("tap-bpm")).toHaveTextContent("≈ 240");
-        fireEvent.click(screen.getByRole("button", { name: "÷2" }));
+        // 240 isn't called steady: the panel asks, with ÷2 next to the question (FB-6)
+        expect(screen.getByTestId("tap-implausible")).toHaveTextContent(
+            "Did you tap twice per count?",
+        );
+        expect(screen.queryByText("That's steady")).toBeNull();
+        fireEvent.click(
+            within(screen.getByTestId("tap-implausible")).getByRole("button", {
+                name: "÷2",
+            }),
+        );
         expect(screen.getByTestId("tap-bpm")).toHaveTextContent("≈ 120");
+        expect(screen.queryByTestId("tap-implausible")).toBeNull();
+    });
+
+    it("offers Play with clicks before Apply, and From here only off home", () => {
+        useTimelineSelectionStore.getState().selectHome();
+        useTapTheBeatStore.getState().setOpen(true);
+        render(withSettings(<TapTheBeatPanel />));
+        expect(screen.getByRole("radio", { name: "From here" })).toBeDisabled();
+        for (let i = 0; i < 8; i++) tapAt(i * 0.5);
+        expect(screen.getByTestId("tap-play-clicks")).toBeInTheDocument();
+        expect(screen.getByTestId("tap-apply")).toBeInTheDocument();
     });
 });
 

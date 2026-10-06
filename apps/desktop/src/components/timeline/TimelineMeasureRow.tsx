@@ -9,6 +9,7 @@ import {
     TrashIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { toast } from "sonner";
 import {
     type ComponentPropsWithoutRef,
     type KeyboardEvent as ReactKeyboardEvent,
@@ -156,6 +157,35 @@ export const suggestedMark = (
         model.measures.map((m) => m.rehearsalMark),
     );
 
+/**
+ * The measure that already has rehearsal mark `name` (case and spaces ignored), other than
+ * `exceptId`; null when the name is free. Two Cs make "go to C" ambiguous (FB-9).
+ */
+export const measureWithMark = (
+    measures: readonly TimelineMeasureMarker[],
+    name: string,
+    exceptId?: MeasureId | null,
+): TimelineMeasureMarker | null => {
+    const wanted = name.trim().toLowerCase();
+    if (!wanted) return null;
+    return (
+        measures.find(
+            (m) => m.id !== exceptId && markOf(m)?.toLowerCase() === wanted,
+        ) ?? null
+    );
+};
+
+/** "There's already a C at m12" */
+export const duplicateMarkMessage = (measure: TimelineMeasureMarker) =>
+    measureRowText(
+        "toast.duplicateMark",
+        "There's already a {mark} at m{measure}",
+        {
+            mark: markOf(measure) ?? "",
+            measure: numberOf(measure),
+        },
+    );
+
 /** Hover title on a rehearsal tab (11-ui.md D) */
 export const rehearsalTabTitle = (mark: string, measure: string) =>
     measureRowText(
@@ -255,8 +285,10 @@ export const TimelineRehearsalMarkers = ({
                             onEdit(measure);
                         } else if (
                             onRemove &&
+                            // In Align, Backspace means "drop the last tap" to
+                            // a tapper; only Delete removes the mark there (Jo)
                             (event.key === "Delete" ||
-                                event.key === "Backspace")
+                                (event.key === "Backspace" && !handle))
                         ) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -514,6 +546,18 @@ export function useMeasureRowEditing({
             return;
         }
         const current = markOf(measure);
+        // R on a measure that already has a mark while the music plays: say so, rather than
+        // opening a small rename box the music runs past (Dana, FB-9)
+        if (current && isPlaying) {
+            toast.info(
+                measureRowText(
+                    "toast.alreadyMarked",
+                    "{mark} is already at m{measure}. Pause and double-click it to rename it.",
+                    { mark: current, measure: numberOf(measure) },
+                ),
+            );
+            return;
+        }
         if (current || !isPlaying) {
             setEditor({
                 kind: "mark",
@@ -564,13 +608,27 @@ export function useMeasureRowEditing({
         setEditor(null);
         if (!current || !commands) return;
         const typed = text.trim();
+        // A name another measure has is refused, and the input stays open to fix it
+        const refuseDuplicate = (exceptId: MeasureId | null) => {
+            const taken = measureWithMark(
+                latest.current.model.measures,
+                typed,
+                exceptId,
+            );
+            if (!taken) return false;
+            toast.error(duplicateMarkMessage(taken));
+            setEditor({ ...current, initial: typed } as MeasureRowEditor);
+            return true;
+        };
         switch (current.kind) {
             case "mark":
-                if (typed !== current.original)
-                    commands.onSetMark(current.measureId, typed || null);
+                if (typed === current.original) return;
+                if (typed && refuseDuplicate(current.measureId)) return;
+                commands.onSetMark(current.measureId, typed || null);
                 return;
             case "new":
-                if (typed) commands.onStartMeasure(current.atBeat, typed);
+                if (!typed || refuseDuplicate(null)) return;
+                commands.onStartMeasure(current.atBeat, typed);
                 return;
             case "beats":
             case "beatsFrom": {

@@ -571,6 +571,7 @@ fixture list and how to score).
   tabs, editor and right-click targets all use the timeline's axis. In Align, a rehearsal tab
   also drags its measure onto the music, and a click that ends a drag doesn't seek.
 - **Validate:** capture `tempo-align` on the integration branch.
+
 ## RI-1 Bars line up by shape first, then by shared marks (re-import, E12)
 
 - **Context:** a corrected score must land on the show's existing counts. Counts carry no bar
@@ -692,3 +693,130 @@ fixture list and how to score).
   "Lined up pages 12–18 to your taps." with Undo. Leaving Align keeps drafts in memory; closing
   the show loses them without asking (not built).
 - **Validate:** V-67.
+
+## FB-1 Tapping syncs what it put on the music (fix-beginner, E6)
+
+- **Context:** after Tap the beat, only count 1 was synced, so the first Align flag drag re-spaced
+  every page back to count 1 and moved a hit Dana had just lined up (Dana, major 1).
+- **Choice:** applying taps (`syncedAfterTaps`) syncs the first and last tapped counts, and, From
+  here, the playhead's count too (it stays put); synced counts the taps moved are dropped as
+  before. ×2 / ÷2 after applying re-derive the set from the synced counts before the apply. The
+  counts the taps only extrapolated (after the last tap) aren't synced: they aren't evidence.
+- **Alternatives:** sync every page flag in the tapped stretch (more protection, but a tapped
+  stretch is usually 8 counts, inside one page); sync nothing and rely on FB-2 alone.
+- **Validate:** V-68.
+
+## FB-2 An Align flag drag changes its page only (fix-beginner, E7; Tempo lab `alignDragScope`)
+
+- **Context:** a flag drag re-spaced back to the previous **synced** count, so flags left alone
+  because they were right moved (Jo blocker 1, Dana major 1, Priya). Holds did the same up to the
+  next synced count, so a second hold in a page moved the first.
+- **Choice:** `alignDragScope: "page"` (default): a flag (or rehearsal mark, or measure line) drag
+  re-spaces back to the previous flag, synced or not (`moveCount({ respaceFrom })`); after it,
+  counts re-space up to the next synced count as before, or shift. A count-tick hold absorbs the
+  change up to the next flag after it (`holdCount({ absorbUntil })`), so the page's flag stays and
+  later pages don't move; on a page's last count it absorbs into the next page. `"toSynced"`
+  keeps E7's first rule for comparison. When the re-spaced range spans more than one page (always
+  possible with `toSynced`, or a mark drag across a flag) the chip says from where: "Pg 1–11 · 138
+  → 135 · since the start". A stop at an unsynced flag reads "up to Pg 5 ct 8", not "synced".
+- **Alternatives:** sync every flag left of the last drag (Jo's alternative: protects more, but
+  hidden state accumulates); Shift for the wide drag (Shift already means "don't sync").
+- **Validate:** V-69, comparing both settings on `rubato-wrong` and Dana's show.
+
+## FB-3 One name for a place (fix-beginner)
+
+- **Context:** one count was "page 10's flag" on the ruler and toast, "Pg 10 · ct 16/16" in the
+  transport, "page 11, count 1" in Tap the beat and "synced Pg 12" in the chip (bug B2, `afterPart`
+  named the page that _starts_ at the synced count).
+- **Choice:** everything follows the transport (count-convention.md rule A, UI-13): a tick is
+  "Pg N ct M", counted from the page's start flag, so a flag is the last count of the page it
+  closes ("Pg 10 ct 16"). The chip (`countName`), the synced toast ("Pg 11 ct 16 is now
+  synced…"), and Tap the beat (`countLabel`: "From Pg 10 ct 16, counts will run…") all use it;
+  the show's start is "the start". The count-1 chip reads from the music's side: "Count 1 is
+  1.84 s into the music" (Jo minor 9).
+- **Not done:** naming by rehearsal letter ("from C"), which Dana would prefer; it needs the
+  measures in the chip and panel and a rule for a letter that isn't on a page start.
+- **Validate:** V-70.
+
+## FB-4 Tap the beat stays findable (fix-beginner, E6)
+
+- **Context:** once the strip went, Tap the beat lived only in the Sound popover (Dana major 3).
+- **Choice:** a small "Tap the beat" button at the right of the waveform lane: in Normal view it
+  appears while the pointer is over the timeline (no permanent header button), in Align it stays
+  (the strip is hidden there, FB-11). When the paused playhead is 32 counts or more past the last
+  synced count before it (`suggestTapAgain`), it reads "Tap again from here", stays visible, and
+  opens the panel on From here. The panel, after applying, offers "Tap again from here" in place
+  of "Tap again" when the playhead is 32 counts from the tapped stretch.
+- **Alternatives:** a transport button next to Align (critique; adds a permanent header item);
+  "Tap the beat from C" in the rehearsal tab menu (not built).
+- **Validate:** V-71.
+
+## FB-5 Taps show on the timeline before Apply (fix-beginner, E6)
+
+- **Choice:** while the panel previews, the timeline draws each tap as a tick at the top of the
+  lanes and a dashed accent line where each changed count would land (`tapGhostCounts`), on the
+  current axis: in Normal view the lines sit off the count grid by as much as the counts would
+  move; in Align they sit on the music. After Apply the changed range flashes once (1.6 s).
+- **Alternatives:** switch to Align while tapping (a hidden mode change, UI rules forbid it);
+  redraw the whole axis on the plan (moves the playhead off the music while playing, PT-4).
+- **Validate:** V-72.
+
+## FB-6 The pulse check, hearing it first, and From here at home (fix-beginner, E6)
+
+- **Choice:** a tapped tempo above 200 or below 60 per minute shows "Did you tap twice per count?
+  [÷2]" or "Did you tap every other count? [×2]" in amber instead of "That's steady".
+  **Play with clicks** sits before **Apply** and, before applying, clicks on the plan's counts
+  (scheduled from the live position; the metronome follows stored counts). **From here** is off
+  while the playhead is at home (it would retime from count 1: Jo), with a line saying to move the
+  playhead first. When the plan moves synced counts, the sentence is amber and Apply reads "Apply
+  (moves 7 synced counts)".
+- **Alternatives:** 40–240 (a ballad in 2 or a fast march would trip 60–200; owner to tune).
+- **Validate:** V-73.
+
+## FB-7 Pages to the end of the music in one step (fix-beginner, E1)
+
+- **Context:** a show made from an MP3 has counts to the end of the song but five pages; "+ 16
+  counts" added a page over counts that already existed (bug B3).
+- **Choice:** when 16 or more counts lie past the last flag, the pill reads "+ page of 16 counts"
+  ("Add a page over the next 16 counts"), and a second pill "Pages every 16 counts to the end"
+  adds a flag every N counts (N is the show's new-page counts) to the end of the show, with a
+  shorter last page for the remainder (`pageFlagsToEnd`, `appendPagesToEnd`): one undo, no counts
+  added, drill untouched.
+- **Alternatives:** create the pages in the wizard (the critique's suggestion: fewer clicks, but
+  decides page lengths for the user before they've heard the music); 4 measures per page.
+- **Validate:** V-74.
+
+## FB-8 Small drags in Align count (fix-beginner, E7)
+
+- **Choice:** a drop lands back on the old place only within 2 px (`ALIGN_ORIGIN_SNAP_PX`; was the
+  6 px snap, 0.31 s at the opening zoom, Jo blocker 2); the playhead snap stays 6 px; a drag still
+  starts after 3 px. A drag that would change nothing shows "No change: zoom in (Ctrl+scroll) for
+  finer moves" in the chip, and as a toast when dropped.
+- **Validate:** V-69 (fine corrections on `rubato-wrong` at the opening zoom).
+
+## FB-9 Rehearsal marks have unique names; R says when a mark is already there (fix-beginner, E8)
+
+- **Choice:** naming or renaming a mark to a name another measure has (ignoring case) is refused
+  with "There's already a C at m12", and the input stays open with the typed text. R while
+  playing on a measure that already has a mark shows "C is already at m41. Pause and double-click
+  it to rename it." instead of a rename box the music runs past. Paused, R still opens the rename.
+- **Alternatives:** "Move C here" (retime C onto the press, the critique's suggestion; a tempo edit
+  from a label key felt too surprising for R).
+- **Validate:** V-75.
+
+## FB-10 The wizard's tempo is optional with music (fix-beginner)
+
+- **Choice:** with an audio file and Tempo lab `tapTheBeat` on, the Tempo step labels the BPM
+  "Tempo (BPM), if you know it" and offers "I don't know: I'll tap it", which greys out the field
+  and creates the show at 120 with a note that Tap the beat lines it up once it opens.
+- **Validate:** V-74 (the same first-show run).
+
+## FB-11 Align's own small fixes (fix-beginner)
+
+- The line-up strip isn't drawn in Align, where it covered the pickup (Jo); the lane button stands
+  in.
+- Clicking a rehearsal tab in Align seeks again: any pointer jitter used to count as a drag and
+  swallow the click (Jo bug 3). Backspace no longer removes a mark in Align (Jo major 6).
+- A ruler page box shows its tempo note only when name and note fit on one line, so it no
+  longer wraps onto the time line (Dana B4, Jo bug 6). `formatShowTime` no longer reads "1:16.10"
+  (Jo bug 2).

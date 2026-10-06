@@ -227,6 +227,93 @@ describe("moveCount", () => {
     });
 });
 
+describe("moveCount respaceFrom", () => {
+    it("re-spaces back to respaceFrom when it is after the previous synced count", () => {
+        const d = steady(16);
+        const r = moveCount({
+            durations: d,
+            index: 13,
+            toTime: 7,
+            respaceFrom: 9,
+        });
+        expect(r.effect.respaced[0]).toEqual({ from: 9, to: 13 });
+        expectClose(r.durations.slice(0, 9), d.slice(0, 9));
+        expect(countTimes(r.durations)[13]).toBeCloseTo(7, 9);
+    });
+    it("is ignored when a synced count is later, or when it isn't before the count", () => {
+        const d = steady(16);
+        expect(
+            moveCount({
+                durations: d,
+                index: 13,
+                toTime: 7,
+                synced: [11],
+                respaceFrom: 9,
+            }).effect.respaced[0],
+        ).toEqual({ from: 11, to: 13 });
+        expect(
+            moveCount({ durations: d, index: 13, toTime: 7, respaceFrom: 13 })
+                .effect.respaced[0],
+        ).toEqual({ from: 1, to: 13 });
+    });
+    it("keeps every count before respaceFrom exactly (property)", () => {
+        fc.assert(
+            fc.property(
+                fc.integer({ min: 3, max: 30 }),
+                fc.double({ min: -2, max: 2, noNaN: true }),
+                (index, by) => {
+                    const d = steady(32);
+                    const from = index - 2;
+                    const r = moveCount({
+                        durations: d,
+                        index,
+                        toTime: countTimes(d)[index] + by,
+                        respaceFrom: from,
+                    });
+                    for (let i = 0; i < from; i++)
+                        expect(r.durations[i]).toBe(d[i]);
+                },
+            ),
+        );
+    });
+});
+
+describe("holdCount absorbUntil", () => {
+    it("absorbs the hold up to absorbUntil when it comes before the next synced count", () => {
+        const d = steady(16);
+        const r = holdCount({
+            durations: d,
+            index: 3,
+            newDuration: 1,
+            absorbUntil: 9,
+        });
+        expect(r.effect.heldFrom).toBe(9);
+        expectClose(r.durations.slice(9), d.slice(9));
+        expect(countTimes(r.durations)[9]).toBeCloseTo(4, 9);
+    });
+    it("falls back to the next synced count when absorbUntil leaves no room", () => {
+        const d = steady(16);
+        expect(
+            holdCount({
+                durations: d,
+                index: 3,
+                newDuration: 1,
+                absorbUntil: 4,
+                synced: [12],
+            }).effect.heldFrom,
+        ).toBe(12);
+        expect(
+            holdCount({
+                durations: d,
+                index: 3,
+                newDuration: 1,
+                absorbUntil: 9,
+                after: "shift",
+            }).effect.heldFrom,
+        ).toBeNull();
+    });
+});
+
 describe("holdCount", () => {
     it("shifts later counts with nothing synced", () => {
         const r = holdCount({ durations: steady(6), index: 3, newDuration: 2 });

@@ -498,6 +498,7 @@ export default function NewShowDialog({
                     <TempoStep
                         tempo={wizardState.tempo}
                         onChange={handleTempoChange}
+                        hasAudio={wizardState.audio?.method === "audio"}
                     />
                 );
             default:

@@ -186,6 +186,7 @@ describe("Tempo lab flags", () => {
     it("are all off by default", () => {
         expect(defaultSettings.tempoLab).toEqual({
             alignView: false,
+            alignDragScope: "page",
             tapTheBeat: false,
             punchInTap: false,
             tapApply: "stop",

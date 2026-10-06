@@ -422,7 +422,7 @@ export const TimelineShell = ({
                 ref={viewportRef}
                 data-testid="timeline-viewport"
                 // The scrollbar's track is always there, so zooming never changes the height
-                className="min-w-0 overflow-x-scroll overflow-y-hidden"
+                className="group/timeline min-w-0 overflow-x-scroll overflow-y-hidden"
             >
                 {children}
             </div>
@@ -620,6 +620,30 @@ const useRulerScrub = (
  * measure numbers under it, so the box and the weight tell them apart. Hidden when the box is too
  * narrow to read it, when zoomed far out (UI-12).
  */
+/** About how wide one character of the ruler's 11px mono labels is, with padding per box */
+const RULER_CHAR_PX = 7;
+const RULER_BOX_PADDING_PX = 16;
+
+/**
+ * What a page box in the ruler has room for: its name, and its note (" · 120") only when both
+ * fit on one line. A note that wrapped dropped onto the Align view's time line (FB-11).
+ */
+export function pageBoxLabelFits(
+    label: string,
+    width: number,
+    note?: string | null,
+): { label: boolean; note: boolean } {
+    const fitsLabel = width >= label.length * RULER_CHAR_PX + 10;
+    const fitsNote =
+        fitsLabel &&
+        !!note &&
+        width >= ALIGN_NOTE_MIN_PX &&
+        width >=
+            (label.length + 3 + note.length) * RULER_CHAR_PX +
+                RULER_BOX_PADDING_PX;
+    return { label: fitsLabel, note: fitsNote };
+}
+
 const PageBoxLabel = ({
     label,
     width,
@@ -629,11 +653,12 @@ const PageBoxLabel = ({
     width: number;
     /** A dim note after the name, such as the Align view's tempo ("5 · 120"), when there's room */
     note?: string | null;
-}) =>
-    width >= label.length * 7 + 10 ? (
-        <span className="sticky right-8 font-semibold">
+}) => {
+    const fits = pageBoxLabelFits(label, width, note);
+    return fits.label ? (
+        <span className="sticky right-8 font-semibold whitespace-nowrap">
             {label}
-            {note && width >= ALIGN_NOTE_MIN_PX && (
+            {fits.note && (
                 <span
                     data-testid="timeline-page-note"
                     className="text-text-subtitle font-normal"
@@ -643,6 +668,7 @@ const PageBoxLabel = ({
             )}
         </span>
     ) : null;
+};
 
 /** How wide a page box must be to show its note (11-ui.md A: the BPM at 56px) */
 const ALIGN_NOTE_MIN_PX = 56;

@@ -12,6 +12,7 @@ import {
     spanLimits,
     spanOf,
     type CountDurations,
+    type CountRange,
     type SyncedCounts,
 } from "./retime";
 import type { TapTempo } from "./tapTempo";
@@ -309,4 +310,118 @@ export function addTap(taps: readonly number[], time: number): number[] {
     if (last === undefined || time < last || time - last > TAP_RUN_GAP_SECONDS)
         return [time];
     return [...taps, time];
+}
+
+/**
+ * The synced counts after applying a tap plan (docs/tempo/decisions.md FB-1): the ones it moved
+ * off the music are dropped, and the counts the taps put on the music join them: the first and
+ * last tapped counts, and from here, the playhead's count too (it stays put), so a later Align
+ * drag can't re-tempo the counts before it. Count 1 is always synced and isn't listed. Ascending.
+ */
+export function syncedAfterTaps(
+    previous: readonly number[],
+    plan: TapTheBeatPlan,
+    countCount: number,
+): number[] {
+    const moved = new Set(plan.unsynced);
+    const out = new Set(previous.filter((s) => !moved.has(s)));
+    const add = (index: number) => {
+        if (Number.isInteger(index) && index > 1 && index < countCount)
+            out.add(index);
+    };
+    add(plan.fromCount);
+    add(plan.tapped.from);
+    add(plan.tapped.to);
+    return [...out].sort((a, b) => a - b);
+}
+
+/** Tapped tempos outside this range per minute are likelier the wrong pulse than the music's */
+export const PLAUSIBLE_TAP_BPM = { min: 60, max: 200 } as const;
+
+/**
+ * Whether a tapped tempo looks like the wrong pulse: `fast` above ~200 per minute (twice per
+ * count?), `slow` below ~60 (every other count?), else null.
+ */
+export function tapPlausibility(bpm: number): "fast" | "slow" | null {
+    if (!(bpm > 0)) return null;
+    if (bpm > PLAUSIBLE_TAP_BPM.max) return "fast";
+    if (bpm < PLAUSIBLE_TAP_BPM.min) return "slow";
+    return null;
+}
+
+/** The fractional count index at `time` on counts starting at `times` (as `countTimes` gives). */
+export function countAtTime(times: readonly number[], time: number): number {
+    const n = times.length - 1;
+    if (n < 1) return 0;
+    if (time <= times[1]!) return 1;
+    if (time >= times[n]!) return n;
+    let lo = 1;
+    let hi = n - 1;
+    while (lo < hi) {
+        const mid = (lo + hi + 1) >>> 1;
+        if (times[mid]! <= time) lo = mid;
+        else hi = mid - 1;
+    }
+    const length = times[lo + 1]! - times[lo]!;
+    return length > 0 ? lo + (time - times[lo]!) / length : lo;
+}
+
+/**
+ * Where a tap plan would put the counts it changes, drawn over the timing as it is: for each count
+ * from `plan.fromCount` up to where nothing moves (`heldFrom`, else the end), the fractional count
+ * index of the current timing at the moment of the music it would land on. A count that moves
+ * later reads as a larger index. `changed` is that range, for the flash after applying.
+ */
+export function tapGhostCounts(
+    before: CountDurations,
+    plan: TapTheBeatPlan,
+): { counts: { index: number; at: number }[]; changed: CountRange } {
+    const n = before.length;
+    const oldTimes = countTimes(before);
+    const newTimes = countTimes(plan.durations);
+    const to = Math.min(plan.heldFrom ?? n, n);
+    const counts: { index: number; at: number }[] = [];
+    for (let i = Math.max(1, plan.fromCount); i <= to; i++)
+        counts.push({
+            index: i,
+            // Show time t after applying is t + originShift before it
+            at: countAtTime(oldTimes, newTimes[i]! + plan.originShift),
+        });
+    return { counts, changed: { from: plan.fromCount, to } };
+}
+
+/**
+ * When the plan's counts would land, in the current show time, from `fromTime` on, for clicks
+ * that preview the plan before it's applied.
+ */
+export function tapPlanClickTimes(
+    plan: TapTheBeatPlan,
+    fromTime: number,
+): number[] {
+    const times = countTimes(plan.durations);
+    const out: number[] = [];
+    for (let i = 1; i < times.length; i++) {
+        const t = times[i]! + plan.originShift;
+        if (t >= fromTime - 1e-9) out.push(t);
+    }
+    return out;
+}
+
+/** Counts past the last synced count before Tap the beat suggests tapping again from here */
+export const TAP_AGAIN_COUNTS = 32;
+
+/**
+ * Whether to suggest "Tap again from here": the show has been lined up somewhere (synced counts),
+ * and the playhead is at least `TAP_AGAIN_COUNTS` counts past the last synced count before it
+ * (count 1 counts), so tapping there would line up music nobody has checked.
+ */
+export function suggestTapAgain(
+    playheadCount: number,
+    synced: readonly number[],
+): boolean {
+    if (synced.length === 0 || playheadCount <= 1) return false;
+    let previous = 1;
+    for (const s of synced)
+        if (s <= playheadCount && s > previous) previous = s;
+    return playheadCount - previous >= TAP_AGAIN_COUNTS;
 }
