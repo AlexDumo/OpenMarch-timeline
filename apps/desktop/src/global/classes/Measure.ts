@@ -1,3 +1,4 @@
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { withTimelinePageRipple } from "@/db-functions/timelineRipple";
 import Beat, { beatsDuration, compareBeats, tempBeat } from "./Beat";
 import { db, schema } from "../database/db";
@@ -9,7 +10,6 @@ import {
 } from "@/hooks/queries";
 import { queryClient } from "@/App";
 import { useMutation } from "@tanstack/react-query";
-import { conToastError } from "@/utilities/utils";
 import tolgee from "../singletons/Tolgee";
 import { toast } from "sonner";
 import { deleteMeasuresInTransaction } from "@/db-functions/measures";
@@ -154,8 +154,8 @@ export const useCascadeDeleteMeasures = () => {
             void queryClient.invalidateQueries({ queryKey: pageKeys.all() });
             void queryClient.invalidateQueries({ queryKey: measureKeys.all() });
         },
-        onError: () => {
-            conToastError(tolgee.t("tempoGroup.deleteFailed"));
+        onError: (error) => {
+            toastTimelineError(error, tolgee.t("tempoGroup.deleteFailed"));
             return;
         },
     });

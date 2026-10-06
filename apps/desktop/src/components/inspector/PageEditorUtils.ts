@@ -1,3 +1,4 @@
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { withTimelinePageRipple } from "@/db-functions/timelineRipple";
 import {
     transactionWithHistory,
@@ -12,7 +13,6 @@ import {
     allDatabaseMeasuresQueryOptions,
     allDatabaseBeatsQueryOptions,
 } from "@/hooks/queries";
-import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import { splitPage } from "@/global/classes/Page";
 import Page from "@/global/classes/Page";
@@ -85,7 +85,7 @@ const useSplitPageMutation = <TArgs>(
             });
         },
         onError: (error) => {
-            conToastError(tolgee.t(errorKey), error);
+            toastTimelineError(error, tolgee.t(errorKey));
         },
     });
 };
