@@ -29,6 +29,7 @@ import {
     formatBpm,
     formatMeter,
     formatTempo,
+    isNoOpWrite,
     markText,
     meterText,
     parseMeterCell,
@@ -202,6 +203,24 @@ export function TempoMapTable({
             if (!result.ok) {
                 setMessage({ text: EDIT_ERRORS[result.error], tone: "error" });
                 return false;
+            }
+            // An edit that changes nothing writes nothing, so it never takes an undo step (DE-4)
+            const synced = new Set(map.syncedBeatIds);
+            if (
+                isNoOpWrite({
+                    write: result.write,
+                    durations: map.state.durations,
+                    marks: map.state.marks,
+                    synced: map.beatIds.flatMap((id, i) =>
+                        synced.has(id) ? [i] : [],
+                    ),
+                })
+            ) {
+                setMessage({
+                    text: `${typeof done === "string" ? done : done(result)} (already so: nothing changed)`,
+                    tone: "info",
+                });
+                return true;
             }
             try {
                 await retime.mutateAsync(

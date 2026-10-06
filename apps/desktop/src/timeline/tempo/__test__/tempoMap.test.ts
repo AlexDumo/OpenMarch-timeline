@@ -10,6 +10,7 @@ import {
     findMeasure,
     formatUnitTempo,
     inferMeter,
+    isNoOpWrite,
     markText,
     marksByMeasure,
     meterText,
@@ -742,5 +743,75 @@ describe("tempos in their units for Align and the readout (FX-7)", () => {
         });
         const units = countUnits(rows, d.length);
         expect(formatUnitTempo(unitTempo(d, units, 1, 5)!)).toBe("♩=176");
+    });
+});
+
+describe("an edit that changes nothing writes nothing (DE-4)", () => {
+    it("Marcus: ♩.=86, then 86, then 6/8 on the same row: only the first is an edit", () => {
+        // m1–2 of 2/4 at ♩=88 (an imported 6/8 shown as 2/4)
+        const measures = measuresOf([2, 2]);
+        let d = [0, ...Array<number>(4).fill(60 / 88)];
+        let marks = new Map<number, TempoMapMark>();
+        let synced: number[] = [];
+        const apply = (w: ReturnType<typeof ok>) => {
+            d = w.durations;
+            marks = w.marks;
+            synced = [...new Set([...synced, ...w.sync])].sort((a, b) => a - b);
+        };
+        const noOp = (w: ReturnType<typeof ok>) =>
+            isNoOpWrite({ write: w, durations: d, marks, synced });
+
+        const first = ok(
+            editRowTempo(state(d, measures, marks), 0, {
+                kind: "tempo",
+                bpm: 86,
+                unit: "dq",
+            }),
+        );
+        expect(noOp(first)).toBe(false);
+        apply(first);
+        const again = ok(
+            editRowTempo(state(d, measures, marks), 0, {
+                kind: "tempo",
+                bpm: 86,
+                unit: null,
+            }),
+        );
+        expect(noOp(again)).toBe(true);
+        const sameMeter = ok(
+            editRowMeter(state(d, measures, marks), 0, meter("6/8")),
+        );
+        expect(noOp(sameMeter)).toBe(true);
+        // A real change still is one
+        const faster = ok(
+            editRowTempo(state(d, measures, marks), 0, {
+                kind: "tempo",
+                bpm: 90,
+                unit: null,
+            }),
+        );
+        expect(noOp(faster)).toBe(false);
+    });
+
+    it("adding a synced count or a mark is a change", () => {
+        const measures = measuresOf([4, 4]);
+        const d = [0, ...Array<number>(8).fill(0.5)];
+        const w = ok(addRowAt(state(d, measures), 1));
+        expect(
+            isNoOpWrite({
+                write: w,
+                durations: d,
+                marks: new Map(),
+                synced: [],
+            }),
+        ).toBe(false);
+        expect(
+            isNoOpWrite({
+                write: w,
+                durations: d,
+                marks: w.marks,
+                synced: [5],
+            }),
+        ).toBe(true);
     });
 });

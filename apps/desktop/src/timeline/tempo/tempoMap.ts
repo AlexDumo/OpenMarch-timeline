@@ -739,6 +739,36 @@ export function retimeArgsOf({
 }
 
 /**
+ * Whether a map edit changes nothing: the same count lengths, the same marks (as the file stores
+ * them) and no synced count added or taken out. Such an edit writes nothing, so it never takes an
+ * undo step (DE-4: Marcus's "86" after ♩.=86 and "6/8" after that used up two Ctrl+Z).
+ */
+export function isNoOpWrite({
+    write,
+    durations,
+    marks,
+    synced,
+}: {
+    write: TempoMapWrite;
+    durations: readonly number[];
+    marks: TempoMapMarks;
+    /** Synced count indexes before the edit */
+    synced: readonly number[];
+}): boolean {
+    if (write.durations.length !== durations.length) return false;
+    if (write.durations.some((d, i) => d !== durations[i])) return false;
+    const before = new Set(synced);
+    if (write.sync.some((c) => !before.has(c))) return false;
+    if (write.unsync.some((c) => before.has(c))) return false;
+    // Stored by measure index itself, so two sets of marks compare as the file would hold them
+    const last = Math.max(-1, ...write.marks.keys(), ...marks.keys());
+    const byIndex = Array.from({ length: last + 1 }, (_, i) => i);
+    const asStored = (m: TempoMapMarks) =>
+        JSON.stringify(storedMarks(m, byIndex));
+    return asStored(write.marks) === asStored(marks);
+}
+
+/**
  * The meter cell's text: the score's own signature when it is counted differently ("3/2"), and a
  * short marked measure as a pickup ("4/4 pickup").
  */
