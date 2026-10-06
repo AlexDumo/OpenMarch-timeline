@@ -313,6 +313,41 @@ describeDbTests("tempo write path", (it) => {
             expect((await counts(db)).durations[9]).toBe(60 / 152.5);
             await roundTrip(db, before, await snapshot(db));
         });
+
+        it("adds no undo entry for the same marks, synced counts and durations again (DE-4)", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            void marchersAndPages;
+            await setUp(db);
+            const show = await counts(db);
+            const write = (unit: "dq" | "q") =>
+                retimeBeats({
+                    db,
+                    newDurationsByBeatId: durationsByBeatId(
+                        show.beatIds,
+                        show.durations,
+                    ),
+                    syncedBeatIds: [9],
+                    tempoMapMarks: [
+                        {
+                            beatId: 9,
+                            meter: { top: 6, bottom: 8, groups: [3, 3] },
+                            unit,
+                            bpm: 86,
+                            source: "typed",
+                        },
+                    ],
+                });
+            await write("dq");
+            const length = await undoEntries(db);
+            // Marcus: "86" then "6/8" on a row already at 6/8 ♩.=86
+            await write("dq");
+            await write("dq");
+            expect(await undoEntries(db)).toBe(length);
+            await write("q");
+            expect(await undoEntries(db)).toBe(length + 1);
+        });
     });
 
     testWithHistory(

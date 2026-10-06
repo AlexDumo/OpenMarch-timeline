@@ -1472,6 +1472,7 @@
                 "question": "This changes {tempo} you typed for {measures}. Afterwards the tempo map shows it as ≈. Override it?"
             },
             "synced": "Synced to the music",
+            "typedEdge": "Holds still: a tempo starts here in the tempo map (●, typed or from the score). Not lined up with the music until you drag it.",
             "syncedToast": "{place} is now synced to the music: later fixes won't move it. Right-click its flag to unsync.",
             "tempoItem": "Tempo… ({bpm})",
             "tempoPrompt": "Page {page} tempo (BPM)",

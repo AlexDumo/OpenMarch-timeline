@@ -1417,6 +1417,7 @@ function TimelineSurface({
                                 onSetSynced={align.onSetSynced}
                                 onFlagClick={punch?.retarget}
                                 audioOffsetSeconds={align.audioOffsetSeconds}
+                                typedEdges={align.tempoMap?.edges}
                                 formatTime={(seconds) =>
                                     formatShowTime(seconds, true)
                                 }

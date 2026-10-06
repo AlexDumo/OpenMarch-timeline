@@ -6,13 +6,15 @@ import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSetti
 import { useTempoSyncedBeatIds } from "@/hooks/queries/useTempo";
 import {
     deriveTempoMap,
+    linedUpCounts,
     marksByMeasure,
     type TempoMapMeasure,
 } from "@/timeline/tempo";
 
 /**
  * The show's counts, measures and tempo map marks as the tempo map takes them, with the derived
- * rows. Shared by the tempo map panel and the Align view (units in its labels, typed sections).
+ * rows. Shared by the tempo map panel and the Align view (units in its labels, typed sections),
+ * and by Tap the beat (which synced counts are really lined up with the music).
  */
 export function useTempoMapState() {
     const { beats, measures } = useTimingObjects()!;
@@ -45,10 +47,17 @@ export function useTempoMapState() {
             measures: mapMeasures,
             marks,
         });
+        const synced = new Set(syncedBeatIds);
+        // Synced counts that aren't a ● row's edge: lined up with the recording (DE-6)
+        const linedUpBeatIds = linedUpCounts(
+            beatIds.flatMap((id, i) => (synced.has(id) ? [i] : [])),
+            rows,
+        ).map((i) => beatIds[i]!);
         return {
             beatIds,
             measureStartBeatIds,
             syncedBeatIds,
+            linedUpBeatIds,
             state: { durations, measures: mapMeasures, marks, rows },
         };
     }, [beats, measures, settings?.tempoMapMarks, syncedBeatIds]);

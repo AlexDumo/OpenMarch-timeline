@@ -726,6 +726,7 @@ export function TimelineAlignFlags({
     onFlagClick,
     formatTime,
     audioOffsetSeconds = 0,
+    typedEdges = [],
 }: {
     flags: readonly AlignFlag[];
     axis: TimelineXAxis;
@@ -739,6 +740,8 @@ export function TimelineAlignFlags({
     formatTime: (seconds: number) => string;
     /** Where the music starts against count 1, for count 1's label */
     audioOffsetSeconds?: number;
+    /** Counts synced because a ● tempo map row starts or ends there, not lined up (DE-6) */
+    typedEdges?: readonly number[];
 }) {
     const t = alignT;
     const [menu, setMenu] = useState<{
@@ -754,6 +757,11 @@ export function TimelineAlignFlags({
                 const view = flag.index - offset;
                 const x = axis.x(view);
                 const isSynced = flag.index <= 1 || syncedSet.has(flag.index);
+                // A ● row's edge holds still like a synced count, but nobody lined it up
+                const syncedText =
+                    flag.index > 1 && typedEdges.includes(flag.index)
+                        ? t("tempo.align.typedEdge")
+                        : t("tempo.align.synced");
                 const active = preview?.index === flag.index;
                 const time = formatTime(axis.toUnit(view));
                 const label = flag.page
@@ -773,11 +781,9 @@ export function TimelineAlignFlags({
                         data-count={flag.index}
                         data-synced={isSynced || undefined}
                         aria-label={
-                            isSynced
-                                ? joinSentences(label, t("tempo.align.synced"))
-                                : label
+                            isSynced ? joinSentences(label, syncedText) : label
                         }
-                        title={`${label}${isSynced ? `\n${t("tempo.align.synced")}` : ""}`}
+                        title={`${label}${isSynced ? `\n${syncedText}` : ""}`}
                         {...dragProps("move", flag.index, undefined)}
                         onPointerDownCapture={(event) => {
                             pressX.current = event.clientX;

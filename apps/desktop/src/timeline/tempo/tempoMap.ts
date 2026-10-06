@@ -91,6 +91,11 @@ export interface TempoMapRow {
     readonly meter: Meter;
     /** The meter was read from count lengths, not typed. */
     readonly meterInferred: boolean;
+    /**
+     * A meter read from the counts that isn't plain n/4: compound (6/8 from ♩.=♩) or a pickup
+     * (DE-5). The map shows it with "?" and a one-click confirm.
+     */
+    readonly meterGuess?: MeterGuess;
     readonly unit: BeatUnit;
     readonly shape: TempoMapShape;
     /** Tempo of the first and last count, in beats of `unit` per minute. */
@@ -153,6 +158,8 @@ interface MeasureProfile {
     /** Fewer counts than the meter: a pickup, counted as the meter's last counts */
     readonly partial: boolean;
     readonly inferred: boolean;
+    /** How a meter read from the counts differs from plain n/4 (DE-5), if it does */
+    readonly guess?: MeterGuess;
     readonly unit: BeatUnit;
     readonly marked: boolean;
     readonly from: number;
@@ -177,6 +184,70 @@ const isSteady = (bpms: readonly number[]) =>
         (b) => Number.isFinite(b) && close(b, bpms[0], STEADY_TOLERANCE),
     );
 
+/** How a meter read from the counts differs from plain n/4 (DE-5). */
+export type MeterGuess = "compound" | "pickup";
+
+/** Relative difference under which a count is read as 1.5× (or ⅔ of) another (DE-5). */
+const COMPOUND_TOLERANCE = 1e-3;
+
+/** Whether every count in `own` has the same length. */
+const evenCounts = (own: readonly number[]) =>
+    own.length > 0 &&
+    own.every((d) => d > 0 && close(d, own[0], STEADY_TOLERANCE));
+
+/**
+ * The meter a measure without a typed or imported meter is read as (DE-5): `inferMeter`, unless
+ *
+ * - `compound`: its counts are even and each lasts 1.5× the plain ♩ count before it (a ♩.=♩
+ *   change, as an imported 6/8 or 12/8 after 4/4 is timed), or it follows such a measure with as
+ *   many counts and doesn't go back (⅔ of its count): n counts of ♩., so 2 is 6/8 and 4 is 12/8;
+ * - `pickup`: it is the show's first measure, it has one count and the next measure has more: the
+ *   last count of the next measure's meter.
+ *
+ * Inferring only names the counts; it never changes when any count lands.
+ */
+function guessMeter({
+    index,
+    own,
+    previous,
+    previousLength,
+    next,
+}: {
+    index: number;
+    own: readonly number[];
+    previous: MeasureProfile | undefined;
+    /** The length of the previous measure's last count, in seconds */
+    previousLength: number | undefined;
+    /** The next measure's meter, as typed or read from its counts */
+    next: Meter | undefined;
+}): { meter: Meter; guess?: MeterGuess } {
+    const plain = inferMeter(own);
+    if (index === 0 && own.length === 1 && next && meterCounts(next) > 1)
+        return { meter: next, guess: "pickup" };
+    if (
+        plain.groups !== null ||
+        !evenCounts(own) ||
+        !previous ||
+        !(previousLength && previousLength > 0)
+    )
+        return { meter: plain };
+    const lastLength = previousLength;
+    const compound = meterFromWeights(Array<number>(own.length).fill(6));
+    if (
+        previous.guess === "compound" &&
+        previous.to - previous.from === own.length &&
+        !close(own[0], (lastLength * 2) / 3, COMPOUND_TOLERANCE)
+    )
+        return { meter: compound, guess: "compound" };
+    if (
+        previous.unit === "q" &&
+        !previous.partial &&
+        close(own[0], lastLength * 1.5, COMPOUND_TOLERANCE)
+    )
+        return { meter: compound, guess: "compound" };
+    return { meter: plain };
+}
+
 function profiles(
     durations: readonly number[],
     measures: readonly TempoMapMeasure[],
@@ -185,6 +256,11 @@ function profiles(
     const out: MeasureProfile[] = [];
     // A mark's meter and unit carry on through the measures after it that have as many counts
     let carried: TempoMapMark = {};
+    const countsOf = (m: TempoMapMeasure) =>
+        durations.slice(
+            Math.max(m.firstCount, 1),
+            Math.min(m.firstCount + m.counts, durations.length),
+        );
     measures.forEach((m, i) => {
         const from = Math.max(m.firstCount, 1);
         const to = Math.min(m.firstCount + m.counts, durations.length);
@@ -192,21 +268,40 @@ function profiles(
         const mark = marks.get(i);
         if (mark) carried = { ...mark };
         const inferred = inferMeter(own);
-        // The marked measure itself may be short (a pickup): it is the meter's last counts
-        const partial =
-            mark?.meter !== undefined &&
-            own.length > 0 &&
-            own.length < meterCounts(mark.meter);
         // A mark stops at a measure with another number of counts or another grouping
         if (
-            !partial &&
+            !(
+                mark?.meter !== undefined &&
+                own.length > 0 &&
+                own.length < meterCounts(mark.meter)
+            ) &&
             carried.meter &&
             (meterCounts(carried.meter) !== own.length ||
                 (inferred.groups !== null &&
                     !sameShape(inferred, carried.meter)))
         )
             carried = {};
-        const meter = carried.meter ?? inferred;
+        const nextMeasure = measures[i + 1];
+        const guessed = carried.meter
+            ? null
+            : guessMeter({
+                  index: i,
+                  own,
+                  previous: out[out.length - 1],
+                  previousLength:
+                      i > 0 && from > 1 ? durations[from - 1] : undefined,
+                  next:
+                      i === 0 && nextMeasure
+                          ? (marks.get(1)?.meter ??
+                            inferMeter(countsOf(nextMeasure)))
+                          : undefined,
+              });
+        const meter = carried.meter ?? guessed!.meter;
+        // The marked measure itself may be short (a pickup): it is the meter's last counts
+        const partial =
+            own.length > 0 &&
+            own.length < meterCounts(meter) &&
+            (mark?.meter !== undefined || guessed?.guess === "pickup");
         const unit = carried.unit ?? defaultUnit(meter);
         const weights = partial
             ? unitWeights(meter, unit).slice(-own.length)
@@ -218,6 +313,7 @@ function profiles(
             label: carried.meter ? carried.label : undefined,
             partial,
             inferred: carried.meter === undefined,
+            ...(guessed?.guess ? { guess: guessed.guess } : {}),
             unit,
             marked: mark !== undefined,
             from,
@@ -308,6 +404,7 @@ export function deriveTempoMap({
             to,
             meter: first.meter,
             meterInferred: first.inferred,
+            ...(first.guess ? { meterGuess: first.guess } : {}),
             unit: first.unit,
             shape,
             startBpm,
@@ -836,6 +933,33 @@ export const typedSections = (rows: readonly TempoMapRow[]): TypedSection[] =>
                     : formatTempo(r.unit, r.startBpm, true),
             measures: rowMeasures(r),
         }));
+
+/**
+ * The counts a ● row put among the synced counts (its first count and the count after its last,
+ * TM-3): typed or read from the score, never lined up with a recording (DE-6).
+ */
+export function typedEdgeCounts(rows: readonly TempoMapRow[]): Set<number> {
+    const out = new Set<number>();
+    for (const r of rows)
+        if (r.typed) {
+            out.add(r.from);
+            out.add(r.to);
+        }
+    return out;
+}
+
+/**
+ * The synced counts that say the show is lined up with the recording: those a ● row's edge
+ * didn't put there (DE-6). A count synced in Align that happens to sit on a ● edge isn't told
+ * apart; it reads as typed.
+ */
+export const linedUpCounts = (
+    synced: readonly number[],
+    rows: readonly TempoMapRow[],
+): number[] => {
+    const edges = typedEdgeCounts(rows);
+    return synced.filter((c) => !edges.has(c));
+};
 
 /** The typed sections whose counts an edit gives other lengths (FX-5). */
 export function overriddenSections(

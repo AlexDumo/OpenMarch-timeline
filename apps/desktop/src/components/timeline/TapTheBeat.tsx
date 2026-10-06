@@ -163,11 +163,13 @@ export function useLineUpStripVisible(): boolean {
     const { data: settings } = useQuery(workspaceSettingsQueryOptions(enabled));
     const open = useTapTheBeatStore((s) => s.open);
     const align = useAlignShowing();
+    // A typed tempo map's ● edges are synced, but nothing lined them up with the music (DE-6)
+    const linedUp = useTempoMapState().linedUpBeatIds.length;
     if (!settings || open || align) return false;
     return showLineUpStrip({
         enabled,
         hasAudio,
-        syncedCount: settings.tempoSyncedBeatIds?.length ?? 0,
+        syncedCount: linedUp,
         dismissed: settings.tempoLineUpDismissed ?? false,
         audioOffsetSeconds: settings.audioOffsetSeconds,
     });
@@ -231,15 +233,15 @@ export function TapTheBeatLaneButton() {
     const { beats } = useTimingObjects()!;
     const { isPlaying } = useIsPlaying()!;
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
-    const { data: settings } = useQuery(workspaceSettingsQueryOptions(enabled));
     const { t } = useTolgee();
+    const { linedUpBeatIds } = useTempoMapState();
     const synced = useMemo(
         () =>
             syncedOrdinals(
                 beats.map((b) => b.id),
-                settings?.tempoSyncedBeatIds ?? [],
+                linedUpBeatIds,
             ),
-        [beats, settings?.tempoSyncedBeatIds],
+        [beats, linedUpBeatIds],
     );
     if (!enabled || !hasAudio || open || stripVisible) return null;
     const again = !isPlaying && suggestTapAgain(playheadBeat, synced);

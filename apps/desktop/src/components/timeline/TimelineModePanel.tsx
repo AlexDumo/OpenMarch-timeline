@@ -43,7 +43,7 @@ import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import { TempoMapMenu } from "./TempoMapPanel";
 import { useTempoMapState } from "./useTempoMapState";
-import { countUnits, typedSections } from "@/timeline/tempo";
+import { countUnits, typedEdgeCounts, typedSections } from "@/timeline/tempo";
 import {
     TimelineCompactButton,
     TimelinePreviewButtons,
@@ -435,6 +435,7 @@ function useTimelineAlign({
         () => ({
             units: countUnits(map.state.rows, map.state.durations.length),
             sections: typedSections(map.state.rows),
+            edges: [...typedEdgeCounts(map.state.rows)],
         }),
         [map],
     );
