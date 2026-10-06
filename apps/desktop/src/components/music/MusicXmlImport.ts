@@ -17,7 +17,8 @@ import {
 } from "@/db-functions";
 import { updatePagesInTransaction } from "@/db-functions";
 import { db } from "@/global/database/db";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { workspaceSettingsKeys } from "@/hooks/queries/useWorkspaceSettings";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     Measure as ParserMeasure,
@@ -284,9 +285,14 @@ const useMusicXmlMutation = <TArgs>(
     successKey?: string,
 ) => {
     const { fetchTimingObjects } = useTimingObjects();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn,
         onSuccess: async () => {
+            // The import also writes the measure-number offset, which lives in workspace settings
+            await queryClient.invalidateQueries({
+                queryKey: workspaceSettingsKeys.all(),
+            });
             // This happens twice to bypass the errors. There's likely a better solution
             await fetchTimingObjects();
             await fetchTimingObjects();

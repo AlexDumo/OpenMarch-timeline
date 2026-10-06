@@ -224,7 +224,8 @@ export class OverlayTimeline {
                 : null,
             setName: page.name,
             count: line?.count ?? 0,
-            totalCounts: line ? Math.max(page.counts, page.beats.length) : 0,
+            // The count lines stop at the page's beats, so the total does too
+            totalCounts: line ? page.beats.length : 0,
             measureNumber: inMeasure && measure ? measure.number : null,
             rehearsalMark,
             tempoBpm,
@@ -309,9 +310,7 @@ export function computeFormatBounds(
 ): OverlayFormatBounds {
     const countDigits = Math.max(
         1,
-        ...pages.map(
-            (page) => String(Math.max(page.counts, page.beats.length)).length,
-        ),
+        ...pages.map((page) => String(page.beats.length).length),
     );
     const measureDigits =
         measures.length > 0

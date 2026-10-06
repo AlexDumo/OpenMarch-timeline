@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@openmarch/ui";
 import { T, useTolgee } from "@tolgee/react";
@@ -23,6 +24,7 @@ export default function MusicXmlSelector() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { t } = useTolgee();
     const { measures, pages: allPages, beats: allBeats } = useTimingObjects();
+    const queryClient = useQueryClient();
     const [pending, setPending] = useState<{
         fileName: string;
         report: MusicXmlParseResult;
@@ -78,6 +80,8 @@ export default function MusicXmlSelector() {
         const result = await _dryRunMusicXmlImport({
             data: importData(file.name, report),
         });
+        // Reads that ran while the trial was open may have cached its rolled-back rows
+        await queryClient.invalidateQueries();
         if (previewId.current !== id) return;
         setDryRun(
             result.ok
