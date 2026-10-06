@@ -908,3 +908,96 @@ fixture list and how to score).
 - **Alternatives:** the same gesture in both views (two meanings for one gesture remain); a
   "Move G to…" menu item.
 - **Validate:** V-88.
+
+## FX-1 The tempo map opens in its grid and keeps its keys (expert fixes, E11)
+
+- **Context:** Sam pressed Shift+T and typed; focus was on ✕, so "=prev" started playback and
+  made a rehearsal mark "ev".
+- **Choice:** the map opens with the focus in the grid on the first row's tempo cell (Radix
+  `onOpenAutoFocus`). While anything in the map has the focus, keys stop there (the panel's
+  `onKeyDown` stops propagation) except Ctrl/⌘ shortcuts (undo, save) and Esc, which closes it.
+  A click outside the map gives the keys back to the app.
+- **Alternatives:** a modal map (the timeline couldn't be played while typing); block only the
+  known single-key shortcuts (misses new ones).
+- **Validate:** V-76.
+
+## FX-2 "=prev" and relations carry the pulse (expert fixes, E11; replaces part of TM-6)
+
+- **Context:** after m25 `e=352`, `=prev` on the 6/4 row wrote ♩=352: the number went across
+  units and the show drifted a second.
+- **Choice:** `=prev` takes the previous row's last tempo and converts it into this row's unit
+  (same note length), so `e=352` then `=prev` in ♩ is ♩=176, and 4/4 ♩=152.5 then `=prev` in 12/8
+  is ♩.=101.667. `♩.=♩` already did this. Confirmations show what was written ("m29: ♩=176"), not
+  what was typed.
+- **Alternatives:** keep the count rate (TM-6's old rule; it is what made the bug).
+
+## FX-3 The import writes the tempo map's marks (expert fixes, E3/E12)
+
+- **Context:** the preview read 6/8 ♩.=88, 3/2 in ♩, 7/8 2+2+3 and the pickup, but the map then
+  showed "2/4 ♩=88", "6/4" and "1/4": counts carry no note values (TM-1). Typing the score's own
+  ♩.=86 then played 1.5× too fast.
+- **Choice:** a MusicXML import stores a `tempoMapMarks` entry (source "import") at the first
+  measure, every meter change and every tempo marking: the meter as counted (from the parser's
+  count lengths), the score's own text as `label` when it counts differently ("3/2" counted in ♩,
+  "3/4+3/8"), and the marking's unit and tempo (from the quarter tempo the counts use). A marked
+  measure shorter than its meter is a pickup ("4/4 pickup, 1 count"), counted as the meter's last
+  counts. A re-import gives paired bars the file's marks, drops import marks the file no longer
+  has, and keeps typed rows when the show keeps its timing. Separately, a dotted unit typed over
+  counts read as plain quarters (no meter typed or imported) makes them compound: ♩.=86 over "2/4"
+  is 6/8 ♩.=86. Sibelius' ♩. = ♩ is an "info" note ("read as ♩.=152.5"), not a warning.
+- **Alternatives:** a meter column on `measures` (migration; the ADR's long-term home); ask
+  "Each count here is a ♩., set ♩.=86?" instead of reinterpreting.
+- **Validate:** V-77.
+
+## FX-4 "=" means written, "≈" anything else (expert fixes, E11)
+
+- **Context:** a drag over typed ♩=176 left "♩=185.035" with "=", the glyph for typed values;
+  after Align, Marcus's map showed fitted tempos as exact.
+- **Choice:** marks store the tempo they were given (`bpm`, `endBpm` for a rit.). A marked row
+  shows "=" while it still plays at that tempo (within 1e-6); once something else changed it, it
+  shows "≈" and its dot turns ○ with "Typed ♩=176; changed since (now ♩≈185)". A row without a
+  stored tempo (older files, rows nobody typed) shows "=" only for a steady tempo with at most two
+  decimals, as E7-4 does for page labels.
+- **Alternatives:** a "Score" and a "Plays" column (Marcus; more surface); "=" only for marks
+  (a show made with the wizard at 120 would read "≈120").
+- **Validate:** V-78.
+
+## FX-5 Typed sections need an Override; count 1 always moves the music start (expert fixes, E7)
+
+- **Context:** an Align drag inside typed ♩=176 re-spaced it silently; nudging count 1 after
+  typing squeezed the typed pickup to 400 BPM because the typed rows' synced edges held the rest.
+- **Choice:** rows typed in the map (source "typed") that still play as typed are protected
+  sections (both edges were already synced, TM-3). A drag, hold or nudge that would give any of
+  their counts another length says so in an amber chip ("Overrides typed ♩=176 (m1–16)") and on
+  release waits for **Override** (Enter) or **Keep typed** (Esc). After an override the row reads
+  "≈" (FX-4) and is no longer protected. Imported rows aren't protected: lining a score up with a
+  live take is what Align is for. Count 1's drag and arrow nudges always shift the whole show
+  (`after: "shift"`, the audio offset changes), whatever is synced. The Music panel's Audio Offset
+  shows milliseconds and says its sign in words ("Music starts 0.500 s before count 1: count 1 is
+  0.500 s into the recording."); count 1's handle label says the same.
+- **Alternatives:** a modifier (Ctrl/⌘ is range drawing, Alt no snapping, Shift no sync: none
+  free); refuse the drag outright; protect imported rows too.
+- **Validate:** V-79, V-80.
+
+## FX-6 Re-import keeps a hand-made rit. and counts only real alignment (expert fixes, E12)
+
+- **Context:** a file's "rit." without a target flattened the show's rit. at m53–54; "lined up
+  with the recording at 2 places" counted typed tempo map rows, even with no audio; the dialog's
+  buttons spilled over the timeline.
+- **Choice:** where the file has a rit. or accel. with no target and the show's bar there is
+  uneven, the show's timing stays for that bar and the uneven paired bars after it (at most four),
+  and the summary says "m53–54: your rit. or accel. stays as it is…". Synced counts that are a
+  typed row's edge don't count as lined up with the recording, and with no audio loaded the
+  question isn't asked (the score's timing is used). The dialog is at most 40rem (or the window)
+  tall; its body scrolls and the buttons stay in the box.
+- **Alternatives:** keep a fixed four bars from the rit.; an unchecked "flatten my rit." line.
+- **Validate:** V-81.
+
+## FX-7 Tempos in the score's note in Align and the readout (expert fixes, E7)
+
+- **Choice:** where the tempo map counts in another note than a plain ♩ (6/8 in ♩., or 5/8 3+2
+  whose long count is 1.5 ♩), page labels, the Align chip and the transport readout show
+  "♩.=88" / "♩.≈85" / "♩=176" from the map's units; plain ♩ shows the number as before ("120",
+  "120 BPM"). A page that runs into another note reads the tempo where it starts, never an average
+  across a meter change.
+- **Validate:** V-77 (open the imported score in Align).
