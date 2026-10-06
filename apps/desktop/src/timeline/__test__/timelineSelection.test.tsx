@@ -212,7 +212,9 @@ describeDbTests("the stored timelines the selection resolves to", (it) => {
             store().selectRange(3, 12);
         });
         expect(selectedStoredTimeline(store())).toBeNull();
-        await waitFor(() => expect(seen.length).toBeGreaterThan(0));
+        // Outside isolation nothing is dimmed, so the hook needn't even re-render; let any
+        // effects run before checking
+        await act(async () => {});
         expect(result.current.selectedMarchers.map((m) => m.id)).toEqual([
             1, 2, 3,
         ]);
