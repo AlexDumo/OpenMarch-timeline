@@ -8,6 +8,7 @@ import {
     useState,
     type MouseEvent,
 } from "react";
+import { flushSync } from "react-dom";
 import { PlusIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
@@ -162,7 +163,9 @@ const useTimelineZoom = ({
                     (viewport.scrollLeft + anchorPx - leadingInset) / current,
             };
             latest.current = { ...latest.current, pixelsPerBeat: bounded };
-            change(bounded);
+            // Drawn now, in this frame, rather than in a later task once the frame has painted
+            // with the old zoom, so the zoom isn't a frame behind the gesture (h-dom H4)
+            flushSync(() => change(bounded));
         },
         [leadingInset, viewportRef],
     );
