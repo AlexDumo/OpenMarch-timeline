@@ -62,6 +62,30 @@ export const withTimelineWriteLock = <T>(
     operation: () => Promise<T>,
 ): Promise<T> => withTransactionWithHistoryLock(operation);
 
+const historyWriteListeners = new Set<() => void>();
+
+/**
+ * Calls `listener` after every committed `transactionWithHistory` write, whatever called it. The
+ * app refreshes its Undo and Redo state from here, so a write made outside a TanStack mutation
+ * (a drill edit dialog, a page-flag grip) still enables Undo. Returns the unsubscribe.
+ */
+export const subscribeHistoryWrites = (listener: () => void): (() => void) => {
+    historyWriteListeners.add(listener);
+    return () => {
+        historyWriteListeners.delete(listener);
+    };
+};
+
+const notifyHistoryWrite = () => {
+    for (const listener of historyWriteListeners) {
+        try {
+            listener();
+        } catch (err) {
+            console.error("History write listener failed:", err);
+        }
+    }
+};
+
 /**
  * Runs a function in a transaction with undo/redo history tracking.
  *
@@ -205,6 +229,7 @@ export const transactionWithHistory = async <T>(
         // Only reached once the transaction has committed
         notifyTimelineBatch(drained);
         if (touchedDisplayTables) bumpTimelineDisplayVersion();
+        notifyHistoryWrite();
         return output;
     }
 

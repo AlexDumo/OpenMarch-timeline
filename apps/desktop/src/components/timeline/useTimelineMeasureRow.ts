@@ -92,6 +92,12 @@ export function useTimelineMeasureRow(
                     beats,
                     laterKeep,
                 }),
+            onMoveMark: (from, to) =>
+                run({
+                    kind: "moveMark",
+                    fromMeasureId: Number(from),
+                    toMeasureId: Number(to),
+                }),
             onBeatsFrom: (measureId, beats, until) =>
                 run({
                     kind: "beatsFrom",

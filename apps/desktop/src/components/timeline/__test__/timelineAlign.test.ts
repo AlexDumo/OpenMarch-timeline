@@ -216,6 +216,38 @@ describe("the chip", () => {
         );
     });
 
+    it("warns when the re-spaced pages have very different tempos", () => {
+        // An opener at 168 and a ballad at 72 before page 2A's flag
+        const mixed = [
+            0,
+            ...Array<number>(8).fill(60 / 168),
+            ...Array<number>(8).fill(60 / 72),
+            ...Array<number>(16).fill(0.5),
+        ];
+        const at = countTimes(mixed)[17]!;
+        const result = moveChip({
+            before: mixed,
+            result: alignMove({
+                durations: mixed,
+                index: 17,
+                toTime: at - 0.4,
+                synced: [],
+            }),
+            index: 17,
+            pages,
+            audioOffsetSeconds: 0,
+            t,
+        });
+        expect(result.amber).toBe(true);
+        expect(result.text).toMatch(
+            /^Pg 1–2 · avg \d+ → \d+ · (since the start · )?includes 168 and 72 BPM sections, all re-spaced alike · /,
+        );
+        // Similar tempos: no warning
+        expect(chip(17, 8.4)).toEqual(
+            expect.objectContaining({ amber: false }),
+        );
+    });
+
     it("turns amber when the drag is limited", () => {
         expect(chip(9, 0.5)).toEqual({
             text: "Pg 1 · 120 → 400 · Pg 2–4 move −2.80 s · can't get faster than 400 BPM",

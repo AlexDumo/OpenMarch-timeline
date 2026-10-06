@@ -105,6 +105,54 @@ describe("timeline views", () => {
         ).not.toBeInTheDocument();
     });
 
+    it("Ctrl+drag that starts on the playhead draws a range instead of scrubbing", () => {
+        const onSelectionChange = vi.fn();
+        const onSeek = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSelectionChange={onSelectionChange}
+                onSeek={onSeek}
+            />,
+        );
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        const playhead = screen.getByTestId("timeline-playhead");
+        expect(surface.contains(playhead)).toBe(true);
+        fireEvent(
+            playhead,
+            new MouseEvent("pointerdown", {
+                bubbles: true,
+                button: 0,
+                clientX: 11 * 16,
+                altKey: true,
+                ctrlKey: true,
+            }),
+        );
+        fireEvent(
+            surface,
+            new MouseEvent("pointermove", {
+                bubbles: true,
+                clientX: 15 * 16,
+                altKey: true,
+            }),
+        );
+        fireEvent(
+            surface,
+            new MouseEvent("pointerup", {
+                bubbles: true,
+                clientX: 15 * 16,
+                altKey: true,
+            }),
+        );
+        expect(onSelectionChange).toHaveBeenCalledWith({
+            kind: "range",
+            range: { startBeatIndex: 11, endBeatIndex: 15 },
+            drawn: true,
+        });
+        expect(onSeek).not.toHaveBeenCalled();
+    });
+
     it("Ctrl+drag draws a range on empty space, and a click seeks (UI-9, UI-12)", () => {
         const onSelectionChange = vi.fn();
         const onSeek = vi.fn();

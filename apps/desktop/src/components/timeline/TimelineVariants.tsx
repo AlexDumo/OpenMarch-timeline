@@ -964,9 +964,11 @@ function TimelineSurface({
     // else a page box or clip under the pointer, else a dragged range the pointer is inside (UI-9
     // Adding marchers, Creating a timeline)
     // Without the measure row's own targets (E8), the measure under the pointer, for count edits
+    // (or the one starting at `atBeat`, a measure number's downbeat)
     const measureRangeAt = (
         event: MouseEvent<HTMLElement>,
         rowHeight: number,
+        atBeat?: number,
     ) => {
         const surface = event.currentTarget.querySelector(
             '[data-testid="timeline-pointer-surface"]',
@@ -974,8 +976,8 @@ function TimelineSurface({
         if (!surface) return null;
         const bounds = surface.getBoundingClientRect();
         const y = event.clientY - bounds.top;
-        if (y < 28 || y > 28 + rowHeight) return null;
-        const beat = axis.beatAt(event.clientX - bounds.left);
+        if (atBeat === undefined && (y < 28 || y > 28 + rowHeight)) return null;
+        const beat = atBeat ?? axis.beatAt(event.clientX - bounds.left);
         const ordered = [...model.measures].sort((a, b) => a.atBeat - b.atBeat);
         const index = ordered.findLastIndex((m) => m.atBeat <= beat);
         if (index < 0) return null;
@@ -987,58 +989,96 @@ function TimelineSurface({
             measure: ordered[index]!.label.replace(/^m/i, "m"),
         };
     };
-    const rangeMenu = useTimelineRangeMenu({
-        menu,
-        extraItems: align ? alignMenuItems : undefined,
-        resolveRange: (event: MouseEvent<HTMLElement>) => {
-            const pointerSurface = event.currentTarget.querySelector(
-                '[data-testid="timeline-pointer-surface"]',
-            );
-            const onRow =
-                measureRow && pointerSurface
-                    ? measureRowTargetAt({
-                          event,
-                          surface: pointerSurface,
-                          model,
-                          axis,
-                          rowTop: 28,
-                          rowHeight: railHeight + 2,
-                      })
-                    : null;
-            if (onRow) {
-                // A measure or its tab also names the measure, so count edits (E10) act on all
-                // of it; a count tick offers no cut
-                const measure =
-                    onRow.target.kind === "count"
-                        ? undefined
-                        : model.measures.find(
-                              (m) => m.atBeat === onRow.range.startBeatIndex,
-                          )?.label;
+    // The drawn range the pointer is inside, if any
+    const drawnRangeAt = (event: MouseEvent<HTMLElement>) => {
+        if (selection?.kind !== "range" || !selectionRange) return null;
+        const surface = event.currentTarget.querySelector(
+            '[data-testid="timeline-pointer-surface"]',
+        );
+        if (!surface) return null;
+        const beat = axis.beatAt(
+            event.clientX - surface.getBoundingClientRect().left,
+        );
+        return beat >= selectionRange.startBeatIndex &&
+            beat <= selectionRange.endBeatIndex
+            ? selectionRange
+            : null;
+    };
+    const measureLabelAt = (beat: number) => {
+        const label = model.measures.find((m) => m.atBeat === beat)?.label;
+        return label?.replace(/^m/i, "m");
+    };
+    const menuTargetAt = (
+        event: MouseEvent<HTMLElement>,
+    ): TimelineMenuTarget | null => {
+        const pointerSurface = event.currentTarget.querySelector(
+            '[data-testid="timeline-pointer-surface"]',
+        );
+        const onRow =
+            measureRow && pointerSurface
+                ? measureRowTargetAt({
+                      event,
+                      surface: pointerSurface,
+                      model,
+                      axis,
+                      rowTop: 28,
+                      rowHeight: railHeight + 2,
+                  })
+                : null;
+        if (onRow) {
+            // A measure, its tab or its number (the count tick on its downbeat) names the
+            // measure, so count edits (E10) act on all of it; another count offers no cut
+            const measure = measureLabelAt(onRow.range.startBeatIndex);
+            if (onRow.target.kind !== "count")
                 return {
                     range: onRow.range,
                     measureRow: onRow.target,
                     measure,
                 };
+            const whole = measure
+                ? measureRangeAt(event, railHeight, onRow.target.beat)
+                : null;
+            return whole
+                ? { ...whole, measureRow: onRow.target }
+                : { range: onRow.range, measureRow: onRow.target };
+        }
+        const marked = markedRangeAt(event.target);
+        if (marked) return marked;
+        // The measure row: the measure under the pointer, for count edits (E10)
+        const measure = props.addSelectedMarchers?.onRemoveCounts
+            ? measureRangeAt(event, railHeight)
+            : null;
+        return measure ?? null;
+    };
+    const rangeMenu = useTimelineRangeMenu({
+        menu,
+        extraItems: align ? alignMenuItems : undefined,
+        resolveRange: (event: MouseEvent<HTMLElement>) => {
+            const target = menuTargetAt(event);
+            // A drawn range under the pointer is the cut whatever else is there: ruler, measure
+            // row, waveform or a clip
+            const cut = drawnRangeAt(event);
+            if (!target) {
+                if (cut) return { range: cut, cut };
+                // Empty space, with count edits on: a menu that can add counts at the playhead
+                // and says how to draw a cut
+                if (!props.addSelectedMarchers?.onRemoveCounts) return null;
+                const surface = event.currentTarget.querySelector(
+                    '[data-testid="timeline-pointer-surface"]',
+                );
+                if (!surface) return null;
+                const beat = Math.floor(
+                    axis.beatAt(
+                        event.clientX - surface.getBoundingClientRect().left,
+                    ),
+                );
+                if (beat < 0 || beat >= model.beatCount) return null;
+                return {
+                    range: { startBeatIndex: beat, endBeatIndex: beat + 1 },
+                    blank: true,
+                };
             }
-            const marked = markedRangeAt(event.target);
-            if (marked) return marked;
-            // The measure row: the measure under the pointer, for count edits (E10)
-            const measure = props.addSelectedMarchers?.onRemoveCounts
-                ? measureRangeAt(event, railHeight)
-                : null;
-            if (measure) return measure;
-            if (selection?.kind !== "range" || !selectionRange) return null;
-            const surface = event.currentTarget.querySelector(
-                '[data-testid="timeline-pointer-surface"]',
-            );
-            if (!surface) return null;
-            const beat = axis.beatAt(
-                event.clientX - surface.getBoundingClientRect().left,
-            );
-            return beat >= selectionRange.startBeatIndex &&
-                beat <= selectionRange.endBeatIndex
-                ? { range: selectionRange }
-                : null;
+            return cut ? { ...target, cut } : target;
         },
     });
 
@@ -1453,6 +1493,7 @@ function TimelineSurface({
                                 : null
                         }
                         onEdit={measureRow ? editing.editMark : undefined}
+                        onMove={showAlign ? undefined : measureRow?.onMoveMark}
                         onRemove={
                             measureRow
                                 ? (measure) =>

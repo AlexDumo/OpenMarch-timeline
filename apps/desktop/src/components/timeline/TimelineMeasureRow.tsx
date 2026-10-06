@@ -72,6 +72,11 @@ export interface TimelineMeasureRowCommands {
         beats: number,
         until: "mark" | "end",
     ) => void;
+    /**
+     * Moves a measure's rehearsal mark to another measure that has none (a tab dragged along the
+     * measure row in the Normal view). Without it, tabs don't drag there.
+     */
+    readonly onMoveMark?: (from: MeasureId, to: MeasureId) => void;
 }
 
 /** What was right-clicked on the measure row, in view beats */
@@ -194,11 +199,36 @@ export const rehearsalTabTitle = (mark: string, measure: string) =>
         { mark, measure },
     );
 
+/** The tab's tooltip when it can be dragged to another measure (the Normal view) */
+export const rehearsalTabMoveTitle = (mark: string, measure: string) =>
+    measureRowText(
+        "tab.titleMove",
+        "Rehearsal {mark}, measure {measure}. Drag along the measure row to move the mark to another measure (the music stays put; in Align, dragging it retimes the music instead). Double-click to rename, R to add one.",
+        { mark, measure },
+    );
+
+/** Pixels a tab must move before a press becomes a drag */
+const MARK_DRAG_PX = 4;
+
+/** A tab being dragged along the measure row to another measure (the Normal view) */
+interface MarkDrag {
+    readonly measureId: MeasureId;
+    readonly pointerId: number;
+    readonly startX: number;
+    /** Past `MARK_DRAG_PX`: a drag, not a click */
+    readonly moved: boolean;
+    /** The measure under the tab now */
+    readonly toId: MeasureId;
+}
+
 /**
  * Rehearsal marks as tabs in the measure row (UI-12), in place of their measure's number. Clicking
  * one seeks there. With `onEdit`, double-clicking one (or Enter on it) renames it and Delete
- * removes it; the tab being edited gives way to the input.
+ * removes it; the tab being edited gives way to the input. With `onMove` (the Normal view), a tab
+ * drags along the row to another measure: a label edit, one undo; a measure that has a mark of
+ * its own doesn't take it. In Align (`dragHandle`) a tab drags its measure onto the music instead.
  */
+// eslint-disable-next-line max-lines-per-function
 export const TimelineRehearsalMarkers = ({
     model,
     axis,
@@ -208,6 +238,7 @@ export const TimelineRehearsalMarkers = ({
     editingMeasureId,
     onEdit,
     onRemove,
+    onMove,
     dragHandle,
 }: {
     model: TimelineViewModel;
@@ -219,6 +250,8 @@ export const TimelineRehearsalMarkers = ({
     editingMeasureId?: MeasureId | null;
     onEdit?: (measure: TimelineMeasureMarker) => void;
     onRemove?: (measure: TimelineMeasureMarker) => void;
+    /** Moves a mark to another measure (the Normal view's tab drag) */
+    onMove?: (from: MeasureId, to: MeasureId) => void;
     /**
      * In the Align view (E7) a tab is also a handle that drags its measure onto the music; the
      * click that follows a drag doesn't seek (`consumeClick`)
@@ -227,90 +260,206 @@ export const TimelineRehearsalMarkers = ({
         readonly props: ComponentPropsWithoutRef<"button">;
         readonly consumeClick: () => boolean;
     } | null;
-}) => (
-    <div className="pointer-events-none absolute inset-0 z-20">
-        {model.measures.flatMap((measure) => {
-            const label = markOf(measure);
-            if (!label || measure.id === editingMeasureId) return [];
-            const number = numberOf(measure);
-            const handle = dragHandle?.(measure.atBeat) ?? null;
-            const title = onEdit
-                ? rehearsalTabTitle(label, number)
-                : `Rehearsal ${label}, measure ${number}`;
-            return [
-                <button
-                    key={measure.id}
-                    type="button"
-                    data-timeline-interactive="true"
-                    data-timeline-mark={String(measure.id)}
-                    data-testid="timeline-rehearsal-tab"
-                    aria-label={
-                        onEdit
+}) => {
+    const [drag, setDrag] = useState<MarkDrag | null>(null);
+    // A drag's own click doesn't seek
+    const dragged = useRef(false);
+    const measureNear = (x: number) => {
+        let best: TimelineMeasureMarker | null = null;
+        for (const m of model.measures)
+            if (
+                !best ||
+                Math.abs(axis.x(m.atBeat) - x) <
+                    Math.abs(axis.x(best.atBeat) - x)
+            )
+                best = m;
+        return best;
+    };
+    const target = drag?.moved
+        ? model.measures.find((m) => m.id === drag.toId)
+        : undefined;
+    const source = drag
+        ? model.measures.find((m) => m.id === drag.measureId)
+        : undefined;
+    const blocked =
+        !!target && !!source && target.id !== source.id && !!markOf(target);
+    const moveProps = (
+        measure: TimelineMeasureMarker,
+    ): ComponentPropsWithoutRef<"button"> => ({
+        onPointerDown: (event) => {
+            if (
+                event.button !== 0 ||
+                event.altKey ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.shiftKey
+            )
+                return;
+            dragged.current = false;
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+            setDrag({
+                measureId: measure.id,
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                moved: false,
+                toId: measure.id,
+            });
+        },
+        onPointerMove: (event) => {
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            const dx = event.clientX - drag.startX;
+            if (!drag.moved && Math.abs(dx) < MARK_DRAG_PX) return;
+            const near = measureNear(axis.x(measure.atBeat) + dx);
+            setDrag({ ...drag, moved: true, toId: near?.id ?? drag.toId });
+        },
+        onPointerUp: (event) => {
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            event.currentTarget.releasePointerCapture?.(event.pointerId);
+            setDrag(null);
+            if (!drag.moved) return;
+            dragged.current = true;
+            const to = model.measures.find((m) => m.id === drag.toId);
+            if (to && to.id !== drag.measureId && !markOf(to))
+                onMove?.(drag.measureId, to.id);
+        },
+        onPointerCancel: () => setDrag(null),
+    });
+    return (
+        <div className="pointer-events-none absolute inset-0 z-20">
+            {model.measures.flatMap((measure) => {
+                const label = markOf(measure);
+                if (!label || measure.id === editingMeasureId) return [];
+                const number = numberOf(measure);
+                const handle = dragHandle?.(measure.atBeat) ?? null;
+                const movable = !handle && !!onMove;
+                const title = movable
+                    ? rehearsalTabMoveTitle(label, number)
+                    : onEdit
+                      ? rehearsalTabTitle(label, number)
+                      : `Rehearsal ${label}, measure ${number}`;
+                const lifted = drag?.moved && drag.measureId === measure.id;
+                return [
+                    <button
+                        key={measure.id}
+                        type="button"
+                        data-timeline-interactive="true"
+                        data-timeline-mark={String(measure.id)}
+                        data-testid="timeline-rehearsal-tab"
+                        aria-label={
+                            onEdit
+                                ? measureRowText(
+                                      "tab.label",
+                                      "Rehearsal {mark}, measure {measure}. Enter renames it, Delete removes it",
+                                      { mark: label, measure: number },
+                                  )
+                                : title
+                        }
+                        {...handle?.props}
+                        {...(movable ? moveProps(measure) : {})}
+                        title={title}
+                        onClick={(event) => {
+                            // A pointer click only seeks: it doesn't leave the tab focused, where
+                            // Backspace or Delete (meant for a tap or the canvas) would remove it.
+                            // Tab to it to rename or remove it from the keyboard.
+                            if (event.detail > 0) event.currentTarget.blur();
+                            if (dragged.current) {
+                                dragged.current = false;
+                                return;
+                            }
+                            if (handle?.consumeClick()) return;
+                            onSeek?.(measure.atBeat);
+                        }}
+                        onDoubleClick={
+                            onEdit
+                                ? (event) => {
+                                      event.stopPropagation();
+                                      onEdit(measure);
+                                  }
+                                : undefined
+                        }
+                        onKeyDown={(
+                            event: ReactKeyboardEvent<HTMLButtonElement>,
+                        ) => {
+                            // Align: arrows nudge the mark onto the music, Esc drops a drag
+                            handle?.props.onKeyDown?.(event);
+                            if (event.defaultPrevented) return;
+                            if (event.key === "Escape" && drag) {
+                                event.preventDefault();
+                                setDrag(null);
+                                return;
+                            }
+                            if (event.altKey || event.ctrlKey || event.metaKey)
+                                return;
+                            if (
+                                onEdit &&
+                                (event.key === "Enter" || event.key === "F2")
+                            ) {
+                                // Enter renames rather than clicking (seeking): Space still seeks
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onEdit(measure);
+                            } else if (
+                                onRemove &&
+                                // In Align, Backspace means "drop the last tap" to
+                                // a tapper; only Delete removes the mark there (Jo)
+                                (event.key === "Delete" ||
+                                    (event.key === "Backspace" && !handle))
+                            ) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onRemove(measure);
+                            }
+                        }}
+                        className={clsx(
+                            "border-text-subtitle bg-bg-1 text-text rounded-r-4 focus-visible:ring-accent pointer-events-auto absolute flex h-16 min-w-16 items-center justify-center border border-l-2 px-3 font-mono leading-none font-semibold outline-hidden focus-visible:ring-2",
+                            compact ? "text-[9px]" : "text-[10px]",
+                            handle && "cursor-col-resize touch-none",
+                            movable && "cursor-grab touch-none",
+                            lifted && "opacity-40",
+                        )}
+                        style={{
+                            left: axis.x(measure.atBeat),
+                            top,
+                        }}
+                    >
+                        {label}
+                    </button>,
+                ];
+            })}
+            {target && source && target.id !== source.id && (
+                <span
+                    aria-hidden="true"
+                    data-testid="timeline-rehearsal-tab-ghost"
+                    data-blocked={blocked || undefined}
+                    title={
+                        blocked
                             ? measureRowText(
-                                  "tab.label",
-                                  "Rehearsal {mark}, measure {measure}. Enter renames it, Delete removes it",
-                                  { mark: label, measure: number },
+                                  "tab.moveTaken",
+                                  "Measure {measure} already has {mark}",
+                                  {
+                                      measure: numberOf(target),
+                                      mark: markOf(target) ?? "",
+                                  },
                               )
-                            : title
-                    }
-                    {...handle?.props}
-                    title={title}
-                    onClick={() => {
-                        if (handle?.consumeClick()) return;
-                        onSeek?.(measure.atBeat);
-                    }}
-                    onDoubleClick={
-                        onEdit
-                            ? (event) => {
-                                  event.stopPropagation();
-                                  onEdit(measure);
-                              }
                             : undefined
                     }
-                    onKeyDown={(
-                        event: ReactKeyboardEvent<HTMLButtonElement>,
-                    ) => {
-                        // Align: arrows nudge the mark onto the music, Esc drops a drag
-                        handle?.props.onKeyDown?.(event);
-                        if (event.defaultPrevented) return;
-                        if (event.altKey || event.ctrlKey || event.metaKey)
-                            return;
-                        if (
-                            onEdit &&
-                            (event.key === "Enter" || event.key === "F2")
-                        ) {
-                            // Enter renames rather than clicking (seeking): Space still seeks
-                            event.preventDefault();
-                            event.stopPropagation();
-                            onEdit(measure);
-                        } else if (
-                            onRemove &&
-                            // In Align, Backspace means "drop the last tap" to
-                            // a tapper; only Delete removes the mark there (Jo)
-                            (event.key === "Delete" ||
-                                (event.key === "Backspace" && !handle))
-                        ) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            onRemove(measure);
-                        }
-                    }}
                     className={clsx(
-                        "border-text-subtitle bg-bg-1 text-text rounded-r-4 focus-visible:ring-accent pointer-events-auto absolute flex h-16 min-w-16 items-center justify-center border border-l-2 px-3 font-mono leading-none font-semibold outline-hidden focus-visible:ring-2",
+                        "rounded-r-4 absolute flex h-16 min-w-16 items-center justify-center border border-l-2 border-dashed px-3 font-mono leading-none font-semibold",
                         compact ? "text-[9px]" : "text-[10px]",
-                        handle && "cursor-col-resize touch-none",
+                        blocked
+                            ? "border-red text-red bg-bg-1"
+                            : "border-accent text-accent bg-bg-1",
                     )}
-                    style={{
-                        left: axis.x(measure.atBeat),
-                        top,
-                    }}
+                    style={{ left: axis.x(target.atBeat), top }}
                 >
-                    {label}
-                </button>,
-            ];
-        })}
-    </div>
-);
+                    {blocked
+                        ? `${markOf(source)} ✕ m${numberOf(target)}`
+                        : `${markOf(source)} → m${numberOf(target)}`}
+                </span>
+            )}
+        </div>
+    );
+};
 
 const editorLabel = (
     editor: MeasureRowEditor,

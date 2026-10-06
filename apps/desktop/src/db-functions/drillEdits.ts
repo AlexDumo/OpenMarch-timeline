@@ -77,6 +77,18 @@ export interface RemoveCountsEdit {
     readonly crossing: "squeeze" | "skip";
     /** Clips wholly inside the cut: delete them, or keep them (the edit is then refused) */
     readonly inside: "delete" | "keep";
+    /**
+     * Whether the recording lost these counts too. `"lost"` (the default): their time goes with
+     * them, so the music after the cut plays earlier. `"kept"`: the music stays where it is, so
+     * the counts after the cut, up to the end of the page that then holds them, slow down to fill
+     * the cut's time and later pages keep their times.
+     */
+    readonly recording?: "lost" | "kept";
+    /**
+     * Rehearsal marks on measures the cut removes: `"move"` (the default) puts the first one on
+     * the first measure after the cut (when it has no mark of its own); `"drop"` removes them.
+     */
+    readonly marks?: "move" | "drop";
 }
 
 export interface AddCountsEdit {
@@ -151,6 +163,40 @@ export interface DrillTimingImpact {
     readonly bpmAfter: number;
 }
 
+/** A measure range, by measure number */
+export interface MeasureNumberRange {
+    readonly from: number;
+    readonly to: number;
+}
+
+/** What happens to measure numbers */
+export interface DrillMeasureImpact {
+    /** Measures that go, numbered as before */
+    readonly removed: MeasureNumberRange | null;
+    /** Measures that are new, numbered as after */
+    readonly added: MeasureNumberRange | null;
+    /** Measures that keep their music but get new numbers ("m57–96 become m41–80") */
+    readonly renumbered: {
+        readonly before: MeasureNumberRange;
+        readonly after: MeasureNumberRange;
+    } | null;
+}
+
+/** What happens to a rehearsal mark */
+export interface DrillMarkImpact {
+    readonly mark: string;
+    /** Its measure's number before */
+    readonly before: number;
+    /** Its measure's number after; absent when it goes */
+    readonly after?: number;
+    /**
+     * - `removed`: its measure goes and so does the mark
+     * - `moved`: its measure goes and the mark moves to the first measure after the cut
+     * - `renumbered`: same measure, new number
+     */
+    readonly change: "removed" | "moved" | "renumbered";
+}
+
 export interface DrillImpact {
     /** Counts in the show (beat 0 not counted) */
     readonly countsBefore: number;
@@ -163,6 +209,10 @@ export interface DrillImpact {
     readonly moves: readonly DrillMoveImpact[];
     /** Pages whose tempo changes by half a BPM or more */
     readonly timing: readonly DrillTimingImpact[];
+    /** Measures removed, added and renumbered; absent from older reports */
+    readonly measures?: DrillMeasureImpact;
+    /** Rehearsal marks that go, move or get a new measure number, in show order */
+    readonly marks?: readonly DrillMarkImpact[];
 }
 
 export type DrillEditPreview =
@@ -185,6 +235,16 @@ export interface DrillState {
     readonly assignments: readonly AssignmentRow[];
     /** Beat durations in seconds, by ordinal */
     readonly durations: readonly number[];
+    /** Measure lines in show order: first beat ordinal and rehearsal mark */
+    readonly measures?: readonly DrillMeasureLine[];
+    /** The first measure's number (the workspace's `measurementOffset`) */
+    readonly measureOffset?: number;
+}
+
+export interface DrillMeasureLine {
+    readonly id: number;
+    readonly start: number;
+    readonly mark: string | null;
 }
 
 /**
@@ -261,17 +321,132 @@ export async function readDrillState(tx: DbTransaction): Promise<DrillState> {
         utility?.lastPageCounts ?? 0,
     );
     const beats = await tx
-        .select({ duration: schema.beats.duration })
+        .select({ id: schema.beats.id, duration: schema.beats.duration })
         .from(schema.beats)
         .orderBy(asc(schema.beats.position), asc(schema.beats.id))
         .all();
+    const ordinal = new Map(beats.map((b, i) => [b.id, i]));
+    const measures = (
+        await tx
+            .select({
+                id: schema.measures.id,
+                startBeat: schema.measures.start_beat,
+                mark: schema.measures.rehearsal_mark,
+            })
+            .from(schema.measures)
+            .all()
+    )
+        .flatMap((m) => {
+            const start = ordinal.get(m.startBeat);
+            return start === undefined
+                ? []
+                : [{ id: m.id, start, mark: m.mark?.trim() || null }];
+        })
+        .sort((a, b) => a.start - b.start || a.id - b.id);
     return {
         grid,
         timelines: await tx.select().from(schema.timelines).all(),
         transitions: await tx.select().from(schema.timeline_transitions).all(),
         assignments: await tx.select().from(schema.timeline_assignments).all(),
         durations: beats.map((b) => b.duration),
+        measures,
+        measureOffset: await readMeasureOffset(tx),
     };
+}
+
+/** The workspace's first measure number (`measurementOffset`, 1 when unset) */
+async function readMeasureOffset(tx: DbTransaction): Promise<number> {
+    const row = await tx
+        .select({ json: schema.workspace_settings.json_data })
+        .from(schema.workspace_settings)
+        .get();
+    try {
+        const offset = (
+            JSON.parse(row?.json ?? "{}") as Record<string, unknown>
+        ).measurementOffset;
+        return typeof offset === "number" && Number.isInteger(offset)
+            ? offset
+            : 1;
+    } catch {
+        return 1;
+    }
+}
+
+/**
+ * Measures removed, added and renumbered, and what happens to rehearsal marks, between two
+ * states' measure lines. Measures are matched by id; a mark that leaves its measure and turns up
+ * on one that didn't have it has moved. Pure.
+ */
+export function diffMeasures(
+    before: readonly DrillMeasureLine[],
+    after: readonly DrillMeasureLine[],
+    offsetBefore = 1,
+    offsetAfter = offsetBefore,
+): { measures: DrillMeasureImpact; marks: DrillMarkImpact[] } {
+    const numberBefore = new Map(
+        before.map((m, i) => [m.id, offsetBefore + i]),
+    );
+    const numberAfter = new Map(after.map((m, i) => [m.id, offsetAfter + i]));
+    const range = (numbers: number[]): MeasureNumberRange | null =>
+        numbers.length === 0
+            ? null
+            : { from: Math.min(...numbers), to: Math.max(...numbers) };
+    const removed = range(
+        before.flatMap((m) =>
+            numberAfter.has(m.id) ? [] : [numberBefore.get(m.id)!],
+        ),
+    );
+    const added = range(
+        after.flatMap((m) =>
+            numberBefore.has(m.id) ? [] : [numberAfter.get(m.id)!],
+        ),
+    );
+    const moved = before.filter(
+        (m) =>
+            numberAfter.has(m.id) &&
+            numberAfter.get(m.id) !== numberBefore.get(m.id),
+    );
+    const renumbered =
+        moved.length === 0
+            ? null
+            : {
+                  before: range(moved.map((m) => numberBefore.get(m.id)!))!,
+                  after: range(moved.map((m) => numberAfter.get(m.id)!))!,
+              };
+
+    const marks: DrillMarkImpact[] = [];
+    const afterById = new Map(after.map((m) => [m.id, m]));
+    const beforeById = new Map(before.map((m) => [m.id, m]));
+    for (const m of before) {
+        if (!m.mark) continue;
+        const was = numberBefore.get(m.id)!;
+        const now = afterById.get(m.id);
+        if (now?.mark === m.mark) {
+            const number = numberAfter.get(m.id)!;
+            if (number !== was)
+                marks.push({
+                    mark: m.mark,
+                    before: was,
+                    after: number,
+                    change: "renumbered",
+                });
+            continue;
+        }
+        const target = after.find(
+            (a) => a.mark === m.mark && beforeById.get(a.id)?.mark !== m.mark,
+        );
+        marks.push(
+            target
+                ? {
+                      mark: m.mark,
+                      before: was,
+                      after: numberAfter.get(target.id)!,
+                      change: "moved",
+                  }
+                : { mark: m.mark, before: was, change: "removed" },
+        );
+    }
+    return { measures: { removed, added, renumbered }, marks };
 }
 
 /** Anything that answers where a marcher is at a beat (the resolver) */
@@ -509,6 +684,16 @@ export function diffDrill({
         });
     }
 
+    const measureDiff =
+        before.measures && after.measures
+            ? diffMeasures(
+                  before.measures,
+                  after.measures,
+                  before.measureOffset,
+                  after.measureOffset,
+              )
+            : null;
+
     return {
         countsBefore: before.grid.beatIds.length - 1,
         countsAfter: after.grid.beatIds.length - 1,
@@ -516,6 +701,7 @@ export function diffDrill({
         renumbered,
         moves,
         timing,
+        ...(measureDiff ?? {}),
     };
 }
 
@@ -663,11 +849,16 @@ async function removeCountsInTransaction(
             .select({
                 id: schema.measures.id,
                 start_beat: schema.measures.start_beat,
+                mark: schema.measures.rehearsal_mark,
             })
             .from(schema.measures)
             .all()
     )
-        .map((m) => ({ id: m.id, start: ordinal.get(m.start_beat) ?? -1 }))
+        .map((m) => ({
+            id: m.id,
+            start: ordinal.get(m.start_beat) ?? -1,
+            mark: m.mark?.trim() || null,
+        }))
         .sort((x, y) => x.start - y.start);
     const measureStarts = new Set(measures.map((m) => m.start));
     const measureMoves: { id: number; beat: number }[] = [];
@@ -679,6 +870,27 @@ async function removeCountsInTransaction(
             measureMoves.push({ id: m.id, beat: grid.beatIds[b]! });
         else measureDeletes.push(m.id);
     });
+    // The first mark the cut takes goes to the measure that starts the music after it, unless
+    // that one has a mark of its own (F at m41, cut m41–56: F goes on old m57)
+    let markMove: { id: number; mark: string } | null = null;
+    if ((edit.marks ?? "move") === "move") {
+        const lost = measures.find(
+            (m) => m.mark !== null && measureDeletes.includes(m.id),
+        );
+        const target =
+            measures.find((m) => measureMoves.some((v) => v.id === m.id)) ??
+            measures.find((m) => m.start === b);
+        if (lost && target && target.mark === null)
+            markMove = { id: target.id, mark: lost.mark! };
+    }
+    const removedSeconds = before.durations
+        .slice(a, b)
+        .reduce((sum, d) => sum + d, 0);
+    const keepTime = edit.recording === "kept";
+    if (keepTime && b >= n)
+        refuse(
+            "there are no counts after the cut to take its time, so the recording can't stay as it is",
+        );
 
     // The last page keeps the end it had, less the counts cut from it
     const survivors = grid.pages.filter((p) => !pageDeletes.includes(p.id));
@@ -714,6 +926,11 @@ async function removeCountsInTransaction(
                 .update(schema.measures)
                 .set({ start_beat: m.beat })
                 .where(eq(schema.measures.id, m.id));
+        if (markMove)
+            await tx
+                .update(schema.measures)
+                .set({ rehearsal_mark: markMove.mark })
+                .where(eq(schema.measures.id, markMove.id));
         await deleteBeatsInTransaction({
             tx,
             beatIds: new Set(grid.beatIds.slice(a, b)),
@@ -722,7 +939,42 @@ async function removeCountsInTransaction(
             await updateLastPageCounts({ tx, lastPageCounts });
         await ensureSecondBeatHasPage({ tx });
     });
+    if (keepTime && removedSeconds > 0)
+        await fillCutTimeInTransaction(tx, a, removedSeconds);
     return { notes, stoppedEarly };
+}
+
+/**
+ * The music stays where it was (a cut the recording didn't lose): the counts from `at` (the first
+ * after the cut) to the end of the page that holds it slow down evenly to take `seconds` more, so
+ * every later count keeps its time. A duration-only change.
+ */
+async function fillCutTimeInTransaction(
+    tx: DbTransaction,
+    at: number,
+    seconds: number,
+) {
+    const beats = await tx
+        .select({ id: schema.beats.id, duration: schema.beats.duration })
+        .from(schema.beats)
+        .orderBy(asc(schema.beats.position), asc(schema.beats.id))
+        .all();
+    const page = (await readPageGrid(tx)).pages.find(
+        (p) => p.start <= at && at < p.end,
+    );
+    const end = Math.min(page?.end ?? beats.length, beats.length);
+    const span = beats.slice(at, end);
+    const total = span.reduce((sum, b) => sum + b.duration, 0);
+    if (span.length === 0 || total <= 0)
+        refuse(
+            "the counts after the cut have no time to stretch, so the recording can't stay as it is",
+        );
+    const factor = (total + seconds) / total;
+    for (const beat of span)
+        await tx
+            .update(schema.beats)
+            .set({ duration: beat.duration * factor })
+            .where(eq(schema.beats.id, beat.id));
 }
 
 /** The page that gets counts added at `at`: the one whose box ends at or holds `at` */
@@ -840,6 +1092,7 @@ async function addCountsInTransaction(
                 lastPageCounts: owner.end - owner.start + count,
             });
     }
+    if (edit.crossing === "hold") await nameHoldsInTransaction(tx, before, at);
 
     if (edit.recording === "sameTime" && owner) {
         // The page keeps its length in time: every beat of it, old and new, gets shorter alike
@@ -861,6 +1114,39 @@ async function addCountsInTransaction(
                 .where(eq(schema.beats.id, row.id));
     }
     return { notes, stoppedEarly: new Set() };
+}
+
+/**
+ * Names the holding moves an add-with-hold made after the measure they start in, "Hold (vamp
+ * m70)", so they don't read as breakaways nobody made ("Timeline 29"). Stored text, like a
+ * clip name the user types.
+ */
+async function nameHoldsInTransaction(
+    tx: DbTransaction,
+    before: DrillState,
+    at: number,
+) {
+    const known = new Set(before.timelines.map((l) => l.id));
+    const made = (await tx.select().from(schema.timelines).all()).filter(
+        (l) => !known.has(l.id) && l.name === null,
+    );
+    if (made.length === 0) return;
+    const state = await readDrillState(tx);
+    const lines = state.measures ?? [];
+    const index = lines.findLastIndex((m) => m.start <= at);
+    const name =
+        index >= 0
+            ? `Hold (vamp m${(state.measureOffset ?? 1) + index})`
+            : "Hold (vamp)";
+    await tx
+        .update(schema.timelines)
+        .set({ name })
+        .where(
+            inArray(
+                schema.timelines.id,
+                made.map((l) => l.id),
+            ),
+        );
 }
 
 async function moveFlagInTransaction(

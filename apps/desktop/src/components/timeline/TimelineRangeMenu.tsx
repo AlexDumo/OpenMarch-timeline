@@ -9,6 +9,7 @@ import {
 import { tolgeeTranslate as t } from "@/timeline/drillEditText";
 import type { TimelineBeatRange } from "./TimelineViewModel";
 import type { TimelineMeasureRowTarget } from "./TimelineMeasureRow";
+import { isMac } from "./TimelinePrimitives";
 
 /**
  * The timeline's right-click menu (ui.md UI-9 Adding marchers, P8.14). It offers **Add selected
@@ -61,6 +62,13 @@ export interface TimelineMenuTarget {
     readonly measureRow?: TimelineMeasureRowTarget;
     /** A measure on the measure row, by its label ("m41"), for count edits */
     readonly measure?: string;
+    /**
+     * The drawn range the right-click is inside, whatever is under the pointer: **Remove
+     * counts…** acts on it
+     */
+    readonly cut?: TimelineBeatRange;
+    /** Empty space: only Add counts at the playhead… and the hint on drawing a cut */
+    readonly blank?: boolean;
 }
 
 /**
@@ -108,6 +116,26 @@ export const markedRangeAt = (
     };
 };
 
+const stopPropagation = (event: { stopPropagation: () => void }) =>
+    event.stopPropagation();
+
+/**
+ * Props for a menu's content rendered inside the timeline's React tree: a portal still bubbles
+ * React events to its React ancestors, so without these a click on an item reaches the pointer
+ * surface, which seeks, captures the pointer and keeps the item from ever being chosen.
+ */
+export const timelineMenuContentGuards = {
+    onPointerDown: stopPropagation,
+    onPointerMove: stopPropagation,
+    onPointerUp: stopPropagation,
+    onClick: stopPropagation,
+    onDoubleClick: stopPropagation,
+    onContextMenu: (event: MouseEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+    },
+} as const;
+
 /** An extra entry for a target, such as the Align view's "Even out page 5" */
 export interface TimelineMenuExtraItem {
     readonly id: string;
@@ -132,12 +160,16 @@ const countEditsFor = <T,>(
     menu: TimelineAddMarchersMenu<T>,
     target: TimelineMenuTarget,
 ) => {
-    // A dragged range or a measure; not a page box or a clip, whose range isn't a cut
+    // A drawn range under the pointer (on anything), or a measure; not a page box or a clip on
+    // their own, whose range isn't a cut, nor a count that isn't a measure's downbeat
     const remove =
         menu.onRemoveCounts !== undefined &&
-        target.pageId === undefined &&
-        target.trackId === undefined &&
-        target.measureRow?.kind !== "count";
+        !target.blank &&
+        (target.cut !== undefined ||
+            (target.pageId === undefined &&
+                target.trackId === undefined &&
+                (target.measureRow?.kind !== "count" ||
+                    target.measure !== undefined)));
     const addAtFlag =
         menu.onAddCountsAtFlag !== undefined && target.pageId !== undefined;
     const addAtPlayhead = menu.onAddCountsAtPlayhead !== undefined;
@@ -171,7 +203,7 @@ export function useTimelineRangeMenu({
     } | null>(null);
     const menu = givenMenu ?? (extraItems ? NO_MENU : undefined);
     const extrasFor = (target: TimelineMenuTarget) =>
-        target.measureRow ? [] : (extraItems?.(target) ?? []);
+        target.measureRow || target.blank ? [] : (extraItems?.(target) ?? []);
     const onContextMenu = (event: MouseEvent<HTMLElement>) => {
         if (!menu) return;
         const target = resolveRange(event);
@@ -184,7 +216,7 @@ export function useTimelineRangeMenu({
             const canDelete =
                 menu.onDeleteFlag !== undefined && target.pageId !== undefined;
             if (
-                !menu.onAdd &&
+                (!menu.onAdd || target.blank) &&
                 !canDelete &&
                 !countEditsFor(menu, target).any &&
                 extrasFor(target).length === 0
@@ -214,25 +246,29 @@ export function useTimelineRangeMenu({
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
                 <DropdownMenu.Content
+                    {...timelineMenuContentGuards}
                     data-testid="timeline-range-menu"
                     align="start"
                     // Focus stays where the command puts it, such as the measure row's input
                     onCloseAutoFocus={(event) => event.preventDefault()}
-                    className="bg-modal text-text rounded-6 border-stroke shadow-modal z-50 flex min-w-[180px] flex-col gap-4 border p-4 backdrop-blur-md"
+                    className="bg-modal text-text rounded-6 border-stroke shadow-modal z-[200] flex min-w-[180px] flex-col gap-4 border p-4 backdrop-blur-md"
                 >
                     {open.target.measureRow &&
                         menu.measureRowItems?.(open.target.measureRow)}
-                    {!open.target.measureRow && menu.onAdd && (
-                        <DropdownMenu.Item
-                            disabled={disabledReason !== null}
-                            onSelect={() => menu.onAdd?.(open.target)}
-                            className="rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50"
-                        >
-                            <UserPlusIcon size={14} />
-                            Add selected marchers
-                        </DropdownMenu.Item>
-                    )}
                     {!open.target.measureRow &&
+                        !open.target.blank &&
+                        menu.onAdd && (
+                            <DropdownMenu.Item
+                                disabled={disabledReason !== null}
+                                onSelect={() => menu.onAdd?.(open.target)}
+                                className="rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50"
+                            >
+                                <UserPlusIcon size={14} />
+                                Add selected marchers
+                            </DropdownMenu.Item>
+                        )}
+                    {!open.target.measureRow &&
+                        !open.target.blank &&
                         menu.onAdd &&
                         disabledReason !== null && (
                             <p
@@ -268,7 +304,7 @@ export function useTimelineRangeMenu({
                                 Delete page flag
                             </DropdownMenu.Item>
                         )}
-                    {counts?.any && (
+                    {counts?.any && !open.target.blank && (
                         <DropdownMenu.Separator className="bg-stroke my-2 h-px" />
                     )}
                     {counts?.remove && (
@@ -278,7 +314,7 @@ export function useTimelineRangeMenu({
                             className={ITEM}
                         >
                             <MinusCircleIcon size={14} />
-                            {open.target.measure
+                            {open.target.measure && !open.target.cut
                                 ? t(
                                       "timeline.drillEdits.menu.removeMeasure",
                                       "Remove {measure}’s counts…",
@@ -289,6 +325,18 @@ export function useTimelineRangeMenu({
                                       "Remove counts…",
                                   )}
                         </DropdownMenu.Item>
+                    )}
+                    {menu.onRemoveCounts && !open.target.cut && (
+                        <p
+                            data-testid="timeline-range-menu-cut-hint"
+                            className="text-text-subtitle px-8 pb-4 text-[11px]"
+                        >
+                            {t(
+                                "timeline.drillEdits.menu.cutHint",
+                                "{modifier}+drag across measures to remove counts",
+                                { modifier: isMac() ? "⌘" : "Ctrl" },
+                            )}
+                        </p>
                     )}
                     {counts?.addAtFlag && (
                         <DropdownMenu.Item

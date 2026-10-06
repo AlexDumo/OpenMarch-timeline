@@ -2,10 +2,12 @@ import {
     getRedoStackLength,
     getUndoStackLength,
     performHistoryAction,
+    subscribeHistoryWrites,
 } from "@/db-functions";
 import { db } from "@/global/database/db";
 import { useEffect, useState } from "react";
 import {
+    QueryClient,
     queryOptions,
     useMutation,
     useQuery,
@@ -47,6 +49,24 @@ export const canRedoQueryOptions = (enabled = true) =>
         },
         enabled,
     });
+
+/**
+ * Keeps Undo and Redo fresh: refreshes the history queries after every TanStack mutation and
+ * after every committed history write, including writes made without a mutation (drill edit
+ * dialogs, page-flag grips). Returns the unsubscribe.
+ */
+export const refreshHistoryOnWrites = (qc: QueryClient): (() => void) => {
+    const refresh = () =>
+        void qc.invalidateQueries({ queryKey: historyKeys.all() });
+    const unsubscribeMutations = qc.getMutationCache().subscribe((event) => {
+        if (event?.type === "updated") refresh();
+    });
+    const unsubscribeWrites = subscribeHistoryWrites(refresh);
+    return () => {
+        unsubscribeMutations();
+        unsubscribeWrites();
+    };
+};
 
 /** Messages for an undo or redo that didn't apply, as Tolgee keys with English defaults */
 export const HISTORY_FAILURE_MESSAGES = {

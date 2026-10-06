@@ -43,6 +43,15 @@ export type MeasureLineEdit =
           readonly mark: string | null;
       }
     /**
+     * Move a measure's rehearsal mark to another measure (a label edit: lines, beats and pages
+     * stay). The other measure must have no mark of its own.
+     */
+    | {
+          readonly kind: "moveMark";
+          readonly fromMeasureId: number;
+          readonly toMeasureId: number;
+      }
+    /**
      * Give a measure `beats` beats by moving the line after it. With `laterKeep`, every later line
      * moves by the same amount, so later measures keep their beats (the rest of the show is
      * re-barred); without it, the next measure absorbs the difference.
@@ -104,6 +113,7 @@ const assertBeats = (beats: number) => {
  * The row writes for `edit` on `lines`. Throws for an edit the measure row never offers (an
  * unknown measure, measure 1's line, a beat outside the show), which is a caller's mistake.
  */
+// eslint-disable-next-line max-lines-per-function
 export function planMeasureLineEdit(
     lines: readonly MeasureLine[],
     bounds: MeasureLineBounds,
@@ -152,6 +162,22 @@ export function planMeasureLineEdit(
             return mark === line.mark
                 ? EMPTY_PLAN
                 : { ...EMPTY_PLAN, updates: [{ id: line.id, mark }] };
+        }
+        case "moveMark": {
+            const from = ordered[indexOf(edit.fromMeasureId)]!;
+            const to = ordered[indexOf(edit.toMeasureId)]!;
+            if (from.id === to.id || from.mark === null) return EMPTY_PLAN;
+            if (to.mark !== null)
+                throw new Error(
+                    `that measure already has rehearsal mark ${to.mark}`,
+                );
+            return {
+                ...EMPTY_PLAN,
+                updates: [
+                    { id: from.id, mark: null },
+                    { id: to.id, mark: from.mark },
+                ],
+            };
         }
         case "setBeats": {
             assertBeats(edit.beats);

@@ -184,8 +184,11 @@ export interface TimelineProps {
 
 /** The commands behind the timeline's count edits (E10). Beats are spec beats. */
 export interface TimelineDrillEdits {
-    /** **Remove counts…** for a dragged range or a measure */
-    readonly onRemoveCounts: (range: TimelineBeatRange) => void;
+    /** **Remove counts…** for a dragged range, or a measure (`measure` is its label, "m41") */
+    readonly onRemoveCounts: (
+        range: TimelineBeatRange,
+        measure?: string,
+    ) => void;
     /** **Add counts at the end of this page…** */
     readonly onAddCountsAtFlag: (pageId: number) => void;
     /** **Add counts at the playhead…** */
@@ -460,7 +463,19 @@ export function Timeline(props: TimelineProps) {
         ...(drillEdits
             ? {
                   onRemoveCounts: (target: TimelineMenuTarget) =>
-                      drillEdits.onRemoveCounts(specRangeOf(target)),
+                      target.cut
+                          ? drillEdits.onRemoveCounts({
+                                startBeatIndex: axis.toSpec(
+                                    target.cut.startBeatIndex,
+                                ),
+                                endBeatIndex: axis.toSpec(
+                                    target.cut.endBeatIndex,
+                                ),
+                            })
+                          : drillEdits.onRemoveCounts(
+                                specRangeOf(target),
+                                target.measure,
+                            ),
                   onAddCountsAtFlag: (pageId: string | number) =>
                       drillEdits.onAddCountsAtFlag(Number(pageId)),
                   onAddCountsAtPlayhead: drillEdits.onAddCountsAtPlayhead,

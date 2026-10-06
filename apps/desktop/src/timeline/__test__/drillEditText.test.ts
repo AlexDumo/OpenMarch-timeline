@@ -4,6 +4,7 @@ import type { DrillImpact } from "@/db-functions/drillEdits";
 import {
     clipText,
     impactLines,
+    isBigStep,
     refusalText,
     spanText,
     stepText,
@@ -144,6 +145,83 @@ describe("drill edit words", () => {
             "Later pages renumber: Pg 3 becomes Pg 2",
             "2 later moves move 8 counts earlier, unchanged",
             "Show: 96 → 88 counts",
+        ]);
+    });
+
+    it("flags big steps and big tempo changes as warnings", () => {
+        expect(isBigStep(8, 6)).toBe(false);
+        // Bigger than 5 to 5
+        expect(isBigStep(6, 4.5)).toBe(true);
+        // Half as long again, while bigger than 8 to 5
+        expect(isBigStep(6.6, 4.2)).toBe(true);
+        expect(isBigStep(8, 5.5)).toBe(false);
+        expect(isBigStep(9, 5.5)).toBe(true);
+        expect(isBigStep(undefined, 6)).toBe(false);
+        // Already a sprint, and barely changing: not flagged again
+        expect(isBigStep(1.9, 1.8)).toBe(false);
+        expect(isBigStep(Infinity, 4)).toBe(true);
+        const impact: DrillImpact = {
+            countsBefore: 96,
+            countsAfter: 80,
+            pages: [],
+            renumbered: null,
+            moves: [
+                {
+                    timelineId: 1,
+                    clip: { kind: "named", name: "Guard feature" },
+                    pageMove: false,
+                    change: "squeezed",
+                    countsBefore: 24,
+                    countsAfter: 8,
+                    stepBefore: 6.6,
+                    stepAfter: 2.2,
+                },
+            ],
+            timing: [{ page: "11", bpmBefore: 120, bpmAfter: 40 }],
+        };
+        const lines = impactLines(impact, t);
+        expect(lines[0]).toEqual({
+            tone: "warning",
+            text: "“Guard feature”: squeezed from 24 to 8 counts, same set · largest step 6.6 to 5 → 2.2 to 5 · big steps, check this move",
+        });
+        expect(lines.find((l) => l.text.includes("BPM"))?.tone).toBe("warning");
+    });
+
+    it("says which marks go or move and how measures renumber, as summary lines", () => {
+        const impact: DrillImpact = {
+            countsBefore: 384,
+            countsAfter: 320,
+            pages: [],
+            renumbered: null,
+            moves: [],
+            timing: [],
+            measures: {
+                removed: { from: 41, to: 56 },
+                added: null,
+                renumbered: {
+                    before: { from: 57, to: 96 },
+                    after: { from: 41, to: 80 },
+                },
+            },
+            marks: [
+                { mark: "F", before: 41, after: 41, change: "moved" },
+                { mark: "E", before: 45, change: "removed" },
+                { mark: "G", before: 65, after: 49, change: "renumbered" },
+            ],
+        };
+        expect(
+            impactLines(impact, t)
+                .filter((l) => l.summary)
+                .map((l) => [l.tone, l.text]),
+        ).toEqual([
+            [
+                "notice",
+                "Rehearsal F (m41) moves to the first measure after the cut, now m41",
+            ],
+            ["loss", "Rehearsal E (m45) is removed"],
+            ["notice", "Later measures renumber: m57–96 become m41–80"],
+            ["plain", "Rehearsal marks: G m65 → m49"],
+            ["plain", "Show: 384 → 320 counts"],
         ]);
     });
 

@@ -34,7 +34,7 @@ import {
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createAllUndoTriggers, resetTimelineChangeLog } from "./db-functions";
 import { db } from "./global/database/db";
-import { historyKeys } from "./hooks/queries/useHistory";
+import { refreshHistoryOnWrites } from "./hooks/queries/useHistory";
 import tolgee from "./global/singletons/Tolgee";
 import { InContextTools } from "@tolgee/web/tools";
 import clsx from "clsx";
@@ -161,21 +161,9 @@ function App() {
     }, [fetchUiSettings]);
 
     /**
-     * Invalidate history queries when a mutation is added.
-     * This is to keep the UI fresh for when an undo/redo is available.
+     * Keep Undo and Redo fresh after every write, made through a mutation or not.
      */
-    useEffect(() => {
-        const unsubscribe = queryClient
-            .getMutationCache()
-            .subscribe((event) => {
-                if (event?.type === "updated") {
-                    void queryClient.invalidateQueries({
-                        queryKey: historyKeys.all(),
-                    });
-                }
-            });
-        return () => unsubscribe();
-    }, [databaseIsReady]);
+    useEffect(() => refreshHistoryOnWrites(queryClient), [databaseIsReady]);
 
     useEffect(() => {
         void window.electron

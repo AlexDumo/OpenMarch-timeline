@@ -1,7 +1,11 @@
 import tolgee from "@/global/singletons/Tolgee";
 import type { CountSpan, DrillClipRef } from "@/db-functions/drillNames";
 import type { TimelineRefusalSubject } from "@/db-functions/timelineErrors";
-import type { DrillImpact, DrillMoveImpact } from "@/db-functions/drillEdits";
+import type {
+    DrillImpact,
+    DrillMoveImpact,
+    MeasureNumberRange,
+} from "@/db-functions/drillEdits";
 
 /**
  * Words for count edits and their refusals (tempo experiment E10): pages, counts, clip names and
@@ -125,12 +129,45 @@ export function refusalText(
     }
 }
 
-/** How a line of the report should read: plain, worth a look, or a loss */
-export type DrillLineTone = "plain" | "notice" | "loss";
+/** How a line of the report should read: plain, worth a look, a risk to check, or a loss */
+export type DrillLineTone = "plain" | "notice" | "warning" | "loss";
 
 export interface DrillImpactLine {
     readonly tone: DrillLineTone;
     readonly text: string;
+    /** A summary line (show length, renumbering, marks): the dialog shows these first */
+    readonly summary?: boolean;
+}
+
+/**
+ * A step worth a warning: one that becomes bigger than 5 to 5 (`stepAfter` below 5 steps per five
+ * yards when it wasn't before), or gets more than half as long again while bigger than 8 to 5. A
+ * step that was already that big and barely changes isn't flagged again.
+ */
+export const isBigStep = (stepBefore: number | undefined, stepAfter: number) =>
+    Number.isFinite(stepAfter) &&
+    ((stepAfter < BIG_STEP_TO_FIVE &&
+        (stepBefore === undefined || stepBefore >= BIG_STEP_TO_FIVE)) ||
+        (stepAfter < 8 &&
+            stepBefore !== undefined &&
+            Number.isFinite(stepBefore) &&
+            stepBefore / stepAfter > 1 + BIG_STEP_CHANGE));
+
+/** Steps per five yards below which a step is big */
+export const BIG_STEP_TO_FIVE = 5;
+/** How much longer a step may get before it is flagged (0.5: half as long again) */
+export const BIG_STEP_CHANGE = 0.5;
+/** How much a page's tempo may change before it is flagged (0.5: by half) */
+export const BIG_TEMPO_CHANGE = 0.5;
+
+const bigStepMove = (move: DrillMoveImpact) =>
+    move.stepAfter !== undefined && isBigStep(move.stepBefore, move.stepAfter);
+
+/** "m41" or "m41–56" */
+export function measureRangeText(range: MeasureNumberRange): string {
+    return range.from === range.to
+        ? `m${range.from}`
+        : `m${range.from}–${range.to}`;
 }
 
 const countsText = (n: number, t: DrillTranslate) =>
@@ -143,10 +180,14 @@ const stepsChange = (move: DrillMoveImpact, t: DrillTranslate) =>
         ? t(`${K}.move.steps`, " · largest step {from} → {to}", {
               from: stepText(move.stepBefore, t),
               to: stepText(move.stepAfter, t),
-          })
+          }) +
+          (bigStepMove(move)
+              ? t(`${K}.move.bigSteps`, " · big steps, check this move")
+              : "")
         : "";
 
 /** One clip's line */
+// eslint-disable-next-line max-lines-per-function
 export function moveLine(
     move: DrillMoveImpact,
     t: DrillTranslate,
@@ -177,7 +218,7 @@ export function moveLine(
             };
         case "squeezed":
             return {
-                tone: "notice",
+                tone: bigStepMove(move) ? "warning" : "notice",
                 text:
                     t(
                         `${K}.move.squeezed`,
@@ -194,7 +235,7 @@ export function moveLine(
             };
         case "stretched":
             return {
-                tone: "notice",
+                tone: bigStepMove(move) ? "warning" : "notice",
                 text:
                     t(
                         `${K}.move.stretched`,
@@ -249,6 +290,7 @@ export function moveLine(
  * pages, then a summary of moves that only shift, then tempo. `limit` caps the clip lines (the
  * rest are summed up in one line).
  */
+// eslint-disable-next-line max-lines-per-function
 export function impactLines(
     impact: DrillImpact,
     t: DrillTranslate,
@@ -267,7 +309,12 @@ export function impactLines(
     const listed = impact.moves
         .filter((m) => m.change !== "shifted")
         .filter((m) => !(m.change === "deleted" && m.pageMove && !m.note))
-        .sort((a, b) => rank[a.change] - rank[b.change]);
+        .sort(
+            (a, b) =>
+                rank[a.change] -
+                (bigStepMove(a) ? 0.5 : 0) -
+                (rank[b.change] - (bigStepMove(b) ? 0.5 : 0)),
+        );
     for (const move of listed.slice(0, limit)) lines.push(moveLine(move, t));
     if (listed.length > limit)
         lines.push({
@@ -306,12 +353,14 @@ export function impactLines(
     if (impact.renumbered)
         lines.push({
             tone: "notice",
+            summary: true,
             text: t(
                 `${K}.renumbered`,
                 "Later pages renumber: Pg {from} becomes Pg {to}",
                 impact.renumbered,
             ),
         });
+    lines.push(...measureLines(impact, t));
 
     const shifted = impact.moves.filter((m) => m.change === "shifted");
     if (shifted.length > 0) {
@@ -342,7 +391,11 @@ export function impactLines(
 
     for (const timing of impact.timing)
         lines.push({
-            tone: "notice",
+            tone:
+                Math.abs(timing.bpmAfter / timing.bpmBefore - 1) >
+                BIG_TEMPO_CHANGE
+                    ? "warning"
+                    : "notice",
             text: t(
                 timing.bpmAfter > timing.bpmBefore
                     ? `${K}.timing.faster`
@@ -360,6 +413,7 @@ export function impactLines(
     if (impact.countsAfter !== impact.countsBefore)
         lines.push({
             tone: "plain",
+            summary: true,
             text: t(`${K}.total`, "Show: {from} → {to} counts", {
                 from: impact.countsBefore,
                 to: impact.countsAfter,
@@ -372,6 +426,78 @@ export function impactLines(
         });
     return lines;
 }
+
+/** Measure and rehearsal mark lines: what goes, what moves, what renumbers */
+function measureLines(
+    impact: DrillImpact,
+    t: DrillTranslate,
+): DrillImpactLine[] {
+    const lines: DrillImpactLine[] = [];
+    for (const mark of impact.marks ?? []) {
+        if (mark.change === "removed")
+            lines.push({
+                tone: "loss",
+                summary: true,
+                text: t(
+                    `${K}.mark.removed`,
+                    "Rehearsal {mark} (m{measure}) is removed",
+                    { mark: mark.mark, measure: mark.before },
+                ),
+            });
+        else if (mark.change === "moved")
+            lines.push({
+                tone: "notice",
+                summary: true,
+                text: t(
+                    `${K}.mark.moved`,
+                    "Rehearsal {mark} (m{before}) moves to the first measure after the cut, now m{after}",
+                    {
+                        mark: mark.mark,
+                        before: mark.before,
+                        after: mark.after!,
+                    },
+                ),
+            });
+    }
+    const renumbered = impact.measures?.renumbered;
+    if (renumbered)
+        lines.push({
+            tone: "notice",
+            summary: true,
+            text: t(
+                `${K}.measuresRenumber`,
+                "Later measures renumber: {before} become {after}",
+                {
+                    before: measureRangeText(renumbered.before),
+                    after: measureRangeText(renumbered.after),
+                },
+            ),
+        });
+    const marks = (impact.marks ?? []).filter((m) => m.change === "renumbered");
+    if (marks.length > 0) {
+        const shown = marks
+            .slice(0, MARKS_LISTED)
+            .map((m) => `${m.mark} m${m.before} → m${m.after}`)
+            .join(", ");
+        lines.push({
+            tone: "plain",
+            summary: true,
+            text:
+                marks.length > MARKS_LISTED
+                    ? t(
+                          `${K}.mark.renumberedMore`,
+                          "Rehearsal marks: {list} and {more} more",
+                          { list: shown, more: marks.length - MARKS_LISTED },
+                      )
+                    : t(`${K}.mark.renumbered`, "Rehearsal marks: {list}", {
+                          list: shown,
+                      }),
+        });
+    }
+    return lines;
+}
+
+const MARKS_LISTED = 3;
 
 /** A short summary for a toast after the edit: the page lines and the first clip lines */
 export function impactSummary(impact: DrillImpact, t: DrillTranslate): string {

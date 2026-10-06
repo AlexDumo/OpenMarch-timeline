@@ -39,6 +39,7 @@ import {
 } from "./timelineAlign";
 import type { TimelineXAxis } from "./timelineAxis";
 import type { TimelineAlign } from "./TimelineViewModel";
+import { timelineMenuContentGuards } from "./TimelineRangeMenu";
 
 /** How far, in pixels, a press must move before it is a drag rather than a click */
 export const ALIGN_DRAG_PX = 3;
@@ -569,6 +570,12 @@ export function TimelineAlignTimeLine({
  * head, so count 1 can be dragged while the playhead rests on it (the playhead still scrubs from
  * anywhere else).
  */
+/** "A. B", without doubling the full stop when `first` already ends a sentence */
+export const joinSentences = (first: string, second: string) =>
+    /[.!?…]$/.test(first.trim())
+        ? `${first.trim()} ${second}`
+        : `${first}. ${second}`;
+
 export function TimelineAlignFlags({
     flags,
     axis,
@@ -621,7 +628,11 @@ export function TimelineAlignFlags({
                         data-timeline-interactive="true"
                         data-count={flag.index}
                         data-synced={isSynced || undefined}
-                        aria-label={`${label}${isSynced ? `. ${t("tempo.align.synced")}` : ""}`}
+                        aria-label={
+                            isSynced
+                                ? joinSentences(label, t("tempo.align.synced"))
+                                : label
+                        }
                         title={`${label}${isSynced ? `\n${t("tempo.align.synced")}` : ""}`}
                         {...dragProps("move", flag.index, undefined)}
                         onPointerDownCapture={(event) => {
@@ -692,9 +703,10 @@ export function TimelineAlignFlags({
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Portal>
                         <DropdownMenu.Content
+                            {...timelineMenuContentGuards}
                             data-testid="timeline-align-flag-menu"
                             align="start"
-                            className="bg-modal text-text rounded-6 border-stroke shadow-modal z-50 flex min-w-[160px] flex-col gap-4 border p-4 backdrop-blur-md"
+                            className="bg-modal text-text rounded-6 border-stroke shadow-modal z-[200] flex min-w-[160px] flex-col gap-4 border p-4 backdrop-blur-md"
                         >
                             <DropdownMenu.Item
                                 onSelect={() =>

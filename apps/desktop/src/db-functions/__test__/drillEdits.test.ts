@@ -728,3 +728,162 @@ describe("stepsPerFiveYards", () => {
         expect(stepsPerFiveYards(0, 8)).toBe(Infinity);
     });
 });
+
+/**
+ * Fix pass (FE-2, FE-3, FE-6): a cut keeps or names the rehearsal marks it takes, says how
+ * measures renumber, asks whether the recording lost the counts, and holds get a name. Measures
+ * are 4 counts from ordinal 1 (m1 at 1, m2 at 5, …, m24 at 93), numbered from 1.
+ */
+describeDbTests("count edits: marks, measures and the recording", (it) => {
+    const mark = async (db: DbConnection, startBeat: number, name: string) =>
+        await db
+            .update(schema.measures)
+            .set({ rehearsal_mark: name })
+            .where(sql`${schema.measures.start_beat} = ${startBeat}`);
+    const marks = async (db: DbConnection) =>
+        (
+            await db
+                .select()
+                .from(schema.measures)
+                .orderBy(asc(schema.measures.start_beat))
+                .all()
+        ).flatMap((m, i) =>
+            m.rehearsal_mark ? [[m.rehearsal_mark, i + 1] as const] : [],
+        );
+    const durations = async (db: DbConnection) =>
+        (
+            await db
+                .select({ d: schema.beats.duration })
+                .from(schema.beats)
+                .orderBy(asc(schema.beats.position))
+                .all()
+        ).map((b) => b.d);
+    const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
+
+    it("moves the cut's first mark to the measure after it, and reports renumbering", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await setUp(db);
+        await mark(db, 9, "F");
+        await mark(db, 21, "G");
+        const before = await snapshot(db);
+        // m3–m4
+        const impact = await previewThenCommit(db, {
+            kind: "removeCounts",
+            start: 9,
+            end: 17,
+            crossing: "squeeze",
+            inside: "delete",
+        });
+        expect(await marks(db)).toEqual([
+            ["F", 3],
+            ["G", 4],
+        ]);
+        expect(impact.measures).toEqual({
+            removed: { from: 3, to: 4 },
+            added: null,
+            renumbered: {
+                before: { from: 5, to: 24 },
+                after: { from: 3, to: 22 },
+            },
+        });
+        expect(impact.marks).toEqual([
+            { mark: "F", before: 3, after: 3, change: "moved" },
+            { mark: "G", before: 6, after: 4, change: "renumbered" },
+        ]);
+        await roundTrip(db, before);
+    });
+
+    it("drops the cut's marks when asked, and says so", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await setUp(db);
+        await mark(db, 9, "F");
+        const impact = await previewThenCommit(db, {
+            kind: "removeCounts",
+            start: 9,
+            end: 17,
+            crossing: "squeeze",
+            inside: "delete",
+            marks: "drop",
+        });
+        expect(await marks(db)).toEqual([]);
+        expect(impact.marks).toEqual([
+            { mark: "F", before: 3, change: "removed" },
+        ]);
+    });
+
+    it("doesn't move a mark onto a measure that has its own", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await setUp(db);
+        await mark(db, 9, "F");
+        await mark(db, 17, "G");
+        const impact = await previewThenCommit(db, {
+            kind: "removeCounts",
+            start: 9,
+            end: 17,
+            crossing: "squeeze",
+            inside: "delete",
+        });
+        expect(await marks(db)).toEqual([["G", 3]]);
+        expect(impact.marks?.[0]).toEqual({
+            mark: "F",
+            before: 3,
+            change: "removed",
+        });
+    });
+
+    it("with the recording unchanged, the counts after the cut take its time, to their page's end", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await setUp(db);
+        const show = await durations(db);
+        const before = await snapshot(db);
+        // Two counts out of page 2 ([9, 17)): its six left take its four seconds
+        const impact = await previewThenCommit(db, {
+            kind: "removeCounts",
+            start: 11,
+            end: 13,
+            crossing: "squeeze",
+            inside: "delete",
+            recording: "kept",
+        });
+        const after = await durations(db);
+        expect(after.length).toBe(show.length - 2);
+        expect(sum(after)).toBeCloseTo(sum(show), 9);
+        // Counts before the cut, and from page 3 on, keep their times
+        expect(after.slice(0, 11)).toEqual(show.slice(0, 11));
+        expect(after.slice(15)).toEqual(show.slice(17));
+        for (const d of after.slice(11, 15)) expect(d).toBeCloseTo(0.75, 9);
+        expect(impact.timing).toEqual([
+            expect.objectContaining({ bpmBefore: 120, bpmAfter: 90 }),
+        ]);
+        await roundTrip(db, before);
+    });
+
+    it("names the holds a vamp makes after their measure", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await setUp(db);
+        const impact = await previewThenCommit(db, {
+            kind: "addCounts",
+            at: 17,
+            count: 4,
+            recording: "has",
+            crossing: "hold",
+        });
+        const holds = impact.moves.filter((m) => m.change === "holds");
+        expect(holds.length).toBeGreaterThan(0);
+        const names = (await db.select().from(schema.timelines).all())
+            .filter((l) => holds.some((h) => h.timelineId === l.id))
+            .map((l) => l.name);
+        expect(new Set(names)).toEqual(new Set(["Hold (vamp m5)"]));
+        expect(impact.measures?.added).toEqual({ from: 5, to: 5 });
+    });
+});

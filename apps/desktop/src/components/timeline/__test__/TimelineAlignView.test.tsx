@@ -84,7 +84,7 @@ const renderAlign = (
             align={{ ...align, offset: 1 }}
         />,
     );
-    return { ...view, align };
+    return { ...view, align, onSeek };
 };
 
 /** Lets the drag's animation frame run */
@@ -151,6 +151,9 @@ describe("the Align view (E7)", () => {
                 .map((el) => el.getAttribute("data-count")),
         ).toEqual(["1", "9", "17", "25", "33"]);
         expect(flag(1)).toHaveAttribute("data-synced", "true");
+        // One full stop between the hint and "Synced" (Jo: "no snapping.. Synced")
+        expect(flag(1).getAttribute("aria-label")).not.toContain("..");
+        expect(flag(1).getAttribute("aria-label")).toContain("Synced");
         expect(flag(9)).not.toHaveAttribute("data-synced");
     });
 
@@ -282,6 +285,17 @@ describe("the Align view (E7)", () => {
         fireEvent.contextMenu(flag(9));
         fireEvent.click(screen.getByText("Unsync"));
         expect(synced.align.onSetSynced).toHaveBeenCalledWith([17]);
+    });
+
+    it("a mouse press on the flag menu's item stays in the menu: no seek, no range", () => {
+        const { align, onSeek } = renderAlign();
+        fireEvent.contextMenu(flag(9));
+        const item = screen.getByText("Mark as synced");
+        fireEvent.pointerDown(item, { button: 0, clientX: 100 });
+        fireEvent.pointerUp(item, { button: 0, clientX: 100 });
+        fireEvent.click(item);
+        expect(onSeek).not.toHaveBeenCalled();
+        expect(align.onSetSynced).toHaveBeenCalledWith([9]);
     });
 
     it("drags a count tick to hold the count before it", () => {
