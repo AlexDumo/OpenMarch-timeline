@@ -1343,7 +1343,65 @@
     },
     "tempo": {
         "retimeError": "Couldn't change when the counts land",
-        "syncError": "Couldn't change which counts are synced"
+        "syncError": "Couldn't change which counts are synced",
+        "tapTheBeat": {
+            "apply": "Apply",
+            "applyError": "Couldn't apply the taps",
+            "bpm": "BPM",
+            "clamped": "Some counts would be too fast or too slow, so they were kept within limits.",
+            "close": "Close",
+            "countAlone": "count {count}",
+            "countOnPage": "page {page}, count {count}",
+            "done": "Done",
+            "double": "I tapped every other count: double the tempo",
+            "fromHere": "From here",
+            "fromStart": "From the start",
+            "half": "I tapped twice per count: halve the tempo",
+            "heldSynced": "The synced count at {count} and everything after it stay on the music.",
+            "here": {
+                "applied": "From {count}, counts run at about {bpm} per minute. Earlier counts didn't change.",
+                "preview": "From {count}, counts will run at about {bpm} per minute. Earlier counts stay as they are."
+            },
+            "instructionsHere": "Play the music from the playhead and tap T (or click here) on each beat. Counts before the playhead stay as they are. 8 taps is enough.",
+            "instructionsStart": "Play the music from 0:00 and tap T (or click here) on each beat. Your first tap is count 1. 8 taps is enough.",
+            "keepGoing": "Keep going…",
+            "menuEntry": "Tap the beat…",
+            "multiplierError": "Couldn't change the tempo",
+            "musicAfterCounts": "The music goes on for {time} after the last count.",
+            "nothingToPlay": "There's nothing to play after the playhead.",
+            "pad": "Tap",
+            "padEmpty": "Tap here or press T",
+            "pause": "Pause",
+            "perMinute": "≈ {bpm} per minute",
+            "play": "Play",
+            "playFirst": "Play the music first, then tap along.",
+            "playFromHere": "Play from here",
+            "playFromStart": "Play from 0:00",
+            "playWithClicks": "Play with clicks",
+            "start": {
+                "applied": "Count 1 is at {time} in the music, and counts run at about {bpm} per minute.",
+                "preview": "Count 1 will start at {time} in the music, and counts will run at about {bpm} per minute."
+            },
+            "startFlat": {
+                "applied": "Counts run at about {bpm} per minute from the start.",
+                "preview": "Counts will run at about {bpm} per minute from the start."
+            },
+            "startOver": "Start over",
+            "steady": "That's steady",
+            "strip": {
+                "dismiss": "Dismiss",
+                "tap": "Tap the beat",
+                "text": "Counts aren't lined up with the music yet."
+            },
+            "tapAgain": "Tap again",
+            "tapCount": "{count, plural, one {# tap} other {# taps}} · Backspace drops the last",
+            "title": "Tap the beat",
+            "undoHint": "Ctrl+Z undoes it.",
+            "unsyncedMany": "{count} synced counts move with the taps.",
+            "unsyncedOne": "The synced count at {count} moves with the taps.",
+            "waiting": "Waiting for taps…",
+            "whereStarts": "Where tapping starts"
+        }
     },
     "tempoGroup": {
         "createBeatsError": "Error creating beats",
