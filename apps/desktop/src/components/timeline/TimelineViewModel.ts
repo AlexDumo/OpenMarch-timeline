@@ -87,6 +87,33 @@ export interface TimelineTrack {
 export interface TimelineWaveform {
     /** Normalized peak magnitudes (0..1), grouped by beat. */
     readonly peaksByBeat: readonly (readonly number[])[];
+    /**
+     * The music after the show's last count (E1), on the beats the show would have if it went on
+     * at its last tempo, on the same scale. Drawn dimmed past the end, so the music that has no
+     * counts yet shows. Empty or missing without music there.
+     */
+    readonly peaksPastEnd?: readonly (readonly number[])[];
+}
+
+/**
+ * **+ N counts** after the last page (E1): always offered while paused, since nothing lies after
+ * the end of the show. The owner names it, since it adds counts.
+ */
+export interface TimelineAppendCounts {
+    /** The button's text, such as "+ 16 counts" */
+    readonly label: string;
+    /** Its tooltip and accessible name, such as "Add a page of 16 counts after the last page" */
+    readonly title: string;
+    readonly onAppend: () => void;
+}
+
+/** The music runs past the last count (E1): a note past the end that offers extending the counts */
+export interface TimelineMusicPastEnd {
+    /** Such as "Counts end at 0:40; the music runs to 2:31." */
+    readonly message: string;
+    /** Such as "Extend counts to the end" */
+    readonly actionLabel: string;
+    readonly onExtend: () => void;
 }
 
 export interface TimelineViewModel {
@@ -172,6 +199,10 @@ export interface TimelineInteractionProps {
      * while it's given and the timeline isn't playing; the owner passes it only where **+** applies.
      */
     readonly onAddPageFlag?: () => void;
+    /** **+ N counts** after the last page's flag (E1); without it, none */
+    readonly appendCounts?: TimelineAppendCounts;
+    /** The note past the last count when the music runs on (E1); without it, none */
+    readonly musicPastEnd?: TimelineMusicPastEnd;
     /** Double-clicking a page box or clip opens (isolates) its range, in view beats here */
     readonly onOpenRange?: (target: TimelineMenuTarget) => void;
 }

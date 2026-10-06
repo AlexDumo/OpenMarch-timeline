@@ -1404,6 +1404,13 @@
         "pages": "Pages",
         "perspective": {
             "label": "Perspective"
+        },
+        "showLength": {
+            "appendCounts": "{counts, plural, one {# count} other {# counts}}",
+            "appendCountsTitle": "{counts, plural, one {Add a page of # count after the last page} other {Add a page of # counts after the last page}}",
+            "extendToEnd": "Extend counts to the end",
+            "extended": "{counts, plural, one {Added # count to the end of the show.} other {Added # counts to the end of the show.}}",
+            "musicPastEnd": "Counts end at {countsEnd}; the music runs to {musicEnd}."
         }
     },
     "titlebar": {

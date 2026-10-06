@@ -68,6 +68,16 @@ export function fitBackZoom(
     return Math.min(back, TIMELINE_MAX_PX_PER_BEAT);
 }
 
+/** No waveform past the end of the show */
+const NO_PEAKS: readonly (readonly number[])[] = [];
+
+/** About how wide **+ N counts** is, and the room kept for it after the last beat (E1) */
+const APPEND_COUNTS_WIDTH = 84;
+const APPEND_COUNTS_ROOM = APPEND_COUNTS_WIDTH + 16;
+
+/** The room kept after the last count for the note that the music runs on (E1) */
+const MUSIC_PAST_END_NOTE_WIDTH = 440;
+
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
 
@@ -86,6 +96,7 @@ const useTimelineZoom = ({
     pixelsPerBeat,
     beatCount,
     leadingInset,
+    trailingInset = 0,
     playheadBeat,
     onPixelsPerBeatChange,
     fitted: rememberedFitted,
@@ -93,8 +104,11 @@ const useTimelineZoom = ({
 }: {
     viewportRef: React.RefObject<HTMLDivElement | null>;
     pixelsPerBeat: number;
+    /** The beats Fit fits: the show's, and any music drawn past its end */
     beatCount: number;
     leadingInset: number;
+    /** Pixels kept free after the last beat, for **+ N counts** */
+    trailingInset?: number;
     playheadBeat: number;
     onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
     fitted?: boolean;
@@ -104,7 +118,8 @@ const useTimelineZoom = ({
     const fitValue =
         beatCount > 0 && viewportWidth > 0
             ? clamp(
-                  Math.max(0, viewportWidth - leadingInset) / beatCount,
+                  Math.max(0, viewportWidth - leadingInset - trailingInset) /
+                      beatCount,
                   TIMELINE_MIN_PX_PER_BEAT,
                   TIMELINE_MAX_PX_PER_BEAT,
               )
@@ -436,14 +451,23 @@ function TimelineSurface({
     const initialPageWidth = model.pages.some((page) => page.isInitial)
         ? TIMELINE_INITIAL_PAGE_WIDTH
         : 0;
-    const surfaceWidth = width + initialPageWidth;
+    // E1: the music past the last count, drawn dimmed after it
+    const peaksPastEnd = model.waveform.peaksPastEnd ?? NO_PEAKS;
+    const pastEndWidth = peaksPastEnd.length * pixelsPerBeat;
+    // E1: room after the last beat for the music past it, **+ N counts** and the note
+    const trailingWidth = Math.max(
+        pastEndWidth,
+        props.musicPastEnd ? MUSIC_PAST_END_NOTE_WIDTH : 0,
+        props.appendCounts ? APPEND_COUNTS_ROOM : 0,
+    );
+    const surfaceWidth = width + initialPageWidth + trailingWidth;
     // UI-12: the ruler (28px) and the measure row; then the waveform, when audio is loaded, so it
     // stays put as clips come and go; then the clip rows, one always kept (with no chrome), so the
     // first off-page clip doesn't move the ruler right after the drag that made it
     const railHeight = expanded ? 20 : 17;
-    const showWaveform = model.waveform.peaksByBeat.some(
-        (peaks) => peaks.length > 0,
-    );
+    const showWaveform =
+        model.waveform.peaksByBeat.some((peaks) => peaks.length > 0) ||
+        peaksPastEnd.some((peaks) => peaks.length > 0);
     const waveformHeight = expanded ? 32 : 12;
     const audioTop = 28 + railHeight + 2;
     const trackTop = showWaveform ? audioTop + waveformHeight + 4 : audioTop;
@@ -478,13 +502,49 @@ function TimelineSurface({
     const zoom = useTimelineZoom({
         viewportRef,
         pixelsPerBeat,
-        beatCount: model.beatCount,
+        beatCount: model.beatCount + peaksPastEnd.length,
         leadingInset: initialPageWidth,
+        trailingInset: props.appendCounts ? APPEND_COUNTS_ROOM : 0,
         playheadBeat: positionBeat,
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
         fitted: props.zoomFitted,
         onFittedChange: props.onZoomFittedChange,
     });
+    // E1: the waveform past the end, as its own lane model so the canvas keeps its memo
+    const pastEndWaveform = useMemo(
+        () => ({ peaksByBeat: peaksPastEnd }),
+        [peaksPastEnd],
+    );
+    // E1: **+ N counts** goes after the last page's flag; when **+** at the playhead would cover
+    // it, it moves just past that one, so both stay clickable
+    const showAddPageFlag = props.onAddPageFlag != null && !props.isPlaying;
+    const addPageFlagX = beatToX(positionBeat, pixelsPerBeat) + 8;
+    const lastFlagBeat = Math.min(
+        model.beatCount,
+        model.pages.reduce(
+            (end, page) => Math.max(end, page.endBeat ?? page.atBeat),
+            0,
+        ),
+    );
+    const appendCountsX = (() => {
+        const atFlag = beatToX(lastFlagBeat, pixelsPerBeat) + 8;
+        return showAddPageFlag &&
+            addPageFlagX + 22 > atFlag &&
+            addPageFlagX < atFlag + APPEND_COUNTS_WIDTH
+            ? addPageFlagX + 22
+            : atFlag;
+    })();
+    const showAppendCounts = props.appendCounts != null && !props.isPlaying;
+    // The note sits in the waveform lane past the last count; compact, the lane is too thin, so
+    // it sits in the top row, after **+ N counts** when that is at the end too
+    const musicNoteTop = expanded ? audioTop + (waveformHeight - 22) / 2 : 4;
+    const musicNoteLeft =
+        initialPageWidth +
+        (!expanded &&
+        showAppendCounts &&
+        appendCountsX + APPEND_COUNTS_WIDTH > width
+            ? appendCountsX + APPEND_COUNTS_WIDTH + 8
+            : width + 8);
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = (next: TimelineSelection) =>
         props.onSelectionChange?.(next);
@@ -700,7 +760,7 @@ function TimelineSurface({
                         onSeek={props.onSeek}
                         isPlaying={props.isPlaying}
                     />
-                    {props.onAddPageFlag && !props.isPlaying && (
+                    {showAddPageFlag && (
                         <button
                             type="button"
                             data-testid="timeline-add-page-flag"
@@ -710,11 +770,25 @@ function TimelineSurface({
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={props.onAddPageFlag}
                             className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
-                            style={{
-                                left: beatToX(positionBeat, pixelsPerBeat) + 8,
-                            }}
+                            style={{ left: addPageFlagX }}
                         >
                             <PlusIcon size={10} weight="bold" />
+                        </button>
+                    )}
+                    {showAppendCounts && props.appendCounts && (
+                        <button
+                            type="button"
+                            data-testid="timeline-append-counts"
+                            data-timeline-interactive="true"
+                            aria-label={props.appendCounts.title}
+                            title={props.appendCounts.title}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={props.appendCounts.onAppend}
+                            className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex h-16 items-center gap-2 rounded-full border px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
+                            style={{ left: appendCountsX }}
+                        >
+                            <PlusIcon size={9} weight="bold" />
+                            {props.appendCounts.label}
                         </button>
                     )}
                     {pointer.rangePreview && (
@@ -824,6 +898,44 @@ function TimelineSurface({
                         </div>
                     )}
                 </div>
+                {showWaveform && peaksPastEnd.length > 0 && (
+                    <div
+                        data-testid="timeline-waveform-past-end"
+                        aria-hidden="true"
+                        className="rounded-4 pointer-events-none absolute overflow-hidden opacity-40"
+                        style={{
+                            left: initialPageWidth + width,
+                            top: audioTop,
+                            width: pastEndWidth,
+                            height: waveformHeight,
+                        }}
+                    >
+                        <TimelineWaveformCanvas
+                            waveform={pastEndWaveform}
+                            width={pastEndWidth}
+                            height={waveformHeight}
+                            pixelsPerBeat={pixelsPerBeat}
+                            tone="rest"
+                        />
+                    </div>
+                )}
+                {props.musicPastEnd && !props.isPlaying && (
+                    <div
+                        data-testid="timeline-music-past-end"
+                        className="border-stroke bg-bg-1 text-text rounded-6 absolute z-[55] flex h-22 items-center gap-8 border px-8 text-[11px] whitespace-nowrap shadow-sm"
+                        style={{ left: musicNoteLeft, top: musicNoteTop }}
+                    >
+                        <span>{props.musicPastEnd.message}</span>
+                        <button
+                            type="button"
+                            data-timeline-interactive="true"
+                            onClick={props.musicPastEnd.onExtend}
+                            className="text-accent focus-visible:ring-accent rounded-4 font-medium outline-hidden hover:underline focus-visible:ring-2"
+                        >
+                            {props.musicPastEnd.actionLabel}
+                        </button>
+                    </div>
+                )}
                 {rangeMenu.element}
             </div>
         </TimelineShell>
