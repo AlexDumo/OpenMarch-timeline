@@ -1,12 +1,13 @@
 /**
- * Generates a string representation of the measure range for the page.
- * If the page starts on the first beat, the measure number is returned.
- * Otherwise, the measure number and the starting beat are returned.
- * The last measure number and ending beat are also included in the string if the page ends in the middle of a measure.
+ * Generates a string representation of the measure range of the page's counts, from its count 1
+ * to its last count (docs/tempo/count-convention.md). A count on a measure's first beat is the
+ * measure number alone at the start; a last count on a measure's last beat is the number alone at
+ * the end. Otherwise the beat follows in brackets.
  *
- * E.g. "1 - 2" means the page starts on the first beat of m1 and goes through m2 to the start of m3.
+ * E.g. "5 - 8": count 1 is m5 beat 1 and the last count is m8's last beat.
  *
- * E.g. "1(2) - 3(4)" means the page starts on the second beat of m1 and goes up to the fourth beat of m3.
+ * E.g. "5(2) - 9(1)": the page starts on m5's downbeat, so its count 1 is m5 beat 2 and its flag,
+ * on m9's downbeat, is m9 beat 1.
  *
  * @returns A string representing the measure range for the page.
  */

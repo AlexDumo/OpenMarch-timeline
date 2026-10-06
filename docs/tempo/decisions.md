@@ -69,7 +69,443 @@ Feel-based ones also have a row in
   full).
 - **Validate:** V-40, then E4 tap-lab data.
 
-## T-E7-1 A toggles Align, except while marchers are selected (align)
+## K-0 Test-show kit (kit, 2026-10-06)
+
+Entries K-1 to K-7 are about the test-show kit in `apps/desktop/tempo-kit` (its README has the
+fixture list and how to score).
+
+## K-1. Truth times are audio-file seconds
+
+- **Context:** a show's count times start at 0, but the music in a recording starts later. The app links the two with `audioOffsetSeconds` (audio time = show time − offset).
+- **Choice:** every truth time is seconds from the start of the audio file. The scorer subtracts the show's offset. A synced show stores `-leadIn`.
+- **Alternatives:** times from count 1, which can't score an offset mistake; a lead-in count, which changes the count structure.
+- **Validate:** `-synced.dots` scores 0 ms. Moving the offset by 0.1 s scores 100 ms on every count (unit test).
+
+## K-2. What a count is in each meter
+
+- **Context:** the truth has to commit to a count per note value, and today's parser gets several meters wrong.
+- **Choice:**
+  - 6/8 and 12/8 count dotted quarters.
+  - 7/8 counts 2+2+3 and 5/8 counts 3+2 (three and two uneven counts).
+  - 3/2 counts quarters: six counts, a step per quarter at ♩=176.
+  - A pickup is its own one-count measure, m0, with `measurementOffset` 0.
+- **Alternatives:**
+  - 3/2 in halves (three counts, as the parser's table has it).
+  - 6/8 in six.
+  - The pickup inside m1.
+- **Validate:** ask Sam how the 3/2 bar is marched. If the answer is halves, change `METERS["3/2"]` and regenerate. The E3 import preview's "count in" choice needs the same answer.
+
+## K-3. Fermata and caesura lengths
+
+- **Choice:**
+  - A fermata's seconds are the held count's whole length (3.2 s means the count lasts 3.2 s).
+  - A caesura's seconds are silence added after its count.
+  - Errors "in counts" divide by the count's length without either, so a held count doesn't hide an error.
+- **Alternatives:** a fermata as extra time added to the count.
+- **Validate:** read `rubato.json` m5 beat 4 and m14 beat 4 against the WAV.
+
+## K-4. How each "wrong" show is wrong
+
+- **Choice:**
+  - Dana: flat ♩=120 (the new-show default).
+  - Marcus: every count 4% fast.
+  - Jo: only the printed tempos (no rit., accel., fermatas or caesura).
+  - Sam: 0.5 s per count whatever the note value.
+  - All with no audio offset.
+  - Marcus's live take: his render-synced show with the live audio swapped in.
+  - Counts, measures and marks are always right, so only timing needs fixing. That keeps every fix duration-only, which the ripple never refuses.
+- **Alternatives:** shows imported by today's parser, with its wrong counts. Those test the parser, not alignment, and the MusicXML files already cover that case.
+- **Validate:** each persona's script starts from its `-wrong` show and ends with a scorer run.
+
+## K-5. Generated audio stands in for a MuseScore render
+
+- **Context:** the plan asks for a MuseScore render and a real band recording. MuseScore isn't on the capture box, and the recording needs two annotators.
+- **Choice:** render the click with `createMetronomeWav`, a louder hit sound at marked hits, and a quiet sustained chord per section, straight from the truth. The truth is then exact to the sample.
+- **Alternatives:** time-stretching one render for the live take. The kit renders the live map directly instead, so its truth is exact too.
+- **Validate:** E5 (onset snapping) needs something less clean than clicks. Add reverb or a real recording before running it.
+
+## K-6. Score letters, typo and rit.
+
+- **Choice:**
+  - The score's rit. leads into H. The lead's task named H; Marcus's persona report said K.
+  - The 6/8 section is at I, with the 3/4 bar (m70) closing I before J.
+  - v1 prints the ♩=138 typo at F. The audio and `score.json` are v2 (♩=132).
+  - The Sibelius export prints "c. 132" at K, restating the tempo, so a parser that refuses or warns there loses nothing.
+- **Validate:** Marcus's E12 script. Re-importing v2 over a v1 import should change only the timing after F.
+
+## K-7. The generator runs through vitest
+
+- **Context:** the shows have to be built with the app's own db-functions and converter, which import through the `@/` alias and need a DOM-like environment.
+- **Choice:** `generate.kit.ts` is one vitest "test" under its own config (`tempo-kit/vitest.kit.config.mts`), as `~/om-capture/make-fixture` already does. The scorer is plain Node (`score.mts`), so anyone can run it on a saved show.
+- **Alternatives:** `tsx` with tsconfig paths. Some app modules pull in browser globals at import time, which vitest's jsdom environment provides.
+
+## T-8 Wizard: counts to the end of the recording, pages stay at the start (show-length, E1)
+
+- **Context:** "Tempo only" made 20 measures (80 counts, 40 s at 120) whatever the MP3's length;
+  "Skip for now" made 128 counts. The music past that had no counts, so nothing could be planned
+  there.
+- **Choice:** with audio and no MusicXML, "Tempo only" makes whole measures of the chosen meter
+  at the chosen tempo until the recording ends (at least the 20 starter measures), and "Skip"
+  makes counts until it ends (at least 128, still no measures). The starter pages are unchanged
+  (five pages at the start, last page 2 measures). The length is the decoded file's duration, read
+  once at completion; a file that can't be decoded falls back to the starter length. A MusicXML
+  file's own measures set its show's length, unchanged.
+- **Alternatives:** pages through the whole song (every 4 measures); a fixed 64 counts with "+"
+  to extend (11-ui); asking how long the show is.
+- **Validate:** E1 session task 2 ("put a set at the very end of the song"): does anyone ask how
+  to add more?
+
+## T-9 **+ N counts**: a page after the last page, N from the "new page counts" setting (show-length, E1)
+
+- **Context:** "+" was offered only at the paused playhead, and never past the show's last count
+  (`planPageFlagInsertion` returned null there), with nothing to say why.
+- **Choice:** a labelled button, "+ 16 counts" (tooltip "Add a page of 16 counts after the last
+  page"), always shown while paused just after the last page's flag. It adds a page of N counts
+  after that flag and appends counts only where the show ends before the new flag (all of them
+  when the counts end at the last flag, the usual case after the first use). N is the workspace
+  setting "Default new page counts" (16 by default, 4 measures for a tempo-only show), which the
+  old page-mode "+" used. Appended counts continue the last measure's tempo and count lengths and
+  carry on its measure lines. The beats go through `withTimelinePageRipple` and the flag through
+  `addPageFlagInTransaction`, in one undoable edit; nothing lies after the end, so it is never
+  refused for the drill. When **+** at the playhead would cover it, it moves just past that one.
+- **Alternatives:** N from `last_page_counts` (it becomes huge after a page that covers spare
+  counts, and the next click would say "+ 230 counts"); the button at the end of the counts with a
+  flag at the new end (on a wizard show with counts to 2:31 and pages to 0:36 it would make one
+  page of 2 minutes); a plain "+" with no count.
+- **Validate:** V-41.
+
+## T-10 The music past the last count: drawn dimmed, with a note that offers extending (show-length, E1)
+
+- **Context:** the waveform lane drew only the music under existing counts, so a show shorter than
+  its music looked complete.
+- **Choice:** the lane goes on past the last count at 40% opacity, on counts at the show's last
+  tempo (as appending would make them), up to where the music ends: the last moment the waveform
+  would draw (within 42 dB of the loudest), so the silent padding the player adds isn't music.
+  Both parts share one loudness scale. When more than one count of music is left, a note sits in
+  the top row just past the last count: "Counts end at 0:48; the music runs to 1:00. Extend counts
+  to the end". Extending appends counts (no pages) to the end of the music, finishing the last
+  measure, as one undoable edit, and a toast says how many were added. Fit includes the music past
+  the end and room for the note, so a fitted timeline shows both. Counts that reach the end within
+  50 ms of the music's end count as reaching it.
+- **Alternatives:** the note in the Music modal (Dana doesn't open it); a toast on open (lost to
+  interruptions); extending automatically when audio is added (a hidden structural change).
+- **Validate:** V-42, V-43.
+
+## T-11 One rule for which count a moment belongs to (count-parity, E2)
+
+- **Context:** the timeline readout, the PDF drill sheet and the video overlay named different
+  counts and measures for the same moment (on m5's downbeat the video was one count ahead of the
+  timeline). See [count-convention.md](count-convention.md).
+- **Choice:** count k of a page is the k-th beat line after its start flag, so the flag is the
+  last count. A line is named by the beat that starts on it; a moment belongs to the line at or
+  before it. Applied to the readout, the PDF measure range and the video overlay; the go-to box
+  already agreed.
+- **Alternatives:** counts as the beats a page spans (keeps "5 - 8" on sheets, but reverses UI-12
+  and UI-13, which put a page's last count on its flag); or a mixed rule that keeps the sheet's
+  span range (two answers for one page).
+- **Validate:** owner decides whether "5(2) - 9(1)" on drill sheets is acceptable; Sam's script
+  (print page 12, scrub to its count 1 and 16, render the video, read all three) finds zero
+  mismatches. Note T-3 calls the show's first beat "count 1"; under this rule the first page's
+  count 1 is the second beat line, so the two docs should settle one word.
+
+## MR-1 Rehearsal marks belong to their measure (measure row, E8)
+
+- **Context:** a `measures` row stores its downbeat and its mark, so re-barring has to decide
+  whether a mark follows its measure (and its number) or stays on its count.
+- **Choice:** the mark follows its measure line: re-barring moves the row, and its mark with it,
+  so "D at m25" stays at m25. A mark is lost only when its line is removed or pushed past the end
+  of the show, and the toast names it with Undo.
+- **Alternatives:** keep each mark on its count and move it to whichever measure starts there
+  (better for marks set by ear, worse for marks typed from the score).
+- **Validate:** V-46.
+
+## MR-2 R marks the nearest downbeat while playing (E8, Dana's E4)
+
+- **Context:** marking "the big hit is here" by ear means pressing a little early or late.
+- **Choice:** while playing, R marks the nearest downbeat at once (one undo entry), without
+  stopping, then opens the name field with the suggested letter; typing and Enter renames it (a
+  second undo entry), and R or Space before anything is typed go on to the timeline, so marking
+  hit after hit, or pausing, never types into the field. Paused, R opens the field on the measure
+  holding the playhead and writes nothing until Enter. With no measure there, the field explains
+  that a mark needs a measure line and Enter starts one at that count.
+- **Alternatives:** the measure holding the playhead (a press a hair early lands a measure
+  before); a draft that waits for Enter (a press while playing would be lost if ignored).
+- **Validate:** V-44.
+
+## MR-3 The suggested mark name (E8)
+
+- **Choice:** the name after the previous mark: A … Z, then AA, BB (doubled letters, as scores
+  do); trailing numbers count up ("B2" → "B3", "41" → "42"); a word starts at A. Names the show
+  already uses are skipped, so go-to "C" stays unambiguous.
+- **Alternatives:** AA, AB (spreadsheet style); allow duplicates.
+- **Validate:** V-45.
+
+## MR-4 Beats in mN (E8)
+
+- **Choice:** "Later measures keep their beats" is on by default: every later line moves by the
+  difference. Lines pushed past the end are removed. The last measure is open-ended, so shortening
+  a measure makes it longer rather than adding lines at the end. Unchecked, the next measure
+  absorbs the difference; lines it passes are merged into it (a mark there moves to the line that
+  stays when that line has none). "Beats per measure from here" re-bars up to the next rehearsal
+  mark (default when there is one) or to the end, and a last shorter measure keeps what's left.
+- **Alternatives:** unchecked by default (11-ui.md's "usual case" argues for on).
+- **Validate:** V-46.
+
+## MR-5 The measure row's targets (E8)
+
+- **Choice:** measure numbers become buttons when the row can edit (a click names that measure;
+  it no longer seeks). A right-click on the row targets a rehearsal tab, else the count tick
+  within 6px, else the measure under the pointer. Tabs keep seeking on click (owner rule);
+  double-click or Enter renames. Compact mode has no numbers, so only tabs, R and the menu edit
+  there.
+- **Validate:** V-47.
+
+## MR-6 No ripple, no flag (E8)
+
+- **Context:** the brief's three layers: labels touch neither counts nor timing.
+- **Choice:** `editMeasureLines` writes only `measures` rows in one `transactionWithHistory`; it
+  doesn't run `withTimelinePageRipple` (nothing for it to do: same beats, same grid). No Tempo lab
+  flag: this restores what the click-a-tick popover did before PR 80.
+- **Side effects checked:** tempo groups are derived on read (`TempoGroupsFromMeasures`), so a new
+  mark or line only changes how the Music modal groups measures; no beat duration is written. Two
+  knock-ons remain, as with the old popover: a mid-group mark splits that group, so a later tempo
+  edit in the Music modal applies to the smaller group; and re-barring a mixed-meter measure
+  (2+2+3 durations) can change whether the modal reads it as mixed meter. Measure numbers after an
+  added or removed line renumber everywhere (readout, go-to, PDF), which is the point, but the designer's
+  printed sheets will disagree until reprinted.
+
+## MX-1 Which note is the count in each meter (musicxml)
+
+- **Context:** the parser had a lookup table (7/8 as seven quarters, 5/8 and 5/4 as one count a
+  bar, `2+2+3` not read). The app stores no time signature, only counts, and reads mixed meter
+  as short and long counts in the ratio 2:3.
+- **Choice:** one rule (`packages/musicxml-parser/src/meter.ts`): the score's own grouping wins;
+  x/1, x/2, x/4 count the denominator, except x/2 counts quarters while the tempo is printed in
+  quarters; x/8 and shorter count in groups of 2 and 3 (6/8, 9/8, 12/8 in dotted quarters, 3/8
+  one count, 5 → 3+2, 7 → 2+2+3, 8 → 3+3+2, then 3s before 2s). A guessed grouping is a
+  highlighted warning in the preview. Unknown meters (4/3, senza misura) keep the previous meter,
+  with a warning.
+- **Alternatives:** count every denominator note (6/8 in six, 7/8 in seven); a per-meter "count
+  in" choice in the preview (Marcus and Sam ask for it; follow-up).
+- **Validate:** V-48. The kit's corps exports (7/8, 5/8, 3/2 in quarters, 12/8) match their
+  ground truth count times exactly.
+
+## MX-2 rit. and accel. are applied only to a known target (musicxml)
+
+- **Context:** most exports write "rit." as words with no target tempo.
+- **Choice:** a rit. or accel. becomes evenly changing tempos per count (like
+  `newBeatsFromTempoGroup`, ending one step short of the target) only when a numbered tempo
+  follows within 4 measures, goes the right way, and isn't an "a tempo". Otherwise the preview
+  says "rit. not applied" and the counts keep their tempo. "a tempo" goes back to the tempo
+  before the rit.; "Tempo I" to the first tempo.
+- **Alternatives:** guess a target (say 85%); use `<dashes>` to find the end of the line.
+- **Validate:** V-49. On the kit's score export the rit. at m53 has no target in the file, so
+  every later count is 0.54 s early against the ground truth; a later in-app rit. edit has to fix
+  it.
+
+## MX-3 Approximate and odd tempo marks (musicxml)
+
+- **Choice:** "c. 132", "ca 132" and "126-132" read as their first number (an info note).
+  Anything without a number keeps the previous tempo, with a warning (no more NaN durations).
+  `<sound tempo>` (quarters, decimals allowed) wins over the printed mark. A modulation printed
+  with no number (♩. = ♩) is read as "the new note lasts as long as the old one", with a warning.
+- **Alternatives:** refuse "c. 132" (the plan's wording); ignore modulations.
+- **Validate:** V-50 for the modulation reading.
+
+## MX-4 Pickups and measure numbers (musicxml)
+
+- **Choice:** an `implicit="yes"` measure shorter than its meter keeps only the counts its music
+  fills (rounded up to a whole count, with a warning). Import sets `measurementOffset` to the
+  file's first measure number, in the import's undo entry, so a pickup reads m0. A file whose
+  numbers aren't consecutive gets a warning naming where the app's numbers start to differ.
+- **Follow-up:** per-measure numbers (repeats renumbered, "12a") need a column on `measures`.
+
+## MX-5 Import preview and dry run (musicxml)
+
+- **Choice:** picking a file never writes. A dialog shows the summary line and the measures
+  where something happens (all measures behind a checkbox), with warning rows highlighted.
+  Import runs once in a rolled-back transaction first (ripple and commit checks included); if
+  the drill would refuse it, the preview says why and Import stays disabled. The existing
+  "page N starts at measure N" mapping is kept and stated in the preview.
+- **Validate:** V-51.
+
+## E10-1 Skip at a cut stops moves, it can't jump them (drill edits)
+
+- **Context:** "Skip that part of the move" should put marchers where they'd be after the cut. The
+  timeline model is continuous: a move starts where the previous one ended, so there is no jump.
+- **Choice:** skip changes only moves that run into the cut and end inside it: their destination
+  becomes the marchers' positions at the cut's first count (direct paths with one marcher per
+  slot and no higher layer there). Moves that run out of the cut or across it are squeezed, and
+  the report says why ("marchers can't jump").
+- **Alternatives:** split moves at the cut (shapes, arcs and per-slot rows make that a large
+  write); leave skip out.
+- **Validate:** Persona script, "cut 41–56, make the drill skip that part".
+
+## E10-2 Hold for added counts uses the ripple's holding moves, then takes the page out again
+
+- **Context:** at a page flag, "Hold marchers for these counts" should keep moves landing on their
+  count and hold until the flag. `addHoldingMoves` does that for an added page.
+- **Choice:** in one transaction: insert the counts plus a page over them (the ripple adds the
+  holds), then delete that page row without a ripple, so the owner page gets the counts and later
+  pages don't renumber. Hold is only offered at a flag; a move partway through there stretches.
+- **Validate:** "4-count vamp before the closer, hold everyone" plays as a hold.
+
+## E10-3 Defaults in the count dialogs
+
+- **Choice:** "Does the recording have these counts?" defaults to Yes (the arranger's vamp comes
+  with a recording that has it); at a flag, Hold is the default, elsewhere Stretch; a cut squeezes
+  by default; clips only in the cut are deleted with it, and the commit button says so.
+- **Validate:** as V-rows: which option directors pick first, unprompted.
+
+## E10-4 Page flag grips in the ruler's lower half
+
+- **Context:** UI-10 keeps a plain drag on the timeline a scrub. The start pennant (upper half of
+  the ruler) and the playhead sit on flags too.
+- **Choice:** a small grip standing on the ruler's bottom edge at each flag; only it moves a flag.
+  A drop is one undo; the readout shows both pages' counts and, after a pause, what the drill does.
+- **Validate:** owner hands-on; check grips don't clutter a zoomed-out show.
+
+## E10-5 Previews share the renderer's database connection
+
+- **Context:** a preview runs the edit in BEGIN..ROLLBACK on the one renderer connection, and the
+  SQL proxy queue serializes statements, not transactions. A query that fetches while a preview's
+  transaction is open reads rows that are then rolled back, and TanStack Query caches them.
+- **Choice (mitigation):** one preview at a time (a newer one on a channel replaces a waiting
+  one), under `withTimelineWriteLock` (so the resolver's reads wait), and after every rollback the
+  app re-fetches every query that was fetching or updated since the preview began.
+- **Real fix:** have the proxy queue hold a whole transaction (no other statement between BEGIN
+  and COMMIT/ROLLBACK), or run previews on a separate connection to a copy (for example an
+  in-memory `VACUUM INTO`, or a dedicated main-process connection).
+- **Validate:** no stale page boxes after dragging a flag grip for a while.
+
+## E10-6 Measure lines for added counts carry the meter on
+
+- **Choice:** at a downbeat the new counts are whole measures of the previous measure's length;
+  after the last count, the last measure is finished and the meter of the last two lines carries
+  on (as E1's `countContinuation`); partway through a measure that measure gets the counts.
+- **Validate:** adding 16 counts at a downbeat of a 4/4 show gives four 4-count measures.
+
+## TM-1 The meter is read from count lengths unless a row is typed (tempo map, E11)
+
+- **Context:** counts carry no note values. 7/8 2+2+3 is three counts at 2:2:3, but 12/8 at
+  ♩.=152.5 and 4/4 at ♩=152.5 are the same four equal counts.
+- **Choice:** `inferMeter` reads ratios of 1, 1.5 and 2 to a measure's shortest count (within 3%)
+  as a grouping in eighths (2:2:3 is 7/8 2+2+3, 3:2 is 5/8 3+2); anything else, including equal
+  counts, a rit. or a fermata, is n/4. A typed row stores a **mark** (meter and beat unit) at its
+  measure in `tempoMapMarks` (workspace settings, by the measure's start beat id, written with
+  the retime in the same undo entry, as `tempoSyncedBeatIds`). A mark carries on through later
+  measures with the same number of counts and no conflicting grouping.
+- **Alternatives:** a `meter` column on `measures` (migration; the right home if the map stays,
+  see the synced counts ADR); infer only, so 12/8 can never be shown.
+- **Validate:** V-52.
+
+## TM-2 A typed tempo is exact, and later counts shift (tempo map, E11)
+
+- **Context:** "♩=152.5" from a score means every count of the row at 152.5. The drag rule
+  re-spaces up to the next synced count instead.
+- **Choice:** the row's counts get exactly the typed tempo (`setRangeRamp`, weighted by the
+  meter: the long count of 7/8 2+2+3 lasts 1.5 ♩), a rit. keeps the tempo it ends on, and every
+  later count shifts. Holds inside the row are flattened (Ctrl+Z brings them back). Nothing
+  re-spaces to keep a later synced count in place: in a typed map every row edge is synced, so
+  re-spacing would rewrite the next row the user also typed.
+- **Alternatives:** `keepRelative` (the average becomes the typed tempo, holds survive, but the
+  cell then shows "≈"); `keepSyncedAfter` (later synced counts stay on the music).
+- **Validate:** V-53.
+
+## TM-3 Typed rows sync their edges (tempo map, E11)
+
+- **Choice:** a tempo, rit. or meter edit adds the row's first count and the count after its last
+  to the synced counts (core's `tempoSyncedBeatIds`); "Add row at m45" syncs m45's first count;
+  removing a typed row (Delete) drops its mark and takes its first count out of the synced counts. So Align drags stop at
+  the map's rows.
+- **Alternatives:** keep the map and synced counts separate; sync only the row's first count.
+- **Validate:** with the Align view (E7) once both are on the integration branch.
+
+## TM-4 Where rows start (tempo map, E11)
+
+- **Choice:** at a typed mark, a meter or unit change, a change of steady tempo, and where steady
+  counts turn uneven or back. Consecutive uneven measures are one row, so a rit. over two bars is
+  one row. A row whose tempos fall on a straight line count by count (first count at the start
+  tempo, last at the end, as the kit renders them) shows "rit./accel. to ♩=100"; any other uneven
+  row shows its average with "≈".
+- **Validate:** V-52 (open the kit's `score-synced` and `rubato-synced` shows).
+
+## TM-5 Meter edits only regroup (tempo map, E11)
+
+- **Choice:** the meter cell takes a meter with the same number of counts per measure (3/4 to 7/8
+  2+2+3, 4/4 to 12/8, 2/4 to 5/8 3+2); anything else is refused with "changes the number of
+  counts: not in this prototype". The tempo's number stays and its unit follows the meter, so
+  4/4 ♩=120 becomes 12/8 ♩.=120 (same counts) and 3/4 ♩=120 becomes 7/8 2+2+3 ♩=120 (the long
+  count gets longer).
+- **Alternatives:** keep each measure's length (the eighth changes speed).
+- **Validate:** V-53.
+
+## TM-6 Relations are worked out once (tempo map, E11)
+
+- **Choice:** "♩.=♩" makes this row's ♩. last as long as the previous row's last ♩;
+  "=prev" keeps the previous row's last tempo number in this row's unit (the count goes on at the
+  same rate). Both are written as numbers; changing the previous row later doesn't follow.
+- **Alternatives:** live links between rows (needs storage and a cascade rule).
+
+## TM-7 A side panel behind the ⋯ menu (tempo map, E11)
+
+- **Choice:** with the flag on, the transport gets a "⋯" menu with "Tempo map…" and Shift+T opens
+  it (free in `RegisteredActionsHandler`; Alt+T is Focus timeline). It's a non-modal panel on
+  the right, so the timeline and field stay visible and playable. With the flag off there is no
+  menu and no shortcut.
+  Tap the beat (E6) entries are numbered TB-n so they don't collide with other workers' T-n; the
+  lead renumbers on merge.
+
+## TB-1 Tapping scales; it doesn't flatten (tap-beat, 2026-10-06)
+
+- **Context:** Dana taps 8 beats near the start; the show's later counts may hold score tempo
+  changes (Marcus) or a slower letter C (the kit's `steady`).
+- **Choice:** `planTapTheBeat` matches the tapped stretch to the taps on average and scales every
+  later count by the same factor, so relative lengths survive. The first synced count after the
+  taps stays on the music, with the counts before it re-spaced. From the start, count 1 goes to
+  the fitted first tap (`originShift`); from here, the playhead's count stays and absorbs up to
+  half a beat of phase.
+- **Alternatives:** `setRangeBpm` to the end (one tempo everywhere: wrong for any score with a
+  tempo change); only the tapped stretch changes (later music drifts against counts).
+- **Validate:** V-54.
+
+## TB-2 Applying is never refused; it needs four taps
+
+- **Choice:** Apply is enabled from four taps whatever the confidence ("Keep going…" is advice,
+  not a gate); the count limits clamp, and the sentence says so. One undo entry includes the
+  offset and the strip's dismissal, so Ctrl+Z brings the strip back with the old timing.
+- **Validate:** V-55.
+
+## TB-3 ×2 / ÷2 after applying is a new undo entry
+
+- **Choice:** before Apply, ×2/÷2 only change the preview. After, they re-plan from the show as it
+  was before the first apply and write again (offset unchanged), as a second undo entry, rather
+  than undoing and redoing.
+- **Alternatives:** hide ×2/÷2 after Apply; replace the first undo entry.
+
+## TB-4 Taps use the input event's time
+
+- **Context:** on a loaded machine the main thread ran key handlers 300 ms late during playback
+  (measured in the headless capture), which made taps uneven and the tempo wrong.
+- **Choice:** a tap is `livePosition - (now - event.timeStamp)`, ignored past one second.
+- **Validate:** V-55 on a slow laptop.
+
+## TB-5 Where the entry points live
+
+- **Choice:** the strip sits over the waveform lane's left edge (full timeline only; compact has
+  no room) and sticks to the viewport. "Tap the beat…" is in the Sound popover. The panel floats
+  over the bottom of the field so the field and timeline stay visible. No header button.
+
+## TB-6 From here plays with a pre-roll
+
+- **Context:** Dana's E2 asks for a pre-roll before "here" so her taps have settled by the
+  playhead.
+- **Choice:** Play from here starts 8 counts before the playhead. Taps in the pre-roll set the tempo
+  but never move counts before the playhead. The playhead's count is fixed when Play or the first
+  tap happens, because pausing a play-on run moves the playhead (UI-12).
+- **Alternatives:** two measures (needs the meter; counts are what the panel knows); no pre-roll.
+
+## E7-1 A toggles Align, except while marchers are selected (align)
 
 - **Context:** the brief asks for key A. A already moves selected marchers left (WASD nudge in
   `RegisteredActionsHandler`), and the timeline panel is only shown while the canvas has focus.
@@ -77,9 +513,9 @@ Feel-based ones also have a row in
   moving them. The button and its ✕ always work.
 - **Alternatives:** Shift+A; a different letter; let A do both (it would move marchers and switch
   views at once).
-- **Validate:** V-41.
+- **Validate:** V-56.
 
-## T-E7-2 A flag drag syncs the flag; Shift doesn't; a release in place writes nothing (align)
+## E7-2 A flag drag syncs the flag; Shift doesn't; a release in place writes nothing (align)
 
 - **Context:** 12-ux.md 3 says any drag syncs; 11-ui.md B used Shift for "only pages N and N+1".
   T-5 left the modifier for the `"shift"` rule to the UI.
@@ -88,9 +524,9 @@ Feel-based ones also have a row in
   once per user (localStorage). A drag released where it started (it snaps back within 6px)
   writes nothing, not even the sync. The `"shift"` after-rule has no modifier yet.
 - **Alternatives:** manual sync only (right-click); Shift for "only this page and the next".
-- **Validate:** V-42.
+- **Validate:** V-57.
 
-## T-E7-3 Flag handles sit above the playhead's head (align)
+## E7-3 Flag handles sit above the playhead's head (align)
 
 - **Context:** the playhead usually rests on count 1 (home), so count 1's handle was under the
   playhead head and a drag there scrubbed instead.
@@ -98,26 +534,40 @@ Feel-based ones also have a row in
   still scrubs from anywhere else on the ruler.
 - **Validate:** capture `tempo-align` step 3.
 
-## T-E7-4 Typed page tempo is 40–400 BPM; dragged tempos read "≈" (align)
+## E7-4 Typed page tempo is 40–400 BPM; dragged tempos read "≈" (align)
 
 - **Context:** a typed "12038" (120 with "38" appended) squeezed a page to nothing in the first
   capture. Sam wants exact typed values shown exactly.
 - **Choice:** "Tempo…" accepts 40 to 400 BPM and selects the old value on focus. Page labels show
   a tempo exactly ("152.5") only when every count is the same length and the BPM has at most two
   decimals; a drag's 137.93… reads "≈138".
-- **Validate:** V-46.
+- **Validate:** V-61.
 
-## T-E7-5 Align's zoom and size (align)
+## E7-5 Align's zoom and size (align)
 
 - **Choice:** Align has its own px/s, set on entering so the playhead's page keeps its width, and
   doesn't touch the normal timeline's remembered Fit. The surface is at most 16 000 px wide (so
   its canvases fit at 2× density), which caps px/s for long shows. The waveform is 64px (24px
   compact), drawn from the envelope in 2px bars on the same decibel scale as the normal lane.
-- **Validate:** V-44.
+- **Validate:** V-59.
 
-## T-E7-6 Holds: which ticks can be grabbed, and what reads as held (align)
+## E7-6 Holds: which ticks can be grabbed, and what reads as held (align)
 
 - **Choice:** count ticks in the measure row take the pointer only when a count is at least 10px
   wide and isn't a flag. A count longer than 1.6× its page's median count is hatched as held.
   Drags snap to the playhead, then the count's own time (no onsets yet: E5).
-- **Validate:** V-45.
+- **Validate:** V-60.
+
+## E7-7 What the other experiments' controls do in Align (align, merge with the integration branch)
+
+- **Context:** E10 draws page flag grips that move a flag to another count, E1 draws **+ N
+  counts**, a dimmed waveform past the last count and a "music runs on" note, and E8 makes the
+  measure row editable. All of them were built on the counts axis.
+- **Choice:** in Align, a flag drag retimes (E7), so E10's grips and **+** at the playhead are
+  hidden there: one gesture, one meaning per view (12-ux.md 3). Structural edits stay in the
+  right-click menu and in Normal. **+ N counts** and the music note stay, placed after the last
+  count on the seconds axis. The dimmed waveform past the end isn't drawn in Align, which already
+  draws the whole recording in time. E8's measure row works the same in both views: its numbers,
+  tabs, editor and right-click targets all use the timeline's axis. In Align, a rehearsal tab
+  also drags its measure onto the music, and a click that ends a drag doesn't seek.
+- **Validate:** capture `tempo-align` on the integration branch.

@@ -270,6 +270,51 @@ describeDbTests("tempo write path", (it) => {
         });
     });
 
+    describe("tempo map", () => {
+        it("writes a typed row's durations, synced counts and mark as one undo entry", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            void marchersAndPages;
+            await setUp(db);
+            const before = await snapshot(db);
+            const undoBefore = await undoEntries(db);
+            const show = await counts(db);
+            // ♩=152.5 from count 9 to count 17, as the tempo map writes it
+            const durations = show.durations.map((d, i) =>
+                i >= 9 && i < 17 ? 60 / 152.5 : d,
+            );
+            await retimeBeats({
+                db,
+                newDurationsByBeatId: durationsByBeatId(
+                    show.beatIds,
+                    durations,
+                ),
+                syncedBeatIds: [9, 17],
+                tempoMapMarks: [
+                    {
+                        beatId: 9,
+                        meter: { top: 12, bottom: 8, groups: [3, 3, 3, 3] },
+                        unit: "dq",
+                    },
+                    { beatId: 123456 },
+                ],
+            });
+            expect(await undoEntries(db)).toBe(undoBefore + 1);
+            const settings = await getWorkspaceSettingsParsed({ db });
+            expect(settings.tempoMapMarks).toEqual([
+                {
+                    beatId: 9,
+                    meter: { top: 12, bottom: 8, groups: [3, 3, 3, 3] },
+                    unit: "dq",
+                },
+            ]);
+            expect(await readTempoSyncedBeatIds(db)).toEqual([9, 17]);
+            expect((await counts(db)).durations[9]).toBe(60 / 152.5);
+            await roundTrip(db, before, await snapshot(db));
+        });
+    });
+
     testWithHistory(
         "retime with offset and synced counts is one change",
         async ({ db, marchersAndPages, expectNumberOfChanges }) => {

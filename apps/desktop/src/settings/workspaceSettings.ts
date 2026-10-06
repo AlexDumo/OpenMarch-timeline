@@ -38,6 +38,33 @@ export const workspaceSettingsSchema = z.object({
      * changes it, in the same undo entry (docs/tempo/adr-synced-counts.md).
      */
     tempoSyncedBeatIds: z.array(z.int().nonnegative()).optional(),
+
+    /**
+     * Tempo prototype (Tempo lab `tempoMap`): the tempo map's typed rows, by the beat id of the
+     * measure they start at, with the meter and beat unit typed there (counts carry no note
+     * values, so 12/8 and 4/4 at the same pulse look alike). Written with the retime that changes
+     * it, in the same undo entry (docs/tempo/decisions.md TM-1).
+     */
+    tempoMapMarks: z
+        .array(
+            z.object({
+                beatId: z.int().nonnegative(),
+                meter: z
+                    .object({
+                        top: z.int().positive(),
+                        bottom: z.int().positive(),
+                        groups: z.array(z.int().positive()).nullable(),
+                    })
+                    .optional(),
+                unit: z.enum(["s", "e", "de", "q", "dq", "h", "dh"]).optional(),
+            }),
+        )
+        .optional(),
+    /**
+     * Tempo prototype ("Tap the beat", E6): the timeline's "Counts aren't lined up with the music
+     * yet" strip was dismissed for this file, or the user tapped the beat. Absent means not yet.
+     */
+    tempoLineUpDismissed: z.boolean().optional(),
 });
 
 export type WorkspaceSettings = z.infer<typeof workspaceSettingsSchema>;

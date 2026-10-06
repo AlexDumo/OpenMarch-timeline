@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import { countTimes } from "@/timeline/tempo";
 import { beatToX } from "../TimelineGeometry";
+import { measureRowTargetAt } from "../TimelineMeasureRow";
+import { timelineStoryModel } from "../TimelineStoryFixtures";
 import {
     alignPixelsPerSecond,
     ALIGN_MAX_PX_PER_SECOND,
@@ -122,5 +124,36 @@ describe("switching axes", () => {
         const beat = 5;
         const next = scrollKeepingBeat({ beat, before, after, scrollLeft });
         expect(after.x(beat) - next).toBe(before.x(beat) - scrollLeft);
+    });
+});
+
+describe("the measure row on the seconds axis (E8 in Align)", () => {
+    it("targets the count tick under the pointer in seconds", () => {
+        // Two 4-count measures; count 4 held for 2 s
+        const model = {
+            ...timelineStoryModel,
+            beatCount: 7,
+            measures: [
+                { id: 1, label: "M1", atBeat: 0 },
+                { id: 2, label: "M2", atBeat: 4 },
+            ],
+        };
+        const axis = secondsAxis({ times, pixelsPerSecond: 10 });
+        const surface = {
+            getBoundingClientRect: () => ({ left: 100, top: 0 }) as DOMRect,
+        } as Element;
+        const at = (x: number) =>
+            measureRowTargetAt({
+                event: { clientX: 100 + x, clientY: 35, target: null },
+                surface,
+                model,
+                axis,
+                rowTop: 28,
+                rowHeight: 22,
+            });
+        // Count 5 starts at 4 s (x = 40); on a counts axis at 10 px/count it would be x = 50
+        expect(at(41)?.target).toEqual({ kind: "count", beat: 5 });
+        // Inside the held count, away from its ticks: the measure holding it
+        expect(at(30)?.target).toEqual({ kind: "measure", beat: 4 });
     });
 });

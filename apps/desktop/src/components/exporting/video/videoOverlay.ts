@@ -1,4 +1,5 @@
 import Measure from "@/global/classes/Measure";
+import type Beat from "@/global/classes/Beat";
 import Page from "@/global/classes/Page";
 import { recolorMarcherIconSvg } from "@/assets/open-march-marcher";
 import { getVideoThemeColors, type VideoTheme } from "./videoTheme";
@@ -64,6 +65,7 @@ export interface OverlayFormatBounds {
     countDigits: number;
     measureDigits: number;
     clockMinuteDigits: number;
+    /** Characters of the widest tempo, such as 5 for "152.5" */
     tempoDigits: number;
     /** Max digit length of page number portions (e.g. "12" in "12A") */
     setNumberDigits: number;
@@ -71,18 +73,25 @@ export interface OverlayFormatBounds {
     setSuffixChars: number;
 }
 
+/** A time this close after a beat line is on it (sums of beat lengths drift in the last bits) */
+const SAME_TIME_SECONDS = 1e-6;
+
 export interface OverlayState {
-    /** Name of the set the marchers are leaving (null on the first page) */
+    /** Name of the set the marchers are leaving (null at the opening set) */
     previousSetName: string | null;
-    /** Name of the set the marchers are moving toward */
+    /** Name of the set the marchers are moving toward, or the opening set before count 1 */
     setName: string;
-    /** 1-based count within the current transition */
+    /**
+     * The count within the current transition: the last count line at or before now, so the
+     * transition's last count is on its set. 0 at the opening set, before the first count.
+     */
     count: number;
-    /** Total counts of the current transition */
+    /** Total counts of the current transition; 0 at the opening set */
     totalCounts: number;
     measureNumber: number | null;
     /** Most recent rehearsal mark at or before the current measure */
     rehearsalMark: string | null;
+    /** The tempo the current beat is counted at (`countTempoBpm`) */
     tempoBpm: number | null;
     timeSeconds: number;
     totalSeconds: number;
@@ -99,7 +108,18 @@ export class OverlayTimeline {
     private readonly measures: Measure[];
     private readonly totalSeconds: number;
     private readonly formatBounds: OverlayFormatBounds;
+    /**
+     * Every page's counts in show order, each at the time of its beat line: count k of a page is
+     * the k-th beat line after the page's start, so its last count is on its flag, where the
+     * marchers reach its set (docs/tempo/count-convention.md, as the timeline's readout counts).
+     */
+    private readonly countLines: {
+        readonly pageIndex: number;
+        readonly count: number;
+        readonly time: number;
+    }[] = [];
     private pageCursor = 0;
+    private countCursor = -1;
     private measureCursor = 0;
 
     constructor(sortedPages: Page[], measures: Measure[]) {
@@ -109,6 +129,22 @@ export class OverlayTimeline {
         this.totalSeconds = lastPage
             ? lastPage.timestamp + lastPage.duration
             : 0;
+        sortedPages.forEach((page, pageIndex) => {
+            // The first page is the opening set, with no counts of its own
+            if (pageIndex === 0 && (page.counts === 0 || page.duration === 0))
+                return;
+            const { beats } = page;
+            const last = beats[beats.length - 1];
+            const flag =
+                sortedPages[pageIndex + 1]?.beats[0]?.timestamp ??
+                (last ? last.timestamp + last.duration : page.timestamp);
+            for (let count = 1; count <= beats.length; count++)
+                this.countLines.push({
+                    pageIndex,
+                    count,
+                    time: count < beats.length ? beats[count].timestamp : flag,
+                });
+        });
         this.formatBounds = computeFormatBounds(
             sortedPages,
             measures,
@@ -120,8 +156,20 @@ export class OverlayTimeline {
      * @param timeSeconds - Show time; must not decrease between calls
      */
     getState(timeSeconds: number): OverlayState {
-        // Advance to the page whose transition covers this time. The first
-        // page has duration 0, so it is skipped immediately.
+        // The page and count: the last count line at or before this time, so a page's last
+        // count holds from its flag until the next page's count 1. Before the first page's
+        // count 1 the marchers are at the opening set, count 0.
+        while (
+            this.countCursor < this.countLines.length - 1 &&
+            timeSeconds + SAME_TIME_SECONDS >=
+                this.countLines[this.countCursor + 1].time
+        ) {
+            this.countCursor++;
+        }
+        const line = this.countLines[this.countCursor];
+
+        // The beat sounding now, for the tempo: the page whose beats cover this time. The
+        // first page has duration 0, so it is skipped immediately.
         while (
             this.pageCursor < this.pages.length - 1 &&
             timeSeconds >=
@@ -130,20 +178,19 @@ export class OverlayTimeline {
         ) {
             this.pageCursor++;
         }
-        const page = this.pages[this.pageCursor];
-
-        // 1-based count within the page: the last beat that has started
-        let count = 1;
-        for (let i = page.beats.length - 1; i >= 0; i--) {
-            if (page.beats[i].timestamp <= timeSeconds) {
-                count = i + 1;
+        const soundingPage = this.pages[this.pageCursor];
+        let currentBeat: Beat | undefined;
+        for (let i = soundingPage.beats.length - 1; i >= 0; i--) {
+            if (soundingPage.beats[i].timestamp <= timeSeconds) {
+                currentBeat = soundingPage.beats[i];
                 break;
             }
         }
 
         while (
             this.measureCursor < this.measures.length - 1 &&
-            timeSeconds >= this.measures[this.measureCursor + 1].timestamp
+            timeSeconds + SAME_TIME_SECONDS >=
+                this.measures[this.measureCursor + 1].timestamp
         ) {
             this.measureCursor++;
         }
@@ -153,7 +200,10 @@ export class OverlayTimeline {
         // The active rehearsal mark is the most recent one at or before the
         // current measure (marks denote the start of a section)
         let rehearsalMark: string | null = null;
-        if (measure && measure.timestamp <= timeSeconds) {
+        const inMeasure =
+            measure != null &&
+            measure.timestamp <= timeSeconds + SAME_TIME_SECONDS;
+        if (inMeasure) {
             for (let i = this.measureCursor; i >= 0; i--) {
                 if (this.measures[i].rehearsalMark) {
                     rehearsalMark = this.measures[i].rehearsalMark;
@@ -162,24 +212,21 @@ export class OverlayTimeline {
             }
         }
 
-        // Tempo from the beat currently sounding
-        const currentBeat = page.beats[count - 1];
-        const tempoBpm = currentBeat?.duration
-            ? Math.round(60 / currentBeat.duration)
+        // Tempo from the beat currently sounding, at its measure's count tempo
+        const tempoBpm = currentBeat
+            ? countTempoBpm(currentBeat, inMeasure ? measure : undefined)
             : null;
 
+        const page = this.pages[line?.pageIndex ?? 0];
         return {
-            previousSetName:
-                this.pageCursor > 0
-                    ? this.pages[this.pageCursor - 1].name
-                    : null,
+            previousSetName: line
+                ? (this.pages[line.pageIndex - 1]?.name ?? null)
+                : null,
             setName: page.name,
-            count,
-            totalCounts: Math.max(page.counts, page.beats.length),
-            measureNumber:
-                measure && measure.timestamp <= timeSeconds
-                    ? measure.number
-                    : null,
+            count: line?.count ?? 0,
+            // The count lines stop at the page's beats, so the total does too
+            totalCounts: line ? page.beats.length : 0,
+            measureNumber: inMeasure && measure ? measure.number : null,
             rehearsalMark,
             tempoBpm,
             timeSeconds,
@@ -189,6 +236,73 @@ export class OverlayTimeline {
     }
 }
 
+/** Two beat durations closer than this are the same length */
+const SAME_DURATION_SECONDS = 1e-6;
+
+/**
+ * The short beat's length when a measure is mixed meter, such as 7/8 as 2+2+3: exactly two beat
+ * lengths, the long one 1.5 times the short one (as `measureIsMixedMeter` in TempoGroup.ts decides
+ * it). Null otherwise.
+ */
+function mixedMeterShortBeat(beats: readonly Beat[]): number | null {
+    const lengths: number[] = [];
+    for (const beat of beats)
+        if (
+            !lengths.some(
+                (length) =>
+                    Math.abs(length - beat.duration) < SAME_DURATION_SECONDS,
+            )
+        )
+            lengths.push(beat.duration);
+    if (lengths.length !== 2) return null;
+    const short = Math.min(...lengths);
+    const long = Math.max(...lengths);
+    return short > 0 && Math.abs(long / short - 1.5) < 1e-3 ? short : null;
+}
+
+/**
+ * The tempo a beat is counted at, in beats per minute, to two decimals so an exact tempo such as
+ * 152.5 shows as itself. In a mixed-meter measure every beat reads the short beat's tempo, as the
+ * tempo is written (♩=176 for 7/8 as 2+2+3), so the long beat doesn't make it jump. Null for a
+ * beat with no length.
+ */
+export function countTempoBpm(
+    beat: Beat,
+    measure: Measure | undefined,
+): number | null {
+    if (!(beat.duration > 0)) return null;
+    const inMeasure = measure?.beats?.some(
+        (other) => other === beat || other.id === beat.id,
+    );
+    const short = inMeasure ? mixedMeterShortBeat(measure!.beats) : null;
+    return Math.round((60 / (short ?? beat.duration)) * 100) / 100;
+}
+
+/** A tempo as the overlay writes it: "152.5", "176", "117.33" */
+export function formatTempo(bpm: number): string {
+    return String(Math.round(bpm * 100) / 100);
+}
+
+/** The widest tempo the show's overlay can write, in characters (at least 3, as "120") */
+function maxTempoChars(pages: Page[], measures: Measure[]): number {
+    const sorted = [...measures].sort((a, b) => a.timestamp - b.timestamp);
+    let widest = 3;
+    let cursor = -1;
+    const beats = pages
+        .flatMap((page) => page.beats)
+        .sort((a, b) => a.timestamp - b.timestamp);
+    for (const beat of beats) {
+        while (
+            cursor < sorted.length - 1 &&
+            sorted[cursor + 1].timestamp <= beat.timestamp
+        )
+            cursor++;
+        const bpm = countTempoBpm(beat, sorted[cursor]);
+        if (bpm != null) widest = Math.max(widest, formatTempo(bpm).length);
+    }
+    return widest;
+}
+
 export function computeFormatBounds(
     pages: Page[],
     measures: Measure[],
@@ -196,9 +310,7 @@ export function computeFormatBounds(
 ): OverlayFormatBounds {
     const countDigits = Math.max(
         1,
-        ...pages.map(
-            (page) => String(Math.max(page.counts, page.beats.length)).length,
-        ),
+        ...pages.map((page) => String(page.beats.length).length),
     );
     const measureDigits =
         measures.length > 0
@@ -222,7 +334,7 @@ export function computeFormatBounds(
         countDigits,
         measureDigits,
         clockMinuteDigits,
-        tempoDigits: 3,
+        tempoDigits: maxTempoChars(pages, measures),
         setNumberDigits,
         setSuffixChars: Math.min(setSuffixChars, 2),
     };
@@ -345,7 +457,8 @@ export function buildOverlaySegments(
             bold: true,
         });
     }
-    if (options.showCounts) {
+    // The opening set has no counts to show
+    if (options.showCounts && state.totalCounts > 0) {
         segments.push({
             text: `${options.countLabel} ${padInteger(state.count, countDigits)} / ${padInteger(state.totalCounts, countDigits)}`,
             layoutText: `${options.countLabel} ${countTemplate} / ${countTemplate}`,
@@ -367,7 +480,7 @@ export function buildOverlaySegments(
     }
     if (options.showTempo && state.tempoBpm !== null) {
         segments.push({
-            text: `${padIntegerSpaced(state.tempoBpm, tempoDigits)} bpm`,
+            text: `${formatTempo(state.tempoBpm).padStart(tempoDigits, " ")} bpm`,
             layoutText: `${digitTemplate(tempoDigits)} bpm`,
             bold: false,
         });

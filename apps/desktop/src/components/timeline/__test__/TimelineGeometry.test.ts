@@ -320,6 +320,22 @@ describe("getPageCountAt (UI-12)", () => {
             home: true,
         });
     });
+
+    it("names the count a playhead between two beat lines has passed, as the measure does (E2)", () => {
+        // 8.6 used to round to page 2's count 1 while its measure part floored to m3 beat 1
+        expect(getPageCountAt(timelineStoryModel, 8.6)).toMatchObject({
+            pageLabel: "1",
+            count: 8,
+        });
+        expect(getPlayheadLabel(timelineStoryModel, 8.6)).toBe(
+            getPlayheadLabel(timelineStoryModel, 8),
+        );
+        // A live position a hair short of a line is on it
+        expect(getPageCountAt(timelineStoryModel, 8.9999999)).toMatchObject({
+            pageLabel: "2",
+            count: 1,
+        });
+    });
 });
 
 describe("getVisiblePageCounts (UI-13)", () => {

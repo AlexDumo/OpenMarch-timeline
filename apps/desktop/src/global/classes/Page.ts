@@ -33,21 +33,24 @@ interface Page {
     readonly duration: number;
     /** The beats that belong to this page in order */
     readonly beats: Beat[];
-    /** The measures that belong to this page in order */
+    /**
+     * The measures the page's counts are in, in order (docs/tempo/count-convention.md). Count k is
+     * the k-th beat line after the page's start, named by the beat that starts on it: count 1 is
+     * the page's second beat and the last count is the next page's first beat. A page from m5's
+     * downbeat to m9's has counts in m5 to m9.
+     */
     readonly measures: Measure[] | null;
     /**
-     * The beat in the first measure that the page starts on.
+     * The beat of measures[0] that the page's count 1 is on.
      * Remember that music is 1-indexed, meaning the first beat is 1, not 0.
      *
-     * E.g. 3 means the page starts on beat 3 of measures[0]
+     * E.g. 2 for a page that starts on m5's downbeat: its count 1 is m5 beat 2
      */
     readonly measureBeatToStartOn: number | null;
     /**
-     * Gets the beat number of the last measure that the page goes until.
-     * This is calculated by taking the total big beats of all measures, subtracting the start beat offset,
-     * and then subtracting the total counts of the page to get the remaining beats.
+     * The beat of the last of `measures` that the page's last count (its flag) is on.
      *
-     * E.g. if the page has 7 counts and has two 4/4 measures, the beat to end on is 4 because it goes to that beat.
+     * E.g. 1 for a page that ends on m9's downbeat: its last count is m9 beat 1
      */
     readonly measureBeatToEndOn: number | null;
     /** Where the start of this page is in the music in seconds.

@@ -1,3 +1,4 @@
+import { TimelinePageFlagHandles } from "./TimelinePageFlagHandles";
 import {
     useCallback,
     useEffect,
@@ -31,7 +32,6 @@ import {
     TIMELINE_MIN_PX_PER_BEAT,
     TimelinePageLines,
     TimelinePlayhead,
-    TimelineRehearsalMarkers,
     TimelineRuler,
     TimelineSelectionRange,
     type TimelineSelectionInteraction,
@@ -44,9 +44,17 @@ import {
 import {
     markedRangeAt,
     useTimelineRangeMenu,
+    type TimelineAddMarchersMenu,
     type TimelineMenuExtraItem,
     type TimelineMenuTarget,
 } from "./TimelineRangeMenu";
+import {
+    MeasureRowMenuItems,
+    measureRowTargetAt,
+    TimelineMeasureRowEditor,
+    TimelineRehearsalMarkers,
+    useMeasureRowEditing,
+} from "./TimelineMeasureRow";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import {
     ALIGN_MAX_PX_PER_SECOND,
@@ -110,6 +118,16 @@ export function fitBackZoom(
     return Math.min(back, maxScale);
 }
 
+/** No waveform past the end of the show */
+const NO_PEAKS: readonly (readonly number[])[] = [];
+
+/** About how wide **+ N counts** is, and the room kept for it after the last beat (E1) */
+const APPEND_COUNTS_WIDTH = 84;
+const APPEND_COUNTS_ROOM = APPEND_COUNTS_WIDTH + 16;
+
+/** About how wide the note that the music runs on is, and the room kept for it (E1) */
+const MUSIC_PAST_END_NOTE_WIDTH = 420;
+
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
 
@@ -131,6 +149,7 @@ const useTimelineZoom = ({
     pixelsPerBeat,
     beatCount,
     leadingInset,
+    trailingInset = 0,
     playheadBeat,
     onPixelsPerBeatChange,
     fitted: rememberedFitted,
@@ -140,8 +159,11 @@ const useTimelineZoom = ({
 }: {
     viewportRef: React.RefObject<HTMLDivElement | null>;
     pixelsPerBeat: number;
+    /** The beats Fit fits: the show's, and any music drawn past its end */
     beatCount: number;
     leadingInset: number;
+    /** Pixels kept free after the last beat, for **+ N counts** */
+    trailingInset?: number;
     playheadBeat: number;
     onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
     fitted?: boolean;
@@ -153,7 +175,8 @@ const useTimelineZoom = ({
     const fitValue =
         beatCount > 0 && viewportWidth > 0
             ? clamp(
-                  Math.max(0, viewportWidth - leadingInset) / beatCount,
+                  Math.max(0, viewportWidth - leadingInset - trailingInset) /
+                      beatCount,
                   minScale,
                   maxScale,
               )
@@ -592,14 +615,32 @@ function TimelineSurface({
     }, [cancelAlignEdit, showAlign]);
 
     const width = axis.width;
-    const surfaceWidth = Math.max(width, baseAxis.width) + initialPageWidth;
+    // E1: the music past the last count, drawn dimmed after it. The Align view draws the whole
+    // recording in time already, so there it has none.
+    const peaksPastEnd = showAlign
+        ? NO_PEAKS
+        : (model.waveform.peaksPastEnd ?? NO_PEAKS);
+    const pastEndWidth = peaksPastEnd.length * pixelsPerBeat;
+    // E1: room after the last beat for the music past it, **+ N counts** and the note
+    const trailingWidth = Math.max(
+        pastEndWidth,
+        props.musicPastEnd ? MUSIC_PAST_END_NOTE_WIDTH : 0,
+        props.appendCounts ? APPEND_COUNTS_ROOM : 0,
+    );
+    // Where the counts end: the surface's end on the normal timeline; in Align the recording may
+    // run on past them
+    const countsEndX = axis.x(model.beatCount);
+    const surfaceWidth =
+        Math.max(width, baseAxis.width, countsEndX + trailingWidth) +
+        initialPageWidth;
     // UI-12: the ruler (28px) and the measure row; then the waveform, when audio is loaded, so it
     // stays put as clips come and go; then the clip rows, one always kept (with no chrome), so the
     // first off-page clip doesn't move the ruler right after the drag that made it
     const railHeight = expanded ? 20 : 17;
     const showWaveform = showAlign
         ? envelope !== null
-        : model.waveform.peaksByBeat.some((peaks) => peaks.length > 0);
+        : model.waveform.peaksByBeat.some((peaks) => peaks.length > 0) ||
+          peaksPastEnd.some((peaks) => peaks.length > 0);
     // The Align view's waveform is what's being edited, so it's taller (11-ui.md A)
     const waveformHeight = showAlign
         ? expanded
@@ -641,8 +682,17 @@ function TimelineSurface({
     const zoom = useTimelineZoom({
         viewportRef,
         pixelsPerBeat: showAlign ? pixelsPerSecond : pixelsPerBeat,
-        beatCount: showAlign ? baseAxis.extent : model.beatCount,
+        // The beats Fit fits, and any music drawn past the show's end (E1)
+        beatCount: showAlign
+            ? baseAxis.extent
+            : model.beatCount + peaksPastEnd.length,
         leadingInset: initialPageWidth,
+        // Fitted, the note and its Extend button stay in view (E1)
+        trailingInset: props.musicPastEnd
+            ? MUSIC_PAST_END_NOTE_WIDTH
+            : props.appendCounts
+              ? APPEND_COUNTS_ROOM
+              : 0,
         playheadBeat: showAlign ? playheadTime : positionBeat,
         onPixelsPerBeatChange: showAlign
             ? setPixelsPerSecond
@@ -726,6 +776,40 @@ function TimelineSurface({
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [align, alignKeyBlocked, toggleAlign]);
 
+    // E1: the waveform past the end, as its own lane model so the canvas keeps its memo
+    const pastEndWaveform = useMemo(
+        () => ({ peaksByBeat: peaksPastEnd }),
+        [peaksPastEnd],
+    );
+    // E1: **+ N counts** goes after the last page's flag; when **+** at the playhead would cover
+    // it, it moves just past that one, so both stay clickable
+    // Not in Align, where the ruler's flags retime counts: adding a page is a Normal-view edit
+    const showAddPageFlag =
+        props.onAddPageFlag != null && !props.isPlaying && !showAlign;
+    const addPageFlagX = axis.x(positionBeat) + 8;
+    const lastFlagBeat = Math.min(
+        model.beatCount,
+        model.pages.reduce(
+            (end, page) => Math.max(end, page.endBeat ?? page.atBeat),
+            0,
+        ),
+    );
+    const appendCountsX = (() => {
+        const atFlag = axis.x(lastFlagBeat) + 8;
+        return showAddPageFlag &&
+            addPageFlagX + 22 > atFlag &&
+            addPageFlagX < atFlag + APPEND_COUNTS_WIDTH
+            ? addPageFlagX + 22
+            : atFlag;
+    })();
+    const showAppendCounts = props.appendCounts != null && !props.isPlaying;
+    // The note sits in the top row past the last count, over no page boxes and clear of the
+    // music drawn below it, after **+ N counts** when that is at the end too
+    const musicNoteLeft =
+        initialPageWidth +
+        (showAppendCounts && appendCountsX + APPEND_COUNTS_WIDTH > countsEndX
+            ? appendCountsX + APPEND_COUNTS_WIDTH + 8
+            : countsEndX + 8);
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = (next: TimelineSelection) =>
         props.onSelectionChange?.(next);
@@ -801,14 +885,100 @@ function TimelineSurface({
             },
         ];
     };
-    // The right-click menu's target: a page box or clip under the pointer, else a dragged range
-    // the pointer is inside (UI-9 Adding marchers, Creating a timeline)
+    // Tempo E8: rehearsal marks and measure lines on the measure row
+    const measureRow = props.measureRow;
+    const markTop = expanded ? 30 : 29;
+    const editing = useMeasureRowEditing({
+        model,
+        commands: measureRow,
+        positionBeat,
+        livePositionBeat: props.livePositionBeat,
+        isPlaying: props.isPlaying,
+        onPlayingChange: props.onPlayingChange,
+    });
+    const menu: TimelineAddMarchersMenu<TimelineMenuTarget> | undefined =
+        measureRow
+            ? {
+                  ...props.addSelectedMarchers,
+                  measureRowItems: (target) => (
+                      <MeasureRowMenuItems
+                          target={target}
+                          model={model}
+                          commands={measureRow}
+                          onEditor={editing.setEditor}
+                          onEditMark={editing.editMark}
+                          onSeek={props.onSeek}
+                      />
+                  ),
+              }
+            : props.addSelectedMarchers;
+    // The right-click menu's target: the measure row's count, measure or tab under the pointer;
+    // else a page box or clip under the pointer, else a dragged range the pointer is inside (UI-9
+    // Adding marchers, Creating a timeline)
+    // Without the measure row's own targets (E8), the measure under the pointer, for count edits
+    const measureRangeAt = (
+        event: MouseEvent<HTMLElement>,
+        rowHeight: number,
+    ) => {
+        const surface = event.currentTarget.querySelector(
+            '[data-testid="timeline-pointer-surface"]',
+        );
+        if (!surface) return null;
+        const bounds = surface.getBoundingClientRect();
+        const y = event.clientY - bounds.top;
+        if (y < 28 || y > 28 + rowHeight) return null;
+        const beat = axis.beatAt(event.clientX - bounds.left);
+        const ordered = [...model.measures].sort((a, b) => a.atBeat - b.atBeat);
+        const index = ordered.findLastIndex((m) => m.atBeat <= beat);
+        if (index < 0) return null;
+        const start = ordered[index]!.atBeat;
+        const end = ordered[index + 1]?.atBeat ?? model.beatCount;
+        if (end <= start || beat > end) return null;
+        return {
+            range: { startBeatIndex: start, endBeatIndex: end },
+            measure: ordered[index]!.label.replace(/^m/i, "m"),
+        };
+    };
     const rangeMenu = useTimelineRangeMenu({
-        menu: props.addSelectedMarchers,
+        menu,
         extraItems: align ? alignMenuItems : undefined,
         resolveRange: (event: MouseEvent<HTMLElement>) => {
+            const pointerSurface = event.currentTarget.querySelector(
+                '[data-testid="timeline-pointer-surface"]',
+            );
+            const onRow =
+                measureRow && pointerSurface
+                    ? measureRowTargetAt({
+                          event,
+                          surface: pointerSurface,
+                          model,
+                          axis,
+                          rowTop: 28,
+                          rowHeight: railHeight + 2,
+                      })
+                    : null;
+            if (onRow) {
+                // A measure or its tab also names the measure, so count edits (E10) act on all
+                // of it; a count tick offers no cut
+                const measure =
+                    onRow.target.kind === "count"
+                        ? undefined
+                        : model.measures.find(
+                              (m) => m.atBeat === onRow.range.startBeatIndex,
+                          )?.label;
+                return {
+                    range: onRow.range,
+                    measureRow: onRow.target,
+                    measure,
+                };
+            }
             const marked = markedRangeAt(event.target);
             if (marked) return marked;
+            // The measure row: the measure under the pointer, for count edits (E10)
+            const measure = props.addSelectedMarchers?.onRemoveCounts
+                ? measureRangeAt(event, railHeight)
+                : null;
+            if (measure) return measure;
             if (selection?.kind !== "range" || !selectionRange) return null;
             const surface = event.currentTarget.querySelector(
                 '[data-testid="timeline-pointer-surface"]',
@@ -978,6 +1148,9 @@ function TimelineSurface({
                         positionBeat={positionBeat}
                         pageNote={pageNote}
                         labelsTop={showAlign}
+                        onMeasureClick={
+                            measureRow ? editing.editMark : undefined
+                        }
                     />
                     {showAlign && (
                         <TimelineAlignTimeLine
@@ -1117,14 +1290,71 @@ function TimelineSurface({
                             )}
                         </>
                     )}
+                    {/* E10's grips move a flag to another count; in Align the same drag
+                        retimes counts (E7), so only one of them is drawn: one gesture, one
+                        meaning per view (12-ux.md 3) */}
+                    {props.pageFlagMove && !showAlign && (
+                        <TimelinePageFlagHandles
+                            pages={model.pages}
+                            measures={model.measures}
+                            beatCount={model.beatCount}
+                            pixelsPerBeat={pixelsPerBeat}
+                            move={props.pageFlagMove}
+                        />
+                    )}
+                    {showWaveform && expanded && props.waveformNotice && (
+                        // Full width, so the notice can stick to the viewport's left edge
+                        <div
+                            className="pointer-events-none absolute left-0 z-10"
+                            style={{
+                                top: audioTop + 2,
+                                width,
+                                height: waveformHeight - 4,
+                            }}
+                        >
+                            <div
+                                className="sticky left-8 inline-flex h-full"
+                                // The notice's buttons are not a seek on the lane under them
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onDoubleClick={(e) => e.stopPropagation()}
+                                onContextMenu={(e) => e.stopPropagation()}
+                            >
+                                {props.waveformNotice}
+                            </div>
+                        </div>
+                    )}
                     <TimelineRehearsalMarkers
                         model={model}
                         axis={axis}
-                        top={expanded ? 30 : 29}
+                        dragHandle={markHandle}
+                        top={markTop}
                         compact={!expanded}
                         onSeek={props.onSeek}
-                        dragHandle={markHandle}
+                        editingMeasureId={
+                            editing.editor && "measureId" in editing.editor
+                                ? editing.editor.measureId
+                                : null
+                        }
+                        onEdit={measureRow ? editing.editMark : undefined}
+                        onRemove={
+                            measureRow
+                                ? (measure) =>
+                                      measureRow.onSetMark(measure.id, null)
+                                : undefined
+                        }
                     />
+                    {editing.editor && (
+                        <TimelineMeasureRowEditor
+                            key={editing.editorKey}
+                            editor={editing.editor}
+                            model={model}
+                            axis={axis}
+                            top={markTop}
+                            onCommit={editing.commit}
+                            onCancel={editing.cancel}
+                            onPassKey={editing.passKey}
+                        />
+                    )}
                     <TimelinePlayhead
                         model={model}
                         positionBeat={positionBeat}
@@ -1138,7 +1368,7 @@ function TimelineSurface({
                         onSeek={props.onSeek}
                         isPlaying={props.isPlaying}
                     />
-                    {props.onAddPageFlag && !props.isPlaying && !showAlign && (
+                    {showAddPageFlag && (
                         <button
                             type="button"
                             data-testid="timeline-add-page-flag"
@@ -1148,11 +1378,25 @@ function TimelineSurface({
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={props.onAddPageFlag}
                             className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
-                            style={{
-                                left: axis.x(positionBeat) + 8,
-                            }}
+                            style={{ left: addPageFlagX }}
                         >
                             <PlusIcon size={10} weight="bold" />
+                        </button>
+                    )}
+                    {showAppendCounts && props.appendCounts && (
+                        <button
+                            type="button"
+                            data-testid="timeline-append-counts"
+                            data-timeline-interactive="true"
+                            aria-label={props.appendCounts.title}
+                            title={props.appendCounts.title}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={props.appendCounts.onAppend}
+                            className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex h-16 items-center gap-2 rounded-full border px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
+                            style={{ left: appendCountsX }}
+                        >
+                            <PlusIcon size={9} weight="bold" />
+                            {props.appendCounts.label}
                         </button>
                     )}
                     {pointer.rangePreview && (
@@ -1262,6 +1506,44 @@ function TimelineSurface({
                         </div>
                     )}
                 </div>
+                {showWaveform && peaksPastEnd.length > 0 && (
+                    <div
+                        data-testid="timeline-waveform-past-end"
+                        aria-hidden="true"
+                        className="rounded-4 pointer-events-none absolute overflow-hidden opacity-40"
+                        style={{
+                            left: initialPageWidth + width,
+                            top: audioTop,
+                            width: pastEndWidth,
+                            height: waveformHeight,
+                        }}
+                    >
+                        <TimelineWaveformCanvas
+                            waveform={pastEndWaveform}
+                            width={pastEndWidth}
+                            height={waveformHeight}
+                            pixelsPerBeat={pixelsPerBeat}
+                            tone="rest"
+                        />
+                    </div>
+                )}
+                {props.musicPastEnd && !props.isPlaying && (
+                    <div
+                        data-testid="timeline-music-past-end"
+                        className="border-stroke bg-bg-1 text-text rounded-6 absolute z-[55] flex h-22 items-center gap-8 border px-8 text-[11px] whitespace-nowrap shadow-sm"
+                        style={{ left: musicNoteLeft, top: 3 }}
+                    >
+                        <span>{props.musicPastEnd.message}</span>
+                        <button
+                            type="button"
+                            data-timeline-interactive="true"
+                            onClick={props.musicPastEnd.onExtend}
+                            className="text-accent focus-visible:ring-accent rounded-4 font-medium outline-hidden hover:underline focus-visible:ring-2"
+                        >
+                            {props.musicPastEnd.actionLabel}
+                        </button>
+                    </div>
+                )}
                 {rangeMenu.element}
             </div>
         </TimelineShell>

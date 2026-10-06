@@ -3,6 +3,7 @@ words:
   - ADDME
   - aleksi
   - alexdumo
+  - allarg
   - apikey
   - apos
   - aren
@@ -20,6 +21,7 @@ words:
   - blockmap
   - blockqoute
   - bostick
+  - bpms
   - BRHS
   - Bézier
   - canvas
@@ -35,7 +37,10 @@ words:
   - Configuración
   - cooldown
   - couldn
+  - cresc
   - customizer
+  - dacapo
+  - dalsegno
   - dbstat
   - DELME
   - Dhruva
@@ -69,6 +74,7 @@ words:
   - Invalidators
   - keyframed
   - launchpage
+  - libmp
   - lightridge
   - localappdata
   - Loudoun
@@ -82,6 +88,7 @@ words:
   - mgmt
   - midset
   - midsets
+  - misura
   - monokai
   - Moulse
   - multiselection
@@ -101,17 +108,21 @@ words:
   - pacman
   - pagewidth
   - paperplane
+  - parsererror
+  - partwise
   - pfps
   - playhead
   - PKCE
   - Português
   - posthog
   - Pressable
+  - Priya
   - PWDEBUG
   - pwsh
   - Pyware
   - Rcoords
   - recents
+  - Recordare
   - rels
   - respace
   - respaced
@@ -122,6 +133,7 @@ words:
   - retiming
   - rgba
   - ritardandos
+  - riten
   - rootfile
   - rw-r
   - rwxr
@@ -130,6 +142,7 @@ words:
   - sandboxing
   - Schachner
   - Segoe
+  - senza
   - seti
   - shouldn
   - sicommand

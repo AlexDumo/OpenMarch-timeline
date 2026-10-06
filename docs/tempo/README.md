@@ -21,6 +21,7 @@ Everything in the tempo core is in the timing layer.
 | Show time to count and back            | `apps/desktop/src/timeline/timeMap.ts`                                                                                                                                     |
 | Write path (one transaction, one undo) | `apps/desktop/src/db-functions/tempo.ts`: `retimeBeats`, `retimeBeatsInTransaction`, `setTempoSyncedBeatIds`, `readTempoSyncedBeatIds`                                     |
 | React Query hooks                      | `apps/desktop/src/hooks/queries/useTempo.ts`: `useRetimeBeats`, `useSetTempoSyncedBeatIds`, `useTempoSyncedBeatIds`                                                        |
+| Tempo map (E11)                        | `apps/desktop/src/components/timeline/TempoMapPanel.tsx`; typed rows in `tempoMapMarks` (workspace settings)                                                               |
 | Synced counts (prototype)              | `tempoSyncedBeatIds` in the file's workspace settings ([ADR draft](adr-synced-counts.md))                                                                                  |
 | Audio offset                           | `audioOffsetSeconds` in the file's workspace settings; positive pads silence before the music                                                                              |
 | Align view (E7, flag `alignView`)      | `apps/desktop/src/components/timeline/`: `timelineAxis.ts` (counts or seconds axis), `timelineAlign.ts` (drag, snap, chip), `TimelineAlignView.tsx` (handles, chip, ticks) |
@@ -48,6 +49,13 @@ Per user, all off by default (`useTempoLabFlag(flag)` reads one):
 | `tempoMap`      | boolean              | A table of tempo marks at measures (E11)                                         |
 | `snapToAttacks` | boolean              | Drags and taps snap to attacks in the music (E5)                                 |
 | `drillChoices`  | boolean              | Cuts and inserts ask what the drill does, with a preview (E10)                   |
+
+## Test-show kit
+
+Shows, audio and MusicXML with known count times, plus a scorer, for the experiments and hands-on
+sessions: [apps/desktop/tempo-kit](../../apps/desktop/tempo-kit/README.md). Make it with
+`pnpm --dir apps/desktop run tempo-kit` (writes to `~/om-capture/fixtures/tempo/`) and score a show
+with `node apps/desktop/tempo-kit/score.mts <show.dots> <truth.json>`.
 
 ## Decisions
 

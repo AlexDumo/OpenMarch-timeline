@@ -2,6 +2,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import { TimelineCommitViolationError } from "@/db-functions/timelineChanges";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { conToastError } from "@/utilities/utils";
+import { refusalText } from "./drillEditText";
 
 /**
  * User-facing messages for the timeline's refusals (spec section 6, P8.6). One place maps every
@@ -16,6 +17,9 @@ import { conToastError } from "@/utilities/utils";
  * - `E-DB` is any other database rejection. The user gets a generic message; the original error
  *   (kept as the `cause`) goes to the log.
  * - Commit-time violations (`TimelineCommitViolationError`) map by their code, like row errors.
+ * - A page or beat edit's refusal that carries its subject in drill words (the ripple's,
+ *   `TimelineWriteError.subject`) is worded from it instead: the clip, its pages and counts, and
+ *   the marcher (`refusalText`), never beat ordinals or timeline ids.
  * - Anything else is not a timeline refusal, and the caller's own message is used.
  *
  * Each message is a Tolgee key under `timeline.errors` with the English text as the default, so a
@@ -155,11 +159,20 @@ export const TIMELINE_NOT_READY_MESSAGE: TimelineErrorMessage = {
     defaultMessage: "The timeline is still loading. Try again in a moment.",
 };
 
-/** Looks a message up by key and default; the Tolgee singleton by default, anything in tests. */
-export type TimelineTranslate = (key: string, defaultMessage: string) => string;
+/**
+ * Looks a message up by key and default, with ICU params where the message has them; the Tolgee
+ * singleton by default, anything in tests.
+ */
+export type TimelineTranslate = (
+    key: string,
+    defaultMessage: string,
+    params?: Record<string, string | number>,
+) => string;
 
-const defaultTranslate: TimelineTranslate = (key, defaultMessage) =>
-    tolgee.t(key, defaultMessage);
+const defaultTranslate: TimelineTranslate = (key, defaultMessage, params) =>
+    params
+        ? tolgee.t(key, defaultMessage, params)
+        : tolgee.t(key, defaultMessage);
 
 /** The spec error code of a timeline refusal, or null for an error that isn't one. */
 export function timelineErrorCode(error: unknown): string | null {
@@ -208,6 +221,8 @@ export function timelineErrorMessage(
                 TIMELINE_UNKNOWN_ERROR_MESSAGE.defaultMessage,
             )
         );
+    if (error instanceof TimelineWriteError && error.subject)
+        return refusalText(error.subject, translate);
     if (code === "E-ARGS") {
         const own = argsMessage((error as Error).message);
         if (own) return own;
