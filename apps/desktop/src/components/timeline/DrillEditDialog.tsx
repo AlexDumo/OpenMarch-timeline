@@ -33,6 +33,7 @@ import { pageEndBeat } from "@/timeline/pageEndBeat";
 import {
     clipText,
     impactLines,
+    measureRangeText,
     impactSummary,
     spanText,
     tolgeeTranslate as t,
@@ -45,6 +46,9 @@ import {
 import { invalidatePageQueries } from "@/hooks/queries/usePages";
 import { measureKeys } from "@/hooks/queries/useMeasures";
 import { getUtilityQueryOptions } from "@/hooks/queries/useUtility";
+import { historyKeys } from "@/hooks/queries/useHistory";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { useAudioEnvelopeStore } from "@/timeline/timelineWaveform";
 
 /**
  * The **Remove counts…** and **Add counts…** dialogs (tempo experiment E10, Tempo lab
@@ -101,10 +105,14 @@ export const namedPages = (pages: readonly Page[], lastPageCounts?: number) => {
     return { grid, names };
 };
 
-/** After a count edit: beats, pages, measures and the utility row changed */
+/**
+ * After a count edit: beats, pages, measures and the utility row changed, and Undo has a new
+ * entry (the app also refreshes Undo after every history write, `refreshHistoryOnWrites`)
+ */
 export const invalidateAfterDrillEdit = async (qc: QueryClient) => {
     await invalidatePageQueries(qc);
     await qc.invalidateQueries({ queryKey: measureKeys.all() });
+    await qc.invalidateQueries({ queryKey: historyKeys.all() });
 };
 
 const PREVIEW_DELAY_MS = 200;
@@ -112,16 +120,52 @@ const PREVIEW_DELAY_MS = 200;
 const TONE: Record<DrillImpactLine["tone"], string> = {
     plain: "text-text",
     notice: "text-text",
+    warning: "text-red font-medium",
     loss: "text-red",
 };
 
+/**
+ * The report: the summary (marks, renumbering, show length) first and always in view, then the
+ * clip and page lines, in a box that grows with the dialog before it scrolls
+ */
 function ImpactList({ impact }: { impact: DrillImpact }) {
+    const lines = impactLines(impact, t);
+    const summary = lines.filter((line) => line.summary);
+    const details = lines.filter((line) => !line.summary);
+    return (
+        <div className="flex flex-col gap-6">
+            {summary.length > 0 && (
+                <Lines testId="drill-edit-summary" lines={summary} />
+            )}
+            {details.length > 0 && (
+                <Lines
+                    testId="drill-edit-impact"
+                    lines={details}
+                    className="max-h-[38vh] overflow-y-auto"
+                />
+            )}
+        </div>
+    );
+}
+
+function Lines({
+    lines,
+    testId,
+    className,
+}: {
+    lines: readonly DrillImpactLine[];
+    testId: string;
+    className?: string;
+}) {
     return (
         <ul
-            data-testid="drill-edit-impact"
-            className="border-stroke bg-fg-1 rounded-6 flex max-h-[180px] flex-col gap-4 overflow-y-auto border px-10 py-8 text-[12px]"
+            data-testid={testId}
+            className={clsx(
+                "border-stroke bg-fg-1 rounded-6 flex flex-col gap-4 border px-10 py-8 text-[12px]",
+                className,
+            )}
         >
-            {impactLines(impact, t).map((line, i) => (
+            {lines.map((line, i) => (
                 <li
                     key={i}
                     className={clsx("flex gap-6 leading-snug", TONE[line.tone])}
@@ -129,9 +173,11 @@ function ImpactList({ impact }: { impact: DrillImpact }) {
                     <span aria-hidden="true">
                         {line.tone === "loss"
                             ? "✕"
-                            : line.tone === "notice"
-                              ? "•"
-                              : "·"}
+                            : line.tone === "warning"
+                              ? "!"
+                              : line.tone === "notice"
+                                ? "•"
+                                : "·"}
                     </span>
                     <span>{line.text}</span>
                 </li>
@@ -247,6 +293,11 @@ export default function DrillEditDialog({
         onFlag ? "hold" : "stretch",
     );
     const [crossing, setCrossing] = useState<"squeeze" | "skip">("squeeze");
+    // Remove: did the recording lose these counts too? Yes unless said otherwise; asked only
+    // when there is a recording
+    const hasAudio = useAudioEnvelopeStore((s) => s.envelope !== null);
+    const [cutRecording, setCutRecording] = useState<"lost" | "kept">("lost");
+    const [marks, setMarks] = useState<"move" | "drop">("move");
     const [committing, setCommitting] = useState(false);
 
     const edit: DrillEdit | null =
@@ -257,6 +308,8 @@ export default function DrillEditDialog({
                   end: request.end,
                   crossing,
                   inside: "delete",
+                  recording: hasAudio ? cutRecording : "lost",
+                  marks,
               }
             : Number.isInteger(count) && count >= 1 && count <= 512
               ? {
@@ -286,6 +339,32 @@ export default function DrillEditDialog({
     );
     const ownerName = owner ? (names.get(owner.id) ?? "?") : null;
 
+    const impact = preview?.ok ? preview.impact : null;
+    const otherImpact = otherPreview?.ok ? otherPreview.impact : null;
+    // The measures the cut takes, once the preview knows them ("m41–56")
+    const cutMeasures =
+        request.kind === "remove" && impact?.measures?.removed
+            ? measureRangeText(impact.measures.removed)
+            : null;
+    // Rehearsal marks the cut takes: offer to keep the first on the measure after the cut
+    const cutMarks = (impact?.marks ?? []).filter(
+        (m) => m.change === "moved" || m.change === "removed",
+    );
+    const movableMark =
+        marks === "move"
+            ? cutMarks.find((m) => m.change === "moved")
+            : cutMarks[0];
+    // The cut's length in seconds, for the recording question
+    const cutSeconds = useMemo(() => {
+        if (request.kind !== "remove") return "0";
+        let seconds = 0;
+        for (const page of pages)
+            for (const beat of page.beats)
+                if (beat.index >= request.start && beat.index < request.end)
+                    seconds += beat.duration;
+        return seconds.toFixed(1);
+    }, [pages, request]);
+
     // Title and where
     const title =
         request.kind === "remove"
@@ -306,19 +385,27 @@ export default function DrillEditDialog({
                     "timeline.drillEdits.add.titlePlayhead",
                     "Add counts at the playhead",
                 );
+    const span =
+        request.kind === "remove"
+            ? spanText(countSpanOf(grid, names, request.start, request.end), t)
+            : "";
     const where =
         request.kind === "remove"
-            ? t(
-                  "timeline.drillEdits.remove.where",
-                  "{span}: {n, plural, one {# count} other {# counts}}",
-                  {
-                      span: spanText(
-                          countSpanOf(grid, names, request.start, request.end),
-                          t,
-                      ),
-                      n: request.end - request.start,
-                  },
-              )
+            ? cutMeasures
+                ? t(
+                      "timeline.drillEdits.remove.whereMeasures",
+                      "{measures} ({span}): {n, plural, one {# count} other {# counts}}",
+                      {
+                          measures: cutMeasures,
+                          span,
+                          n: request.end - request.start,
+                      },
+                  )
+                : t(
+                      "timeline.drillEdits.remove.where",
+                      "{span}: {n, plural, one {# count} other {# counts}}",
+                      { span, n: request.end - request.start },
+                  )
             : request.at > 1
               ? t("timeline.drillEdits.add.where", "After {span}", {
                     span: spanText(
@@ -331,8 +418,6 @@ export default function DrillEditDialog({
                     "At the start of the show",
                 );
 
-    const impact = preview?.ok ? preview.impact : null;
-    const otherImpact = otherPreview?.ok ? otherPreview.impact : null;
     // Moves that cross the cut, or land at or run through the new counts: only then is there a
     // drill choice to make
     const moves = (i: DrillImpact | null) =>
@@ -406,6 +491,11 @@ export default function DrillEditDialog({
         try {
             const done = await commitDrillEdit({ db, edit });
             await invalidateAfterDrillEdit(queryClient);
+            // The range held counts that are now other music: let it go
+            if (
+                useTimelineSelectionStore.getState().selection?.kind === "range"
+            )
+                useTimelineSelectionStore.getState().selectNothing();
             toast.success(impactSummary(done, t));
             onClose();
         } catch (e) {
@@ -579,6 +669,81 @@ export default function DrillEditDialog({
                                         "Marchers stop where they are when the cut starts; that set is skipped.",
                                     ),
                                     disabledReason: skipReason,
+                                },
+                            ]}
+                        />
+                    )}
+                    {request.kind === "remove" && hasAudio && (
+                        <Choice
+                            legend={t(
+                                "timeline.drillEdits.remove.recording",
+                                "Did the recording lose these counts too?",
+                            )}
+                            value={cutRecording}
+                            onChange={setCutRecording}
+                            options={[
+                                {
+                                    value: "lost",
+                                    label: t(
+                                        "timeline.drillEdits.remove.recordingLost",
+                                        "Yes: the music was cut too",
+                                    ),
+                                    hint: t(
+                                        "timeline.drillEdits.remove.recordingLostHint",
+                                        "Their {seconds} s go with them: the music after the cut plays that much earlier, with its counts.",
+                                        { seconds: cutSeconds },
+                                    ),
+                                },
+                                {
+                                    value: "kept",
+                                    label: t(
+                                        "timeline.drillEdits.remove.recordingKept",
+                                        "No: the recording still has them",
+                                    ),
+                                    hint: t(
+                                        "timeline.drillEdits.remove.recordingKeptHint",
+                                        "The music stays where it is. The counts after the cut, to the end of their page, slow down to fill its {seconds} s, so later pages stay with the music.",
+                                        { seconds: cutSeconds },
+                                    ),
+                                },
+                            ]}
+                        />
+                    )}
+                    {request.kind === "remove" && cutMarks.length > 0 && (
+                        <Choice
+                            legend={t(
+                                "timeline.drillEdits.remove.marks",
+                                "Rehearsal marks in the cut",
+                            )}
+                            value={marks}
+                            onChange={setMarks}
+                            options={[
+                                {
+                                    value: "move",
+                                    label: t(
+                                        "timeline.drillEdits.remove.marksMove",
+                                        "Keep {mark} on the first measure after the cut",
+                                        { mark: cutMarks[0]!.mark },
+                                    ),
+                                    disabledReason:
+                                        marks === "move" && !movableMark
+                                            ? t(
+                                                  "timeline.drillEdits.remove.marksMoveTaken",
+                                                  "The measure after the cut has a mark of its own.",
+                                              )
+                                            : null,
+                                },
+                                {
+                                    value: "drop",
+                                    label: t(
+                                        "timeline.drillEdits.remove.marksDrop",
+                                        "Remove {marks}",
+                                        {
+                                            marks: cutMarks
+                                                .map((m) => m.mark)
+                                                .join(", "),
+                                        },
+                                    ),
                                 },
                             ]}
                         />
