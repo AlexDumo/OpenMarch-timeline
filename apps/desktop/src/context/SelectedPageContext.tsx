@@ -57,6 +57,10 @@ export function SelectedPageProvider({ children }: { children: ReactNode }) {
         (newPage: { id: number }) => {
             const page = pages.find((p) => p.id === newPage.id);
             if (page) setSelectedPage(page);
+            // This provider's page list hasn't loaded yet, though the caller's has (each
+            // `useTimingObjects` caller gets the data in its own commit; StateInitializer selects
+            // the first page on load): select it once the list arrives, as `setPageToSelect` does
+            else if (pages.length === 0) pageToSelectRef.current = newPage;
             else
                 console.warn(
                     `Page with id ${newPage.id} not found. Not setting selected page.`,
