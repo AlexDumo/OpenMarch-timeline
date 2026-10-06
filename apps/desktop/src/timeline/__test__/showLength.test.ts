@@ -11,7 +11,7 @@ import {
     musicRunsPastCounts,
     MUSIC_END_TOLERANCE_SECONDS,
 } from "../showLength";
-import { waveformWithPastEnd, WAVEFORM_FLOOR_DB } from "../timelineWaveform";
+import { waveformWithPastEnd } from "../timelineWaveform";
 
 /** Beat 0 (zero length) and then `durations` */
 const show = (...durations: number[]) => [
@@ -309,10 +309,9 @@ describe("the waveform past the last count", () => {
         // 4 s to 10 s in counts of 2 s
         expect(peaksPastEnd.length).toBe(3);
         expect(peaksPastEnd.flat()).toEqual(Array(6).fill(1));
-        // One scale for both: the loud music past the end sets it
-        const quiet =
-            (20 * Math.log10(0.01) + WAVEFORM_FLOOR_DB) / WAVEFORM_FLOOR_DB;
-        expect(peaksByBeat.flat()[0]).toBeCloseTo(Math.max(0, quiet));
+        // One scale for both, set by the show's loudest moment (UI-12): the louder music past
+        // the end can't shrink the show's waveform, and is clipped at the top
+        expect(peaksByBeat.flat()[0]).toBeCloseTo(1);
     });
 
     it("draws nothing past the end without music there", () => {

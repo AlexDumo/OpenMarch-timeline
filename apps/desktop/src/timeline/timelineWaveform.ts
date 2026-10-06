@@ -82,8 +82,9 @@ export function peaksByBeat(
  * The waveform lane with the music past the show's last count (E1): `peaksByBeat` as above, and
  * `peaksPastEnd`, the music after the last count on counts that continue the show
  * (`durationAt(k)` is the `k`th one's length, as appending counts would make them), until the
- * music ends at `musicEnd`. Both share one scale, set by the loudest moment in either: the music
- * past the end is music the show is meant to cover.
+ * music ends at `musicEnd`. Both share one scale, set by the show's loudest moment (UI-12), so
+ * applause or a tail past the last count can't shrink the show's waveform; louder music past the
+ * end is clipped at the top.
  */
 export function waveformWithPastEnd(
     envelope: AudioEnvelope,
@@ -105,8 +106,13 @@ export function waveformWithPastEnd(
         }
     }
     const shown = beats.slice(offset);
+    const shownRaw = shown.map((beat) => beatPeaks(envelope, beat, perBeat));
     const all = normalizedPeaks(
-        [...shown, ...extra].map((beat) => beatPeaks(envelope, beat, perBeat)),
+        [
+            ...shownRaw,
+            ...extra.map((beat) => beatPeaks(envelope, beat, perBeat)),
+        ],
+        shownRaw.length > 0 ? loudestOf(shownRaw) : undefined,
     );
     return {
         peaksByBeat: all.slice(0, shown.length),
@@ -139,11 +145,16 @@ function beatPeaks(
     });
 }
 
-/** Raw peaks in decibels below the loudest of them, mapped onto 0 .. 1 (see `peaksByBeat`) */
-function normalizedPeaks(raw: number[][]): number[][] {
+function loudestOf(raw: number[][]): number {
     let loudest = 0;
     for (const beat of raw)
         for (const peak of beat) loudest = Math.max(loudest, peak);
+    return loudest;
+}
+
+/** Raw peaks in decibels below the loudest of them, mapped onto 0 .. 1 (see `peaksByBeat`) */
+function normalizedPeaks(raw: number[][], reference?: number): number[][] {
+    const loudest = reference ?? loudestOf(raw);
     if (loudest <= 0) return raw.map((beat) => beat.map(() => 0));
     return raw.map((beat) =>
         beat.map((peak) =>
