@@ -15,6 +15,8 @@ import { OPENMARCH_LOGO } from "./brandMark";
 
 /** Turf colors, from the reference demo's `fieldTexture`. */
 export const TURF = {
+    /** Darker turf painted under the midfield logo as its shadow. */
+    shadow: "rgba(12, 38, 10, 0.35)",
     base: "#3d7a33",
     stripeDark: "#3a7330",
     stripeLight: "#44853a",
@@ -56,6 +58,7 @@ export function planTurf(ctx: PlanContext): void {
     planHashesAndTicks(ctx, xs, play);
     planTurfNumbers(ctx);
     pushBorder(ctx, TURF.paint, BORDER);
+    ctx.items.push({ type: "grain", role: "grain", seed: 7, strength: 1 });
 }
 
 interface PlayingRegion {
@@ -116,6 +119,7 @@ function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
             ez.goal,
             f.maxZ,
         );
+        planEndZoneArt(ctx, ez);
         if (!text) continue;
         const zoneDepth = Math.abs(ez.goal - ez.outer);
         const side = Math.sign(ez.outer - ez.goal);
@@ -132,6 +136,7 @@ function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
             weight: 700,
             maxLength: depth * 0.82,
             leadingMark: isOpenMarch(text),
+            shadow: shade(ctx.params.endZoneColor, 0.45),
         });
     }
 }
@@ -170,7 +175,81 @@ function planCenterLogo(ctx: PlanContext, play: PlayingRegion): void {
         width,
         rotation: 0,
         color: TURF.paint,
+        shadow: TURF.shadow,
     });
+}
+
+/** Diagonal bands and a white keyline one yard inside the end zone. */
+function planEndZoneArt(
+    ctx: PlanContext,
+    ez: { outer: number; goal: number },
+): void {
+    const f = ctx.footprint;
+    const [x0, x1] = [Math.min(ez.outer, ez.goal), Math.max(ez.outer, ez.goal)];
+    ctx.items.push({
+        type: "hatch",
+        role: "endZoneHatch",
+        minX: x0,
+        maxX: x1,
+        minZ: f.minZ,
+        maxZ: f.maxZ,
+        color: shade(ctx.params.endZoneColor, 0.82),
+        spacing: 2.4,
+        width: 1.2,
+    });
+    // A white keyline one yard inside the end zone's edges.
+    const i = END_ZONE_INSET;
+    const b = BORDER;
+    const w = LINE;
+    pushRect(
+        ctx,
+        "endZoneBorder",
+        TURF.paint,
+        x0 + i,
+        f.minZ + b + i,
+        x1 - i,
+        f.minZ + b + i + w,
+    );
+    pushRect(
+        ctx,
+        "endZoneBorder",
+        TURF.paint,
+        x0 + i,
+        f.maxZ - b - i - w,
+        x1 - i,
+        f.maxZ - b - i,
+    );
+    pushRect(
+        ctx,
+        "endZoneBorder",
+        TURF.paint,
+        x0 + i,
+        f.minZ + b + i,
+        x0 + i + w,
+        f.maxZ - b - i,
+    );
+    pushRect(
+        ctx,
+        "endZoneBorder",
+        TURF.paint,
+        x1 - i - w,
+        f.minZ + b + i,
+        x1 - i,
+        f.maxZ - b - i,
+    );
+}
+
+/** End-zone keyline inset from the zone's edges, in meters (one yard). */
+const END_ZONE_INSET = 0.9144;
+
+/** `#rrggbb` scaled toward black by `factor` (1 keeps it). */
+export function shade(hex: string, factor: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const c = (v: number) =>
+        Math.round(Math.max(0, Math.min(255, v * factor)))
+            .toString(16)
+            .padStart(2, "0");
+    return `#${c(n >> 16)}${c((n >> 8) & 255)}${c(n & 255)}`;
 }
 
 /** OpenMarch end-zone text gets the marcher mark in front of it. */

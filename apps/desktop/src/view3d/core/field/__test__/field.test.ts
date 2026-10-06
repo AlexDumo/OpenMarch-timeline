@@ -128,6 +128,12 @@ describe("turf on football fields", () => {
                     }
             });
 
+            it("stripes and outlines both end zones, and grains the turf", () => {
+                expect(count(p, "endZoneHatch")).toBe(2);
+                expect(count(p, "endZoneBorder")).toBe(8);
+                expect(p.items.at(-1)?.role).toBe("grain");
+            });
+
             it("puts the OpenMarch logo on the center line", () => {
                 const logos = p.items.filter((i) => i.role === "centerLogo");
                 expect(logos).toHaveLength(1);
@@ -390,10 +396,16 @@ describe("painting", () => {
         const rec = recordingContext();
         paintPlan(rec.g, p, layout);
         const rects = p.items.filter((i) => i.type === "rect").length;
-        const texts = p.items.filter((i) => i.type === "text").length;
+        const texts = p.items.filter((i) => i.type === "text");
+        const shadowed = texts.filter((t) => t.type === "text" && t.shadow);
         expect(rec.named("fillRect")).toHaveLength(rects);
-        expect(rec.named("fillText")).toHaveLength(texts);
-        expect(rec.named("fill")).toHaveLength(count(p, "arrow"));
+        // shadowed text is painted three times: drop shadow, outline, face
+        expect(rec.named("fillText")).toHaveLength(
+            texts.length + 2 * shadowed.length,
+        );
+        expect(rec.named("strokeText")).toHaveLength(2 * shadowed.length);
+        // arrows, plus the end zones' diagonal bands
+        expect(rec.named("fill").length).toBeGreaterThan(count(p, "arrow"));
         for (const c of rec.named("fillRect"))
             for (const v of c.args) expect(Number.isFinite(v)).toBe(true);
     });
@@ -402,6 +414,8 @@ describe("painting", () => {
         const fp = T.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
         const p = plan(fp, "turf");
         const layout = textureLayout(p.footprint, 4096);
+        const without = recordingContext();
+        paintPlan(without.g, p, layout);
         const rec = recordingContext();
         const had = "Path2D" in globalThis;
         const original = (globalThis as { Path2D?: unknown }).Path2D;
@@ -415,11 +429,13 @@ describe("painting", () => {
             else delete (globalThis as { Path2D?: unknown }).Path2D;
         }
         const logo = OPENMARCH_LOGO.paths.length;
-        const marks = 2 * MARCHER_MARK.paths.length;
-        expect(rec.named("stroke")).toHaveLength(0);
-        expect(rec.named("fill")).toHaveLength(
-            count(p, "arrow") + logo + marks,
+        const mark = MARCHER_MARK.paths.length;
+        // logo: shadow and face; each end zone's mark: shadow, outline, face
+        expect(rec.named("fill").length - without.named("fill").length).toBe(
+            2 * logo + 2 * 3 * mark,
         );
+        // the mark's two outlined layers, in both end zones
+        expect(rec.named("stroke")).toHaveLength(2 * 2 * mark);
     });
 
     it("maps the back of the field to the top of the texture", () => {

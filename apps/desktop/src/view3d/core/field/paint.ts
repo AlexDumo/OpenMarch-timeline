@@ -1,9 +1,12 @@
 import type { FieldFootprint } from "@openmarch/core";
 import { TEXTURE_FONT } from "../environment";
 import { MARCHER_MARK, OPENMARCH_LOGO } from "./brandMark";
+import { createRng } from "../environment/random";
 import type {
     FieldPlan,
     PlanArrow,
+    PlanGrain,
+    PlanHatch,
     PlanItem,
     PlanLogo,
     PlanText,
@@ -106,7 +109,109 @@ function paintItem(
         case "logo":
             paintLogo(g, item, X(item.x), Y(item.z), s);
             return;
+        case "hatch":
+            paintHatch(g, item, X, Y, s);
+            return;
+        case "grain":
+            paintGrain(g, item, layout);
+            return;
     }
+}
+
+/** Diagonal bands, clipped to the hatch's rectangle. */
+function paintHatch(
+    g: CanvasRenderingContext2D,
+    h: PlanHatch,
+    X: (x: number) => number,
+    Y: (z: number) => number,
+    s: number,
+): void {
+    const [x0, y0, x1, y1] = [X(h.minX), Y(h.minZ), X(h.maxX), Y(h.maxZ)];
+    const half = (h.width * s) / 2 / Math.SQRT1_2;
+    const step = (h.spacing * s) / Math.SQRT1_2;
+    g.save();
+    g.beginPath();
+    g.rect(x0, y0, x1 - x0, y1 - y0);
+    g.clip();
+    g.fillStyle = h.color;
+    // Bands run at 45 degrees: each is a parallelogram along x + y = c.
+    for (let c = x0 + y0 - (y1 - y0); c < x1 + y1; c += step) {
+        g.beginPath();
+        g.moveTo(c - half - y0, y0);
+        g.lineTo(c + half - y0, y0);
+        g.lineTo(c + half - y1, y1);
+        g.lineTo(c - half - y1, y1);
+        g.closePath();
+        g.fill();
+    }
+    g.restore();
+}
+
+/** Side of the generated noise tiles, in pixels. */
+const GRAIN_TILE = 256;
+
+/**
+ * Overlays two seamless noise tiles: speckle at about 3 m a tile for
+ * blade-scale texture, and soft blotches at about 40 m a tile for uneven
+ * growth and wear.
+ * Needs a DOM canvas for the tiles; skipped without one (tests).
+ */
+function paintGrain(
+    g: CanvasRenderingContext2D,
+    grain: PlanGrain,
+    layout: TextureLayout,
+): void {
+    if (typeof document === "undefined" || typeof DOMMatrix === "undefined")
+        return;
+    const rng = createRng(grain.seed);
+    /**
+     * A seamless GRAIN_TILE tile of value noise over a `cells` x `cells`
+     * grid, smoothly interpolated and wrapped at the edges.
+     */
+    const tile = (cells: number) => {
+        const grid = Array.from({ length: cells * cells }, () => rng());
+        const at = (i: number, j: number) =>
+            grid[(j % cells) * cells + (i % cells)];
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = GRAIN_TILE;
+        const tg = canvas.getContext("2d");
+        if (!tg) return null;
+        const img = tg.createImageData(GRAIN_TILE, GRAIN_TILE);
+        const per = GRAIN_TILE / cells;
+        const ease = (t: number) => t * t * (3 - 2 * t);
+        for (let y = 0; y < GRAIN_TILE; y++)
+            for (let x = 0; x < GRAIN_TILE; x++) {
+                const i = Math.floor(x / per);
+                const j = Math.floor(y / per);
+                const u = ease(x / per - i);
+                const w = ease(y / per - j);
+                const top = at(i, j) + (at(i + 1, j) - at(i, j)) * u;
+                const bottom =
+                    at(i, j + 1) + (at(i + 1, j + 1) - at(i, j + 1)) * u;
+                const v = Math.round((top + (bottom - top) * w) * 255);
+                img.data.set([v, v, v, 255], (y * GRAIN_TILE + x) * 4);
+            }
+        tg.putImageData(img, 0, 0);
+        return canvas;
+    };
+    const layers: [number, number, number][] = [
+        // cells, meters per tile, alpha
+        [GRAIN_TILE, 3, 0.16],
+        [12, 40, 0.22],
+    ];
+    g.save();
+    g.globalCompositeOperation = "soft-light";
+    for (const [cells, meters, alpha] of layers) {
+        const t = tile(cells);
+        const pattern = t && g.createPattern(t, "repeat");
+        if (!pattern) continue;
+        const k = (meters * layout.scaleX) / GRAIN_TILE;
+        pattern.setTransform(new DOMMatrix([k, 0, 0, k, 0, 0]));
+        g.globalAlpha = alpha * grain.strength;
+        g.fillStyle = pattern;
+        g.fillRect(0, 0, layout.width, layout.height);
+    }
+    g.restore();
 }
 
 /**
@@ -128,6 +233,14 @@ function paintLogo(
     g.rotate(logo.rotation);
     g.scale(k, k);
     g.translate(-OPENMARCH_LOGO.width / 2, -OPENMARCH_LOGO.height / 2);
+    if (logo.shadow) {
+        const d = (SHADOW_OFFSET / 2) * OPENMARCH_LOGO.height;
+        g.save();
+        g.translate(d, d);
+        g.fillStyle = logo.shadow;
+        for (const p of paths) g.fill(p);
+        g.restore();
+    }
     g.fillStyle = logo.color;
     for (const p of paths) g.fill(p);
     g.restore();
@@ -161,25 +274,45 @@ function paintText(
     const cap = size * CAP_HEIGHT;
     g.translate(px, py);
     g.rotate(t.rotation);
-    g.fillStyle = t.color;
     g.textBaseline = "alphabetic";
-    if (!mark) {
-        g.textAlign = "center";
-        g.fillText(t.text, 0, cap / 2);
-        g.restore();
-        return;
-    }
     const run = markRun(cap);
-    const left = -(run + g.measureText(t.text).width) / 2;
-    g.textAlign = "left";
-    g.fillText(t.text, left + run, cap / 2);
-    // The mark is centered on the caps, which span -cap / 2 to cap / 2.
+    const textWidth = mark ? g.measureText(t.text).width : 0;
+    const left = -(run + textWidth) / 2;
+    const marks = mark ? MARCHER_MARK.paths.map((d) => new Path2D(d)) : [];
     const k = (cap * MARK_HEIGHT) / MARCHER_MARK.height;
-    g.translate(left, (-cap * MARK_HEIGHT) / 2);
-    g.scale(k, k);
-    for (const d of MARCHER_MARK.paths) g.fill(new Path2D(d));
+    /** Paints the text, and the mark if any, in one color at an offset. */
+    const layer = (color: string, dx: number, dy: number, outline = 0) => {
+        g.fillStyle = color;
+        g.strokeStyle = color;
+        g.lineJoin = "round";
+        g.lineWidth = outline;
+        g.textAlign = mark ? "left" : "center";
+        const tx = (mark ? left + run : 0) + dx;
+        if (outline) g.strokeText(t.text, tx, cap / 2 + dy);
+        g.fillText(t.text, tx, cap / 2 + dy);
+        if (!mark) return;
+        // The mark is centered on the caps, which span -cap / 2 to cap / 2.
+        g.save();
+        g.translate(left + dx, (-cap * MARK_HEIGHT) / 2 + dy);
+        g.scale(k, k);
+        if (outline) {
+            g.lineWidth = outline / k;
+            for (const p of marks) g.stroke(p);
+        }
+        for (const p of marks) g.fill(p);
+        g.restore();
+    };
+    if (t.shadow) {
+        const d = cap * SHADOW_OFFSET;
+        layer(t.shadow, d, d, cap * 0.05);
+        layer(t.shadow, 0, 0, cap * 0.07);
+    }
+    layer(t.color, 0, 0);
     g.restore();
 }
+
+/** Drop-shadow offset for painted text and logos, as a share of their height. */
+const SHADOW_OFFSET = 0.07;
 
 /** The marcher mark's height and its gap before end-zone text, in cap heights. */
 const MARK_HEIGHT = 1.3;

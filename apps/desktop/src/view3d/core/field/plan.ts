@@ -34,7 +34,10 @@ export type FieldRole =
     | "arrow"
     | "image"
     | "tarpArt"
-    | "centerLogo";
+    | "centerLogo"
+    | "endZoneHatch"
+    | "endZoneBorder"
+    | "grain";
 
 export interface PlanRect {
     type: "rect";
@@ -69,6 +72,8 @@ export interface PlanText {
      * color; `maxLength` then covers the mark and the text together.
      */
     leadingMark?: boolean;
+    /** Painted behind the text (and mark) as a drop shadow and outline. */
+    shadow?: string;
 }
 
 export interface PlanArrow {
@@ -109,6 +114,36 @@ export interface PlanLogo {
     /** Same convention as `PlanText.rotation`. */
     rotation: number;
     color: string;
+    /** Painted behind the logo as a drop shadow. */
+    shadow?: string;
+}
+
+/**
+ * Diagonal bands across a rectangle, like the stripes painted in college end
+ * zones. Bands are `width` meters wide every `spacing` meters, at 45 degrees.
+ */
+export interface PlanHatch {
+    type: "hatch";
+    role: "endZoneHatch";
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+    color: string;
+    spacing: number;
+    width: number;
+}
+
+/**
+ * Fine and coarse noise laid over the whole surface, so grass and paint have
+ * texture instead of flat fills. Deterministic for a given `seed`.
+ */
+export interface PlanGrain {
+    type: "grain";
+    role: "grain";
+    seed: number;
+    /** Overall opacity of the noise, 0 to 1. */
+    strength: number;
 }
 
 /** The generated tarp's background artwork (gradient, glow and arcs). */
@@ -123,7 +158,9 @@ export type PlanItem =
     | PlanArrow
     | PlanImage
     | PlanTarpArt
-    | PlanLogo;
+    | PlanLogo
+    | PlanHatch
+    | PlanGrain;
 
 export interface FieldPlan {
     style: FieldSurfaceStyle;
