@@ -129,7 +129,10 @@ export const useTapPreviewStore = create<{
 export const PRE_ROLL_COUNTS = 8;
 
 const openPanel = () => useTapTheBeatStore.getState().setOpen(true);
-const openPanelHere = () => useTapTheBeatStore.getState().setOpen(true, true);
+/** Opens Tap the beat on From here (the playhead), as the lane's "Tap again from here" does */
+export const openTapTheBeatHere = () =>
+    useTapTheBeatStore.getState().setOpen(true, true);
+const openPanelHere = openTapTheBeatHere;
 
 /** Whether the show has music in the timeline (the waveform lane's envelope is loaded). */
 const useHasMusic = () => useAudioEnvelopeStore((s) => s.envelope !== null);

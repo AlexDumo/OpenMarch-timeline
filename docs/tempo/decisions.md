@@ -693,6 +693,7 @@ fixture list and how to score).
   "Lined up pages 12–18 to your taps." with Undo. Leaving Align keeps drafts in memory; closing
   the show loses them without asking (not built).
 - **Validate:** V-67.
+- **Superseded** by DT-1 (persona decision D2): `tapApply` is retired.
 
 ## FB-1 Tapping syncs what it put on the music (fix-beginner, E6)
 
@@ -1001,3 +1002,86 @@ fixture list and how to score).
   "120 BPM"). A page that runs into another note reads the tempo where it starts, never an average
   across a meter change.
 - **Validate:** V-77 (open the imported score in Align).
+
+## DT-1 A take survives pauses and applies on Done (decide-tap, D2)
+
+- **Context:** the personas split between "on stop" (Dana: interrupted, wants one stop and one
+  undo) and drafts (Jo, Marcus, Sam: pause to listen again before anything counts). Dana's real
+  fear was losing work to a stray Esc; Jo's was every pause re-spacing the rest of the page.
+- **Choice:** punch-in taps are a take of drafts. Pausing keeps the take and playing again (T or
+  Space) carries it on. It is applied, as one undo entry, by **Done** or Enter, by leaving Line up
+  with music, or by opening Tap the beat. Only **Discard take** throws it away; Esc does nothing to
+  it. No timers. The Tempo lab flag `tapApply` is retired (stored values are dropped). The take
+  lives in the timeline's memory: switching away from the timeline or closing the show loses it
+  without asking (not built: it would need a write while the show closes).
+- **Alternatives:** apply on stop (Dana's pick; with loop on, playback never stops); drafts with
+  Esc twice to discard (the old `drafts` mode); applying after N idle seconds (rejected: hidden
+  mode changes).
+- **Validate:** V-89.
+
+## DT-2 Each page is tapped as suits it (decide-tap, D3)
+
+- **Context:** a global "every count" makes Dana tap 64 counts of drums; a global "page starts"
+  spreads Jo's fermata and rit. evenly over the page.
+- **Choice:** without a choice for the take, a page is tapped count by count when it's slow (under
+  76 counts a minute) or uneven (its longest count over 1.25× its shortest, measured in each
+  count's own note from the tempo map, so 7/8's long count isn't uneven), else by its start. The
+  chip beside Tap says which and why: "Every count: slow page", "Page starts: steady page". Its
+  menu sets page starts or every count for the rest of the take, or each page's own again; the
+  choice ends with the take. The count-in follows the target's page (a page before, or 8 counts).
+  A take re-spaces untapped counts evenly only when every tap is on a by-count page, else in
+  proportion. `tapUnit` is retired.
+- **Alternatives:** 70 a minute (the resolution's "~70"; Jo's ♩=72 ballad would be page starts,
+  which is what she asked to avoid); remembering the choice per page (Jo; not built).
+- **Validate:** V-90.
+
+## DT-3 A take over a typed tempo asks first (decide-tap, FX-5)
+
+- **Choice:** Done or Enter on a take that would change a typed tempo map row shows the same
+  Override / Keep typed prompt an Align drag does, above the Tap controls. Override writes the take;
+  Keep typed writes nothing and keeps the drafts. Leaving Line up with music (or opening Tap the
+  beat) can't ask, so such a take stays as drafts and a toast says why ("…would change the typed
+  tempo ♩=176 (m1–16). Open Line up with music to apply or discard them.").
+- **Alternatives:** dropping the taps inside typed sections (they'd still re-space the section
+  through the ripple); applying anyway on leaving.
+- **Validate:** V-89.
+
+## DT-4 Amber only for taps out of step with both sides (decide-tap, Jo)
+
+- **Context:** with every-count taps on a rubato show, nearly every tag went amber against the
+  35% rule (PT-3), so Jo stopped reading them.
+- **Choice:** each tap's span per count is compared with the span just before and just after it
+  (at a take's edge, the two on its one side), and with the median of up to three spans each side
+  (so a normal tap between a fermata and a missed tap isn't odd). It's "Missed a tap?" when at least 1.7× longer than
+  all of them, "An extra tap?" when that much shorter, or when it and the next span are both short
+  but add up to about one (a stray tap mid-count). More than 2.6× longer than either side is a
+  hold (fermata, caesura) and isn't amber. A sudden new tempo is out of step with one side only,
+  so it isn't amber either. Tuned in a unit test on the kit's rubato truth (`rubato.json`): every
+  count tapped ±40 ms (four seeds) and every page start ±60 ms give no amber; one missed count and
+  one stray tap give exactly one amber each.
+- **Alternatives:** the local median of more taps (slower to react); dropping amber in count mode.
+- **Validate:** V-91.
+
+## DT-5 Draft tags thin out at a low zoom (decide-tap, Jo)
+
+- **Choice:** a draft keeps its numbered tag only when no numbered tag is within 18 px; amber taps
+  are numbered first, then taps on page flags, then the rest left to right. The others draw a
+  6 px dot on their dashed line (still clickable). Zooming in brings the numbers back.
+- **Alternatives:** tags only at page flags below 30 px a count (Jo); hiding the dashed lines.
+- **Validate:** V-92.
+
+## DT-6 Held counts are hatched at 2× and only when they stand out (decide-tap, Jo)
+
+- **Choice:** Align hatches a count as held when it's at least 2× its page's median (was 1.6×)
+  and at least 1.5× the shorter of the counts beside it, so tap wobbles and a rit. aren't hatched.
+- **Validate:** V-93.
+
+## DT-7 "Line up with music", and Tap the beat from a rehearsal mark (decide-tap, D4)
+
+- **Choice:** the Align button, its tooltips, the Tempo lab entry and the strings that mention it
+  say "Line up with music" (A still toggles it; code keeps "Align view"). Tap the beat keeps its
+  lane button, and a rehearsal tab's right-click menu offers "Tap from here (C)" when Tap the beat
+  is on and music is loaded: it seeks to the mark and opens Tap the beat on From here.
+- **Alternatives:** "Align to music" (Jo); hiding Align until after a first tap (Dana; rejected,
+  Jo needs it first).
+- **Validate:** V-94.

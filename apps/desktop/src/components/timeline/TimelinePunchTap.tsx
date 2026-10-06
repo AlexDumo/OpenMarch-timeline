@@ -1,72 +1,103 @@
 /**
- * Punch-in tap in the Align view (E9, Tempo lab `punchInTap`, `tapApply`, `tapUnit`): tap T along
- * with the music to put the next flag (or count) on it, from any page. Paused, T plays a count-in
- * before the target; playing, T taps. Backspace drops the last tap, a bounce is ignored, a tap
- * that implies a big tempo jump is kept but drawn amber, and clicking a flag taps again from
- * there. Taps are drafts drawn over the waveform, applied when playback stops (`tapApply: "stop"`)
- * or with Enter (`"drafts"`; Esc twice discards), as one undo entry that only changes count
- * lengths. The pure rules are in `timelinePunchTap.ts`.
+ * Punch-in tap in the Align view (E9, Tempo lab `punchInTap`): tap T along with the music to put
+ * the next flag (or count) on it, from any page. Paused, T plays a count-in before the target;
+ * playing, T taps. Backspace drops the last tap, a bounce is ignored, a tap out of step with its
+ * neighbors is kept but drawn amber, and clicking a flag taps again from there. Each page is
+ * tapped by its start or count by count, as suits it (DT-2), unless the user picks one for the
+ * take. Taps are a take of drafts drawn over the waveform: pausing keeps them and playing again
+ * carries on (DT-1). Done or Enter applies them, and so does leaving Align or opening Tap the beat,
+ * as one undo entry that only changes count lengths; a take that would change a typed tempo asks
+ * first (DT-3). Only Discard take throws a take away. The pure rules are in `timelinePunchTap.ts`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { HandTapIcon } from "@phosphor-icons/react";
-import { countTimes, type CountTap } from "@/timeline/tempo";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { CaretDownIcon, CheckIcon, HandTapIcon } from "@phosphor-icons/react";
+import {
+    countTimes,
+    overriddenSections,
+    type CountTap,
+    type TypedSection,
+} from "@/timeline/tempo";
 import {
     addPunchTap,
     countInFrom,
     dropLastPunchTap,
     EMPTY_PUNCH_TAP,
     NO_TARGET_LEFT,
+    numberedTags,
+    pageOfTarget,
+    pageTapUnit,
     punchTapResult,
     punchTargets,
     retargetPunchTap,
     suspectTaps,
     syncedAfterTaps,
+    takeUnit,
     tappedPages,
     targetAtOrAfter,
     targetName,
     upcomingTarget,
     type PunchTapState,
+    type PunchTapUnit,
+    type PunchTapUnitChoice,
+    type PunchTapUnitReason,
     type SuspectTap,
 } from "./timelinePunchTap";
 import { alignFlags, formatShowTime, type AlignPage } from "./timelineAlign";
-import { alignT, type AlignPreview } from "./TimelineAlignView";
+import {
+    alignT,
+    TimelineAlignConfirm,
+    type AlignPreview,
+} from "./TimelineAlignView";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
+import { timelineMenuContentGuards } from "./TimelineRangeMenu";
 import type { TimelineXAxis } from "./timelineAxis";
 import type { TimelineAlign } from "./TimelineViewModel";
 
-/** How long the first Esc waits for the second before it stops meaning "discard" */
-const ESC_AGAIN_MS = 3000;
 /** For this long after playback starts, the playhead moving back is it settling, not a loop */
 const SETTLE_MS = 400;
+/** Draft tags closer than this (px) don't all get their number (DT-5) */
+const TAG_GAP_PX = 18;
 
 type AlignWithOffset = TimelineAlign & { readonly offset: number };
 
 /** What `usePunchTap` gives the timeline to draw and the header to show */
 export interface PunchTapController {
-    readonly apply: "stop" | "drafts";
-    readonly unit: "page" | "count";
     readonly isPlaying: boolean;
     /** The drafts, in tap order */
     readonly taps: readonly CountTap[];
     /** The count the next tap (or T while paused) sets, or null when there's none */
     readonly target: number | null;
     readonly targetLabel: string | null;
+    /** How the next target's page is tapped, and why ("Every count: slow page") */
+    readonly targetUnit: PunchTapUnit;
+    readonly unitReason: PunchTapUnitReason;
+    /** The user's choice for this take */
+    readonly unitChoice: PunchTapUnitChoice;
+    readonly setUnitChoice: (choice: PunchTapUnitChoice) => void;
     /** What the drafts would write, or null without drafts */
     readonly preview: AlignPreview | null;
     readonly suspect: ReadonlyMap<number, SuspectTap>;
-    /** Esc was pressed once: the chip asks for a second */
-    readonly escArmed: boolean;
+    /** Done would change these typed tempos: waiting for Override or Keep typed */
+    readonly confirming: readonly TypedSection[] | null;
     readonly pages: readonly AlignPage[];
     readonly tap: (eventTimeStamp: number) => void;
     readonly retarget: (index: number) => void;
+    /** Done: applies the take (asking first over a typed tempo) */
     readonly applyDrafts: () => void;
+    /** Override: applies the take over the typed tempos */
+    readonly confirm: () => void;
+    /** Keep typed: the take stays, as drafts */
+    readonly keepTyped: () => void;
+    /** Discard take: the only way drafts are thrown away */
     readonly discard: () => void;
 }
 
 /**
  * The punch-in tap session for the Align view, or null when the Tempo lab flag is off (no
- * `align.punchTap`). Owns T, Backspace, Enter and Esc while Align shows and the flag is on.
+ * `align.punchTap`) or Align isn't showing. Owns T, Backspace and Enter while Align shows and the
+ * flag is on. The take lives on while Align is closed, so leaving and coming back finds it.
  *
  * @param positionBeat the playhead (view beat); while playing it moves count by count
  * @param selection the selected range (view beats): while the playhead is in it, a paused tap
@@ -92,14 +123,33 @@ export function usePunchTap({
     const config = align?.punchTap;
     const enabled = active && config !== undefined && align !== undefined;
     const [state, setState] = useState<PunchTapState>(EMPTY_PUNCH_TAP);
-    const [escArmed, setEscArmed] = useState(false);
+    const [unitChoice, setUnitChoiceState] =
+        useState<PunchTapUnitChoice>("auto");
+    const [confirming, setConfirming] = useState<
+        readonly TypedSection[] | null
+    >(null);
     const offset = align?.offset ?? 0;
     const durations = align?.durations;
-    const unit = config?.unit ?? "page";
-    const apply = config?.apply ?? "stop";
+    const units = align?.tempoMap?.units;
+    // Each page's own unit, from its current lengths (DT-2)
+    const autoUnits = useMemo(() => {
+        const out = new Map<number, ReturnType<typeof pageTapUnit>>();
+        if (!durations) return out;
+        const weights = units?.map((u) => u?.weight);
+        for (const page of pages)
+            out.set(page.start, pageTapUnit(durations, page, weights));
+        return out;
+    }, [durations, pages, units]);
+    const unitOf = useCallback(
+        (page: AlignPage): PunchTapUnit =>
+            unitChoice === "auto"
+                ? (autoUnits.get(page.start)?.unit ?? "page")
+                : unitChoice,
+        [autoUnits, unitChoice],
+    );
     const targets = useMemo(
-        () => (durations ? punchTargets(pages, durations.length, unit) : []),
-        [durations, pages, unit],
+        () => (durations ? punchTargets(pages, durations.length, unitOf) : []),
+        [durations, pages, unitOf],
     );
 
     // The target: the chosen one, or while playing the next one the music hasn't passed, or while
@@ -132,6 +182,14 @@ export function usePunchTap({
         state.next,
         targets,
     ]);
+    const targetPage = target === null ? null : pageOfTarget(pages, target);
+    const targetUnit: PunchTapUnit = targetPage ? unitOf(targetPage) : "page";
+    const unitReason: PunchTapUnitReason =
+        unitChoice !== "auto"
+            ? "chosen"
+            : targetPage
+              ? (autoUnits.get(targetPage.start)?.reason ?? "steady")
+              : "steady";
 
     const result = useMemo(
         () =>
@@ -140,21 +198,14 @@ export function usePunchTap({
                       durations: align.durations,
                       taps: state.taps,
                       synced: align.synced,
-                      unit,
+                      unit: takeUnit(pages, state.taps, unitOf),
                   })
                 : null,
-        [align, state.taps, unit],
+        [align, pages, state.taps, unitOf],
     );
     const suspect = useMemo(
-        () =>
-            result
-                ? suspectTaps({
-                      durations: result.durations,
-                      targets,
-                      taps: state.taps,
-                  })
-                : new Map<number, SuspectTap>(),
-        [result, state.taps, targets],
+        () => suspectTaps({ taps: state.taps }),
+        [state.taps],
     );
     const preview = useMemo((): AlignPreview | null => {
         if (!align || !result) return null;
@@ -173,71 +224,91 @@ export function usePunchTap({
     }, [align, result, state.taps]);
 
     // Everything the handlers read, current at the time of the event
-    const latest = useRef({
+    const current = {
         align,
         config,
         state,
         targets,
         target,
+        targetUnit,
         isPlaying,
-        unit,
+        unitOf,
         pages,
         enabled,
-    });
-    latest.current = {
-        align,
-        config,
-        state,
-        targets,
-        target,
-        isPlaying,
-        unit,
-        pages,
-        enabled,
+        confirming,
     };
+    const latest = useRef(current);
+    latest.current = current;
     const startedByTap = useRef(false);
 
-    const discard = useCallback(() => {
+    const endTake = useCallback(() => {
         setState(EMPTY_PUNCH_TAP);
-        setEscArmed(false);
+        setConfirming(null);
+        setUnitChoiceState("auto");
     }, []);
 
-    const applyDrafts = useCallback(() => {
-        const {
-            align: a,
-            config: c,
-            state: s,
-            unit: u,
-            pages: p,
-        } = latest.current;
-        if (!a || !c || s.taps.length === 0) return;
-        const written = punchTapResult({
-            durations: a.durations,
-            taps: s.taps,
-            synced: a.synced,
-            unit: u,
-        });
-        setState(EMPTY_PUNCH_TAP);
-        setEscArmed(false);
-        if (!written) return;
-        const range = tappedPages(p, written.taps);
-        const message = range
-            ? range.first === range.last
-                ? t("tempo.punchTap.appliedPage", { page: range.first })
-                : t("tempo.punchTap.appliedPages", {
-                      from: range.first,
-                      to: range.last,
-                  })
-            : t("tempo.punchTap.applied");
-        const done = a.onRetime({
-            durations: written.durations,
-            originShift: written.originShift,
-            synced: syncedAfterTaps(a.synced, written.taps),
-        });
-        const notify = () => c.onApplied?.(message);
-        if (done && typeof done.then === "function") void done.then(notify);
-        else notify();
-    }, [t]);
+    /**
+     * Writes the take. `how`: Done or Enter (`done`) asks first over a typed tempo; leaving Align
+     * or switching tools (`leave`) can't ask, so such a take stays as drafts, and says so.
+     */
+    const applyDrafts = useCallback(
+        (how: "done" | "leave" = "done", confirmed = false) => {
+            const {
+                align: a,
+                config: c,
+                state: s,
+                pages: p,
+                unitOf: unitFor,
+            } = latest.current;
+            if (!a || !c || s.taps.length === 0) return;
+            const written = punchTapResult({
+                durations: a.durations,
+                taps: s.taps,
+                synced: a.synced,
+                unit: takeUnit(p, s.taps, unitFor),
+            });
+            if (!written) return;
+            // A typed tempo changes only when the user says so (FX-5)
+            const overrides = overriddenSections(
+                a.tempoMap?.sections ?? [],
+                a.durations,
+                written.durations,
+            );
+            if (overrides.length > 0 && !confirmed) {
+                if (how === "done") setConfirming(overrides);
+                else {
+                    setConfirming(null);
+                    c.onNotice?.(
+                        t("tempo.punchTap.keptForTyped", {
+                            count: s.taps.length,
+                            tempo: overrides[0]!.tempo,
+                            measures: overrides[0]!.measures,
+                        }),
+                    );
+                }
+                return;
+            }
+            endTake();
+            const range = tappedPages(p, written.taps);
+            const message = range
+                ? range.first === range.last
+                    ? t("tempo.punchTap.appliedPage", { page: range.first })
+                    : t("tempo.punchTap.appliedPages", {
+                          from: range.first,
+                          to: range.last,
+                      })
+                : t("tempo.punchTap.applied");
+            const done = a.onRetime({
+                durations: written.durations,
+                originShift: written.originShift,
+                synced: syncedAfterTaps(a.synced, written.taps),
+            });
+            const notify = () => c.onApplied?.(message);
+            if (done && typeof done.then === "function") void done.then(notify);
+            else notify();
+        },
+        [endTake, t],
+    );
 
     const tap = useCallback((eventTimeStamp: number) => {
         const {
@@ -246,16 +317,16 @@ export function usePunchTap({
             state: s,
             targets: ts,
             target: tg,
+            targetUnit: u,
             isPlaying: playing,
-            unit: u,
             enabled: on,
+            confirming: asking,
         } = latest.current;
-        if (!on || !a || !c) return;
-        setEscArmed(false);
+        if (!on || !a || !c || asking) return;
         if (!playing) {
             // Paused: play a count-in before the target; the taps come while it plays
             if (tg === null) return;
-            setState((current) => retargetPunchTap(current, tg));
+            setState((now) => retargetPunchTap(now, tg));
             startedByTap.current = true;
             if (!c.play(countInFrom(ts, tg, u))) startedByTap.current = false;
             return;
@@ -263,9 +334,9 @@ export function usePunchTap({
         const time = c.liveTime(eventTimeStamp);
         const hit = s.next ?? upcomingTarget(ts, a.durations, time);
         if (hit === null) return;
-        setState((current) =>
-            addPunchTap(current, {
-                target: current.next ?? hit,
+        setState((now) =>
+            addPunchTap(now, {
+                target: now.next ?? hit,
                 time,
                 stamp: eventTimeStamp,
                 targets: ts,
@@ -274,18 +345,26 @@ export function usePunchTap({
     }, []);
 
     const retarget = useCallback((index: number) => {
-        setEscArmed(false);
-        setState((current) => retargetPunchTap(current, index));
+        setState((now) => retargetPunchTap(now, index));
+    }, []);
+
+    const setUnitChoice = useCallback((choice: PunchTapUnitChoice) => {
+        setUnitChoiceState(choice);
+        // The chosen target may not be one any more: the next tap finds its own
+        setState((now) =>
+            now.next === null || now.next === NO_TARGET_LEFT
+                ? now
+                : { ...now, next: null },
+        );
     }, []);
 
     // Playback started by Space (not T) taps the next target the music reaches; a loop or a jump
-    // back does the same from where it lands
+    // back does the same from where it lands. Pausing keeps the take (DT-1).
     const wasPlaying = useRef(isPlaying);
     const lastBeat = useRef(positionBeat);
     const startedAt = useRef(0);
     useEffect(() => {
         const started = isPlaying && !wasPlaying.current;
-        const stopped = !isPlaying && wasPlaying.current;
         // The playhead settling on the count-in's start isn't a jump
         const jumpedBack =
             isPlaying &&
@@ -296,28 +375,31 @@ export function usePunchTap({
         if (started) {
             startedAt.current = performance.now();
             if (!startedByTap.current)
-                setState((current) => ({ ...current, next: null }));
+                setState((now) => ({ ...now, next: null }));
             startedByTap.current = false;
-        } else if (jumpedBack)
-            setState((current) => ({ ...current, next: null }));
-        if (stopped && apply === "stop" && latest.current.enabled)
-            applyDrafts();
-    }, [apply, applyDrafts, isPlaying, positionBeat]);
+        } else if (jumpedBack) setState((now) => ({ ...now, next: null }));
+    }, [isPlaying, positionBeat]);
 
-    // The first Esc only asks; it forgets after a few seconds
+    // Leaving Align, or opening another tool that taps (Tap the beat), applies the take (DT-1)
+    const wasEnabled = useRef(enabled);
+    const otherTool = config?.otherToolOpen ?? false;
+    const wasOtherTool = useRef(otherTool);
     useEffect(() => {
-        if (!escArmed) return;
-        const timer = setTimeout(() => setEscArmed(false), ESC_AGAIN_MS);
-        return () => clearTimeout(timer);
-    }, [escArmed]);
+        const left = wasEnabled.current && !enabled;
+        const switched = otherTool && !wasOtherTool.current;
+        wasEnabled.current = enabled;
+        wasOtherTool.current = otherTool;
+        if (left || switched) applyDrafts("leave");
+    }, [applyDrafts, enabled, otherTool]);
 
-    // T, Backspace, Enter and Esc, before the app's shortcuts see them
+    // T, Backspace and Enter, before the app's shortcuts see them
     useEffect(() => {
         if (!enabled) return;
         const onKey = (event: KeyboardEvent) => {
-            const { config: c, state: s } = latest.current;
+            const { config: c, state: s, confirming: asking } = latest.current;
             if (
                 !c ||
+                asking ||
                 event.ctrlKey ||
                 event.metaKey ||
                 event.altKey ||
@@ -335,19 +417,11 @@ export function usePunchTap({
             } else if (key === "Backspace" && hasTaps) {
                 event.preventDefault();
                 event.stopPropagation();
-                setEscArmed(false);
                 setState(dropLastPunchTap);
-            } else if (key === "Enter" && hasTaps && c.apply === "drafts") {
+            } else if (key === "Enter" && hasTaps) {
                 event.preventDefault();
                 event.stopPropagation();
-                applyDrafts();
-            } else if (key === "Escape" && hasTaps && c.apply === "drafts") {
-                event.preventDefault();
-                event.stopPropagation();
-                setEscArmed((armed) => {
-                    if (armed) setState(EMPTY_PUNCH_TAP);
-                    return !armed;
-                });
+                applyDrafts("done");
             }
         };
         window.addEventListener("keydown", onKey, { capture: true });
@@ -357,8 +431,6 @@ export function usePunchTap({
 
     if (!enabled) return null;
     return {
-        apply,
-        unit,
         isPlaying,
         taps: state.taps,
         target,
@@ -366,20 +438,89 @@ export function usePunchTap({
             target === null
                 ? null
                 : targetName(pages, target, t("tempo.punchTap.countOne")),
+        targetUnit,
+        unitReason,
+        unitChoice,
+        setUnitChoice,
         preview,
         suspect,
-        escArmed,
+        confirming,
         pages,
         tap,
         retarget,
-        applyDrafts,
-        discard,
+        applyDrafts: () => applyDrafts("done"),
+        confirm: () => applyDrafts("done", true),
+        keepTyped: () => setConfirming(null),
+        discard: endTake,
     };
 }
 
+const menuItemClass =
+    "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-6 px-8 py-6 text-[12px] outline-hidden select-none";
+
 /**
- * The header's Tap button and chip: "Next tap → Pg 12 ct 16", "3 taps · Next → …", and in
- * drafts mode Apply and Discard.
+ * What a tap sets in this take, and why (DT-2): "Every count: slow page", with a menu to choose
+ * page starts or every count for the whole take, or each page's own again.
+ */
+function PunchTapUnitMenu({ punch }: { punch: PunchTapController }) {
+    const t = alignT;
+    const label = t("tempo.punchTap.unitLabel", {
+        unit: t(`tempo.punchTap.unit.${punch.targetUnit}`),
+        reason: t(`tempo.punchTap.reason.${punch.unitReason}`),
+    });
+    const choices: { value: PunchTapUnitChoice; text: string }[] = [
+        { value: "auto", text: t("tempo.punchTap.unitAuto") },
+        { value: "page", text: t("tempo.punchTap.unit.page") },
+        { value: "count", text: t("tempo.punchTap.unit.count") },
+    ];
+    return (
+        <DropdownMenu.Root modal={false}>
+            <DropdownMenu.Trigger asChild>
+                <button
+                    type="button"
+                    data-testid="timeline-punch-tap-unit"
+                    title={t("tempo.punchTap.unitTooltip")}
+                    className="rounded-4 text-text-subtitle hover:bg-fg-2 hover:text-text focus-visible:ring-accent flex h-20 items-center gap-2 px-4 font-mono text-[11px] whitespace-nowrap outline-hidden focus-visible:ring-2"
+                >
+                    {label}
+                    <CaretDownIcon size={10} />
+                </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                    {...timelineMenuContentGuards}
+                    data-testid="timeline-punch-tap-unit-menu"
+                    align="end"
+                    className="bg-modal text-text rounded-6 border-stroke shadow-modal z-[200] flex min-w-[200px] flex-col gap-2 border p-4 backdrop-blur-md"
+                >
+                    <DropdownMenu.Label className="text-text-subtitle px-8 py-4 text-[11px]">
+                        {t("tempo.punchTap.unitMenuTitle")}
+                    </DropdownMenu.Label>
+                    {choices.map((choice) => (
+                        <DropdownMenu.Item
+                            key={choice.value}
+                            data-testid={`timeline-punch-tap-unit-${choice.value}`}
+                            onSelect={() => punch.setUnitChoice(choice.value)}
+                            className={menuItemClass}
+                        >
+                            <span className="w-12">
+                                {punch.unitChoice === choice.value && (
+                                    <CheckIcon size={12} />
+                                )}
+                            </span>
+                            {choice.text}
+                        </DropdownMenu.Item>
+                    ))}
+                </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+    );
+}
+
+/**
+ * The header's Tap button and chips: what a tap sets ("Every count: slow page"), "Next tap → Pg
+ * 12 ct 16" (or "3 taps · Next → …"), and once there are drafts, Done and Discard take. Done over
+ * a typed tempo asks Override or Keep typed, as an Align drag does.
  */
 export function TimelinePunchTapControls({
     punch,
@@ -387,17 +528,34 @@ export function TimelinePunchTapControls({
     punch: PunchTapController;
 }) {
     const t = alignT;
+    const ref = useRef<HTMLDivElement>(null);
     const count = punch.taps.length;
     const next = punch.targetLabel
         ? t("tempo.punchTap.next", { target: punch.targetLabel })
         : t("tempo.punchTap.noTarget");
-    const chip = punch.escArmed
-        ? t("tempo.punchTap.escAgain", { count })
-        : count > 0
-          ? t("tempo.punchTap.tapsAndNext", { count, next })
-          : next;
+    const chip =
+        count > 0 ? t("tempo.punchTap.tapsAndNext", { count, next }) : next;
+    const confirmPreview = (): AlignPreview | null => {
+        if (!punch.confirming || !punch.preview) return null;
+        const bounds = ref.current?.getBoundingClientRect();
+        return {
+            ...punch.preview,
+            overrides: punch.confirming,
+            confirming: true,
+            anchor: bounds
+                ? {
+                      x: bounds.left + bounds.width / 2,
+                      top: bounds.top,
+                      left: bounds.left,
+                      right: bounds.right,
+                  }
+                : null,
+        };
+    };
+    const asking = confirmPreview();
     return (
         <div
+            ref={ref}
             className="flex shrink-0 items-center gap-4"
             data-testid="timeline-punch-tap"
         >
@@ -406,7 +564,7 @@ export function TimelinePunchTapControls({
                 data-testid="timeline-punch-tap-button"
                 aria-pressed={punch.isPlaying && count > 0}
                 title={
-                    punch.unit === "count"
+                    punch.targetUnit === "count"
                         ? t("tempo.punchTap.tooltipCount")
                         : t("tempo.punchTap.tooltipPage")
                 }
@@ -422,19 +580,15 @@ export function TimelinePunchTapControls({
                     T
                 </kbd>
             </button>
+            <PunchTapUnitMenu punch={punch} />
             <span
                 role="status"
                 data-testid="timeline-punch-tap-chip"
-                className={clsx(
-                    "rounded-6 border px-6 py-1 font-mono text-[11px] whitespace-nowrap",
-                    punch.escArmed
-                        ? "border-yellow text-text"
-                        : "border-stroke text-text-subtitle",
-                )}
+                className="rounded-6 border-stroke text-text-subtitle border px-6 py-1 font-mono text-[11px] whitespace-nowrap"
             >
                 {chip}
             </span>
-            {punch.apply === "drafts" && count > 0 && (
+            {count > 0 && (
                 <>
                     <button
                         type="button"
@@ -450,11 +604,18 @@ export function TimelinePunchTapControls({
                         data-testid="timeline-punch-tap-discard"
                         title={t("tempo.punchTap.discardTooltip")}
                         onClick={punch.discard}
-                        className="rounded-4 text-text hover:bg-fg-2 h-20 px-6 text-[11px]"
+                        className="rounded-4 text-text hover:bg-fg-2 h-20 px-6 text-[11px] whitespace-nowrap"
                     >
                         {t("tempo.punchTap.discard")}
                     </button>
                 </>
+            )}
+            {asking && (
+                <TimelineAlignConfirm
+                    preview={asking}
+                    onConfirm={punch.confirm}
+                    onCancel={punch.keepTyped}
+                />
             )}
         </div>
     );
@@ -495,6 +656,20 @@ export function TimelinePunchTapLayer({
               })
             : [];
     const countOne = t("tempo.punchTap.countOne");
+    // At a low zoom (every count at Align's opening zoom), only some tags get a number (DT-5)
+    const flagIndexes = new Set(alignFlags(punch.pages).map((f) => f.index));
+    const numbered = numberedTags(
+        punch.taps.map((tap) => ({
+            index: tap.index,
+            x: tap.time * pixelsPerSecond,
+            priority: punch.suspect.has(tap.index)
+                ? 2
+                : flagIndexes.has(tap.index)
+                  ? 1
+                  : 0,
+        })),
+        TAG_GAP_PX,
+    );
     return (
         <div
             data-testid="timeline-punch-tap-layer"
@@ -516,12 +691,18 @@ export function TimelinePunchTapLayer({
                 const n = order.get(tap.index)!;
                 const suspect = punch.suspect.get(tap.index);
                 const name = targetName(punch.pages, tap.index, countOne);
+                const showNumber = numbered.has(tap.index);
                 const title = suspect
-                    ? t("tempo.punchTap.suspect", {
-                          target: name,
-                          bpm: suspect.bpm,
-                          was: suspect.beforeBpm,
-                      })
+                    ? t(
+                          suspect.kind === "extra"
+                              ? "tempo.punchTap.suspectExtra"
+                              : "tempo.punchTap.suspect",
+                          {
+                              target: name,
+                              bpm: suspect.bpm,
+                              was: suspect.beforeBpm,
+                          },
+                      )
                     : t("tempo.punchTap.draftTag", {
                           n,
                           target: name,
@@ -543,6 +724,7 @@ export function TimelinePunchTapLayer({
                         <button
                             type="button"
                             data-testid="timeline-punch-tap-tag"
+                            data-numbered={showNumber || undefined}
                             data-timeline-interactive="true"
                             title={title}
                             aria-label={title}
@@ -552,14 +734,17 @@ export function TimelinePunchTapLayer({
                                 punch.retarget(tap.index);
                             }}
                             className={clsx(
-                                "pointer-events-auto absolute top-[2px] flex h-14 min-w-14 -translate-x-1/2 items-center justify-center rounded-full px-2 font-mono text-[9px] leading-none font-bold",
+                                "pointer-events-auto absolute -translate-x-1/2 rounded-full font-mono leading-none font-bold",
+                                showNumber
+                                    ? "top-[2px] flex h-14 min-w-14 items-center justify-center px-2 text-[9px]"
+                                    : "top-[6px] size-6",
                                 suspect
                                     ? "bg-yellow text-black"
                                     : "bg-accent text-text-invert",
                             )}
                             style={{ left: x }}
                         >
-                            {suspect ? `${n}?` : n}
+                            {showNumber && (suspect ? `${n}?` : n)}
                         </button>
                     </span>
                 );

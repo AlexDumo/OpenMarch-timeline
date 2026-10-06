@@ -189,8 +189,6 @@ describe("Tempo lab flags", () => {
             alignDragScope: "page",
             tapTheBeat: false,
             punchInTap: false,
-            tapApply: "stop",
-            tapUnit: "page",
             tempoMap: false,
             snapToAttacks: false,
             drillChoices: false,
@@ -203,24 +201,32 @@ describe("Tempo lab flags", () => {
         expect(
             mergeTempoLab({
                 alignView: true,
+                alignDragScope: "toSynced",
+                // Retired flags (DT-1, DT-2) are dropped
                 tapApply: "drafts",
-                tapUnit: "measure",
+                tapUnit: "count",
                 tempoMap: "yes",
                 retired: true,
             }),
-        ).toEqual({ ...defaultTempoLab, alignView: true, tapApply: "drafts" });
+        ).toEqual({
+            ...defaultTempoLab,
+            alignView: true,
+            alignDragScope: "toSynced",
+        });
     });
 
     it("sets one flag and saves it", () => {
         const { result } = renderHook(() => useUiSettingsStore());
-        act(() => result.current.setTempoLabFlag("tapUnit", "count"));
-        expect(result.current.uiSettings.tempoLab.tapUnit).toBe("count");
+        act(() => result.current.setTempoLabFlag("alignDragScope", "toSynced"));
+        expect(result.current.uiSettings.tempoLab.alignDragScope).toBe(
+            "toSynced",
+        );
         expect(result.current.uiSettings.tempoLab.alignView).toBe(false);
         const saved = JSON.parse(
             (localStorage.setItem as ReturnType<typeof vi.fn>).mock.calls.at(
                 -1,
             )![1] as string,
         ) as UiSettings;
-        expect(saved.tempoLab.tapUnit).toBe("count");
+        expect(saved.tempoLab.alignDragScope).toBe("toSynced");
     });
 });

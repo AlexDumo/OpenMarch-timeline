@@ -485,22 +485,19 @@ function useTimelineAlign({
 /**
  * Punch-in tap's app side (E9), when the Tempo lab flag `punchInTap` is on: the live clock, a
  * count-in (or the user's own From start window and loop, UI-11), and the "Lined up" toast with
- * Undo. Tap the beat's open panel keeps T.
+ * Undo. Tap the beat's open panel keeps T, and opening it applies the take (DT-1).
  */
 function useTimelinePunchTap(
     showEndBeat: number,
 ): TimelinePunchTapConfig | undefined {
     const enabled = useTempoLabFlag("punchInTap") === true;
-    const apply = useTempoLabFlag("tapApply");
-    const unit = useTempoLabFlag("tapUnit");
+    const tapTheBeatOpen = useTapTheBeatStore((s) => s.open);
     const { setIsPlaying } = useIsPlaying()!;
     const { mutate: performHistoryAction } = usePerformHistoryAction();
     const { t } = useTolgee();
     return useMemo(() => {
         if (!enabled) return undefined;
         return {
-            apply,
-            unit,
             liveTime: (stamp) =>
                 getLivePlaybackPosition() - handlerDelaySeconds(stamp),
             play: (from) => {
@@ -512,6 +509,7 @@ function useTimelinePunchTap(
                 return startTimelinePlayOn(showEndBeat, setIsPlaying);
             },
             blocked: () => useTapTheBeatStore.getState().open,
+            otherToolOpen: tapTheBeatOpen,
             onApplied: (message) =>
                 toast.success(message, {
                     action: {
@@ -519,15 +517,15 @@ function useTimelinePunchTap(
                         onClick: () => performHistoryAction("undo"),
                     },
                 }),
+            onNotice: (message) => toast.info(message),
         };
     }, [
-        apply,
         enabled,
         performHistoryAction,
         setIsPlaying,
         showEndBeat,
         t,
-        unit,
+        tapTheBeatOpen,
     ]);
 }
 
