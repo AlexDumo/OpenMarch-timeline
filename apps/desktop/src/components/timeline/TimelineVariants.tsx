@@ -350,8 +350,13 @@ function TimelineWaveformLane({
     pixelsPerBeat,
     positionBeat,
     livePositionBeat,
+    viewportRef,
+    layerLeft,
 }: {
     waveform: TimelineCommonProps["model"]["waveform"];
+    viewportRef: React.RefObject<HTMLDivElement | null>;
+    /** How far into the scroller's content the lane's left edge is */
+    layerLeft: number;
     top: number;
     width: number;
     height: number;
@@ -386,6 +391,8 @@ function TimelineWaveformLane({
                 width={width}
                 height={height}
                 pixelsPerBeat={pixelsPerBeat}
+                viewportRef={viewportRef}
+                layerLeft={layerLeft}
                 tone="rest"
             />
             <div
@@ -397,6 +404,8 @@ function TimelineWaveformLane({
                     width={width}
                     height={height}
                     pixelsPerBeat={pixelsPerBeat}
+                    viewportRef={viewportRef}
+                    layerLeft={layerLeft}
                     tone="played"
                 />
             </div>
@@ -602,6 +611,8 @@ function TimelineSurface({
                         width={width}
                         height={timelineHeight}
                         pixelsPerBeat={pixelsPerBeat}
+                        viewportRef={viewportRef}
+                        layerLeft={initialPageWidth}
                         measures={model.measures}
                         lineTop={28}
                         topTickY={34}
@@ -668,6 +679,8 @@ function TimelineSurface({
                     {showWaveform && (
                         <TimelineWaveformLane
                             waveform={model.waveform}
+                            viewportRef={viewportRef}
+                            layerLeft={initialPageWidth}
                             top={audioTop}
                             width={width}
                             height={waveformHeight}
