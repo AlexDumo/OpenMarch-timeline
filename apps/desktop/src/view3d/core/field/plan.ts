@@ -16,6 +16,25 @@ import type { VenueParams } from "../types";
  */
 export type FieldSurfaceStyle = "turf" | "theme" | "tarp";
 
+/**
+ * How turf end zones are painted (mockups; not yet a show setting):
+ * - `stripes`: diagonal bands and a white border line;
+ * - `solid`: flat color and a white border line;
+ * - `argyle`: crossed diagonal bands that read as diamonds;
+ * - `fade`: color at the end line fading into the turf toward the goal line;
+ * - `outline`: no fill, lettering outlined in the end-zone color;
+ * - `pinstripe`: flat color with a double white border line.
+ */
+export const END_ZONE_STYLES = [
+    "stripes",
+    "solid",
+    "argyle",
+    "fade",
+    "outline",
+    "pinstripe",
+] as const;
+export type EndZoneStyle = (typeof END_ZONE_STYLES)[number];
+
 /** What a painted element stands for. Tests count items by role. */
 export type FieldRole =
     | "background"
@@ -33,7 +52,12 @@ export type FieldRole =
     | "endZoneText"
     | "arrow"
     | "image"
-    | "tarpArt";
+    | "tarpArt"
+    | "centerLogo"
+    | "endZoneHatch"
+    | "endZoneFade"
+    | "endZoneBorder"
+    | "grain";
 
 export interface PlanRect {
     type: "rect";
@@ -63,6 +87,13 @@ export interface PlanText {
     weight: number;
     /** Shrinks the font so the text is at most this long, in meters. */
     maxLength?: number;
+    /**
+     * Paints the marcher mark (`brandMark.ts`) before the text, in the text's
+     * color; `maxLength` then covers the mark and the text together.
+     */
+    leadingMark?: boolean;
+    /** Painted behind the text (and mark) as a drop shadow and outline. */
+    shadow?: string;
 }
 
 export interface PlanArrow {
@@ -89,6 +120,65 @@ export interface PlanImage {
     opacity: number;
 }
 
+/**
+ * A logo painted flat on the field, centered on (x, z). The art comes from
+ * `brandMark.ts`; the plan only says where it goes and how big it is.
+ */
+export interface PlanLogo {
+    type: "logo";
+    role: "centerLogo";
+    x: number;
+    z: number;
+    /** Width of the logo in meters; the height follows its aspect. */
+    width: number;
+    /** Same convention as `PlanText.rotation`. */
+    rotation: number;
+    color: string;
+    /** Painted behind the logo as a drop shadow. */
+    shadow?: string;
+}
+
+/**
+ * Diagonal bands across a rectangle, like the stripes painted in college end
+ * zones. Bands are `width` meters wide every `spacing` meters, at 45 degrees.
+ */
+export interface PlanHatch {
+    type: "hatch";
+    role: "endZoneHatch";
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+    color: string;
+    spacing: number;
+    width: number;
+    /** 1 for bands rising to +x, -1 for the mirror image. Defaults to 1. */
+    direction?: 1 | -1;
+}
+
+/** A color fading from opaque at `fromX` to clear at `toX`. */
+export interface PlanFade {
+    type: "fade";
+    role: "endZoneFade";
+    fromX: number;
+    toX: number;
+    minZ: number;
+    maxZ: number;
+    color: string;
+}
+
+/**
+ * Fine and coarse noise laid over the whole surface, so grass and paint have
+ * texture instead of flat fills. Deterministic for a given `seed`.
+ */
+export interface PlanGrain {
+    type: "grain";
+    role: "grain";
+    seed: number;
+    /** Overall opacity of the noise, 0 to 1. */
+    strength: number;
+}
+
 /** The generated tarp's background artwork (gradient, glow and arcs). */
 export interface PlanTarpArt {
     type: "tarpArt";
@@ -100,7 +190,11 @@ export type PlanItem =
     | PlanText
     | PlanArrow
     | PlanImage
-    | PlanTarpArt;
+    | PlanTarpArt
+    | PlanLogo
+    | PlanHatch
+    | PlanFade
+    | PlanGrain;
 
 export interface FieldPlan {
     style: FieldSurfaceStyle;
@@ -119,6 +213,8 @@ export interface PlanInput {
     theme: FieldTheme;
     style: FieldSurfaceStyle;
     params: VenueParams;
+    /** Turf end-zone paint; defaults to `solid`. */
+    endZoneStyle?: EndZoneStyle;
     /** The field background image's size, or null when there is none. */
     image: ImageSize | null;
 }

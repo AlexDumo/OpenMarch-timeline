@@ -13,8 +13,12 @@
  * - `focus`: the kit's default look-at point (normally the field center).
  * - `lighting`: the preset actually applied (the stored one, or the kit's
  *   default when the stored one doesn't fit the kit).
- * - `quality`: the render quality the scene builds for. P5.1 lowers it
- *   with `setQuality("low")`; that drops shadows and halves the crowd.
+ * - `quality`: the render quality the scene builds for. `low` drops
+ *   shadows and halves the crowd.
+ * - `qualityMode`: the viewer's choice in the settings panel (`auto`, `low`
+ *   or `high`), saved per computer. Set it with `setQualityMode`. In `auto`
+ *   the scene lowers `quality` once with `_autoLower()` when frames are slow
+ *   (P5.1), and `autoLowered` says so.
  *
  * Read it in React with `useView3dSceneStore(selector)`, and in `useFrame` or
  * event handlers with `useView3dSceneStore.getState()`.
@@ -30,6 +34,12 @@ import type {
     LightingPreset,
     VenueKitId,
 } from "@/view3d/core/types";
+import {
+    initialQuality,
+    loadQualityMode,
+    saveQualityMode,
+    type QualityMode,
+} from "./qualityPreference";
 
 /** People within this many meters of a seat camera are hidden (ui.md UI-3). */
 export const CROWD_CLEAR_RADIUS = 4.9;
@@ -44,6 +54,13 @@ export interface View3dSceneState {
     lighting: LightingPreset | null;
     quality: View3dQuality;
     setQuality: (quality: View3dQuality) => void;
+    qualityMode: QualityMode;
+    /** Saves the choice and applies it. Choosing `auto` starts on `high` again. */
+    setQualityMode: (mode: QualityMode) => void;
+    /** True after `auto` dropped to `low` because frames were slow. */
+    autoLowered: boolean;
+    /** Scene only: the automatic fallback fired. */
+    _autoLower: () => void;
     /** Scene only. */
     _setKit: (kitId: VenueKitId | null, kit: KitResult | null) => void;
     /** Scene only. */
@@ -54,14 +71,27 @@ export interface View3dSceneState {
 
 const ORIGIN: Vector3Tuple = [0, 0, 0];
 
+const startMode = loadQualityMode();
+
 export const useView3dSceneStore = create<View3dSceneState>()((set) => ({
     kitId: null,
     kit: null,
     crowd: null,
     focus: ORIGIN,
     lighting: null,
-    quality: "high",
+    quality: initialQuality(startMode),
     setQuality: (quality) => set({ quality }),
+    qualityMode: startMode,
+    setQualityMode: (mode) => {
+        saveQualityMode(mode);
+        set({
+            qualityMode: mode,
+            quality: initialQuality(mode),
+            autoLowered: false,
+        });
+    },
+    autoLowered: false,
+    _autoLower: () => set({ quality: "low", autoLowered: true }),
     _setKit: (kitId, kit) =>
         set({ kitId, kit, focus: kit ? kit.focus : ORIGIN }),
     _setCrowd: (crowd) => set({ crowd }),

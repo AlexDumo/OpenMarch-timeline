@@ -15,6 +15,7 @@ import {
 } from "./paint";
 import {
     createPlanContext,
+    type EndZoneStyle,
     type FieldPlan,
     type FieldSurfaceStyle,
     type ImageSize,
@@ -34,7 +35,14 @@ import { planTurf } from "./turfPlan";
  * `tarp` (gym). Tests call `setTexturePainting(false)` from the environment
  * module, and can paint a plan into any 2D context with `paintPlan`.
  */
-export type { FieldPlan, FieldSurfaceStyle, PlanItem, FieldRole } from "./plan";
+export type {
+    EndZoneStyle,
+    FieldPlan,
+    FieldSurfaceStyle,
+    PlanItem,
+    FieldRole,
+} from "./plan";
+export { END_ZONE_STYLES } from "./plan";
 export { paintPlan, textureLayout, textureLongSide } from "./paint";
 export type { TextureLayout } from "./paint";
 
@@ -50,6 +58,8 @@ export interface FieldSurfaceInput {
     theme?: FieldTheme;
     style: FieldSurfaceStyle;
     params: VenueParams;
+    /** Turf end-zone paint; defaults to `solid`. */
+    endZoneStyle?: EndZoneStyle;
     /** The show's field background image, if it has one. */
     image?: FieldImage | null;
     /** `renderer.capabilities.maxTextureSize`; 8192 px textures need >= 8192. */
@@ -91,6 +101,7 @@ export function planField(input: FieldSurfaceInput): FieldPlan {
         theme: input.theme ?? input.fieldProperties.theme,
         style: input.style,
         params: input.params,
+        endZoneStyle: input.endZoneStyle,
         image,
     });
     if (input.style === "turf") planTurf(ctx);

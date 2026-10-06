@@ -11,6 +11,7 @@ import {
     SelectTriggerButton,
 } from "@openmarch/ui";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { VIEW3D_AUTO_OPEN_SETTING } from "@/view3d/sync/protocol";
 
 const languages = [
     { code: "en", name: "English" },
@@ -27,6 +28,7 @@ export default function GeneralSettings() {
     const [currentLanguage, setCurrentLanguage] = useState("en");
     const [automaticUpdatesEnabled, setAutomaticUpdatesEnabled] =
         useState(true);
+    const [view3dAutoOpen, setView3dAutoOpen] = useState(false);
     const { uiSettings, setUiSettings } = useUiSettingsStore();
 
     useEffect(() => {
@@ -54,6 +56,11 @@ export default function GeneralSettings() {
             if (isMounted) setAutomaticUpdatesEnabled(savedValue !== false);
         };
         void loadAutomaticUpdatesSetting();
+        void window.electron
+            .invoke("settings:get", VIEW3D_AUTO_OPEN_SETTING)
+            .then((savedValue: unknown) => {
+                if (isMounted) setView3dAutoOpen(savedValue === true);
+            });
         return () => {
             isMounted = false;
         };
@@ -157,6 +164,22 @@ export default function GeneralSettings() {
                         setAutomaticUpdatesEnabled(checked);
                         window.electron.send("settings:set", {
                             automaticUpdates: checked,
+                        });
+                    }}
+                />
+            </div>
+
+            <div className="flex h-[2.5rem] items-center justify-between px-8">
+                <p className="text-body text-text-subtitle">
+                    <T keyName="settings.general.openView3dWithShow" />
+                </p>
+                <Switch
+                    checked={view3dAutoOpen}
+                    data-testid="settings-view3d-auto-open"
+                    onCheckedChange={(checked) => {
+                        setView3dAutoOpen(checked);
+                        window.electron.send("settings:set", {
+                            [VIEW3D_AUTO_OPEN_SETTING]: checked,
                         });
                     }}
                 />

@@ -79,8 +79,9 @@ Paths are relative to `apps/desktop/` unless they start at the repo root.
 - **D-2** Meters. Origin at center front. +X toward side 2, +Y up, +Z toward the
   audience. Conversions go in `@openmarch/core`'s `field/world.ts`.
 - **D-3** One 3D View window, `?view=3d`, with its own read-only preload.
-- **D-4** IPC: `view3d:open`, `clock`, `selection`, `invalidate`, `hello` and
-  `venue-change-request`. The editor is the only writer.
+- **D-4** IPC: `view3d:open`, `clock`, `selection`, `invalidate`, `hello`,
+  `venue-change-request` and `playback-request`. The editor is the only
+  writer and the only owner of playback.
 - **D-5** A `view3d_venue` single-row table with versioned JSON. No row means
   a default from the field template. Writes use history. The gym tarp is the
   field image.

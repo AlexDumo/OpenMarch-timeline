@@ -19,7 +19,10 @@ import {
     type FieldRole,
     type FieldSurfaceInput,
     type FieldSurfaceStyle,
+    type EndZoneStyle,
+    END_ZONE_STYLES,
 } from "..";
+import { MARCHER_MARK, OPENMARCH_LOGO } from "../brandMark";
 import { FIVE_YARDS } from "../turfPlan";
 
 beforeAll(() => setTexturePainting(false));
@@ -122,8 +125,45 @@ describe("turf on football fields", () => {
                 for (const t of texts)
                     if (t.type === "text") {
                         expect(t.text).toBe("OPENMARCH");
+                        expect(t.leadingMark).toBe(true);
                         expect(Math.abs(t.rotation)).toBeCloseTo(Math.PI / 2);
                     }
+            });
+
+            it("outlines both end zones and grains the turf", () => {
+                expect(count(p, "endZoneHatch")).toBe(0);
+                expect(count(p, "endZoneBorder")).toBe(8);
+                expect(p.items.at(-1)?.role).toBe("grain");
+            });
+
+            it("puts the OpenMarch logo on the center line", () => {
+                const logos = p.items.filter((i) => i.role === "centerLogo");
+                expect(logos).toHaveLength(1);
+                const [logo] = logos;
+                if (logo.type !== "logo") throw new Error("not a logo");
+                expect(logo.x).toBe(0);
+                expect(logo.z).toBeCloseTo(
+                    (p.footprint.minZ + p.footprint.maxZ) / 2,
+                    6,
+                );
+                expect(logo.rotation).toBe(0);
+                expect(logo.color).toBe("#f4f6f1");
+                // fits between the middle hash rows, at most 15 yards wide
+                const height = (logo.width * 128) / 230;
+                const mid = (p.footprint.minZ + p.footprint.maxZ) / 2;
+                for (const h of p.items.filter((i) => i.role === "hash"))
+                    if (h.type === "rect" && Math.abs(h.minX) < 1)
+                        expect(
+                            Math.abs((h.minZ + h.maxZ) / 2 - mid),
+                        ).toBeGreaterThan(height / 2);
+                expect(logo.width).toBeLessThanOrEqual(3 * FIVE_YARDS + 1e-9);
+                // painted over the center yard line, under the numbers
+                const at = (role: FieldRole) =>
+                    p.items.findIndex((i) => i.role === role);
+                expect(p.items.indexOf(logo)).toBeGreaterThan(
+                    p.items.findLastIndex((i) => i.role === "yardLine"),
+                );
+                expect(p.items.indexOf(logo)).toBeLessThan(at("yardNumber"));
             });
 
             it("has 20 mowing stripes between the goal lines", () => {
@@ -214,6 +254,16 @@ describe("turf on football fields", () => {
         expect(count(empty, "endZone")).toBe(2);
         expect(count(empty, "endZoneText")).toBe(0);
 
+        // only the OpenMarch text gets the marcher mark
+        const school = planField({
+            fieldProperties: fp,
+            style: "turf",
+            params: { ...params, endZoneText: "TIGERS" },
+        });
+        for (const t of school.items)
+            if (t.type === "text" && t.role === "endZoneText")
+                expect(t.leadingMark).toBe(false);
+
         const noEz = plan(T.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES, "turf");
         expect(count(noEz, "endZone")).toBe(0);
         expect(count(noEz, "endZoneText")).toBe(0);
@@ -237,6 +287,36 @@ describe("turf on football fields", () => {
     });
 });
 
+describe("end-zone styles", () => {
+    const fp = T.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
+    const styled = (endZoneStyle: EndZoneStyle) =>
+        plan(fp, "turf", { endZoneStyle });
+
+    it("paints each style's fill and keeps the lettering", () => {
+        const expected: Record<
+            EndZoneStyle,
+            Partial<Record<FieldRole, number>>
+        > = {
+            stripes: { endZone: 2, endZoneHatch: 2, endZoneBorder: 8 },
+            solid: { endZone: 2, endZoneHatch: 0, endZoneBorder: 8 },
+            argyle: { endZone: 2, endZoneHatch: 4, endZoneBorder: 8 },
+            fade: { endZone: 0, endZoneFade: 2, endZoneBorder: 0 },
+            outline: { endZone: 0, endZoneHatch: 0, endZoneBorder: 0 },
+            pinstripe: { endZone: 2, endZoneHatch: 0, endZoneBorder: 16 },
+        };
+        for (const style of END_ZONE_STYLES) {
+            const p = styled(style);
+            for (const [role, n] of Object.entries(expected[style]))
+                expect(count(p, role as FieldRole), `${style} ${role}`).toBe(n);
+            expect(count(p, "endZoneText")).toBe(2);
+        }
+    });
+
+    it("defaults to solid", () => {
+        expect(plan(fp, "turf")).toEqual(styled("solid"));
+    });
+});
+
 describe("theme style mirrors the 2D canvas", () => {
     it("draws grid, half lines, checkpoints, hashes and numbers on football", () => {
         const fp = T.COLLEGE_FOOTBALL_FIELD_WITH_END_ZONES;
@@ -255,6 +335,8 @@ describe("theme style mirrors the 2D canvas", () => {
         expect(count(p, "border")).toBe(4);
         expect(count(p, "endZone")).toBe(0);
         expect(count(p, "stripe")).toBe(0);
+        // the theme is the show's 2D field, so no venue branding
+        expect(count(p, "centerLogo")).toBe(0);
         const bg = p.items[0];
         expect(bg.type === "rect" && bg.color).toBe("rgba(255, 255, 255, 1)");
     });
@@ -305,6 +387,7 @@ describe("tarp style", () => {
         expect(count(p, "dot")).toBe(7 * 4);
         expect(count(p, "image")).toBe(0);
         expect(count(p, "yardLine")).toBe(0);
+        expect(count(p, "centerLogo")).toBe(0);
         expectInside(p, fieldFootprint(fp));
     });
 
@@ -345,12 +428,46 @@ describe("painting", () => {
         const rec = recordingContext();
         paintPlan(rec.g, p, layout);
         const rects = p.items.filter((i) => i.type === "rect").length;
-        const texts = p.items.filter((i) => i.type === "text").length;
+        const texts = p.items.filter((i) => i.type === "text");
+        const shadowed = texts.filter((t) => t.type === "text" && t.shadow);
         expect(rec.named("fillRect")).toHaveLength(rects);
-        expect(rec.named("fillText")).toHaveLength(texts);
+        // shadowed text is painted three times: drop shadow, outline, face
+        expect(rec.named("fillText")).toHaveLength(
+            texts.length + 2 * shadowed.length,
+        );
+        expect(rec.named("strokeText")).toHaveLength(2 * shadowed.length);
+        // only the arrows are paths (solid end zones are rects)
         expect(rec.named("fill")).toHaveLength(count(p, "arrow"));
         for (const c of rec.named("fillRect"))
             for (const v of c.args) expect(Number.isFinite(v)).toBe(true);
+    });
+
+    it("paints the center logo and the end zones' marcher marks", () => {
+        const fp = T.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
+        const p = plan(fp, "turf");
+        const layout = textureLayout(p.footprint, 4096);
+        const without = recordingContext();
+        paintPlan(without.g, p, layout);
+        const rec = recordingContext();
+        const had = "Path2D" in globalThis;
+        const original = (globalThis as { Path2D?: unknown }).Path2D;
+        (globalThis as { Path2D?: unknown }).Path2D = class {
+            constructor(public d: string) {}
+        };
+        try {
+            paintPlan(rec.g, p, layout);
+        } finally {
+            if (had) (globalThis as { Path2D?: unknown }).Path2D = original;
+            else delete (globalThis as { Path2D?: unknown }).Path2D;
+        }
+        const logo = OPENMARCH_LOGO.paths.length;
+        const mark = MARCHER_MARK.paths.length;
+        // logo: shadow and face; each end zone's mark: shadow, outline, face
+        expect(rec.named("fill").length - without.named("fill").length).toBe(
+            2 * logo + 2 * 3 * mark,
+        );
+        // the mark's two outlined layers, in both end zones
+        expect(rec.named("stroke")).toHaveLength(2 * 2 * mark);
     });
 
     it("maps the back of the field to the top of the texture", () => {

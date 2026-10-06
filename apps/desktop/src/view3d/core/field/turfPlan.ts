@@ -9,11 +9,15 @@ import {
     visible,
     yardNumberBands,
     type NumberBand,
+    type EndZoneStyle,
     type PlanContext,
 } from "./plan";
+import { OPENMARCH_LOGO } from "./brandMark";
 
 /** Turf colors, from the reference demo's `fieldTexture`. */
 export const TURF = {
+    /** Darker turf painted under the midfield logo as its shadow. */
+    shadow: "rgba(12, 38, 10, 0.35)",
     base: "#3d7a33",
     stripeDark: "#3a7330",
     stripeLight: "#44853a",
@@ -32,7 +36,11 @@ const MIN_END_ZONE = 8;
 /**
  * The `turf` style (stadium kits): green turf with 5-yard mowing stripes,
  * white lines at the real checkpoints, hashes, yard numbers with direction
- * arrows, and end-zone paint and text when the field has end zones.
+ * arrows, end-zone paint and text when the field has end zones, and the
+ * OpenMarch logo at midfield.
+ *
+ * Turf is the venue's own look, not the show's 2D field theme: only the
+ * `theme` style (blank kit) paints with `FieldTheme` colors.
  */
 export function planTurf(ctx: PlanContext): void {
     const f = ctx.footprint;
@@ -47,9 +55,11 @@ export function planTurf(ctx: PlanContext): void {
     if (!ctx.fieldProperties.useHashes)
         for (const yc of visible(ctx.fieldProperties.yCheckpoints))
             pushLineX(ctx, "yLine", TURF.paint, checkpointWorld(ctx, yc), LINE);
+    planCenterLogo(ctx, play);
     planHashesAndTicks(ctx, xs, play);
     planTurfNumbers(ctx);
     pushBorder(ctx, TURF.paint, BORDER);
+    ctx.items.push({ type: "grain", role: "grain", seed: 7, strength: 1 });
 }
 
 interface PlayingRegion {
@@ -98,18 +108,12 @@ function planStripes(ctx: PlanContext, minX: number, maxX: number): void {
 
 function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
     const f = ctx.footprint;
+    const style = ctx.endZoneStyle ?? "solid";
+    const color = ctx.params.endZoneColor;
     const text = ctx.params.endZoneText.trim();
     const depth = f.maxZ - f.minZ;
     for (const ez of play.endZones) {
-        pushRect(
-            ctx,
-            "endZone",
-            ctx.params.endZoneColor,
-            ez.outer,
-            f.minZ,
-            ez.goal,
-            f.maxZ,
-        );
+        planEndZoneFill(ctx, ez, style);
         if (!text) continue;
         const zoneDepth = Math.abs(ez.goal - ez.outer);
         const side = Math.sign(ez.outer - ez.goal);
@@ -125,8 +129,137 @@ function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
             color: TURF.paint,
             weight: 700,
             maxLength: depth * 0.82,
+            leadingMark: isOpenMarch(text),
+            // On bare turf the lettering is outlined in the end-zone color.
+            shadow: style === "outline" ? color : shade(color, 0.45),
         });
     }
+}
+
+/** Widest midfield logo: fifteen yards, like a large college logo. */
+const LOGO_MAX_WIDTH = 3 * FIVE_YARDS;
+/** Narrower than this, the logo is skipped. */
+const LOGO_MIN_WIDTH = FIVE_YARDS;
+
+/**
+ * The OpenMarch logo, in white paint, at the middle of the center line, reading from the
+ * front sideline, as large as fits inside the hash rows nearest the middle
+ * (or in the middle third of a field without hashes). Skipped on fields too small to
+ * hold it.
+ */
+function planCenterLogo(ctx: PlanContext, play: PlayingRegion): void {
+    const f = ctx.footprint;
+    const midZ = (f.minZ + f.maxZ) / 2;
+    const hashZs = ctx.fieldProperties.useHashes
+        ? realHashes(ctx).map((c) => checkpointWorld(ctx, c))
+        : [];
+    const back = Math.max(f.minZ, ...hashZs.filter((z) => z < midZ - 1e-6));
+    const front = Math.min(f.maxZ, ...hashZs.filter((z) => z > midZ + 1e-6));
+    const room = hashZs.length
+        ? 2 * Math.min(midZ - back, front - midZ) - 2 * MARK
+        : (f.maxZ - f.minZ) / 3;
+    const aspect = OPENMARCH_LOGO.width / OPENMARCH_LOGO.height;
+    const width = Math.min(LOGO_MAX_WIDTH, room * aspect);
+    if (width < LOGO_MIN_WIDTH) return;
+    if (play.minX > -width || play.maxX < width) return;
+    ctx.items.push({
+        type: "logo",
+        role: "centerLogo",
+        x: 0,
+        z: midZ,
+        width,
+        rotation: 0,
+        color: TURF.paint,
+        shadow: TURF.shadow,
+    });
+}
+
+/** The end zone's paint under its lettering, in the given style. */
+function planEndZoneFill(
+    ctx: PlanContext,
+    ez: { outer: number; goal: number },
+    style: EndZoneStyle,
+): void {
+    const f = ctx.footprint;
+    const color = ctx.params.endZoneColor;
+    const [x0, x1] = [Math.min(ez.outer, ez.goal), Math.max(ez.outer, ez.goal)];
+    const zone = { minX: x0, maxX: x1, minZ: f.minZ, maxZ: f.maxZ };
+    const hatch = (bandColor: string, direction: 1 | -1) =>
+        ctx.items.push({
+            type: "hatch",
+            role: "endZoneHatch",
+            ...zone,
+            color: bandColor,
+            spacing: 2.4,
+            width: 1.2,
+            direction,
+        });
+    if (style === "outline") return;
+    if (style === "fade") {
+        ctx.items.push({
+            type: "fade",
+            role: "endZoneFade",
+            fromX: ez.outer,
+            toX: ez.goal,
+            minZ: f.minZ,
+            maxZ: f.maxZ,
+            color,
+        });
+        return;
+    }
+    pushRect(ctx, "endZone", color, x0, f.minZ, x1, f.maxZ);
+    if (style === "stripes") hatch(shade(color, 0.82), 1);
+    if (style === "argyle") {
+        hatch(hexAlpha(shade(color, 0.7), 0.45), 1);
+        hatch(hexAlpha(shade(color, 0.7), 0.45), -1);
+    }
+    planEndZoneBorder(ctx, x0, x1, END_ZONE_INSET);
+    if (style === "pinstripe")
+        planEndZoneBorder(ctx, x0, x1, END_ZONE_INSET + 3 * LINE);
+}
+
+/** A white border line `inset` meters inside the end zone's edges. */
+function planEndZoneBorder(
+    ctx: PlanContext,
+    x0: number,
+    x1: number,
+    inset: number,
+): void {
+    const f = ctx.footprint;
+    const i = inset;
+    const z0 = f.minZ + BORDER + i;
+    const z1 = f.maxZ - BORDER - i;
+    const w = LINE;
+    const line = (a: number, b: number, c: number, d: number) =>
+        pushRect(ctx, "endZoneBorder", TURF.paint, a, b, c, d);
+    line(x0 + i, z0, x1 - i, z0 + w);
+    line(x0 + i, z1 - w, x1 - i, z1);
+    line(x0 + i, z0, x0 + i + w, z1);
+    line(x1 - i - w, z0, x1 - i, z1);
+}
+
+/** `#rrggbb` as `rgba(...)` with the given alpha. */
+function hexAlpha(hex: string, alpha: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/** End-zone border line inset from the zone's edges, in meters (one yard). */
+const END_ZONE_INSET = 0.9144;
+
+/** `#rrggbb` scaled toward black by `factor` (1 keeps it). */
+export function shade(hex: string, factor: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const c = (v: number) =>
+        Math.round(Math.max(0, Math.min(255, v * factor)))
+            .toString(16)
+            .padStart(2, "0");
+    return `#${c(n >> 16)}${c((n >> 8) & 255)}${c(n & 255)}`;
+}
+
+/** OpenMarch end-zone text gets the marcher mark in front of it. */
+function isOpenMarch(text: string): boolean {
+    return text.replace(/\s+/g, "").toLowerCase() === "openmarch";
 }
 
 /**

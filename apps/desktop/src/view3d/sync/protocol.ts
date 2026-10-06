@@ -21,6 +21,18 @@ export const VIEW3D_HELLO_CHANNEL = "view3d:hello";
 /** Window → main → editor: `{ settings }` for the editor to validate and write. */
 export const VIEW3D_VENUE_CHANGE_REQUEST_CHANNEL =
     "view3d:venue-change-request";
+/**
+ * Window → main → editor: `{ action }`, a playback action for the editor to
+ * run as if its own button or shortcut were used. The editor stays the only
+ * owner of the clock; the window sees the result in the next `clock`.
+ */
+export const VIEW3D_PLAYBACK_REQUEST_CHANNEL = "view3d:playback-request";
+
+/**
+ * The app setting (`settings:get` and `settings:set`) that opens the 3D View
+ * whenever the editor opens a show. A boolean; missing means off.
+ */
+export const VIEW3D_AUTO_OPEN_SETTING = "view3dAutoOpen";
 
 /** The channels the editor publishes and the window may listen to. */
 export const VIEW3D_PUBLISH_CHANNELS = [
@@ -55,6 +67,30 @@ export interface View3dInvalidate {
 export interface View3dVenueChangeRequest {
     /** Unchecked: the editor validates it against the venue schema. */
     settings: unknown;
+}
+
+/**
+ * The playback actions the window may ask for. Each is the name of the
+ * editor's registered action (`RegisteredActionsEnum`) with the same effect.
+ */
+export const VIEW3D_PLAYBACK_ACTIONS = [
+    "playPause",
+    "previousPage",
+    "nextPage",
+    "firstPage",
+    "lastPage",
+] as const;
+export type View3dPlaybackAction = (typeof VIEW3D_PLAYBACK_ACTIONS)[number];
+
+export interface View3dPlaybackRequest {
+    /** Unchecked: the editor runs it only if it's a `View3dPlaybackAction`. */
+    action: unknown;
+}
+
+export function isView3dPlaybackAction(
+    value: unknown,
+): value is View3dPlaybackAction {
+    return (VIEW3D_PLAYBACK_ACTIONS as readonly unknown[]).includes(value);
 }
 
 export interface View3dPayloads {

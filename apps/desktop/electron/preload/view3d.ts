@@ -8,6 +8,8 @@ import { contextBridge, ipcRenderer } from "electron";
 // editor's preload, which a sandboxed preload can't `require`.
 import type {
     View3dPayloads,
+    View3dPlaybackAction,
+    View3dPlaybackRequest,
     View3dPublishChannel,
     View3dVenueChangeRequest,
 } from "../../src/view3d/sync/protocol";
@@ -75,6 +77,16 @@ const VIEW3D_API = {
         ipcRenderer.send("view3d:venue-change-request", {
             settings,
         } satisfies View3dVenueChangeRequest),
+
+    /**
+     * Asks the editor to run a playback action (play/pause, previous, next,
+     * first or last page), as its own button would. The new clock and
+     * selection arrive on `view3d:clock` and `view3d:selection`.
+     */
+    requestPlayback: (action: View3dPlaybackAction) =>
+        ipcRenderer.send("view3d:playback-request", {
+            action,
+        } satisfies View3dPlaybackRequest),
 };
 
 contextBridge.exposeInMainWorld("view3d", VIEW3D_API);

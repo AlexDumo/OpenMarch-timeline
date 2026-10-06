@@ -67,8 +67,8 @@ void _paramsMatch;
 export const DEFAULT_VENUE_PARAMS: Readonly<VenueParams> = Object.freeze({
     homeColor: "#6442ff",
     awayColor: "#c23b3b",
-    endZoneText: "",
-    endZoneColor: "#1f2a5c",
+    endZoneText: "OPENMARCH",
+    endZoneColor: "#6442ff",
 });
 
 /**
