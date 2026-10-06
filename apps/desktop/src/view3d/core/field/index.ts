@@ -58,7 +58,7 @@ export interface FieldSurfaceInput {
     theme?: FieldTheme;
     style: FieldSurfaceStyle;
     params: VenueParams;
-    /** Turf end-zone paint; defaults to `stripes`. */
+    /** Turf end-zone paint; defaults to `solid`. */
     endZoneStyle?: EndZoneStyle;
     /** The show's field background image, if it has one. */
     image?: FieldImage | null;

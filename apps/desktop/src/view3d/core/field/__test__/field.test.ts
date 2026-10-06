@@ -130,8 +130,8 @@ describe("turf on football fields", () => {
                     }
             });
 
-            it("stripes and outlines both end zones, and grains the turf", () => {
-                expect(count(p, "endZoneHatch")).toBe(2);
+            it("outlines both end zones and grains the turf", () => {
+                expect(count(p, "endZoneHatch")).toBe(0);
                 expect(count(p, "endZoneBorder")).toBe(8);
                 expect(p.items.at(-1)?.role).toBe("grain");
             });
@@ -312,8 +312,8 @@ describe("end-zone styles", () => {
         }
     });
 
-    it("defaults to stripes", () => {
-        expect(plan(fp, "turf")).toEqual(styled("stripes"));
+    it("defaults to solid", () => {
+        expect(plan(fp, "turf")).toEqual(styled("solid"));
     });
 });
 
@@ -436,8 +436,8 @@ describe("painting", () => {
             texts.length + 2 * shadowed.length,
         );
         expect(rec.named("strokeText")).toHaveLength(2 * shadowed.length);
-        // arrows, plus the end zones' diagonal bands
-        expect(rec.named("fill").length).toBeGreaterThan(count(p, "arrow"));
+        // only the arrows are paths (solid end zones are rects)
+        expect(rec.named("fill")).toHaveLength(count(p, "arrow"));
         for (const c of rec.named("fillRect"))
             for (const v of c.args) expect(Number.isFinite(v)).toBe(true);
     });

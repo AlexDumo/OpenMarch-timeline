@@ -108,7 +108,7 @@ function planStripes(ctx: PlanContext, minX: number, maxX: number): void {
 
 function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
     const f = ctx.footprint;
-    const style = ctx.endZoneStyle ?? "stripes";
+    const style = ctx.endZoneStyle ?? "solid";
     const color = ctx.params.endZoneColor;
     const text = ctx.params.endZoneText.trim();
     const depth = f.maxZ - f.minZ;

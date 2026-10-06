@@ -213,7 +213,7 @@ export interface PlanInput {
     theme: FieldTheme;
     style: FieldSurfaceStyle;
     params: VenueParams;
-    /** Turf end-zone paint; defaults to `stripes`. */
+    /** Turf end-zone paint; defaults to `solid`. */
     endZoneStyle?: EndZoneStyle;
     /** The field background image's size, or null when there is none. */
     image: ImageSize | null;
