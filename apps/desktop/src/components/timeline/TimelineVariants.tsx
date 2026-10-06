@@ -37,6 +37,8 @@ import {
     TimelineTrackClip,
     TimelineTransport,
     useElementWidth,
+    scrubLineNear,
+    useScrubFollow,
     useTimelinePointer,
 } from "./TimelinePrimitives";
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
@@ -356,6 +358,7 @@ const TimelineWaveformLane = memo(function TimelineWaveformLane({
     pixelsPerBeat,
     positionBeat,
     livePositionBeat,
+    scrubLine,
     viewportRef,
     layerLeft,
 }: {
@@ -369,14 +372,24 @@ const TimelineWaveformLane = memo(function TimelineWaveformLane({
     pixelsPerBeat: number;
     positionBeat: number;
     livePositionBeat?: () => number | null;
+    /** While a scrub is down, the played part follows its line (`useScrubFollow`) */
+    scrubLine?: TimelineLiveValue<number | null>;
 }) {
     const playedRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
+    useLayoutEffect(() => {
         const played = playedRef.current;
         if (!played) return;
         if (!livePositionBeat) {
-            played.style.width = `${Math.max(0, positionBeat * pixelsPerBeat)}px`;
-            return;
+            const draw = () => {
+                const line = scrubLine?.get() ?? null;
+                const beat =
+                    line === null
+                        ? positionBeat
+                        : scrubLineNear(line, positionBeat);
+                played.style.width = `${Math.max(0, beat * pixelsPerBeat)}px`;
+            };
+            draw();
+            return scrubLine?.subscribe(draw);
         }
         let frame = 0;
         const update = () => {
@@ -386,7 +399,7 @@ const TimelineWaveformLane = memo(function TimelineWaveformLane({
         };
         update();
         return () => cancelAnimationFrame(frame);
-    }, [livePositionBeat, pixelsPerBeat, positionBeat]);
+    }, [livePositionBeat, pixelsPerBeat, positionBeat, scrubLine]);
     return (
         <div
             className="rounded-4 pointer-events-none absolute left-0 overflow-hidden"
@@ -531,6 +544,7 @@ const TimelineSurface = memo(function TimelineSurface({
     const expanded = density === "expanded";
     const viewportRef = useRef<HTMLDivElement>(null);
     const playheadRef = useRef<HTMLButtonElement>(null);
+    const addPageFlagRef = useRef<HTMLButtonElement>(null);
     const rows = useMemo(
         () => packTimelineTracks(model.tracks),
         [model.tracks],
@@ -615,6 +629,14 @@ const TimelineSurface = memo(function TimelineSurface({
         beatCount: model.beatCount,
         snapBeats,
     });
+    // **+** sits just after the playhead, so a scrub carries it along with the line
+    useScrubFollow(
+        addPageFlagRef,
+        pointer.scrubLine,
+        positionBeat,
+        beatToX(positionBeat, pixelsPerBeat),
+        pixelsPerBeat,
+    );
     const onNavigate = useLatestCallback(transportNavigation(props));
     // A clip is its timeline: clicking it selects that range (UI-12)
     const selectTrack = useLatestCallback(
@@ -728,6 +750,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         initialPageWidth={initialPageWidth}
                         showMeasures={expanded}
                         seekSnapBeats={seekSnapBeats}
+                        scrubLine={pointer.scrubLine}
                         // Only a show without measures numbers the playhead page's counts
                         positionBeat={
                             expanded && model.measures.length === 0
@@ -777,6 +800,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                     ? props.livePositionBeat
                                     : undefined
                             }
+                            scrubLine={pointer.scrubLine}
                         />
                     )}
                     <TimelineRehearsalMarkers
@@ -798,9 +822,11 @@ const TimelineSurface = memo(function TimelineSurface({
                         anchorRef={playheadRef}
                         onSeek={props.onSeek}
                         isPlaying={props.isPlaying}
+                        scrubLine={pointer.scrubLine}
                     />
                     {props.onAddPageFlag && !props.isPlaying && (
                         <button
+                            ref={addPageFlagRef}
                             type="button"
                             data-testid="timeline-add-page-flag"
                             data-timeline-interactive="true"

@@ -12,7 +12,7 @@ import {
     ExpandedTimeline,
     fitBackZoom,
 } from "../TimelineVariants";
-import { snapSeekBeat } from "../TimelinePrimitives";
+import { scrubLineBeat, snapSeekBeat } from "../TimelinePrimitives";
 import { Timeline, TimelineWaveformProvider } from "../Timeline";
 import {
     createLongTimelineStoryModel,
@@ -1051,6 +1051,64 @@ describe("a calmer timeline (UI-12)", () => {
         expect(onSelectionChange).not.toHaveBeenCalled();
     });
 
+    it("a scrub's line follows the pointer between beats, while seeks stay on whole beats", () => {
+        const onSeek = vi.fn();
+        // The owner moves the playhead to each seek, as the app does
+        const Seeking = () => {
+            const [position, setPosition] = useState(11);
+            return (
+                <ExpandedTimeline
+                    {...commonProps}
+                    positionBeat={position}
+                    showTransport={false}
+                    onSeek={(beat, options) => {
+                        onSeek(beat, options);
+                        setPosition(beat);
+                    }}
+                />
+            );
+        };
+        render(<Seeking />);
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        const playhead = screen.getByTestId("timeline-playhead");
+        expect(playhead).toHaveStyle({ left: "176px" });
+        press(surface, "pointerdown", 3 * 16);
+        expect(playhead).toHaveStyle({ left: "48px" });
+        expect(playhead.style.transform).toBe("translateX(0px)");
+        // Beat 6 is at 96px: React puts the line there, and a transform moves it to the pointer
+        press(surface, "pointermove", 100);
+        expect(onSeek).toHaveBeenLastCalledWith(6, { gesture: "drag" });
+        expect(playhead).toHaveStyle({ left: "96px" });
+        expect(playhead.style.transform).toBe("translateX(4px)");
+        // Within the same beat the line still moves
+        press(surface, "pointermove", 102);
+        expect(playhead.style.transform).toBe("translateX(6px)");
+        press(surface, "pointerup", 102);
+        expect(onSeek).toHaveBeenLastCalledWith(6, { gesture: "end" });
+        // Released, the line settles on the beat
+        expect(playhead.style.transform).toBe("");
+        expect(playhead).toHaveStyle({ left: "96px" });
+    });
+
+    it("a scrub's line stays within half a beat of a playhead that can't follow", () => {
+        // As inside an isolated range: the owner holds the playhead on beat 11
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSeek={vi.fn()}
+            />,
+        );
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        const playhead = screen.getByTestId("timeline-playhead");
+        press(surface, "pointerdown", 3 * 16);
+        press(surface, "pointermove", 4 * 16);
+        // Beat 10.5 is 168px, 8px left of the line's 176px
+        expect(playhead.style.transform).toBe("translateX(-8px)");
+        press(surface, "pointerup", 4 * 16);
+        expect(playhead.style.transform).toBe("");
+    });
+
     it("a cancelled scrub ends where it was (UI-12 review)", () => {
         const onSeek = vi.fn();
         render(
@@ -1320,6 +1378,17 @@ describe("a calmer timeline (UI-12)", () => {
         );
         fireEvent.click(screen.getByRole("button", { name: /^Next page/ }));
         expect(onNavigate).toHaveBeenCalledWith("next-page");
+    });
+});
+
+describe("where a scrub draws the line", () => {
+    it("is under the pointer, or on the downbeat or page line a release would land on", () => {
+        expect(scrubLineBeat(13.4, [12, 16], 16, false)).toBe(13.4);
+        // 4px from beat 12: drawn where the release lands
+        expect(scrubLineBeat(12.25, [12, 16], 16, false)).toBe(12);
+        expect(snapSeekBeat(12.25, [12, 16], 16, false)).toBe(12);
+        // Alt: no magnet
+        expect(scrubLineBeat(12.25, [12, 16], 16, true)).toBe(12.25);
     });
 });
 

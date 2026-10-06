@@ -476,7 +476,11 @@ from it. The spec still wins on the model; this file decides presentation.
     Ctrl+drag (Cmd+drag on macOS, where Ctrl+click is a right-click) draws a range, on page boxes
     and clips too, which still turns From start on (UI-11's cycle drag). A click or scrub lands on
     a downbeat or page line within 6px; Alt turns that off, as it does for dragged flags (Shift is
-    the canvas's fine nudge and the transport's first/last page).
+    the canvas's fine nudge and the transport's first/last page). While the pointer is down the
+    playhead line (with **+** and the played waveform) follows it between beats, drawn on the
+    downbeat or page line a release there would land on (project owner, 2026-10-06: scrubbing
+    should be "buttery smooth"); the readout, the field and where the release lands still move by
+    whole beats, so the line settles onto the nearest beat on release.
   - **A pinned start flag stays pinned until unpinned** (supersedes UI-10's "until P moves to or
     before it"): scrubbing is now the commonest gesture, so moving the playhead never unpins it.
     With P on or before a pinned S the window falls back to the page box holding P, as after Stop.
