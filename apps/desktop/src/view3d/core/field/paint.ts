@@ -5,6 +5,7 @@ import { createRng } from "../environment/random";
 import type {
     FieldPlan,
     PlanArrow,
+    PlanFade,
     PlanGrain,
     PlanHatch,
     PlanItem,
@@ -115,6 +116,9 @@ function paintItem(
         case "grain":
             paintGrain(g, item, layout);
             return;
+        case "fade":
+            paintFade(g, item, X, Y);
+            return;
     }
 }
 
@@ -134,17 +138,37 @@ function paintHatch(
     g.rect(x0, y0, x1 - x0, y1 - y0);
     g.clip();
     g.fillStyle = h.color;
-    // Bands run at 45 degrees: each is a parallelogram along x + y = c.
-    for (let c = x0 + y0 - (y1 - y0); c < x1 + y1; c += step) {
+    // Bands run at 45 degrees: parallelograms along x + d * y = c.
+    const d = h.direction ?? 1;
+    const span = y1 - y0;
+    for (let c = x0 - span; c < x1 + span; c += step) {
+        const at = (y: number) => c - d * (y - y0);
         g.beginPath();
-        g.moveTo(c - half - y0, y0);
-        g.lineTo(c + half - y0, y0);
-        g.lineTo(c + half - y1, y1);
-        g.lineTo(c - half - y1, y1);
+        g.moveTo(at(y0) - half, y0);
+        g.lineTo(at(y0) + half, y0);
+        g.lineTo(at(y1) + half, y1);
+        g.lineTo(at(y1) - half, y1);
         g.closePath();
         g.fill();
     }
     g.restore();
+}
+
+/** A linear fade from the item's color to clear, across x. */
+function paintFade(
+    g: CanvasRenderingContext2D,
+    fade: PlanFade,
+    X: (x: number) => number,
+    Y: (z: number) => number,
+): void {
+    const [a, b] = [X(fade.fromX), X(fade.toX)];
+    const gradient = g.createLinearGradient(a, 0, b, 0);
+    gradient.addColorStop(0, fade.color);
+    gradient.addColorStop(0.55, fade.color + "b0");
+    gradient.addColorStop(1, fade.color + "00");
+    g.fillStyle = gradient;
+    const [y0, y1] = [Y(fade.minZ), Y(fade.maxZ)];
+    g.fillRect(Math.min(a, b), y0, Math.abs(b - a), y1 - y0);
 }
 
 /** Side of the generated noise tiles, in pixels. */

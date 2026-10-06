@@ -16,6 +16,25 @@ import type { VenueParams } from "../types";
  */
 export type FieldSurfaceStyle = "turf" | "theme" | "tarp";
 
+/**
+ * How turf end zones are painted (mockups; not yet a show setting):
+ * - `stripes`: diagonal bands and a white border line;
+ * - `solid`: flat color and a white border line;
+ * - `argyle`: crossed diagonal bands that read as diamonds;
+ * - `fade`: color at the end line fading into the turf toward the goal line;
+ * - `outline`: no fill, lettering outlined in the end-zone color;
+ * - `pinstripe`: flat color with a double white border line.
+ */
+export const END_ZONE_STYLES = [
+    "stripes",
+    "solid",
+    "argyle",
+    "fade",
+    "outline",
+    "pinstripe",
+] as const;
+export type EndZoneStyle = (typeof END_ZONE_STYLES)[number];
+
 /** What a painted element stands for. Tests count items by role. */
 export type FieldRole =
     | "background"
@@ -36,6 +55,7 @@ export type FieldRole =
     | "tarpArt"
     | "centerLogo"
     | "endZoneHatch"
+    | "endZoneFade"
     | "endZoneBorder"
     | "grain";
 
@@ -132,6 +152,19 @@ export interface PlanHatch {
     color: string;
     spacing: number;
     width: number;
+    /** 1 for bands rising to +x, -1 for the mirror image. Defaults to 1. */
+    direction?: 1 | -1;
+}
+
+/** A color fading from opaque at `fromX` to clear at `toX`. */
+export interface PlanFade {
+    type: "fade";
+    role: "endZoneFade";
+    fromX: number;
+    toX: number;
+    minZ: number;
+    maxZ: number;
+    color: string;
 }
 
 /**
@@ -160,6 +193,7 @@ export type PlanItem =
     | PlanTarpArt
     | PlanLogo
     | PlanHatch
+    | PlanFade
     | PlanGrain;
 
 export interface FieldPlan {
@@ -179,6 +213,8 @@ export interface PlanInput {
     theme: FieldTheme;
     style: FieldSurfaceStyle;
     params: VenueParams;
+    /** Turf end-zone paint; defaults to `stripes`. */
+    endZoneStyle?: EndZoneStyle;
     /** The field background image's size, or null when there is none. */
     image: ImageSize | null;
 }

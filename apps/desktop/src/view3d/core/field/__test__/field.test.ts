@@ -19,6 +19,8 @@ import {
     type FieldRole,
     type FieldSurfaceInput,
     type FieldSurfaceStyle,
+    type EndZoneStyle,
+    END_ZONE_STYLES,
 } from "..";
 import { MARCHER_MARK, OPENMARCH_LOGO } from "../brandMark";
 import { FIVE_YARDS } from "../turfPlan";
@@ -282,6 +284,36 @@ describe("turf on football fields", () => {
         expect(zs).toEqual(
             new Set([+(-32 * m).toFixed(3), +(-53.33 * m).toFixed(3)]),
         );
+    });
+});
+
+describe("end-zone styles", () => {
+    const fp = T.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
+    const styled = (endZoneStyle: EndZoneStyle) =>
+        plan(fp, "turf", { endZoneStyle });
+
+    it("paints each style's fill and keeps the lettering", () => {
+        const expected: Record<
+            EndZoneStyle,
+            Partial<Record<FieldRole, number>>
+        > = {
+            stripes: { endZone: 2, endZoneHatch: 2, endZoneBorder: 8 },
+            solid: { endZone: 2, endZoneHatch: 0, endZoneBorder: 8 },
+            argyle: { endZone: 2, endZoneHatch: 4, endZoneBorder: 8 },
+            fade: { endZone: 0, endZoneFade: 2, endZoneBorder: 0 },
+            outline: { endZone: 0, endZoneHatch: 0, endZoneBorder: 0 },
+            pinstripe: { endZone: 2, endZoneHatch: 0, endZoneBorder: 16 },
+        };
+        for (const style of END_ZONE_STYLES) {
+            const p = styled(style);
+            for (const [role, n] of Object.entries(expected[style]))
+                expect(count(p, role as FieldRole), `${style} ${role}`).toBe(n);
+            expect(count(p, "endZoneText")).toBe(2);
+        }
+    });
+
+    it("defaults to stripes", () => {
+        expect(plan(fp, "turf")).toEqual(styled("stripes"));
     });
 });
 

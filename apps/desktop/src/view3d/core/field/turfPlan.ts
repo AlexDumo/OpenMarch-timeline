@@ -9,6 +9,7 @@ import {
     visible,
     yardNumberBands,
     type NumberBand,
+    type EndZoneStyle,
     type PlanContext,
 } from "./plan";
 import { OPENMARCH_LOGO } from "./brandMark";
@@ -107,19 +108,12 @@ function planStripes(ctx: PlanContext, minX: number, maxX: number): void {
 
 function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
     const f = ctx.footprint;
+    const style = ctx.endZoneStyle ?? "stripes";
+    const color = ctx.params.endZoneColor;
     const text = ctx.params.endZoneText.trim();
     const depth = f.maxZ - f.minZ;
     for (const ez of play.endZones) {
-        pushRect(
-            ctx,
-            "endZone",
-            ctx.params.endZoneColor,
-            ez.outer,
-            f.minZ,
-            ez.goal,
-            f.maxZ,
-        );
-        planEndZoneArt(ctx, ez);
+        planEndZoneFill(ctx, ez, style);
         if (!text) continue;
         const zoneDepth = Math.abs(ez.goal - ez.outer);
         const side = Math.sign(ez.outer - ez.goal);
@@ -136,7 +130,8 @@ function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
             weight: 700,
             maxLength: depth * 0.82,
             leadingMark: isOpenMarch(text),
-            shadow: shade(ctx.params.endZoneColor, 0.45),
+            // On bare turf the lettering is outlined in the end-zone color.
+            shadow: style === "outline" ? color : shade(color, 0.45),
         });
     }
 }
@@ -161,7 +156,7 @@ function planCenterLogo(ctx: PlanContext, play: PlayingRegion): void {
     const back = Math.max(f.minZ, ...hashZs.filter((z) => z < midZ - 1e-6));
     const front = Math.min(f.maxZ, ...hashZs.filter((z) => z > midZ + 1e-6));
     const room = hashZs.length
-        ? front - back - 2 * MARK
+        ? 2 * Math.min(midZ - back, front - midZ) - 2 * MARK
         : (f.maxZ - f.minZ) / 3;
     const aspect = OPENMARCH_LOGO.width / OPENMARCH_LOGO.height;
     const width = Math.min(LOGO_MAX_WIDTH, room * aspect);
@@ -179,64 +174,74 @@ function planCenterLogo(ctx: PlanContext, play: PlayingRegion): void {
     });
 }
 
-/** Diagonal bands and a white border line one yard inside the end zone. */
-function planEndZoneArt(
+/** The end zone's paint under its lettering, in the given style. */
+function planEndZoneFill(
     ctx: PlanContext,
     ez: { outer: number; goal: number },
+    style: EndZoneStyle,
 ): void {
     const f = ctx.footprint;
+    const color = ctx.params.endZoneColor;
     const [x0, x1] = [Math.min(ez.outer, ez.goal), Math.max(ez.outer, ez.goal)];
-    ctx.items.push({
-        type: "hatch",
-        role: "endZoneHatch",
-        minX: x0,
-        maxX: x1,
-        minZ: f.minZ,
-        maxZ: f.maxZ,
-        color: shade(ctx.params.endZoneColor, 0.82),
-        spacing: 2.4,
-        width: 1.2,
-    });
-    // A white border line one yard inside the end zone's edges.
-    const i = END_ZONE_INSET;
-    const b = BORDER;
+    const zone = { minX: x0, maxX: x1, minZ: f.minZ, maxZ: f.maxZ };
+    const hatch = (bandColor: string, direction: 1 | -1) =>
+        ctx.items.push({
+            type: "hatch",
+            role: "endZoneHatch",
+            ...zone,
+            color: bandColor,
+            spacing: 2.4,
+            width: 1.2,
+            direction,
+        });
+    if (style === "outline") return;
+    if (style === "fade") {
+        ctx.items.push({
+            type: "fade",
+            role: "endZoneFade",
+            fromX: ez.outer,
+            toX: ez.goal,
+            minZ: f.minZ,
+            maxZ: f.maxZ,
+            color,
+        });
+        return;
+    }
+    pushRect(ctx, "endZone", color, x0, f.minZ, x1, f.maxZ);
+    if (style === "stripes") hatch(shade(color, 0.82), 1);
+    if (style === "argyle") {
+        hatch(hexAlpha(shade(color, 0.7), 0.45), 1);
+        hatch(hexAlpha(shade(color, 0.7), 0.45), -1);
+    }
+    planEndZoneBorder(ctx, x0, x1, END_ZONE_INSET);
+    if (style === "pinstripe")
+        planEndZoneBorder(ctx, x0, x1, END_ZONE_INSET + 3 * LINE);
+}
+
+/** A white border line `inset` meters inside the end zone's edges. */
+function planEndZoneBorder(
+    ctx: PlanContext,
+    x0: number,
+    x1: number,
+    inset: number,
+): void {
+    const f = ctx.footprint;
+    const i = inset;
+    const z0 = f.minZ + BORDER + i;
+    const z1 = f.maxZ - BORDER - i;
     const w = LINE;
-    pushRect(
-        ctx,
-        "endZoneBorder",
-        TURF.paint,
-        x0 + i,
-        f.minZ + b + i,
-        x1 - i,
-        f.minZ + b + i + w,
-    );
-    pushRect(
-        ctx,
-        "endZoneBorder",
-        TURF.paint,
-        x0 + i,
-        f.maxZ - b - i - w,
-        x1 - i,
-        f.maxZ - b - i,
-    );
-    pushRect(
-        ctx,
-        "endZoneBorder",
-        TURF.paint,
-        x0 + i,
-        f.minZ + b + i,
-        x0 + i + w,
-        f.maxZ - b - i,
-    );
-    pushRect(
-        ctx,
-        "endZoneBorder",
-        TURF.paint,
-        x1 - i - w,
-        f.minZ + b + i,
-        x1 - i,
-        f.maxZ - b - i,
-    );
+    const line = (a: number, b: number, c: number, d: number) =>
+        pushRect(ctx, "endZoneBorder", TURF.paint, a, b, c, d);
+    line(x0 + i, z0, x1 - i, z0 + w);
+    line(x0 + i, z1 - w, x1 - i, z1);
+    line(x0 + i, z0, x0 + i + w, z1);
+    line(x1 - i - w, z0, x1 - i, z1);
+}
+
+/** `#rrggbb` as `rgba(...)` with the given alpha. */
+function hexAlpha(hex: string, alpha: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
 /** End-zone border line inset from the zone's edges, in meters (one yard). */
