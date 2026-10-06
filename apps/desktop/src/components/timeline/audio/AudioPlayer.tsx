@@ -7,6 +7,7 @@ import AudioFile, {
     computePlaceholderAudioDurationFromPages,
 } from "@/global/classes/AudioFile";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useShallow } from "zustand/react/shallow";
 import { useTimingObjects } from "@/hooks";
 import { useTheme } from "@/context/ThemeContext";
 import { toast } from "sonner";
@@ -117,7 +118,13 @@ export const restartLivePlaybackAt = (seconds: number): void => {
 export default function AudioPlayer() {
     const { t } = useTolgee();
     const { theme } = useTheme();
-    const { uiSettings } = useUiSettingsStore();
+    const uiSettings = useUiSettingsStore(
+        useShallow((s) => ({
+            audioMuted: s.uiSettings.audioMuted,
+            audioVolume: s.uiSettings.audioVolume,
+            timelinePixelsPerSecond: s.uiSettings.timelinePixelsPerSecond,
+        })),
+    );
     const audioMuted = uiSettings.audioMuted;
     const audioVolume = uiSettings.audioVolume;
     const selectedPageContext = useSelectedPage();

@@ -11,6 +11,7 @@ import {
 } from "@/hooks/queries";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useShallow } from "zustand/react/shallow";
 import { useTimingObjects } from "@/hooks";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
@@ -21,7 +22,13 @@ export const useMovementListeners = ({
 }: {
     canvas: OpenMarchCanvas | null;
 }) => {
-    const { uiSettings } = useUiSettingsStore()!;
+    const uiSettings = useUiSettingsStore(
+        useShallow((s) => ({
+            previousPaths: s.uiSettings.previousPaths,
+            nextPaths: s.uiSettings.nextPaths,
+            stepSizeWarnings: s.uiSettings.stepSizeWarnings,
+        })),
+    );
     const { selectedPage } = useSelectedPage()!;
     const { pages } = useTimingObjects()!;
     const { selectedMarchers } = useSelectedMarchers()!;

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useShallow } from "zustand/react/shallow";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import {
@@ -116,7 +117,17 @@ export default function Canvas({
     const { data: fieldProperties } = useQuery(
         fieldPropertiesQueryOptions(databaseReady),
     );
-    const { uiSettings } = useUiSettingsStore()!;
+    // Only the fields this component renders from; the canvas itself is kept in sync with the
+    // whole settings object by a store subscription below, so timeline zoom saves and other
+    // unrelated settings don't re-render the field
+    const uiSettings = useUiSettingsStore(
+        useShallow((s) => ({
+            previousPaths: s.uiSettings.previousPaths,
+            nextPaths: s.uiSettings.nextPaths,
+            stepSizeWarnings: s.uiSettings.stepSizeWarnings,
+            showCollisions: s.uiSettings.showCollisions,
+        })),
+    );
     const {
         alignmentEvent,
         alignmentEventMarchers,
@@ -196,7 +207,7 @@ export default function Canvas({
             newCanvasInstance = new OpenMarchCanvas({
                 canvasRef: canvasRef.current,
                 fieldProperties,
-                uiSettings,
+                uiSettings: useUiSettingsStore.getState().uiSettings,
                 currentPage: selectedPage,
             });
         }
@@ -212,14 +223,7 @@ export default function Canvas({
         requestAnimationFrame(() => {
             newCanvasInstance.centerAtBaseZoom?.();
         });
-    }, [
-        selectedPage,
-        fieldProperties,
-        testCanvas,
-        uiSettings,
-        canvas,
-        onCanvasReady,
-    ]);
+    }, [selectedPage, fieldProperties, testCanvas, canvas, onCanvasReady]);
 
     // Initiate listeners
     useEffect(() => {
@@ -399,8 +403,13 @@ export default function Canvas({
 
     // Set the canvas UI settings to the global UI settings
     useEffect(() => {
-        if (canvas) canvas.setUiSettings(uiSettings);
-    }, [canvas, uiSettings]);
+        if (!canvas) return;
+        canvas.setUiSettings(useUiSettingsStore.getState().uiSettings);
+        return useUiSettingsStore.subscribe((state, prevState) => {
+            if (state.uiSettings !== prevState.uiSettings)
+                canvas.setUiSettings(state.uiSettings);
+        });
+    }, [canvas]);
 
     // Render the marchers when the selected page or the marcher pages change
     useEffect(() => {
