@@ -145,6 +145,43 @@ export function snapAlignTime({
     return { time, snapped: false };
 }
 
+/** How close, in pixels, a drop must come back to where the count was to write nothing */
+export const ALIGN_ORIGIN_SNAP_PX = 2;
+
+/**
+ * Where an Align drag lands: on the playhead within `ALIGN_SNAP_PX`, back where it started only
+ * within `ALIGN_ORIGIN_SNAP_PX` (so a small correction at a low zoom isn't thrown away, FB-8), else
+ * at the pointer. Alt turns snapping off.
+ */
+export function alignDropTime({
+    time,
+    playhead,
+    origin,
+    pixelsPerSecond,
+    disabled,
+}: {
+    time: number;
+    playhead: number | null;
+    origin: number;
+    pixelsPerSecond: number;
+    disabled: boolean;
+}): { time: number; snapped: boolean } {
+    const toPlayhead = snapAlignTime({
+        time,
+        targets: [playhead],
+        pixelsPerSecond,
+        disabled,
+    });
+    if (toPlayhead.snapped) return toPlayhead;
+    return snapAlignTime({
+        time,
+        targets: [origin],
+        pixelsPerSecond,
+        disabled,
+        thresholdPx: ALIGN_ORIGIN_SNAP_PX,
+    });
+}
+
 /** The synced counts after a drag of count `index`: it joins them (count 1 always is) */
 export function syncedWith(
     synced: readonly number[],
@@ -156,25 +193,67 @@ export function syncedWith(
 }
 
 /**
- * A drag of count `index` to `toTime`: `moveCount`, re-spacing up to the next synced count. The
- * end of the show (`index === durations.length`, the last page's flag) has nothing after it: the
- * counts back to the previous synced count re-space, clamped as `moveCount` clamps.
+ * How far back a flag drag re-spaces (Tempo lab `alignDragScope`, docs/tempo/decisions.md FB-2):
+ * `page`, only the page before the dragged count (back to the previous flag, synced or not);
+ * `toSynced`, back to the previous synced count (E7's first rule).
+ */
+export type AlignDragScope = "page" | "toSynced";
+
+/** The last flag before `index`, or undefined */
+export const flagBefore = (
+    flags: readonly number[],
+    index: number,
+): number | undefined => {
+    let best: number | undefined;
+    for (const f of flags)
+        if (f < index && (best === undefined || f > best)) best = f;
+    return best;
+};
+
+/** The first flag after `index`, or undefined */
+export const flagAfter = (
+    flags: readonly number[],
+    index: number,
+): number | undefined => {
+    let best: number | undefined;
+    for (const f of flags)
+        if (f > index && (best === undefined || f < best)) best = f;
+    return best;
+};
+
+/**
+ * A drag of count `index` to `toTime`: `moveCount`, re-spacing up to the next synced count. Before
+ * it, counts re-space back to the previous synced count, or with the `page` scope only back to the
+ * previous flag (`flags`, spec count indexes). The end of the show (`index === durations.length`,
+ * the last page's flag) has nothing after it: the counts back to that start re-space, clamped as
+ * `moveCount` clamps.
  */
 export function alignMove({
     durations,
     index,
     toTime,
     synced,
+    scope = "toSynced",
+    flags = [],
 }: {
     durations: CountDurations;
     index: number;
     toTime: number;
     synced: readonly number[];
+    scope?: AlignDragScope;
+    flags?: readonly number[];
 }): MoveCountResult {
+    const respaceFrom = scope === "page" ? flagBefore(flags, index) : undefined;
     if (index < durations.length)
-        return moveCount({ durations, index, toTime, synced });
+        return moveCount({ durations, index, toTime, synced, respaceFrom });
     const times = countTimes(durations);
-    const from = previousSynced(synced, index);
+    const synced0 = previousSynced(synced, index);
+    const from =
+        respaceFrom !== undefined &&
+        respaceFrom > synced0 &&
+        respaceFrom < index
+            ? respaceFrom
+            : synced0;
     const [min, max] = spanLimits(durations, from, index);
     const wanted = toTime - times[from]!;
     const span = Math.min(Math.max(wanted, min), max);
@@ -239,11 +318,16 @@ export function alignHold({
     index,
     toTime,
     synced,
+    scope = "toSynced",
+    flags = [],
 }: {
     durations: CountDurations;
     index: number;
     toTime: number;
     synced: readonly number[];
+    /** `page`: the change is absorbed up to the next flag after the tick, so the hold stays in its page */
+    scope?: AlignDragScope;
+    flags?: readonly number[];
 }): RetimeResult | null {
     const held = index - 1;
     if (held < 1 || index >= durations.length + 1) return null;
@@ -253,6 +337,7 @@ export function alignHold({
         index: held,
         newDuration: toTime - start,
         synced,
+        absorbUntil: scope === "page" ? flagAfter(flags, index) : undefined,
     });
 }
 
@@ -312,33 +397,49 @@ function afterPart({
     result,
     from,
     pages,
+    synced,
     t,
 }: {
     before: CountDurations;
     result: RetimeResult;
     from: number;
     pages: readonly AlignPage[];
+    synced?: readonly number[];
     t: AlignTranslate;
 }): string | null {
     const { effect } = result;
     if (effect.heldFrom !== null) {
         const respaced = effect.respaced.find((r) => r.from === from);
-        // The page that starts on the synced count: "up to synced Pg 9"
-        const synced = pages.find((page) => page.start === effect.heldFrom);
-        const what = synced
-            ? `Pg ${synced.label}`
-            : countName(pages, effect.heldFrom);
+        // Named as the transport names that moment: a flag is the last count of the page it
+        // closes ("up to synced Pg 11 ct 16"), never the page that starts there (FB-3)
+        const what = countName(pages, effect.heldFrom);
+        // A hold kept inside its page stops at a flag that may not be synced
+        const isSynced = !synced || synced.includes(effect.heldFrom);
         const label = respaced
             ? pagesLabel(pages, respaced.from, respaced.to)
             : null;
         return label && respaced && respaced.to > respaced.from
-            ? t("tempo.align.chip.respacedTo", {
-                  pages: label,
-                  from: roundBpm(before, respaced.from, respaced.to),
-                  to: roundBpm(result.durations, respaced.from, respaced.to),
-                  synced: what,
-              })
-            : t("tempo.align.chip.upToSynced", { synced: what });
+            ? t(
+                  isSynced
+                      ? "tempo.align.chip.respacedTo"
+                      : "tempo.align.chip.respacedToFlag",
+                  {
+                      pages: label,
+                      from: roundBpm(before, respaced.from, respaced.to),
+                      to: roundBpm(
+                          result.durations,
+                          respaced.from,
+                          respaced.to,
+                      ),
+                      synced: what,
+                  },
+              )
+            : t(
+                  isSynced
+                      ? "tempo.align.chip.upToSynced"
+                      : "tempo.align.chip.upToFlag",
+                  { synced: what },
+              );
     }
     if (effect.shifted) {
         const label = pagesLabel(pages, effect.shifted.from, Infinity);
@@ -371,6 +472,7 @@ export function moveChip({
     pages,
     audioOffsetSeconds,
     head,
+    synced,
     t,
 }: {
     before: CountDurations;
@@ -380,9 +482,17 @@ export function moveChip({
     /** The audio offset before the drag: positive pads silence before the music */
     audioOffsetSeconds: number;
     head?: string;
+    /** The synced counts, so a stop at an unsynced flag isn't called synced */
+    synced?: readonly number[];
     t: AlignTranslate;
 }): AlignChip {
     const parts: string[] = [];
+    if (
+        index !== 1 &&
+        result.originShift === 0 &&
+        result.durations.every((d, i) => d === before[i])
+    )
+        return { text: t("tempo.align.chip.noChange"), amber: false };
     if (index === 1) {
         // The music now starts this long before count 1 (negative: after it)
         const lead = result.originShift - audioOffsetSeconds;
@@ -404,10 +514,22 @@ export function moveChip({
         const tempo = left
             ? `${roundBpm(before, left.from, left.to)} → ${roundBpm(result.durations, left.from, left.to)}`
             : null;
-        parts.push([label, tempo].filter(Boolean).join(" · "));
+        // Re-spacing that reaches back past one page says from where, so it is never silent (FB-2)
+        const reach =
+            left &&
+            pages.filter((p) => p.start < left.to && left.from < p.end).length >
+                1
+                ? t("tempo.align.chip.since", {
+                      place:
+                          left.from <= 1
+                              ? t("tempo.align.chip.theStart")
+                              : countName(pages, left.from),
+                  })
+                : null;
+        parts.push([label, tempo, reach].filter(Boolean).join(" · "));
     }
     // Moving count 1 shifts the whole show unless a synced count holds the rest
-    const after = afterPart({ before, result, from: index, pages, t });
+    const after = afterPart({ before, result, from: index, pages, synced, t });
     if (after && (index !== 1 || result.effect.heldFrom !== null))
         parts.push(after);
     const clamp = clampPart(result, t);
@@ -421,15 +543,19 @@ export function holdChip({
     result,
     index,
     pages,
+    synced,
     t,
 }: {
     before: CountDurations;
     result: RetimeResult;
     index: number;
     pages: readonly AlignPage[];
+    synced?: readonly number[];
     t: AlignTranslate;
 }): AlignChip {
     const held = index - 1;
+    if (result.durations.every((d, i) => d === before[i]))
+        return { text: t("tempo.align.chip.noChange"), amber: false };
     const parts = [
         t("tempo.align.chip.held", {
             count: countName(pages, held),
@@ -437,7 +563,7 @@ export function holdChip({
             to: (result.durations[held] ?? 0).toFixed(2),
         }),
     ];
-    const after = afterPart({ before, result, from: index, pages, t });
+    const after = afterPart({ before, result, from: index, pages, synced, t });
     if (after) parts.push(after);
     const clamp = clampPart(result, t);
     if (clamp) parts.push(clamp);
@@ -478,11 +604,14 @@ const TIME_STEPS = [0.5, 1, 2, 5, 10, 15, 30, 60, 120];
 /** "1:05" (or "1:05.5" when `fraction`) */
 export const formatShowTime = (seconds: number, fraction = false) => {
     const sign = seconds < 0 ? "−" : "";
-    const abs = Math.abs(seconds);
-    const minutes = Math.floor(abs / 60);
-    const rest = abs - minutes * 60;
+    // With tenths, round to tenths first, so 76.97 s reads 1:17, not 1:16.10
+    const abs = fraction
+        ? Math.round(Math.abs(seconds) * 10) / 10
+        : Math.abs(seconds);
+    const minutes = Math.floor(abs / 60 + 1e-9);
+    const rest = Math.max(0, abs - minutes * 60);
     const whole = Math.floor(rest + 1e-9);
-    const tenths = Math.round((rest - whole) * 10);
+    const tenths = Math.min(9, Math.round((rest - whole) * 10));
     return `${sign}${minutes}:${String(whole).padStart(2, "0")}${
         fraction && tenths > 0 ? `.${tenths}` : ""
     }`;

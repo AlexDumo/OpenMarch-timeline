@@ -250,6 +250,19 @@ export function previousSynced(synced: SyncedCounts, index: number): number {
     return best;
 }
 
+/** `previous`, or `from` when that is a count after it and before `index` */
+const laterStart = (
+    previous: number,
+    from: number | undefined,
+    index: number,
+): number =>
+    from !== undefined &&
+    Number.isInteger(from) &&
+    from > previous &&
+    from < index
+        ? from
+        : previous;
+
 /** The first synced count after `index` (up to `durations.length`, the end of the show), or null. */
 export function nextSynced(
     synced: SyncedCounts,
@@ -364,6 +377,11 @@ export interface MoveCountArgs {
     synced?: SyncedCounts;
     /** Defaults to `respaceToNextSynced`. */
     after?: AfterRule;
+    /**
+     * Re-space back to this count instead of the previous synced one when it is later (the Align
+     * view's page scope passes the previous page flag, synced or not). Default: count 1.
+     */
+    respaceFrom?: number;
 }
 
 export interface MoveCountResult extends RetimeResult {
@@ -374,7 +392,8 @@ export interface MoveCountResult extends RetimeResult {
 /**
  * Moves the start of count `index` to `toTime` ("scale left, move right").
  *
- * - Counts back to the previous synced count (or count 1) re-space proportionally.
+ * - Counts back to the previous synced count (or count 1, or `respaceFrom` when that is later)
+ *   re-space proportionally.
  * - After it, with `respaceToNextSynced` and a later synced count, counts up to that count
  *   re-space proportionally and everything from it on stays put. Otherwise everything after
  *   shifts with its tempo unchanged.
@@ -389,11 +408,15 @@ export function moveCount({
     toTime,
     synced = [],
     after = "respaceToNextSynced",
+    respaceFrom,
 }: MoveCountArgs): MoveCountResult {
     assertIndex(durations, index, "index");
     if (!Number.isFinite(toTime)) throw new RangeError(`toTime must be finite`);
     const times = countTimes(durations);
-    const prev = index === 1 ? null : previousSynced(synced, index);
+    const prev =
+        index === 1
+            ? null
+            : laterStart(previousSynced(synced, index), respaceFrom, index);
     const next =
         after === "respaceToNextSynced"
             ? nextSynced(synced, index, durations.length)
@@ -445,6 +468,12 @@ export interface HoldCountArgs {
     synced?: SyncedCounts;
     /** Defaults to `respaceToNextSynced`. */
     after?: AfterRule;
+    /**
+     * With `respaceToNextSynced`: absorb the change up to this count instead of the next synced
+     * one when it comes first (the Align view's page scope passes the next page flag, so a hold
+     * stays inside its page). Ignored unless it is after `index + 1`.
+     */
+    absorbUntil?: number;
 }
 
 /**
@@ -459,16 +488,26 @@ export function holdCount({
     newDuration,
     synced = [],
     after = "respaceToNextSynced",
+    absorbUntil,
 }: HoldCountArgs): RetimeResult {
     assertIndex(durations, index, "index");
     if (!Number.isFinite(newDuration))
         throw new RangeError(`newDuration must be finite`);
     const times = countTimes(durations);
     const old = durations[index];
-    const next =
+    const syncedNext =
         after === "respaceToNextSynced"
             ? nextSynced(synced, index, durations.length)
             : null;
+    const next =
+        after === "respaceToNextSynced" &&
+        absorbUntil !== undefined &&
+        Number.isInteger(absorbUntil) &&
+        absorbUntil > index + 1 &&
+        absorbUntil <= durations.length &&
+        (syncedNext === null || absorbUntil < syncedNext)
+            ? absorbUntil
+            : syncedNext;
 
     // Work in the end time of the held count, so the shared clamp applies
     const bounds: Bound[] = [

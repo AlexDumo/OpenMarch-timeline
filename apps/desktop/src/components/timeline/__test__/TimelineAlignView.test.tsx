@@ -197,8 +197,9 @@ describe("the Align view (E7)", () => {
             clientX: 100,
             pointerId: 1,
         });
+        // Dropped back within 2 px of where it started (FB-8)
         fireEvent.pointerMove(handle, { clientX: 104, pointerId: 1 });
-        fireEvent.pointerUp(handle, { clientX: 104, pointerId: 1 });
+        fireEvent.pointerUp(handle, { clientX: 101, pointerId: 1 });
         expect(align.onRetime).not.toHaveBeenCalled();
 
         fireEvent.pointerDown(handle, {
@@ -208,10 +209,23 @@ describe("the Align view (E7)", () => {
         });
         fireEvent.pointerMove(handle, { clientX: 104, pointerId: 1 });
         fireEvent.pointerUp(handle, {
-            clientX: 104,
+            clientX: 101,
             pointerId: 1,
             altKey: true,
         });
+        expect(align.onRetime).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps a 4 px correction instead of snapping it back (FB-8)", () => {
+        const { align } = renderAlign();
+        const handle = flag(9);
+        fireEvent.pointerDown(handle, {
+            button: 0,
+            clientX: 100,
+            pointerId: 1,
+        });
+        fireEvent.pointerMove(handle, { clientX: 104, pointerId: 1 });
+        fireEvent.pointerUp(handle, { clientX: 104, pointerId: 1 });
         expect(align.onRetime).toHaveBeenCalledTimes(1);
     });
 

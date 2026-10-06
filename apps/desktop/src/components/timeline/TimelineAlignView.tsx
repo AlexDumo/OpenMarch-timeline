@@ -16,14 +16,17 @@ import { Input } from "@openmarch/ui";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { countTimes, type RetimeResult } from "@/timeline/tempo";
+import { useTempoLabFlag } from "@/stores/UiSettingsStore";
 import {
+    alignDropTime,
+    alignFlags,
     alignHold,
     alignMove,
+    countName,
     countTempo,
     heldCounts,
     holdChip,
     moveChip,
-    snapAlignTime,
     syncedWith,
     typedPageTempo,
     TYPED_TEMPO_CEILING_BPM,
@@ -135,8 +138,26 @@ export function useAlignEdit({
         timer: ReturnType<typeof setTimeout> | null;
         element: HTMLElement;
     } | null>(null);
-    const latest = useRef({ align, pages, pixelsPerSecond, playheadTime, t });
-    latest.current = { align, pages, pixelsPerSecond, playheadTime, t };
+    const scope = useTempoLabFlag("alignDragScope");
+    const flags = useMemo(() => alignFlags(pages).map((f) => f.index), [pages]);
+    const latest = useRef({
+        align,
+        pages,
+        pixelsPerSecond,
+        playheadTime,
+        t,
+        scope,
+        flags,
+    });
+    latest.current = {
+        align,
+        pages,
+        pixelsPerSecond,
+        playheadTime,
+        t,
+        scope,
+        flags,
+    };
 
     // A written edit stays drawn until the timeline gets the new counts, so nothing flickers back
     const durations = align?.durations;
@@ -161,7 +182,13 @@ export function useAlignEdit({
             head: string | undefined,
             anchor: AlignPreview["anchor"],
         ): AlignPreview | null => {
-            const { align: a, pages: p, t: tr } = latest.current;
+            const {
+                align: a,
+                pages: p,
+                t: tr,
+                scope: sc,
+                flags: fl,
+            } = latest.current;
             if (!a) return null;
             const times = countTimes(a.durations);
             const ghostTime = times[index] ?? 0;
@@ -171,6 +198,8 @@ export function useAlignEdit({
                     index,
                     toTime,
                     synced: a.synced,
+                    scope: sc,
+                    flags: fl,
                 });
                 if (!result) return null;
                 return {
@@ -184,6 +213,7 @@ export function useAlignEdit({
                         result,
                         index,
                         pages: p,
+                        synced: a.synced,
                         t: tr,
                     }),
                     ghostTime,
@@ -196,6 +226,8 @@ export function useAlignEdit({
                 index,
                 toTime,
                 synced: a.synced,
+                scope: sc,
+                flags: fl,
             });
             return {
                 kind,
@@ -210,6 +242,7 @@ export function useAlignEdit({
                     pages: p,
                     audioOffsetSeconds: a.audioOffsetSeconds,
                     head,
+                    synced: a.synced,
                     t: tr,
                 }),
                 ghostTime,
@@ -229,9 +262,11 @@ export function useAlignEdit({
         const changed =
             next.origin !== 0 ||
             next.durations.some((d, i) => d !== a.durations[i]);
-        // A release where it started writes nothing, not even the sync (11-ui.md B Snapping)
+        // A release where it started writes nothing, not even the sync (11-ui.md B Snapping);
+        // it says so, since at a low zoom a small correction can land back on the old place
         if (!changed) {
             setPreview(null);
+            toast.info(latest.current.t("tempo.align.chip.noChange"));
             return;
         }
         setPreview({ ...next, committed: true, anchor: null });
@@ -249,12 +284,10 @@ export function useAlignEdit({
             next.synced.length > a.synced.length && next.kind === "move";
         if (newlySynced && !readToastShown()) {
             writeToastShown();
-            const page = latest.current.pages.find(
-                (pg) => pg.end === next.index,
-            );
+            // Named as the transport and the chip name it: "Pg 11 ct 16" (FB-3)
             toast.info(
                 latest.current.t("tempo.align.syncedToast", {
-                    page: page?.label ?? String(next.index),
+                    place: countName(latest.current.pages, next.index),
                 }),
             );
         }
@@ -327,9 +360,10 @@ export function useAlignEdit({
                     const { playheadTime: playhead, pixelsPerSecond } =
                         latest.current;
                     // Count 1 and the music: the playhead is on the old clock, as the pointer is
-                    const snapped = snapAlignTime({
+                    const snapped = alignDropTime({
                         time: timeAt(current, clientX),
-                        targets: [playhead, current.originTime],
+                        playhead,
+                        origin: current.originTime,
                         pixelsPerSecond,
                         disabled: altKey,
                     });
@@ -354,9 +388,10 @@ export function useAlignEdit({
                 if (!g.moved) return;
                 const { playheadTime: playhead, pixelsPerSecond } =
                     latest.current;
-                const snapped = snapAlignTime({
+                const snapped = alignDropTime({
                     time: timeAt(g, event.clientX),
-                    targets: [playhead, g.originTime],
+                    playhead,
+                    origin: g.originTime,
                     pixelsPerSecond,
                     disabled: event.altKey,
                 });

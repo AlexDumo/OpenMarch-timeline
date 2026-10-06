@@ -6,6 +6,7 @@ import {
     alignHold,
     alignMove,
     alignPages,
+    alignDropTime,
     alignTimeTicks,
     countName,
     evenOutPage,
@@ -211,7 +212,7 @@ describe("the chip", () => {
 
     it("says how far it re-spaces when a synced page holds the rest", () => {
         expect(chip(9, 4.31, [17]).text).toBe(
-            "Pg 1 · 120 → 111 · Pg 2 120 → 130 up to synced Pg 2A",
+            "Pg 1 · 120 → 111 · Pg 2 120 → 130 up to synced Pg 2 ct 8",
         );
     });
 
@@ -223,7 +224,7 @@ describe("the chip", () => {
     });
 
     it("says where the music starts when count 1 moves", () => {
-        expect(chip(1, 1.84).text).toBe("Music starts 1.84 s before count 1");
+        expect(chip(1, 1.84).text).toBe("Count 1 is 1.84 s into the music");
         expect(
             moveChip({
                 before: durations,
@@ -238,8 +239,8 @@ describe("the chip", () => {
                 audioOffsetSeconds: 0.5,
                 t,
             }).text,
-        ).toBe("Music starts 0.50 s after count 1");
-        expect(chip(1, 0).text).toBe("Music starts on count 1");
+        ).toBe("Count 1 is 0.50 s before the music starts");
+        expect(chip(1, 0).text).toBe("Count 1 is where the music starts");
     });
 
     it("names what's dragged when it isn't a page flag", () => {
@@ -259,7 +260,20 @@ describe("the chip", () => {
                 head: "A",
                 t,
             }).text,
-        ).toBe("A · 120 → 115 · Pg 4 move +0.50 s");
+        ).toBe("A · 120 → 115 · since the start · Pg 4 move +0.50 s");
+    });
+
+    it("names a synced flag by the page it closes, as the transport does (B2)", () => {
+        // Page 2's flag (count 17) is synced; dragging page 1's flag re-spaces page 2 up to it
+        const text = chip(9, 4.31, [17]).text;
+        expect(text).toContain("up to synced Pg 2 ct 8");
+        expect(text).not.toContain("Pg 2A");
+    });
+
+    it("says a drop that changes nothing changes nothing", () => {
+        expect(chip(9, 4).text).toBe(
+            "No change: zoom in (Ctrl+scroll) for finer moves",
+        );
     });
 
     it("says how long a held count lasts", () => {
@@ -277,6 +291,167 @@ describe("the chip", () => {
         expect(
             alignHold({ durations, index: 1, toTime: 3, synced: [] }),
         ).toBeNull();
+    });
+});
+
+describe("drag scope (FB-2)", () => {
+    const flags = alignFlags(pages).map((f) => f.index);
+
+    it("with page scope, re-spaces only the page before the dragged flag", () => {
+        const result = alignMove({
+            durations,
+            index: 17,
+            toTime: 8.5,
+            synced: [],
+            scope: "page",
+            flags,
+        });
+        // Page 1 (counts 1–8) keeps its tempo; page 2 absorbs the drag
+        expect(result.durations.slice(1, 9)).toEqual(durations.slice(1, 9));
+        expect(result.effect.respaced[0]).toEqual({ from: 9, to: 17 });
+        expect(countTimes(result.durations)[17]).toBeCloseTo(8.5, 9);
+    });
+
+    it("with toSynced scope, re-spaces back to the previous synced count", () => {
+        const result = alignMove({
+            durations,
+            index: 17,
+            toTime: 8.5,
+            synced: [],
+            scope: "toSynced",
+            flags,
+        });
+        expect(result.effect.respaced[0]).toEqual({ from: 1, to: 17 });
+    });
+
+    it("a synced count later than the previous flag still bounds it", () => {
+        const result = alignMove({
+            durations,
+            index: 17,
+            toTime: 8.5,
+            synced: [13],
+            scope: "page",
+            flags,
+        });
+        expect(result.effect.respaced[0]).toEqual({ from: 13, to: 17 });
+    });
+
+    it("re-spaces the last page only, at the end of the show", () => {
+        const result = alignMove({
+            durations,
+            index: 33,
+            toTime: 17,
+            synced: [],
+            scope: "page",
+            flags,
+        });
+        expect(result.effect.respaced[0]).toEqual({ from: 25, to: 33 });
+        expect(result.durations.slice(1, 25)).toEqual(durations.slice(1, 25));
+    });
+
+    it("the chip names how far back a wide re-space reaches", () => {
+        const result = alignMove({
+            durations,
+            index: 17,
+            toTime: 8.5,
+            synced: [],
+        });
+        expect(
+            moveChip({
+                before: durations,
+                result,
+                index: 17,
+                pages,
+                audioOffsetSeconds: 0,
+                t,
+            }).text,
+        ).toBe("Pg 1–2 · 120 → 113 · since the start · Pg 2A–4 move +0.50 s");
+    });
+
+    it("a hold with page scope stays inside its page, so earlier holds keep", () => {
+        // Hold count 3 (tick 4) of page 1, then count 5 (tick 6): the first stays
+        const first = alignHold({
+            durations,
+            index: 4,
+            toTime: 2.5,
+            synced: [],
+            scope: "page",
+            flags,
+        })!;
+        expect(countTimes(first.durations)[9]).toBeCloseTo(4, 9);
+        expect(first.effect.heldFrom).toBe(9);
+        const second = alignHold({
+            durations: first.durations,
+            index: 6,
+            toTime: countTimes(first.durations)[6]! - 0.1,
+            synced: [],
+            scope: "page",
+            flags,
+        })!;
+        expect(second.durations[3]).toBeCloseTo(first.durations[3]!, 9);
+        expect(countTimes(second.durations)[9]).toBeCloseTo(4, 9);
+        // The chip doesn't call page 1's unsynced flag synced
+        expect(
+            holdChip({
+                before: durations,
+                result: first,
+                index: 4,
+                pages,
+                synced: [],
+                t,
+            }).text,
+        ).toContain("up to Pg 1 ct 8");
+    });
+
+    it("a hold on a page's last count re-spaces the next page", () => {
+        const result = alignHold({
+            durations,
+            index: 9,
+            toTime: 5,
+            synced: [],
+            scope: "page",
+            flags,
+        })!;
+        expect(result.effect.heldFrom).toBe(17);
+    });
+});
+
+describe("drops", () => {
+    it("small corrections at a low zoom aren't thrown away (FB-8)", () => {
+        // 0.2 s at 19 px/s is under 4 px: it used to snap back to where it was
+        expect(
+            alignDropTime({
+                time: 10.2,
+                playhead: null,
+                origin: 10,
+                pixelsPerSecond: 19,
+                disabled: false,
+            }),
+        ).toEqual({ time: 10.2, snapped: false });
+        expect(
+            alignDropTime({
+                time: 10.05,
+                playhead: null,
+                origin: 10,
+                pixelsPerSecond: 19,
+                disabled: false,
+            }),
+        ).toEqual({ time: 10, snapped: true });
+        expect(
+            alignDropTime({
+                time: 10.2,
+                playhead: 10.4,
+                origin: 10,
+                pixelsPerSecond: 19,
+                disabled: false,
+            }),
+        ).toEqual({ time: 10.4, snapped: true });
+    });
+
+    it("formats tenths without rolling over to .10 (Jo bug 2)", () => {
+        expect(formatShowTime(76.97, true)).toBe("1:17");
+        expect(formatShowTime(59.96, true)).toBe("1:00");
+        expect(formatShowTime(65.7)).toBe("1:05");
     });
 });
 

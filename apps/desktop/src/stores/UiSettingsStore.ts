@@ -9,6 +9,11 @@ export type FocusableComponents = "canvas" | "timeline";
 export interface TempoLabFlags {
     /** Align view: counts drawn over the real waveform on a seconds axis; drag a flag onto the music */
     alignView: boolean;
+    /**
+     * How far back an Align flag drag re-spaces: only the page before the flag (`page`), or back
+     * to the previous synced count (`toSynced`, E7's first rule). docs/tempo/decisions.md FB-2
+     */
+    alignDragScope: "page" | "toSynced";
     /** Tap the beat: a few taps set the tempo and where count 1 starts */
     tapTheBeat: boolean;
     /** Punch-in tap: T taps page starts or counts while playing */
@@ -29,6 +34,7 @@ export interface TempoLabFlags {
 
 export const defaultTempoLab: TempoLabFlags = {
     alignView: false,
+    alignDragScope: "page",
     tapTheBeat: false,
     punchInTap: false,
     tapApply: "stop",
@@ -43,6 +49,7 @@ const TEMPO_LAB_CHOICES: {
     [K in keyof TempoLabFlags]: readonly TempoLabFlags[K][];
 } = {
     alignView: [false, true],
+    alignDragScope: ["page", "toSynced"],
     tapTheBeat: [false, true],
     punchInTap: [false, true],
     tapApply: ["stop", "drafts"],
