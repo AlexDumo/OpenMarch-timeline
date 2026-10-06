@@ -1,6 +1,68 @@
 import { create } from "zustand";
 
 export type FocusableComponents = "canvas" | "timeline";
+
+/**
+ * Tempo lab: experimental tempo features the owner can turn on to compare options
+ * (docs/tempo/README.md). Each is off by default. Per user, not per file.
+ */
+export interface TempoLabFlags {
+    /** Align view: counts drawn over the real waveform on a seconds axis; drag a flag onto the music */
+    alignView: boolean;
+    /** Tap the beat: a few taps set the tempo and where count 1 starts */
+    tapTheBeat: boolean;
+    /** Punch-in tap: T taps page starts or counts while playing */
+    punchInTap: boolean;
+    /** When punch-in taps are written: on stop, or kept as drafts until Enter */
+    tapApply: "stop" | "drafts";
+    /** What a punch-in tap marks: page starts or every count */
+    tapUnit: "page" | "count";
+    /** Tempo map: a table of tempo marks at measures */
+    tempoMap: boolean;
+    /** Drags and taps snap to attacks found in the music */
+    snapToAttacks: boolean;
+    /** Edits that add or remove counts ask what the drill should do, with a preview */
+    drillChoices: boolean;
+}
+
+export const defaultTempoLab: TempoLabFlags = {
+    alignView: false,
+    tapTheBeat: false,
+    punchInTap: false,
+    tapApply: "stop",
+    tapUnit: "page",
+    tempoMap: false,
+    snapToAttacks: false,
+    drillChoices: false,
+};
+
+const TEMPO_LAB_CHOICES: {
+    [K in keyof TempoLabFlags]: readonly TempoLabFlags[K][];
+} = {
+    alignView: [false, true],
+    tapTheBeat: [false, true],
+    punchInTap: [false, true],
+    tapApply: ["stop", "drafts"],
+    tapUnit: ["page", "count"],
+    tempoMap: [false, true],
+    snapToAttacks: [false, true],
+    drillChoices: [false, true],
+};
+
+/**
+ * The tempo lab flags from stored settings: each known flag with an allowed value is kept, and
+ * anything else (missing, renamed or of the wrong type) falls back to its default.
+ */
+export function mergeTempoLab(stored: unknown): TempoLabFlags {
+    const out: Record<string, unknown> = { ...defaultTempoLab };
+    if (stored && typeof stored === "object")
+        for (const [key, choices] of Object.entries(TEMPO_LAB_CHOICES)) {
+            const value = (stored as Record<string, unknown>)[key];
+            if ((choices as readonly unknown[]).includes(value))
+                out[key] = value;
+        }
+    return out as unknown as TempoLabFlags;
+}
 export interface UiSettings {
     lockX: boolean;
     lockY: boolean;
@@ -56,6 +118,8 @@ export interface UiSettings {
     tolgeeDevTools?: boolean;
     /** Tolgee API Key for In-Context Translating */
     tolgeeApiKey?: string;
+    /** Experimental tempo features (Tempo lab) */
+    tempoLab: TempoLabFlags;
 }
 
 // Default settings that will be used if no localStorage data exists
@@ -89,6 +153,7 @@ export const defaultSettings: UiSettings = {
         referencePointY: undefined,
     },
     tolgeeDevTools: false,
+    tempoLab: defaultTempoLab,
 };
 
 const STORAGE_KEY = "openmarch:uiSettings";
@@ -124,6 +189,7 @@ const loadSettings = (): UiSettings => {
                       ...parsed.coordinateRounding,
                   }
                 : defaultSettings.coordinateRounding,
+            tempoLab: mergeTempoLab(parsed.tempoLab),
         };
     } catch (error) {
         console.error("Failed to load UI settings from localStorage:", error);
@@ -153,11 +219,17 @@ interface UiSettingsStoreActions {
     setTimelineCompact: (compact?: boolean) => void;
     toggleAudioMute: () => void;
     setAudioVolume: (volume: number) => void;
+    /** Sets one Tempo lab flag */
+    setTempoLabFlag: <K extends keyof TempoLabFlags>(
+        flag: K,
+        value: TempoLabFlags[K],
+    ) => void;
 }
 interface UiSettingsStoreInterface
     extends UiSettingsStoreState, UiSettingsStoreActions {}
 
 export const useUiSettingsStore = create<UiSettingsStoreInterface>(
+    // eslint-disable-next-line max-lines-per-function
     (set, get) => ({
         uiSettings: loadSettings(),
 
@@ -250,5 +322,19 @@ export const useUiSettingsStore = create<UiSettingsStoreInterface>(
             set({ uiSettings: newSettings });
             saveSettings(newSettings);
         },
+        setTempoLabFlag: (flag, value) => {
+            const current = get().uiSettings;
+            const newSettings = {
+                ...current,
+                tempoLab: { ...current.tempoLab, [flag]: value },
+            };
+            set({ uiSettings: newSettings });
+            saveSettings(newSettings);
+        },
     }),
 );
+
+/** One Tempo lab flag, re-rendering only when it changes. */
+export const useTempoLabFlag = <K extends keyof TempoLabFlags>(
+    flag: K,
+): TempoLabFlags[K] => useUiSettingsStore((s) => s.uiSettings.tempoLab[flag]);

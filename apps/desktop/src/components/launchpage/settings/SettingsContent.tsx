@@ -4,6 +4,7 @@ import PluginsContents from "./plugins/Plugins";
 import PrivacySettings from "./PrivacySettings";
 import DeveloperSettings from "./DeveloperSettings";
 import DatabaseRepairSettings from "./DatabaseRepairSettings";
+import TempoLabSettings from "./TempoLabSettings";
 import { T } from "@tolgee/react";
 
 export default function SettingsContent() {
@@ -32,6 +33,12 @@ export default function SettingsContent() {
                     <T keyName="settings.privacy" />
                 </h5>
                 <PrivacySettings />
+            </div>
+            <div className="space-y-16">
+                <h5 className="text-h5">
+                    <T keyName="settings.tempoLab" />
+                </h5>
+                <TempoLabSettings />
             </div>
             <div className="space-y-16">
                 <h5 className="text-h5">

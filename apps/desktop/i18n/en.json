@@ -1306,6 +1306,28 @@
         "repairDotsFile.repairing": "Repairing...",
         "repairDotsFile.success": "Database repaired successfully. Reloading...",
         "repairDotsFile.title": "Repair DOTS file",
+        "tempoLab": "Tempo lab (experimental)",
+        "tempoLab.alignView": "Align view",
+        "tempoLab.alignView.description": "See the counts on the real waveform in seconds, and drag a page flag onto the music.",
+        "tempoLab.description": "Try new ways to line counts up with the music. These may change or go away.",
+        "tempoLab.drillChoices": "Drill choices",
+        "tempoLab.drillChoices.description": "When counts are cut or added, choose what the drill does and preview it first.",
+        "tempoLab.punchInTap": "Punch-in tap",
+        "tempoLab.punchInTap.description": "Press T while the music plays to tap where pages or counts start.",
+        "tempoLab.snapToAttacks": "Snap to attacks",
+        "tempoLab.snapToAttacks.description": "Drags and taps snap to the nearest hit in the music.",
+        "tempoLab.tapApply": "Apply taps",
+        "tempoLab.tapApply.description": "Write taps when you stop, or keep them as drafts until you press Enter.",
+        "tempoLab.tapApply.drafts": "As drafts",
+        "tempoLab.tapApply.stop": "On stop",
+        "tempoLab.tapTheBeat": "Tap the beat",
+        "tempoLab.tapTheBeat.description": "Tap along for a few counts to set the tempo and where count 1 starts.",
+        "tempoLab.tapUnit": "Tap",
+        "tempoLab.tapUnit.count": "Every count",
+        "tempoLab.tapUnit.description": "Tap page starts for steady music, or every count for rubato.",
+        "tempoLab.tapUnit.page": "Page starts",
+        "tempoLab.tempoMap": "Tempo map",
+        "tempoLab.tempoMap.description": "A table of tempo marks at measures, such as \"m30 ♩ = 152.5\".",
         "title": "Settings",
         "tolgeeApiKeyPlaceholder": "Tolgee API Key",
         "tolgeeDevToolsToggle": "Tolgee In-Context Translating"
@@ -1318,6 +1340,10 @@
     },
     "tags": {
         "title": "Tags"
+    },
+    "tempo": {
+        "retimeError": "Couldn't change when the counts land",
+        "syncError": "Couldn't change which counts are synced"
     },
     "tempoGroup": {
         "createBeatsError": "Error creating beats",

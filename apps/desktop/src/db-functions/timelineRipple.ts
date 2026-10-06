@@ -146,7 +146,8 @@ export async function readPageGrid(tx: DbTransaction): Promise<PageGrid> {
     return { beatIds, pages };
 }
 
-const sameGrid = (a: PageGrid, b: PageGrid) =>
+/** Whether two page grids have the same beats in the same order and the same page edges. */
+export const sameGrid = (a: PageGrid, b: PageGrid) =>
     a.beatIds.length === b.beatIds.length &&
     a.beatIds.every((id, i) => b.beatIds[i] === id) &&
     a.pages.length === b.pages.length &&

@@ -50,6 +50,9 @@ const singleTableNameToQueryKey = (tableName: string): string[][] => {
         case "timeline_assignments":
         case "timeline_slot_destinations":
             return [];
+        // Undo and redo of a retime can restore the settings row (tablesWithScopedHistory)
+        case "workspace_settings":
+            return [["workspaceSettings"]];
         default:
             return [[tableName]];
     }
