@@ -132,5 +132,5 @@ Feel-based ones also have a row in
   knock-ons remain, as with the old popover: a mid-group mark splits that group, so a later tempo
   edit in the Music modal applies to the smaller group; and re-barring a mixed-meter measure
   (2+2+3 durations) can change whether the modal reads it as mixed meter. Measure numbers after an
-  added or removed line renumber everywhere (readout, go-to, PDF), which is the point, but Priya's
+  added or removed line renumber everywhere (readout, go-to, PDF), which is the point, but the designer's
   printed sheets will disagree until reprinted.
