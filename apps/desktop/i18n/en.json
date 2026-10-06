@@ -1440,9 +1440,11 @@
             "button": "Align",
             "buttonOff": "Leave Align (A)",
             "chip": {
+                "average": "avg {from} → {to}",
                 "clampFast": "can't get faster than 400 BPM",
                 "clampSlow": "can't hold a count longer than 30 s",
                 "held": "{count} held · {from} → {to} s",
+                "mixed": "includes {fast} and {slow} BPM sections, all re-spaced alike",
                 "musicAfter": "Count 1 is {seconds} s before the music starts",
                 "musicBefore": "Count 1 is {seconds} s into the music",
                 "musicOnCountOne": "Count 1 is where the music starts",
@@ -1620,14 +1622,23 @@
                 "readoutPage": "Pg {page}: {from} → {to} counts"
             },
             "later": "later",
+            "mark": {
+                "moved": "Rehearsal {mark} (m{before}) moves to the first measure after the cut, now m{after}",
+                "removed": "Rehearsal {mark} (m{measure}) is removed",
+                "renumbered": "Rehearsal marks: {list}",
+                "renumberedMore": "Rehearsal marks: {list} and {more} more"
+            },
+            "measuresRenumber": "Later measures renumber: {before} become {after}",
             "menu": {
                 "addAtFlag": "Add counts at the end of this page…",
                 "addAtPlayhead": "Add counts at the playhead…",
+                "cutHint": "{modifier}+drag across measures to remove counts",
                 "remove": "Remove counts…",
                 "removeMeasure": "Remove {measure}’s counts…"
             },
             "moreMoves": "{n, plural, one {# more move changes} other {# more moves change}}",
             "move": {
+                "bigSteps": " · big steps, check this move",
                 "cantHold": " (marchers are partway through it there)",
                 "cantSkip": " (it runs on past the cut, and marchers can’t jump)",
                 "deleted": "{clip} ({where}) goes",
@@ -1657,13 +1668,23 @@
                 "commitDeleting": "Remove {n, plural, one {# count} other {# counts}} and delete {m, plural, one {# move} other {# moves}}",
                 "crossing": "Moves that cross the cut",
                 "instead": "Remove {span} instead",
+                "marks": "Rehearsal marks in the cut",
+                "marksDrop": "Remove {marks}",
+                "marksMove": "Keep {mark} on the first measure after the cut",
+                "marksMoveTaken": "The measure after the cut has a mark of its own.",
+                "recording": "Did the recording lose these counts too?",
+                "recordingKept": "No: the recording still has them",
+                "recordingKeptHint": "The music stays where it is. The counts after the cut, to the end of their page, slow down to fill its {seconds} s, so later pages stay with the music.",
+                "recordingLost": "Yes: the music was cut too",
+                "recordingLostHint": "Their {seconds} s go with them: the music after the cut plays that much earlier, with its counts.",
                 "skip": "Skip that part of the move",
                 "skipHint": "Marchers stop where they are when the cut starts; that set is skipped.",
                 "squeeze": "Squeeze the move into fewer counts",
                 "squeezeHint": "Marchers still reach their set, with bigger steps.",
                 "title": "Remove counts",
                 "titleMeasure": "Remove {measure}’s counts",
-                "where": "{span}: {n, plural, one {# count} other {# counts}}"
+                "where": "{span}: {n, plural, one {# count} other {# counts}}",
+                "whereMeasures": "{measures} ({span}): {n, plural, one {# count} other {# counts}}"
             },
             "renumbered": "Later pages renumber: Pg {from} becomes Pg {to}",
             "shiftedMixed": "{n, plural, one {# other move moves} other {# other moves move}}, unchanged",

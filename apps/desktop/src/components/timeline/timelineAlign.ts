@@ -452,6 +452,36 @@ function afterPart({
     return null;
 }
 
+/** Pages a re-spaced range mixes if the fastest is this much faster than the slowest (1.5×) */
+export const MIXED_TEMPO_RATIO = 1.5;
+
+/**
+ * The fastest and slowest page tempos (rounded BPM) in counts `[from, to)`, when they differ by
+ * `MIXED_TEMPO_RATIO` or more, else null: a drag that re-spaces them all by one factor changes
+ * an opener and a ballad alike, and their average means little.
+ */
+export function mixedTempos(
+    durations: CountDurations,
+    pages: readonly AlignPage[],
+    from: number,
+    to: number,
+): { readonly fast: number; readonly slow: number } | null {
+    const tempos: number[] = [];
+    for (const page of pages) {
+        const start = Math.max(page.start, from);
+        const end = Math.min(page.end, to);
+        if (end <= start) continue;
+        const bpm = bpmOfRange(durations, start, end);
+        if (bpm !== null && Number.isFinite(bpm) && bpm > 0) tempos.push(bpm);
+    }
+    if (tempos.length < 2) return null;
+    const fast = Math.max(...tempos);
+    const slow = Math.min(...tempos);
+    return fast / slow >= MIXED_TEMPO_RATIO
+        ? { fast: Math.round(fast), slow: Math.round(slow) }
+        : null;
+}
+
 const clampPart = (result: RetimeResult, t: AlignTranslate) =>
     result.clamped
         ? result.clampReason === "maxCount"
@@ -493,6 +523,7 @@ export function moveChip({
         result.durations.every((d, i) => d === before[i])
     )
         return { text: t("tempo.align.chip.noChange"), amber: false };
+    let mixedWarning = false;
     if (index === 1) {
         // The music now starts this long before count 1 (negative: after it)
         const lead = result.originShift - audioOffsetSeconds;
@@ -511,8 +542,15 @@ export function moveChip({
         const left = result.effect.respaced.find((r) => r.to === index);
         const label =
             head ?? (left ? pagesLabel(pages, left.from, left.to) : null);
+        const mixed = left
+            ? mixedTempos(before, pages, left.from, left.to)
+            : null;
+        const from = left ? roundBpm(before, left.from, left.to) : null;
+        const to = left ? roundBpm(result.durations, left.from, left.to) : null;
         const tempo = left
-            ? `${roundBpm(before, left.from, left.to)} → ${roundBpm(result.durations, left.from, left.to)}`
+            ? mixed
+                ? t("tempo.align.chip.average", { from: from!, to: to! })
+                : `${from} → ${to}`
             : null;
         // Re-spacing that reaches back past one page says from where, so it is never silent (FB-2)
         const reach =
@@ -527,6 +565,10 @@ export function moveChip({
                   })
                 : null;
         parts.push([label, tempo, reach].filter(Boolean).join(" · "));
+        if (mixed) {
+            parts.push(t("tempo.align.chip.mixed", mixed));
+            mixedWarning = true;
+        }
     }
     // Moving count 1 shifts the whole show unless a synced count holds the rest
     const after = afterPart({ before, result, from: index, pages, synced, t });
@@ -534,7 +576,10 @@ export function moveChip({
         parts.push(after);
     const clamp = clampPart(result, t);
     if (clamp) parts.push(clamp);
-    return { text: parts.filter(Boolean).join(" · "), amber: result.clamped };
+    return {
+        text: parts.filter(Boolean).join(" · "),
+        amber: result.clamped || mixedWarning,
+    };
 }
 
 /** The chip while holding the count before tick `index`: "Pg 5 ct 4 held · 0.50 → 1.85 s" */
