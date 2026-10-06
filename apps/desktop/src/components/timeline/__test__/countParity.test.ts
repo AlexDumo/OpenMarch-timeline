@@ -309,19 +309,15 @@ const checkShow = (show: GeneratedShow) => {
     }
 };
 
-// Until the surfaces follow the rule, the tests that catch them disagreeing are expected to fail
 describe("one rule for counts across the readout, go-to, PDF and video (E2)", () => {
-    it.fails(
-        "names the same page, count, measure and beat on every surface",
-        () => {
-            fc.assert(
-                fc.property(showArb, (show) => {
-                    checkShow(show);
-                }),
-                { numRuns: 300 },
-            );
-        },
-    );
+    it("names the same page, count, measure and beat on every surface", () => {
+        fc.assert(
+            fc.property(showArb, (show) => {
+                checkShow(show);
+            }),
+            { numRuns: 300 },
+        );
+    });
 
     // Sam's example (25-persona-sam.md): 4/4 at ♩=176, page 2 starts on m5's downbeat
     describe("a 16-count page from m5's downbeat", () => {
@@ -336,7 +332,7 @@ describe("one rule for counts across the readout, go-to, PDF and video (E2)", ()
         const { model, pages, measures, beats } = buildShow(show);
         const m5 = beats[17]!.timestamp;
 
-        it.fails("passes the property", () => checkShow(show));
+        it("passes the property", () => checkShow(show));
 
         it("reads count 1 as m5 beat 2 and the flag as count 16, m9 beat 1 (UI-13)", () => {
             expect(getPlayheadReadout(model, 17)).toMatchObject({
@@ -349,29 +345,23 @@ describe("one rule for counts across the readout, go-to, PDF and video (E2)", ()
             });
         });
 
-        it.fails(
-            "prints the page's counts on the drill sheet: m5 beat 2 to m9 beat 1",
-            () => {
-                expect(measureRangeString(pages[2]!)).toBe("5(2) - 9(1)");
-                expect(measureRangeString(pages[1]!)).toBe("1(2) - 5(1)");
-            },
-        );
+        it("prints the page's counts on the drill sheet: m5 beat 2 to m9 beat 1", () => {
+            expect(measureRangeString(pages[2]!)).toBe("5(2) - 9(1)");
+            expect(measureRangeString(pages[1]!)).toBe("1(2) - 5(1)");
+        });
 
-        it.fails(
-            "shows the video one count apart from nothing: page 1's last count on m5's downbeat",
-            () => {
-                const overlay = new OverlayTimeline(pages, measures);
-                expect(overlay.getState(m5)).toMatchObject({
-                    setName: "1",
-                    count: 16,
-                    measureNumber: 5,
-                });
-                expect(overlay.getState(beats[18]!.timestamp)).toMatchObject({
-                    setName: "2",
-                    count: 1,
-                    measureNumber: 5,
-                });
-            },
-        );
+        it("shows the video one count apart from nothing: page 1's last count on m5's downbeat", () => {
+            const overlay = new OverlayTimeline(pages, measures);
+            expect(overlay.getState(m5)).toMatchObject({
+                setName: "1",
+                count: 16,
+                measureNumber: 5,
+            });
+            expect(overlay.getState(beats[18]!.timestamp)).toMatchObject({
+                setName: "2",
+                count: 1,
+                measureNumber: 5,
+            });
+        });
     });
 });
