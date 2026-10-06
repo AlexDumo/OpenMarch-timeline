@@ -94,3 +94,26 @@ export function cacheAtViewportResolution(
         ctx.restore();
     };
 }
+
+/**
+ * Whether Fabric can cache `obj` at its full on-screen resolution at the current zoom. A cache
+ * canvas over `fabric.maxCacheSideLimit` on a side or `fabric.perfLimitSizeTotal` in area is
+ * scaled down, so the object looks blurry.
+ */
+export function cacheFitsAtFullResolution(obj: fabric.Object): boolean {
+    const dims = (
+        obj as unknown as {
+            _getCacheCanvasDimensions?: () => { width: number; height: number };
+        }
+    )._getCacheCanvasDimensions?.();
+    if (!dims) return true;
+    const limits = fabric as unknown as {
+        maxCacheSideLimit: number;
+        perfLimitSizeTotal: number;
+    };
+    return (
+        dims.width <= limits.maxCacheSideLimit &&
+        dims.height <= limits.maxCacheSideLimit &&
+        dims.width * dims.height <= limits.perfLimitSizeTotal
+    );
+}

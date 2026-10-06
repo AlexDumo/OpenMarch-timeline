@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { fabric } from "fabric";
-import { cacheAtViewportResolution } from "../viewportRasterCache";
+import {
+    cacheAtViewportResolution,
+    cacheFitsAtFullResolution,
+} from "../viewportRasterCache";
 
 /** A canvas with one uncached rect whose drawing we count. */
 const setup = () => {
@@ -77,5 +80,22 @@ describe("cacheAtViewportResolution", () => {
         rect.render(other);
         rect.render(other);
         expect(draws).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe("cacheFitsAtFullResolution", () => {
+    it("is false once zoom makes an object's cache too big for Fabric's limits", () => {
+        const canvas = new fabric.StaticCanvas(
+            document.createElement("canvas"),
+            { width: 200, height: 100, renderOnAddRemove: false },
+        );
+        const dot = new fabric.Circle({ radius: 4 });
+        const line = new fabric.Line([0, 0, 1000, 0], { stroke: "black" });
+        canvas.add(dot, line);
+        expect(cacheFitsAtFullResolution(dot)).toBe(true);
+        expect(cacheFitsAtFullResolution(line)).toBe(true);
+        canvas.setZoom(10);
+        expect(cacheFitsAtFullResolution(dot)).toBe(true);
+        expect(cacheFitsAtFullResolution(line)).toBe(false);
     });
 });

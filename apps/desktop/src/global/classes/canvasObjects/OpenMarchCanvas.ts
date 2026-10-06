@@ -5,7 +5,10 @@ import Pathway, { DEFAULT_PATHWAY_STROKE_WIDTH } from "./Pathway";
 import Midpoint from "./Midpoint";
 import TimelinePathway from "./TimelinePathway";
 import TimelineFocusLayer from "./TimelineFocusLayer";
-import { cacheAtViewportResolution } from "./viewportRasterCache";
+import {
+    cacheAtViewportResolution,
+    cacheFitsAtFullResolution,
+} from "./viewportRasterCache";
 import type { FocusScene } from "@/timeline/timelineFocusScene";
 import type TimelineShapeOverlay from "./TimelineShapeOverlay";
 import { FieldProperties } from "@openmarch/core";
@@ -504,24 +507,41 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         this.zoomToPoint(pointer, newZoom);
         this.checkCanvasBounds();
 
-        // set objectCaching to false after 100ms to improve performance after zooming
-        // This is why the grid is blurry but fast while zooming, and sharp while not.
-        // If it was always sharp (object caching on), it would be horrendously slow
+        // The grid uses Fabric's (size-capped, so blurry) cache while the zoom is in progress,
+        // which keeps zooming smooth. 75 ms after the last tick it goes back to its sharp
+        // viewport-sized bitmap, and objects too big for a full-resolution Fabric cache at the new
+        // zoom (long pathways) draw as vectors so they stay sharp too. Everything else keeps its
+        // cache: drawing every marcher as vectors each frame made playback slow after any zoom.
         clearTimeout(this._zoomTimeout);
         this._zoomTimeout = setTimeout(() => {
-            this.getObjects().forEach((obj) => {
-                if (
-                    !(
-                        obj instanceof fabric.Text ||
-                        obj instanceof fabric.IText ||
-                        obj instanceof fabric.Textbox
-                    )
-                ) {
-                    obj.objectCaching = false;
-                }
-            });
+            this.staticGridRef.objectCaching = false;
+            this.refreshCachingForZoom();
             this.requestRenderAll();
         }, 75);
+    }
+
+    /** Objects whose Fabric cache `refreshCachingForZoom` switched off */
+    private _uncachedForZoom = new WeakSet<fabric.Object>();
+
+    /**
+     * After a zoom, switches Fabric's object cache off for objects whose cache would be capped
+     * below the zoomed resolution (so they'd be blurry), and back on for those this turned off
+     * earlier that now fit again. Text and the grid are left alone.
+     */
+    private refreshCachingForZoom() {
+        for (const obj of this.getObjects()) {
+            if (obj === this.staticGridRef || obj instanceof fabric.Text)
+                continue;
+            if (this._uncachedForZoom.has(obj)) {
+                if (cacheFitsAtFullResolution(obj)) {
+                    obj.objectCaching = true;
+                    this._uncachedForZoom.delete(obj);
+                }
+            } else if (obj.objectCaching && !cacheFitsAtFullResolution(obj)) {
+                obj.objectCaching = false;
+                this._uncachedForZoom.add(obj);
+            }
+        }
     }
 
     public checkCanvasBounds() {
