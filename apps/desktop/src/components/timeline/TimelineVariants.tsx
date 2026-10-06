@@ -130,6 +130,9 @@ const NO_PEAKS: readonly (readonly number[])[] = [];
 /** About how wide **+ N counts** is, and the room kept for it after the last beat (E1) */
 const APPEND_COUNTS_WIDTH = 84;
 const APPEND_COUNTS_ROOM = APPEND_COUNTS_WIDTH + 16;
+/** About how wide a pill in the top row is for `label` (10px text, icon and padding) */
+const pillWidth = (label: string) =>
+    Math.max(APPEND_COUNTS_WIDTH, Math.ceil(label.length * 5.6) + 24);
 
 /** About how wide the note that the music runs on is, and the room kept for it (E1) */
 const MUSIC_PAST_END_NOTE_WIDTH = 420;
@@ -841,12 +844,19 @@ function TimelineSurface({
             : atFlag;
     })();
     const showAppendCounts = props.appendCounts != null && !props.isPlaying;
+    const appendWidth = props.appendCounts
+        ? pillWidth(props.appendCounts.label)
+        : APPEND_COUNTS_WIDTH;
+    const toEndWidth = props.appendCounts?.toEnd
+        ? pillWidth(props.appendCounts.toEnd.label)
+        : 0;
+    const appendTotalWidth = appendWidth + (toEndWidth ? toEndWidth + 6 : 0);
     // The note sits in the top row past the last count, over no page boxes and clear of the
     // music drawn below it, after **+ N counts** when that is at the end too
     const musicNoteLeft =
         initialPageWidth +
-        (showAppendCounts && appendCountsX + APPEND_COUNTS_WIDTH > countsEndX
-            ? appendCountsX + APPEND_COUNTS_WIDTH + 8
+        (showAppendCounts && appendCountsX + appendTotalWidth > countsEndX
+            ? appendCountsX + appendTotalWidth + 8
             : countsEndX + 8);
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = (next: TimelineSelection) =>
@@ -1504,6 +1514,21 @@ function TimelineSurface({
                         >
                             <PlusIcon size={9} weight="bold" />
                             {props.appendCounts.label}
+                        </button>
+                    )}
+                    {showAppendCounts && props.appendCounts?.toEnd && (
+                        <button
+                            type="button"
+                            data-testid="timeline-pages-to-end"
+                            data-timeline-interactive="true"
+                            aria-label={props.appendCounts.toEnd.title}
+                            title={props.appendCounts.toEnd.title}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={props.appendCounts.toEnd.onAppend}
+                            className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex h-16 items-center gap-2 rounded-full border border-dashed px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
+                            style={{ left: appendCountsX + appendWidth + 6 }}
+                        >
+                            {props.appendCounts.toEnd.label}
                         </button>
                     )}
                     {pointer.rangePreview && (

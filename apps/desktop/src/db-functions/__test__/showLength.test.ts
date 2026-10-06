@@ -12,7 +12,11 @@ import {
 import { performRedo, performUndo } from "../history";
 import { readPageGrid } from "../timelineRipple";
 import { TimelineWriteError } from "../timelineErrors";
-import { appendPageOfCounts, extendCountsTo } from "../showLength";
+import {
+    appendPageOfCounts,
+    appendPagesToEnd,
+    extendCountsTo,
+} from "../showLength";
 
 // These tests set the flag and convert the show themselves
 keepFixturesInPageMode(
@@ -132,6 +136,37 @@ const ORIGINAL = [
 ];
 
 describeDbTests("counts past the end of the show (E1)", (it) => {
+    describe("pages every N counts to the end (FB-6)", () => {
+        it("adds a page every 16 counts over the counts past the last flag, as one undo", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const timelineBefore = await snapshot(db, TIMELINE_TABLES);
+            const motionBefore = await positions();
+            const before = await snapshot(db);
+
+            expect(await appendPagesToEnd({ db, counts: 16 })).toBe(3);
+
+            const after = await grid(db);
+            expect(after.slice(0, 7)).toEqual(ORIGINAL);
+            expect(
+                after.slice(7).map(([, start, end]) => [start, end]),
+            ).toEqual([
+                [49, 65],
+                [65, 81],
+                [81, 97],
+            ]);
+            // No counts added, and nothing the drill had moves
+            expect((await beats(db)).length).toBe(97);
+            expect(await snapshot(db, TIMELINE_TABLES)).toEqual(timelineBefore);
+            expect(await positions()).toEqual(motionBefore);
+            await roundTrip(db, before, await snapshot(db));
+            // Pages already reach the end: nothing to add, and no empty undo step
+            expect(await appendPagesToEnd({ db, counts: 16 })).toBe(0);
+        });
+    });
+
     describe("+ N counts after the last page", () => {
         it("where the show has counts after the last flag, it adds a page there and no counts", async ({
             db,

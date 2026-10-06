@@ -116,6 +116,29 @@ describe("+ N counts after the last page (E1)", () => {
         expect(onAppend).toHaveBeenCalledTimes(1);
     });
 
+    it("offers pages to the end next to it when counts run on (FB-6)", () => {
+        const onPages = vi.fn();
+        show({
+            appendCounts: {
+                ...appendCounts(),
+                label: "page of 16 counts",
+                toEnd: {
+                    label: "Pages every 16 counts to the end",
+                    title: "Add pages every 16 counts to the end of the music",
+                    onAppend: onPages,
+                },
+            },
+        });
+        const toEnd = screen.getByRole("button", {
+            name: "Add pages every 16 counts to the end of the music",
+        });
+        expect(parseFloat(toEnd.style.left)).toBeGreaterThan(
+            parseFloat(pill()!.style.left) + 84,
+        );
+        fireEvent.click(toEnd);
+        expect(onPages).toHaveBeenCalledTimes(1);
+    });
+
     it("moves past + at the playhead instead of hiding under it", () => {
         show({
             appendCounts: appendCounts(),

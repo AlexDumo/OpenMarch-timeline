@@ -35,8 +35,10 @@ import {
 import { durationsByBeatId } from "@/db-functions/tempo";
 import {
     appendPageOfCountsMutationOptions,
+    appendPagesToEndMutationOptions,
     extendCountsToMutationOptions,
 } from "@/hooks/queries/useShowLength";
+import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import { TempoMapMenu } from "./TempoMapPanel";
@@ -260,6 +262,7 @@ export default function TimelineModePanel() {
     const queryClient = useQueryClient();
     const showLength = useShowLengthControls({
         beats,
+        lastFlag: pages.length > 0 ? pageEndBeat(pages[pages.length - 1]!) : 0,
         continuation,
         musicEnd,
         hidden: isPlaying || holding,
@@ -523,11 +526,14 @@ function useTimelinePunchTap(
  */
 function useShowLengthControls({
     beats,
+    lastFlag,
     continuation,
     musicEnd,
     hidden,
 }: {
     beats: Parameters<typeof showEndTime>[0];
+    /** The last page's flag, a spec beat position */
+    lastFlag: number;
     continuation: ReturnType<typeof countContinuation>;
     musicEnd: number | null;
     hidden: boolean;
@@ -548,13 +554,48 @@ function useShowLengthControls({
                 );
         }),
     );
+    const { mutate: pagesToEnd } = useMutation(
+        appendPagesToEndMutationOptions(queryClient, (added) => {
+            if (added > 0)
+                toast.success(
+                    t("timeline.showLength.pagesAdded", { pages: added }),
+                );
+        }),
+    );
     const countsEnd = showEndTime(beats);
+    // Counts already past the last flag (a show made from an MP3): the pill adds a page over them,
+    // and says so, and one more offers pages to the end (FB-6)
+    const countsPast = beats.length - lastFlag;
+    const overExisting = countsPast >= counts;
     const appendCounts = hidden
         ? undefined
         : {
-              label: t("timeline.showLength.appendCounts", { counts }),
-              title: t("timeline.showLength.appendCountsTitle", { counts }),
+              label: t(
+                  overExisting
+                      ? "timeline.showLength.appendPage"
+                      : "timeline.showLength.appendCounts",
+                  { counts },
+              ),
+              title: t(
+                  overExisting
+                      ? "timeline.showLength.appendPageTitle"
+                      : "timeline.showLength.appendCountsTitle",
+                  { counts },
+              ),
               onAppend: () => appendPage(counts),
+              ...(countsPast > counts
+                  ? {
+                        toEnd: {
+                            label: t("timeline.showLength.pagesToEnd", {
+                                counts,
+                            }),
+                            title: t("timeline.showLength.pagesToEndTitle", {
+                                counts,
+                            }),
+                            onAppend: () => pagesToEnd(counts),
+                        },
+                    }
+                  : {}),
           };
     const musicPastEnd =
         !hidden &&

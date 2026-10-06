@@ -227,3 +227,23 @@ export function formatMinutesSeconds(seconds: number): string {
     const whole = Math.max(0, Math.floor(seconds + 1e-6));
     return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
+
+/**
+ * Where "Add pages every N counts to the end" puts flags (docs/tempo/decisions.md FB-6): every
+ * `counts` counts after the last flag while the counts last, and a last, shorter page on the end
+ * of the show when counts are left over, so the pages cover the whole song. Flags are spec beat
+ * positions (the end of the show is the beat count). Empty when no count lies past the last flag.
+ */
+export function pageFlagsToEnd(
+    lastFlag: number,
+    showEnd: number,
+    counts: number,
+): number[] {
+    if (!Number.isInteger(counts) || counts < 1 || showEnd <= lastFlag)
+        return [];
+    const flags: number[] = [];
+    for (let flag = lastFlag + counts; flag <= showEnd; flag += counts)
+        flags.push(flag);
+    if ((flags[flags.length - 1] ?? lastFlag) < showEnd) flags.push(showEnd);
+    return flags;
+}

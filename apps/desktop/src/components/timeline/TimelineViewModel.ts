@@ -108,6 +108,12 @@ export interface TimelineAppendCounts {
     /** Its tooltip and accessible name, such as "Add a page of 16 counts after the last page" */
     readonly title: string;
     readonly onAppend: () => void;
+    /** "Add pages every 16 counts to the end", when counts run on past the last page (FB-6) */
+    readonly toEnd?: {
+        readonly label: string;
+        readonly title: string;
+        readonly onAppend: () => void;
+    };
 }
 
 /** The music runs past the last count (E1): a note past the end that offers extending the counts */

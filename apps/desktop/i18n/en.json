@@ -1783,9 +1783,14 @@
         "showLength": {
             "appendCounts": "{counts, plural, one {# count} other {# counts}}",
             "appendCountsTitle": "{counts, plural, one {Add a page of # count after the last page} other {Add a page of # counts after the last page}}",
+            "appendPage": "{counts, plural, one {page of # count} other {page of # counts}}",
+            "appendPageTitle": "{counts, plural, one {Add a page over the next # count} other {Add a page over the next # counts}}",
             "extendToEnd": "Extend counts to the end",
             "extended": "{counts, plural, one {Added # count to the end of the show.} other {Added # counts to the end of the show.}}",
-            "musicPastEnd": "Counts end at {countsEnd}; the music runs to {musicEnd}."
+            "musicPastEnd": "Counts end at {countsEnd}; the music runs to {musicEnd}.",
+            "pagesAdded": "{pages, plural, one {Added # page to the end of the show.} other {Added # pages to the end of the show.}}",
+            "pagesToEnd": "{counts, plural, one {Pages every count to the end} other {Pages every # counts to the end}}",
+            "pagesToEndTitle": "{counts, plural, one {Add pages every count to the end of the music} other {Add pages every # counts to the end of the music}}"
         }
     },
     "titlebar": {

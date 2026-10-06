@@ -10,6 +10,7 @@ import {
     musicEndSeconds,
     musicRunsPastCounts,
     MUSIC_END_TOLERANCE_SECONDS,
+    pageFlagsToEnd,
 } from "../showLength";
 import { waveformWithPastEnd } from "../timelineWaveform";
 
@@ -327,5 +328,14 @@ describe("the waveform past the last count", () => {
                 musicEnd: 3,
             }).peaksPastEnd,
         ).toEqual([]);
+    });
+});
+
+describe("pageFlagsToEnd (FB-6)", () => {
+    it("puts a flag every N counts, and a shorter last page on the end", () => {
+        expect(pageFlagsToEnd(49, 97, 16)).toEqual([65, 81, 97]);
+        expect(pageFlagsToEnd(49, 100, 16)).toEqual([65, 81, 97, 100]);
+        expect(pageFlagsToEnd(97, 97, 16)).toEqual([]);
+        expect(pageFlagsToEnd(1, 5, 0)).toEqual([]);
     });
 });
