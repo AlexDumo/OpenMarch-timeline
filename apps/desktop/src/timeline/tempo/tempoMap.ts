@@ -124,6 +124,8 @@ export interface TempoMapRow {
     readonly endMeasureNumber: number;
     /** Each count's length in beats of `unit` (1.5 for the long count of 7/8 2+2+3 in ♩). */
     readonly weights: readonly number[];
+    /** A row the map adds at a rehearsal mark inside a row (`rowsAtRehearsalMarks`) */
+    readonly continues?: boolean;
 }
 
 const close = (a: number, b: number, tolerance: number) =>
@@ -505,6 +507,7 @@ function writeRow({
     unit,
     startBpm,
     endBpm,
+    label: typedLabel,
 }: {
     state: MapState;
     row: TempoMapRow;
@@ -512,6 +515,8 @@ function writeRow({
     unit: BeatUnit;
     startBpm: number;
     endBpm: number;
+    /** The meter as written, when it is counted as `meter` ("3/2" counted as 6/4) */
+    label?: string;
 }): TempoMapEditResult {
     if (Math.min(startBpm, endBpm) < MIN_TYPED_BPM)
         return { ok: false, error: "tooSlow" };
@@ -538,7 +543,8 @@ function writeRow({
             return { ok: false, error: "tooSlow" };
     }
     const marks = new Map(state.marks);
-    const label = sameMeter(meter, row.meter) ? row.label : undefined;
+    const label =
+        typedLabel ?? (sameMeter(meter, row.meter) ? row.label : undefined);
     marks.set(row.measureIndex, {
         meter,
         unit,
@@ -668,6 +674,23 @@ export function editRowMeter(
     const perMeasure = state.measures
         .slice(row.measureIndex, row.endMeasureIndex)
         .map((m) => m.counts);
+    // "3/2" or "2/2" over quarter counts: written that way, counted in ♩ (as an import keeps it)
+    const inQuarters = countedInQuarters(meter);
+    if (
+        perMeasure.some((c) => c !== meterCounts(meter)) &&
+        inQuarters &&
+        row.unit === "q" &&
+        perMeasure.every((c) => c === meterCounts(inQuarters))
+    )
+        return writeRow({
+            state,
+            row,
+            meter: inQuarters,
+            unit: "q",
+            startBpm: rowTempo(row),
+            endBpm: row.shape === "ramp" ? row.endBpm : rowTempo(row),
+            label: formatMeter(meter),
+        });
     if (perMeasure.some((c) => c !== meterCounts(meter)))
         return { ok: false, error: "changesCounts" };
     const unit = defaultUnit(meter);
@@ -679,6 +702,111 @@ export function editRowMeter(
         startBpm: rowTempo(row),
         endBpm: row.shape === "ramp" ? row.endBpm : rowTempo(row),
     });
+}
+
+/** A half-note meter (3/2, 2/2) as quarter counts (6/4, 4/4); null for anything else */
+function countedInQuarters(meter: Meter): Meter | null {
+    if (meter.bottom !== 2 || meter.groups !== null) return null;
+    return { top: meter.top * 2, bottom: 4, groups: null };
+}
+
+/**
+ * "?" on a meter read from the counts (DE-5): store it as the row's meter, in the unit it is
+ * shown in. No count changes length and no count is synced; the mark says nothing about tempo
+ * (it is stored as read from the score, so it never protects a tempo).
+ */
+export function confirmMeter(
+    state: MapState,
+    rowIndex: number,
+): TempoMapEditResult {
+    const row = state.rows[rowIndex];
+    if (!row) return { ok: false, error: "noSuchMeasure" };
+    const marks = new Map(state.marks);
+    const own = state.marks.get(row.measureIndex);
+    marks.set(row.measureIndex, {
+        ...own,
+        meter: row.meter,
+        unit: row.unit,
+        source: own?.source ?? "import",
+        ...(row.label ? { label: row.label } : {}),
+    });
+    return {
+        ok: true,
+        write: { durations: [...state.durations], marks, sync: [], unsync: [] },
+    };
+}
+
+/**
+ * The map's rows with one more row at every rehearsal mark inside a row (D7: the map lists every
+ * letter). A row added at a letter is a continuation: not typed, with the parent's meter, unit,
+ * shape and exactness, and its own counts, start and tempos. Only for showing and editing in the
+ * map: typed sections and synced edges come from the rows themselves.
+ */
+export function rowsAtRehearsalMarks(
+    rows: readonly TempoMapRow[],
+    measures: readonly TempoMapMeasure[],
+    durations: readonly number[],
+): TempoMapRow[] {
+    const times = countTimes(durations);
+    const out: TempoMapRow[] = [];
+    for (const row of rows) {
+        const cuts = [row.measureIndex];
+        for (let k = row.measureIndex + 1; k < row.endMeasureIndex; k++)
+            if (measures[k]?.rehearsalMark) cuts.push(k);
+        if (cuts.length === 1) {
+            out.push(row);
+            continue;
+        }
+        cuts.forEach((start, j) => {
+            const end = cuts[j + 1] ?? row.endMeasureIndex;
+            const from =
+                j === 0 ? row.from : Math.max(measures[start].firstCount, 1);
+            const to =
+                j === cuts.length - 1
+                    ? row.to
+                    : Math.max(measures[end].firstCount, 1);
+            const weights = row.weights.slice(from - row.from, to - row.from);
+            const bpmAt = (i: number) =>
+                durations[i] > 0
+                    ? (weights[i - from] * 60) / durations[i]
+                    : NaN;
+            const span = times[to] - times[from];
+            const total = weights.reduce((a, b) => a + b, 0);
+            if (j === 0) {
+                out.push({
+                    ...row,
+                    endMeasureIndex: end,
+                    endMeasureNumber: measures[end - 1].number,
+                    to,
+                    weights,
+                    endBpm: row.shape === "ramp" ? bpmAt(to - 1) : row.endBpm,
+                    averageBpm: span > 0 ? (total * 60) / span : NaN,
+                });
+                return;
+            }
+            out.push({
+                ...row,
+                measureIndex: start,
+                endMeasureIndex: end,
+                measureNumber: measures[start].number,
+                endMeasureNumber: measures[end - 1].number,
+                rehearsalMark: measures[start].rehearsalMark,
+                from,
+                to,
+                weights,
+                startTime: times[from],
+                startBpm: row.shape === "steady" ? row.startBpm : bpmAt(from),
+                endBpm: row.shape === "steady" ? row.endBpm : bpmAt(to - 1),
+                averageBpm: span > 0 ? (total * 60) / span : NaN,
+                typed: false,
+                source: undefined,
+                markedBpm: undefined,
+                partial: false,
+                continues: true,
+            });
+        });
+    }
+    return out;
 }
 
 /**

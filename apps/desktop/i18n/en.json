@@ -1186,6 +1186,8 @@
         "numberOfMeasures": "Number of measures *",
         "onlyClickOnMeasure": "Only click on measure",
         "onOff": "On/Off",
+        "openTempoMap": "Open the tempo map",
+        "openTempoMapHint": "Every rehearsal mark, meter and tempo in one table (Shift+T)",
         "rehearsalLetterOrIdentifier": "Rehearsal letter or identifier",
         "saveChanges": "Save Changes",
         "seeDocs": "See docs",

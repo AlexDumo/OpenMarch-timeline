@@ -7,6 +7,7 @@
 import {
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
     type KeyboardEvent as ReactKeyboardEvent,
@@ -14,14 +15,19 @@ import {
 } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { create } from "zustand";
 import { DotsThreeIcon, XIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { workspaceSettingsKeys } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    workspaceSettingsKeys,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
 import { useRetimeBeats } from "@/hooks/queries/useTempo";
 import { useTempoLabFlag } from "@/stores/UiSettingsStore";
 import {
     addRowAt,
+    confirmMeter,
     editRowMeter,
     editRowRamp,
     editRowTempo,
@@ -37,6 +43,7 @@ import {
     parseTempoCell,
     removeRow,
     retimeArgsOf,
+    rowsAtRehearsalMarks,
     rowTempoText,
     UNIT_GLYPH,
     type TempoMapEditError,
@@ -72,8 +79,18 @@ const EDIT_ERRORS: Record<TempoMapEditError, string> = {
     rowExists: "A row already starts there",
     noSuchMeasure: "There's no such measure",
     notTyped:
-        "This row comes from the counts themselves; only rows you added can be removed",
+        "This row comes from the counts or a rehearsal mark; only rows you added can be removed",
 };
+
+/** Whether the tempo map is open: Shift+T, the transport's ⋯ menu and the Music panel open it */
+export const useTempoMapOpenStore = create<{
+    open: boolean;
+    setOpen: (open: boolean) => void;
+}>((set) => ({ open: false, setOpen: (open) => set({ open }) }));
+
+/** The map's legend for ● and ○ (DE-6) */
+export const TYPED_LEGEND =
+    "● a tempo or meter typed here or read from the score; ○ typed, then changed by a drag or taps. ● edges hold still but aren't lined up with the music.";
 
 const TEMPO_HELP =
     "Type 152.5, ♩=152.5, q=152.5, dq=176 (♩.=176), e=352, ♩.=♩ or =prev";
@@ -119,6 +136,21 @@ function cellText(row: TempoMapRow, column: ColumnKey): string {
     }
 }
 
+/** The meter cell's "?": why the meter was read that way, and that a click confirms it (DE-5) */
+function guessTitle(row: TempoMapRow): string {
+    const why =
+        row.meterGuess === "compound"
+            ? "each count lasts 1.5× the ♩ before it (♩.=♩)"
+            : row.meterGuess === "pickup"
+              ? "a one-count first measure before the next measure's meter"
+              : "the count lengths";
+    const plain =
+        row.meterGuess === "compound"
+            ? ` If it's a slower ${row.weights.length}/4 instead, type ${row.weights.length}/4.`
+            : "";
+    return `Read from the counts: ${why}. Click to confirm ${meterText(row)}; nothing moves.${plain}`;
+}
+
 /** What a cell's editor starts with: the value without "≈", so Enter right away rewrites it. */
 function editText(row: TempoMapRow, column: ColumnKey): string {
     if (column === "tempo")
@@ -144,23 +176,111 @@ function TypedDot({ row }: { row: TempoMapRow }) {
             : null;
     const from = row.source === "import" ? "From the score" : "Typed";
     const title = !written
-        ? "A row you added"
+        ? row.source === "import"
+            ? `Meter as written: ${meterText(row)} (from the score or confirmed)`
+            : "A row you added"
         : row.exact
           ? `${from}: ${written}`
           : `${from} ${written}; changed since (now ${rowTempoText(row)})`;
+    // What ● means, on every dot (Marcus: the dot was unexplained)
+    const legend =
+        row.exact || !written ? "● typed here or read from the score" : "";
     return (
         <span
             className={clsx(
                 "text-[10px]",
                 row.exact || !written ? "text-accent" : "text-text-subtitle",
             )}
-            title={title}
+            title={legend ? `${title}\n${legend}` : title}
             aria-label={title}
             data-testid="tempo-map-typed"
             data-exact={row.exact || undefined}
         >
             {row.exact || !written ? "●" : "○"}
         </span>
+    );
+}
+
+/**
+ * "Count 1 at [1.840] s in the music" (D7): where count 1 lands in the recording, the audio offset
+ * in the words of the Align chip (offset −1.84 is count 1 at 1.84 s). Enter writes it as one undo
+ * entry, moving the whole show against the music; nothing re-spaces.
+ */
+function CountOneField({
+    onWritten,
+}: {
+    onWritten: (text: string, tone: "info" | "error") => void;
+}) {
+    const { data: settings } = useQuery(workspaceSettingsQueryOptions());
+    const retime = useRetimeBeats();
+    const offset = settings?.audioOffsetSeconds ?? 0;
+    const shown = (-offset).toFixed(3);
+    const [text, setText] = useState<string | null>(null);
+    const submit = async () => {
+        const at = Number((text ?? shown).trim().replace(",", "."));
+        if (!Number.isFinite(at)) {
+            onWritten("Type where count 1 is, in seconds: 1.84", "error");
+            return;
+        }
+        // newOffset = offset − originShift, and count 1 at `at` s is an offset of −at
+        const originShift = offset + at;
+        setText(null);
+        if (Math.abs(originShift) < 1e-9) {
+            onWritten(
+                `Count 1 is already at ${shown} s: nothing changed`,
+                "info",
+            );
+            return;
+        }
+        try {
+            await retime.mutateAsync({
+                newDurationsByBeatId: new Map(),
+                originShift,
+            });
+        } catch {
+            onWritten("Couldn't save that edit", "error");
+            return;
+        }
+        onWritten(
+            at >= 0
+                ? `Count 1 is at ${at.toFixed(3)} s in the music`
+                : `Count 1 is ${(-at).toFixed(3)} s before the music starts`,
+            "info",
+        );
+    };
+    return (
+        <form
+            className="flex items-center gap-8 text-[12px]"
+            onSubmit={(e) => {
+                e.preventDefault();
+                void submit();
+            }}
+        >
+            <label htmlFor="tempo-map-count-one" className="text-text-subtitle">
+                Count 1 at
+            </label>
+            <input
+                id="tempo-map-count-one"
+                data-testid="tempo-map-count-one"
+                inputMode="decimal"
+                value={text ?? shown}
+                onFocus={(e) => e.currentTarget.select()}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Escape") {
+                        e.preventDefault();
+                        setText(null);
+                    }
+                }}
+                onBlur={() => setText(null)}
+                className="bg-bg-1 text-text rounded-4 border-stroke focus:border-accent h-24 w-[80px] border px-6 font-mono outline-hidden"
+            />
+            <span className="text-text-subtitle text-[11px]">
+                s in the music (Enter; moves the whole show, negative is before
+                the music starts)
+            </span>
+        </form>
     );
 }
 
@@ -174,7 +294,19 @@ export function TempoMapTable({
     gridRef?: RefObject<HTMLDivElement | null>;
 }) {
     const map = useTempoMapState();
-    const { rows } = map.state;
+    // Every rehearsal mark gets a row, even without a tempo change there (D7)
+    const view = useMemo(
+        () => ({
+            ...map.state,
+            rows: rowsAtRehearsalMarks(
+                map.state.rows,
+                map.state.measures,
+                map.state.durations,
+            ),
+        }),
+        [map.state],
+    );
+    const { rows } = view;
     const retime = useRetimeBeats();
     const queryClient = useQueryClient();
     const [active, setActive] = useState({ row: 0, col: 2 });
@@ -259,21 +391,21 @@ export function TempoMapTable({
                 setMessage({ text: TEMPO_HELP, tone: "error" });
                 return;
             }
-            result = editRowTempo(map.state, row, cell);
+            result = editRowTempo(view, row, cell);
         } else if (column.key === "ramp") {
             const cell = parseRampCell(text);
             if (cell.kind === "error") {
                 setMessage({ text: RAMP_HELP, tone: "error" });
                 return;
             }
-            result = editRowRamp(map.state, row, cell);
+            result = editRowRamp(view, row, cell);
         } else if (column.key === "meter") {
             const cell = parseMeterCell(text);
             if (cell.kind === "error") {
                 setMessage({ text: METER_HELP, tone: "error" });
                 return;
             }
-            result = editRowMeter(map.state, row, cell.meter);
+            result = editRowMeter(view, row, cell.meter);
         } else return;
         // Say what was written, not what was typed: "=prev" reads "m29: ♩=176"
         const resolved = (r: Extract<TempoMapEditResult, { ok: true }>) => {
@@ -300,10 +432,10 @@ export function TempoMapTable({
         const result =
             index < 0
                 ? ({ ok: false, error: "noSuchMeasure" } as const)
-                : addRowAt(map.state, index);
+                : addRowAt(view, index);
         if (await write(result, `Added a row at ${addText.trim()}`)) {
             setAddText("");
-            const at = map.state.rows.findIndex((r) => r.measureIndex > index);
+            const at = rows.findIndex((r) => r.measureIndex > index);
             setActive({ row: at < 0 ? rows.length : at, col: 2 });
             focusGrid();
         }
@@ -353,7 +485,7 @@ export function TempoMapTable({
                 event.preventDefault();
                 if (rows[row])
                     void write(
-                        removeRow(map.state, row),
+                        removeRow(view, row),
                         `Removed the row at ${measureText(rows[row])}`,
                     );
                 return;
@@ -491,13 +623,30 @@ export function TempoMapTable({
                                             )}
                                             {c.key === "meter" &&
                                                 r.meterInferred &&
-                                                r.meter.groups && (
-                                                    <span
-                                                        className="text-text-subtitle text-[10px]"
-                                                        title="Read from the count lengths"
+                                                (r.meterGuess ||
+                                                    r.meter.groups) && (
+                                                    <button
+                                                        type="button"
+                                                        tabIndex={-1}
+                                                        data-testid="tempo-map-confirm-meter"
+                                                        className="text-text-subtitle hover:text-accent rounded-4 px-2 text-[10px]"
+                                                        title={guessTitle(r)}
+                                                        aria-label={guessTitle(
+                                                            r,
+                                                        )}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            void write(
+                                                                confirmMeter(
+                                                                    view,
+                                                                    i,
+                                                                ),
+                                                                `${measureText(r)}: ${meterText(r)} confirmed`,
+                                                            ).then(focusGrid);
+                                                        }}
                                                     >
                                                         ?
-                                                    </span>
+                                                    </button>
                                                 )}
                                         </>
                                     )}
@@ -527,6 +676,9 @@ export function TempoMapTable({
                             ? METER_HELP
                             : "Arrows move, Enter edits and saves, Esc cancels. Delete removes a row you added. Each edit is one undo.")}
             </p>
+            <CountOneField
+                onWritten={(text, tone) => setMessage({ text, tone })}
+            />
             <form
                 className="flex items-center gap-8 text-[12px]"
                 onSubmit={(e) => {
@@ -619,11 +771,19 @@ export function TempoMapPanel({
                                 Tempo map
                             </Dialog.Title>
                             <Dialog.Description className="text-text-subtitle mt-4 text-[11px]">
-                                One row per tempo or meter change. = is a tempo
-                                typed here or read from the score, still as
-                                written; ≈ came from a drag, tapping or an
-                                average. Typing only changes when counts land.
+                                One row per tempo or meter change and per
+                                rehearsal mark. = is a tempo typed here or read
+                                from the score, still as written; ≈ came from a
+                                drag, tapping or an average. ? is a meter read
+                                from the counts: click it to confirm. Typing
+                                only changes when counts land.
                             </Dialog.Description>
+                            <p
+                                data-testid="tempo-map-legend"
+                                className="text-text-subtitle mt-2 text-[11px]"
+                            >
+                                {TYPED_LEGEND}
+                            </p>
                         </div>
                         <Dialog.Close
                             aria-label="Close the tempo map"
@@ -648,7 +808,8 @@ export function TempoMapPanel({
  */
 export function TempoMapMenu() {
     const enabled = useTempoLabFlag("tempoMap");
-    const [open, setOpen] = useState(false);
+    const open = useTempoMapOpenStore((st) => st.open);
+    const setOpen = useTempoMapOpenStore((st) => st.setOpen);
     useEffect(() => {
         if (!enabled) return;
         const onKeyDown = (event: KeyboardEvent) => {
@@ -668,7 +829,7 @@ export function TempoMapMenu() {
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [enabled]);
+    }, [enabled, setOpen]);
     if (!enabled) return null;
     return (
         <>

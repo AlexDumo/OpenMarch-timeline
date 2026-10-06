@@ -1,7 +1,9 @@
 import AudioSelector from "./AudioSelector";
 import MusicXmlSelector from "./MusicXmlSelector";
 import { SidebarModalLauncher } from "../sidebar/SidebarModal";
-import { BooksIcon, XIcon } from "@phosphor-icons/react";
+import { BooksIcon, TableIcon, XIcon } from "@phosphor-icons/react";
+import { useTempoLabFlag } from "@/stores/UiSettingsStore";
+import { useTempoMapOpenStore } from "@/components/timeline/TempoMapPanel";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import {
     getLastBeatOfTempoGroup,
@@ -27,6 +29,7 @@ import {
 } from "@/hooks/queries/useWorkspaceSettings";
 import { StaticFormField } from "../ui/FormField";
 import { audioOffsetHint, formatAudioOffset } from "./audioOffset";
+import { isTimelineModeEnabled } from "@/settings/workspaceSettings";
 
 export default function MusicModal({
     label = <MusicNotesIcon size={24} />,
@@ -42,6 +45,32 @@ export default function MusicModal({
             buttonLabel={label}
             className={buttonClassName}
         />
+    );
+}
+
+/** "Open the tempo map", where the Tempo Groups are (D7; Tempo lab `tempoMap`) */
+function OpenTempoMapButton({ onOpen }: { onOpen: () => void }) {
+    const enabled = useTempoLabFlag("tempoMap");
+    const { data: settings } = useQuery(workspaceSettingsQueryOptions());
+    const { t } = useTolgee();
+    // The map lives in the timeline's transport, there only in the timeline mode
+    if (!enabled || !isTimelineModeEnabled(settings)) return null;
+    return (
+        <Button
+            size="compact"
+            variant="secondary"
+            data-testid="music-open-tempo-map"
+            title={t("music.openTempoMapHint")}
+            className="w-fit min-w-fit whitespace-nowrap"
+            onClick={() => {
+                // The map sits beside the field: the Music panel closes so both stay usable
+                onOpen();
+                useTempoMapOpenStore.getState().setOpen(true);
+            }}
+        >
+            <TableIcon size={20} />
+            <T keyName="music.openTempoMap" />
+        </Button>
     );
 }
 
@@ -121,6 +150,7 @@ function MusicModalContents() {
                             <T keyName="music.seeDocs" />
                         </Button>
                     </a>
+                    <OpenTempoMapButton onOpen={toggleOpen} />
                 </div>
                 <div className="flex flex-col gap-16">
                     <MusicXmlSelector />
