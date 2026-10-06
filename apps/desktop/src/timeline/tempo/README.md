@@ -97,6 +97,14 @@ shift) and `countBpms(durations, weights)` (the inverse).
 Typed rows are **marks** (a meter and beat unit at a measure) stored in `tempoMapMarks`, because
 counts carry no note values. See [decisions TM-1 to TM-7](../../../../../docs/tempo/decisions.md).
 
+`reimport.ts`: re-importing a corrected MusicXML in place (Tempo lab `reimportInPlace`, E12).
+`planReimport(show, score)` lines the file's bars up with the show's (same bars and counts, else
+by shared rehearsal marks; see [decisions RI-1 to RI-5](../../../../../docs/tempo/decisions.md))
+and returns the paired bars, the bars that differ, the new durations (duration-only), mark and
+numbering changes, tempo changes per run of bars, and which synced counts the file's timing would
+move. `syncedAfterReimport`, `reimportChangesAnything` and `defaultReimportTiming` drive the
+preview; the write is `applyMusicXmlReimport` in `@/db-functions/musicXmlReimport`.
+
 ## Example: drag page 3's flag onto the music
 
 ```ts
