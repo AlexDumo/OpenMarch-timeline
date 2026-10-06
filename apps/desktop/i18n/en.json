@@ -1143,9 +1143,9 @@
         "addNewTempoGroupAfter": "Add a new tempo group after this one",
         "addTempoGroup": "Add New Group",
         "audioOffsetHint": {
-            "after": "Music starts {seconds} s after count 1 (silence first). If count 1 is {seconds} s into the recording instead, type -{seconds}.",
-            "before": "Music starts {seconds} s before count 1: count 1 is {seconds} s into the recording.",
-            "on": "Music starts on count 1. If count 1 is 0.5 s into the recording, type -0.5."
+            "after": "Count 1 is {seconds} s before the music starts (silence first). If count 1 is {seconds} s into the recording instead, type -{seconds}.",
+            "before": "Count 1 is {seconds} s into the music (the recording starts first).",
+            "on": "Count 1 is where the music starts. If count 1 is 0.5 s into the recording, type -0.5."
         },
         "audio": "Audio",
         "audioFile": "Audio File",

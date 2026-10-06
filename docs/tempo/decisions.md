@@ -973,8 +973,8 @@ fixture list and how to score).
   "≈" (FX-4) and is no longer protected. Imported rows aren't protected: lining a score up with a
   live take is what Align is for. Count 1's drag and arrow nudges always shift the whole show
   (`after: "shift"`, the audio offset changes), whatever is synced. The Music panel's Audio Offset
-  shows milliseconds and says its sign in words ("Music starts 0.500 s before count 1: count 1 is
-  0.500 s into the recording."); count 1's handle label says the same.
+  shows milliseconds and says its sign in words ("Count 1 is 0.500 s into the music (the
+  recording starts first)."); count 1's handle label says the same.
 - **Alternatives:** a modifier (Ctrl/⌘ is range drawing, Alt no snapping, Shift no sync: none
   free); refuse the drag outright; protect imported rows too.
 - **Validate:** V-79, V-80.

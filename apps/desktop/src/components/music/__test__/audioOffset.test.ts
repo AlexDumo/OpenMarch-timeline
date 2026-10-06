@@ -22,10 +22,10 @@ describe("the Audio Offset field (FX-5)", () => {
 
     it("says in words which way its sign goes", () => {
         expect(text(audioOffsetHint(-0.5000000000000002))).toBe(
-            "Music starts 0.500 s before count 1: count 1 is 0.500 s into the recording.",
+            "Count 1 is 0.500 s into the music (the recording starts first).",
         );
         expect(text(audioOffsetHint(0.5))).toBe(
-            "Music starts 0.500 s after count 1 (silence first). If count 1 is 0.500 s into the recording instead, type -0.500.",
+            "Count 1 is 0.500 s before the music starts (silence first). If count 1 is 0.500 s into the recording instead, type -0.500.",
         );
         expect(audioOffsetHint(0).key).toBe("music.audioOffsetHint.on");
     });

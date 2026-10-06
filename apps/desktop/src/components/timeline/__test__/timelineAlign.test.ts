@@ -585,7 +585,7 @@ describe("count 1 is where the music starts (FX-5)", () => {
             audioOffsetSeconds: 0,
             t,
         }).text;
-        expect(text).toBe("Music starts 0.50 s before count 1");
+        expect(text).toBe("Count 1 is 0.50 s into the music");
     });
 });
 
