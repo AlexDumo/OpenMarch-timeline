@@ -258,7 +258,9 @@ describe("punch-in tap (E9)", () => {
         tapAt(0);
         play();
         tapAt(slowTimes[17]!);
-        expect(chip()).toHaveTextContent("1 tap · Next tap → Pg 2A ct 8");
+        expect(chip()).toHaveTextContent(
+            "1 tap · Next tap → A · Pg 2A ct 8 → 4",
+        );
     });
 
     it("draws a tap out of step with the taps on both sides amber, and keeps it", () => {
