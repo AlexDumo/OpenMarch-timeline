@@ -58,7 +58,10 @@ const envelope = {
     rate: 200,
 };
 
-const renderAlign = (overrides: Partial<TimelineAlign> = {}) => {
+const renderAlign = (
+    overrides: Partial<TimelineAlign> = {},
+    onSeek = vi.fn(),
+) => {
     const align = {
         on: true,
         onToggle: vi.fn(),
@@ -76,7 +79,7 @@ const renderAlign = (overrides: Partial<TimelineAlign> = {}) => {
             positionBeat={11}
             isPlaying={false}
             pixelsPerBeat={16}
-            onSeek={vi.fn()}
+            onSeek={onSeek}
             align={{ ...align, offset: 1 }}
         />,
     );
@@ -214,6 +217,18 @@ describe("the Align view (E7)", () => {
             altKey: true,
         });
         expect(align.onRetime).toHaveBeenCalledTimes(1);
+    });
+
+    it("seeks on a click on a rehearsal tab, even with pointer jitter (Jo)", () => {
+        const onSeek = vi.fn();
+        const { align } = renderAlign({}, onSeek);
+        const tab = screen.getByTestId("timeline-rehearsal-tab");
+        fireEvent.pointerDown(tab, { button: 0, clientX: 50, pointerId: 1 });
+        fireEvent.pointerMove(tab, { clientX: 51, pointerId: 1 });
+        fireEvent.pointerUp(tab, { clientX: 51, pointerId: 1 });
+        fireEvent.click(tab, { clientX: 51 });
+        expect(onSeek).toHaveBeenCalledTimes(1);
+        expect(align.onRetime).not.toHaveBeenCalled();
     });
 
     it("keeps a 4 px correction instead of snapping it back (FB-8)", () => {

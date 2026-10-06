@@ -255,8 +255,10 @@ export const TimelineRehearsalMarkers = ({
                             onEdit(measure);
                         } else if (
                             onRemove &&
+                            // In Align, Backspace means "drop the last tap" to
+                            // a tapper; only Delete removes the mark there (Jo)
                             (event.key === "Delete" ||
-                                event.key === "Backspace")
+                                (event.key === "Backspace" && !handle))
                         ) {
                             event.preventDefault();
                             event.stopPropagation();

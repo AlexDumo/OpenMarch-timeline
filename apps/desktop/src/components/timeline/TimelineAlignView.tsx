@@ -41,7 +41,7 @@ import type { TimelineXAxis } from "./timelineAxis";
 import type { TimelineAlign } from "./TimelineViewModel";
 
 /** How far, in pixels, a press must move before it is a drag rather than a click */
-const ALIGN_DRAG_PX = 3;
+export const ALIGN_DRAG_PX = 3;
 /** An arrow nudge: 10 ms, or 1 ms with Shift (11-ui.md B Keyboard) */
 const NUDGE_SECONDS = 0.01;
 const NUDGE_FINE_SECONDS = 0.001;

@@ -83,6 +83,7 @@ import {
     TimelineAlignTempoPrompt,
     TimelineAlignTicks,
     TimelineAlignTimeLine,
+    ALIGN_DRAG_PX,
     TimelineAlignToggle,
     useAlignEdit,
 } from "./TimelineAlignView";
@@ -1064,15 +1065,30 @@ function TimelineSurface({
                   if (index < 1 || index > align.durations.length) return null;
                   const measure = model.measures.find((m) => m.atBeat === beat);
                   const head = measure?.rehearsalMark?.trim() || undefined;
+                  // Only a real drag (past the drag threshold) swallows the click: any
+                  // pointer jitter used to, so clicking a tab in Align didn't seek (Jo)
                   let moved = false;
+                  let pressX: number | null = null;
                   const handlers = alignEdit.dragProps("move", index, head);
                   return {
                       props: {
                           ...handlers,
+                          onPointerDown: (
+                              event: React.PointerEvent<HTMLElement>,
+                          ) => {
+                              pressX = event.clientX;
+                              moved = false;
+                              handlers.onPointerDown(event);
+                          },
                           onPointerMove: (
                               event: React.PointerEvent<HTMLElement>,
                           ) => {
-                              moved = true;
+                              if (
+                                  pressX !== null &&
+                                  Math.abs(event.clientX - pressX) >=
+                                      ALIGN_DRAG_PX
+                              )
+                                  moved = true;
                               handlers.onPointerMove(event);
                           },
                           title: t("tempo.align.markHandle", {
