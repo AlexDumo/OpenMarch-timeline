@@ -92,7 +92,13 @@ export default function MusicXmlImportPreview({
                     </span>
                 </DialogDescription>
 
-                <div className="rounded-6 border-stroke max-h-[18rem] overflow-y-auto border">
+                <div
+                    className={clsx(
+                        "rounded-6 border-stroke max-h-[18rem] overflow-y-auto border",
+                        // Keep a few of the file's rows visible above the re-import summary
+                        inPlace && "max-h-[8rem] min-h-[6rem] shrink-0",
+                    )}
+                >
                     <table
                         className="text-sub w-full border-collapse"
                         data-testid="musicxml-preview-table"

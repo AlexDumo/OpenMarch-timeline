@@ -1237,7 +1237,7 @@
                 "syncedWarning": "This show is lined up with the recording at {count, plural, one {# place} other {# places}}. The score's timing would move {moved, plural, =0 {none of them} other {# of them}} off it.",
                 "keepAlignment": "Keep my alignment, update marks only",
                 "useScoreTiming": "Use the score's timing",
-                "nothing": "The show already matches this file.",
+                "nothing": "Nothing to update with this choice.",
                 "update": "Update show",
                 "updating": "Updating…",
                 "replaceEverything": "Replace everything…",
