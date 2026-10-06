@@ -1541,6 +1541,43 @@ describe("fitBackZoom (UI-12 review)", () => {
     });
 });
 
+describe("a cancelled clip drag (UI-12 review)", () => {
+    it("doesn't select the clip when dragged back to where it started", () => {
+        const onSelectionChange = vi.fn();
+        const onTimelineRangeCommit = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSelectionChange={onSelectionChange}
+                onTimelineRangeCommit={onTimelineRangeCommit}
+            />,
+        );
+        const track = screen.getByLabelText(/M1 timeline/);
+        const pointer = (
+            type: "pointerdown" | "pointermove" | "pointerup",
+            clientX: number,
+        ) =>
+            fireEvent(
+                track,
+                new MouseEvent(type, { bubbles: true, button: 0, clientX }),
+            );
+        pointer("pointerdown", 0);
+        pointer("pointermove", 112);
+        pointer("pointermove", 0);
+        pointer("pointerup", 0);
+        fireEvent.click(track);
+        expect(onTimelineRangeCommit).not.toHaveBeenCalled();
+        expect(onSelectionChange).not.toHaveBeenCalled();
+
+        // The next plain click still selects it
+        pointer("pointerdown", 0);
+        pointer("pointerup", 0);
+        fireEvent.click(track);
+        expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe("G behind overlays (UI-12 review)", () => {
     it("leaves G to an open menu", () => {
         render(

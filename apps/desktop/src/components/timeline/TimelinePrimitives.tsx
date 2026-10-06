@@ -985,8 +985,9 @@ export const TimelineTrackClip = ({
                     isPageSnapDisabled(event),
                 );
                 setPreviewOffset(0);
-                if (offset === 0) return;
+                // A drag brought back to where it started is cancelled, not a click
                 draggedRef.current = true;
+                if (offset === 0) return;
                 onRangeCommit?.({
                     timelineId: track.id,
                     startBeatIndex: range.startBeatIndex + offset,
