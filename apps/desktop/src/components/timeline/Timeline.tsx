@@ -22,8 +22,10 @@ import type {
 } from "./TimelineRangeMenu";
 import type {
     TimelineActivitySpan,
+    TimelineAppendCounts,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
+    TimelineMusicPastEnd,
     TimelineNavigation,
     TimelineRangeChange,
     TimelineSeekOptions,
@@ -142,6 +144,10 @@ export interface TimelineProps {
      * show (on a flag, at home, past the beats).
      */
     readonly onAddPageFlag?: () => void;
+    /** **+ N counts** after the last page (E1), shown while paused */
+    readonly appendCounts?: TimelineAppendCounts;
+    /** The note past the last count when the music runs on (E1) */
+    readonly musicPastEnd?: TimelineMusicPastEnd;
     /** The page box menu's **Delete page flag** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
     /**
@@ -433,6 +439,8 @@ export function Timeline(props: TimelineProps) {
         onCreateTrack: createTrack,
         addSelectedMarchers: addMarchersMenu,
         onAddPageFlag: props.onAddPageFlag,
+        appendCounts: props.appendCounts,
+        musicPastEnd: props.musicPastEnd,
         onOpenRange: onOpenRange && openRange,
         onTimelineRangeCommit: commitRange,
         onPlayFromStartOff: props.onPlayFromStartOff,

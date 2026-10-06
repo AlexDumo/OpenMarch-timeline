@@ -138,3 +138,54 @@ fixture list and how to score).
 - **Context:** the shows have to be built with the app's own db-functions and converter, which import through the `@/` alias and need a DOM-like environment.
 - **Choice:** `generate.kit.ts` is one vitest "test" under its own config (`tempo-kit/vitest.kit.config.mts`), as `~/om-capture/make-fixture` already does. The scorer is plain Node (`score.mts`), so anyone can run it on a saved show.
 - **Alternatives:** `tsx` with tsconfig paths. Some app modules pull in browser globals at import time, which vitest's jsdom environment provides.
+## T-8 Wizard: counts to the end of the recording, pages stay at the start (show-length, E1)
+
+- **Context:** "Tempo only" made 20 measures (80 counts, 40 s at 120) whatever the MP3's length;
+  "Skip for now" made 128 counts. The music past that had no counts, so nothing could be planned
+  there.
+- **Choice:** with audio and no MusicXML, "Tempo only" makes whole measures of the chosen meter
+  at the chosen tempo until the recording ends (at least the 20 starter measures), and "Skip"
+  makes counts until it ends (at least 128, still no measures). The starter pages are unchanged
+  (five pages at the start, last page 2 measures). The length is the decoded file's duration, read
+  once at completion; a file that can't be decoded falls back to the starter length. A MusicXML
+  file's own measures set its show's length, unchanged.
+- **Alternatives:** pages through the whole song (every 4 measures); a fixed 64 counts with "+"
+  to extend (11-ui); asking how long the show is.
+- **Validate:** E1 session task 2 ("put a set at the very end of the song"): does anyone ask how
+  to add more?
+
+## T-9 **+ N counts**: a page after the last page, N from the "new page counts" setting (show-length, E1)
+
+- **Context:** "+" was offered only at the paused playhead, and never past the show's last count
+  (`planPageFlagInsertion` returned null there), with nothing to say why.
+- **Choice:** a labelled button, "+ 16 counts" (tooltip "Add a page of 16 counts after the last
+  page"), always shown while paused just after the last page's flag. It adds a page of N counts
+  after that flag and appends counts only where the show ends before the new flag (all of them
+  when the counts end at the last flag, the usual case after the first use). N is the workspace
+  setting "Default new page counts" (16 by default, 4 measures for a tempo-only show), which the
+  old page-mode "+" used. Appended counts continue the last measure's tempo and count lengths and
+  carry on its measure lines. The beats go through `withTimelinePageRipple` and the flag through
+  `addPageFlagInTransaction`, in one undoable edit; nothing lies after the end, so it is never
+  refused for the drill. When **+** at the playhead would cover it, it moves just past that one.
+- **Alternatives:** N from `last_page_counts` (it becomes huge after a page that covers spare
+  counts, and the next click would say "+ 230 counts"); the button at the end of the counts with a
+  flag at the new end (on a wizard show with counts to 2:31 and pages to 0:36 it would make one
+  page of 2 minutes); a plain "+" with no count.
+- **Validate:** V-41.
+
+## T-10 The music past the last count: drawn dimmed, with a note that offers extending (show-length, E1)
+
+- **Context:** the waveform lane drew only the music under existing counts, so a show shorter than
+  its music looked complete.
+- **Choice:** the lane goes on past the last count at 40% opacity, on counts at the show's last
+  tempo (as appending would make them), up to where the music ends: the last moment the waveform
+  would draw (within 42 dB of the loudest), so the silent padding the player adds isn't music.
+  Both parts share one loudness scale. When more than one count of music is left, a note sits in
+  the top row just past the last count: "Counts end at 0:48; the music runs to 1:00. Extend counts
+  to the end". Extending appends counts (no pages) to the end of the music, finishing the last
+  measure, as one undoable edit, and a toast says how many were added. Fit includes the music past
+  the end and room for the note, so a fitted timeline shows both. Counts that reach the end within
+  50 ms of the music's end count as reaching it.
+- **Alternatives:** the note in the Music modal (Dana doesn't open it); a toast on open (lost to
+  interruptions); extending automatically when audio is added (a hidden structural change).
+- **Validate:** V-42, V-43.

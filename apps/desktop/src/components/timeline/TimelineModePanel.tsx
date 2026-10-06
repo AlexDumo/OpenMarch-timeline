@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTolgee } from "@tolgee/react";
 import type { AddedPageFlag } from "@/db-functions/pageFlags";
 import {
     deletePageFlagsMutationOptions,
@@ -22,7 +23,14 @@ import {
     selectionOfPage,
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    useTimelineMode,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
+import {
+    appendPageOfCountsMutationOptions,
+    extendCountsToMutationOptions,
+} from "@/hooks/queries/useShowLength";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import {
@@ -38,11 +46,18 @@ import {
     type TimelineSelection,
 } from "./Timeline";
 import {
-    peaksByBeat,
     useAudioEnvelopeStore,
+    waveformWithPastEnd,
+    WAVEFORM_FLOOR_DB,
 } from "@/timeline/timelineWaveform";
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
-import { timeAtBeat } from "@/timeline/timeMap";
+import { showEndTime, timeAtBeat } from "@/timeline/timeMap";
+import {
+    countContinuation,
+    formatMinutesSeconds,
+    musicEndSeconds,
+    musicRunsPastCounts,
+} from "@/timeline/showLength";
 import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 
@@ -120,20 +135,32 @@ export default function TimelineModePanel() {
             ? timeAtBeat(beats, Math.min(shownBeat, beats.length))
             : undefined;
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
-    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis
+    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis; E1:
+    // and the music past the last count, on counts as the show would go on
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
+    const continuation = useMemo(
+        () =>
+            countContinuation({
+                beats,
+                measureStarts: measures.map((m) => m.startBeat.index),
+            }),
+        [beats, measures],
+    );
+    const musicEnd = useMemo(
+        () => (envelope ? musicEndSeconds(envelope, WAVEFORM_FLOOR_DB) : null),
+        [envelope],
+    );
     const waveform = useMemo(
         () =>
             envelope
-                ? {
-                      peaksByBeat: peaksByBeat(
-                          envelope,
-                          beats,
-                          createTimelineBeatAxis(beats).offset,
-                      ),
-                  }
+                ? waveformWithPastEnd(
+                      envelope,
+                      beats,
+                      createTimelineBeatAxis(beats).offset,
+                      { durationAt: continuation.durationAt, musicEnd },
+                  )
                 : null,
-        [envelope, beats],
+        [envelope, beats, continuation, musicEnd],
     );
     // The zoom changes every frame of a pinch: keep it here, and save it once the gesture settles
     const [pixelsPerBeat, setPixelsPerBeat] = useState(
@@ -191,6 +218,12 @@ export default function TimelineModePanel() {
         onAdded: selectAddedPage,
     });
     const queryClient = useQueryClient();
+    const showLength = useShowLengthControls({
+        beats,
+        continuation,
+        musicEnd,
+        hidden: isPlaying || holding,
+    });
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
     const { mutate: deletePageFlags } = useMutation(
         deletePageFlagsMutationOptions(queryClient),
@@ -276,6 +309,8 @@ export default function TimelineModePanel() {
                     onAddPageFlag={
                         addPageFlag.insertion ? addPageFlag.add : undefined
                     }
+                    appendCounts={showLength.appendCounts}
+                    musicPastEnd={showLength.musicPastEnd}
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
                             pages,
@@ -296,6 +331,66 @@ export default function TimelineModePanel() {
             </TimelineWaveformProvider>
         </div>
     );
+}
+
+/**
+ * E1, a show as long as its music: **+ N counts** after the last page (N is the show's "new page
+ * counts" setting), and, when the music runs past the last count, the note that offers extending
+ * the counts to its end. Each is one undoable edit; the new page is selected, as **+** selects it.
+ */
+function useShowLengthControls({
+    beats,
+    continuation,
+    musicEnd,
+    hidden,
+}: {
+    beats: Parameters<typeof showEndTime>[0];
+    continuation: ReturnType<typeof countContinuation>;
+    musicEnd: number | null;
+    hidden: boolean;
+}) {
+    const { t } = useTolgee();
+    const queryClient = useQueryClient();
+    const counts =
+        useQuery(workspaceSettingsQueryOptions()).data?.defaultNewPageCounts ??
+        16;
+    const { mutate: appendPage } = useMutation(
+        appendPageOfCountsMutationOptions(queryClient, selectAddedPage),
+    );
+    const { mutate: extend } = useMutation(
+        extendCountsToMutationOptions(queryClient, (added) => {
+            if (added > 0)
+                toast.success(
+                    t("timeline.showLength.extended", { counts: added }),
+                );
+        }),
+    );
+    const countsEnd = showEndTime(beats);
+    const appendCounts = hidden
+        ? undefined
+        : {
+              label: t("timeline.showLength.appendCounts", { counts }),
+              title: t("timeline.showLength.appendCountsTitle", { counts }),
+              onAppend: () => appendPage(counts),
+          };
+    const musicPastEnd =
+        !hidden &&
+        musicEnd !== null &&
+        musicRunsPastCounts({
+            countsEndSeconds: countsEnd,
+            musicEnd,
+            continuation,
+        })
+            ? {
+                  message: t("timeline.showLength.musicPastEnd", {
+                      countsEnd: formatMinutesSeconds(countsEnd),
+                      musicEnd: formatMinutesSeconds(musicEnd),
+                  }),
+                  actionLabel: t("timeline.showLength.extendToEnd"),
+                  onExtend: () => extend(musicEnd),
+              }
+            : undefined;
+    return { appendCounts, musicPastEnd };
 }
 
 /**
