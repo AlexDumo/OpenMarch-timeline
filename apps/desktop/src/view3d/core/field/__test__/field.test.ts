@@ -20,7 +20,7 @@ import {
     type FieldSurfaceInput,
     type FieldSurfaceStyle,
 } from "..";
-import { OPENMARCH_LOGO } from "../brandMark";
+import { MARCHER_MARK, OPENMARCH_LOGO } from "../brandMark";
 import { FIVE_YARDS } from "../turfPlan";
 
 beforeAll(() => setTexturePainting(false));
@@ -123,6 +123,7 @@ describe("turf on football fields", () => {
                 for (const t of texts)
                     if (t.type === "text") {
                         expect(t.text).toBe("OPENMARCH");
+                        expect(t.leadingMark).toBe(true);
                         expect(Math.abs(t.rotation)).toBeCloseTo(Math.PI / 2);
                     }
             });
@@ -138,6 +139,7 @@ describe("turf on football fields", () => {
                     6,
                 );
                 expect(logo.rotation).toBe(0);
+                expect(logo.color).toBe("#f4f6f1");
                 // fits between the middle hash rows, at most 15 yards wide
                 const height = (logo.width * 128) / 230;
                 const mid = (p.footprint.minZ + p.footprint.maxZ) / 2;
@@ -243,6 +245,16 @@ describe("turf on football fields", () => {
         });
         expect(count(empty, "endZone")).toBe(2);
         expect(count(empty, "endZoneText")).toBe(0);
+
+        // only the OpenMarch text gets the marcher mark
+        const school = planField({
+            fieldProperties: fp,
+            style: "turf",
+            params: { ...params, endZoneText: "TIGERS" },
+        });
+        for (const t of school.items)
+            if (t.type === "text" && t.role === "endZoneText")
+                expect(t.leadingMark).toBe(false);
 
         const noEz = plan(T.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES, "turf");
         expect(count(noEz, "endZone")).toBe(0);
@@ -386,7 +398,7 @@ describe("painting", () => {
             for (const v of c.args) expect(Number.isFinite(v)).toBe(true);
     });
 
-    it("paints the center logo's paths, outline first", () => {
+    it("paints the center logo and the end zones' marcher marks", () => {
         const fp = T.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
         const p = plan(fp, "turf");
         const layout = textureLayout(p.footprint, 4096);
@@ -402,9 +414,12 @@ describe("painting", () => {
             if (had) (globalThis as { Path2D?: unknown }).Path2D = original;
             else delete (globalThis as { Path2D?: unknown }).Path2D;
         }
-        const paths = OPENMARCH_LOGO.paths.length;
-        expect(rec.named("stroke")).toHaveLength(paths);
-        expect(rec.named("fill")).toHaveLength(count(p, "arrow") + paths);
+        const logo = OPENMARCH_LOGO.paths.length;
+        const marks = 2 * MARCHER_MARK.paths.length;
+        expect(rec.named("stroke")).toHaveLength(0);
+        expect(rec.named("fill")).toHaveLength(
+            count(p, "arrow") + logo + marks,
+        );
     });
 
     it("maps the back of the field to the top of the texture", () => {

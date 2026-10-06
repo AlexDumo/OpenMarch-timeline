@@ -64,6 +64,11 @@ export interface PlanText {
     weight: number;
     /** Shrinks the font so the text is at most this long, in meters. */
     maxLength?: number;
+    /**
+     * Paints the marcher mark (`brandMark.ts`) before the text, in the text's
+     * color; `maxLength` then covers the mark and the text together.
+     */
+    leadingMark?: boolean;
 }
 
 export interface PlanArrow {
@@ -104,8 +109,6 @@ export interface PlanLogo {
     /** Same convention as `PlanText.rotation`. */
     rotation: number;
     color: string;
-    /** Paint drawn around the shapes so the logo reads on the turf. */
-    outline: string;
 }
 
 /** The generated tarp's background artwork (gradient, glow and arcs). */

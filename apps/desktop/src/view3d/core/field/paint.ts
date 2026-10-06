@@ -1,6 +1,6 @@
 import type { FieldFootprint } from "@openmarch/core";
 import { TEXTURE_FONT } from "../environment";
-import { OPENMARCH_LOGO } from "./brandMark";
+import { MARCHER_MARK, OPENMARCH_LOGO } from "./brandMark";
 import type {
     FieldPlan,
     PlanArrow,
@@ -109,12 +109,9 @@ function paintItem(
     }
 }
 
-/** Outline width around the logo's shapes, in meters. */
-const LOGO_OUTLINE = 0.08;
-
 /**
- * Paints the logo's SVG paths: an outline in `outline` first, then the
- * shapes in `color`. Needs `Path2D`, which test DOMs may lack.
+ * Paints the logo's SVG paths in `color`. Needs `Path2D`, which test DOMs
+ * may lack.
  */
 function paintLogo(
     g: CanvasRenderingContext2D,
@@ -131,10 +128,6 @@ function paintLogo(
     g.rotate(logo.rotation);
     g.scale(k, k);
     g.translate(-OPENMARCH_LOGO.width / 2, -OPENMARCH_LOGO.height / 2);
-    g.lineJoin = "round";
-    g.lineWidth = (2 * LOGO_OUTLINE * s) / k;
-    g.strokeStyle = logo.outline;
-    for (const p of paths) g.stroke(p);
     g.fillStyle = logo.color;
     for (const p of paths) g.fill(p);
     g.restore();
@@ -150,21 +143,47 @@ function paintText(
     let size = (t.height * s) / CAP_HEIGHT;
     g.save();
     g.font = `${t.weight} ${size}px ${TEXTURE_FONT}`;
-    if (t.maxLength !== undefined && typeof g.measureText === "function") {
-        const w = g.measureText(t.text).width;
+    const measure = typeof g.measureText === "function";
+    const mark = t.leadingMark && typeof Path2D !== "undefined" && measure;
+    const markRun = (cap: number) =>
+        mark
+            ? cap *
+              ((MARK_HEIGHT * MARCHER_MARK.width) / MARCHER_MARK.height +
+                  MARK_GAP)
+            : 0;
+    if (t.maxLength !== undefined && measure) {
+        const w = g.measureText(t.text).width + markRun(size * CAP_HEIGHT);
         if (w > t.maxLength * s) {
             size *= (t.maxLength * s) / w;
             g.font = `${t.weight} ${size}px ${TEXTURE_FONT}`;
         }
     }
+    const cap = size * CAP_HEIGHT;
     g.translate(px, py);
     g.rotate(t.rotation);
     g.fillStyle = t.color;
-    g.textAlign = "center";
     g.textBaseline = "alphabetic";
-    g.fillText(t.text, 0, (size * CAP_HEIGHT) / 2);
+    if (!mark) {
+        g.textAlign = "center";
+        g.fillText(t.text, 0, cap / 2);
+        g.restore();
+        return;
+    }
+    const run = markRun(cap);
+    const left = -(run + g.measureText(t.text).width) / 2;
+    g.textAlign = "left";
+    g.fillText(t.text, left + run, cap / 2);
+    // The mark is centered on the caps, which span -cap / 2 to cap / 2.
+    const k = (cap * MARK_HEIGHT) / MARCHER_MARK.height;
+    g.translate(left, (-cap * MARK_HEIGHT) / 2);
+    g.scale(k, k);
+    for (const d of MARCHER_MARK.paths) g.fill(new Path2D(d));
     g.restore();
 }
+
+/** The marcher mark's height and its gap before end-zone text, in cap heights. */
+const MARK_HEIGHT = 1.3;
+const MARK_GAP = 0.3;
 
 function paintArrow(
     g: CanvasRenderingContext2D,

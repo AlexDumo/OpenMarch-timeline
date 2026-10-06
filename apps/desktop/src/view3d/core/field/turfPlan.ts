@@ -131,6 +131,7 @@ function planEndZones(ctx: PlanContext, play: PlayingRegion): void {
             color: TURF.paint,
             weight: 700,
             maxLength: depth * 0.82,
+            leadingMark: isOpenMarch(text),
         });
     }
 }
@@ -141,7 +142,7 @@ const LOGO_MAX_WIDTH = 3 * FIVE_YARDS;
 const LOGO_MIN_WIDTH = FIVE_YARDS;
 
 /**
- * The OpenMarch logo at the middle of the center line, reading from the
+ * The OpenMarch logo, in white paint, at the middle of the center line, reading from the
  * front sideline, as large as fits inside the hash rows nearest the middle
  * (or in the middle third of a field without hashes). Skipped on fields too small to
  * hold it.
@@ -168,9 +169,13 @@ function planCenterLogo(ctx: PlanContext, play: PlayingRegion): void {
         z: midZ,
         width,
         rotation: 0,
-        color: OPENMARCH_LOGO.color,
-        outline: TURF.paint,
+        color: TURF.paint,
     });
+}
+
+/** OpenMarch end-zone text gets the marcher mark in front of it. */
+function isOpenMarch(text: string): boolean {
+    return text.replace(/\s+/g, "").toLowerCase() === "openmarch";
 }
 
 /**
