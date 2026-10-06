@@ -35,6 +35,7 @@ import { useSelectionStore } from "@/stores/SelectionStore";
 import { useSelectionListeners } from "./hooks/canvasListeners.selection";
 import { useMovementListeners } from "./hooks/canvasListeners.movement";
 import { useCanvasUiSettings } from "./hooks/useCanvasUiSettings";
+import { usePageAppearances } from "./hooks/usePageAppearances";
 import { useRenderMarcherShapes } from "./hooks/shapes";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { ShapePath } from "@/global/classes/canvasObjects/ShapePath";
@@ -376,49 +377,15 @@ export default function Canvas({
         }
     }, [canvas, marchers, marcherVisuals, fieldProperties]);
 
-    // Sync canvas with marcher appearances. The query is keyed by page, so every page change
-    // brings a new map, usually with the same appearances (always the same in timeline mode
-    // unless a tag's appearance changes there); a marcher whose appearance is what was last
-    // applied to it is skipped, and nothing is redrawn when none changed.
-    const appliedAppearances = useRef(new WeakMap<object, string>());
-    useEffect(() => {
-        if (
-            !canvas ||
-            !marchers ||
-            marcherAppearances == null ||
-            marcherVisuals == null
-        )
-            return;
-
-        const labelColor = fieldProperties?.theme.defaultMarcher.label;
-        let changed = false;
-        marchers.forEach((marcher) => {
-            const visualGroup = marcherVisuals[marcher.id];
-            const appearancesForMarcher = marcherAppearances[marcher.id];
-            if (!visualGroup || !appearancesForMarcher) return;
-
-            const canvasMarcher = visualGroup.getCanvasMarcher();
-            const key = JSON.stringify([appearancesForMarcher, labelColor]);
-            if (appliedAppearances.current.get(canvasMarcher) === key) return;
-            appliedAppearances.current.set(canvasMarcher, key);
-            changed = true;
-            canvasMarcher.setAppearance(
-                appearancesForMarcher,
-                {
-                    requestRenderAll: false,
-                },
-                labelColor,
-            );
-        });
-
-        if (changed) canvas.requestRenderAll();
-    }, [
+    // Sync canvas with marcher appearances
+    usePageAppearances({
         canvas,
         marchers,
-        marcherAppearances,
         marcherVisuals,
-        fieldProperties?.theme.defaultMarcher.label,
-    ]);
+        marcherAppearances,
+        labelColor: fieldProperties?.theme.defaultMarcher.label,
+        timelineMode,
+    });
 
     // Timeline mode: in place of the selected page's appearance above
     useTimelinePausedAppearance({
