@@ -118,6 +118,11 @@ export interface NewShowTempoData {
     method: "xml" | "tempo_only" | "skip";
     tempo?: number;
     timeSignature?: TempoOnlyTimeSignature;
+    /**
+     * "I don't know: I'll tap it" (FB-10): the show starts at the default tempo and the user lines
+     * the counts up with Tap the beat after it opens. Only offered with music.
+     */
+    tapLater?: boolean;
 }
 
 export interface NewShowWizardState {
