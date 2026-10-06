@@ -1195,7 +1195,60 @@
         "timeSignature": "Time signature: {timeSignature}",
         "title": "Music",
         "undoWithCtrlZ": "This action is undoable with Ctrl + Z",
-        "volume": "Volume"
+        "volume": "Volume",
+        "xmlPreview": {
+            "cancel": "Cancel",
+            "checking": "Checking that your drill allows this import…",
+            "columns": {
+                "mark": "Mark",
+                "measure": "Measure",
+                "meter": "Meter",
+                "notes": "Notes",
+                "tempo": "Tempo"
+            },
+            "import": "Import",
+            "noMeasures": "This file has no measures to import.",
+            "pagesMove": "This show has {count} pages. Importing starts page N at measure N, so each page becomes one measure long.",
+            "rampReasons": {
+                "no-target": "no tempo marking says where it arrives",
+                "too-far": "the next tempo marking is more than {window} measures later",
+                "wrong-direction": "the next tempo marking goes the other way"
+            },
+            "refused": "This import would be refused, so nothing will change: {reason}",
+            "showAll": "Show every measure",
+            "summary": {
+                "marks": "marks {marks}",
+                "measures": "{count, plural, one {# measure} other {# measures}}",
+                "meterChanges": "{count, plural, one {# meter change} other {# meter changes}}",
+                "ramps": "{count, plural, one {# rit./accel.} other {# rit./accel.}}",
+                "tempoChanges": "{count, plural, one {# tempo change} other {# tempo changes}}",
+                "warnings": "{count, plural, =0 {no warnings} one {# warning} other {# warnings}}"
+            },
+            "title": "Import {fileName}",
+            "warnings": {
+                "a-tempo": "{text}: back to {tempo}",
+                "a-tempo-unknown": "\"{text}\" has no rit. or accel. before it; kept {kept}",
+                "approximate-tempo": "Approximate tempo read as {tempo}",
+                "assumed-grouping": "{meter} has no grouping in the file; counted {grouping}",
+                "fermata": "Fermata: its count keeps its length",
+                "invalid-tempo": "Tempo \"{text}\" isn't a number; kept {kept}",
+                "jump": "{jump}: the jump is not played out",
+                "measure-numbers": "The file's measure numbers aren't consecutive after m{previous}; OpenMarch numbers this measure m{appNumber}",
+                "metric-modulation": "Metric modulation ({text}) has no number; kept {kept}",
+                "no-start-tempo": "No tempo at the start; counts before the first marking use {tempo}",
+                "no-tempo": "No tempo marking in the file; all counts use {tempo}",
+                "no-time-signature": "No time signature; counted {meter}",
+                "pickup": "Pickup: {counts, plural, one {# count} other {# counts}}",
+                "pickup-rounded": "Pickup is {quarters} quarter notes, not a whole number of counts; given {counts, plural, one {# count} other {# counts}}",
+                "ramp-applied": "{text} from {from} to {to} at m{target}",
+                "ramp-not-applied": "{text} not applied: {reason}",
+                "repeat": "Repeat: the music is counted once, not played out",
+                "tempo-primo": "{text}: back to {tempo}",
+                "tempo-word-without-number": "\"{text}\" has no metronome number; the tempo doesn't change",
+                "unknown-meter": "{meter} isn't a meter OpenMarch can count; kept {kept}"
+            },
+            "warningsHint": "Highlighted rows may not line up with the music. Fix them in the score, or adjust the tempo after importing."
+        }
     },
     "pages": {
         "createFailed": "Failed to create page - {error}",
