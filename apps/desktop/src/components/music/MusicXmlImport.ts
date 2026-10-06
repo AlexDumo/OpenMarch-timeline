@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import { withTimelinePageRipple } from "@/db-functions/timelineRipple";
 import {
     checkAndDrainTimelineChangesInTransaction,
@@ -16,7 +15,7 @@ import {
     deleteMeasuresInTransaction,
 } from "@/db-functions";
 import { updatePagesInTransaction } from "@/db-functions";
-import { db, schema } from "@/global/database/db";
+import { db } from "@/global/database/db";
 import { useMutation } from "@tanstack/react-query";
 import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
@@ -34,6 +33,7 @@ import Measure from "@/global/classes/Measure";
 import Beat from "@/global/classes/Beat";
 import { useTimingObjects } from "@/hooks";
 import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
+import { updateWorkspaceSettingsWithHistoryInTransaction } from "@/db-functions/workspaceSettings";
 import { timelineErrorMessage } from "@/timeline/timelineErrorMessages";
 import { firstMeasureNumber } from "./musicXmlPreview";
 
@@ -81,8 +81,7 @@ function generateStandardMeasures(count: number): ParserMeasure[] {
 
 /**
  * Numbers the show's measures from the file's first measure number (0 for a pickup), so the
- * measure row reads like the score. Workspace settings have no undo history, so undoing the
- * import keeps this number.
+ * measure row reads like the score. Recorded in the import's undo entry.
  */
 async function setMeasureNumberOffsetInTransaction(
     tx: DbTransaction,
@@ -90,24 +89,23 @@ async function setMeasureNumberOffsetInTransaction(
 ) {
     if (first === undefined) return;
     const row = await tx.query.workspace_settings.findFirst();
-    if (!row) return;
-    let parsed;
-    try {
-        parsed = workspaceSettingsSchema.safeParse(JSON.parse(row.json_data));
-    } catch {
-        return;
+    if (row) {
+        const parsed = (() => {
+            try {
+                return workspaceSettingsSchema.safeParse(
+                    JSON.parse(row.json_data),
+                );
+            } catch {
+                return undefined;
+            }
+        })();
+        // Leave a row the app can't read alone, and skip a write that changes nothing
+        if (!parsed?.success || parsed.data.measurementOffset === first) return;
     }
-    if (!parsed.success || parsed.data.measurementOffset === first) return;
-    await tx
-        .update(schema.workspace_settings)
-        .set({
-            json_data: JSON.stringify({
-                ...parsed.data,
-                measurementOffset: first,
-            }),
-            updated_at: new Date().toISOString(),
-        })
-        .where(eq(schema.workspace_settings.id, row.id));
+    await updateWorkspaceSettingsWithHistoryInTransaction({
+        tx,
+        update: (settings) => ({ ...settings, measurementOffset: first }),
+    });
 }
 
 /**

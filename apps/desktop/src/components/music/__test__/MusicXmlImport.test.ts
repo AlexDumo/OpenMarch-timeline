@@ -12,6 +12,7 @@ import {
     stopTimelineResolver,
 } from "@/timeline/timelineStore";
 import { createTrack } from "@/db-functions/timelineCommands";
+import { performUndo } from "@/db-functions/history";
 import type Measure from "@/global/classes/Measure";
 import {
     _dryRunMusicXmlImport,
@@ -155,4 +156,24 @@ describeDbTests("MusicXML import", (it) => {
             timelineMode: true,
         });
     });
+
+    it.skipIf(process.env.VITEST_ENABLE_HISTORY !== "true")(
+        "is one undo entry, measure numbering included",
+        async ({ db, marchersAndPages: _ }) => {
+            await setUp(db);
+            const before = await snapshot(db);
+            await _importMusicXmlFile({ data: await importData(db) });
+            expect((await performUndo(db)).success).toBe(true);
+            const after = await snapshot(db);
+            expect(after.beats).toEqual(before.beats);
+            expect(after.measures).toEqual(before.measures);
+            expect(after.pages).toEqual(before.pages);
+            expect(
+                JSON.parse(
+                    (after.workspace_settings[0] as { json_data: string })
+                        .json_data,
+                ),
+            ).toMatchObject({ measurementOffset: 1 });
+        },
+    );
 });
