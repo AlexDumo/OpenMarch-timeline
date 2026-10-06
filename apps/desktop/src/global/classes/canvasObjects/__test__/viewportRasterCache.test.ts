@@ -83,6 +83,31 @@ describe("cacheAtViewportResolution", () => {
     });
 });
 
+describe("cacheAtViewportResolution, visibility and opacity", () => {
+    it("draws nothing once the object is hidden after a render", () => {
+        const { canvas, rect } = setup();
+        canvas.renderAll();
+        expect(pixel(canvas, 30, 20)).toEqual([255, 0, 0, 255]);
+        // The video export shows the grid for one render, then hides it for every frame
+        rect.visible = false;
+        canvas.renderAll();
+        expect(pixel(canvas, 30, 20)[3]).toBe(0);
+    });
+
+    it("follows an opacity change made after a render", () => {
+        const { canvas, rect } = setup();
+        canvas.renderAll();
+        rect.opacity = 0.5;
+        canvas.renderAll();
+        const alpha = pixel(canvas, 30, 20)[3];
+        expect(alpha).toBeGreaterThan(100);
+        expect(alpha).toBeLessThan(155);
+        rect.opacity = 1;
+        canvas.renderAll();
+        expect(pixel(canvas, 30, 20)).toEqual([255, 0, 0, 255]);
+    });
+});
+
 describe("cacheFitsAtFullResolution", () => {
     it("is false once zoom makes an object's cache too big for Fabric's limits", () => {
         const canvas = new fabric.StaticCanvas(

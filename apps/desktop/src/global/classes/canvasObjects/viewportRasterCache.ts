@@ -11,7 +11,8 @@ import { fabric } from "fabric";
  * so playback and marcher drags no longer pay for the grid.
  *
  * Fabric's own object cache keeps priority: while `objectCaching` is on (the canvas turns it on
- * during a wheel zoom, for speed), the object renders the normal way. Renders to any context
+ * during a wheel zoom, for speed), the object renders the normal way. So does an object that isn't
+ * fully opaque or uses a blend mode; a hidden one draws nothing, as with Fabric's `render`. Renders to any context
  * other than the canvas's own (exports, `toDataURL`) also draw directly.
  *
  * The object must be drawn first after the canvas is cleared (it is sent to the back); the bitmap
@@ -40,9 +41,16 @@ export function cacheAtViewportResolution(
         drawnWith[7] === height;
 
     obj.render = (ctx: CanvasRenderingContext2D) => {
+        // Fabric's own render skips a hidden object. Changing `visible` or `opacity` doesn't set
+        // `dirty`, so the bitmap can't follow them: hidden draws nothing, and anything but full
+        // opacity (or a blend mode) draws the normal way.
+        if ((obj as fabric.Object & { isNotVisible(): boolean }).isNotVisible())
+            return;
         const ownContext = (canvas as unknown as { contextContainer?: unknown })
             .contextContainer;
         if (
+            obj.opacity !== 1 ||
+            (obj.globalCompositeOperation ?? "source-over") !== "source-over" ||
             obj.objectCaching ||
             ctx !== ownContext ||
             typeof ctx.getTransform !== "function"
