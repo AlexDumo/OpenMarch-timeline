@@ -37,6 +37,18 @@ export const tablesWithHistory = [
 ];
 
 /**
+ * Tables with "scoped" history: a write to them is recorded only when the write asks for it, by
+ * logging its own undo statement (`recordWorkspaceSettingsUndoInTransaction`). They have no
+ * standing triggers, because many of their writers run outside `transactionWithHistory` and would
+ * otherwise join the last edit's undo entry. Undo and redo still create triggers on them while
+ * replaying, so the inverse lands on the other stack, and drop them afterwards
+ * (`switchTriggerMode` in history.ts). docs/tempo/adr-synced-counts.md.
+ */
+export const tablesWithScopedHistory: readonly string[] = [
+    getTableName(schema.workspace_settings),
+];
+
+/**
  * Creates triggers for a table to record undo/redo history in the database.
  * These actions happen automatically when a row is inserted, updated, or deleted.
  *

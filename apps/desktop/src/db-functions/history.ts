@@ -24,7 +24,11 @@ import {
     touchesTimelineDisplayTables,
     undoGroupTouchesDisplayTables,
 } from "./timelineDisplay";
-import { createTriggers, type HistoryType } from "./historyTriggers";
+import {
+    createTriggers,
+    tablesWithScopedHistory,
+    type HistoryType,
+} from "./historyTriggers";
 
 export {
     buildHistoryTriggerSql,
@@ -508,6 +512,14 @@ const switchTriggerMode = async (
         await db.run(sql.raw(`DROP TRIGGER IF EXISTS ${trigger.name};`));
     }
     for (const table of tables) {
+        // Back in normal undo mode, scoped tables go without triggers again (see
+        // `tablesWithScopedHistory`)
+        if (
+            mode === "undo" &&
+            deleteRedoRows &&
+            tablesWithScopedHistory.includes(table)
+        )
+            continue;
         await createTriggers(db, table, mode, deleteRedoRows);
     }
     mainProcessLog(

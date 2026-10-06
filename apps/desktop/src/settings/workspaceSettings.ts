@@ -31,6 +31,13 @@ export const workspaceSettingsSchema = z.object({
      * presence is how a file reset to version 7 by an older release is recognized.
      */
     timelineConvertedAt: z.string().optional(),
+
+    /**
+     * Tempo prototype: ids of the beats (counts) the user has put on the music ("synced"). Retimes
+     * re-space up to them instead of moving them. Absent means none. Written with the retime that
+     * changes it, in the same undo entry (docs/tempo/adr-synced-counts.md).
+     */
+    tempoSyncedBeatIds: z.array(z.int().nonnegative()).optional(),
 });
 
 export type WorkspaceSettings = z.infer<typeof workspaceSettingsSchema>;
