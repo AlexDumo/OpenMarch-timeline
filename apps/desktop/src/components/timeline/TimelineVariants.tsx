@@ -28,6 +28,7 @@ import {
     TimelinePageLines,
     TimelinePlayhead,
     TimelineRehearsalMarkers,
+    TimelineRangePreview,
     TimelineRuler,
     TimelineSelectionRange,
     type TimelineSelectionInteraction,
@@ -40,10 +41,16 @@ import {
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useLatestCallback } from "./useLatestCallback";
+import {
+    createLiveValue,
+    type TimelineLiveValue,
+    useLiveValue,
+} from "./timelineLiveValue";
 import type {
     TimelineBeatRange,
     TimelineCommonProps,
     TimelineNavigation,
+    TimelineTarget,
     TimelineTrackId,
 } from "./TimelineViewModel";
 
@@ -409,6 +416,102 @@ const TimelineWaveformLane = memo(function TimelineWaveformLane({
     );
 });
 
+const sameInteraction = (
+    a: TimelineSelectionInteraction | null,
+    b: TimelineSelectionInteraction | null,
+) =>
+    a === b ||
+    (a !== null &&
+        b !== null &&
+        sameRange(a.range, b.range) &&
+        a.activeHandle === b.activeHandle &&
+        a.dragging === b.dragging);
+
+/**
+ * The window's count and Create Track, beside the window's end, or its start while the start flag
+ * is dragged. It follows a dragged flag (`interaction`) on its own, without re-rendering the
+ * timeline on each move.
+ */
+const TimelineSelectionActions = memo(function TimelineSelectionActions({
+    model,
+    range,
+    interaction,
+    pixelsPerBeat,
+    expanded,
+    snapBeats,
+    createTrackTarget,
+    onCreateTrack,
+}: {
+    model: TimelineCommonProps["model"];
+    range: TimelineBeatRange;
+    interaction: TimelineLiveValue<TimelineSelectionInteraction | null>;
+    pixelsPerBeat: number;
+    expanded: boolean;
+    snapBeats: readonly number[];
+    /** What Create Track would make a track for; `null` hides it */
+    createTrackTarget: TimelineTarget | null | undefined;
+    onCreateTrack: TimelineCommonProps["onCreateTrack"];
+}) {
+    const current = useLiveValue(interaction);
+    const displayedRange = current?.range ?? range;
+    const dragging = current?.dragging ?? false;
+    const countFollowsStart = dragging && current?.activeHandle === "start";
+    const countRendersToLeft = countFollowsStart
+        ? displayedRange.startBeatIndex > 0
+        : displayedRange.endBeatIndex >= model.beatCount;
+    // UI-13: the window's count shows while a handle is dragged, or when the window starts off a
+    // page line; from a page line, it is the playhead's count, which the transport already shows
+    const showWindowCount =
+        dragging || !snapBeats.includes(displayedRange.startBeatIndex);
+    const showCreateTrack = createTrackTarget != null && !dragging;
+    return (
+        <div
+            data-testid="timeline-selection-actions"
+            className="absolute z-40 flex flex-col gap-4"
+            style={{
+                left:
+                    (countFollowsStart
+                        ? displayedRange.startBeatIndex
+                        : displayedRange.endBeatIndex) *
+                        pixelsPerBeat +
+                    (countRendersToLeft ? -6 : 6),
+                top: expanded ? 31 : 29,
+                alignItems: countRendersToLeft ? "flex-end" : "flex-start",
+                transform: countRendersToLeft ? "translateX(-100%)" : undefined,
+            }}
+        >
+            {showWindowCount && (
+                <span
+                    data-testid="timeline-selection-count"
+                    className={clsx(
+                        "border-stroke bg-bg-1 text-text rounded-6 border font-mono whitespace-nowrap",
+                        expanded
+                            ? "px-8 py-2 text-[10px]"
+                            : "px-6 py-0 text-[9px]",
+                    )}
+                >
+                    {getWindowCountLabel(model, displayedRange)}
+                </span>
+            )}
+            {showCreateTrack && (
+                <button
+                    type="button"
+                    data-timeline-interactive="true"
+                    onClick={() =>
+                        onCreateTrack?.({
+                            target: createTrackTarget,
+                            range: displayedRange,
+                        })
+                    }
+                    className="bg-accent text-text-invert rounded-full px-8 py-3 text-[11px] leading-none whitespace-nowrap"
+                >
+                    Create Track
+                </button>
+            )}
+        </div>
+    );
+});
+
 const TimelineSurface = memo(function TimelineSurface({
     density,
     ...props
@@ -459,27 +562,22 @@ const TimelineSurface = memo(function TimelineSurface({
     const trackBandHeight = Math.max(rows.length, 1) * rowPitch;
     const timelineHeight = trackTop + trackBandHeight + (expanded ? 2 : 0);
     const selectionRange = getSelectionRange(selection);
-    const [selectionInteraction, setSelectionInteraction] =
-        useState<TimelineSelectionInteraction | null>(null);
+    // A dragged start flag's range: only the window's count reads it (`TimelineSelectionActions`)
+    const [selectionInteraction] = useState(() =>
+        createLiveValue<TimelineSelectionInteraction | null>(
+            null,
+            sameInteraction,
+        ),
+    );
     const selectionIdentity = selection?.kind ?? "none";
     useEffect(() => {
-        setSelectionInteraction(null);
+        selectionInteraction.set(null);
     }, [
+        selectionInteraction,
         selectionIdentity,
         selectionRange?.endBeatIndex,
         selectionRange?.startBeatIndex,
     ]);
-    const displayedSelectionRange = selectionRange
-        ? (selectionInteraction?.range ?? selectionRange)
-        : null;
-    const selectionDragging = selectionInteraction?.dragging ?? false;
-    const countFollowsStart =
-        selectionDragging && selectionInteraction?.activeHandle === "start";
-    const countRendersToLeft = displayedSelectionRange
-        ? countFollowsStart
-            ? displayedSelectionRange.startBeatIndex > 0
-            : displayedSelectionRange.endBeatIndex >= model.beatCount
-        : false;
     const zoom = useTimelineZoom({
         viewportRef,
         pixelsPerBeat,
@@ -514,18 +612,6 @@ const TimelineSurface = memo(function TimelineSurface({
         beatCount: model.beatCount,
         snapBeats,
     });
-    // UI-13: the window's count shows while a handle is dragged, or when the window starts off a
-    // page line; from a page line, it is the playhead's count, which the transport already shows
-    const showWindowCount =
-        displayedSelectionRange != null &&
-        (selectionDragging ||
-            !snapBeats.includes(displayedSelectionRange.startBeatIndex));
-    const showCreateTrack =
-        selection?.kind === "range" &&
-        selectedTarget != null &&
-        selectionRange != null &&
-        props.onCreateTrack != null &&
-        !selectionDragging;
     const onNavigate = useLatestCallback(transportNavigation(props));
     // A clip is its timeline: clicking it selects that range (UI-12)
     const selectTrack = useLatestCallback(
@@ -727,23 +813,11 @@ const TimelineSurface = memo(function TimelineSurface({
                             <PlusIcon size={10} weight="bold" />
                         </button>
                     )}
-                    {pointer.rangePreview && (
-                        <div
-                            data-testid="timeline-range-preview"
-                            aria-hidden="true"
-                            className="bg-accent/15 border-accent pointer-events-none absolute top-28 z-30 border-x"
-                            style={{
-                                left:
-                                    pointer.rangePreview.startBeatIndex *
-                                    pixelsPerBeat,
-                                width:
-                                    (pointer.rangePreview.endBeatIndex -
-                                        pointer.rangePreview.startBeatIndex) *
-                                    pixelsPerBeat,
-                                height: Math.max(0, timelineHeight - 28),
-                            }}
-                        />
-                    )}
+                    <TimelineRangePreview
+                        preview={pointer.rangePreview}
+                        pixelsPerBeat={pixelsPerBeat}
+                        height={timelineHeight}
+                    />
                     {selectionRange && (
                         <TimelineSelectionRange
                             range={selectionRange}
@@ -769,61 +843,25 @@ const TimelineSurface = memo(function TimelineSurface({
                             height={timelineHeight}
                             snapBeats={snapBeats}
                             onCommit={commitSelection}
-                            onInteractionChange={setSelectionInteraction}
+                            onInteractionChange={selectionInteraction.set}
                         />
                     )}
-                    {displayedSelectionRange && (
-                        <div
-                            data-testid="timeline-selection-actions"
-                            className="absolute z-40 flex flex-col gap-4"
-                            style={{
-                                left:
-                                    (countFollowsStart
-                                        ? displayedSelectionRange.startBeatIndex
-                                        : displayedSelectionRange.endBeatIndex) *
-                                        pixelsPerBeat +
-                                    (countRendersToLeft ? -6 : 6),
-                                top: expanded ? 31 : 29,
-                                alignItems: countRendersToLeft
-                                    ? "flex-end"
-                                    : "flex-start",
-                                transform: countRendersToLeft
-                                    ? "translateX(-100%)"
-                                    : undefined,
-                            }}
-                        >
-                            {showWindowCount && (
-                                <span
-                                    data-testid="timeline-selection-count"
-                                    className={clsx(
-                                        "border-stroke bg-bg-1 text-text rounded-6 border font-mono whitespace-nowrap",
-                                        expanded
-                                            ? "px-8 py-2 text-[10px]"
-                                            : "px-6 py-0 text-[9px]",
-                                    )}
-                                >
-                                    {getWindowCountLabel(
-                                        model,
-                                        displayedSelectionRange,
-                                    )}
-                                </span>
-                            )}
-                            {showCreateTrack && selectedTarget && (
-                                <button
-                                    type="button"
-                                    data-timeline-interactive="true"
-                                    onClick={() =>
-                                        props.onCreateTrack?.({
-                                            target: selectedTarget,
-                                            range: displayedSelectionRange,
-                                        })
-                                    }
-                                    className="bg-accent text-text-invert rounded-full px-8 py-3 text-[11px] leading-none whitespace-nowrap"
-                                >
-                                    Create Track
-                                </button>
-                            )}
-                        </div>
+                    {selectionRange && (
+                        <TimelineSelectionActions
+                            model={model}
+                            range={selectionRange}
+                            interaction={selectionInteraction}
+                            pixelsPerBeat={pixelsPerBeat}
+                            expanded={expanded}
+                            snapBeats={snapBeats}
+                            createTrackTarget={
+                                selection?.kind === "range" &&
+                                props.onCreateTrack != null
+                                    ? selectedTarget
+                                    : null
+                            }
+                            onCreateTrack={props.onCreateTrack}
+                        />
                     )}
                 </div>
                 {rangeMenu.element}

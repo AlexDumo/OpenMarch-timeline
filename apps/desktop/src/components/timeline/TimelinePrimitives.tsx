@@ -45,6 +45,11 @@ import {
     snapRangeOffset,
 } from "./TimelineGeometry";
 import { timelineRangeTargetProps } from "./TimelineRangeMenu";
+import {
+    createLiveValue,
+    type TimelineLiveValue,
+    useLiveValue,
+} from "./timelineLiveValue";
 import type {
     BeatPosition,
     TimelineBeatRange,
@@ -1220,8 +1225,11 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                               beatCount,
                           ),
                       };
-            previewRef.current = next;
-            setPreview(next);
+            // A move within the same snapped beat changes nothing
+            if (!sameRange(next, current)) {
+                previewRef.current = next;
+                setPreview(next);
+            }
             onInteractionChange?.({
                 range: next,
                 activeHandle: dragging ? kind : null,
@@ -1826,9 +1834,12 @@ export const useTimelinePointer = ({
     /** Downbeats and page lines a click or scrub lands on when near (UI-12) */
     seekSnapBeats?: readonly number[];
 }) => {
-    const [isDragging, setIsDragging] = useState(false);
-    const [rangePreview, setRangePreview] = useState<TimelineBeatRange | null>(
-        null,
+    // Every move of a range drag writes it: only the preview leaf reads it (`TimelineRangePreview`)
+    const [rangePreview] = useState(() =>
+        createLiveValue<TimelineBeatRange | null>(
+            null,
+            (a, b) => a === b || sameRange(a, b),
+        ),
     );
     const gesture = useRef<{
         mode: "scrub" | "press" | "range";
@@ -1892,12 +1903,10 @@ export const useTimelinePointer = ({
     const end = () => {
         gesture.current = null;
         edgeScroll.stop();
-        setIsDragging(false);
-        setRangePreview(null);
+        rangePreview.set(null);
     };
 
     return {
-        isDragging,
         rangePreview,
         pointerHandlers: {
             onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
@@ -1923,7 +1932,7 @@ export const useTimelinePointer = ({
                 )
                     return;
                 current.mode = "range";
-                setRangePreview(draggedRange(event, current.startBeat));
+                rangePreview.set(draggedRange(event, current.startBeat));
             },
             onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
                 const drawing = isRangeModifier(event);
@@ -1955,10 +1964,8 @@ export const useTimelinePointer = ({
                     lastBeat: null,
                 };
                 event.currentTarget.setPointerCapture?.(event.pointerId);
-                if (gesture.current.mode === "scrub") {
-                    setIsDragging(true);
-                    if (!onPlayhead) seek(startBeat, event, "press");
-                }
+                if (gesture.current.mode === "scrub" && !onPlayhead)
+                    seek(startBeat, event, "press");
             },
             onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
                 const current = gesture.current;
@@ -1985,6 +1992,33 @@ export const useTimelinePointer = ({
         },
     };
 };
+
+/** The range a Ctrl/Cmd drag is drawing (UI-9), the only part of the timeline each move redraws */
+export const TimelineRangePreview = memo(function TimelineRangePreview({
+    preview,
+    pixelsPerBeat,
+    height,
+}: {
+    preview: TimelineLiveValue<TimelineBeatRange | null>;
+    pixelsPerBeat: number;
+    height: number;
+}) {
+    const range = useLiveValue(preview);
+    if (!range) return null;
+    return (
+        <div
+            data-testid="timeline-range-preview"
+            aria-hidden="true"
+            className="bg-accent/15 border-accent pointer-events-none absolute top-28 z-30 border-x"
+            style={{
+                left: range.startBeatIndex * pixelsPerBeat,
+                width:
+                    (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat,
+                height: Math.max(0, height - 28),
+            }}
+        />
+    );
+});
 
 export const useElementWidth = (ref: RefObject<HTMLElement | null>) => {
     const [width, setWidth] = useState(0);
