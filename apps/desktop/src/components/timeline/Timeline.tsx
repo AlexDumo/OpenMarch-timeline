@@ -21,6 +21,10 @@ import type {
     TimelineMenuTarget,
 } from "./TimelineRangeMenu";
 import type {
+    TimelinePageFlagMove,
+    TimelinePageFlagPreview,
+} from "./TimelinePageFlagHandles";
+import type {
     TimelineActivitySpan,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
@@ -149,6 +153,28 @@ export interface TimelineProps {
      * range in spec beats (a clip's stored range).
      */
     readonly onOpenRange?: (range: TimelineBeatRange) => void;
+    /**
+     * Count edits that ask what the drill should do (Tempo lab `drillChoices`, E10), in spec
+     * beats: the right-click menu's **Remove counts…** and **Add counts…**, and page flag grips.
+     */
+    readonly drillEdits?: TimelineDrillEdits;
+}
+
+/** The commands behind the timeline's count edits (E10). Beats are spec beats. */
+export interface TimelineDrillEdits {
+    /** **Remove counts…** for a dragged range or a measure */
+    readonly onRemoveCounts: (range: TimelineBeatRange) => void;
+    /** **Add counts at the end of this page…** */
+    readonly onAddCountsAtFlag: (pageId: number) => void;
+    /** **Add counts at the playhead…** */
+    readonly onAddCountsAtPlayhead: () => void;
+    /** A dragged page flag grip let go at `toBeat` */
+    readonly onMovePageFlag: (pageId: number, toBeat: number) => void;
+    /** What moving the flag there would do, for the drag's readout */
+    readonly previewPageFlagMove?: (
+        pageId: number,
+        toBeat: number,
+    ) => Promise<TimelinePageFlagPreview | null>;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -376,7 +402,8 @@ export function Timeline(props: TimelineProps) {
                   },
               })
         : undefined;
-    const { addSelectedMarchers, onDeletePageFlag, onOpenRange } = props;
+    const { addSelectedMarchers, onDeletePageFlag, onOpenRange, drillEdits } =
+        props;
     // A clip's stored spec range, else the view range mapped back (as the menu's Add does)
     const specRangeOf = ({ range, trackId }: TimelineMenuTarget) => {
         const input =
@@ -401,8 +428,19 @@ export function Timeline(props: TimelineProps) {
     // The right-click menu has an entry for each command given: add, and delete on page boxes
     const addMarchersMenu:
         | TimelineAddMarchersMenu<TimelineMenuTarget>
-        | undefined = (addSelectedMarchers || onDeletePageFlag) && {
+        | undefined = (addSelectedMarchers ||
+        onDeletePageFlag ||
+        drillEdits) && {
         disabledReason: addSelectedMarchers?.disabledReason,
+        ...(drillEdits
+            ? {
+                  onRemoveCounts: (target: TimelineMenuTarget) =>
+                      drillEdits.onRemoveCounts(specRangeOf(target)),
+                  onAddCountsAtFlag: (pageId: string | number) =>
+                      drillEdits.onAddCountsAtFlag(Number(pageId)),
+                  onAddCountsAtPlayhead: drillEdits.onAddCountsAtPlayhead,
+              }
+            : {}),
         ...(onDeletePageFlag
             ? {
                   onDeleteFlag: (pageId: string | number) =>
@@ -413,8 +451,21 @@ export function Timeline(props: TimelineProps) {
             addSelectedMarchers?.onAdd &&
             ((target) => addSelectedMarchers.onAdd?.(specRangeOf(target))),
     };
+    // Flag grips work in view beats; the commands get spec beats
+    const pageFlagMove: TimelinePageFlagMove | undefined = drillEdits && {
+        onMove: (pageId, toBeat) =>
+            drillEdits.onMovePageFlag(Number(pageId), axis.toSpec(toBeat)),
+        preview: drillEdits.previewPageFlagMove
+            ? (pageId, toBeat) =>
+                  drillEdits.previewPageFlagMove!(
+                      Number(pageId),
+                      axis.toSpec(toBeat),
+                  )
+            : undefined,
+    };
     const commonProps = {
         model,
+        pageFlagMove,
         positionBeat,
         livePositionBeat,
         isPlaying: playback.isPlaying,

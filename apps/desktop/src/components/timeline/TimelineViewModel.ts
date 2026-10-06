@@ -1,3 +1,4 @@
+import type { TimelinePageFlagMove } from "./TimelinePageFlagHandles";
 import type { ReactNode } from "react";
 import type {
     TimelineAddMarchersMenu,
@@ -202,6 +203,11 @@ export interface TimelineCommonProps
     readonly transportSecondary?: ReactNode;
     /** View controls at the transport's end, such as Compact (UI-12); they fold too */
     readonly transportViewControls?: ReactNode;
+    /**
+     * Page flag grips that move a flag and carry the drill (Tempo lab `drillChoices`, E10), in
+     * view beats. Without it, flags have no grips.
+     */
+    readonly pageFlagMove?: TimelinePageFlagMove;
 }
 
 export interface TimelineRangeChange extends TimelineBeatRange {
