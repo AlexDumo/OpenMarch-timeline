@@ -11,6 +11,7 @@ import { asc } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
 import {
+    marksAfterReimport,
     planReimport,
     reimportChangesAnything,
     syncedAfterReimport,
@@ -56,13 +57,16 @@ export async function readReimportShow(
 
     const settingsRow = await tx.select().from(schema.workspace_settings).get();
     let measurementOffset = workspaceSettingsSchema.parse({}).measurementOffset;
+    let tempoMapMarks: ReimportShow["tempoMapMarks"] = [];
     if (settingsRow) {
         try {
             const parsed = workspaceSettingsSchema.safeParse(
                 JSON.parse(settingsRow.json_data),
             );
-            if (parsed.success)
+            if (parsed.success) {
                 measurementOffset = parsed.data.measurementOffset;
+                tempoMapMarks = parsed.data.tempoMapMarks ?? [];
+            }
         } catch {
             // An unreadable row keeps the default numbering
         }
@@ -73,6 +77,7 @@ export async function readReimportShow(
         measures,
         measurementOffset,
         syncedBeatIds: await readTempoSyncedBeatIds(tx),
+        tempoMapMarks,
     };
 }
 
@@ -137,10 +142,15 @@ export async function applyMusicXmlReimportInTransaction({
         });
 
     const offset = plan.measurementOffset;
-    if (offset)
+    const tempoMapMarks = marksAfterReimport(show, score, plan, timing);
+    if (offset || tempoMapMarks)
         await updateWorkspaceSettingsWithHistoryInTransaction({
             tx,
-            update: (s) => ({ ...s, measurementOffset: offset.to }),
+            update: (s) => ({
+                ...s,
+                ...(offset ? { measurementOffset: offset.to } : {}),
+                ...(tempoMapMarks ? { tempoMapMarks } : {}),
+            }),
         });
     return plan;
 }
@@ -158,8 +168,9 @@ export async function applyMusicXmlReimport({
     score: readonly ReimportScoreMeasure[];
     timing: ReimportTiming;
 }): Promise<ReimportResult> {
-    const { plan } = await planMusicXmlReimport({ db, score });
-    if (!reimportChangesAnything(plan, timing)) return { changed: false, plan };
+    const { show, plan } = await planMusicXmlReimport({ db, score });
+    if (!reimportChangesAnything(plan, timing, { show, score }))
+        return { changed: false, plan };
     const written = await transactionWithHistory(db, "reimportMusicXml", (tx) =>
         applyMusicXmlReimportInTransaction({ tx, score, timing }),
     );

@@ -5,10 +5,9 @@
  * the timeline's view beats are `index - offset`.
  */
 import {
-    bpmOfRange,
     countTimes,
+    formatUnitTempo,
     holdCount,
-    isEvenRange,
     keepSyncedAfter,
     MIN_COUNT_SECONDS,
     moveCount,
@@ -18,9 +17,12 @@ import {
     setRangeBpm,
     spanLimits,
     spanOf,
+    unitTempo,
     type CountDurations,
+    type CountUnit,
     type MoveCountResult,
     type RetimeResult,
+    type TypedSection,
 } from "@/timeline/tempo";
 import type { TimelinePageMarker } from "./TimelineViewModel";
 
@@ -92,28 +94,54 @@ export function countName(pages: readonly AlignPage[], index: number): string {
     return page ? `Pg ${page.label} ct ${index - page.start}` : `ct ${index}`;
 }
 
+/** Each count's note and length in it (the tempo map's `countUnits`); none means plain ♩ */
+export type AlignUnits = readonly (CountUnit | undefined)[];
+
 /**
  * A tempo as a page label shows it (Sam: exact values stay exact): "120" or "152.5" when every
- * count is the same length, "≈118" when they aren't. Null for no tempo.
+ * count is the same length, "≈118" when they aren't. Where the tempo map counts in another note
+ * (6/8 in ♩., 5/8 3+2 in ♩ with a long count), with the note: "♩.=88", and only the counts that
+ * share the page start's note, never an average across a meter change (FX-7). Null for no tempo.
  */
 export function formatTempo(
     durations: CountDurations,
     from: number,
     to: number,
+    units: AlignUnits = [],
 ): string | null {
-    const bpm = bpmOfRange(durations, from, to);
-    if (bpm === null) return null;
+    const tempo = unitTempo(durations, units, from, to);
     // A dragged page lands on 137.9312…: that isn't a tempo anyone typed, so it reads "≈138"
-    const exact = Number(bpm.toFixed(2));
-    if (!isEvenRange(durations, from, to) || Math.abs(bpm - exact) > 1e-6)
-        return `≈${Math.round(bpm)}`;
-    return String(exact);
+    return tempo ? formatUnitTempo(tempo) : null;
 }
 
-const roundBpm = (durations: CountDurations, from: number, to: number) => {
-    const bpm = bpmOfRange(durations, from, to);
-    return bpm === null ? "–" : String(Math.round(bpm));
+/** A chip's before and after tempo: "176", or "♩.≈85" where the counts aren't plain ♩ */
+const roundBpm = (
+    durations: CountDurations,
+    from: number,
+    to: number,
+    units: AlignUnits = [],
+) => {
+    const tempo = unitTempo(durations, units, from, to);
+    if (!tempo) return "–";
+    return tempo.plain ? String(Math.round(tempo.bpm)) : formatUnitTempo(tempo);
 };
+
+/**
+ * The readout's tempo at count `index`: "120 BPM", or "♩.=88" where the tempo map counts in
+ * another note (FX-7). Null for a zero-length count.
+ */
+export function countTempoText(
+    durations: CountDurations,
+    index: number,
+    units: AlignUnits = [],
+): string | null {
+    const i = Math.min(index, durations.length - 1);
+    const tempo = unitTempo(durations, units, i, i + 1);
+    if (!tempo) return null;
+    return tempo.plain
+        ? `${Math.round(tempo.bpm)} BPM`
+        : formatUnitTempo(tempo);
+}
 
 const signedSeconds = (seconds: number) =>
     `${seconds >= 0 ? "+" : "−"}${Math.abs(seconds).toFixed(2)}`;
@@ -243,6 +271,10 @@ export function alignMove({
     scope?: AlignDragScope;
     flags?: readonly number[];
 }): MoveCountResult {
+    // Count 1 is where the music starts: moving it shifts the whole show against the music and
+    // never re-spaces the counts up to a synced one (FX-5)
+    if (index === 1)
+        return moveCount({ durations, index, toTime, after: "shift" });
     const respaceFrom = scope === "page" ? flagBefore(flags, index) : undefined;
     if (index < durations.length)
         return moveCount({ durations, index, toTime, synced, respaceFrom });
@@ -399,6 +431,7 @@ function afterPart({
     pages,
     synced,
     t,
+    units,
 }: {
     before: CountDurations;
     result: RetimeResult;
@@ -406,6 +439,7 @@ function afterPart({
     pages: readonly AlignPage[];
     synced?: readonly number[];
     t: AlignTranslate;
+    units?: AlignUnits;
 }): string | null {
     const { effect } = result;
     if (effect.heldFrom !== null) {
@@ -425,11 +459,12 @@ function afterPart({
                       : "tempo.align.chip.respacedToFlag",
                   {
                       pages: label,
-                      from: roundBpm(before, respaced.from, respaced.to),
+                      from: roundBpm(before, respaced.from, respaced.to, units),
                       to: roundBpm(
                           result.durations,
                           respaced.from,
                           respaced.to,
+                          units,
                       ),
                       synced: what,
                   },
@@ -504,6 +539,8 @@ export function moveChip({
     head,
     synced,
     t,
+    units,
+    overrides = [],
 }: {
     before: CountDurations;
     result: MoveCountResult;
@@ -515,6 +552,9 @@ export function moveChip({
     /** The synced counts, so a stop at an unsynced flag isn't called synced */
     synced?: readonly number[];
     t: AlignTranslate;
+    units?: AlignUnits;
+    /** Typed sections the drag would rescale (FX-5) */
+    overrides?: readonly TypedSection[];
 }): AlignChip {
     const parts: string[] = [];
     if (
@@ -524,6 +564,8 @@ export function moveChip({
     )
         return { text: t("tempo.align.chip.noChange"), amber: false };
     let mixedWarning = false;
+    const override = overridePart(overrides, t);
+    if (override) parts.push(override);
     if (index === 1) {
         // The music now starts this long before count 1 (negative: after it)
         const lead = result.originShift - audioOffsetSeconds;
@@ -545,8 +587,10 @@ export function moveChip({
         const mixed = left
             ? mixedTempos(before, pages, left.from, left.to)
             : null;
-        const from = left ? roundBpm(before, left.from, left.to) : null;
-        const to = left ? roundBpm(result.durations, left.from, left.to) : null;
+        const from = left ? roundBpm(before, left.from, left.to, units) : null;
+        const to = left
+            ? roundBpm(result.durations, left.from, left.to, units)
+            : null;
         const tempo = left
             ? mixed
                 ? t("tempo.align.chip.average", { from: from!, to: to! })
@@ -571,15 +615,37 @@ export function moveChip({
         }
     }
     // Moving count 1 shifts the whole show unless a synced count holds the rest
-    const after = afterPart({ before, result, from: index, pages, synced, t });
+    const after = afterPart({
+        before,
+        result,
+        from: index,
+        pages,
+        synced,
+        t,
+        units,
+    });
     if (after && (index !== 1 || result.effect.heldFrom !== null))
         parts.push(after);
     const clamp = clampPart(result, t);
     if (clamp) parts.push(clamp);
     return {
         text: parts.filter(Boolean).join(" · "),
-        amber: result.clamped || mixedWarning,
+        amber: result.clamped || mixedWarning || overrides.length > 0,
     };
+
+    /** "Overrides typed ♩=176 (m1–16)", or "… and 2 more typed sections" */
+    function overridePart(
+        overrides: readonly TypedSection[],
+        t: AlignTranslate,
+    ): string | null {
+        if (overrides.length === 0) return null;
+        const first = overrides[0]!;
+        return t("tempo.align.chip.overridesTyped", {
+            tempo: first.tempo,
+            measures: first.measures,
+            more: overrides.length - 1,
+        });
+    }
 }
 
 /** The chip while holding the count before tick `index`: "Pg 5 ct 4 held · 0.50 → 1.85 s" */
@@ -590,6 +656,8 @@ export function holdChip({
     pages,
     synced,
     t,
+    units,
+    overrides = [],
 }: {
     before: CountDurations;
     result: RetimeResult;
@@ -597,22 +665,37 @@ export function holdChip({
     pages: readonly AlignPage[];
     synced?: readonly number[];
     t: AlignTranslate;
+    units?: AlignUnits;
+    overrides?: readonly TypedSection[];
 }): AlignChip {
     const held = index - 1;
     if (result.durations.every((d, i) => d === before[i]))
         return { text: t("tempo.align.chip.noChange"), amber: false };
+    const override = overridePart(overrides, t);
     const parts = [
+        ...(override ? [override] : []),
         t("tempo.align.chip.held", {
             count: countName(pages, held),
             from: (before[held] ?? 0).toFixed(2),
             to: (result.durations[held] ?? 0).toFixed(2),
         }),
     ];
-    const after = afterPart({ before, result, from: index, pages, synced, t });
+    const after = afterPart({
+        before,
+        result,
+        from: index,
+        pages,
+        synced,
+        t,
+        units,
+    });
     if (after) parts.push(after);
     const clamp = clampPart(result, t);
     if (clamp) parts.push(clamp);
-    return { text: parts.join(" · "), amber: result.clamped };
+    return {
+        text: parts.join(" · "),
+        amber: result.clamped || overrides.length > 0,
+    };
 }
 
 /**

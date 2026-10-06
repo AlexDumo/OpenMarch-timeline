@@ -68,7 +68,7 @@ import {
 import {
     alignFlags,
     alignPages as toAlignPages,
-    countTempo,
+    countTempoText,
     evenOutPage,
     formatShowTime,
     formatTempo,
@@ -78,6 +78,7 @@ import {
 import {
     alignT,
     TimelineAlignChip,
+    TimelineAlignConfirm,
     TimelineAlignFlags,
     TimelineAlignPreviewLayer,
     TimelineAlignTempoPrompt,
@@ -912,7 +913,12 @@ function TimelineSurface({
         if (!showAlign || !align || target.pageId === undefined) return [];
         const page = alignPages.find((p) => String(p.id) === target.pageId);
         if (!page || page.end <= page.start) return [];
-        const bpm = formatTempo(align.durations, page.start, page.end);
+        const bpm = formatTempo(
+            align.durations,
+            page.start,
+            page.end,
+            align.tempoMap?.units,
+        );
         return [
             {
                 id: "even-out",
@@ -1097,15 +1103,23 @@ function TimelineSurface({
         showAlign && shownDurations
             ? (page: TimelinePageMarker) => {
                   const p = alignPages.find((ap) => ap.id === page.id);
-                  return p ? formatTempo(shownDurations, p.start, p.end) : null;
+                  return p
+                      ? formatTempo(
+                            shownDurations,
+                            p.start,
+                            p.end,
+                            align?.tempoMap?.units,
+                        )
+                      : null;
               }
             : undefined;
     const readoutTempo =
         showAlign && alignDurations
-            ? countTempo(
+            ? countTempoText(
                   alignDurations,
                   Math.min(Math.floor(positionBeat), model.beatCount - 1) +
                       alignOffset,
+                  align?.tempoMap?.units,
               )
             : null;
     const markHandle =
@@ -1200,11 +1214,7 @@ function TimelineSurface({
                                   )
                                 : undefined
                         }
-                        readoutNote={
-                            readoutTempo !== null
-                                ? `${readoutTempo} BPM`
-                                : undefined
-                        }
+                        readoutNote={readoutTempo ?? undefined}
                     />
                 ) : undefined
             }
@@ -1370,6 +1380,7 @@ function TimelineSurface({
                                 dragProps={alignEdit.dragProps}
                                 onSetSynced={align.onSetSynced}
                                 onFlagClick={punch?.retarget}
+                                audioOffsetSeconds={align.audioOffsetSeconds}
                                 formatTime={(seconds) =>
                                     formatShowTime(seconds, true)
                                 }
@@ -1407,7 +1418,15 @@ function TimelineSurface({
                                             timelineHeight - 28,
                                         )}
                                     />
-                                    <TimelineAlignChip preview={preview} />
+                                    {preview.confirming ? (
+                                        <TimelineAlignConfirm
+                                            preview={preview}
+                                            onConfirm={alignEdit.confirm}
+                                            onCancel={alignEdit.cancel}
+                                        />
+                                    ) : (
+                                        <TimelineAlignChip preview={preview} />
+                                    )}
                                 </>
                             )}
                             {tempoPrompt && (

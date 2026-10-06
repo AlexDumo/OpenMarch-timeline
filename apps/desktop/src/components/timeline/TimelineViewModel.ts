@@ -1,6 +1,7 @@
 import type { TimelinePageFlagMove } from "./TimelinePageFlagHandles";
 import type { ReactNode } from "react";
 import type { AudioEnvelope } from "@/timeline/timelineWaveform";
+import type { CountUnit, TypedSection } from "@/timeline/tempo";
 import type {
     TimelineAddMarchersMenu,
     TimelineMenuTarget,
@@ -263,6 +264,14 @@ export interface TimelineAlign {
     readonly onSetSynced: (synced: readonly number[]) => void;
     /** Punch-in tap (E9, Tempo lab `punchInTap`); without it, Align has no Tap */
     readonly punchTap?: TimelinePunchTapConfig;
+    /**
+     * What the tempo map knows (FX-5, FX-7): each count's note and its length in it (by count
+     * index), for "♩.=88" labels, and the typed sections a drag must not rescale silently.
+     */
+    readonly tempoMap?: {
+        readonly units: readonly (CountUnit | undefined)[];
+        readonly sections: readonly TypedSection[];
+    };
 }
 
 /** What punch-in tap needs from the app: playback, the live clock, and where to report */

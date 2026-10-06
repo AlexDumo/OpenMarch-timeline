@@ -309,4 +309,57 @@ describeDbTests("MusicXML re-import in place (E12, tempo kit)", (it) => {
             expect(await marks(db)).toEqual(marksBefore);
         },
     );
+
+    it("an import stores the score's meters and tempos as tempo map marks (FX-3)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await setUpV1Show(db);
+        const { beatIds } = await readCountDurationsInTransaction(db);
+        const { I } = letters("v1");
+        const stored = (await getWorkspaceSettingsParsed({ db })).tempoMapMarks;
+        const atI = stored?.find((m) => m.beatId === beatIds[I.ordinal]);
+        expect(atI).toMatchObject({
+            meter: { top: 6, bottom: 8, groups: [3, 3] },
+            unit: "dq",
+            source: "import",
+        });
+        expect(atI?.bpm).toBeCloseTo(88, 9);
+        // The pickup keeps its 4/4
+        expect(stored?.find((m) => m.beatId === beatIds[1])).toMatchObject({
+            meter: { top: 4, bottom: 4, groups: null },
+        });
+    });
+
+    it("keeps a rit. the show has where the file's rit. has no target (FX-6)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await setUpV1Show(db);
+        const v1 = report("v1");
+        const ritAt = v1.ramps.find((r) => !r.applied)!.startMeasureIndex;
+        const ordinalOf = (measure: number) =>
+            1 +
+            v1.measures
+                .slice(0, measure)
+                .reduce((n, m) => n + m.beats.length, 0);
+        const from = ordinalOf(ritAt);
+        const to = ordinalOf(ritAt + 2);
+        const { beatIds } = await readCountDurationsInTransaction(db);
+        // Someone typed a rit. over the two bars
+        for (let i = from; i < to; i++)
+            await db
+                .update(schema.beats)
+                .set({ duration: 60 / (132 - (i - from) * 4) })
+                .where(eq(schema.beats.id, beatIds[i]))
+                .run();
+        const before = await readCountDurationsInTransaction(db);
+        const v2 = scoreMeasuresOf(report("v2").measures, report("v2").ramps);
+        const { plan } = await planMusicXmlReimport({ db, score: v2 });
+        expect(plan.keptRamps).toEqual([{ from: ritAt, to: ritAt + 2 }]);
+        await applyMusicXmlReimport({ db, score: v2, timing: "score" });
+        const after = await readCountDurationsInTransaction(db);
+        for (let i = from; i < to; i++)
+            expect(after.durations[i]).toBe(before.durations[i]);
+    });
 });

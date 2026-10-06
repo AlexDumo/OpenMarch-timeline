@@ -665,7 +665,7 @@ function walkTempos(
             };
             setTempo(e.count, marking, e.measureIndex);
             beforeRamp = undefined;
-            warn("metric-modulation", "warning", e.measureIndex, {
+            warn("metric-modulation", "info", e.measureIndex, {
                 text: `${formatBeatUnit(newUnit.unit, newUnit.dots)} = ${formatBeatUnit(oldUnit.unit, oldUnit.dots)}`,
                 tempo: formatTempoMarking(marking),
             });

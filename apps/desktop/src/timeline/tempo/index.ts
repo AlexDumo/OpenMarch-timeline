@@ -6,3 +6,4 @@ export * from "./tempoMap";
 export * from "./tempoMapParse";
 export * from "./tapTheBeat";
 export * from "./reimport";
+export * from "./scoreMarks";

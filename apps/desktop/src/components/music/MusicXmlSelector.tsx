@@ -8,6 +8,7 @@ import { useTimingObjects } from "@/hooks";
 import { conToastError } from "@/utilities/utils";
 import { db } from "@/global/database/db";
 import { useTempoLabFlag } from "@/stores/UiSettingsStore";
+import { useAudioEnvelopeStore } from "@/timeline/timelineWaveform";
 import { planMusicXmlReimport } from "@/db-functions/musicXmlReimport";
 import {
     defaultReimportTiming,
@@ -51,6 +52,8 @@ export default function MusicXmlSelector() {
     const { measures, pages: allPages, beats: allBeats } = useTimingObjects();
     const queryClient = useQueryClient();
     const reimportInPlace = useTempoLabFlag("reimportInPlace");
+    // Without a recording there's no alignment to keep, whatever the synced counts say (FX-6)
+    const hasAudio = useAudioEnvelopeStore((s) => s.envelope !== null);
     const [pending, setPending] = useState<{
         fileName: string;
         report: MusicXmlParseResult;
@@ -129,7 +132,7 @@ export default function MusicXmlSelector() {
         let offer: PendingReimport | null = null;
         let none = false;
         if (reimportInPlace) {
-            const score = scoreMeasuresOf(report.measures);
+            const score = scoreMeasuresOf(report.measures, report.ramps);
             const { show, plan } = await planMusicXmlReimport({ db, score });
             if (plan.pairs.length > 0) offer = { show, score, plan };
             else none = show.measures.length > 0;
@@ -137,7 +140,8 @@ export default function MusicXmlSelector() {
         setReimport(offer);
         setNoMatch(none);
         setMode(offer ? "reimport" : "replace");
-        if (offer) setTiming(defaultReimportTiming(offer.plan));
+        if (offer)
+            setTiming(hasAudio ? defaultReimportTiming(offer.plan) : "score");
         setPending({ fileName: file.name, report });
         // The full import's dry run takes the timeline's write lock: run it only when it's needed
         if (!offer) await startDryRun(file.name, report);
@@ -230,9 +234,12 @@ export default function MusicXmlSelector() {
                                   changes: reimportChangesAnything(
                                       reimport.plan,
                                       timing,
+                                      reimport,
                                   ),
                                   synced: {
-                                      total: reimport.plan.synced.total,
+                                      total: hasAudio
+                                          ? reimport.plan.synced.total
+                                          : 0,
                                       moved: reimport.plan.synced.moved.length,
                                   },
                                   timing,

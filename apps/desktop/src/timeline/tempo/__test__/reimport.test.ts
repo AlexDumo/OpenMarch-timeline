@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { rampDurations } from "../ramp";
 import {
     defaultReimportTiming,
+    marksAfterReimport,
     planReimport,
     reimportChangesAnything,
     syncedAfterReimport,
@@ -224,5 +226,124 @@ describe("synced counts", () => {
     it("uses the file's timing by default when nothing is synced", () => {
         const plan = planReimport(showOf(version(138)), version(132));
         expect(defaultReimportTiming(plan)).toBe("score");
+    });
+});
+
+describe("a rit. the file gives no target for (FX-6)", () => {
+    /** The show's own rit. over bars 3–4 (132 → 100), the file flat at 132 with "rit." at bar 3 */
+    const withRit = () => {
+        const file = version(132);
+        const showBars = version(132).map((b, i) =>
+            i === 2
+                ? { ...b, durations: rampDurations([1, 1, 1, 1], 132, 116) }
+                : i === 3
+                  ? { ...b, durations: rampDurations([1, 1, 1, 1], 112, 100) }
+                  : b,
+        );
+        return {
+            show: showOf(showBars),
+            score: file.map((b, i) =>
+                i === 2 ? { ...b, rampWithoutTarget: true } : b,
+            ),
+        };
+    };
+
+    it("leaves the show's rit. bars as they are and says so", () => {
+        const { show, score } = withRit();
+        const plan = planReimport(show, score);
+        expect(plan.keptRamps).toEqual([{ from: 2, to: 4 }]);
+        expect(plan.retimedOrdinals).toEqual([]);
+        expect(plan.tempoChanges).toEqual([]);
+        expect(reimportChangesAnything(plan, "score")).toBe(false);
+    });
+
+    it("still applies the file where the show has no rit.", () => {
+        const { score } = withRit();
+        const show = showOf(version(138));
+        const plan = planReimport(show, score);
+        expect(plan.keptRamps).toEqual([]);
+        expect(plan.retimedOrdinals.length).toBeGreaterThan(0);
+    });
+});
+
+describe("tempos typed in the map aren't alignment (FX-6)", () => {
+    it("doesn't count a typed row's synced edges as lined up with the recording", () => {
+        const bars = version(138);
+        const base = showOf(bars, { synced: [9, 17] });
+        // Bar 3 (ordinal 9) was typed in the tempo map; its edges 9 and 17 got synced
+        const show = {
+            ...base,
+            tempoMapMarks: [
+                {
+                    beatId: 109,
+                    unit: "q" as const,
+                    bpm: 138,
+                    source: "typed" as const,
+                },
+            ],
+        };
+        const plan = planReimport(show, version(132));
+        expect(plan.synced.total).toBe(0);
+        expect(defaultReimportTiming(plan)).toBe("score");
+        // A count synced in Align still counts
+        const aligned = planReimport(
+            { ...show, syncedBeatIds: [109, 117, 121] },
+            version(132),
+        );
+        expect(aligned.synced.total).toBe(1);
+    });
+});
+
+describe("tempo map marks on re-import (FX-3)", () => {
+    it("takes the file's meters and tempos, and keeps a typed row when keeping the timing", () => {
+        const file = version(132).map((b, i) =>
+            i === 0
+                ? {
+                      ...b,
+                      tempoMark: {
+                          unit: "q" as const,
+                          bpm: 132,
+                          source: "import" as const,
+                      },
+                  }
+                : b,
+        );
+        const show = {
+            ...showOf(version(132)),
+            tempoMapMarks: [
+                {
+                    beatId: 101,
+                    unit: "q" as const,
+                    bpm: 120,
+                    source: "typed" as const,
+                },
+                {
+                    beatId: 109,
+                    unit: "q" as const,
+                    bpm: 132,
+                    source: "import" as const,
+                },
+            ],
+        };
+        const plan = planReimport(show, file);
+        expect(marksAfterReimport(show, file, plan, "score")).toEqual([
+            { beatId: 101, unit: "q", bpm: 132, source: "import" },
+        ]);
+        expect(marksAfterReimport(show, file, plan, "keep")).toEqual([
+            { beatId: 101, unit: "q", bpm: 120, source: "typed" },
+        ]);
+        expect(
+            marksAfterReimport(
+                {
+                    ...show,
+                    tempoMapMarks: [
+                        { beatId: 101, unit: "q", bpm: 132, source: "import" },
+                    ],
+                },
+                file,
+                plan,
+                "score",
+            ),
+        ).toBeNull();
     });
 });

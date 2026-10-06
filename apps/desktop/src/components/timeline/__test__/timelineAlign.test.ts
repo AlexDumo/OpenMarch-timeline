@@ -8,6 +8,7 @@ import {
     alignPages,
     alignDropTime,
     alignTimeTicks,
+    countTempoText,
     countName,
     evenOutPage,
     formatShowTime,
@@ -561,5 +562,88 @@ describe("the time line", () => {
             "0:01",
         ]);
         expect(formatShowTime(65.5, true)).toBe("1:05.5");
+    });
+});
+
+describe("count 1 is where the music starts (FX-5)", () => {
+    it("shifts the whole show, even with synced counts after it", () => {
+        // A typed pickup and m1 at ♩=176: their edges are synced (TM-3)
+        const d = [0, ...Array<number>(9).fill(60 / 176)];
+        const result = alignMove({
+            durations: d,
+            index: 1,
+            toTime: 0.5,
+            synced: [2, 6],
+        });
+        expect(result.durations).toEqual(d);
+        expect(result.originShift).toBeCloseTo(0.5, 12);
+        const text = moveChip({
+            before: d,
+            result,
+            index: 1,
+            pages,
+            audioOffsetSeconds: 0,
+            t,
+        }).text;
+        expect(text).toBe("Music starts 0.50 s before count 1");
+    });
+});
+
+describe("tempos in the score's units (FX-7)", () => {
+    // Counts 1–8 plain ♩, 9–16 6/8 counted in ♩.
+    const units = [
+        undefined,
+        ...Array(8).fill({ unit: "q", weight: 1 }),
+        ...Array(8).fill({ unit: "dq", weight: 1 }),
+    ];
+    const d = [0, ...Array(8).fill(0.5), ...Array(8).fill(60 / 88)];
+
+    it("labels a 6/8 page ♩.=88, a plain one 120, and never averages across", () => {
+        expect(formatTempo(d, 1, 9, units)).toBe("120");
+        expect(formatTempo(d, 9, 17, units)).toBe("♩.=88");
+        expect(formatTempo(d, 5, 17, units)).toBe("120");
+        expect(formatTempo(d, 1, 9)).toBe("120");
+    });
+
+    it("reads the readout in the count's note", () => {
+        expect(countTempoText(d, 3, units)).toBe("120 BPM");
+        expect(countTempoText(d, 12, units)).toBe("♩.=88");
+        expect(countTempoText(d, 12)).toBe("88 BPM");
+    });
+
+    it("speaks the chip in the note too", () => {
+        const result = alignMove({
+            durations: d,
+            index: 13,
+            toTime: 6.9,
+            synced: [9, 17],
+        });
+        expect(
+            moveChip({
+                before: d,
+                result,
+                index: 13,
+                pages,
+                audioOffsetSeconds: 0,
+                t,
+                units,
+            }).text,
+        ).toMatch(/^Pg 2 · ♩.=88 → ♩.≈\d+/);
+    });
+});
+
+describe("typed sections (FX-5)", () => {
+    it("says a drag overrides a typed tempo, in amber", () => {
+        const chip = moveChip({
+            before: durations,
+            result: alignMove({ durations, index: 9, toTime: 4.3, synced: [] }),
+            index: 9,
+            pages,
+            audioOffsetSeconds: 0,
+            t,
+            overrides: [{ from: 1, to: 9, tempo: "♩=176", measures: "m1–16" }],
+        });
+        expect(chip.text).toMatch(/^Overrides typed ♩=176 \(m1–16\)/);
+        expect(chip.amber).toBe(true);
     });
 });

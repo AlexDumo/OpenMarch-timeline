@@ -126,6 +126,11 @@ export function reimportLines(
             params: { count: plan.tempoChanges.length },
         });
     if (timing === "score") {
+        for (const r of plan.keptRamps)
+            lines.push({
+                key: "rampKept",
+                params: { measures: showMeasureRange(show, r.from, r.to) },
+            });
         for (const c of plan.tempoChanges.slice(0, MAX_TEMPO_LINES))
             lines.push({
                 key: "tempo",
