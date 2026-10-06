@@ -45,14 +45,27 @@ import type {
 
 type TimelineDensity = "expanded" | "collapsed";
 
-/** The zoom a second Fit goes back to when there was none before (Timeline's starting zoom) */
+/** Timeline's starting zoom, and the least a second Fit zooms in to when it can't go back */
 const TIMELINE_DEFAULT_PX_PER_BEAT = 16;
 
+/** How far above the fitted zoom a remembered zoom must be for a second Fit to go back to it */
+const FIT_BACK_MARGIN = 1.05;
+
 /**
- * The zoom from before Fit, so a second Fit goes back to it (UI-12). Kept outside the surface,
- * which remounts when compact is switched; there is one timeline.
+ * The zoom a second Fit goes back to (UI-12): the zoom from before Fit when it is visibly closer
+ * in than the fit, else twice the fit (at least the starting zoom), so Fit always does something.
+ * Zooming out stops at the fit, so going back to a zoom at or under it would do nothing.
  */
-let zoomBeforeFit: number | null = null;
+export function fitBackZoom(
+    zoomBeforeFit: number | null,
+    fitValue: number,
+): number {
+    const back =
+        zoomBeforeFit !== null && zoomBeforeFit > fitValue * FIT_BACK_MARGIN
+            ? zoomBeforeFit
+            : Math.max(TIMELINE_DEFAULT_PX_PER_BEAT, fitValue * 2);
+    return Math.min(back, TIMELINE_MAX_PX_PER_BEAT);
+}
 
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
@@ -115,6 +128,13 @@ const useTimelineZoom = ({
         null,
     );
     const frame = useRef(0);
+    /**
+     * The zoom from before Fit, so a second Fit goes back to it. Per surface: switching compact
+     * remounts it, and a second Fit then zooms in from the fit instead.
+     */
+    const zoomBeforeFit = useRef<number | null>(null);
+    /** Set when the effect below fits a resized show, so the remember effect skips that commit */
+    const autoFitted = useRef(false);
 
     /** Zooms to `next`, keeping `anchorBeat` at `anchorPx` from the viewport's left */
     const zoomTo = useCallback(
@@ -211,6 +231,7 @@ const useTimelineZoom = ({
             (rememberedFitted || pixelsPerBeat < fitValue) &&
             Math.abs(pixelsPerBeat - fitValue) > 0.01
         ) {
+            autoFitted.current = true;
             onPixelsPerBeatChange(fitValue);
             const viewport = viewportRef.current;
             if (viewport) viewport.scrollLeft = 0;
@@ -219,8 +240,14 @@ const useTimelineZoom = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fitValue]);
 
-    // Remember whether the timeline is fitted, so the next show opens fitted too
+    // Remember whether the timeline is fitted, so the next show opens fitted too. Not in the
+    // commit where the effect above fits a resize: the zoom here is still the old one, and
+    // writing "not fitted" then "fitted" again would save twice on every resize.
     useEffect(() => {
+        if (autoFitted.current) {
+            autoFitted.current = false;
+            return;
+        }
         if (fitValue === null || rememberedFitted === isFitted) return;
         onFittedChange?.(isFitted);
     }, [fitValue, isFitted, onFittedChange, rememberedFitted]);
@@ -229,13 +256,13 @@ const useTimelineZoom = ({
         const viewport = viewportRef.current;
         if (!viewport || !onPixelsPerBeatChange || fitValue === null) return;
         if (isFitted) {
-            const back = zoomBeforeFit ?? TIMELINE_DEFAULT_PX_PER_BEAT;
-            zoomBeforeFit = null;
+            const back = fitBackZoom(zoomBeforeFit.current, fitValue);
+            zoomBeforeFit.current = null;
             // Back about the playhead, where the work is
             zoomTo(back, viewport.clientWidth / 2, playheadBeat);
             return;
         }
-        zoomBeforeFit = pixelsPerBeat;
+        zoomBeforeFit.current = pixelsPerBeat;
         onPixelsPerBeatChange(fitValue);
         viewport.scrollLeft = 0;
     }, [

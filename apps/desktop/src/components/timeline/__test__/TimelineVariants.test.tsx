@@ -5,8 +5,13 @@ import {
     render,
     screen,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { CollapsedTimeline, ExpandedTimeline } from "../TimelineVariants";
+import { useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+    CollapsedTimeline,
+    ExpandedTimeline,
+    fitBackZoom,
+} from "../TimelineVariants";
 import { snapSeekBeat } from "../TimelinePrimitives";
 import { Timeline, TimelineWaveformProvider } from "../Timeline";
 import {
@@ -1378,5 +1383,131 @@ describe("the transport's go-to box (UI-12)", () => {
         );
         fireEvent.keyDown(window, { key: "g" });
         expect(screen.getByTestId("timeline-go-to")).toBeInTheDocument();
+    });
+});
+
+describe("Fit (UI-12 review)", () => {
+    // The story show has 32 beats: at 360px, less the 40px home box, it fits at 10px a beat
+    let width = 360;
+    let observers: (() => void)[] = [];
+    beforeEach(() => {
+        vi.spyOn(
+            HTMLElement.prototype,
+            "clientWidth",
+            "get",
+        ).mockImplementation(() => width);
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                constructor(callback: () => void) {
+                    observers.push(callback);
+                }
+                observe() {}
+                disconnect() {}
+            },
+        );
+    });
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+        observers = [];
+        width = 360;
+    });
+
+    const Zoomed = ({
+        initial,
+        fitted,
+        onZoom,
+        onFittedChange,
+    }: {
+        initial: number;
+        fitted: boolean;
+        onZoom: (pixelsPerBeat: number) => void;
+        onFittedChange: (fitted: boolean) => void;
+    }) => {
+        const [pixelsPerBeat, setPixelsPerBeat] = useState(initial);
+        const [zoomFitted, setZoomFitted] = useState(fitted);
+        return (
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                pixelsPerBeat={pixelsPerBeat}
+                onPixelsPerBeatChange={(next) => {
+                    onZoom(next);
+                    setPixelsPerBeat(next);
+                }}
+                zoomFitted={zoomFitted}
+                onZoomFittedChange={(next) => {
+                    onFittedChange(next);
+                    setZoomFitted(next);
+                }}
+            />
+        );
+    };
+    const shiftZ = () =>
+        act(() => {
+            fireEvent.keyDown(window, { key: "Z", shiftKey: true });
+        });
+
+    it("goes back to the zoom from before Fit", () => {
+        const onZoom = vi.fn();
+        render(
+            <Zoomed
+                initial={32}
+                fitted={false}
+                onZoom={onZoom}
+                onFittedChange={vi.fn()}
+            />,
+        );
+        shiftZ();
+        expect(onZoom).toHaveBeenLastCalledWith(10);
+        shiftZ();
+        expect(onZoom).toHaveBeenLastCalledWith(32);
+    });
+
+    it("zooms in from a show that opened fitted, where there is no zoom to go back to", () => {
+        // Fitted at 25px a beat, closer in than the starting zoom of 16
+        width = 840;
+        const onZoom = vi.fn();
+        render(
+            <Zoomed
+                initial={25}
+                fitted
+                onZoom={onZoom}
+                onFittedChange={vi.fn()}
+            />,
+        );
+        shiftZ();
+        expect(onZoom).toHaveBeenLastCalledWith(50);
+    });
+
+    it("stays fitted through a resize without saving the fit again", () => {
+        const onZoom = vi.fn();
+        const onFittedChange = vi.fn();
+        render(
+            <Zoomed
+                initial={10}
+                fitted
+                onZoom={onZoom}
+                onFittedChange={onFittedChange}
+            />,
+        );
+        width = 680;
+        act(() => observers.forEach((observe) => observe()));
+        expect(onZoom).toHaveBeenLastCalledWith(20);
+        expect(onFittedChange).not.toHaveBeenCalled();
+    });
+});
+
+describe("fitBackZoom (UI-12 review)", () => {
+    it("goes back to a zoom closer in than the fit", () => {
+        expect(fitBackZoom(32, 10)).toBe(32);
+    });
+
+    it("zooms in from the fit when the zoom before was at or under it, or unknown", () => {
+        expect(fitBackZoom(null, 10)).toBe(20);
+        expect(fitBackZoom(10.2, 10)).toBe(20);
+        expect(fitBackZoom(null, 4)).toBe(16);
+        expect(fitBackZoom(null, 50)).toBe(64);
     });
 });
