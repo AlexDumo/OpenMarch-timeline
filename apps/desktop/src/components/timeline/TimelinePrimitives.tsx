@@ -49,6 +49,8 @@ import type {
     TimelineNavigation,
     TimelinePageMarker,
     TimelineRangeChange,
+    TimelineSeekGesture,
+    TimelineSeekOptions,
     TimelineSelection,
     TimelineTrack,
     TimelineTrackId,
@@ -410,13 +412,81 @@ export const TimelineShell = ({
     </div>
 );
 
+/** How far past the viewport's edge, in pixels, a scrub scrolls fastest */
+const SCRUB_EDGE_SCROLL_MAX_PX = 80;
+
+/**
+ * Scrolls the timeline while a scrub is held past the viewport's edge, once a frame, faster the
+ * further past it the pointer is. Each frame seeks again under the pointer, which the scroll has
+ * moved along the show.
+ */
+const useScrubEdgeScroll = () => {
+    const state = useRef<{
+        frame: number;
+        overshoot: number;
+        viewport: HTMLElement | null;
+        seekAgain: () => void;
+    }>({ frame: 0, overshoot: 0, viewport: null, seekAgain: () => {} });
+    const stop = useCallback(() => {
+        cancelAnimationFrame(state.current.frame);
+        state.current.frame = 0;
+        state.current.viewport = null;
+    }, []);
+    useEffect(() => stop, [stop]);
+    const follow = useCallback(
+        (clientX: number, element: Element, seekAgain: () => void) => {
+            const viewport = element.closest<HTMLElement>(
+                '[data-testid="timeline-viewport"]',
+            );
+            const bounds = viewport?.getBoundingClientRect();
+            const overshoot = !bounds
+                ? 0
+                : clientX < bounds.left
+                  ? clientX - bounds.left
+                  : clientX > bounds.right
+                    ? clientX - bounds.right
+                    : 0;
+            if (!viewport || overshoot === 0) {
+                stop();
+                return;
+            }
+            Object.assign(state.current, { overshoot, viewport, seekAgain });
+            if (state.current.frame) return;
+            const step = () => {
+                const current = state.current;
+                if (!current.viewport) return;
+                const before = current.viewport.scrollLeft;
+                current.viewport.scrollLeft +=
+                    clamp(
+                        current.overshoot,
+                        -SCRUB_EDGE_SCROLL_MAX_PX,
+                        SCRUB_EDGE_SCROLL_MAX_PX,
+                    ) / 4;
+                // At either end of the show there is nothing more to scroll
+                if (current.viewport.scrollLeft === before) {
+                    stop();
+                    return;
+                }
+                current.seekAgain();
+                current.frame = requestAnimationFrame(step);
+            };
+            state.current.frame = requestAnimationFrame(step);
+        },
+        [stop],
+    );
+    return { follow, stop };
+};
+
 /**
  * Scrubbing by dragging along the page boxes (UI-12). A press that moves past the drag threshold
  * scrubs the playhead with the pointer and swallows the click that follows, so the box under the
- * release isn't selected; a press that doesn't move stays a click.
+ * release isn't selected; a press that doesn't move stays a click. The scrub's seeks are a `drag`
+ * gesture and its release (or cancel) an `end` (UI-12 review).
  */
 const useRulerScrub = (
-    onSeek: ((beat: BeatPosition) => void) | undefined,
+    onSeek:
+        | ((beat: BeatPosition, options?: TimelineSeekOptions) => void)
+        | undefined,
     beatCount: number,
     pixelsPerBeat: number,
     seekSnapBeats: readonly number[],
@@ -424,21 +494,43 @@ const useRulerScrub = (
     const drag = useRef<{
         pointerId: number;
         startClientX: number;
-        surfaceLeft: number;
+        // Read again on every move, so a scroll during the scrub doesn't skew it
+        surface: Element;
         scrubbing: boolean;
+        lastBeat: number;
     } | null>(null);
     const swallowClick = useRef(false);
+    const edgeScroll = useScrubEdgeScroll();
     const beatAt = (
         clientX: number,
-        surfaceLeft: number,
+        surface: Element,
         event: { readonly altKey: boolean },
     ) =>
         snapSeekBeat(
-            clamp((clientX - surfaceLeft) / pixelsPerBeat, 0, beatCount),
+            clamp(
+                (clientX - surface.getBoundingClientRect().left) /
+                    pixelsPerBeat,
+                0,
+                beatCount,
+            ),
             seekSnapBeats,
             pixelsPerBeat,
             isPageSnapDisabled(event),
         );
+    const scrubTo = (clientX: number, event: { readonly altKey: boolean }) => {
+        const current = drag.current;
+        if (!current) return;
+        current.lastBeat = beatAt(clientX, current.surface, event);
+        onSeek?.(current.lastBeat, { gesture: "drag" });
+    };
+    const finish = (beat?: number) => {
+        const current = drag.current;
+        drag.current = null;
+        edgeScroll.stop();
+        if (current?.scrubbing)
+            onSeek?.(beat ?? current.lastBeat, { gesture: "end" });
+        return current;
+    };
     return {
         /** Whether this click ends a scrub or a range drag; a keyboard click (detail 0) never does */
         consumeClick: (event: { readonly detail: number }) => {
@@ -463,8 +555,9 @@ const useRulerScrub = (
                 drag.current = {
                     pointerId: event.pointerId,
                     startClientX: event.clientX,
-                    surfaceLeft: surface.getBoundingClientRect().left,
+                    surface,
                     scrubbing: false,
+                    lastBeat: 0,
                 };
                 event.currentTarget.setPointerCapture?.(event.pointerId);
             },
@@ -478,17 +571,25 @@ const useRulerScrub = (
                 )
                     return;
                 current.scrubbing = true;
-                onSeek?.(beatAt(event.clientX, current.surfaceLeft, event));
+                scrubTo(event.clientX, event);
+                const { clientX, altKey } = event;
+                edgeScroll.follow(clientX, current.surface, () =>
+                    scrubTo(clientX, { altKey }),
+                );
             },
             onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
                 const current = drag.current;
                 if (!current || current.pointerId !== event.pointerId) return;
-                drag.current = null;
                 event.currentTarget.releasePointerCapture?.(event.pointerId);
                 swallowClick.current = current.scrubbing;
+                finish(
+                    current.scrubbing
+                        ? beatAt(event.clientX, current.surface, event)
+                        : undefined,
+                );
             },
             onPointerCancel: () => {
-                drag.current = null;
+                finish();
             },
         },
     };
@@ -525,7 +626,7 @@ export const TimelineRuler = ({
     selection?: TimelineSelection;
     onSelectionChange?: (selection: TimelineSelection) => void;
     /** Dragging along the page boxes scrubs (UI-12); a click still selects the box */
-    onSeek?: (beat: BeatPosition) => void;
+    onSeek?: (beat: BeatPosition, options?: TimelineSeekOptions) => void;
     initialPageWidth: number;
     /** The measure numbers under the boxes; compact leaves them out */
     showMeasures?: boolean;
@@ -1453,7 +1554,7 @@ export const TimelinePlayhead = ({
     height: number;
     beatCount: number;
     anchorRef: RefObject<HTMLButtonElement | null>;
-    onSeek?: (beat: BeatPosition) => void;
+    onSeek?: (beat: BeatPosition, options?: TimelineSeekOptions) => void;
 }) => {
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
     const left = Math.round(beatToX(positionBeat, pixelsPerBeat));
@@ -1605,7 +1706,7 @@ export const useTimelinePointer = ({
     snapBeats = [],
     seekSnapBeats = [],
 }: {
-    onSeek?: (beat: number) => void;
+    onSeek?: (beat: number, options?: TimelineSeekOptions) => void;
     onRangeSelect?: (range: TimelineBeatRange) => void;
     pixelsPerBeat: number;
     beatCount: number;
@@ -1621,7 +1722,10 @@ export const useTimelinePointer = ({
         mode: "scrub" | "press" | "range";
         startClientX: number;
         startBeat: number;
+        /** The last beat a scrub sent, which a cancel ends on */
+        lastBeat: number | null;
     } | null>(null);
+    const edgeScroll = useScrubEdgeScroll();
     const draggedRange = (
         event: ReactPointerEvent<HTMLElement>,
         startBeat: number,
@@ -1633,34 +1737,49 @@ export const useTimelinePointer = ({
             pixelsPerBeat,
             beatCount,
         });
-    const pointerBeat = useCallback(
-        (event: ReactPointerEvent<HTMLElement>) => {
-            const bounds = event.currentTarget.getBoundingClientRect();
-            return clientXToBeat({
-                clientX: event.clientX,
-                surfaceLeft: bounds.left,
+    const beatAtClientX = useCallback(
+        (element: Element, clientX: number) =>
+            clientXToBeat({
+                clientX,
+                surfaceLeft: element.getBoundingClientRect().left,
                 pixelsPerBeat,
                 startBeat: 0,
                 beatCount,
-            });
-        },
+            }),
         [beatCount, pixelsPerBeat],
     );
+    const pointerBeat = useCallback(
+        (event: ReactPointerEvent<HTMLElement>) =>
+            beatAtClientX(event.currentTarget, event.clientX),
+        [beatAtClientX],
+    );
     const seek = useCallback(
-        (beat: number, event: { readonly altKey: boolean }) =>
+        (
+            beat: number,
+            event: { readonly altKey: boolean },
+            seekGesture?: TimelineSeekGesture,
+        ) => {
+            const snapped = snapSeekBeat(
+                beat,
+                seekSnapBeats,
+                pixelsPerBeat,
+                isPageSnapDisabled(event),
+            );
+            if (gesture.current && seekGesture !== undefined)
+                gesture.current.lastBeat = snapped;
             onSeek?.(
-                snapSeekBeat(
-                    beat,
-                    seekSnapBeats,
-                    pixelsPerBeat,
-                    isPageSnapDisabled(event),
-                ),
-            ),
+                snapped,
+                seekGesture === undefined
+                    ? undefined
+                    : { gesture: seekGesture },
+            );
+        },
         [onSeek, pixelsPerBeat, seekSnapBeats],
     );
 
     const end = () => {
         gesture.current = null;
+        edgeScroll.stop();
         setIsDragging(false);
         setRangePreview(null);
     };
@@ -1673,7 +1792,16 @@ export const useTimelinePointer = ({
                 const current = gesture.current;
                 if (!current) return;
                 if (current.mode === "scrub") {
-                    seek(pointerBeat(event), event);
+                    seek(pointerBeat(event), event, "drag");
+                    const surface = event.currentTarget;
+                    const { clientX, altKey } = event;
+                    edgeScroll.follow(clientX, surface, () =>
+                        seek(
+                            beatAtClientX(surface, clientX),
+                            { altKey },
+                            "drag",
+                        ),
+                    );
                     return;
                 }
                 if (
@@ -1712,11 +1840,12 @@ export const useTimelinePointer = ({
                             : "press",
                     startClientX: event.clientX,
                     startBeat,
+                    lastBeat: null,
                 };
                 event.currentTarget.setPointerCapture?.(event.pointerId);
                 if (gesture.current.mode === "scrub") {
                     setIsDragging(true);
-                    if (!onPlayhead) seek(startBeat, event);
+                    if (!onPlayhead) seek(startBeat, event, "press");
                 }
             },
             onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
@@ -1730,14 +1859,17 @@ export const useTimelinePointer = ({
                     return;
                 }
                 end();
-                seek(
-                    current.mode === "press"
-                        ? current.startBeat
-                        : pointerBeat(event),
-                    event,
-                );
+                // A range-modifier press that didn't move is a click: one seek
+                if (current.mode === "press") seek(current.startBeat, event);
+                else seek(pointerBeat(event), event, "end");
             },
-            onPointerCancel: end,
+            onPointerCancel: () => {
+                const current = gesture.current;
+                end();
+                // The scrub ends where it was, so a suspended playback resumes and S settles
+                if (current?.mode === "scrub" && current.lastBeat !== null)
+                    onSeek?.(current.lastBeat, { gesture: "end" });
+            },
         },
     };
 };

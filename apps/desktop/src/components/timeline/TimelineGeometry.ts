@@ -120,6 +120,10 @@ export const filterMarkersByMinimumSpacing = <T extends TimelineMarker>(
     });
 };
 
+/**
+ * The beat under a pointer, fractional, from 0 to `beatCount`: the end of the show is a place the
+ * playhead rests (UI-11), so a scrub reaches it as the ruler's does.
+ */
 export const clientXToBeat = ({
     clientX,
     surfaceLeft,
@@ -136,7 +140,7 @@ export const clientXToBeat = ({
     clamp(
         startBeat + (clientX - surfaceLeft) / pixelsPerBeat,
         0,
-        Math.max(beatCount - 1, 0),
+        Math.max(beatCount, 0),
     );
 
 export const clientXToNearestBeat = (

@@ -1,7 +1,11 @@
-import type { TimelineNavigation } from "@/components/timeline/TimelineViewModel";
+import type {
+    TimelineNavigation,
+    TimelineSeekGesture,
+} from "@/components/timeline/TimelineViewModel";
 import {
     displayedBeat,
     useTimelineSelectionStore,
+    type TimelinePlaybackRun,
 } from "@/stores/TimelineSelectionStore";
 import {
     canPlayOn,
@@ -20,6 +24,18 @@ import { restartLivePlaybackAt } from "@/components/timeline/audio/AudioPlayer";
 
 /** Set by `stopTimelinePlayback` while playing, so the pause that follows returns to the playhead. */
 let stopRequested = false;
+/** Set by `suspendTimelinePlayback`, so the pause that follows leaves the cursor and playhead alone. */
+let suspendRequested = false;
+
+/**
+ * The scrub in progress (UI-12 review): the last whole beat it sent, so a move within the same
+ * beat sends nothing, and whether it is over playback, with the run it suspended once it moved.
+ */
+let scrub: {
+    beat: number | null;
+    playing: boolean;
+    suspended: TimelinePlaybackRun | null;
+} | null = null;
 
 /**
  * Page navigation (UI-9 Page-relative tools): moves the playhead to the target flag and selects
@@ -50,21 +66,120 @@ export function jumpTimelinePlayback(
 ): boolean {
     const state = useTimelineSelectionStore.getState();
     if (!state.playback || !Number.isFinite(beat)) return false;
-    const target = state.isolation
-        ? Math.min(
-              Math.max(beat, state.isolation.start),
-              state.isolation.end - 1,
-          )
-        : Math.min(Math.max(beat, 0), beats.length);
-    if (
-        state.playback.kind === "preview" &&
-        !state.isolation &&
-        (target < state.playback.from || target >= state.playback.to)
-    )
-        state.setPlayback({ kind: "on" });
+    const target = playbackTarget(beats, beat);
+    const run = runAfterJump(state.playback, target);
+    if (run !== state.playback) state.setPlayback(run);
     restartLivePlaybackAt(timeAtBeat(beats, target));
     state.cue(target);
     return true;
+}
+
+/** Where playback jumped to `beat` goes: inside an isolated range, else inside the show. */
+const playbackTarget = (beats: readonly BeatTiming[], beat: number) => {
+    const { isolation } = useTimelineSelectionStore.getState();
+    return isolation
+        ? Math.min(Math.max(beat, isolation.start), isolation.end - 1)
+        : Math.min(Math.max(beat, 0), beats.length);
+};
+
+/** A preview jumped outside its window plays on from there; isolation keeps its run. */
+const runAfterJump = (
+    run: TimelinePlaybackRun,
+    target: number,
+): TimelinePlaybackRun =>
+    run.kind === "preview" &&
+    !useTimelineSelectionStore.getState().isolation &&
+    (target < run.from || target >= run.to)
+        ? { kind: "on" }
+        : run;
+
+/**
+ * A scrub over playback has moved (UI-12 review): playback pauses without writing the playhead or
+ * the cursor, so the scrub can show each beat it passes (`cue`) with the audio silent. Returns the
+ * run to resume, or `null` when nothing is playing.
+ */
+export function suspendTimelinePlayback(
+    setIsPlaying: (isPlaying: boolean) => void,
+): TimelinePlaybackRun | null {
+    const run = useTimelineSelectionStore.getState().playback;
+    if (!run) return null;
+    suspendRequested = true;
+    setIsPlaying(false);
+    return run;
+}
+
+/**
+ * The scrub that suspended `run` ended at `beat`: playback starts once from there, as the same
+ * run, or playing on when a preview's window doesn't hold it (as `jumpTimelinePlayback` does).
+ */
+export function resumeTimelinePlayback(
+    beats: readonly BeatTiming[],
+    beat: number,
+    run: TimelinePlaybackRun,
+    setIsPlaying: (isPlaying: boolean) => void,
+): void {
+    const state = useTimelineSelectionStore.getState();
+    const target = playbackTarget(beats, beat);
+    // A suspension whose pause never landed mustn't turn the next ordinary pause into one
+    suspendRequested = false;
+    stopRequested = false;
+    state.cue(target);
+    state.setPlayback(runAfterJump(run, target));
+    setIsPlaying(true);
+}
+
+/** Whether the pause in progress is a scrub's suspension; clears the request. */
+export function consumeSuspendRequest(): boolean {
+    const requested = suspendRequested;
+    suspendRequested = false;
+    return requested;
+}
+
+/**
+ * A seek from the timeline (UI-12 and its review). `gesture` is where it sits in a scrub
+ * (`TimelineSeekGesture`); without one it is a single action.
+ *
+ * - Paused, it moves the playhead (`seek`). A scrub sends one seek per whole beat it passes.
+ * - Playing, a click (a press that ends without moving off its beat), or a seek without a gesture,
+ *   jumps playback there and plays on (`jumpTimelinePlayback`). A drag suspends playback
+ *   (`suspendTimelinePlayback`) and the canvas follows the pointer; when it ends, playback resumes
+ *   once, from there (`resumeTimelinePlayback`). The playhead stays put throughout.
+ */
+export function seekTimeline(
+    beats: readonly BeatTiming[],
+    beat: number,
+    gesture: TimelineSeekGesture | undefined,
+    {
+        isPlaying,
+        setIsPlaying,
+    }: {
+        isPlaying: boolean;
+        setIsPlaying: (isPlaying: boolean) => void;
+    },
+): void {
+    if (!Number.isFinite(beat)) return;
+    const state = useTimelineSelectionStore.getState();
+    if (gesture === undefined || gesture === "end") {
+        const ended = scrub;
+        scrub = null;
+        if (ended?.suspended)
+            resumeTimelinePlayback(beats, beat, ended.suspended, setIsPlaying);
+        else if (ended?.playing ?? isPlaying) jumpTimelinePlayback(beats, beat);
+        else state.seek(beat);
+        return;
+    }
+    const whole = Math.round(beat);
+    scrub ??= { beat: null, playing: isPlaying, suspended: null };
+    if (scrub.beat === whole) return;
+    scrub.beat = whole;
+    if (!scrub.playing) {
+        state.seek(beat);
+        return;
+    }
+    // A press over playback only marks where a click would jump to
+    if (gesture === "press") return;
+    scrub.suspended ??= suspendTimelinePlayback(setIsPlaying);
+    if (scrub.suspended) state.cue(playbackTarget(beats, beat));
 }
 
 /**

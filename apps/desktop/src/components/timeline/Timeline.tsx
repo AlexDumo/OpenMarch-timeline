@@ -26,6 +26,7 @@ import type {
     TimelineCreateTrackRequest,
     TimelineNavigation,
     TimelineRangeChange,
+    TimelineSeekOptions,
     TimelineSelection,
     TimelineTarget,
     TimelineTrack,
@@ -74,8 +75,14 @@ export interface TimelinePlayback {
     /** While playing, the live spec beat, fractional, for a smooth playhead; `null` when there is none */
     readonly liveBeat?: () => number | null;
     readonly isPlaying: boolean;
-    /** Seek to a whole beat index, already clamped to the show */
-    readonly onSeek?: (beatIndex: number) => void;
+    /**
+     * Seek to a whole beat index, already clamped to the show. `options.gesture` says where the
+     * seek sits in a scrub (UI-12 review); without it, the seek is one explicit action.
+     */
+    readonly onSeek?: (
+        beatIndex: number,
+        options?: TimelineSeekOptions,
+    ) => void;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** **Stop** (UI-11): back to the playhead */
     readonly onStop?: () => void;
@@ -323,7 +330,7 @@ export function Timeline(props: TimelineProps) {
         [axis, beatCount, liveBeat],
     );
     const seekToBeat = playback.onSeek
-        ? (viewBeat: number) => {
+        ? (viewBeat: number, options?: TimelineSeekOptions) => {
               if (props.beats.length === 0) return;
               playback.onSeek?.(
                   clamp(
@@ -331,6 +338,7 @@ export function Timeline(props: TimelineProps) {
                       0,
                       props.beats.length,
                   ),
+                  options,
               );
           }
         : undefined;
@@ -447,6 +455,8 @@ export type {
     TimelineActivitySpan,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
+    TimelineSeekGesture,
+    TimelineSeekOptions,
     TimelineSelection,
     TimelineTarget,
 } from "./TimelineViewModel";

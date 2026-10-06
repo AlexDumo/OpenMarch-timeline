@@ -9,7 +9,7 @@ import {
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { beatAtTime, timeAtBeat } from "./timeMap";
 import { playbackStep } from "./timelinePlayhead";
-import { consumeStopRequest } from "./timelineTransport";
+import { consumeStopRequest, consumeSuspendRequest } from "./timelineTransport";
 
 /**
  * Timeline mode's playback rules while playing (docs/timeline/ui.md UI-9 Play, UI-11; P8.11), once
@@ -23,6 +23,8 @@ import { consumeStopRequest } from "./timelineTransport";
  *   instead. Pausing it moves P to the last whole beat played and leaves the start flag where it
  *   is (`seekKeepingStart`), as in UI-10.
  * - **Stop** (`stopTimelinePlayback`) puts the cursor back on P.
+ * - A scrub's suspension (`suspendTimelinePlayback`, UI-12 review) pauses without writing P or the
+ *   cursor: the scrub moves the cursor, and resumes playback when it ends.
  *
  * Nothing follows playback in page mode (`enabled` false); `useAnimation` keeps its page rules.
  */
@@ -56,12 +58,14 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
         const store = useTimelineSelectionStore.getState();
         const run = store.playback;
         const stopped = consumeStopRequest();
+        const suspended = consumeSuspendRequest();
         const ended = previewEnded.current;
         previewEnded.current = false;
         const live = lastLiveBeat.current;
         lastLiveBeat.current = null;
         if (run === null) return;
         store.setPlayback(null);
+        if (suspended) return;
         if (stopped || ended) {
             store.clearCursor();
             return;

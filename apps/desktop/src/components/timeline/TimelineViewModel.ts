@@ -125,6 +125,19 @@ export type TimelineSelection =
       }
     | null;
 
+/**
+ * Where a seek sits in a pointer or key gesture (UI-12 review). `press` is the pointer going down
+ * (a click so far), `drag` is the gesture moving the playhead, and `end` is its release or cancel.
+ * A seek without a gesture is one explicit action (a rehearsal tab, the go-to box). While playing,
+ * a drag suspends playback, which resumes once from where the gesture ends; a press that ends
+ * without a drag jumps playback there. The start flag moves once, when the gesture ends.
+ */
+export type TimelineSeekGesture = "press" | "drag" | "end";
+
+export interface TimelineSeekOptions {
+    readonly gesture?: TimelineSeekGesture;
+}
+
 export type TimelineNavigation =
     | "first-page"
     | "previous-page"
@@ -142,7 +155,10 @@ export interface TimelineInteractionProps {
     readonly isPlaying: boolean;
     readonly selection?: TimelineSelection;
     readonly selectedTarget?: TimelineTarget | null;
-    readonly onSeek?: (beat: BeatPosition) => void;
+    readonly onSeek?: (
+        beat: BeatPosition,
+        options?: TimelineSeekOptions,
+    ) => void;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** **Stop** (UI-10): stops and returns the playhead to the start flag; without it, no Stop button */
     readonly onStop?: () => void;

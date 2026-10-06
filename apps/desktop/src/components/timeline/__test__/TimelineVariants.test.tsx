@@ -168,7 +168,9 @@ describe("timeline views", () => {
             surface,
             new MouseEvent("pointerup", { bubbles: true, clientX: 10 * 16 }),
         );
-        expect(onSeek).toHaveBeenCalledWith(10);
+        // A press, then its release (UI-12 review: the release ends the gesture)
+        expect(onSeek).toHaveBeenCalledWith(10, { gesture: "press" });
+        expect(onSeek).toHaveBeenLastCalledWith(10, { gesture: "end" });
         expect(onSelectionChange).toHaveBeenCalledTimes(1);
     });
 
@@ -650,8 +652,9 @@ describe("timeline views", () => {
             surface,
             new MouseEvent("pointerup", { bubbles: true, clientX: 96 }),
         );
-        expect(onSeek).toHaveBeenCalledWith(4);
-        expect(onSeek).toHaveBeenLastCalledWith(6);
+        expect(onSeek).toHaveBeenCalledWith(4, { gesture: "press" });
+        expect(onSeek).toHaveBeenCalledWith(6, { gesture: "drag" });
+        expect(onSeek).toHaveBeenLastCalledWith(6, { gesture: "end" });
     });
 
     it("seeks from an accessible rehearsal marker", () => {
@@ -1039,8 +1042,24 @@ describe("a calmer timeline (UI-12)", () => {
         press(surface, "pointermove", 6 * 16);
         expect(screen.queryByTestId("timeline-range-preview")).toBeNull();
         press(surface, "pointerup", 6 * 16);
-        expect(onSeek).toHaveBeenLastCalledWith(6);
+        expect(onSeek).toHaveBeenLastCalledWith(6, { gesture: "end" });
         expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+
+    it("a cancelled scrub ends where it was (UI-12 review)", () => {
+        const onSeek = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSeek={onSeek}
+            />,
+        );
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        press(surface, "pointerdown", 3 * 16);
+        press(surface, "pointermove", 7 * 16);
+        press(surface, "pointercancel", 7 * 16);
+        expect(onSeek).toHaveBeenLastCalledWith(7, { gesture: "end" });
     });
 
     it("Ctrl+drag across the page boxes draws a range, and doesn't select a box", () => {
@@ -1093,7 +1112,8 @@ describe("a calmer timeline (UI-12)", () => {
         press(box, "pointerup", 200);
         fireEvent.click(box, { detail: 1 });
         // The surface starts at x = 0 in jsdom: 200px at 16px a beat is beat 12.5, rounded to 13
-        expect(onSeek).toHaveBeenLastCalledWith(13);
+        expect(onSeek).toHaveBeenCalledWith(13, { gesture: "drag" });
+        expect(onSeek).toHaveBeenLastCalledWith(13, { gesture: "end" });
         expect(onSelectionChange).not.toHaveBeenCalled();
 
         // A press that doesn't move is still a click that selects the box

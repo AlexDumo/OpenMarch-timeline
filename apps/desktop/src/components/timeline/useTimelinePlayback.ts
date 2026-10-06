@@ -9,8 +9,8 @@ import {
 import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
 import {
     jumpTimelinePages,
-    jumpTimelinePlayback,
     navigateTimelinePages,
+    seekTimeline,
     stopTimelinePlayback,
     toggleTimelinePlayback,
 } from "@/timeline/timelineTransport";
@@ -33,7 +33,8 @@ import type { TimelinePlayback } from "./Timeline";
  *   rests on any whole beat, the end of the show included (UI-11).
  * - Seeking moves only the playhead; the selection stays. Page navigation moves the playhead to a
  *   flag and selects that page (`navigateTimelinePages`). While playing, both jump playback
- *   instead and leave the playhead alone (UI-12, `jumpTimelinePlayback`).
+ *   instead and leave the playhead alone (UI-12, `jumpTimelinePlayback`); a scrub suspends
+ *   playback until it ends, then plays on from there once (`seekTimeline`, UI-12 review).
  * - Play previews the window, from just before the start flag to just after the playhead,
  *   looping when the loop is on (`toggleTimelinePlayback`, UI-11).
  */
@@ -46,7 +47,6 @@ export function useTimelinePlayback({
 }): TimelinePlayback {
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
     const playheadBeat = useTimelineSelectionStore(displayedBeat);
-    const seek = useTimelineSelectionStore((s) => s.seek);
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -79,11 +79,13 @@ export function useTimelinePlayback({
             positionBeat:
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
             isPlaying,
-            // UI-12: while playing, a click, scrub or page button jumps playback there
-            onSeek: (beatIndex) => {
-                if (isPlaying) jumpTimelinePlayback(beats, beatIndex);
-                else seek(beatIndex);
-            },
+            // UI-12: while playing, a click or page button jumps playback there, and a scrub
+            // suspends it until it ends (`seekTimeline`)
+            onSeek: (beatIndex, options) =>
+                seekTimeline(beats, beatIndex, options?.gesture, {
+                    isPlaying,
+                    setIsPlaying,
+                }),
             onNavigate: (direction) => {
                 if (!isPlaying) navigateTimelinePages(pages, direction);
                 else
@@ -111,7 +113,6 @@ export function useTimelinePlayback({
             liveIndex,
             pages,
             playheadBeat,
-            seek,
             setIsPlaying,
         ],
     );

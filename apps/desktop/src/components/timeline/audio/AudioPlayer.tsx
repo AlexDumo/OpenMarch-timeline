@@ -37,6 +37,8 @@ export const waveColor = "rgb(180, 180, 180)";
 export const lightProgressColor = "rgb(100, 66, 255)";
 export const darkProgressColor = "rgb(150, 126, 255)";
 const PLAYBACK_DELAY = 0.1; // Delay in seconds to start playback
+// Stopping fades the sources out over this many seconds, so a stop or restart doesn't click
+const STOP_FADE = 0.008;
 const WAVEFORM_HEIGHT = 60;
 
 // Helper function to adjust volume based on percentage
@@ -406,28 +408,40 @@ export default function AudioPlayer() {
         )
             return;
 
+        // Fades a source out and stops it, then disconnects it and its gain
+        const fadeOut = (
+            source: AudioBufferSourceNode,
+            gain: GainNode | null,
+        ) => {
+            const now = audioContext.currentTime;
+            if (gain) {
+                gain.gain.cancelScheduledValues(now);
+                gain.gain.setValueAtTime(gain.gain.value, now);
+                gain.gain.linearRampToValueAtTime(0, now + STOP_FADE);
+            }
+            try {
+                source.stop(now + STOP_FADE);
+            } catch (e) {
+                // Already stopped or not playing, ignore
+            }
+            setTimeout(
+                () => {
+                    source.disconnect();
+                    gain?.disconnect();
+                },
+                STOP_FADE * 1000 + 20,
+            );
+        };
+
         // Helper to stop playback
         const stopPlayback = () => {
             if (audioNode.current) {
-                try {
-                    audioNode.current.stop();
-                } catch (e) {
-                    // Audio already stopped or not playing, ignore
-                }
-                audioNode.current.disconnect();
+                fadeOut(audioNode.current, audioGainNode.current);
                 audioNode.current = null;
-            }
-            if (audioGainNode.current) {
-                audioGainNode.current.disconnect();
-                audioGainNode.current = null;
-            }
+            } else audioGainNode.current?.disconnect();
+            audioGainNode.current = null;
             if (metroNode.current) {
-                try {
-                    metroNode.current.stop();
-                } catch (e) {
-                    // Metronome already stopped or not playing, ignore
-                }
-                metroNode.current.disconnect();
+                fadeOut(metroNode.current, metroGainNode.current);
                 metroNode.current = null;
             }
         };

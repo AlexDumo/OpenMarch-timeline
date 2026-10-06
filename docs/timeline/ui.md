@@ -440,9 +440,14 @@ from it. The spec still wins on the model; this file decides presentation.
     popover with the slider and a reset; its button shows the angle whenever it isn't 0°, and it is
     disabled, not hidden, outside fullscreen, where the field isn't tilted. Page mode keeps its old
     layout until Phase 10.
-  - **While playing,** a click or scrub on the timeline, and the page buttons, jump playback there
-    and play on, as in a DAW; the playhead stays put. A preview jumped outside its window plays on;
-    isolation keeps the jump inside the isolated range.
+  - **While playing,** a click on the timeline, and the page buttons, jump playback there and play
+    on, as in a DAW; the playhead stays put. A preview jumped outside its window plays on;
+    isolation keeps the jump inside the isolated range. A drag (a scrub) suspends playback instead
+    (lead, UI-12 review): the audio stops, the field follows the pointer beat by beat, and
+    playback resumes once from the release, as the same preview when the window holds that beat
+    (V-35). Restarting the audio on every beat of a scrub stuttered. A scrub held past the
+    timeline's edge scrolls it, and a scrub reaches the end of the show from anywhere on the
+    timeline, as it already did on the ruler.
   - **Zoom is native to trackpads and wheels** (project owner, 2026-10-05: like Logic and Final
     Cut). A pinch, or Ctrl+scroll (Cmd on macOS), zooms smoothly about the pointer: events are
     applied once a frame, and the scroll that keeps the beat under the fingers is set before the
