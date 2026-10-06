@@ -21,6 +21,7 @@ Everything in the tempo core is in the timing layer.
 | Show time to count and back            | `apps/desktop/src/timeline/timeMap.ts`                                                                                                 |
 | Write path (one transaction, one undo) | `apps/desktop/src/db-functions/tempo.ts`: `retimeBeats`, `retimeBeatsInTransaction`, `setTempoSyncedBeatIds`, `readTempoSyncedBeatIds` |
 | React Query hooks                      | `apps/desktop/src/hooks/queries/useTempo.ts`: `useRetimeBeats`, `useSetTempoSyncedBeatIds`, `useTempoSyncedBeatIds`                    |
+| Tempo map (E11)                        | `apps/desktop/src/components/timeline/TempoMapPanel.tsx`; typed rows in `tempoMapMarks` (workspace settings)                           |
 | Synced counts (prototype)              | `tempoSyncedBeatIds` in the file's workspace settings ([ADR draft](adr-synced-counts.md))                                              |
 | Audio offset                           | `audioOffsetSeconds` in the file's workspace settings; positive pads silence before the music                                          |
 | Tempo lab flags                        | `tempoLab` in `apps/desktop/src/stores/UiSettingsStore.ts`; Settings → Tempo lab (experimental)                                        |

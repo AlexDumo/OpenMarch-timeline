@@ -68,6 +68,29 @@ of a beat off the fitted line.
 `tempoReadout.ts`: `bpmOfRange(durations, from, to)` (average BPM or null),
 `isEvenRange(durations, from, to)` ("=" vs "≈"), and `pageTempos(durations, pageStarts, end?)`.
 
+`ramp.ts`: `rampDurations(weights, startBpm, endBpm?)` (a steady tempo or a rit./accel. whose
+first count is at `startBpm` and last at `endBpm`, each count weighted by its note value),
+`setRangeRamp(durations, from, to, startBpm, endBpm?, weights?)` (that over a range; later counts
+shift) and `countBpms(durations, weights)` (the inverse).
+
+`tempoMapParse.ts`: what the tempo map's cells accept and show. `parseTempoCell` ("152.5",
+"♩=152.5", "q=152.5", "dq=176", "♩.=176", "e=352", "♩.=♩", "=prev"), `parseRampCell`
+("rit. to ♩=100", "-"), `parseMeterCell` ("7/8 2+2+3", "12/8", "3+2"), `formatTempo` ("♩=152.5",
+"♩≈131.4"), `formatMeter`, `convertBpm`, `meterWeights`, `defaultUnit`.
+
+`tempoMap.ts`: the tempo map (Tempo lab `tempoMap`, E11).
+
+| Function                                         | What it does                                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `deriveTempoMap({ durations, measures, marks })` | One row per tempo or meter change at a measure: meter, unit, `steady`/`ramp`/`uneven`, start and end tempo, start time, counts |
+| `inferMeter(durations)`                          | A measure's meter from its count lengths (2:2:3 is 7/8 2+2+3); n/4 otherwise                                                   |
+| `editRowTempo`, `editRowRamp`, `editRowMeter`    | A typed cell as a `TempoMapWrite` (durations, marks, counts to sync), or an error                                              |
+| `addRowAt`, `removeRow`                          | Split a row at a measure without changing counts; drop a typed row                                                             |
+| `marksByMeasure`, `retimeArgsOf`                 | Stored marks (by beat id) to measure indexes, and a write to `retimeBeats` arguments                                           |
+
+Typed rows are **marks** (a meter and beat unit at a measure) stored in `tempoMapMarks`, because
+counts carry no note values. See [decisions TM-1 to TM-7](../../../../../docs/tempo/decisions.md).
+
 ## Example: drag page 3's flag onto the music
 
 ```ts

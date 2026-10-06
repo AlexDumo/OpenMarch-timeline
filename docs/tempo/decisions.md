@@ -68,3 +68,72 @@ Feel-based ones also have a row in
   Confidence is steadiness (RMS residual against 10% of a beat) times amount (seven fitted taps =
   full).
 - **Validate:** V-40, then E4 tap-lab data.
+
+## TM-1 The meter is read from count lengths unless a row is typed (tempo map, E11)
+
+- **Context:** counts carry no note values. 7/8 2+2+3 is three counts at 2:2:3, but 12/8 at
+  ♩.=152.5 and 4/4 at ♩=152.5 are the same four equal counts.
+- **Choice:** `inferMeter` reads ratios of 1, 1.5 and 2 to a measure's shortest count (within 3%)
+  as a grouping in eighths (2:2:3 is 7/8 2+2+3, 3:2 is 5/8 3+2); anything else, including equal
+  counts, a rit. or a fermata, is n/4. A typed row stores a **mark** (meter and beat unit) at its
+  measure in `tempoMapMarks` (workspace settings, by the measure's start beat id, written with
+  the retime in the same undo entry, as `tempoSyncedBeatIds`). A mark carries on through later
+  measures with the same number of counts and no conflicting grouping.
+- **Alternatives:** a `meter` column on `measures` (migration; the right home if the map stays,
+  see the synced counts ADR); infer only, so 12/8 can never be shown.
+- **Validate:** V-TM-1.
+
+## TM-2 A typed tempo is exact, and later counts shift (tempo map, E11)
+
+- **Context:** "♩=152.5" from a score means every count of the row at 152.5. The drag rule
+  re-spaces up to the next synced count instead.
+- **Choice:** the row's counts get exactly the typed tempo (`setRangeRamp`, weighted by the
+  meter: the long count of 7/8 2+2+3 lasts 1.5 ♩), a rit. keeps the tempo it ends on, and every
+  later count shifts. Holds inside the row are flattened (Ctrl+Z brings them back). Nothing
+  re-spaces to keep a later synced count in place: in a typed map every row edge is synced, so
+  re-spacing would rewrite the next row the user also typed.
+- **Alternatives:** `keepRelative` (the average becomes the typed tempo, holds survive, but the
+  cell then shows "≈"); `keepSyncedAfter` (later synced counts stay on the music).
+- **Validate:** V-TM-2.
+
+## TM-3 Typed rows sync their edges (tempo map, E11)
+
+- **Choice:** a tempo, rit. or meter edit adds the row's first count and the count after its last
+  to the synced counts (core's `tempoSyncedBeatIds`); "Add row at m45" syncs m45's first count;
+  removing a typed row (Delete) drops its mark and takes its first count out of the synced counts. So Align drags stop at
+  the map's rows.
+- **Alternatives:** keep the map and synced counts separate; sync only the row's first count.
+- **Validate:** with the Align view (E7) once both are on the integration branch.
+
+## TM-4 Where rows start (tempo map, E11)
+
+- **Choice:** at a typed mark, a meter or unit change, a change of steady tempo, and where steady
+  counts turn uneven or back. Consecutive uneven measures are one row, so a rit. over two bars is
+  one row. A row whose tempos fall on a straight line count by count (first count at the start
+  tempo, last at the end, as the kit renders them) shows "rit./accel. to ♩=100"; any other uneven
+  row shows its average with "≈".
+- **Validate:** V-TM-1 (open the kit's `score-synced` and `rubato-synced` shows).
+
+## TM-5 Meter edits only regroup (tempo map, E11)
+
+- **Choice:** the meter cell takes a meter with the same number of counts per measure (3/4 to 7/8
+  2+2+3, 4/4 to 12/8, 2/4 to 5/8 3+2); anything else is refused with "changes the number of
+  counts: not in this prototype". The tempo's number stays and its unit follows the meter, so
+  4/4 ♩=120 becomes 12/8 ♩.=120 (same counts) and 3/4 ♩=120 becomes 7/8 2+2+3 ♩=120 (the long
+  count gets longer).
+- **Alternatives:** keep each measure's length (the eighth changes speed).
+- **Validate:** V-TM-2.
+
+## TM-6 Relations are worked out once (tempo map, E11)
+
+- **Choice:** "♩.=♩" makes this row's ♩. last as long as the previous row's last ♩;
+  "=prev" keeps the previous row's last tempo number in this row's unit (the count goes on at the
+  same rate). Both are written as numbers; changing the previous row later doesn't follow.
+- **Alternatives:** live links between rows (needs storage and a cascade rule).
+
+## TM-7 A side panel behind the ⋯ menu (tempo map, E11)
+
+- **Choice:** with the flag on, the transport gets a "⋯" menu with "Tempo map…" and Shift+T opens
+  it (free in `RegisteredActionsHandler`; Alt+T is Focus timeline). It's a non-modal panel on
+  the right, so the timeline and field stay visible and playable. With the flag off there is no
+  menu and no shortcut.
