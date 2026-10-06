@@ -564,6 +564,16 @@ const useRulerScrub = (
         scrubLine?.set(null);
         return current;
     };
+    // A scrub still down when the ruler goes (a variant switch, focusing the page timeline) ends
+    // where it was, so the seek's owner doesn't wait for a release that never comes
+    const latestFinish = useRef(finish);
+    latestFinish.current = finish;
+    useEffect(
+        () => () => {
+            if (drag.current) latestFinish.current();
+        },
+        [],
+    );
     return {
         /** Whether this click ends a scrub or a range drag; a keyboard click (detail 0) never does */
         consumeClick: (event: { readonly detail: number }) => {
@@ -613,16 +623,22 @@ const useRulerScrub = (
             onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
                 const current = drag.current;
                 if (!current || current.pointerId !== event.pointerId) return;
-                event.currentTarget.releasePointerCapture?.(event.pointerId);
                 swallowClick.current = current.scrubbing;
                 finish(
                     current.scrubbing
                         ? beatAt(event.clientX, current.surface, event)
                         : undefined,
                 );
+                // After the scrub has ended, so the capture's loss (below) finds nothing to end
+                event.currentTarget.releasePointerCapture?.(event.pointerId);
             },
             onPointerCancel: () => {
                 finish();
+            },
+            // The capture can go without a pointerup or pointercancel (the window loses focus
+            // mid-drag and the button is released outside it): end the scrub as a cancel does
+            onLostPointerCapture: () => {
+                if (drag.current) finish();
             },
         },
     };
@@ -2095,6 +2111,20 @@ export const useTimelinePointer = ({
         rangePreview.set(null);
         scrubLine.set(null);
     };
+    /** Ends a gesture without its release: a range isn't selected, a scrub ends where it was */
+    const cancel = () => {
+        const current = gesture.current;
+        if (!current) return;
+        end();
+        // The scrub ends where it was, so a suspended playback resumes and S settles
+        if (current.mode === "scrub" && current.lastBeat !== null)
+            onSeek?.(current.lastBeat, { gesture: "end" });
+    };
+    // A gesture still down when the timeline goes (a variant switch, focusing the page timeline)
+    // is cancelled, so the seek's owner doesn't wait for a release that never comes
+    const latestCancel = useRef(cancel);
+    latestCancel.current = cancel;
+    useEffect(() => () => latestCancel.current(), []);
 
     return {
         rangePreview,
@@ -2161,25 +2191,25 @@ export const useTimelinePointer = ({
             onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
                 const current = gesture.current;
                 if (!current) return;
-                event.currentTarget.releasePointerCapture?.(event.pointerId);
+                const { currentTarget, pointerId } = event;
                 if (current.mode === "range") {
                     const range = draggedRange(event, current.startBeat);
                     end();
+                    currentTarget.releasePointerCapture?.(pointerId);
                     if (range) onRangeSelect?.(range);
                     return;
                 }
                 end();
+                // After the gesture has ended, so the capture's loss (below) finds nothing to end
+                currentTarget.releasePointerCapture?.(pointerId);
                 // A range-modifier press that didn't move is a click: one seek
                 if (current.mode === "press") seek(current.startBeat, event);
                 else seek(pointerBeat(event), event, "end");
             },
-            onPointerCancel: () => {
-                const current = gesture.current;
-                end();
-                // The scrub ends where it was, so a suspended playback resumes and S settles
-                if (current?.mode === "scrub" && current.lastBeat !== null)
-                    onSeek?.(current.lastBeat, { gesture: "end" });
-            },
+            onPointerCancel: cancel,
+            // The capture can go without a pointerup or pointercancel (the window loses focus
+            // mid-drag and the button is released outside it): end as a cancel does
+            onLostPointerCapture: cancel,
         },
     };
 };
