@@ -64,8 +64,8 @@ export function applyAppearanceStepsAt({
  *
  * @param redrawKey anything whose change means the canvas marchers were re-created, such as the
  * marcher visuals; every marcher is re-styled then
- * @returns styles the marchers at a beat and returns how many changed (0 when disabled or not
- * loaded); the caller renders
+ * @returns styles the marchers (all of the canvas's, or `canvasMarchers`) at a beat and returns
+ * how many changed (0 when disabled or not loaded); the caller renders
  */
 export function useTimelineAppearance({
     canvas,
@@ -75,7 +75,7 @@ export function useTimelineAppearance({
     canvas: OpenMarchCanvas | null;
     enabled: boolean;
     redrawKey?: unknown;
-}): (beat: number) => number {
+}): (beat: number, canvasMarchers?: readonly CanvasMarcher[]) => number {
     const steps = useMarcherAppearanceSteps(enabled);
     const { data: fieldProperties } = useQuery({
         ...fieldPropertiesQueryOptions(),
@@ -87,7 +87,7 @@ export function useTimelineAppearance({
     const appliedFor = useRef<unknown[]>([]);
 
     return useCallback(
-        (beat: number) => {
+        (beat: number, canvasMarchers?: readonly CanvasMarcher[]) => {
             if (!enabled || !canvas || !steps) return 0;
             // New marchers, new appearances or a new label color: style everyone again
             const key = [canvas, steps, labelColor, redrawKey];
@@ -96,7 +96,8 @@ export function useTimelineAppearance({
                 appliedFor.current = key;
             }
             return applyAppearanceStepsAt({
-                canvasMarchers: canvas.getCanvasMarchers(),
+                // The caller's list when it has one: playback already read it this frame
+                canvasMarchers: canvasMarchers ?? canvas.getCanvasMarchers(),
                 steps,
                 beat,
                 applied: applied.current,

@@ -20,7 +20,10 @@ interface UseAnimationProps {
      * Timeline mode: called each playback frame with the live beat, before the frame renders, to
      * style the marchers there (`useTimelineAppearance`)
      */
-    onTimelineBeat?: (beat: number) => unknown;
+    onTimelineBeat?: (
+        beat: number,
+        canvasMarchers: ReturnType<OpenMarchCanvas["getCanvasMarchers"]>,
+    ) => unknown;
 }
 
 // eslint-disable-next-line max-lines-per-function
@@ -212,19 +215,17 @@ export const useAnimation = ({ canvas, onTimelineBeat }: UseAnimationProps) => {
             const buffer = (timelineBufferRef.current ??=
                 new TimelinePositionBuffer());
             const beat = playbackBeat(beats, timeMilliseconds);
+            const canvasMarchers = canvas.getCanvasMarchers();
             // Not ready (or rebuilding with a new marcher count): leave marchers where they are
             if (buffer.fill(beat)) {
                 const coords = { x: 0, y: 0 };
-                buffer.forEachMarcher(
-                    canvas.getCanvasMarchers(),
-                    (canvasMarcher, x, y) => {
-                        coords.x = x;
-                        coords.y = y;
-                        canvasMarcher.setLiveCoordinates(coords);
-                    },
-                );
+                buffer.forEachMarcher(canvasMarchers, (canvasMarcher, x, y) => {
+                    coords.x = x;
+                    coords.y = y;
+                    canvasMarcher.setLiveCoordinates(coords);
+                });
             }
-            onTimelineBeat?.(beat);
+            onTimelineBeat?.(beat, canvasMarchers);
             canvas.requestRenderAll();
             // The resolver has a position at every beat; the end of the show stops playback
             // through useTimelinePlaybackDriver (UI-9)
