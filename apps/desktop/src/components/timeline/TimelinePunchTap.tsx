@@ -69,7 +69,8 @@ export interface PunchTapController {
  * `align.punchTap`). Owns T, Backspace, Enter and Esc while Align shows and the flag is on.
  *
  * @param positionBeat the playhead (view beat); while playing it moves count by count
- * @param selectionStart the selected range's start (view beat), where a paused tap starts from
+ * @param selection the selected range (view beats): while the playhead is in it, a paused tap
+ *   starts from its start
  */
 // eslint-disable-next-line max-lines-per-function
 export function usePunchTap({
@@ -78,14 +79,14 @@ export function usePunchTap({
     active,
     isPlaying,
     positionBeat,
-    selectionStart,
+    selection,
 }: {
     align: AlignWithOffset | undefined;
     pages: readonly AlignPage[];
     active: boolean;
     isPlaying: boolean;
     positionBeat: number;
-    selectionStart: number | null;
+    selection: { readonly start: number; readonly end: number } | null;
 }): PunchTapController | null {
     const t = alignT;
     const config = align?.punchTap;
@@ -112,16 +113,22 @@ export function usePunchTap({
             const live = countTimes(durations)[playheadIndex] ?? 0;
             return upcomingTarget(targets, durations, live);
         }
+        // A selected page is where to punch in, until the playhead has gone past it (a take
+        // that played on): then it carries on from the playhead
+        const inSelection =
+            selection !== null &&
+            playheadIndex >= selection.start + offset &&
+            playheadIndex <= selection.end + offset;
         return targetAtOrAfter(
             targets,
-            selectionStart !== null ? selectionStart + offset : playheadIndex,
+            inSelection ? selection.start + offset : playheadIndex,
         );
     }, [
         durations,
         isPlaying,
         offset,
         playheadIndex,
-        selectionStart,
+        selection,
         state.next,
         targets,
     ]);

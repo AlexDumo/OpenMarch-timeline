@@ -141,14 +141,24 @@ describe("punch-in tap (E9)", () => {
         expect(screen.getByTestId("timeline-punch-tap-target")).toBeVisible();
     });
 
-    it("from a selected page, the next tap is that page's start", () => {
+    it("from a selected page, the next tap is that page's start, until the playhead has gone past it", () => {
+        // Page 2 (spec counts 9–17) is selected and the playhead is in it
         setup({
             selection: {
                 kind: "range",
-                range: { startBeatIndex: 16, endBeatIndex: 24 },
+                range: { startBeatIndex: 8, endBeatIndex: 16 },
             },
         });
-        // Page 2A starts on page 2's flag, its last count (UI-13)
+        // Page 2 starts on page 1's flag, its last count (UI-13)
+        expect(chip()).toHaveTextContent("Next tap → Pg 1 ct 8");
+        cleanup();
+        // Page 1 is selected but a take played on past it: carry on from the playhead
+        setup({
+            selection: {
+                kind: "range",
+                range: { startBeatIndex: 0, endBeatIndex: 8 },
+            },
+        });
         expect(chip()).toHaveTextContent("Next tap → Pg 2 ct 8");
     });
 

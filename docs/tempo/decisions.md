@@ -571,3 +571,59 @@ fixture list and how to score).
   tabs, editor and right-click targets all use the timeline's axis. In Align, a rehearsal tab
   also drags its measure onto the music, and a click that ends a drag doesn't seek.
 - **Validate:** capture `tempo-align` on the integration branch.
+
+## PT-1 Tap targets are named as the transport reads them (punch-tap, E9)
+
+- **Context:** the task's chip read "Next tap → Pg 12 ct 1" for a page start. In OpenMarch a
+  page's counts lead up to its flag (UI-13): the moment a page starts is the previous page's
+  flag, which the transport reads "Pg 11 · ct 16/16"; "Pg 12 ct 1" is one count later.
+- **Choice:** the chip names the target the way the transport would with the playhead on it:
+  "Next tap → Pg 11 ct 16" in page mode, "→ Pg 12 ct 5" in count mode, "→ count 1" for the
+  start. The target flag also gets a ring and a **T** badge on the ruler, so the words are a
+  second cue.
+- **Alternatives:** "Pg 12 ct 1" (contradicts the readout); "start of Pg 12" (new phrase).
+- **Validate:** V-62.
+
+## PT-2 What a tap sets, and when (punch-tap, E9)
+
+- **Choice:** taps are sequential: each sets the next target after the one it set. Paused, the
+  target is the first at or after the selected range's start (or the playhead), and T plays a
+  count-in: from the previous flag (one page) in page mode, 8 counts before in count mode. If
+  From start is on, T plays the user's own window (and loop), as Space does. Playing without a
+  chosen target (Space, a loop restart, a jump back), the target is the next one the music hasn't
+  passed, with half a count of grace. A tap after the last target does nothing.
+- **Alternatives:** nearest target by time (wrong whenever the timing is far off, which is the
+  case being fixed); restarting the take on a loop.
+- **Validate:** V-62.
+
+## PT-3 Mistakes: bounce, Backspace, amber, retarget (punch-tap, E9)
+
+- **Choice:** a tap within 120 ms of the last is ignored. Backspace drops the last tap, brings
+  back the draft it replaced and steps the target back (it may reach into an earlier loop pass).
+  A tap whose span is more than 35% faster or slower per count than the span before it is drawn
+  amber with "Missed a tap? …", never discarded. Clicking a flag (or a draft's tag) makes it the
+  next target; new taps replace only the drafts on the counts they hit, so looping a page keeps
+  the latest tap per flag.
+- **Alternatives:** ±25% (11-ui.md); dropping suspect taps; Delete on a selected tap (not built).
+- **Validate:** V-63. The 35% is a guess: Jo's report says fermatas, ritardandos and the caesura will
+  all go amber, which teaches users to ignore it. E1 should measure it.
+
+## PT-4 Drafts draw over the stored timing (punch-tap, E9)
+
+- **Context:** a drag preview redraws the whole Align axis on the edited timing. While playing,
+  that moves the playhead off the music (it is placed by count).
+- **Choice:** the stored timing stays drawn; drafts are dashed lines at the tap times with
+  numbered tags, the next target has a ring and a **T** badge, and the Align preview layer tints
+  the re-spaced and shifted counts on the drafted timing, with the flags that would move drawn
+  dotted where they'd land.
+- **Validate:** capture `tempo-punch-tap`.
+
+## PT-5 Applying (punch-tap, E9)
+
+- **Choice:** `tapApply: "stop"` writes the take when playback stops (a pause too); a stop with no
+  taps writes nothing. `"drafts"` keeps drafts until Enter or Apply; Esc once asks, a second Esc
+  within 3 s discards. Either way it's one `retimeBeats` write (one undo; duration-only, never
+  refused) with the tapped counts synced (count 1 moves the audio offset instead), and a toast
+  "Lined up pages 12–18 to your taps." with Undo. Leaving Align keeps drafts in memory; closing
+  the show loses them without asking (not built).
+- **Validate:** V-64.

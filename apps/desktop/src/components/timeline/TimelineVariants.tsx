@@ -614,14 +614,23 @@ function TimelineSurface({
         [alignOffset, baseAxis, pixelsPerSecond, preview],
     );
     // E9: punch-in tap, drawn over the stored timing so the playhead stays on the music
+    const punchSelection = useMemo(
+        () =>
+            selection?.kind === "range"
+                ? {
+                      start: selection.range.startBeatIndex,
+                      end: selection.range.endBeatIndex,
+                  }
+                : null,
+        [selection],
+    );
     const punch = usePunchTap({
         align,
         pages: alignPages,
         active: showAlign,
         isPlaying: props.isPlaying ?? false,
         positionBeat,
-        selectionStart:
-            selection?.kind === "range" ? selection.range.startBeatIndex : null,
+        selection: punchSelection,
     });
     const punchPreview = punch?.preview ?? null;
     const punchAxis = useMemo(
