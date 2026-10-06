@@ -630,8 +630,7 @@ function TimelineSurface({
     // The right-click menu's target: the measure row's count, measure or tab under the pointer;
     // else a page box or clip under the pointer, else a dragged range the pointer is inside (UI-9
     // Adding marchers, Creating a timeline)
-    // The right-click menu's target: a page box or clip under the pointer, else a dragged range
-    // the pointer is inside (UI-9 Adding marchers, Creating a timeline)
+    // Without the measure row's own targets (E8), the measure under the pointer, for count edits
     const measureRangeAt = (
         event: MouseEvent<HTMLElement>,
         rowHeight: number,
@@ -672,7 +671,21 @@ function TimelineSurface({
                           rowHeight: railHeight + 2,
                       })
                     : null;
-            if (onRow) return { range: onRow.range, measureRow: onRow.target };
+            if (onRow) {
+                // A measure or its tab also names the measure, so count edits (E10) act on all
+                // of it; a count tick offers no cut
+                const measure =
+                    onRow.target.kind === "count"
+                        ? undefined
+                        : model.measures.find(
+                              (m) => m.atBeat === onRow.range.startBeatIndex,
+                          )?.label;
+                return {
+                    range: onRow.range,
+                    measureRow: onRow.target,
+                    measure,
+                };
+            }
             const marked = markedRangeAt(event.target);
             if (marked) return marked;
             // The measure row: the measure under the pointer, for count edits (E10)

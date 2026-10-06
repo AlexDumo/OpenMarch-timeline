@@ -16,8 +16,7 @@ import type { TimelineMeasureRowTarget } from "./TimelineMeasureRow";
  * pointer. Opening it doesn't change the timeline selection: the marchers to add are picked first,
  * where they can be selected. On a page box it also offers **Delete page flag** (UI-9 Deleting a
  * flag, P8.15). On the measure row it offers measure lines, marks and beats instead (tempo E8,
- * `MeasureRowMenuItems`).
- * flag, P8.15). With the Tempo lab's `drillChoices` (E10) it also offers count edits that ask
+ * `MeasureRowMenuItems`). With the Tempo lab's `drillChoices` (E10) it also offers count edits that ask
  * what the drill should do: **Remove counts…** on a dragged range or a measure, **Add counts at
  * the end of this page…** on a page box, and **Add counts at the playhead…** anywhere.
  */
@@ -126,7 +125,8 @@ const countEditsFor = <T,>(
     const remove =
         menu.onRemoveCounts !== undefined &&
         target.pageId === undefined &&
-        target.trackId === undefined;
+        target.trackId === undefined &&
+        target.measureRow?.kind !== "count";
     const addAtFlag =
         menu.onAddCountsAtFlag !== undefined && target.pageId !== undefined;
     const addAtPlayhead = menu.onAddCountsAtPlayhead !== undefined;
