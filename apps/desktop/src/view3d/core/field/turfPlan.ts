@@ -179,7 +179,7 @@ function planCenterLogo(ctx: PlanContext, play: PlayingRegion): void {
     });
 }
 
-/** Diagonal bands and a white keyline one yard inside the end zone. */
+/** Diagonal bands and a white border line one yard inside the end zone. */
 function planEndZoneArt(
     ctx: PlanContext,
     ez: { outer: number; goal: number },
@@ -197,7 +197,7 @@ function planEndZoneArt(
         spacing: 2.4,
         width: 1.2,
     });
-    // A white keyline one yard inside the end zone's edges.
+    // A white border line one yard inside the end zone's edges.
     const i = END_ZONE_INSET;
     const b = BORDER;
     const w = LINE;
@@ -239,7 +239,7 @@ function planEndZoneArt(
     );
 }
 
-/** End-zone keyline inset from the zone's edges, in meters (one yard). */
+/** End-zone border line inset from the zone's edges, in meters (one yard). */
 const END_ZONE_INSET = 0.9144;
 
 /** `#rrggbb` scaled toward black by `factor` (1 keeps it). */
