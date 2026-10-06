@@ -271,6 +271,8 @@ export interface TimelineAlign {
     readonly tempoMap?: {
         readonly units: readonly (CountUnit | undefined)[];
         readonly sections: readonly TypedSection[];
+        /** Counts a ● row starts or ends on: synced by typing, not lined up (DE-6) */
+        readonly edges?: readonly number[];
     };
 }
 

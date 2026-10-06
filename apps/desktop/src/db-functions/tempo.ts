@@ -209,7 +209,7 @@ async function retimeChangesAnything({
     syncedBeatIds,
     tempoMapMarks,
 }: RetimeBeatsArgs & { db: DbConnection }): Promise<boolean> {
-    if (originShift !== 0 || tempoMapMarks !== undefined) return true;
+    if (originShift !== 0) return true;
     const current = await readCountDurationsInTransaction(db);
     const durationOf = new Map(
         current.beatIds.map((id, i) => [id, current.durations[i]]),
@@ -221,13 +221,47 @@ async function retimeChangesAnything({
         )
     )
         return true;
-    if (syncedBeatIds === undefined) return false;
-    const stored = (await readTempoSyncedBeatIds(db)).join(",");
     const known = new Set(current.beatIds);
-    const next = [...new Set(syncedBeatIds.filter((id) => known.has(id)))]
-        .sort((a, b) => a - b)
-        .join(",");
-    return stored !== next;
+    if (syncedBeatIds !== undefined) {
+        const stored = (await readTempoSyncedBeatIds(db)).join(",");
+        const next = [...new Set(syncedBeatIds.filter((id) => known.has(id)))]
+            .sort((a, b) => a - b)
+            .join(",");
+        if (stored !== next) return true;
+    }
+    // The same marks again (a map edit that changes nothing) is no edit either (DE-4)
+    if (tempoMapMarks === undefined) return false;
+    const next = tempoMapMarks
+        .filter((m) => known.has(m.beatId))
+        .sort((a, b) => a.beatId - b.beatId);
+    return canonical(await readTempoMapMarks(db)) !== canonical(next);
+}
+
+/** JSON with object keys sorted, so two marks compare by value */
+const canonical = (value: unknown): string =>
+    JSON.stringify(value, (_, v: unknown) =>
+        v && typeof v === "object" && !Array.isArray(v)
+            ? Object.fromEntries(
+                  Object.entries(v as Record<string, unknown>).sort(
+                      ([a], [b]) => a.localeCompare(b),
+                  ),
+              )
+            : v,
+    );
+
+/** The tempo map marks stored in the file, as stored (none: an empty list). */
+async function readTempoMapMarks(
+    db: DbConnection | DbTransaction,
+): Promise<unknown[]> {
+    const row = await db.select().from(schema.workspace_settings).get();
+    if (!row) return [];
+    try {
+        const marks = (JSON.parse(row.json_data) as { tempoMapMarks?: unknown })
+            .tempoMapMarks;
+        return Array.isArray(marks) ? marks : [];
+    } catch {
+        return [];
+    }
 }
 
 /** The synced beat ids stored in the file, ascending. Ids of beats that no longer exist are left out. */

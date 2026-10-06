@@ -1186,6 +1186,8 @@
         "numberOfMeasures": "Number of measures *",
         "onlyClickOnMeasure": "Only click on measure",
         "onOff": "On/Off",
+        "openTempoMap": "Open the tempo map",
+        "openTempoMapHint": "Every rehearsal mark, meter and tempo in one table (Shift+T)",
         "rehearsalLetterOrIdentifier": "Rehearsal letter or identifier",
         "saveChanges": "Save Changes",
         "seeDocs": "See docs",
@@ -1453,6 +1455,7 @@
                 "respacedToFlag": "{pages} {from} → {to} up to {synced}",
                 "shifted": "{pages} move {seconds} s",
                 "since": "since {place}",
+                "stopsAtTyped": "Stops at typed {tempo} ({measures}): release to override or keep it",
                 "theStart": "the start",
                 "upToFlag": "up to {synced}",
                 "upToSynced": "up to synced {synced}"
@@ -1466,9 +1469,12 @@
             "override": {
                 "confirm": "Override",
                 "keep": "Keep typed",
+                "kept": "Kept typed {tempo} ({measures}): nothing else to move",
+                "tempoAgain": "This changes {tempo} you typed for {measures}. Press Enter again to override it, or Esc.",
                 "question": "This changes {tempo} you typed for {measures}. Afterwards the tempo map shows it as ≈. Override it?"
             },
             "synced": "Synced to the music",
+            "typedEdge": "Holds still: a tempo starts here in the tempo map (●, typed or from the score). Not lined up with the music until you drag it.",
             "syncedToast": "{place} is now synced to the music: later fixes won't move it. Right-click its flag to unsync.",
             "tempoItem": "Tempo… ({bpm})",
             "tempoPrompt": "Page {page} tempo (BPM)",
@@ -1482,6 +1488,7 @@
         "tapTheBeat": {
             "apply": "Apply",
             "applyError": "Couldn't apply the taps",
+            "applyOverridesTyped": "Apply (overrides typed {tempo}, {measures})",
             "applyMovesSynced": "{count, plural, one {Apply (moves # synced count)} other {Apply (moves # synced counts)}}",
             "bpm": "BPM",
             "clamped": "Some counts would be too fast or too slow, so they were kept within limits.",
