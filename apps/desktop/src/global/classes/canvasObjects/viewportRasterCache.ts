@@ -6,14 +6,20 @@ import { fabric } from "fabric";
  *
  * The bitmap holds exactly what the object puts on the visible canvas, at device resolution, so
  * it is as sharp as drawing the object directly. It is redrawn only when that would change:
- * the viewport transform (zoom, pan), the canvas size or retina scale, or the object itself
- * (`dirty`, set by Fabric when a child changes). Between those, a frame costs one `drawImage`,
- * so playback and marcher drags no longer pay for the grid.
+ * the viewport transform (zoom, pan), the canvas size or retina scale, or the object's own
+ * `dirty` flag. Between those, a frame costs one `drawImage`, so playback and marcher drags no
+ * longer pay for the grid.
+ *
+ * `dirty` is set by `set()` of one of the object's own cache properties. Fabric does not mark an
+ * uncached group dirty when one of its children changes (it only does that for a group on a
+ * cache), so code that restyles a child of the grid in place must set `obj.dirty = true` itself.
+ * The grid is rebuilt as a new group instead (`renderFieldGrid`), and only `hoverCursor`, which
+ * doesn't draw, is changed in place.
  *
  * Fabric's own object cache keeps priority: while `objectCaching` is on (the canvas turns it on
  * during a wheel zoom, for speed), the object renders the normal way. So does an object that isn't
- * fully opaque or uses a blend mode; a hidden one draws nothing, as with Fabric's `render`. Renders to any context
- * other than the canvas's own (exports, `toDataURL`) also draw directly.
+ * fully opaque or uses a blend mode; a hidden one draws nothing, as with Fabric's `render`.
+ * Renders to any context other than the canvas's own (exports, `toDataURL`) also draw directly.
  *
  * The object must be drawn first after the canvas is cleared (it is sent to the back); the bitmap
  * then composites exactly like direct drawing.
