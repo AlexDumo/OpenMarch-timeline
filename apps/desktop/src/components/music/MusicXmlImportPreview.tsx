@@ -76,7 +76,8 @@ export default function MusicXmlImportPreview({
     return (
         <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
             <DialogContent
-                className="w-[48rem] max-w-[90vw]"
+                // The body scrolls and the buttons stay in the box, however long the summary (FX-6)
+                className="max-h-[min(40rem,calc(100vh-4rem))] w-[48rem] max-w-[90vw]"
                 aria-describedby={undefined}
                 onEscapeKeyDown={onCancel}
             >
@@ -93,137 +94,142 @@ export default function MusicXmlImportPreview({
                 </DialogDescription>
 
                 <div
-                    className={clsx(
-                        "rounded-6 border-stroke max-h-[18rem] overflow-y-auto border",
-                        // Keep a few of the file's rows visible above the re-import summary
-                        inPlace && "max-h-[8rem] min-h-[6rem] shrink-0",
-                    )}
+                    className="-mr-8 flex min-h-0 flex-1 flex-col gap-16 overflow-y-auto pr-8"
+                    data-testid="musicxml-preview-body"
                 >
-                    <table
-                        className="text-sub w-full border-collapse"
-                        data-testid="musicxml-preview-table"
+                    <div
+                        className={clsx(
+                            "rounded-6 border-stroke max-h-[18rem] shrink-0 overflow-y-auto border",
+                            // Keep a few of the file's rows visible above the re-import summary
+                            inPlace && "max-h-[8rem] min-h-[6rem]",
+                        )}
                     >
-                        <thead className="bg-fg-2 text-text/70 sticky top-0 text-left">
-                            <tr>
-                                <th className="px-8 py-4 font-medium">
-                                    <T keyName="music.xmlPreview.columns.measure" />
-                                </th>
-                                <th className="px-8 py-4 font-medium">
-                                    <T keyName="music.xmlPreview.columns.mark" />
-                                </th>
-                                <th className="px-8 py-4 font-medium">
-                                    <T keyName="music.xmlPreview.columns.meter" />
-                                </th>
-                                <th className="px-8 py-4 font-medium">
-                                    <T keyName="music.xmlPreview.columns.tempo" />
-                                </th>
-                                <th className="px-8 py-4 font-medium">
-                                    <T keyName="music.xmlPreview.columns.notes" />
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((row) => (
-                                <tr
-                                    key={row.measureIndex}
-                                    data-warning={
-                                        row.warnings.length > 0 || undefined
-                                    }
-                                    className={clsx(
-                                        "border-stroke border-t align-top",
-                                        row.warnings.length > 0 &&
-                                            "bg-yellow/12",
-                                    )}
-                                >
-                                    <td className="px-8 py-4 font-mono whitespace-nowrap">
-                                        m{row.measure}
-                                    </td>
-                                    <td className="px-8 py-4 font-medium">
-                                        {row.rehearsalMark}
-                                    </td>
-                                    <td className="px-8 py-4 whitespace-nowrap">
-                                        {row.meter}
-                                    </td>
-                                    <td className="px-8 py-4 whitespace-nowrap">
-                                        {row.tempo}
-                                    </td>
-                                    <td className="px-8 py-4">
-                                        {row.warnings.map((w, i) => (
-                                            <div
-                                                key={`w${i}`}
-                                                className="text-text"
-                                            >
-                                                {warningText(w, t)}
-                                            </div>
-                                        ))}
-                                        {row.notes.map((w, i) => (
-                                            <div
-                                                key={`n${i}`}
-                                                className="text-text/60"
-                                            >
-                                                {warningText(w, t)}
-                                            </div>
-                                        ))}
-                                    </td>
+                        <table
+                            className="text-sub w-full border-collapse"
+                            data-testid="musicxml-preview-table"
+                        >
+                            <thead className="bg-fg-2 text-text/70 sticky top-0 text-left">
+                                <tr>
+                                    <th className="px-8 py-4 font-medium">
+                                        <T keyName="music.xmlPreview.columns.measure" />
+                                    </th>
+                                    <th className="px-8 py-4 font-medium">
+                                        <T keyName="music.xmlPreview.columns.mark" />
+                                    </th>
+                                    <th className="px-8 py-4 font-medium">
+                                        <T keyName="music.xmlPreview.columns.meter" />
+                                    </th>
+                                    <th className="px-8 py-4 font-medium">
+                                        <T keyName="music.xmlPreview.columns.tempo" />
+                                    </th>
+                                    <th className="px-8 py-4 font-medium">
+                                        <T keyName="music.xmlPreview.columns.notes" />
+                                    </th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {rows.map((row) => (
+                                    <tr
+                                        key={row.measureIndex}
+                                        data-warning={
+                                            row.warnings.length > 0 || undefined
+                                        }
+                                        className={clsx(
+                                            "border-stroke border-t align-top",
+                                            row.warnings.length > 0 &&
+                                                "bg-yellow/12",
+                                        )}
+                                    >
+                                        <td className="px-8 py-4 font-mono whitespace-nowrap">
+                                            m{row.measure}
+                                        </td>
+                                        <td className="px-8 py-4 font-medium">
+                                            {row.rehearsalMark}
+                                        </td>
+                                        <td className="px-8 py-4 whitespace-nowrap">
+                                            {row.meter}
+                                        </td>
+                                        <td className="px-8 py-4 whitespace-nowrap">
+                                            {row.tempo}
+                                        </td>
+                                        <td className="px-8 py-4">
+                                            {row.warnings.map((w, i) => (
+                                                <div
+                                                    key={`w${i}`}
+                                                    className="text-text"
+                                                >
+                                                    {warningText(w, t)}
+                                                </div>
+                                            ))}
+                                            {row.notes.map((w, i) => (
+                                                <div
+                                                    key={`n${i}`}
+                                                    className="text-text/60"
+                                                >
+                                                    {warningText(w, t)}
+                                                </div>
+                                            ))}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <label className="text-sub text-text/80 flex items-center gap-8">
+                        <Checkbox
+                            checked={showAll}
+                            onCheckedChange={(checked) =>
+                                setShowAll(checked === true)
+                            }
+                        />
+                        <T keyName="music.xmlPreview.showAll" />
+                    </label>
+
+                    {inPlace && reimport && (
+                        <MusicXmlReimportSection reimport={reimport} />
+                    )}
+                    {!inPlace && reimport && (
+                        <WarningNote>
+                            <T keyName="music.xmlPreview.reimport.replaceWarning" />
+                        </WarningNote>
+                    )}
+                    {!inPlace && noMatch && (
+                        <InfoNote>
+                            <T keyName="music.xmlPreview.reimport.noMatch" />
+                        </InfoNote>
+                    )}
+                    {!inPlace && pageCount > 1 && !refused && (
+                        <InfoNote>
+                            <T
+                                keyName="music.xmlPreview.pagesMove"
+                                params={{ count: pageCount }}
+                            />
+                        </InfoNote>
+                    )}
+                    {!inPlace && dryRun.status === "checking" && (
+                        <InfoNote>
+                            <T keyName="music.xmlPreview.checking" />
+                        </InfoNote>
+                    )}
+                    {!inPlace && refused && (
+                        <DangerNote>
+                            <span data-testid="musicxml-preview-refused">
+                                <T
+                                    keyName="music.xmlPreview.refused"
+                                    params={{ reason: dryRun.message }}
+                                />
+                            </span>
+                        </DangerNote>
+                    )}
+                    {report.summary.warnings > 0 && (inPlace || !refused) && (
+                        <WarningNote>
+                            <T keyName="music.xmlPreview.warningsHint" />
+                        </WarningNote>
+                    )}
                 </div>
 
-                <label className="text-sub text-text/80 flex items-center gap-8">
-                    <Checkbox
-                        checked={showAll}
-                        onCheckedChange={(checked) =>
-                            setShowAll(checked === true)
-                        }
-                    />
-                    <T keyName="music.xmlPreview.showAll" />
-                </label>
-
-                {inPlace && reimport && (
-                    <MusicXmlReimportSection reimport={reimport} />
-                )}
-                {!inPlace && reimport && (
-                    <WarningNote>
-                        <T keyName="music.xmlPreview.reimport.replaceWarning" />
-                    </WarningNote>
-                )}
-                {!inPlace && noMatch && (
-                    <InfoNote>
-                        <T keyName="music.xmlPreview.reimport.noMatch" />
-                    </InfoNote>
-                )}
-                {!inPlace && pageCount > 1 && !refused && (
-                    <InfoNote>
-                        <T
-                            keyName="music.xmlPreview.pagesMove"
-                            params={{ count: pageCount }}
-                        />
-                    </InfoNote>
-                )}
-                {!inPlace && dryRun.status === "checking" && (
-                    <InfoNote>
-                        <T keyName="music.xmlPreview.checking" />
-                    </InfoNote>
-                )}
-                {!inPlace && refused && (
-                    <DangerNote>
-                        <span data-testid="musicxml-preview-refused">
-                            <T
-                                keyName="music.xmlPreview.refused"
-                                params={{ reason: dryRun.message }}
-                            />
-                        </span>
-                    </DangerNote>
-                )}
-                {report.summary.warnings > 0 && (inPlace || !refused) && (
-                    <WarningNote>
-                        <T keyName="music.xmlPreview.warningsHint" />
-                    </WarningNote>
-                )}
-
-                <div className="flex justify-end gap-8">
+                <div className="flex shrink-0 justify-end gap-8">
                     {inPlace && reimport && (
                         <Button
                             variant="ghost"

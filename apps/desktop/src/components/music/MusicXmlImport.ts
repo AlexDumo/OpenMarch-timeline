@@ -42,6 +42,8 @@ import type {
     ReimportScoreMeasure,
     ReimportTiming,
 } from "@/timeline/tempo/reimport";
+import { scoreTempoMarks } from "@/timeline/tempo/scoreMarks";
+import { storedMarks, type TempoMapMark } from "@/timeline/tempo/tempoMap";
 
 // Types and interfaces
 export type MusicXmlImportData = {
@@ -111,6 +113,34 @@ async function setMeasureNumberOffsetInTransaction(
     await updateWorkspaceSettingsWithHistoryInTransaction({
         tx,
         update: (settings) => ({ ...settings, measurementOffset: first }),
+    });
+}
+
+/**
+ * Stores the score's meters and tempo markings as the tempo map's marks (FX-3), replacing the
+ * show's, in the import's undo entry. Leaves a settings row the app can't read alone.
+ */
+async function setTempoMapMarksInTransaction(
+    tx: DbTransaction,
+    marks: Map<number, TempoMapMark>,
+    measureStartBeatIds: readonly number[],
+) {
+    const row = await tx.query.workspace_settings.findFirst();
+    if (row) {
+        try {
+            if (
+                !workspaceSettingsSchema.safeParse(JSON.parse(row.json_data))
+                    .success
+            )
+                return;
+        } catch {
+            return;
+        }
+    }
+    const tempoMapMarks = storedMarks(marks, measureStartBeatIds);
+    await updateWorkspaceSettingsWithHistoryInTransaction({
+        tx,
+        update: (settings) => ({ ...settings, tempoMapMarks }),
     });
 }
 
@@ -210,6 +240,11 @@ async function importParsedInTransaction(
     }
 
     await setMeasureNumberOffsetInTransaction(tx, firstMeasureNumber(report));
+    await setTempoMapMarksInTransaction(
+        tx,
+        scoreTempoMarks(report.measures),
+        report.measures.map((_, i) => dbBeats[measureStartBeatPositions[i]].id),
+    );
 
     return {
         success: true,

@@ -10,9 +10,13 @@
 import { MAX_COUNT_SECONDS, MIN_COUNT_SECONDS, countTimes } from "./retime";
 import { setRangeRamp } from "./ramp";
 import {
+    UNIT_GLYPH,
     UNIT_SIXTEENTHS,
     convertBpm,
     defaultUnit,
+    formatBpm,
+    formatMeter,
+    formatTempo,
     meterCounts,
     meterFromWeights,
     meterWeights,
@@ -29,6 +33,8 @@ export const MIN_TYPED_BPM = 40;
 export const STEADY_TOLERANCE = 1e-7;
 /** Relative difference under which a row's tempos lie on a straight line (a rit. or accel.). */
 export const RAMP_TOLERANCE = 1e-6;
+/** Relative difference under which a row still plays at the tempo its mark gave it. */
+export const EXACT_TOLERANCE = 1e-6;
 /** How close count lengths must be to 2:2:3-style ratios to read as a grouping. */
 const GROUPING_TOLERANCE = 0.03;
 
@@ -43,10 +49,24 @@ export interface TempoMapMeasure {
     readonly counts: number;
 }
 
-/** What a typed row says about the measures from it on: a meter, a beat unit or both. */
+/**
+ * What a typed or imported row says about the measures from it on: a meter, a beat unit or both,
+ * and the tempo it was given, so the map can tell a typed value from one a drag left behind.
+ */
 export interface TempoMapMark {
     readonly meter?: Meter;
     readonly unit?: BeatUnit;
+    /** The tempo typed (or read from the score) for the row's first count, in `unit` */
+    readonly bpm?: number;
+    /** The tempo a typed rit. or accel. ends on, in `unit` */
+    readonly endBpm?: number;
+    /** Typed in the map, or read from a MusicXML import; only typed rows are protected */
+    readonly source?: "typed" | "import";
+    /**
+     * The meter as the score writes it, when `meter` counts it differently: "3/2" counted in ♩
+     * is stored as 6/4, "3/4+3/8" as 9/8 2+2+2+3.
+     */
+    readonly label?: string;
 }
 
 /** Marks by measure index (into the measures passed to the map). */
@@ -82,6 +102,21 @@ export interface TempoMapRow {
     readonly startTime: number;
     /** A typed row: it has a mark (its first count is also synced once typed). */
     readonly typed: boolean;
+    /** Where the row's mark came from, if it has one. */
+    readonly source?: "typed" | "import";
+    /** The tempo the mark gave the row (typed or from the score), in `unit`. */
+    readonly markedBpm?: number;
+    /**
+     * The row plays exactly at a tempo someone wrote: the mark's, or (without one) a steady
+     * tempo with at most two decimals. False once a drag or a fit moved it ("≈", never "=").
+     */
+    readonly exact: boolean;
+    /** The row's first measure has fewer counts than its meter (a pickup). */
+    readonly partial: boolean;
+    /** The meter as the score writes it, when it differs from how it is counted ("3/2"). */
+    readonly label?: string;
+    /** The number of the row's last measure. */
+    readonly endMeasureNumber: number;
     /** Each count's length in beats of `unit` (1.5 for the long count of 7/8 2+2+3 in ♩). */
     readonly weights: readonly number[];
 }
@@ -114,6 +149,9 @@ export const unitWeights = (meter: Meter, unit: BeatUnit): number[] =>
 
 interface MeasureProfile {
     readonly meter: Meter;
+    readonly label?: string;
+    /** Fewer counts than the meter: a pickup, counted as the meter's last counts */
+    readonly partial: boolean;
     readonly inferred: boolean;
     readonly unit: BeatUnit;
     readonly marked: boolean;
@@ -146,7 +184,7 @@ function profiles(
 ): MeasureProfile[] {
     const out: MeasureProfile[] = [];
     // A mark's meter and unit carry on through the measures after it that have as many counts
-    let carried: { meter?: Meter; unit?: BeatUnit } = {};
+    let carried: TempoMapMark = {};
     measures.forEach((m, i) => {
         const from = Math.max(m.firstCount, 1);
         const to = Math.min(m.firstCount + m.counts, durations.length);
@@ -154,8 +192,14 @@ function profiles(
         const mark = marks.get(i);
         if (mark) carried = { ...mark };
         const inferred = inferMeter(own);
+        // The marked measure itself may be short (a pickup): it is the meter's last counts
+        const partial =
+            mark?.meter !== undefined &&
+            own.length > 0 &&
+            own.length < meterCounts(mark.meter);
         // A mark stops at a measure with another number of counts or another grouping
         if (
+            !partial &&
             carried.meter &&
             (meterCounts(carried.meter) !== own.length ||
                 (inferred.groups !== null &&
@@ -164,12 +208,15 @@ function profiles(
             carried = {};
         const meter = carried.meter ?? inferred;
         const unit = carried.unit ?? defaultUnit(meter);
-        const weights =
-            meterCounts(meter) === own.length
-                ? unitWeights(meter, unit)
-                : own.map(() => 1);
+        const weights = partial
+            ? unitWeights(meter, unit).slice(-own.length)
+            : meterCounts(meter) === own.length
+              ? unitWeights(meter, unit)
+              : own.map(() => 1);
         out.push({
             meter,
+            label: carried.meter ? carried.label : undefined,
+            partial,
             inferred: carried.meter === undefined,
             unit,
             marked: mark !== undefined,
@@ -225,6 +272,7 @@ export function deriveTempoMap({
             current.end === i &&
             !p.marked &&
             prev !== undefined &&
+            !prev.partial &&
             sameMeter(prev.meter, p.meter) &&
             prev.unit === p.unit &&
             (steady
@@ -248,6 +296,9 @@ export function deriveTempoMap({
         const span = times[to] - times[from];
         const totalWeight = weights.reduce((a, b) => a + b, 0);
         const shape = shapeOf(bpms);
+        const startBpm = bpms[0];
+        const endBpm = bpms[bpms.length - 1];
+        const mark = first.marked ? marks.get(start) : undefined;
         return {
             measureIndex: start,
             endMeasureIndex: end,
@@ -259,14 +310,49 @@ export function deriveTempoMap({
             meterInferred: first.inferred,
             unit: first.unit,
             shape,
-            startBpm: bpms[0],
-            endBpm: bpms[bpms.length - 1],
+            startBpm,
+            endBpm,
             averageBpm: span > 0 ? (totalWeight * 60) / span : NaN,
             startTime: times[from],
             typed: first.marked,
+            ...(mark?.source ? { source: mark.source } : {}),
+            ...(mark?.bpm !== undefined ? { markedBpm: mark.bpm } : {}),
+            exact: isExact(shape, startBpm, endBpm, mark),
+            partial: first.partial,
+            ...(first.label ? { label: first.label } : {}),
+            endMeasureNumber: measures[end - 1].number,
             weights,
         };
     });
+}
+
+/** A tempo someone would write: at most two decimals (a drag's 185.0351… isn't one). */
+const isWritten = (bpm: number) =>
+    Number.isFinite(bpm) && Math.abs(bpm - Math.round(bpm * 100) / 100) < 1e-6;
+
+/**
+ * Whether a row plays at a tempo someone wrote. With a mark that has a tempo, the row must still
+ * play at it (a drag over a typed row makes it "≈"); without one, a steady tempo (or a rit.'s two
+ * ends) with at most two decimals reads as written. Uneven rows never are.
+ */
+function isExact(
+    shape: TempoMapShape,
+    startBpm: number,
+    endBpm: number,
+    mark: TempoMapMark | undefined,
+): boolean {
+    if (shape === "uneven") return false;
+    if (mark?.bpm !== undefined) {
+        if (!close(startBpm, mark.bpm, EXACT_TOLERANCE)) return false;
+        if (shape === "steady") return mark.endBpm === undefined;
+        return (
+            mark.endBpm !== undefined &&
+            close(endBpm, mark.endBpm, EXACT_TOLERANCE)
+        );
+    }
+    return shape === "steady"
+        ? isWritten(startBpm)
+        : isWritten(startBpm) && isWritten(endBpm);
 }
 
 /** The row's tempo as the tempo cell edits it: the first count's, or the average when uneven. */
@@ -355,10 +441,14 @@ function writeRow({
             return { ok: false, error: "tooSlow" };
     }
     const marks = new Map(state.marks);
+    const label = sameMeter(meter, row.meter) ? row.label : undefined;
     marks.set(row.measureIndex, {
-        ...marks.get(row.measureIndex),
         meter,
         unit,
+        bpm: startBpm,
+        ...(close(startBpm, endBpm, STEADY_TOLERANCE) ? {} : { endBpm }),
+        source: "typed",
+        ...(label ? { label } : {}),
     });
     return {
         ok: true,
@@ -384,25 +474,30 @@ export function editRowTempo(
     const row = state.rows[rowIndex];
     const previous = state.rows[rowIndex - 1];
     let unit = row.unit;
+    let meter = row.meter;
     let bpm: number;
     if (cell.kind === "tempo") {
         unit = cell.unit ?? row.unit;
         bpm = cell.bpm;
+        meter = countedIn(row, unit);
     } else {
         if (!previous) return { ok: false, error: "noPreviousRow" };
         if (cell.kind === "relation") {
             unit = cell.unit;
+            meter = countedIn(row, unit);
             bpm = convertBpm(
                 rowEndTempo(previous),
                 previous.unit,
                 cell.previousUnit,
             );
-        } else bpm = rowEndTempo(previous);
+        }
+        // The same pulse as the previous row's end, in this row's unit (e=352 then =prev is ♩=176)
+        else bpm = convertBpm(rowEndTempo(previous), previous.unit, unit);
     }
     return writeRow({
         state,
         row,
-        meter: row.meter,
+        meter,
         unit,
         startBpm: bpm,
         // A rit. keeps the tempo it ends on
@@ -410,6 +505,27 @@ export function editRowTempo(
             row.shape === "ramp" ? convertBpm(row.endBpm, row.unit, unit) : bpm,
     });
 }
+
+/**
+ * The meter a row is counted in once a tempo is typed in `unit`. A dotted unit typed over counts
+ * read as plain quarters (no typed meter) means each count is that unit: "♩.=86" over a section
+ * shown as 2/4 makes it 6/8, so the counts keep their lengths' meaning instead of playing 1.5×
+ * too fast. Anything else keeps the row's meter.
+ */
+function countedIn(row: TempoMapRow, unit: BeatUnit): Meter {
+    if (
+        unit === row.unit ||
+        !row.meterInferred ||
+        row.meter.groups !== null ||
+        !DOTTED_UNITS.has(unit)
+    )
+        return row.meter;
+    return meterFromWeights(
+        Array<number>(meterCounts(row.meter)).fill(UNIT_SIXTEENTHS[unit]),
+    );
+}
+
+const DOTTED_UNITS: ReadonlySet<BeatUnit> = new Set(["de", "dq", "dh"]);
 
 /** A rit./accel. cell: the row ramps from its tempo to the typed one, or turns steady. */
 export function editRowRamp(
@@ -484,7 +600,16 @@ export function addRowAt(
         .reverse()
         .find((r) => r.measureIndex < measureIndex);
     const marks = new Map(state.marks);
-    marks.set(measureIndex, row ? { meter: row.meter, unit: row.unit } : {});
+    marks.set(
+        measureIndex,
+        row
+            ? {
+                  meter: row.meter,
+                  unit: row.unit,
+                  ...(row.label ? { label: row.label } : {}),
+              }
+            : {},
+    );
     return {
         ok: true,
         write: {
@@ -552,6 +677,35 @@ export function marksByMeasure(
     return out;
 }
 
+/** Marks by measure index as the file stores them: by the beat id each measure starts on. */
+export function storedMarks(
+    marks: ReadonlyMap<number, TempoMapMark>,
+    measureStartBeatIds: readonly number[],
+) {
+    return [...marks.entries()]
+        .filter(([i]) => measureStartBeatIds[i] !== undefined)
+        .sort(([a], [b]) => a - b)
+        .map(([i, mark]) => ({
+            beatId: measureStartBeatIds[i],
+            ...(mark.meter
+                ? {
+                      meter: {
+                          top: mark.meter.top,
+                          bottom: mark.meter.bottom,
+                          groups: mark.meter.groups
+                              ? [...mark.meter.groups]
+                              : null,
+                      },
+                  }
+                : {}),
+            ...(mark.unit ? { unit: mark.unit } : {}),
+            ...(mark.bpm !== undefined ? { bpm: mark.bpm } : {}),
+            ...(mark.endBpm !== undefined ? { endBpm: mark.endBpm } : {}),
+            ...(mark.source ? { source: mark.source } : {}),
+            ...(mark.label ? { label: mark.label } : {}),
+        }));
+}
+
 /**
  * What `retimeBeats` takes for a tempo map edit: durations by beat id, the synced beat ids with
  * the edit's added and removed, and the marks by beat id.
@@ -580,23 +734,166 @@ export function retimeArgsOf({
             beatIds.map((id, i) => [id, write.durations[i]]),
         ),
         syncedBeatIds: [...synced].sort((a, b) => a - b),
-        tempoMapMarks: [...write.marks.entries()]
-            .filter(([i]) => measureStartBeatIds[i] !== undefined)
-            .sort(([a], [b]) => a - b)
-            .map(([i, mark]) => ({
-                beatId: measureStartBeatIds[i],
-                ...(mark.meter
-                    ? {
-                          meter: {
-                              top: mark.meter.top,
-                              bottom: mark.meter.bottom,
-                              groups: mark.meter.groups
-                                  ? [...mark.meter.groups]
-                                  : null,
-                          },
-                      }
-                    : {}),
-                ...(mark.unit ? { unit: mark.unit } : {}),
-            })),
+        tempoMapMarks: storedMarks(write.marks, measureStartBeatIds),
     };
+}
+
+/**
+ * The meter cell's text: the score's own signature when it is counted differently ("3/2"), and a
+ * short marked measure as a pickup ("4/4 pickup").
+ */
+export function meterText(row: TempoMapRow): string {
+    const meter = row.label ?? formatMeter(row.meter);
+    // The Counts column says how many: the cell stays narrow
+    return row.partial ? `${meter} pickup` : meter;
+}
+
+/** A row's tempo: "♩=152.5" when it plays at a written tempo, "♩≈185" when not. */
+export function rowTempoText(row: TempoMapRow): string {
+    if (row.shape === "uneven")
+        return formatTempo(row.unit, row.averageBpm, false);
+    return formatTempo(row.unit, row.startBpm, row.exact);
+}
+
+/** "m1–16" or "m29" */
+export const rowMeasures = (row: TempoMapRow) =>
+    row.endMeasureNumber > row.measureNumber
+        ? `m${row.measureNumber}–${row.endMeasureNumber}`
+        : `m${row.measureNumber}`;
+
+/** What an edit wrote at its row, as the confirmation reads it: "6/8 ♩.=86", "♩=176 rit. to ♩=100" */
+export function markText(
+    mark: TempoMapMark,
+    { withMeter }: { withMeter: boolean },
+): string {
+    const unit = mark.unit ?? "q";
+    const parts: string[] = [];
+    if (withMeter && mark.meter)
+        parts.push(mark.label ?? formatMeter(mark.meter));
+    if (mark.bpm !== undefined) parts.push(formatTempo(unit, mark.bpm, true));
+    if (mark.endBpm !== undefined && mark.bpm !== undefined)
+        parts.push(
+            `${mark.endBpm < mark.bpm ? "rit." : "accel."} to ${formatTempo(unit, mark.endBpm, true)}`,
+        );
+    return parts.join(" ");
+}
+
+/** A typed section: a row typed in the map that still plays at the typed tempo. */
+export interface TypedSection {
+    /** Counts `[from, to)` */
+    readonly from: number;
+    readonly to: number;
+    /** "♩=176" */
+    readonly tempo: string;
+    /** "m1–16" */
+    readonly measures: string;
+}
+
+/**
+ * The sections an Align drag must not rescale without saying so: rows typed in the map (not
+ * imported) that still play at their typed tempo (FX-5).
+ */
+export const typedSections = (rows: readonly TempoMapRow[]): TypedSection[] =>
+    rows
+        .filter((r) => r.source === "typed" && r.exact)
+        .map((r) => ({
+            from: r.from,
+            to: r.to,
+            tempo:
+                r.shape === "ramp"
+                    ? `${formatTempo(r.unit, r.startBpm, true)}→${formatBpm(r.endBpm)}`
+                    : formatTempo(r.unit, r.startBpm, true),
+            measures: rowMeasures(r),
+        }));
+
+/** The typed sections whose counts an edit gives other lengths (FX-5). */
+export function overriddenSections(
+    sections: readonly TypedSection[],
+    before: readonly number[],
+    after: readonly number[],
+): TypedSection[] {
+    return sections.filter((s) => {
+        for (let i = s.from; i < s.to; i++)
+            if (
+                Math.abs((after[i] ?? 0) - (before[i] ?? 0)) >
+                1e-9 * Math.max(1, before[i] ?? 0)
+            )
+                return true;
+        return false;
+    });
+}
+
+/** What a count is counted in: its unit, and its length in that unit (1.5 for 7/8's long ♩). */
+export interface CountUnit {
+    readonly unit: BeatUnit;
+    readonly weight: number;
+}
+
+/** Each count's unit and weight, by count index, from the map's rows (undefined outside them). */
+export function countUnits(
+    rows: readonly TempoMapRow[],
+    countCount: number,
+): (CountUnit | undefined)[] {
+    const out = new Array<CountUnit | undefined>(countCount).fill(undefined);
+    for (const row of rows)
+        for (let i = row.from; i < row.to && i < countCount; i++)
+            out[i] = { unit: row.unit, weight: row.weights[i - row.from] ?? 1 };
+    return out;
+}
+
+/** A tempo over some counts, in the unit they are counted in. */
+export interface UnitTempo {
+    readonly unit: BeatUnit;
+    readonly bpm: number;
+    /** Every count at the same tempo */
+    readonly even: boolean;
+    /** Plain quarter counts, so a bare number ("120") says it all */
+    readonly plain: boolean;
+}
+
+/**
+ * The tempo of the counts from `from` (before `to`) that share `from`'s unit: a page that runs
+ * from 6/8 into 3/4 reads the 6/8's tempo at its start, never an average across both. Null for no
+ * counts or no length.
+ */
+export function unitTempo(
+    durations: readonly number[],
+    units: readonly (CountUnit | undefined)[],
+    from: number,
+    to: number,
+): UnitTempo | null {
+    const unit = units[from]?.unit ?? "q";
+    let weight = 0;
+    let span = 0;
+    let plain = true;
+    const bpms: number[] = [];
+    for (let i = from; i < to && i < durations.length; i++) {
+        const u = units[i] ?? { unit: "q" as const, weight: 1 };
+        if (u.unit !== unit) break;
+        if (u.unit !== "q" || Math.abs(u.weight - 1) > 1e-9) plain = false;
+        weight += u.weight;
+        span += durations[i]!;
+        if (durations[i]! > 0) bpms.push((u.weight * 60) / durations[i]!);
+    }
+    if (!(span > 0)) return null;
+    return {
+        unit,
+        bpm: (weight * 60) / span,
+        even: bpms.every((b) => close(b, bpms[0]!, STEADY_TOLERANCE)),
+        plain,
+    };
+}
+
+/**
+ * A tempo in Align and the readout: a bare number for plain quarter counts ("152.5", "≈138", as
+ * E7-4), else with its note ("♩.=88", "♩.≈85", "♩=176" for 5/8 3+2 in ♩). Exact only when even
+ * and written with at most two decimals.
+ */
+export function formatUnitTempo(tempo: UnitTempo): string {
+    const exact = tempo.even && isWritten(tempo.bpm);
+    const number = exact
+        ? String(Number(tempo.bpm.toFixed(2)))
+        : String(Math.round(tempo.bpm));
+    if (tempo.plain) return exact ? number : `≈${number}`;
+    return `${UNIT_GLYPH[tempo.unit]}${exact ? "=" : "≈"}${number}`;
 }

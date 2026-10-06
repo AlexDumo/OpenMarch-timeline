@@ -43,7 +43,8 @@ export const workspaceSettingsSchema = z.object({
      * Tempo prototype (Tempo lab `tempoMap`): the tempo map's typed rows, by the beat id of the
      * measure they start at, with the meter and beat unit typed there (counts carry no note
      * values, so 12/8 and 4/4 at the same pulse look alike). Written with the retime that changes
-     * it, in the same undo entry (docs/tempo/decisions.md TM-1).
+     * it, in the same undo entry (docs/tempo/decisions.md TM-1). A MusicXML import writes them
+     * too, from the score's meters and tempo markings (FX-3).
      */
     tempoMapMarks: z
         .array(
@@ -57,6 +58,14 @@ export const workspaceSettingsSchema = z.object({
                     })
                     .optional(),
                 unit: z.enum(["s", "e", "de", "q", "dq", "h", "dh"]).optional(),
+                /** The tempo typed or imported for the row, in `unit` (FX-4) */
+                bpm: z.number().positive().optional(),
+                /** The tempo a typed rit. or accel. ends on, in `unit` */
+                endBpm: z.number().positive().optional(),
+                /** Typed in the map, or read from a MusicXML import (FX-3, FX-4) */
+                source: z.enum(["typed", "import"]).optional(),
+                /** The meter as the score writes it when it is counted differently ("3/2") */
+                label: z.string().optional(),
             }),
         )
         .optional(),

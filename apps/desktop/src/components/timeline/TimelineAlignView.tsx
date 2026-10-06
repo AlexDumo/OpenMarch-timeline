@@ -15,7 +15,12 @@ import tolgee from "@/global/singletons/Tolgee";
 import { Input } from "@openmarch/ui";
 import clsx from "clsx";
 import { toast } from "sonner";
-import { countTimes, type RetimeResult } from "@/timeline/tempo";
+import {
+    countTimes,
+    overriddenSections,
+    type RetimeResult,
+    type TypedSection,
+} from "@/timeline/tempo";
 import { useTempoLabFlag } from "@/stores/UiSettingsStore";
 import {
     alignDropTime,
@@ -81,6 +86,10 @@ export interface AlignPreview {
     } | null;
     /** Written, waiting for the timeline to show it */
     readonly committed?: boolean;
+    /** Typed sections the edit rescales: it is written only once confirmed (FX-5) */
+    readonly overrides?: readonly TypedSection[];
+    /** Released over a typed section: waiting for Override or Keep typed */
+    readonly confirming?: boolean;
 }
 
 interface AlignGesture {
@@ -131,6 +140,9 @@ export function useAlignEdit({
     t: AlignTranslate;
 }) {
     const [preview, setPreview] = useState<AlignPreview | null>(null);
+    // The preview on screen, for where a confirmation floats after a release
+    const shown = useRef<AlignPreview | null>(null);
+    shown.current = preview;
     const gesture = useRef<AlignGesture | null>(null);
     const frame = useRef(0);
     const nudge = useRef<{
@@ -193,6 +205,13 @@ export function useAlignEdit({
             if (!a) return null;
             const times = countTimes(a.durations);
             const ghostTime = times[index] ?? 0;
+            const units = a.tempoMap?.units;
+            const overridesOf = (next: readonly number[]) =>
+                overriddenSections(
+                    a.tempoMap?.sections ?? [],
+                    a.durations,
+                    next,
+                );
             if (kind === "hold") {
                 const result = alignHold({
                     durations: a.durations,
@@ -203,7 +222,9 @@ export function useAlignEdit({
                     flags: fl,
                 });
                 if (!result) return null;
+                const overrides = overridesOf(result.durations);
                 return {
+                    overrides,
                     kind,
                     index,
                     durations: result.durations,
@@ -216,6 +237,8 @@ export function useAlignEdit({
                         pages: p,
                         synced: a.synced,
                         t: tr,
+                        units,
+                        overrides,
                     }),
                     ghostTime,
                     synced: [...a.synced],
@@ -230,7 +253,9 @@ export function useAlignEdit({
                 scope: sc,
                 flags: fl,
             });
+            const overrides = overridesOf(result.durations);
             return {
+                overrides,
                 kind,
                 index,
                 durations: result.durations,
@@ -245,6 +270,8 @@ export function useAlignEdit({
                     head,
                     synced: a.synced,
                     t: tr,
+                    units,
+                    overrides,
                 }),
                 ghostTime,
                 synced: syncedWith(a.synced, index, sync),
@@ -254,45 +281,57 @@ export function useAlignEdit({
         [],
     );
 
-    const commit = useCallback((next: AlignPreview | null) => {
-        const a = latest.current.align;
-        if (!a || !next) {
-            setPreview(null);
-            return;
-        }
-        const changed =
-            next.origin !== 0 ||
-            next.durations.some((d, i) => d !== a.durations[i]);
-        // A release where it started writes nothing, not even the sync (11-ui.md B Snapping);
-        // it says so, since at a low zoom a small correction can land back on the old place
-        if (!changed) {
-            setPreview(null);
-            toast.info(latest.current.t("tempo.align.chip.noChange"));
-            return;
-        }
-        setPreview({ ...next, committed: true, anchor: null });
-        const done = () =>
-            setPreview((current) => (current?.committed ? null : current));
-        const written = a.onRetime({
-            durations: next.durations,
-            originShift: next.origin,
-            synced: next.synced,
-        });
-        if (written && typeof written.then === "function")
-            written.then(done, done);
-        else done();
-        const newlySynced =
-            next.synced.length > a.synced.length && next.kind === "move";
-        if (newlySynced && !readToastShown()) {
-            writeToastShown();
-            // Named as the transport and the chip name it: "Pg 11 ct 16" (FB-3)
-            toast.info(
-                latest.current.t("tempo.align.syncedToast", {
-                    place: countName(latest.current.pages, next.index),
-                }),
-            );
-        }
-    }, []);
+    const commit = useCallback(
+        (next: AlignPreview | null, confirmed = false) => {
+            const a = latest.current.align;
+            if (!a || !next) {
+                setPreview(null);
+                return;
+            }
+            const changed =
+                next.origin !== 0 ||
+                next.durations.some((d, i) => d !== a.durations[i]);
+            // A release where it started writes nothing, not even the sync (11-ui.md B Snapping);
+            // it says so, since at a low zoom a small correction can land back on the old place
+            if (!changed) {
+                setPreview(null);
+                toast.info(latest.current.t("tempo.align.chip.noChange"));
+                return;
+            }
+            // A typed tempo changes only when the user says so (FX-5)
+            if ((next.overrides?.length ?? 0) > 0 && !confirmed) {
+                setPreview({
+                    ...next,
+                    anchor: next.anchor ?? shown.current?.anchor ?? null,
+                    confirming: true,
+                });
+                return;
+            }
+            setPreview({ ...next, committed: true, anchor: null });
+            const done = () =>
+                setPreview((current) => (current?.committed ? null : current));
+            const written = a.onRetime({
+                durations: next.durations,
+                originShift: next.origin,
+                synced: next.synced,
+            });
+            if (written && typeof written.then === "function")
+                written.then(done, done);
+            else done();
+            const newlySynced =
+                next.synced.length > a.synced.length && next.kind === "move";
+            if (newlySynced && !readToastShown()) {
+                writeToastShown();
+                // Named as the transport and the chip name it: "Pg 11 ct 16" (FB-3)
+                toast.info(
+                    latest.current.t("tempo.align.syncedToast", {
+                        place: countName(latest.current.pages, next.index),
+                    }),
+                );
+            }
+        },
+        [],
+    );
 
     const timeAt = (gestureState: AlignGesture, clientX: number) =>
         gestureState.originTime +
@@ -474,7 +513,14 @@ export function useAlignEdit({
         setPreview(null);
     }, []);
 
-    return { preview, dragProps, cancel, commit };
+    /** Writes the edit waiting for confirmation over a typed section */
+    const confirm = useCallback(() => {
+        const waiting = shown.current;
+        if (waiting?.confirming)
+            commit({ ...waiting, confirming: false }, true);
+    }, [commit]);
+
+    return { preview, dragProps, cancel, commit, confirm };
 }
 
 /**
@@ -564,6 +610,25 @@ export function TimelineAlignTimeLine({
 }
 
 /**
+ * "Music starts 0.50 s before count 1" (a negative offset: count 1 is 0.5 s into the recording),
+ * "… after count 1" or "Music starts on count 1", as the count-1 chip says it.
+ */
+export function musicStartText(
+    audioOffsetSeconds: number,
+    t: AlignTranslate,
+): string {
+    if (Math.abs(audioOffsetSeconds) < 0.0005)
+        return t("tempo.align.chip.musicOnCountOne");
+    return audioOffsetSeconds < 0
+        ? t("tempo.align.chip.musicBefore", {
+              seconds: (-audioOffsetSeconds).toFixed(2),
+          })
+        : t("tempo.align.chip.musicAfter", {
+              seconds: audioOffsetSeconds.toFixed(2),
+          });
+}
+
+/**
  * The handles on count 1 and each page's flag in the ruler (11-ui.md B): drag onto the music,
  * arrows nudge, right-click to sync or unsync. A synced flag's grip is solid, an unsynced one
  * hollow, so "this one stays put" is visible without color alone. They sit above the playhead's
@@ -586,6 +651,7 @@ export function TimelineAlignFlags({
     onSetSynced,
     onFlagClick,
     formatTime,
+    audioOffsetSeconds = 0,
 }: {
     flags: readonly AlignFlag[];
     axis: TimelineXAxis;
@@ -597,6 +663,8 @@ export function TimelineAlignFlags({
     /** A click that didn't drag (punch-in tap retargets to the flag, E9) */
     onFlagClick?: (index: number) => void;
     formatTime: (seconds: number) => string;
+    /** Where the music starts against count 1, for count 1's label */
+    audioOffsetSeconds?: number;
 }) {
     const t = alignT;
     const [menu, setMenu] = useState<{
@@ -619,7 +687,9 @@ export function TimelineAlignFlags({
                           page: flag.page.label,
                           time,
                       })
-                    : t("tempo.align.countOneHandle", { time });
+                    : t("tempo.align.countOneHandle", {
+                          music: musicStartText(audioOffsetSeconds, t),
+                      });
                 return (
                     <button
                         key={flag.index}
@@ -907,6 +977,89 @@ export function TimelineAlignChip({ preview }: { preview: AlignPreview }) {
             }}
         >
             {preview.chip.text}
+        </div>,
+        document.body,
+    );
+}
+
+/**
+ * After a drag or nudge over a typed section (FX-5): the edit waits, drawn, until Override
+ * (Enter) writes it or Keep typed (Esc, or a press elsewhere) drops it.
+ */
+export function TimelineAlignConfirm({
+    preview,
+    onConfirm,
+    onCancel,
+}: {
+    preview: AlignPreview;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    const t = alignT;
+    const ref = useRef<HTMLDivElement>(null);
+    // Focus comes here, and goes back to the flag (or wherever it was) afterwards
+    useEffect(() => {
+        const before =
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null;
+        ref.current?.focus();
+        return () => before?.focus?.();
+    }, []);
+    const first = preview.overrides?.[0];
+    if (!first) return null;
+    const { anchor } = preview;
+    return createPortal(
+        <div
+            ref={ref}
+            role="alertdialog"
+            aria-label={t("tempo.align.override.question", {
+                tempo: first.tempo,
+                measures: first.measures,
+            })}
+            tabIndex={-1}
+            data-testid="timeline-align-confirm"
+            onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    onConfirm();
+                } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    onCancel();
+                }
+            }}
+            className="bg-modal text-text border-yellow shadow-modal rounded-6 fixed z-[70] flex max-w-[360px] flex-col gap-6 border p-8 text-[12px] outline-hidden"
+            style={{
+                left: anchor ? anchor.x : "50%",
+                top: anchor ? anchor.top - 4 : 96,
+                transform: "translate(-50%, -100%)",
+            }}
+        >
+            <p>
+                {t("tempo.align.override.question", {
+                    tempo: first.tempo,
+                    measures: first.measures,
+                })}
+            </p>
+            <div className="flex justify-end gap-6">
+                <button
+                    type="button"
+                    data-testid="timeline-align-keep-typed"
+                    onClick={onCancel}
+                    className="rounded-4 hover:bg-fg-2 focus-visible:ring-accent px-8 py-2 outline-hidden focus-visible:ring-2"
+                >
+                    {t("tempo.align.override.keep")}
+                </button>
+                <button
+                    type="button"
+                    data-testid="timeline-align-override"
+                    onClick={onConfirm}
+                    className="rounded-4 bg-accent text-text-invert focus-visible:ring-accent px-8 py-2 outline-hidden focus-visible:ring-2"
+                >
+                    {t("tempo.align.override.confirm")}
+                </button>
+            </div>
         </div>,
         document.body,
     );

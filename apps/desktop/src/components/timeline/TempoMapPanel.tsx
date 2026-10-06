@@ -7,30 +7,21 @@
 import {
     useCallback,
     useEffect,
-    useMemo,
     useRef,
     useState,
     type KeyboardEvent as ReactKeyboardEvent,
+    type RefObject,
 } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { DotsThreeIcon, XIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { useTimingObjects } from "@/hooks";
-import { compareBeats } from "@/global/classes/Beat";
-import {
-    workspaceSettingsKeys,
-    workspaceSettingsQueryOptions,
-} from "@/hooks/queries/useWorkspaceSettings";
-import {
-    useRetimeBeats,
-    useTempoSyncedBeatIds,
-} from "@/hooks/queries/useTempo";
+import { workspaceSettingsKeys } from "@/hooks/queries/useWorkspaceSettings";
+import { useRetimeBeats } from "@/hooks/queries/useTempo";
 import { useTempoLabFlag } from "@/stores/UiSettingsStore";
 import {
     addRowAt,
-    deriveTempoMap,
     editRowMeter,
     editRowRamp,
     editRowTempo,
@@ -38,19 +29,21 @@ import {
     formatBpm,
     formatMeter,
     formatTempo,
-    marksByMeasure,
+    markText,
+    meterText,
     parseMeterCell,
     parseRampCell,
     parseTempoCell,
     removeRow,
     retimeArgsOf,
+    rowTempoText,
     UNIT_GLYPH,
     type TempoMapEditError,
     type TempoMapEditResult,
-    type TempoMapMeasure,
     type TempoMapRow,
 } from "@/timeline/tempo";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
+import { useTempoMapState } from "./useTempoMapState";
 
 /** The table's columns; only meter, tempo and rit./accel. are edited. */
 const COLUMNS = [
@@ -95,15 +88,12 @@ export const formatStart = (seconds: number) => {
     return `${m}:${s}`;
 };
 
-export const tempoText = (row: TempoMapRow) =>
-    row.shape === "uneven"
-        ? formatTempo(row.unit, row.averageBpm, false)
-        : formatTempo(row.unit, row.startBpm, true);
+export const tempoText = rowTempoText;
 
 export const rampText = (row: TempoMapRow) =>
     row.shape !== "ramp"
         ? ""
-        : `${row.endBpm < row.startBpm ? "rit." : "accel."} to ${formatTempo(row.unit, row.endBpm, true)}`;
+        : `${row.endBpm < row.startBpm ? "rit." : "accel."} to ${formatTempo(row.unit, row.endBpm, row.exact)}`;
 
 const measureText = (row: TempoMapRow) =>
     `m${row.measureNumber}${row.rehearsalMark ? ` ${row.rehearsalMark}` : ""}`;
@@ -116,7 +106,7 @@ function cellText(row: TempoMapRow, column: ColumnKey): string {
         case "measure":
             return measureText(row);
         case "meter":
-            return formatMeter(row.meter);
+            return meterText(row);
         case "tempo":
             return tempoText(row);
         case "ramp":
@@ -136,54 +126,52 @@ function editText(row: TempoMapRow, column: ColumnKey): string {
         return row.shape === "ramp"
             ? `${UNIT_GLYPH[row.unit]}=${formatBpm(row.endBpm)}`
             : "";
+    if (column === "meter") return row.label ?? formatMeter(row.meter);
     return cellText(row, column);
-}
-
-/** The show's counts, measures and typed rows as the tempo map takes them. */
-function useTempoMapState() {
-    const { beats, measures } = useTimingObjects()!;
-    const { data: settings } = useQuery(workspaceSettingsQueryOptions());
-    const syncedBeatIds = useTempoSyncedBeatIds();
-    return useMemo(() => {
-        const sorted = [...beats].sort(compareBeats);
-        const beatIds = sorted.map((b) => b.id);
-        const durations = sorted.map((b) => b.duration);
-        const ordinal = new Map(beatIds.map((id, i) => [id, i]));
-        const mapMeasures: TempoMapMeasure[] = [];
-        const measureStartBeatIds: number[] = [];
-        for (const m of measures) {
-            const firstCount = ordinal.get(m.startBeat.id);
-            if (firstCount === undefined) continue;
-            mapMeasures.push({
-                number: m.number,
-                rehearsalMark: m.rehearsalMark,
-                firstCount,
-                counts: m.counts,
-            });
-            measureStartBeatIds.push(m.startBeat.id);
-        }
-        const marks = marksByMeasure(
-            settings?.tempoMapMarks,
-            measureStartBeatIds,
-        );
-        const rows = deriveTempoMap({
-            durations,
-            measures: mapMeasures,
-            marks,
-        });
-        return {
-            beatIds,
-            measureStartBeatIds,
-            syncedBeatIds,
-            state: { durations, measures: mapMeasures, marks, rows },
-        };
-    }, [beats, measures, settings?.tempoMapMarks, syncedBeatIds]);
 }
 
 type Message = { text: string; tone: "error" | "info" } | null;
 
+/**
+ * The Measure cell's dot: ● a tempo typed here (or read from the score) that still plays; ○ one
+ * that a drag or a fit has since moved, with the written value in its tooltip (FX-4).
+ */
+function TypedDot({ row }: { row: TempoMapRow }) {
+    const written =
+        row.markedBpm !== undefined
+            ? formatTempo(row.unit, row.markedBpm, true)
+            : null;
+    const from = row.source === "import" ? "From the score" : "Typed";
+    const title = !written
+        ? "A row you added"
+        : row.exact
+          ? `${from}: ${written}`
+          : `${from} ${written}; changed since (now ${rowTempoText(row)})`;
+    return (
+        <span
+            className={clsx(
+                "text-[10px]",
+                row.exact || !written ? "text-accent" : "text-text-subtitle",
+            )}
+            title={title}
+            aria-label={title}
+            data-testid="tempo-map-typed"
+            data-exact={row.exact || undefined}
+        >
+            {row.exact || !written ? "●" : "○"}
+        </span>
+    );
+}
+
 /** The table itself, for the panel (and for tests). */
-export function TempoMapTable({ onClose }: { onClose?: () => void }) {
+export function TempoMapTable({
+    onClose,
+    gridRef: outerGridRef,
+}: {
+    onClose?: () => void;
+    /** The grid, so the panel can put the focus in it when it opens */
+    gridRef?: RefObject<HTMLDivElement | null>;
+}) {
     const map = useTempoMapState();
     const { rows } = map.state;
     const retime = useRetimeBeats();
@@ -192,7 +180,8 @@ export function TempoMapTable({ onClose }: { onClose?: () => void }) {
     const [editing, setEditing] = useState<string | null>(null);
     const [message, setMessage] = useState<Message>(null);
     const [addText, setAddText] = useState("");
-    const gridRef = useRef<HTMLDivElement>(null);
+    const ownGridRef = useRef<HTMLDivElement>(null);
+    const gridRef = outerGridRef ?? ownGridRef;
     const addRef = useRef<HTMLInputElement>(null);
 
     const row = Math.min(active.row, Math.max(rows.length - 1, 0));
@@ -200,11 +189,16 @@ export function TempoMapTable({ onClose }: { onClose?: () => void }) {
 
     const focusGrid = useCallback(
         () => requestAnimationFrame(() => gridRef.current?.focus()),
-        [],
+        [gridRef],
     );
 
     const write = useCallback(
-        async (result: TempoMapEditResult, done: string) => {
+        async (
+            result: TempoMapEditResult,
+            done:
+                | string
+                | ((r: Extract<TempoMapEditResult, { ok: true }>) => string),
+        ) => {
             if (!result.ok) {
                 setMessage({ text: EDIT_ERRORS[result.error], tone: "error" });
                 return false;
@@ -227,7 +221,10 @@ export function TempoMapTable({ onClose }: { onClose?: () => void }) {
                 setMessage({ text: "Couldn't save that edit", tone: "error" });
                 return false;
             }
-            setMessage({ text: done, tone: "info" });
+            setMessage({
+                text: typeof done === "string" ? done : done(result),
+                tone: "info",
+            });
             return true;
         },
         [map, retime, queryClient],
@@ -259,12 +256,21 @@ export function TempoMapTable({ onClose }: { onClose?: () => void }) {
             }
             result = editRowMeter(map.state, row, cell.meter);
         } else return;
-        if (
-            await write(
-                result,
-                `${measureText(target)}: ${text.trim() || "no rit."}`,
-            )
-        ) {
+        // Say what was written, not what was typed: "=prev" reads "m29: ♩=176"
+        const resolved = (r: Extract<TempoMapEditResult, { ok: true }>) => {
+            const mark = r.write.marks.get(target.measureIndex);
+            const what = mark
+                ? markText(mark, {
+                      withMeter:
+                          column.key === "meter" ||
+                          (mark.meter !== undefined &&
+                              formatMeter(mark.meter) !==
+                                  formatMeter(target.meter)),
+                  })
+                : "";
+            return `${measureText(target)}: ${what || text.trim() || "no rit."}`;
+        };
+        if (await write(result, resolved)) {
             setEditing(null);
             focusGrid();
         }
@@ -337,6 +343,11 @@ export function TempoMapTable({ onClose }: { onClose?: () => void }) {
                 event.preventDefault();
                 addRef.current?.focus();
                 return;
+        }
+        // Space (play, elsewhere) does nothing here: no tempo or meter starts with it
+        if (event.key === " ") {
+            event.preventDefault();
+            return;
         }
         // Typing starts an edit, as in a spreadsheet
         if (
@@ -457,13 +468,7 @@ export function TempoMapTable({ onClose }: { onClose?: () => void }) {
                                                 {text}
                                             </span>
                                             {c.key === "measure" && r.typed && (
-                                                <span
-                                                    className="text-accent text-[10px]"
-                                                    title="Typed row: its first count is synced"
-                                                    aria-label="typed, synced"
-                                                >
-                                                    ●
-                                                </span>
+                                                <TypedDot row={r} />
                                             )}
                                             {c.key === "meter" &&
                                                 r.meterInferred &&
@@ -546,6 +551,16 @@ export function TempoMapTable({ onClose }: { onClose?: () => void }) {
     );
 }
 
+/**
+ * Whether a key pressed inside the tempo map stays there: everything but Ctrl/⌘ shortcuts (undo,
+ * save) and Esc, which closes the map (Radix listens for it on the document).
+ */
+export const mapOwnsKey = (event: {
+    key: string;
+    ctrlKey: boolean;
+    metaKey: boolean;
+}) => !event.ctrlKey && !event.metaKey && event.key !== "Escape";
+
 /** The tempo map as a side panel that leaves the timeline and field usable. */
 export function TempoMapPanel({
     open,
@@ -554,11 +569,23 @@ export function TempoMapPanel({
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }) {
+    const gridRef = useRef<HTMLDivElement>(null);
     return (
         <Dialog.Root open={open} onOpenChange={onOpenChange} modal={false}>
             <Dialog.Portal>
                 <Dialog.Content
                     data-testid="tempo-map"
+                    // Typing starts in the grid's first tempo cell, never on ✕ (FX-1)
+                    onOpenAutoFocus={(e) => {
+                        e.preventDefault();
+                        gridRef.current?.focus();
+                    }}
+                    // While the map has the focus its keys are its own: Space, R, WASD and the
+                    // other single-key shortcuts don't reach the app. Ctrl/⌘ ones (undo) still do
+                    onKeyDown={(e) => {
+                        if (!mapOwnsKey(e)) return;
+                        e.stopPropagation();
+                    }}
                     onInteractOutside={(e) => e.preventDefault()}
                     // Esc in a cell editor or the add box cancels that, not the panel
                     onEscapeKeyDown={(e) => {
@@ -573,9 +600,10 @@ export function TempoMapPanel({
                                 Tempo map
                             </Dialog.Title>
                             <Dialog.Description className="text-text-subtitle mt-4 text-[11px]">
-                                One row per tempo or meter change. Typed tempos
-                                are exact; ≈ is an average. Typing only changes
-                                when counts land.
+                                One row per tempo or meter change. = is a tempo
+                                typed here or read from the score, still as
+                                written; ≈ came from a drag, tapping or an
+                                average. Typing only changes when counts land.
                             </Dialog.Description>
                         </div>
                         <Dialog.Close
@@ -585,7 +613,10 @@ export function TempoMapPanel({
                             <XIcon size={18} />
                         </Dialog.Close>
                     </div>
-                    <TempoMapTable onClose={() => onOpenChange(false)} />
+                    <TempoMapTable
+                        gridRef={gridRef}
+                        onClose={() => onOpenChange(false)}
+                    />
                 </Dialog.Content>
             </Dialog.Portal>
         </Dialog.Root>

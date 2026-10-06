@@ -2,15 +2,23 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
     addRowAt,
+    countUnits,
     deriveTempoMap,
     editRowMeter,
     editRowRamp,
     editRowTempo,
     findMeasure,
+    formatUnitTempo,
     inferMeter,
+    markText,
     marksByMeasure,
+    meterText,
+    overriddenSections,
     removeRow,
     retimeArgsOf,
+    rowTempoText,
+    typedSections,
+    unitTempo,
     type TempoMapMark,
     type TempoMapMeasure,
 } from "../tempoMap";
@@ -344,8 +352,12 @@ describe("tempo map edits", () => {
             .slice(5)
             .forEach((x) => expect(x).toBeCloseTo(60 / 152.5, 12));
         expect(w.marks.get(1)?.unit).toBe("dq");
+        // "=prev" keeps the pulse (the eighth), not the count: ♩=152.5 is ♩.=101.667
         const prev = ok(editRowTempo(s, 1, { kind: "previous" }));
-        expect(prev.durations).toEqual(w.durations);
+        prev.durations
+            .slice(5)
+            .forEach((x) => expect(x).toBeCloseTo((1.5 * 60) / 152.5, 12));
+        expect(prev.marks.get(1)?.bpm).toBeCloseTo((152.5 * 4) / 6, 9);
     });
 
     it("needs a previous row for relations", () => {
@@ -504,5 +516,228 @@ describe("storing typed rows", () => {
         expect(args.newDurationsByBeatId.get(105)).toBe(0.5);
         expect(marksByMeasure(args.tempoMapMarks, starts)).toEqual(write.marks);
         expect(marksByMeasure([{ beatId: 999 }], starts).size).toBe(0);
+    });
+});
+
+describe("=prev and relations carry the pulse (FX-2)", () => {
+    it("e=352 then =prev on a 6/4 row is ♩=176, not ♩=352", () => {
+        // m1–2 5/8 3+2 typed e=352, m3 6/4
+        const measures = measuresOf([2, 2, 6]);
+        const d = [
+            0,
+            ...rampDurations([1.5, 1], 176),
+            ...rampDurations([1.5, 1], 176),
+            ...Array(6).fill(0.5),
+        ];
+        const marks = new Map<number, TempoMapMark>([
+            [0, { meter: meter("5/8 3+2"), unit: "e", bpm: 352 }],
+            [2, { meter: meter("6/4"), unit: "q" }],
+        ]);
+        const s = state(d, measures, marks);
+        expect(s.rows.map((r) => r.unit)).toEqual(["e", "q"]);
+        const w = ok(editRowTempo(s, 1, { kind: "previous" }));
+        w.durations
+            .slice(5)
+            .forEach((x) => expect(x).toBeCloseTo(60 / 176, 12));
+        expect(w.marks.get(2)?.bpm).toBeCloseTo(176, 9);
+        expect(markText(w.marks.get(2)!, { withMeter: false })).toBe("♩=176");
+    });
+
+    it("=prev keeps the pulse whatever the units, as a property", () => {
+        const units = ["e", "q", "dq", "h"] as const;
+        fc.assert(
+            fc.property(
+                fc.constantFrom(...units),
+                fc.constantFrom(...units),
+                fc.double({ min: 60, max: 200, noNaN: true }),
+                (a, b, bpm) => {
+                    const measures = measuresOf([2, 2]);
+                    const d = [0, 0.5, 0.5, 0.5, 0.5];
+                    const marks = new Map<number, TempoMapMark>([
+                        [0, { unit: a }],
+                        [1, { unit: b }],
+                    ]);
+                    const s0 = state(d, measures, marks);
+                    const first = editRowTempo(s0, 0, {
+                        kind: "tempo",
+                        bpm,
+                        unit: a,
+                    });
+                    fc.pre(first.ok);
+                    const typed = ok(first);
+                    const s1 = state(typed.durations, measures, typed.marks);
+                    // Past the 40–400 limits in the other unit, it is refused
+                    const next = editRowTempo(s1, 1, { kind: "previous" });
+                    fc.pre(next.ok);
+                    const w = ok(next);
+                    const sixteenths = { e: 2, q: 4, dq: 6, h: 8 };
+                    // The same note lasts as long in both rows
+                    const before = (60 / bpm) * (1 / sixteenths[a]);
+                    const after =
+                        (60 / w.marks.get(1)!.bpm!) * (1 / sixteenths[b]);
+                    return Math.abs(before - after) < 1e-12;
+                },
+            ),
+        );
+    });
+});
+
+describe("typed rows stay typed until something else changes them (FX-4)", () => {
+    it("shows = while a typed row plays at its tempo, ≈ once a drag moved it", () => {
+        const d = [0, ...Array(8).fill(0.5)];
+        const measures = measuresOf([4, 4]);
+        const s = state(d, measures);
+        const w = ok(
+            editRowTempo(s, 0, { kind: "tempo", bpm: 176, unit: null }),
+        );
+        expect(w.marks.get(0)).toMatchObject({ bpm: 176, source: "typed" });
+        const typed = deriveTempoMap({
+            durations: w.durations,
+            measures,
+            marks: w.marks,
+        });
+        expect(typed[0].exact).toBe(true);
+        expect(rowTempoText(typed[0])).toBe("♩=176");
+        // A drag rescales the row: still steady, but not what was typed
+        const dragged = w.durations.map((x, i) =>
+            i >= 1 && i <= 8 ? x * 0.95 : x,
+        );
+        const after = deriveTempoMap({
+            durations: dragged,
+            measures,
+            marks: w.marks,
+        });
+        expect(after[0].exact).toBe(false);
+        expect(after[0].markedBpm).toBe(176);
+        expect(rowTempoText(after[0])).toBe("♩≈185.3");
+    });
+
+    it("never shows = for a drag's tempo on a row nobody typed", () => {
+        const d = [0, ...Array(4).fill(60 / 185.035)];
+        const rows = deriveTempoMap({
+            durations: d,
+            measures: measuresOf([4]),
+        });
+        expect(rows[0].exact).toBe(false);
+        expect(rowTempoText(rows[0])).toBe("♩≈185");
+        const plain = deriveTempoMap({
+            durations: [0, ...Array(4).fill(60 / 152.5)],
+            measures: measuresOf([4]),
+        });
+        expect(rowTempoText(plain[0])).toBe("♩=152.5");
+    });
+
+    it("protects typed rows that still play as typed, and names what a drag overrides", () => {
+        const d = [0, ...Array(8).fill(0.5)];
+        const measures = measuresOf([4, 4]);
+        const s = state(d, measures, new Map([[1, {}]]));
+        const w = ok(
+            editRowTempo(s, 0, { kind: "tempo", bpm: 176, unit: null }),
+        );
+        const rows = deriveTempoMap({
+            durations: w.durations,
+            measures,
+            marks: w.marks,
+        });
+        const sections = typedSections(rows);
+        expect(sections).toEqual([
+            { from: 1, to: 5, tempo: "♩=176", measures: "m1" },
+        ]);
+        const inside = [...w.durations];
+        inside[2] *= 1.1;
+        expect(overriddenSections(sections, w.durations, inside)).toEqual(
+            sections,
+        );
+        const later = [...w.durations];
+        later[6] *= 1.1;
+        expect(overriddenSections(sections, w.durations, later)).toEqual([]);
+        // An imported row isn't protected
+        const imported = new Map<number, TempoMapMark>([
+            ...w.marks,
+            [0, { ...w.marks.get(0)!, source: "import" }],
+        ]);
+        expect(
+            typedSections(
+                deriveTempoMap({
+                    durations: w.durations,
+                    measures,
+                    marks: imported,
+                }),
+            ),
+        ).toEqual([]);
+    });
+});
+
+describe("meters as the score writes them (FX-3)", () => {
+    it("shows a pickup with its meter, and the next bar starts its own row", () => {
+        const d = [0, ...Array(9).fill(60 / 132)];
+        const measures = measuresOf([1, 4, 4], 0);
+        const marks = new Map<number, TempoMapMark>([
+            [0, { meter: meter("4/4"), unit: "q", bpm: 132, source: "import" }],
+        ]);
+        const rows = deriveTempoMap({ durations: d, measures, marks });
+        expect(rows.map(meterText)).toEqual(["4/4 pickup", "4/4"]);
+        expect(rows[0].exact).toBe(true);
+        expect(rows[1].meterInferred).toBe(false);
+    });
+
+    it("keeps 3/2 counted in ♩ as 3/2, and 6/8 as ♩.", () => {
+        const d = [0, ...Array(6).fill(0.5), ...Array(4).fill(60 / 88)];
+        const measures = measuresOf([6, 2, 2]);
+        const marks = new Map<number, TempoMapMark>([
+            [0, { meter: meter("6/4"), unit: "q", label: "3/2", bpm: 120 }],
+            [1, { meter: meter("6/8"), unit: "dq", bpm: 88, source: "import" }],
+        ]);
+        const rows = deriveTempoMap({ durations: d, measures, marks });
+        expect(rows.map((r) => `${meterText(r)} ${rowTempoText(r)}`)).toEqual([
+            "3/2 ♩=120",
+            "6/8 ♩.=88",
+        ]);
+    });
+
+    it("reads ♩.=86 typed over a section counted as 2/4 as 6/8, not 1.5× too fast", () => {
+        const d = [0, ...Array(4).fill(60 / 88)];
+        const measures = measuresOf([2, 2]);
+        const s = state(d, measures);
+        expect(formatMeter(s.rows[0].meter)).toBe("2/4");
+        const w = ok(
+            editRowTempo(s, 0, { kind: "tempo", bpm: 86, unit: "dq" }),
+        );
+        w.durations.slice(1).forEach((x) => expect(x).toBeCloseTo(60 / 86, 12));
+        expect(markText(w.marks.get(0)!, { withMeter: true })).toBe(
+            "6/8 ♩.=86",
+        );
+    });
+});
+
+describe("tempos in their units for Align and the readout (FX-7)", () => {
+    it("reads a 6/8 page as ♩.=88 and a plain page as a number", () => {
+        const d = [0, ...Array(4).fill(0.5), ...Array(4).fill(60 / 88)];
+        const measures = measuresOf([4, 2, 2]);
+        const marks = new Map<number, TempoMapMark>([
+            [1, { meter: meter("6/8"), unit: "dq" }],
+        ]);
+        const rows = deriveTempoMap({ durations: d, measures, marks });
+        const units = countUnits(rows, d.length);
+        expect(formatUnitTempo(unitTempo(d, units, 1, 5)!)).toBe("120");
+        expect(formatUnitTempo(unitTempo(d, units, 5, 9)!)).toBe("♩.=88");
+        // A page from 4/4 into 6/8 reads the tempo where it starts, not an average
+        expect(formatUnitTempo(unitTempo(d, units, 3, 9)!)).toBe("120");
+        const slower = d.map((x, i) => (i >= 5 ? x * 1.03 : x));
+        expect(formatUnitTempo(unitTempo(slower, units, 5, 9)!)).toBe("♩.≈85");
+    });
+
+    it("reads a 5/8 3+2 section at ♩=176 as ♩=176, not an average", () => {
+        const d = [
+            0,
+            ...rampDurations([1.5, 1], 176),
+            ...rampDurations([1.5, 1], 176),
+        ];
+        const rows = deriveTempoMap({
+            durations: d,
+            measures: measuresOf([2, 2]),
+        });
+        const units = countUnits(rows, d.length);
+        expect(formatUnitTempo(unitTempo(d, units, 1, 5)!)).toBe("♩=176");
     });
 });

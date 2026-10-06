@@ -126,3 +126,41 @@ describe("reimportLines", () => {
         ]);
     });
 });
+
+describe("a kept rit. (FX-6)", () => {
+    it("says in words that the show's rit. stays, instead of a tempo line", () => {
+        const file = numbered([
+            bar(132, "A"),
+            bar(132),
+            bar(132),
+            bar(132, "B"),
+        ]);
+        const ritBar = (from: number, to: number): ReimportScoreMeasure => ({
+            number: -1,
+            durations: [0, 1, 2, 3].map(
+                (k) => 60 / (from + ((to - from) * k) / 3),
+            ),
+        });
+        const show = showOf(
+            numbered([
+                bar(132, "A"),
+                ritBar(132, 116),
+                ritBar(112, 100),
+                bar(132, "B"),
+            ]),
+        );
+        const score = file.map((b, i) =>
+            i === 1 ? { ...b, rampWithoutTarget: true } : b,
+        );
+        const lines = reimportLines(
+            show,
+            score,
+            planReimport(show, score),
+            "score",
+        );
+        expect(lines).toEqual([
+            { key: "same", params: {} },
+            { key: "rampKept", params: { measures: "m2–3" } },
+        ]);
+    });
+});

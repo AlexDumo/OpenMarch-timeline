@@ -330,3 +330,66 @@ describe("page box labels (FB-11)", () => {
         expect(pageBoxLabelFits("4", 200, null).note).toBe(false);
     });
 });
+
+describe("typed sections in Align (FX-5)", () => {
+    const typed = {
+        units: [],
+        sections: [{ from: 1, to: 9, tempo: "♩=120", measures: "m1–2" }],
+    };
+    const drag = async (handle: HTMLElement) => {
+        fireEvent.pointerDown(handle, {
+            button: 0,
+            clientX: 100,
+            pointerId: 1,
+        });
+        fireEvent.pointerMove(handle, { clientX: 105, pointerId: 1 });
+        fireEvent.pointerMove(handle, { clientX: 110, pointerId: 1 });
+        await nextFrame();
+    };
+
+    it("says a drag overrides a typed tempo, and writes only after Override", async () => {
+        const { align } = renderAlign({ tempoMap: typed });
+        const handle = flag(9);
+        await drag(handle);
+        expect(screen.getByTestId("timeline-align-chip")).toHaveTextContent(
+            "Overrides typed ♩=120 (m1–2)",
+        );
+        fireEvent.pointerUp(handle, { clientX: 110, pointerId: 1 });
+        expect(align.onRetime).not.toHaveBeenCalled();
+        const confirm = screen.getByTestId("timeline-align-confirm");
+        expect(confirm).toHaveFocus();
+        fireEvent.keyDown(confirm, { key: "Enter" });
+        expect(align.onRetime).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the typed tempo with Esc or Keep typed", async () => {
+        const { align } = renderAlign({ tempoMap: typed });
+        const handle = flag(9);
+        await drag(handle);
+        fireEvent.pointerUp(handle, { clientX: 110, pointerId: 1 });
+        fireEvent.keyDown(screen.getByTestId("timeline-align-confirm"), {
+            key: "Escape",
+        });
+        expect(screen.queryByTestId("timeline-align-confirm")).toBeNull();
+        await drag(handle);
+        fireEvent.pointerUp(handle, { clientX: 110, pointerId: 1 });
+        fireEvent.click(screen.getByTestId("timeline-align-keep-typed"));
+        expect(align.onRetime).not.toHaveBeenCalled();
+    });
+
+    it("writes a drag that leaves the typed section alone at once", async () => {
+        const { align } = renderAlign({
+            tempoMap: {
+                units: [],
+                sections: [
+                    { from: 25, to: 33, tempo: "♩=120", measures: "m7–8" },
+                ],
+            },
+            synced: [17],
+        });
+        const handle = flag(9);
+        await drag(handle);
+        fireEvent.pointerUp(handle, { clientX: 110, pointerId: 1 });
+        expect(align.onRetime).toHaveBeenCalledTimes(1);
+    });
+});

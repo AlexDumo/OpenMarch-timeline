@@ -42,6 +42,8 @@ import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import { TempoMapMenu } from "./TempoMapPanel";
+import { useTempoMapState } from "./useTempoMapState";
+import { countUnits, typedSections } from "@/timeline/tempo";
 import {
     TimelineCompactButton,
     TimelinePreviewButtons,
@@ -428,6 +430,14 @@ function useTimelineAlign({
             .sort((a, b) => a - b);
     }, [beats, syncedIds]);
     const audioOffsetSeconds = settings?.audioOffsetSeconds ?? 0;
+    const map = useTempoMapState();
+    const tempoMap = useMemo(
+        () => ({
+            units: countUnits(map.state.rows, map.state.durations.length),
+            sections: typedSections(map.state.rows),
+        }),
+        [map],
+    );
     return useMemo(() => {
         if (!enabled) return undefined;
         const idsOf = (indexes: readonly number[]) =>
@@ -454,9 +464,11 @@ function useTimelineAlign({
                 }),
             onSetSynced: (next) => setSyncedIds(idsOf(next)),
             punchTap,
+            tempoMap,
         };
     }, [
         punchTap,
+        tempoMap,
         audioOffsetSeconds,
         beats,
         durations,
