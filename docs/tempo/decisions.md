@@ -138,6 +138,7 @@ fixture list and how to score).
 - **Context:** the shows have to be built with the app's own db-functions and converter, which import through the `@/` alias and need a DOM-like environment.
 - **Choice:** `generate.kit.ts` is one vitest "test" under its own config (`tempo-kit/vitest.kit.config.mts`), as `~/om-capture/make-fixture` already does. The scorer is plain Node (`score.mts`), so anyone can run it on a saved show.
 - **Alternatives:** `tsx` with tsconfig paths. Some app modules pull in browser globals at import time, which vitest's jsdom environment provides.
+
 ## T-8 Wizard: counts to the end of the recording, pages stay at the start (show-length, E1)
 
 - **Context:** "Tempo only" made 20 measures (80 counts, 40 s at 120) whatever the MP3's length;
@@ -189,7 +190,8 @@ fixture list and how to score).
 - **Alternatives:** the note in the Music modal (Dana doesn't open it); a toast on open (lost to
   interruptions); extending automatically when audio is added (a hidden structural change).
 - **Validate:** V-42, V-43.
-## T-8 One rule for which count a moment belongs to (count-parity, E2)
+
+## T-11 One rule for which count a moment belongs to (count-parity, E2)
 
 - **Context:** the timeline readout, the PDF drill sheet and the video overlay named different
   counts and measures for the same moment (on m5's downbeat the video was one count ahead of the
@@ -205,6 +207,7 @@ fixture list and how to score).
   (print page 12, scrub to its count 1 and 16, render the video, read all three) finds zero
   mismatches. Note T-3 calls the show's first beat "count 1"; under this rule the first page's
   count 1 is the second beat line, so the two docs should settle one word.
+
 ## MR-1 Rehearsal marks belong to their measure (measure row, E8)
 
 - **Context:** a `measures` row stores its downbeat and its mark, so re-barring has to decide
@@ -214,7 +217,7 @@ fixture list and how to score).
   of the show, and the toast names it with Undo.
 - **Alternatives:** keep each mark on its count and move it to whichever measure starts there
   (better for marks set by ear, worse for marks typed from the score).
-- **Validate:** V-43.
+- **Validate:** V-46.
 
 ## MR-2 R marks the nearest downbeat while playing (E8, Dana's E4)
 
@@ -227,7 +230,7 @@ fixture list and how to score).
   that a mark needs a measure line and Enter starts one at that count.
 - **Alternatives:** the measure holding the playhead (a press a hair early lands a measure
   before); a draft that waits for Enter (a press while playing would be lost if ignored).
-- **Validate:** V-41.
+- **Validate:** V-44.
 
 ## MR-3 The suggested mark name (E8)
 
@@ -235,7 +238,7 @@ fixture list and how to score).
   do); trailing numbers count up ("B2" → "B3", "41" → "42"); a word starts at A. Names the show
   already uses are skipped, so go-to "C" stays unambiguous.
 - **Alternatives:** AA, AB (spreadsheet style); allow duplicates.
-- **Validate:** V-42.
+- **Validate:** V-45.
 
 ## MR-4 Beats in mN (E8)
 
@@ -246,7 +249,7 @@ fixture list and how to score).
   stays when that line has none). "Beats per measure from here" re-bars up to the next rehearsal
   mark (default when there is one) or to the end, and a last shorter measure keeps what's left.
 - **Alternatives:** unchecked by default (11-ui.md's "usual case" argues for on).
-- **Validate:** V-43.
+- **Validate:** V-46.
 
 ## MR-5 The measure row's targets (E8)
 
@@ -255,7 +258,7 @@ fixture list and how to score).
   within 6px, else the measure under the pointer. Tabs keep seeking on click (owner rule);
   double-click or Enter renames. Compact mode has no numbers, so only tabs, R and the menu edit
   there.
-- **Validate:** V-44.
+- **Validate:** V-47.
 
 ## MR-6 No ripple, no flag (E8)
 
@@ -270,6 +273,7 @@ fixture list and how to score).
   (2+2+3 durations) can change whether the modal reads it as mixed meter. Measure numbers after an
   added or removed line renumber everywhere (readout, go-to, PDF), which is the point, but the designer's
   printed sheets will disagree until reprinted.
+
 ## MX-1 Which note is the count in each meter (musicxml)
 
 - **Context:** the parser had a lookup table (7/8 as seven quarters, 5/8 and 5/4 as one count a
@@ -283,7 +287,7 @@ fixture list and how to score).
   with a warning.
 - **Alternatives:** count every denominator note (6/8 in six, 7/8 in seven); a per-meter "count
   in" choice in the preview (Marcus and Sam ask for it; follow-up).
-- **Validate:** V-41. The kit's corps exports (7/8, 5/8, 3/2 in quarters, 12/8) match their
+- **Validate:** V-48. The kit's corps exports (7/8, 5/8, 3/2 in quarters, 12/8) match their
   ground truth count times exactly.
 
 ## MX-2 rit. and accel. are applied only to a known target (musicxml)
@@ -295,7 +299,7 @@ fixture list and how to score).
   says "rit. not applied" and the counts keep their tempo. "a tempo" goes back to the tempo
   before the rit.; "Tempo I" to the first tempo.
 - **Alternatives:** guess a target (say 85%); use `<dashes>` to find the end of the line.
-- **Validate:** V-42. On the kit's score export the rit. at m53 has no target in the file, so
+- **Validate:** V-49. On the kit's score export the rit. at m53 has no target in the file, so
   every later count is 0.54 s early against the ground truth; a later in-app rit. edit has to fix
   it.
 
@@ -306,7 +310,7 @@ fixture list and how to score).
   `<sound tempo>` (quarters, decimals allowed) wins over the printed mark. A modulation printed
   with no number (♩. = ♩) is read as "the new note lasts as long as the old one", with a warning.
 - **Alternatives:** refuse "c. 132" (the plan's wording); ignore modulations.
-- **Validate:** V-43 for the modulation reading.
+- **Validate:** V-50 for the modulation reading.
 
 ## MX-4 Pickups and measure numbers (musicxml)
 
@@ -323,4 +327,4 @@ fixture list and how to score).
   Import runs once in a rolled-back transaction first (ripple and commit checks included); if
   the drill would refuse it, the preview says why and Import stays disabled. The existing
   "page N starts at measure N" mapping is kept and stated in the preview.
-- **Validate:** V-44.
+- **Validate:** V-51.
