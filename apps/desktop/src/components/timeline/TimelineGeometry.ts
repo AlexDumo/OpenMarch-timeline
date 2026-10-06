@@ -151,7 +151,11 @@ export const getCanvasWindow = ({
     return { left, width };
 };
 
-/** Whether a drawn window still holds everything the viewport shows of the layer */
+/**
+ * Whether a drawn window still holds everything the viewport shows of the layer, and `margin`
+ * pixels more either side (within the layer), so a scroll that lands a frame before the redraw
+ * (an edge-scroll in an animation frame, a fast scrollbar drag) still finds pixels drawn
+ */
 export const canvasWindowCovers = (
     drawn: TimelineSpan,
     {
@@ -159,9 +163,10 @@ export const canvasWindowCovers = (
         visibleLeft,
         visibleWidth,
     }: { layerWidth: number; visibleLeft: number; visibleWidth: number },
+    margin = 0,
 ) => {
-    const from = clamp(visibleLeft, 0, layerWidth);
-    const to = clamp(visibleLeft + visibleWidth, 0, layerWidth);
+    const from = clamp(visibleLeft - margin, 0, layerWidth);
+    const to = clamp(visibleLeft + visibleWidth + margin, 0, layerWidth);
     return from >= drawn.left && to <= drawn.left + drawn.width;
 };
 

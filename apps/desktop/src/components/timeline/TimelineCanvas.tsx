@@ -23,7 +23,8 @@ import type { TimelineMarker, TimelineWaveform } from "./TimelineViewModel";
  * megabytes, is reallocated on every zoom step, and past the browser's largest canvas (65,535
  * device pixels a side in Chromium) draws nothing at all.
  *
- * - The window moves, and the canvas redraws, only when a scroll leaves it.
+ * - The window moves, and the canvas redraws, only when a scroll comes within half the overscan
+ *   of its edge.
  * - A change of zoom, size, data or theme redraws once, in a microtask queued from the layout
  *   effect: after the whole commit (and the zoom's own scroll fix-up) and before the browser
  *   paints, so a zoom never shows a stale or stretched frame and draws once.
@@ -155,7 +156,7 @@ const useViewportCanvas = ({
     const drawn = useRef<TimelineSpan | null>(null);
     const queued = useRef(false);
 
-    /** Draws the window around the viewport; unless `force`, only if the viewport left it */
+    /** Draws the window around the viewport; unless `force`, only if the viewport nears its edge */
     const draw = useCallback(
         (force: boolean) => {
             const canvas = canvasRef.current;
@@ -168,16 +169,17 @@ const useViewportCanvas = ({
                 visibleLeft: viewport ? viewport.scrollLeft - layerLeft : 0,
                 visibleWidth: viewport ? viewport.clientWidth : width,
             };
+            const overscan = overscanFor(visible.visibleWidth);
+            // Redrawn once the view comes within half the overscan of an edge, not once it has
+            // left the window: a scroll set in an animation frame only reports itself in the
+            // next frame, and a scrollbar drag can run ahead of the main thread
             if (
                 !force &&
                 drawn.current &&
-                canvasWindowCovers(drawn.current, visible)
+                canvasWindowCovers(drawn.current, visible, overscan / 2)
             )
                 return;
-            const span = getCanvasWindow({
-                ...visible,
-                overscan: overscanFor(visible.visibleWidth),
-            });
+            const span = getCanvasWindow({ ...visible, overscan });
             drawn.current = span;
             const context = prepareCanvas(canvas, span, height);
             if (context) paint(context, span, color);
