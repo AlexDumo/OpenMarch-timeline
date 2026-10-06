@@ -113,6 +113,13 @@ words:
   - Rcoords
   - recents
   - rels
+  - respace
+  - respaced
+  - respacing
+  - retime
+  - retimed
+  - retimes
+  - retiming
   - rgba
   - ritardandos
   - rootfile
@@ -162,6 +169,7 @@ words:
   - unmaximize
   - unpreview
   - unstub
+  - unsync
   - uuidv
   - vertaal
   - viewbox
