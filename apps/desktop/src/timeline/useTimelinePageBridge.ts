@@ -25,8 +25,11 @@ export function useTimelinePageBridge(enabled: boolean): void {
     const selectedPage = selectedPageContext?.selectedPage ?? null;
     const setSelectedPage = selectedPageContext?.setSelectedPage;
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
-    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     const scrubbing = useTimelineSelectionStore((s) => s.scrubbing);
+    // Not read while scrubbing (below), so a scrub's seeks don't re-render the host
+    const playheadBeat = useTimelineSelectionStore((s) =>
+        s.scrubbing ? null : s.playheadBeat,
+    );
     /**
      * Pages this bridge selected that the effect below hasn't seen yet, so its own writes aren't
      * read back as someone else's. More than one can be in flight: on pause, the stale playhead's
@@ -40,7 +43,14 @@ export function useTimelinePageBridge(enabled: boolean): void {
 
     // Playhead to page
     useEffect(() => {
-        if (!enabled || isPlaying || scrubbing || !setSelectedPage) return;
+        if (
+            !enabled ||
+            isPlaying ||
+            scrubbing ||
+            playheadBeat === null ||
+            !setSelectedPage
+        )
+            return;
         const page = pageAtPlayhead(pages, playheadBeat);
         if (!page || page.id === selectedPage?.id) return;
         bridged.current.add(page.id);

@@ -183,9 +183,13 @@ export default function AudioPlayer({
     // In timeline mode, mute silences the music only, so the metronome can count through it
     // (UI-12); page mode's mute still silences both
     const metroMuted = audioMuted && !timelineMode;
-    const playheadBeat = useTimelineSelectionStore(displayedBeat);
-    const playheadRevision = useTimelineSelectionStore(
-        (s) => s.playheadRevision,
+    // Only read while playing (where playback starts, and each restart); paused, a scrub's seeks
+    // don't re-render the player
+    const playheadBeat = useTimelineSelectionStore((s) =>
+        isPlaying ? displayedBeat(s) : 0,
+    );
+    const playheadRevision = useTimelineSelectionStore((s) =>
+        isPlaying ? s.playheadRevision : -1,
     );
     const startSeconds = timelineMode
         ? timeAtBeat(beats, playheadBeat)

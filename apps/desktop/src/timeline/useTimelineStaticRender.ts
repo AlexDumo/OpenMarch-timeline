@@ -6,6 +6,10 @@ import { useEffect, useRef } from "react";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import { pageEndBeat, TimelinePositionBuffer } from "./timelineCanvas";
 import { useTimelineResolverStore } from "./timelineStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 
 /**
  * Draws the static (not playing) canvas in timeline mode (docs/timeline/phases/05-rendering.md
@@ -16,6 +20,11 @@ import { useTimelineResolverStore } from "./timelineStore";
  * Does nothing while `enabled` is false (the flag is off) or while playing, when `useAnimation`
  * draws.
  *
+ * With `followPlayhead`, it draws at the beat the timeline shows (`displayedBeat`: the paused
+ * playhead, or a held preview frame) and follows it through a store subscription, so a scrub
+ * redraws the marchers as each beat changes, in the same task as the pointer move, without
+ * re-rendering the component that holds the canvas.
+ *
  * @param redrawKey anything whose change means the canvas marchers were re-created, such as the
  * marcher visuals
  */
@@ -23,6 +32,7 @@ export function useTimelineStaticRender({
     canvas,
     selectedPage,
     beat,
+    followPlayhead = false,
     isPlaying,
     enabled,
     redrawKey,
@@ -32,6 +42,8 @@ export function useTimelineStaticRender({
      * The beat to draw (UI-9: the paused playhead). Without it, the selected page's end beat.
      */
     beat?: number;
+    /** Draw at, and follow, `displayedBeat` in `useTimelineSelectionStore` instead of `beat` */
+    followPlayhead?: boolean;
     selectedPage: {
         /** Stamped on each marcher's `coordinate`, so its `page_id` is current */
         readonly id?: number;
@@ -49,15 +61,42 @@ export function useTimelineStaticRender({
     useEffect(() => {
         if (!enabled || !canvas || !selectedPage || isPlaying) return;
         const buffer = (bufferRef.current ??= new TimelinePositionBuffer());
-        const at = beat ?? pageEndBeat(selectedPage);
-        if (!buffer.fill(at)) return;
-        applyIsolationPlan(buffer.buffer, buffer.marcherIds, at, isolationPlan);
-        canvas.renderMarcherPositions(buffer, selectedPage.id);
+        const draw = (at: number) => {
+            if (!buffer.fill(at)) return;
+            applyIsolationPlan(
+                buffer.buffer,
+                buffer.marcherIds,
+                at,
+                isolationPlan,
+            );
+            canvas.renderMarcherPositions(buffer, selectedPage.id);
+        };
+        if (!followPlayhead) {
+            draw(beat ?? pageEndBeat(selectedPage));
+            return;
+        }
+        let drawn = displayedBeat(useTimelineSelectionStore.getState());
+        draw(drawn);
+        return useTimelineSelectionStore.subscribe((state) => {
+            const at = displayedBeat(state);
+            if (at === drawn) return;
+            drawn = at;
+            // Called inside the store's write: a failed draw mustn't stop its other listeners
+            try {
+                draw(at);
+            } catch (error) {
+                console.error(
+                    "Error drawing the marchers at the playhead",
+                    error,
+                );
+            }
+        });
     }, [
         enabled,
         canvas,
         selectedPage,
         beat,
+        followPlayhead,
         isPlaying,
         version,
         redrawKey,

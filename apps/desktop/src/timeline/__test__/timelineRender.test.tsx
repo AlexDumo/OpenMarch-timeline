@@ -32,6 +32,7 @@ import {
     useTimelineResolverStore,
 } from "../timelineStore";
 import { useTimelineStaticRender } from "../useTimelineStaticRender";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 
 /**
  * Timeline-mode rendering (docs/timeline/phases/05-rendering.md P5.4 and P5.5) against a real
@@ -259,6 +260,52 @@ describeDbTests("timeline rendering", (it) => {
                     );
                 }
             }
+        });
+
+        it("follows the playhead itself with followPlayhead, without a re-render", async ({
+            db,
+        }) => {
+            await seedShow(db);
+            await startTimelineResolver(db);
+            const resolver = useTimelineResolverStore.getState().resolver!;
+            const { pages } = await readTiming(db);
+            const canvas = await createCanvasWithMarchers(db);
+            const store = useTimelineSelectionStore.getState();
+            store.reset();
+            store.seek(9);
+            let renders = 0;
+            renderHook(() => {
+                renders++;
+                useTimelineStaticRender({
+                    canvas,
+                    selectedPage: pages[1]!,
+                    followPlayhead: true,
+                    isPlaying: false,
+                    enabled: true,
+                });
+            });
+            const expectAtBeat = (beat: number) => {
+                const coords = coordsById(canvas);
+                for (const id of MARCHER_IDS)
+                    expectAt(
+                        coords[id]!,
+                        resolver.positionAt(id, beat),
+                        `marcher ${id} at beat ${beat}`,
+                    );
+            };
+            expectAtBeat(9);
+            const rendersBefore = renders;
+            // A scrub: each beat is drawn as the store changes, and nothing re-renders
+            store.beginScrub();
+            for (const beat of [11, 13, 15]) {
+                store.seek(beat);
+                expectAtBeat(beat);
+            }
+            store.seek(17);
+            store.endScrub();
+            expectAtBeat(17);
+            expect(renders).toBe(rendersBefore);
+            store.reset();
         });
 
         it("redraws when a committed edit changes the resolver", async ({

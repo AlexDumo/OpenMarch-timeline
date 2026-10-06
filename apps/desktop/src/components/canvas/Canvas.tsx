@@ -38,10 +38,7 @@ import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
 import { useTimelineShapeCanvas } from "@/timeline/useTimelineShapeCanvas";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import {
-    displayedBeat,
-    useTimelineSelectionStore,
-} from "@/stores/TimelineSelectionStore";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelineDimming } from "@/timeline/useTimelineDimming";
 import TimelineIsolationBar, {
     TimelineFromStartBadge,
@@ -116,9 +113,6 @@ export default function Canvas({
     );
     const { setSelectedShapePageIds } = useSelectionStore()!;
     const databaseReady = useDatabaseReady();
-    // UI-9, UI-11: the paused canvas shows positions at the playhead, or at the frame a paused
-    // preview holds
-    const playheadBeat = useTimelineSelectionStore(displayedBeat);
     const marcherIds = useMemo(() => marchers?.map((m) => m.id), [marchers]);
 
     const { data: fieldProperties } = useQuery(
@@ -698,7 +692,9 @@ export default function Canvas({
     useTimelineStaticRender({
         canvas,
         selectedPage,
-        beat: playheadBeat,
+        // UI-9, UI-11: the paused canvas shows positions at the playhead, or at the frame a
+        // paused preview holds. The hook follows it itself, so a scrub doesn't re-render the field
+        followPlayhead: true,
         isPlaying,
         enabled: timelineMode,
         redrawKey: marcherVisuals,
