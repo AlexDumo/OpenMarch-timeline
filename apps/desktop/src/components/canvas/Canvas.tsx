@@ -83,15 +83,29 @@ export default function Canvas({
     );
     const { setSelectedMarchers } = useSelectedMarchers()!;
 
-    // MarcherPage queries
+    const timelineMode = useTimelineMode();
+    // Draw from the resolver only once it's ready. Until the first cold build finishes (or if it
+    // fails), keep drawing from marcher_pages instead of leaving every marcher at (0, 0).
+    const timelineResolverReady = useTimelineResolverStore(
+        (s) => s.status === "ready",
+    );
+    const drawFromResolver = timelineMode && timelineResolverReady;
+
+    // MarcherPage queries. The previous and next pages' rows only feed page mode's paths, which
+    // timeline mode draws from the resolver, so they aren't read there. The selected page's rows
+    // still gate the page-mode renders below (and other observers read them).
     const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
         marcherPagesByPageQueryOptions(selectedPage?.id),
     );
     const { data: previousMarcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.previousPageId!),
+        marcherPagesByPageQueryOptions(
+            drawFromResolver ? null : selectedPage?.previousPageId,
+        ),
     );
     const { data: nextMarcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.nextPageId!),
+        marcherPagesByPageQueryOptions(
+            drawFromResolver ? null : selectedPage?.nextPageId,
+        ),
     );
 
     const updateMarcherPages = useMutation(
@@ -102,13 +116,6 @@ export default function Canvas({
     );
     const { setSelectedShapePageIds } = useSelectionStore()!;
     const databaseReady = useDatabaseReady();
-    const timelineMode = useTimelineMode();
-    // Draw from the resolver only once it's ready. Until the first cold build finishes (or if it
-    // fails), keep drawing from marcher_pages instead of leaving every marcher at (0, 0).
-    const timelineResolverReady = useTimelineResolverStore(
-        (s) => s.status === "ready",
-    );
-    const drawFromResolver = timelineMode && timelineResolverReady;
     // UI-9, UI-11: the paused canvas shows positions at the playhead, or at the frame a paused
     // preview holds
     const playheadBeat = useTimelineSelectionStore(displayedBeat);
@@ -358,7 +365,11 @@ export default function Canvas({
         }
     }, [canvas, marchers, marcherVisuals, fieldProperties]);
 
-    // Sync canvas with marcher appearances
+    // Sync canvas with marcher appearances. The query is keyed by page, so every page change
+    // brings a new map, usually with the same appearances (always the same in timeline mode
+    // unless a tag's appearance changes there); a marcher whose appearance is what was last
+    // applied to it is skipped, and nothing is redrawn when none changed.
+    const appliedAppearances = useRef(new WeakMap<object, string>());
     useEffect(() => {
         if (
             !canvas ||
@@ -368,23 +379,28 @@ export default function Canvas({
         )
             return;
 
-        // Add all marcher appearances to the canvas
+        const labelColor = fieldProperties?.theme.defaultMarcher.label;
+        let changed = false;
         marchers.forEach((marcher) => {
             const visualGroup = marcherVisuals[marcher.id];
             const appearancesForMarcher = marcherAppearances[marcher.id];
             if (!visualGroup || !appearancesForMarcher) return;
 
             const canvasMarcher = visualGroup.getCanvasMarcher();
+            const key = JSON.stringify([appearancesForMarcher, labelColor]);
+            if (appliedAppearances.current.get(canvasMarcher) === key) return;
+            appliedAppearances.current.set(canvasMarcher, key);
+            changed = true;
             canvasMarcher.setAppearance(
                 appearancesForMarcher,
                 {
                     requestRenderAll: false,
                 },
-                fieldProperties?.theme.defaultMarcher.label,
+                labelColor,
             );
         });
 
-        canvas.requestRenderAll();
+        if (changed) canvas.requestRenderAll();
     }, [
         canvas,
         marchers,
