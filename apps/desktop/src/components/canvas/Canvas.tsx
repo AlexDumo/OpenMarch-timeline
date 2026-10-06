@@ -21,6 +21,10 @@ import { CircleNotchIcon } from "@phosphor-icons/react";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import clsx from "clsx";
 import { useAnimation } from "@/hooks/useAnimation";
+import {
+    useTimelineAppearance,
+    useTimelinePausedAppearance,
+} from "@/hooks/useTimelineAppearance";
 import CollisionMarker from "@/global/classes/canvasObjects/CollisionMarker";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import { setCanvasStore } from "@/stores/CanvasStore";
@@ -75,12 +79,17 @@ export default function Canvas({
     const { data: marcherVisuals } = useQuery(
         marcherWithVisualsQueryOptions(queryClient),
     );
+    const timelineMode = useTimelineMode();
+    // Page mode: the selected page's appearance. Timeline mode reads none (no selected page drives
+    // appearance); it styles marchers by beat instead (useTimelineAppearance below)
     const { data: marcherAppearances } = useQuery(
-        marcherAppearancesQueryOptions(selectedPage?.id, queryClient),
+        marcherAppearancesQueryOptions(
+            timelineMode ? null : selectedPage?.id,
+            queryClient,
+        ),
     );
     const { setSelectedMarchers } = useSelectedMarchers()!;
 
-    const timelineMode = useTimelineMode();
     // Draw from the resolver only once it's ready. Until the first cold build finishes (or if it
     // fails), keep drawing from marcher_pages instead of leaving every marcher at (0, 0).
     const timelineResolverReady = useTimelineResolverStore(
@@ -147,7 +156,14 @@ export default function Canvas({
     // Custom hooks for the canvas
     useSelectionListeners({ canvas });
     useMovementListeners({ canvas });
-    useAnimation({ canvas });
+    // Timeline mode (UI-9): appearance of the last flag crossed, at the live beat while playing
+    // (from useAnimation's frame) and at the displayed beat when paused (below)
+    const applyTimelineAppearanceAt = useTimelineAppearance({
+        canvas,
+        enabled: timelineMode,
+        redrawKey: marcherVisuals,
+    });
+    useAnimation({ canvas, onTimelineBeat: applyTimelineAppearanceAt });
     // Page mode draws the selected page's page-era shapes; timeline mode draws none (P7.11)
     useRenderMarcherShapes({ canvas, selectedPage, isPlaying, timelineMode });
 
@@ -402,6 +418,13 @@ export default function Canvas({
         marcherVisuals,
         fieldProperties?.theme.defaultMarcher.label,
     ]);
+
+    // Timeline mode: in place of the selected page's appearance above
+    useTimelinePausedAppearance({
+        canvas,
+        isPlaying,
+        applyAt: applyTimelineAppearanceAt,
+    });
 
     // Setters for alignmentEvent state
     useEffect(() => {

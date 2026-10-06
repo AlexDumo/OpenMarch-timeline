@@ -155,10 +155,16 @@ from it. The spec still wins on the model; this file decides presentation.
     editing uses the selected timeline, and rendering, playback and the
     inspector use the playhead. Data that still belongs to a page reads the
     page containing the playhead (or ending at it). Marcher appearance stays
-    by page, but is resolved into a step function of time keyed by each
-    flag's timestamp and sampled at the playhead, as on the `coordinates-v2`
-    branch (`dbToMarcherAppearanceTimeline`, `getAppearanceAtTime`), without
-    the dropped per-marcher-page overrides (P7.14).
+    by page, but is resolved into a step function keyed by each flag's beat
+    and sampled at the playhead, or at the live beat while playing, as on the
+    `coordinates-v2` branch (`dbToMarcherAppearanceTimeline`,
+    `getAppearanceAtTime`), without the dropped per-marcher-page overrides
+    (P7.14). Between two flags the field shows the appearance of the last
+    flag crossed, playing and paused, as page-mode playback and the video
+    export do (project owner, 2026-10-06; VALIDATION.md V-37). This differs
+    from page data such as notes, which reads the page containing the
+    playhead. Built in `services/appearance/appearanceSteps.ts`; hidden
+    marchers can't be selected by the same rule.
   - **Page-relative tools (project owner, 2026-10-02).** Features built on
     "the selected page" keep working, relative to flags and the selection:
     - Next, previous, first and last page (shortcuts and transport) move the
