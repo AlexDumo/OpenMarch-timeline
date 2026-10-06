@@ -48,6 +48,12 @@ import { useTimelinePlayback } from "./useTimelinePlayback";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
+// The transport's controls read their own state: the same elements every render, so the
+// memoized transport doesn't re-render for them
+const PREVIEW_BUTTONS = <TimelinePreviewButtons />;
+const SOUND_BUTTON = <TimelineSoundButton />;
+const COMPACT_BUTTON = <TimelineCompactButton />;
+
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
     selection: TimelineEditSelection,
@@ -119,6 +125,10 @@ export default function TimelineModePanel() {
         beats.length > 0
             ? timeAtBeat(beats, Math.min(shownBeat, beats.length))
             : undefined;
+    const clock = useMemo(
+        () => <AudioClock pausedSeconds={pausedSeconds} />,
+        [pausedSeconds],
+    );
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
     // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
@@ -238,12 +248,10 @@ export default function TimelineModePanel() {
                     measures={measures}
                     timelines={offPage}
                     playback={playback}
-                    transportClock={
-                        <AudioClock pausedSeconds={pausedSeconds} />
-                    }
-                    transportAccessories={<TimelinePreviewButtons />}
-                    transportSecondary={<TimelineSoundButton />}
-                    transportViewControls={<TimelineCompactButton />}
+                    transportClock={clock}
+                    transportAccessories={PREVIEW_BUTTONS}
+                    transportSecondary={SOUND_BUTTON}
+                    transportViewControls={COMPACT_BUTTON}
                     selection={selection}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}

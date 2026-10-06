@@ -1,4 +1,5 @@
 import {
+    memo,
     useCallback,
     useEffect,
     useLayoutEffect,
@@ -38,10 +39,12 @@ import {
 } from "./TimelinePrimitives";
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
+import { useLatestCallback } from "./useLatestCallback";
 import type {
+    TimelineBeatRange,
     TimelineCommonProps,
     TimelineNavigation,
-    TimelineSelection,
+    TimelineTrackId,
 } from "./TimelineViewModel";
 
 type TimelineDensity = "expanded" | "collapsed";
@@ -248,7 +251,8 @@ const useTimelineZoom = ({
         onFittedChange?.(isFitted);
     }, [fitValue, isFitted, onFittedChange, rememberedFitted]);
 
-    const fit = useCallback(() => {
+    // The same function across zooms and beats, so the transport and the Shift+Z listener stay put
+    const fit = useLatestCallback(() => {
         const viewport = viewportRef.current;
         if (!viewport || !onPixelsPerBeatChange || fitValue === null) return;
         if (isFitted) {
@@ -261,15 +265,7 @@ const useTimelineZoom = ({
         zoomBeforeFit.current = pixelsPerBeat;
         onPixelsPerBeatChange(fitValue);
         viewport.scrollLeft = 0;
-    }, [
-        fitValue,
-        isFitted,
-        onPixelsPerBeatChange,
-        pixelsPerBeat,
-        playheadBeat,
-        viewportRef,
-        zoomTo,
-    ]);
+    })!;
 
     // Shift+Z fits, or goes back, unless a text field, popover, menu or dialog has the keys
     useEffect(() => {
@@ -342,7 +338,7 @@ const transportNavigation = (props: TimelineCommonProps) =>
  * to the playhead. While playing the played part follows the live position every frame by
  * resizing its clip, so the canvases are never redrawn for it.
  */
-function TimelineWaveformLane({
+const TimelineWaveformLane = memo(function TimelineWaveformLane({
     waveform,
     top,
     width,
@@ -411,9 +407,9 @@ function TimelineWaveformLane({
             </div>
         </div>
     );
-}
+});
 
-function TimelineSurface({
+const TimelineSurface = memo(function TimelineSurface({
     density,
     ...props
 }: TimelineCommonProps & { density: TimelineDensity }) {
@@ -495,8 +491,7 @@ function TimelineSurface({
         onFittedChange: props.onZoomFittedChange,
     });
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
-    const onSelectionChange = (next: TimelineSelection) =>
-        props.onSelectionChange?.(next);
+    const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line
     const seekSnapBeats = useMemo(
         () =>
@@ -511,7 +506,7 @@ function TimelineSurface({
     const pointer = useTimelinePointer({
         seekSnapBeats,
         onSeek: props.onSeek,
-        onRangeSelect: props.onSelectionChange
+        onRangeSelect: onSelectionChange
             ? (range) =>
                   onSelectionChange({ kind: "range", range, drawn: true })
             : undefined,
@@ -531,10 +526,23 @@ function TimelineSurface({
         selectionRange != null &&
         props.onCreateTrack != null &&
         !selectionDragging;
-    const transportProps = {
-        ...props,
-        onNavigate: transportNavigation(props),
-    };
+    const onNavigate = useLatestCallback(transportNavigation(props));
+    // A clip is its timeline: clicking it selects that range (UI-12)
+    const selectTrack = useLatestCallback(
+        onSelectionChange
+            ? (trackId: TimelineTrackId) => {
+                  const track = model.tracks.find((t) => t.id === trackId);
+                  const range = track && getTrackRange(track);
+                  if (range) onSelectionChange({ kind: "range", range });
+              }
+            : undefined,
+    );
+    const commitSelection = useLatestCallback(
+        onSelectionChange
+            ? (range: TimelineBeatRange) =>
+                  onSelectionChange({ kind: "range", range })
+            : undefined,
+    );
     // The right-click menu's target: a page box or clip under the pointer, else a dragged range
     // the pointer is inside (UI-9 Adding marchers, Creating a timeline)
     const rangeMenu = useTimelineRangeMenu({
@@ -570,16 +578,12 @@ function TimelineSurface({
                         secondary={props.transportSecondary}
                         viewControls={props.transportViewControls}
                         onSeek={props.onSeek}
-                        onSelectionChange={
-                            props.onSelectionChange
-                                ? onSelectionChange
-                                : undefined
-                        }
+                        onSelectionChange={onSelectionChange}
                         positionBeat={positionBeat}
-                        isPlaying={transportProps.isPlaying}
-                        onPlayingChange={transportProps.onPlayingChange}
-                        onStop={transportProps.onStop}
-                        onNavigate={transportProps.onNavigate}
+                        isPlaying={props.isPlaying}
+                        onPlayingChange={props.onPlayingChange}
+                        onStop={props.onStop}
+                        onNavigate={onNavigate}
                         onFit={
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
                         }
@@ -635,7 +639,12 @@ function TimelineSurface({
                         initialPageWidth={initialPageWidth}
                         showMeasures={expanded}
                         seekSnapBeats={seekSnapBeats}
-                        positionBeat={positionBeat}
+                        // Only a show without measures numbers the playhead page's counts
+                        positionBeat={
+                            expanded && model.measures.length === 0
+                                ? positionBeat
+                                : undefined
+                        }
                     />
                     {rows.flatMap((row, rowIndex) =>
                         row.map((track) => (
@@ -656,19 +665,7 @@ function TimelineSurface({
                                     getTrackRange(track),
                                     selectionRange,
                                 )}
-                                onSelect={
-                                    props.onSelectionChange
-                                        ? () => {
-                                              const range =
-                                                  getTrackRange(track);
-                                              if (range)
-                                                  onSelectionChange({
-                                                      kind: "range",
-                                                      range,
-                                                  });
-                                          }
-                                        : undefined
-                                }
+                                onSelect={selectTrack}
                                 onRangeCommit={props.onTimelineRangeCommit}
                                 beatCount={model.beatCount}
                                 snapBeats={snapBeats}
@@ -771,15 +768,7 @@ function TimelineSurface({
                             pixelsPerBeat={pixelsPerBeat}
                             height={timelineHeight}
                             snapBeats={snapBeats}
-                            onCommit={
-                                props.onSelectionChange
-                                    ? (range) =>
-                                          props.onSelectionChange?.({
-                                              kind: "range",
-                                              range,
-                                          })
-                                    : undefined
-                            }
+                            onCommit={commitSelection}
                             onInteractionChange={setSelectionInteraction}
                         />
                     )}
@@ -841,12 +830,16 @@ function TimelineSurface({
             </div>
         </TimelineShell>
     );
-}
+});
 
-export function ExpandedTimeline(props: TimelineCommonProps) {
+export const ExpandedTimeline = memo(function ExpandedTimeline(
+    props: TimelineCommonProps,
+) {
     return <TimelineSurface {...props} density="expanded" />;
-}
+});
 
-export function CollapsedTimeline(props: TimelineCommonProps) {
+export const CollapsedTimeline = memo(function CollapsedTimeline(
+    props: TimelineCommonProps,
+) {
     return <TimelineSurface {...props} density="collapsed" />;
-}
+});

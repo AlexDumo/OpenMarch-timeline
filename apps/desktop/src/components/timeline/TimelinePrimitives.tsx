@@ -20,8 +20,10 @@ import {
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
     type RefObject,
+    memo,
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
 } from "react";
@@ -69,7 +71,15 @@ export interface TimelineSelectionInteraction {
     readonly dragging: boolean;
 }
 
-const TransportButton = ({
+// The same elements every render, so the memoized transport buttons don't re-render for them
+const SKIP_BACK_ICON = <SkipBackIcon size={16} />;
+const PAUSE_ICON = <PauseIcon size={18} weight="fill" />;
+const PLAY_ICON = <PlayIcon size={18} weight="fill" />;
+const STOP_ICON = <StopIcon size={16} />;
+const SKIP_FORWARD_ICON = <SkipForwardIcon size={16} />;
+const FIT_ICON = <ArrowsOutLineHorizontalIcon size={16} />;
+
+const TransportButton = memo(function TransportButton({
     label,
     title,
     children,
@@ -82,22 +92,24 @@ const TransportButton = ({
     children: ReactNode;
     onClick?: (event: ReactMouseEvent) => void;
     pressed?: boolean;
-}) => (
-    <button
-        type="button"
-        aria-label={label}
-        aria-pressed={pressed}
-        title={title ?? label}
-        onClick={onClick}
-        disabled={!onClick}
-        className={clsx(
-            "focus-visible:ring-accent rounded-4 enabled:hover:text-accent enabled:hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden transition-[color,background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent enabled:active:translate-y-px disabled:cursor-not-allowed disabled:opacity-30",
-            pressed ? "text-accent" : "text-text",
-        )}
-    >
-        {children}
-    </button>
-);
+}) {
+    return (
+        <button
+            type="button"
+            aria-label={label}
+            aria-pressed={pressed}
+            title={title ?? label}
+            onClick={onClick}
+            disabled={!onClick}
+            className={clsx(
+                "focus-visible:ring-accent rounded-4 enabled:hover:text-accent enabled:hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden transition-[color,background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent enabled:active:translate-y-px disabled:cursor-not-allowed disabled:opacity-30",
+                pressed ? "text-accent" : "text-text",
+            )}
+        >
+            {children}
+        </button>
+    );
+});
 
 /** Below this width the transport folds its secondary controls into "⋯" (Bitwig's rule) */
 const TRANSPORT_FOLD_PX = 640;
@@ -113,7 +125,7 @@ const TRANSPORT_TIGHT_PX = 500;
  * leave: on a narrow panel the rest folds into "⋯". Shift+click on Previous or Next goes to the
  * first or last page (as Shift+Q/E do). While playing, page navigation jumps playback to the flag.
  */
-export function TimelineTransport({
+export const TimelineTransport = memo(function TimelineTransport({
     model,
     clock,
     positionBeat,
@@ -212,11 +224,20 @@ export function TimelineTransport({
         }
         setGoTo(null);
     };
-    const navigate = onNavigate
-        ? (shift: TimelineNavigation, plain: TimelineNavigation) =>
-              (event: ReactMouseEvent) =>
-                  onNavigate(event.shiftKey ? shift : plain)
-        : undefined;
+    const previousPage = useCallback(
+        (event: ReactMouseEvent) =>
+            onNavigate?.(event.shiftKey ? "first-page" : "previous-page"),
+        [onNavigate],
+    );
+    const nextPage = useCallback(
+        (event: ReactMouseEvent) =>
+            onNavigate?.(event.shiftKey ? "last-page" : "next-page"),
+        [onNavigate],
+    );
+    const togglePlaying = useCallback(
+        () => onPlayingChange?.(!isPlaying),
+        [isPlaying, onPlayingChange],
+    );
     const readout =
         goTo !== null ? (
             <input
@@ -269,7 +290,7 @@ export function TimelineTransport({
             pressed={fitted}
             onClick={onFit}
         >
-            <ArrowsOutLineHorizontalIcon size={16} />
+            {FIT_ICON}
         </TransportButton>
     );
     const divider = (
@@ -287,25 +308,17 @@ export function TimelineTransport({
                 <TransportButton
                     label="Previous page"
                     title="Previous page (Q). Shift+click or Shift+Q: first page"
-                    onClick={navigate?.("first-page", "previous-page")}
+                    onClick={onNavigate ? previousPage : undefined}
                 >
-                    <SkipBackIcon size={16} />
+                    {SKIP_BACK_ICON}
                 </TransportButton>
                 <TransportButton
                     label={isPlaying ? "Pause" : "Play"}
                     title={isPlaying ? "Pause (Space)" : "Play (Space)"}
                     pressed={isPlaying}
-                    onClick={
-                        onPlayingChange
-                            ? () => onPlayingChange(!isPlaying)
-                            : undefined
-                    }
+                    onClick={onPlayingChange ? togglePlaying : undefined}
                 >
-                    {isPlaying ? (
-                        <PauseIcon size={18} weight="fill" />
-                    ) : (
-                        <PlayIcon size={18} weight="fill" />
-                    )}
+                    {isPlaying ? PAUSE_ICON : PLAY_ICON}
                 </TransportButton>
                 {onStop && (
                     <TransportButton
@@ -313,15 +326,15 @@ export function TimelineTransport({
                         title="Stop (Shift+Space)"
                         onClick={onStop}
                     >
-                        <StopIcon size={16} />
+                        {STOP_ICON}
                     </TransportButton>
                 )}
                 <TransportButton
                     label="Next page"
                     title="Next page (E). Shift+click or Shift+E: last page"
-                    onClick={navigate?.("last-page", "next-page")}
+                    onClick={onNavigate ? nextPage : undefined}
                 >
-                    <SkipForwardIcon size={16} />
+                    {SKIP_FORWARD_ICON}
                 </TransportButton>
             </div>
             {(accessories != null || (secondary != null && !folded)) && (
@@ -374,7 +387,7 @@ export function TimelineTransport({
             </div>
         </div>
     );
-}
+});
 
 /**
  * The timeline panel (UI-12): one card, its transport as the header row and the timeline under
@@ -600,12 +613,23 @@ const useRulerScrub = (
  * measure numbers under it, so the box and the weight tell them apart. Hidden when the box is too
  * narrow to read it, when zoomed far out (UI-12).
  */
-const PageBoxLabel = ({ label, width }: { label: string; width: number }) =>
-    width >= label.length * 7 + 10 ? (
+const PageBoxLabel = memo(function PageBoxLabel({
+    label,
+    shown,
+}: {
+    label: string;
+    shown: boolean;
+}) {
+    return shown ? (
         <span className="sticky right-8 font-semibold">{label}</span>
     ) : null;
+});
 
-export const TimelineRuler = ({
+/** Whether a page box this wide has room for its name (`PageBoxLabel`) */
+const pageLabelFits = (label: string, width: number) =>
+    width >= label.length * 7 + 10;
+
+export const TimelineRuler = memo(function TimelineRuler({
     pages,
     measures,
     beatCount,
@@ -633,22 +657,25 @@ export const TimelineRuler = ({
     seekSnapBeats?: readonly number[];
     /** The playhead; a show without measures numbers the counts of its page (UI-13) */
     positionBeat?: BeatPosition;
-}) => {
+}) {
     // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
-    const tabBeats = measures
-        .filter((measure) => measure.rehearsalMark?.trim())
-        .map((measure) => measure.atBeat);
-    const visibleMeasures = filterMarkersByMinimumSpacing(
-        measures.filter(
-            (measure) =>
-                !measure.rehearsalMark?.trim() &&
-                tabBeats.every(
-                    (beat) =>
-                        Math.abs(beat - measure.atBeat) * pixelsPerBeat >= 26,
-                ),
-        ),
-        pixelsPerBeat,
-    );
+    const visibleMeasures = useMemo(() => {
+        const tabBeats = measures
+            .filter((measure) => measure.rehearsalMark?.trim())
+            .map((measure) => measure.atBeat);
+        return filterMarkersByMinimumSpacing(
+            measures.filter(
+                (measure) =>
+                    !measure.rehearsalMark?.trim() &&
+                    tabBeats.every(
+                        (beat) =>
+                            Math.abs(beat - measure.atBeat) * pixelsPerBeat >=
+                            26,
+                    ),
+            ),
+            pixelsPerBeat,
+        );
+    }, [measures, pixelsPerBeat]);
     const scrub = useRulerScrub(
         onSeek,
         beatCount,
@@ -656,13 +683,28 @@ export const TimelineRuler = ({
         seekSnapBeats,
     );
     const initialPage = pages.find((page) => page.isInitial);
-    const orderedPages = pages
-        .filter((page) => !page.isInitial)
-        .sort((a, b) => a.atBeat - b.atBeat);
-    // UI-9: the initial box is home; a page box is its range, previous flag to its own flag
+    // UI-9: the initial box is home; a page box is its range, previous flag to its own flag.
+    // Worked out once per change of the pages, not for each box on every render.
+    const pageBoxes = useMemo(() => {
+        const orderedPages = pages
+            .filter((page) => !page.isInitial)
+            .sort((a, b) => a.atBeat - b.atBeat);
+        return orderedPages.map((page) => ({
+            page,
+            range: getPageRange({
+                pages: orderedPages,
+                pageId: page.id,
+                beatCount,
+            }),
+        }));
+    }, [beatCount, pages]);
+    const pageRanges = useMemo(
+        () => new Map(pageBoxes.map(({ page, range }) => [page.id, range])),
+        [pageBoxes],
+    );
     const selectedRange = getSelectionRange(selection);
     const pageRange = (page: TimelinePageMarker) =>
-        getPageRange({ pages: orderedPages, pageId: page.id, beatCount });
+        pageRanges.get(page.id) ?? null;
     const isSelected = (page: TimelinePageMarker) =>
         page.isInitial
             ? selection?.kind === "home"
@@ -721,14 +763,12 @@ export const TimelineRuler = ({
                         <HouseIcon size={14} aria-hidden="true" />
                     </button>
                 )}
-                {orderedPages.map((page) => {
-                    const range = getPageRange({
-                        pages: orderedPages,
-                        pageId: page.id,
-                        beatCount,
-                    });
+                {pageBoxes.map(({ page, range }) => {
                     if (!range) return null;
-                    const selected = isSelected(page);
+                    const selected = sameRange(range, selectedRange);
+                    const boxWidth =
+                        (range.endBeatIndex - range.startBeatIndex) *
+                        pixelsPerBeat;
                     return (
                         <button
                             key={page.id}
@@ -755,19 +795,12 @@ export const TimelineRuler = ({
                                         range.startBeatIndex,
                                         pixelsPerBeat,
                                     ),
-                                width:
-                                    (range.endBeatIndex -
-                                        range.startBeatIndex) *
-                                    pixelsPerBeat,
+                                width: boxWidth,
                             }}
                         >
                             <PageBoxLabel
                                 label={page.label}
-                                width={
-                                    (range.endBeatIndex -
-                                        range.startBeatIndex) *
-                                    pixelsPerBeat
-                                }
+                                shown={pageLabelFits(page.label, boxWidth)}
                             />
                         </button>
                     );
@@ -809,9 +842,9 @@ export const TimelineRuler = ({
             )}
         </>
     );
-};
+});
 
-export const TimelinePageLines = ({
+export const TimelinePageLines = memo(function TimelinePageLines({
     pages,
     pixelsPerBeat,
     height,
@@ -819,24 +852,31 @@ export const TimelinePageLines = ({
     pages: readonly TimelinePageMarker[];
     pixelsPerBeat: number;
     height: number;
-}) => (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        {pages
-            .filter((page) => !page.isInitial)
-            .map((page) => (
-                <span
-                    key={page.id}
-                    className="bg-text absolute top-28 w-px opacity-[0.24]"
-                    style={{
-                        left: Math.round(beatToX(page.atBeat, pixelsPerBeat)),
-                        height: Math.max(0, height - 28),
-                    }}
-                />
-            ))}
-    </div>
-);
+}) {
+    return (
+        <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+        >
+            {pages
+                .filter((page) => !page.isInitial)
+                .map((page) => (
+                    <span
+                        key={page.id}
+                        className="bg-text absolute top-28 w-px opacity-[0.24]"
+                        style={{
+                            left: Math.round(
+                                beatToX(page.atBeat, pixelsPerBeat),
+                            ),
+                            height: Math.max(0, height - 28),
+                        }}
+                    />
+                ))}
+        </div>
+    );
+});
 
-export const TimelineTrackClip = ({
+export const TimelineTrackClip = memo(function TimelineTrackClip({
     track,
     pixelsPerBeat,
     top,
@@ -868,7 +908,7 @@ export const TimelineTrackClip = ({
      * area, so it can still be clicked, dragged and double-clicked). Without it the bar fills it.
      */
     barHeight?: number;
-}) => {
+}) {
     const range = getTrackRange(track);
     const [previewOffset, setPreviewOffset] = useState(0);
     // A drag ends with a click on the clip; that click mustn't also select it
@@ -1075,9 +1115,9 @@ export const TimelineTrackClip = ({
             )}
         </button>
     );
-};
+});
 
-export const TimelineSelectionRange = ({
+export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     range,
     startFlagBeatIndex,
     fromStart = false,
@@ -1121,7 +1161,7 @@ export const TimelineSelectionRange = ({
     onInteractionChange?: (
         interaction: TimelineSelectionInteraction | null,
     ) => void;
-}) => {
+}) {
     const [preview, setPreview] = useState(range);
     const previewRef = useRef(range);
     const dragRef = useRef<{
@@ -1484,14 +1524,14 @@ export const TimelineSelectionRange = ({
             </div>
         </div>
     );
-};
+});
 
 /**
  * Rehearsal marks as tabs in the measure row (UI-12; they sat on the waveform lane before), in
  * place of their measure's number. Clicking one seeks there. Thinned like the measure numbers, so
  * they don't pile up when zoomed out.
  */
-export const TimelineRehearsalMarkers = ({
+export const TimelineRehearsalMarkers = memo(function TimelineRehearsalMarkers({
     model,
     pixelsPerBeat,
     top,
@@ -1503,35 +1543,37 @@ export const TimelineRehearsalMarkers = ({
     top: number;
     compact?: boolean;
     onSeek?: (beat: BeatPosition) => void;
-}) => (
-    <div className="pointer-events-none absolute inset-0 z-20">
-        {model.measures.flatMap((measure) => {
-            const label = measure.rehearsalMark?.trim();
-            if (!label) return [];
-            const number = measure.label.replace(/^m/i, "");
-            return [
-                <button
-                    key={measure.id}
-                    type="button"
-                    data-timeline-interactive="true"
-                    aria-label={`Rehearsal ${label}, measure ${number}`}
-                    title={`Rehearsal ${label}, measure ${number}`}
-                    onClick={() => onSeek?.(measure.atBeat)}
-                    className={clsx(
-                        "border-text-subtitle bg-bg-1 text-text rounded-r-4 pointer-events-auto absolute flex h-16 min-w-16 items-center justify-center border border-l-2 px-3 font-mono leading-none font-semibold",
-                        compact ? "text-[9px]" : "text-[10px]",
-                    )}
-                    style={{
-                        left: beatToX(measure.atBeat, pixelsPerBeat),
-                        top,
-                    }}
-                >
-                    {label}
-                </button>,
-            ];
-        })}
-    </div>
-);
+}) {
+    return (
+        <div className="pointer-events-none absolute inset-0 z-20">
+            {model.measures.flatMap((measure) => {
+                const label = measure.rehearsalMark?.trim();
+                if (!label) return [];
+                const number = measure.label.replace(/^m/i, "");
+                return [
+                    <button
+                        key={measure.id}
+                        type="button"
+                        data-timeline-interactive="true"
+                        aria-label={`Rehearsal ${label}, measure ${number}`}
+                        title={`Rehearsal ${label}, measure ${number}`}
+                        onClick={() => onSeek?.(measure.atBeat)}
+                        className={clsx(
+                            "border-text-subtitle bg-bg-1 text-text rounded-r-4 pointer-events-auto absolute flex h-16 min-w-16 items-center justify-center border border-l-2 px-3 font-mono leading-none font-semibold",
+                            compact ? "text-[9px]" : "text-[10px]",
+                        )}
+                        style={{
+                            left: beatToX(measure.atBeat, pixelsPerBeat),
+                            top,
+                        }}
+                    >
+                        {label}
+                    </button>,
+                ];
+            })}
+        </div>
+    );
+});
 
 /** How long after the last arrow key a run of steps ends, so the start flag follows once */
 const ARROW_STEPS_SETTLE_MS = 300;
@@ -1584,7 +1626,7 @@ const useArrowKeySteps = (
     };
 };
 
-export const TimelinePlayhead = ({
+export const TimelinePlayhead = memo(function TimelinePlayhead({
     model,
     positionBeat,
     livePositionBeat,
@@ -1609,7 +1651,7 @@ export const TimelinePlayhead = ({
     onSeek?: (beat: BeatPosition, options?: TimelineSeekOptions) => void;
     /** While playing, each arrow key jumps playback on its own */
     isPlaying?: boolean;
-}) => {
+}) {
     const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
     const left = Math.round(beatToX(positionBeat, pixelsPerBeat));
@@ -1690,7 +1732,7 @@ export const TimelinePlayhead = ({
             </svg>
         </button>
     );
-};
+});
 
 /** How far, in pixels, a press on empty timeline space must move to select a range */
 export const TIMELINE_RANGE_DRAG_PX = 4;
