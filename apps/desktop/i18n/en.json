@@ -1752,8 +1752,12 @@
                 "beatsFromLabel": "Beats per measure from measure {measure}",
                 "beatsHint": "Moves measure lines only. Counts and drill don't change",
                 "beatsLabel": "Beats in measure {measure}",
+                "existingHint": "This measure already has {mark}. Type a new name to rename it, or Esc to keep it",
                 "markHint": "Enter to save, Esc to cancel. Empty removes the mark",
                 "markLabel": "Rehearsal mark for measure {measure}",
+                "moveHint": "{mark} is at m{measure}. Enter moves it here",
+                "moveHintReplace": "{mark} is at m{measure}. Enter moves it here, replacing {replaces}",
+                "moveMark": "Move {mark} here",
                 "newHint": "A rehearsal mark sits on a measure line, and there is none here. Enter starts a measure at this count",
                 "newLabel": "Rehearsal mark at this count"
             },

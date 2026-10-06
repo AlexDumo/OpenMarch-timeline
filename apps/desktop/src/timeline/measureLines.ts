@@ -44,12 +44,14 @@ export type MeasureLineEdit =
       }
     /**
      * Move a measure's rehearsal mark to another measure (a label edit: lines, beats and pages
-     * stay). The other measure must have no mark of its own.
+     * stay). The other measure must have no mark of its own, unless `replace`: typing C on a
+     * measure that holds B ("Move C here", DN-3) drops B.
      */
     | {
           readonly kind: "moveMark";
           readonly fromMeasureId: number;
           readonly toMeasureId: number;
+          readonly replace?: boolean;
       }
     /**
      * Give a measure `beats` beats by moving the line after it. With `laterKeep`, every later line
@@ -167,7 +169,7 @@ export function planMeasureLineEdit(
             const from = ordered[indexOf(edit.fromMeasureId)]!;
             const to = ordered[indexOf(edit.toMeasureId)]!;
             if (from.id === to.id || from.mark === null) return EMPTY_PLAN;
-            if (to.mark !== null)
+            if (to.mark !== null && !edit.replace)
                 throw new Error(
                     `that measure already has rehearsal mark ${to.mark}`,
                 );

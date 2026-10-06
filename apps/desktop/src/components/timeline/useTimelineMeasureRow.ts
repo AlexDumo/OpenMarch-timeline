@@ -99,12 +99,17 @@ export function useTimelineMeasureRow(
                     beats,
                     laterKeep,
                 }),
-            onMoveMark: (from, to) =>
-                run({
-                    kind: "moveMark",
-                    fromMeasureId: Number(from),
-                    toMeasureId: Number(to),
-                }),
+            onMoveMark: (from, to, replace) =>
+                run(
+                    {
+                        kind: "moveMark",
+                        fromMeasureId: Number(from),
+                        toMeasureId: Number(to),
+                        replace,
+                    },
+                    // "Move C here" over B says B is gone, with Undo
+                    replace ? markOf(to) : null,
+                ),
             onBeatsFrom: (measureId, beats, until) =>
                 run({
                     kind: "beatsFrom",

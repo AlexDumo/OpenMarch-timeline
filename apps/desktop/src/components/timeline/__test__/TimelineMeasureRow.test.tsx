@@ -211,6 +211,74 @@ describe("duplicate marks (FB-9)", () => {
     });
 });
 
+describe("Move C here (DN-3)", () => {
+    const hint = () => screen.getByTestId("timeline-measure-row-hint");
+    const withMove = () => {
+        const measureRow = { ...commands(), onMoveMark: vi.fn() };
+        renderRow({ measureRow });
+        return measureRow;
+    };
+
+    it("typing a letter another measure has offers to move it here; Enter does", () => {
+        const measureRow = withMove();
+        // R at m6 offers C; typing B (m3's mark) offers to move B here
+        fireEvent.keyDown(window, { key: "r" });
+        fireEvent.change(input(), { target: { value: "b" } });
+        expect(hint()).toHaveTextContent("B is at m3. Enter moves it here");
+        expect(
+            screen.getByTestId("timeline-measure-row-move-mark"),
+        ).toHaveTextContent("Move B here");
+        fireEvent.keyDown(input(), { key: "Enter" });
+        expect(measureRow.onMoveMark).toHaveBeenCalledWith(3, 6, false);
+        expect(measureRow.onSetMark).not.toHaveBeenCalled();
+    });
+
+    it("the Move button moves it too; leaving the input doesn't", () => {
+        const measureRow = withMove();
+        fireEvent.keyDown(window, { key: "r" });
+        fireEvent.change(input(), { target: { value: "B" } });
+        fireEvent.blur(input());
+        expect(measureRow.onMoveMark).not.toHaveBeenCalled();
+        expect(measureRow.onSetMark).not.toHaveBeenCalled();
+        fireEvent.keyDown(window, { key: "r" });
+        fireEvent.change(input(), { target: { value: "B" } });
+        fireEvent.click(screen.getByTestId("timeline-measure-row-move-mark"));
+        expect(measureRow.onMoveMark).toHaveBeenCalledWith(3, 6, false);
+    });
+
+    it("renaming a marked measure to a letter elsewhere replaces its own", () => {
+        const measureRow = { ...commands(), onMoveMark: vi.fn() };
+        renderRow({
+            measureRow,
+            model: {
+                ...model,
+                measures: model.measures.map((m) =>
+                    m.id === 6 ? { ...m, rehearsalMark: "X" } : m,
+                ),
+            },
+        });
+        fireEvent.keyDown(window, { key: "r" });
+        fireEvent.change(input(), { target: { value: "B" } });
+        expect(hint()).toHaveTextContent(
+            "B is at m3. Enter moves it here, replacing X",
+        );
+        fireEvent.keyDown(input(), { key: "Enter" });
+        expect(measureRow.onMoveMark).toHaveBeenCalledWith(3, 6, true);
+    });
+
+    it("R on a measure with a mark says so in the hint", () => {
+        renderRow({
+            positionBeat: 9,
+            measureRow: { ...commands(), onMoveMark: vi.fn() },
+        });
+        fireEvent.keyDown(window, { key: "r" });
+        expect(input().value).toBe("B");
+        expect(hint()).toHaveTextContent(
+            "This measure already has B. Type a new name to rename it, or Esc to keep it",
+        );
+    });
+});
+
 describe("R", () => {
     it("paused: names the playhead's measure after the previous mark", () => {
         // The playhead at 21 is in m6 (20–23); the mark before it is B

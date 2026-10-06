@@ -1542,6 +1542,7 @@ function TimelineSurface({
                             onCommit={editing.commit}
                             onCancel={editing.cancel}
                             onPassKey={editing.passKey}
+                            canMoveMark={editing.canMoveMark}
                         />
                     )}
                     <TimelinePlayhead
