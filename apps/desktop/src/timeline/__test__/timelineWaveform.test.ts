@@ -38,6 +38,34 @@ describe("the timeline waveform (UI-12)", () => {
         ]);
     });
 
+    it("matches a sample-by-sample envelope, including a short last window", () => {
+        // 2 channels of 1003 samples at 1000 Hz, 7-sample windows: the last holds 2 samples
+        let seed = 7;
+        const noise = () => {
+            seed = (seed * 16807) % 2147483647;
+            return seed / 2147483647 - 0.5;
+        };
+        const channels = [0, 1].map(() =>
+            Float32Array.from({ length: 1003 }, noise),
+        );
+        const buffer = {
+            numberOfChannels: 2,
+            sampleRate: 1000,
+            length: 1003,
+            getChannelData: (c: number) => channels[c]!,
+        };
+        const window = Math.round(1000 / 140);
+        const expected = new Float32Array(Math.ceil(1003 / window));
+        for (const data of channels)
+            data.forEach((sample, i) => {
+                const slot = Math.floor(i / window);
+                expected[slot] = Math.max(expected[slot]!, Math.abs(sample));
+            });
+        const envelope = audioEnvelope(buffer, 140);
+        expect(envelope.rate).toBe(1000 / window);
+        expect([...envelope.peaks]).toEqual([...expected]);
+    });
+
     it("puts the audio under the beats it plays in, scaled to the loudest moment, after the hidden beat 0", () => {
         // Beat 0 has no time; beats 1-4 are a second each. Sound only during beat 3 (2s to 3s)
         const beats = [

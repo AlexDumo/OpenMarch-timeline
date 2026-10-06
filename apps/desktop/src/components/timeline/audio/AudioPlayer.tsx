@@ -255,15 +255,16 @@ export default function AudioPlayer() {
         return largestMinimumDuration.current;
     }, [pages]);
 
-    // The timeline's waveform lane (UI-12) reads the offset audio's envelope
+    // The timeline's waveform lane (UI-12) reads the offset audio's envelope; page mode has no
+    // lane, so it skips the work
     useEffect(() => {
         const { setEnvelope } = useAudioEnvelopeStore.getState();
         setEnvelope(
-            audioBuffer && selectedAudioFile
+            timelineMode && audioBuffer && selectedAudioFile
                 ? audioEnvelope(audioBuffer)
                 : null,
         );
-    }, [audioBuffer, selectedAudioFile]);
+    }, [timelineMode, audioBuffer, selectedAudioFile]);
     useEffect(
         () => () => useAudioEnvelopeStore.getState().setEnvelope(null),
         [],

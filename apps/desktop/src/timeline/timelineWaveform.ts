@@ -39,10 +39,19 @@ export function audioEnvelope(
     const peaks = new Float32Array(Math.ceil(buffer.length / window));
     for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
         const data = buffer.getChannelData(channel);
-        for (let i = 0; i < data.length; i++) {
-            const magnitude = Math.abs(data[i]!);
-            const slot = Math.floor(i / window);
-            if (magnitude > peaks[slot]!) peaks[slot] = magnitude;
+        // Window by window, so a long show's millions of samples cost no division each
+        for (
+            let slot = 0, start = 0;
+            slot < peaks.length && start < data.length;
+            slot++, start += window
+        ) {
+            const end = Math.min(start + window, data.length);
+            let peak = peaks[slot]!;
+            for (let i = start; i < end; i++) {
+                const magnitude = Math.abs(data[i]!);
+                if (magnitude > peak) peak = magnitude;
+            }
+            peaks[slot] = peak;
         }
     }
     return { peaks, rate: buffer.sampleRate / window };
