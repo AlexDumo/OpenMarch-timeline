@@ -68,3 +68,56 @@ Feel-based ones also have a row in
   Confidence is steadiness (RMS residual against 10% of a beat) times amount (seven fitted taps =
   full).
 - **Validate:** V-40, then E4 tap-lab data.
+
+## T-E7-1 A toggles Align, except while marchers are selected (align)
+
+- **Context:** the brief asks for key A. A already moves selected marchers left (WASD nudge in
+  `RegisteredActionsHandler`), and the timeline panel is only shown while the canvas has focus.
+- **Choice:** A toggles Align when no marchers are selected; with marchers selected, A keeps
+  moving them. The button and its ✕ always work.
+- **Alternatives:** Shift+A; a different letter; let A do both (it would move marchers and switch
+  views at once).
+- **Validate:** V-41.
+
+## T-E7-2 A flag drag syncs the flag; Shift doesn't; a release in place writes nothing (align)
+
+- **Context:** 12-ux.md 3 says any drag syncs; 11-ui.md B used Shift for "only pages N and N+1".
+  T-5 left the modifier for the `"shift"` rule to the UI.
+- **Choice:** dragging a flag, a rehearsal mark or count 1 adds it to the synced counts in the
+  same undo entry; Shift+drag moves it without syncing (12-ux.md). The first sync shows a toast
+  once per user (localStorage). A drag released where it started (it snaps back within 6px)
+  writes nothing, not even the sync. The `"shift"` after-rule has no modifier yet.
+- **Alternatives:** manual sync only (right-click); Shift for "only this page and the next".
+- **Validate:** V-42.
+
+## T-E7-3 Flag handles sit above the playhead's head (align)
+
+- **Context:** the playhead usually rests on count 1 (home), so count 1's handle was under the
+  playhead head and a drag there scrubbed instead.
+- **Choice:** in Align, flag handles are above the playhead (z 55, under **+**'s 60). The playhead
+  still scrubs from anywhere else on the ruler.
+- **Validate:** capture `tempo-align` step 3.
+
+## T-E7-4 Typed page tempo is 40–400 BPM; dragged tempos read "≈" (align)
+
+- **Context:** a typed "12038" (120 with "38" appended) squeezed a page to nothing in the first
+  capture. Sam wants exact typed values shown exactly.
+- **Choice:** "Tempo…" accepts 40 to 400 BPM and selects the old value on focus. Page labels show
+  a tempo exactly ("152.5") only when every count is the same length and the BPM has at most two
+  decimals; a drag's 137.93… reads "≈138".
+- **Validate:** V-46.
+
+## T-E7-5 Align's zoom and size (align)
+
+- **Choice:** Align has its own px/s, set on entering so the playhead's page keeps its width, and
+  doesn't touch the normal timeline's remembered Fit. The surface is at most 16 000 px wide (so
+  its canvases fit at 2× density), which caps px/s for long shows. The waveform is 64px (24px
+  compact), drawn from the envelope in 2px bars on the same decibel scale as the normal lane.
+- **Validate:** V-44.
+
+## T-E7-6 Holds: which ticks can be grabbed, and what reads as held (align)
+
+- **Choice:** count ticks in the measure row take the pointer only when a count is at least 10px
+  wide and isn't a flag. A count longer than 1.6× its page's median count is hatched as held.
+  Drags snap to the playhead, then the count's own time (no onsets yet: E5).
+- **Validate:** V-45.
