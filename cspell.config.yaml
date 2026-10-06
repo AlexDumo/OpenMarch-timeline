@@ -3,6 +3,7 @@ words:
   - ADDME
   - aleksi
   - alexdumo
+  - allarg
   - apikey
   - apos
   - aren
@@ -35,7 +36,10 @@ words:
   - Configuración
   - cooldown
   - couldn
+  - cresc
   - customizer
+  - dacapo
+  - dalsegno
   - dbstat
   - DELME
   - Dhruva
@@ -83,6 +87,7 @@ words:
   - mgmt
   - midset
   - midsets
+  - misura
   - monokai
   - Moulse
   - multiselection
@@ -127,6 +132,7 @@ words:
   - retiming
   - rgba
   - ritardandos
+  - riten
   - rootfile
   - rw-r
   - rwxr
@@ -135,6 +141,7 @@ words:
   - sandboxing
   - Schachner
   - Segoe
+  - senza
   - seti
   - shouldn
   - sicommand

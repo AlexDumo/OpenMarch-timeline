@@ -270,3 +270,57 @@ fixture list and how to score).
   (2+2+3 durations) can change whether the modal reads it as mixed meter. Measure numbers after an
   added or removed line renumber everywhere (readout, go-to, PDF), which is the point, but the designer's
   printed sheets will disagree until reprinted.
+## MX-1 Which note is the count in each meter (musicxml)
+
+- **Context:** the parser had a lookup table (7/8 as seven quarters, 5/8 and 5/4 as one count a
+  bar, `2+2+3` not read). The app stores no time signature, only counts, and reads mixed meter
+  as short and long counts in the ratio 2:3.
+- **Choice:** one rule (`packages/musicxml-parser/src/meter.ts`): the score's own grouping wins;
+  x/1, x/2, x/4 count the denominator, except x/2 counts quarters while the tempo is printed in
+  quarters; x/8 and shorter count in groups of 2 and 3 (6/8, 9/8, 12/8 in dotted quarters, 3/8
+  one count, 5 → 3+2, 7 → 2+2+3, 8 → 3+3+2, then 3s before 2s). A guessed grouping is a
+  highlighted warning in the preview. Unknown meters (4/3, senza misura) keep the previous meter,
+  with a warning.
+- **Alternatives:** count every denominator note (6/8 in six, 7/8 in seven); a per-meter "count
+  in" choice in the preview (Marcus and Sam ask for it; follow-up).
+- **Validate:** V-41. The kit's corps exports (7/8, 5/8, 3/2 in quarters, 12/8) match their
+  ground truth count times exactly.
+
+## MX-2 rit. and accel. are applied only to a known target (musicxml)
+
+- **Context:** most exports write "rit." as words with no target tempo.
+- **Choice:** a rit. or accel. becomes evenly changing tempos per count (like
+  `newBeatsFromTempoGroup`, ending one step short of the target) only when a numbered tempo
+  follows within 4 measures, goes the right way, and isn't an "a tempo". Otherwise the preview
+  says "rit. not applied" and the counts keep their tempo. "a tempo" goes back to the tempo
+  before the rit.; "Tempo I" to the first tempo.
+- **Alternatives:** guess a target (say 85%); use `<dashes>` to find the end of the line.
+- **Validate:** V-42. On the kit's score export the rit. at m53 has no target in the file, so
+  every later count is 0.54 s early against the ground truth; a later in-app rit. edit has to fix
+  it.
+
+## MX-3 Approximate and odd tempo marks (musicxml)
+
+- **Choice:** "c. 132", "ca 132" and "126-132" read as their first number (an info note).
+  Anything without a number keeps the previous tempo, with a warning (no more NaN durations).
+  `<sound tempo>` (quarters, decimals allowed) wins over the printed mark. A modulation printed
+  with no number (♩. = ♩) is read as "the new note lasts as long as the old one", with a warning.
+- **Alternatives:** refuse "c. 132" (the plan's wording); ignore modulations.
+- **Validate:** V-43 for the modulation reading.
+
+## MX-4 Pickups and measure numbers (musicxml)
+
+- **Choice:** an `implicit="yes"` measure shorter than its meter keeps only the counts its music
+  fills (rounded up to a whole count, with a warning). Import sets `measurementOffset` to the
+  file's first measure number, in the import's undo entry, so a pickup reads m0. A file whose
+  numbers aren't consecutive gets a warning naming where the app's numbers start to differ.
+- **Follow-up:** per-measure numbers (repeats renumbered, "12a") need a column on `measures`.
+
+## MX-5 Import preview and dry run (musicxml)
+
+- **Choice:** picking a file never writes. A dialog shows the summary line and the measures
+  where something happens (all measures behind a checkbox), with warning rows highlighted.
+  Import runs once in a rolled-back transaction first (ripple and commit checks included); if
+  the drill would refuse it, the preview says why and Import stays disabled. The existing
+  "page N starts at measure N" mapping is kept and stated in the preview.
+- **Validate:** V-44.
