@@ -1318,6 +1318,27 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         }
     };
 
+    function resetPreview() {
+        const current = {
+            startBeatIndex: range.startBeatIndex,
+            endBeatIndex: range.endBeatIndex,
+        };
+        previewRef.current = current;
+        setPreview(current);
+        onInteractionChange?.(null);
+    }
+
+    /** Ends a flag drag without committing it, releasing `flag`'s capture; false with none */
+    const cancelDrag = (flag?: HTMLElement) => {
+        const drag = dragRef.current;
+        if (!drag) return false;
+        dragRef.current = null;
+        if (flag?.hasPointerCapture?.(drag.pointerId))
+            flag.releasePointerCapture(drag.pointerId);
+        resetPreview();
+        return true;
+    };
+
     const flagTitle = (kind: "start" | "end", beatIndex: number) =>
         kind === "start"
             ? "Start flag: dragged marchers leave from here. Drag to move it."
@@ -1360,11 +1381,20 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         onPointerUp: finishDrag,
         onPointerCancel: () => {
             dragRef.current = null;
-            previewRef.current = range;
-            setPreview(range);
-            onInteractionChange?.(null);
+            resetPreview();
+        },
+        // The capture can go without a pointerup or pointercancel (the window loses focus
+        // mid-drag): the drag is cancelled. After a release the drag has already ended.
+        onLostPointerCapture: () => {
+            cancelDrag();
         },
         onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+            // Escape mid-drag puts the flag back
+            if (event.key === "Escape" && cancelDrag(event.currentTarget)) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
             if (!onCommit) return;
             const delta =
                 event.key === "ArrowLeft"
