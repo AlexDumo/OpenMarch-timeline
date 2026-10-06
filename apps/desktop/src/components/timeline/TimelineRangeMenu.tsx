@@ -251,7 +251,7 @@ export function useTimelineRangeMenu({
                     align="start"
                     // Focus stays where the command puts it, such as the measure row's input
                     onCloseAutoFocus={(event) => event.preventDefault()}
-                    className="bg-modal text-text rounded-6 border-stroke shadow-modal z-50 flex min-w-[180px] flex-col gap-4 border p-4 backdrop-blur-md"
+                    className="bg-modal text-text rounded-6 border-stroke shadow-modal z-[200] flex min-w-[180px] flex-col gap-4 border p-4 backdrop-blur-md"
                 >
                     {open.target.measureRow &&
                         menu.measureRowItems?.(open.target.measureRow)}

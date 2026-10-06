@@ -74,7 +74,6 @@ const renderAlign = (
         onSetSynced: vi.fn(),
         ...overrides,
     } satisfies TimelineAlign;
-    const onSeek = vi.fn();
     const view = render(
         <ExpandedTimeline
             model={timelineStoryModel}

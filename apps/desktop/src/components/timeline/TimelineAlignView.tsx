@@ -706,7 +706,7 @@ export function TimelineAlignFlags({
                             {...timelineMenuContentGuards}
                             data-testid="timeline-align-flag-menu"
                             align="start"
-                            className="bg-modal text-text rounded-6 border-stroke shadow-modal z-50 flex min-w-[160px] flex-col gap-4 border p-4 backdrop-blur-md"
+                            className="bg-modal text-text rounded-6 border-stroke shadow-modal z-[200] flex min-w-[160px] flex-col gap-4 border p-4 backdrop-blur-md"
                         >
                             <DropdownMenu.Item
                                 onSelect={() =>

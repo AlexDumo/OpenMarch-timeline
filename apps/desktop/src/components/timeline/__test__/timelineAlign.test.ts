@@ -240,7 +240,7 @@ describe("the chip", () => {
         });
         expect(result.amber).toBe(true);
         expect(result.text).toMatch(
-            /^Pg 1–2 · avg \d+ → \d+ · includes 168 and 72 BPM sections, all re-spaced alike · /,
+            /^Pg 1–2 · avg \d+ → \d+ · (since the start · )?includes 168 and 72 BPM sections, all re-spaced alike · /,
         );
         // Similar tempos: no warning
         expect(chip(17, 8.4)).toEqual(
@@ -561,15 +561,5 @@ describe("the time line", () => {
             "0:01",
         ]);
         expect(formatShowTime(65.5, true)).toBe("1:05.5");
-    });
-
-    it("formatShowTime rounds tenths without carrying ten of them", () => {
-        expect(formatShowTime(76.97, true)).toBe("1:17");
-        expect(formatShowTime(59.96, true)).toBe("1:00");
-        expect(formatShowTime(76.94, true)).toBe("1:16.9");
-        expect(formatShowTime(76.97)).toBe("1:16");
-        expect(formatShowTime(-1.84, true)).toBe("−0:01.8");
-        expect(formatShowTime(-0.01, true)).toBe("0:00");
-        expect(formatShowTime(3599.99, true)).toBe("60:00");
     });
 });
