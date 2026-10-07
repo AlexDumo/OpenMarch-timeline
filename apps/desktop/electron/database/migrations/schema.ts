@@ -50,17 +50,31 @@ const browserSafeBinaryBlob = customType<{
     toDriver: (value) => value,
 });
 
-export const history_undo = sqliteTable("history_undo", {
-    sequence: integer().primaryKey(),
-    history_group: integer().notNull(),
-    sql: text().notNull(),
-});
+export const history_undo = sqliteTable(
+    "history_undo",
+    {
+        sequence: integer().primaryKey(),
+        history_group: integer().notNull(),
+        sql: text().notNull(),
+    },
+    // Every edit reads max(history_group) and the distinct groups to trim
+    // the stack; without this index both scan the whole table.
+    (table) => [
+        index("index_history_undo_on_history_group").on(table.history_group),
+    ],
+);
 
-export const history_redo = sqliteTable("history_redo", {
-    sequence: integer().primaryKey(),
-    history_group: integer().notNull(),
-    sql: text().notNull(),
-});
+export const history_redo = sqliteTable(
+    "history_redo",
+    {
+        sequence: integer().primaryKey(),
+        history_group: integer().notNull(),
+        sql: text().notNull(),
+    },
+    (table) => [
+        index("index_history_redo_on_history_group").on(table.history_group),
+    ],
+);
 
 export const history_stats = sqliteTable(
     "history_stats",
