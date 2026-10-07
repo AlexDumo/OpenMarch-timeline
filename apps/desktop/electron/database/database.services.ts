@@ -24,7 +24,15 @@ export class LegacyDatabaseResponse<T> {
 }
 
 /* ============================ DATABASE ============================ */
+/** The file connections open: the show itself, or its working copy. */
 let DB_PATH = "";
+/**
+ * The user's show file while a working copy is open (docs/adr/0001). Empty
+ * when connections open the show directly.
+ */
+let SHOW_PATH = "";
+/** Called after each database handler so autosave can notice commits. */
+let onDatabaseActivity: (() => void) | null = null;
 
 let persistentConnection: DatabaseSync | null = null;
 let persistentConnectionPath: string | null = null;
@@ -40,6 +48,59 @@ export function closePersistentConnection() {
 export function closeDatabase() {
     closePersistentConnection();
     DB_PATH = "";
+    SHOW_PATH = "";
+    onDatabaseActivity = null;
+}
+
+/**
+ * Points every connection at a working copy of a show. `getDbPath` keeps
+ * reporting the show file.
+ */
+export function useWorkingCopy(args: {
+    showPath: string;
+    workingPath: string;
+    onActivity: () => void;
+}) {
+    closePersistentConnection();
+    DB_PATH = args.workingPath;
+    SHOW_PATH = args.showPath;
+    onDatabaseActivity = args.onActivity;
+}
+
+/** Changes the show file a working copy saves to, e.g. after Save As. */
+export function setWorkingCopyShowPath(showPath: string) {
+    if (SHOW_PATH) SHOW_PATH = showPath;
+}
+
+/** Whether connections open a working copy instead of the show file. */
+export function isUsingWorkingCopy() {
+    return SHOW_PATH.length > 0;
+}
+
+/** The file connections open. Differs from {@link getDbPath} for a working copy. */
+export function getConnectionPath() {
+    return DB_PATH;
+}
+
+function noteDatabaseActivity() {
+    try {
+        onDatabaseActivity?.();
+    } catch (error) {
+        console.error("Error tracking database activity:", error);
+    }
+}
+
+/** Wraps an IPC handler so autosave hears about writes it makes. */
+function trackingActivity<A extends unknown[], R>(
+    handler: (...args: A) => Promise<R>,
+): (...args: A) => Promise<R> {
+    return async (...args: A) => {
+        try {
+            return await handler(...args);
+        } finally {
+            noteDatabaseActivity();
+        }
+    };
 }
 
 /**
@@ -77,6 +138,8 @@ export function setDbPath(path: string, isNewFile = false) {
     closePersistentConnection();
 
     DB_PATH = path;
+    SHOW_PATH = "";
+    onDatabaseActivity = null;
     const db = connect();
 
     try {
@@ -117,8 +180,9 @@ export function setDbPath(path: string, isNewFile = false) {
     }
 }
 
+/** The show file the user opened, never a working copy. */
 export function getDbPath() {
-    return DB_PATH;
+    return SHOW_PATH || DB_PATH;
 }
 
 let lastLoggedReadyState: boolean | null = null;
@@ -151,7 +215,11 @@ export function connect() {
         if (!sqlite?.DatabaseSync) {
             throw new Error("node:sqlite module is unavailable");
         }
-        return new sqlite.DatabaseSync(DB_PATH);
+        const db = new sqlite.DatabaseSync(DB_PATH);
+        // A working copy is in WAL mode. The show file on disk is the durable
+        // copy, so its commits don't need to wait for a full sync.
+        if (SHOW_PATH) db.exec("PRAGMA synchronous = NORMAL");
+        return db;
     } catch (error: any) {
         console.error(error);
 
@@ -333,23 +401,35 @@ async function handleUnsafeSqlProxy(_: any, sql: string) {
  */
 export function initHandlers() {
     // Generic SQL proxy handler for Drizzle ORM
-    ipcMain.handle("sql:proxy", handleSqlProxy);
-    ipcMain.handle("unsafeSql:proxy", handleUnsafeSqlProxy);
+    ipcMain.handle("sql:proxy", trackingActivity(handleSqlProxy));
+    ipcMain.handle("unsafeSql:proxy", trackingActivity(handleUnsafeSqlProxy));
 
     // File IO handlers located in electron/main/index.ts
 
     // Audio Files
     // ipcMain.handle("audio:insert") is defined in main/index.ts
     ipcMain.handle("audio:getAll", async () => getAudioFilesDetails());
-    ipcMain.handle("audio:getSelected", async () => getSelectedAudioFile());
-    ipcMain.handle("audio:select", async (_, audioFileId: number) =>
-        setSelectAudioFile(audioFileId),
+    ipcMain.handle(
+        "audio:getSelected",
+        trackingActivity(async () => getSelectedAudioFile()),
     );
-    ipcMain.handle("audio:update", async (_, args: ModifiedAudioFileArgs[]) =>
-        updateAudioFiles(args),
+    ipcMain.handle(
+        "audio:select",
+        trackingActivity(async (_, audioFileId: number) =>
+            setSelectAudioFile(audioFileId),
+        ),
     );
-    ipcMain.handle("audio:delete", async (_, audioFileId: number) =>
-        deleteAudioFile(audioFileId),
+    ipcMain.handle(
+        "audio:update",
+        trackingActivity(async (_, args: ModifiedAudioFileArgs[]) =>
+            updateAudioFiles(args),
+        ),
+    );
+    ipcMain.handle(
+        "audio:delete",
+        trackingActivity(async (_, audioFileId: number) =>
+            deleteAudioFile(audioFileId),
+        ),
     );
 }
 
@@ -443,6 +523,16 @@ type AudioFileInsert = {
 };
 
 export async function insertAudioFile(
+    audioFile: AudioFileInsert,
+): Promise<LegacyDatabaseResponse<AudioFile[]>> {
+    try {
+        return await insertAudioFileWithoutTracking(audioFile);
+    } finally {
+        noteDatabaseActivity();
+    }
+}
+
+async function insertAudioFileWithoutTracking(
     audioFile: AudioFileInsert,
 ): Promise<LegacyDatabaseResponse<AudioFile[]>> {
     const db = connect();

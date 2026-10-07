@@ -6,11 +6,16 @@ import { join } from "path";
 import {
     closeDatabase,
     closePersistentConnection,
+    connect,
+    getConnectionPath,
     getDbPath,
     handleSqlProxy,
     handleSqlProxyWithDb,
     insertAudioFile,
+    isUsingWorkingCopy,
     setDbPath,
+    setWorkingCopyShowPath,
+    useWorkingCopy,
 } from "../database.services";
 
 describe("Database Services", () => {
@@ -142,6 +147,75 @@ describe("Database Services", () => {
 
             expect(existsSync(`${dbPath}-wal`)).toBe(false);
             expect(getDbPath()).toBe("");
+        });
+    });
+
+    describe("working copy", () => {
+        let tempDir: string;
+        let showPath: string;
+        let workingPath: string;
+
+        beforeEach(() => {
+            tempDir = mkdtempSync(join(tmpdir(), "openmarch-working-copy-"));
+            showPath = join(tempDir, "show.dots");
+            workingPath = join(tempDir, "working.dots");
+            for (const path of [showPath, workingPath]) {
+                const db = new DatabaseSync(path);
+                db.exec(
+                    "CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)",
+                );
+                db.close();
+            }
+            const working = new DatabaseSync(workingPath);
+            working.exec("PRAGMA journal_mode = WAL");
+            working.close();
+        });
+
+        afterEach(() => {
+            closeDatabase();
+            rmSync(tempDir, { recursive: true, force: true });
+        });
+
+        it("reports the show's path while connections use the working copy", async () => {
+            useWorkingCopy({ showPath, workingPath, onActivity: () => {} });
+
+            expect(getDbPath()).toBe(showPath);
+            expect(getConnectionPath()).toBe(workingPath);
+            expect(isUsingWorkingCopy()).toBe(true);
+
+            await handleSqlProxy(
+                null,
+                "INSERT INTO test (name) VALUES (?)",
+                ["edit"],
+                "run",
+            );
+            const count = (path: string) => {
+                const db = new DatabaseSync(path, { readOnly: true });
+                const { n } = db
+                    .prepare("SELECT count(*) AS n FROM test")
+                    .get() as { n: number };
+                db.close();
+                return n;
+            };
+            expect(count(workingPath)).toBe(1);
+            expect(count(showPath)).toBe(0);
+
+            const db = connect();
+            expect(
+                (db.prepare("PRAGMA synchronous").get() as any).synchronous,
+            ).toBe(1); // NORMAL
+            db.close();
+
+            setWorkingCopyShowPath(join(tempDir, "renamed.dots"));
+            expect(getDbPath()).toBe(join(tempDir, "renamed.dots"));
+        });
+
+        it("goes back to the show file when another show opens directly", () => {
+            useWorkingCopy({ showPath, workingPath, onActivity: () => {} });
+            setDbPath(showPath);
+            expect(getDbPath()).toBe(showPath);
+            expect(getConnectionPath()).toBe(showPath);
+            expect(isUsingWorkingCopy()).toBe(false);
         });
     });
 
