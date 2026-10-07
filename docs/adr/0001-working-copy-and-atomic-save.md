@@ -119,10 +119,14 @@ forces it on or off. With it off, shows are edited in place as before.
 - **The show file is always complete.** Sync clients, backups, email and USB
   copies never see a torn file or sidecar files.
 - **Edits get faster.** A commit in WAL with `synchronous=NORMAL` takes about
-  0.1 ms instead of several ms, and the history index removes the
-  history-size-dependent cost.
-- **Saves cost about 4 ms per MB written, off the editing thread**, plus
-  hashing the show and the snapshot.
+  0.1 ms instead of several ms. Moving 180 marchers took 7.0 ms before and
+  2.0 ms after on a show with little history, and 63 ms before and 23 ms after
+  with a full undo history. The rest of that is the undo-stack trim's
+  `NOT IN` query, which the index doesn't help.
+- **Saves cost about 5 ms per MB, off the editing thread**, including hashing
+  the show and the snapshot: 124 ms p50 for a 28 MB show and 442 ms for a
+  91 MB show with a 4.5-minute WAV and a full undo history. Edits continue
+  meanwhile.
 - **The show trails the app** by the autosave delay, about 1–2 s while
   editing. A power cut can lose those seconds; a process crash is recovered
   from the working copy. "OpenMarch automatically saves your changes" now
