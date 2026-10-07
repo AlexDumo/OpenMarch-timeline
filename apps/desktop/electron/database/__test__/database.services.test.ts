@@ -4,7 +4,9 @@ import { existsSync, mkdtempSync, renameSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
+    closeDatabase,
     closePersistentConnection,
+    getDbPath,
     handleSqlProxy,
     handleSqlProxyWithDb,
     insertAudioFile,
@@ -119,6 +121,27 @@ describe("Database Services", () => {
 
             expect(existsSync(renamedPath)).toBe(true);
             expect(existsSync(dbPath)).toBe(false);
+        });
+
+        it("closeDatabase closes the long-lived connection", async () => {
+            // In WAL mode the -wal file goes away only when the last
+            // connection closes, which makes an open connection visible.
+            const setup = new DatabaseSync(dbPath);
+            setup.exec("PRAGMA journal_mode = WAL");
+            setup.close();
+
+            await handleSqlProxy(
+                null,
+                "INSERT INTO test (name) VALUES (?)",
+                ["a"],
+                "run",
+            );
+            expect(existsSync(`${dbPath}-wal`)).toBe(true);
+
+            closeDatabase();
+
+            expect(existsSync(`${dbPath}-wal`)).toBe(false);
+            expect(getDbPath()).toBe("");
         });
     });
 

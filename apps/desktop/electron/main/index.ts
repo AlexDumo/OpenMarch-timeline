@@ -37,6 +37,7 @@ import {
     startAutomaticUpdates,
 } from "./update";
 import { repairDatabase } from "../database/repair";
+import { removeIfPresent, replaceFileDurably } from "../database/atomicFile";
 import { choosePreviousDotsFile } from "./services/previous-dots-import-service";
 import {
     initAuthBeforeReady,
@@ -508,6 +509,11 @@ function initGetters() {
     //);
 }
 
+// Close the show's connection on the way out so nothing is left mid-write.
+app.on("will-quit", () => {
+    DatabaseServices.closeDatabase();
+});
+
 app.on("window-all-closed", async () => {
     win = null;
     if (process.platform !== "darwin") app.quit();
@@ -785,7 +791,7 @@ async function openDatabaseAtPathWithoutReload(
     } catch (error) {
         captureException(error);
         store.delete("databasePath");
-        DatabaseServices.setDbPath("", false);
+        DatabaseServices.closeDatabase();
         console.error("Error opening database without reload:", error);
         return -1;
     } finally {
@@ -988,8 +994,7 @@ export async function discardNewShowDraft(): Promise<number> {
         return 200;
     }
 
-    DatabaseServices.closePersistentConnection();
-    DatabaseServices.setDbPath("", false);
+    DatabaseServices.closeDatabase();
 
     const storedPath = store.get("databasePath") as string | undefined;
     if (storedPath === draftPath) {
@@ -1061,50 +1066,58 @@ export async function newFile() {
  * I.e. Save As..
  * OpenMarch automatically saves changes to the database, so this is not a save function.
  *
- * @returns 200 for success, -1 for failure
+ * @returns 200 for success, 0 if cancelled, -1 for failure
  */
 export async function saveFile() {
     console.log("saveFile");
 
     if (!win) return -1;
 
-    const db = DatabaseServices.connect();
-
-    // Save
-    const response = await dialog
-        .showSaveDialog(win, {
+    try {
+        const path = await dialog.showSaveDialog(win, {
             buttonLabel: "Save Copy",
             filters: [{ name: "OpenMarch File", extensions: ["dots"] }],
-        })
-        .then(async (path) => {
-            if (path.canceled || !path.filePath) return 0;
-
-            // Make a copy into a temp file
-            const tempPath = path.filePath + ".tmp";
-            if (fs.existsSync(tempPath)) {
-                fs.unlinkSync(tempPath);
-            }
-
-            const stmt = await db.prepare("VACUUM INTO ?");
-            await stmt.run(tempPath);
-
-            // If there is an existing file, only delete it after successful copy
-            if (fs.existsSync(path.filePath)) {
-                fs.unlinkSync(path.filePath);
-            }
-
-            fs.renameSync(tempPath, path.filePath);
-
-            addRecentFile(path.filePath);
-
-            return 200;
-        })
-        .catch((err) => {
-            console.log(err);
-            return -1;
         });
+        if (path.canceled || !path.filePath) return 0;
+        const target = resolve(path.filePath);
 
-    return response;
+        // A copy over the open show would replace the file under the open
+        // connection. Its contents are already the show's, so there is nothing to do.
+        if (target === resolve(DatabaseServices.getDbPath())) return 200;
+
+        await writeSnapshotTo(target);
+        addRecentFile(target);
+        return 200;
+    } catch (err) {
+        console.log(err);
+        return -1;
+    }
+}
+
+/**
+ * Writes a consistent copy of the open show to `target`, replacing any file
+ * there only once the copy is complete and on disk.
+ */
+async function writeSnapshotTo(target: string) {
+    const tempPath = join(
+        dirname(target),
+        `.~${basename(target)}.${randomUUID().slice(0, 8)}.tmp`,
+    );
+    const db = DatabaseServices.connect();
+    try {
+        db.prepare("VACUUM INTO ?").run(tempPath);
+    } catch (error) {
+        await removeIfPresent(tempPath);
+        throw error;
+    } finally {
+        db.close();
+    }
+    try {
+        await replaceFileDurably(tempPath, target);
+    } catch (error) {
+        await removeIfPresent(tempPath);
+        throw error;
+    }
 }
 
 /**
@@ -1204,7 +1217,7 @@ export async function closeCurrentFile(isAppQuitting = false) {
     }
 
     // Close the current file
-    DatabaseServices.setDbPath("", false);
+    DatabaseServices.closeDatabase();
     store.set("databasePath", "");
 
     // Only reload if we're NOT quitting the app
@@ -1330,6 +1343,8 @@ export async function insertAudioFile(): Promise<
  * @param isNewFile True if this is a new file, false if it is an existing file
  */
 async function setActiveDb(path: string, isNewFile = false) {
+    let openConnection: ReturnType<typeof DatabaseServices.connect> | null =
+        null;
     try {
         // Get the current path from the store if the path is "."
         // I.e. last opened file
@@ -1352,6 +1367,8 @@ async function setActiveDb(path: string, isNewFile = false) {
             console.error("Error connecting to database");
             return 500;
         }
+        // The renderer opens its own connection after the reload below.
+        openConnection = db;
 
         const drizzleDb = getOrm(db);
         const migrator = new DrizzleMigrationService(drizzleDb, db);
@@ -1414,9 +1431,11 @@ async function setActiveDb(path: string, isNewFile = false) {
     } catch (error) {
         captureException(error);
         store.delete("databasePath"); // Reset database path
-        DatabaseServices.setDbPath("", false);
+        DatabaseServices.closeDatabase();
         dialog.showErrorBox("Error Loading Database", (error as Error).message);
         win?.webContents.reload();
         throw error;
+    } finally {
+        openConnection?.close();
     }
 }
