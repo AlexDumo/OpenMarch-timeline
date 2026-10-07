@@ -176,7 +176,8 @@ function resolveSaveTarget(showPath: string): string {
 
 export function tempFilePattern(showFileName: string): RegExp {
     const escaped = showFileName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return new RegExp(`^\\.~${escaped}\\.[0-9a-f]+\\.tmp$`);
+    // A crash during VACUUM INTO can also leave the temp file's journal.
+    return new RegExp(`^\\.~${escaped}\\.[0-9a-f]+\\.tmp(-journal)?$`);
 }
 
 /** Deletes `.~<name>.<random>.tmp` files beside the show left by a crashed save. */

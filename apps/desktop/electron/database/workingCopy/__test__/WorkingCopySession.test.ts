@@ -264,16 +264,22 @@ describe("WorkingCopySession", () => {
         it("deletes stale temp files beside the show on open", async () => {
             const stale = join(showDir, ".~Halftime.dots.deadbeef.tmp");
             const fresh = join(showDir, ".~Halftime.dots.cafebabe.tmp");
+            const staleJournal = join(
+                showDir,
+                ".~Halftime.dots.deadbeef.tmp-journal",
+            );
             const unrelated = join(showDir, ".~Other.dots.deadbeef.tmp");
-            for (const file of [stale, fresh, unrelated])
+            for (const file of [stale, staleJournal, fresh, unrelated])
                 fs.writeFileSync(file, "x");
             const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
             fs.utimesSync(stale, old, old);
+            fs.utimesSync(staleJournal, old, old);
             fs.utimesSync(unrelated, old, old);
 
             removeStaleTempFiles(showPath);
 
             expect(fs.existsSync(stale)).toBe(false);
+            expect(fs.existsSync(staleJournal)).toBe(false);
             expect(fs.existsSync(fresh)).toBe(true);
             expect(fs.existsSync(unrelated)).toBe(true);
         });
