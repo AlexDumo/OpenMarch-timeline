@@ -483,13 +483,13 @@ from it. The spec still wins on the model; this file decides presentation.
     and clips too, which still turns From start on (UI-11's cycle drag). A click or scrub lands on
     a downbeat or page line within 6px; Alt turns that off, as it does for dragged flags (Shift is
     the canvas's fine nudge and the transport's first/last page). While the pointer is down the
-    playhead line (with **+**, the played waveform and the window's tint) stays exactly under it
-    at every zoom, between beats, and nothing snaps until the release (project owner, 2026-10-06:
-    scrubbing should be "buttery smooth as the user clicks and drags"; drawing the line where a
-    release would land made it hop from downbeat to downbeat when zoomed out). The readout, the
-    field and where the release lands still move by whole beats, so on release the line settles
-    onto the beat it lands on: the nearest beat, or the downbeat or page line within 6px. Where the
-    playhead can't follow (isolation holds it inside the isolated range), the line stops at it.
+    playhead line (with **+**, the played waveform and the window's tint) steps beat by beat with
+    the playhead, on the beat a release would land on: the nearest beat, or the downbeat or page
+    line within 6px (project owner, 2026-10-07: "I like the beat-level drag in the playhead", after
+    trying a line that glided under the pointer between beats). Each step is drawn in the pointer
+    move that makes it, not after React renders the new beat, so the line never lags the pointer.
+    Where the playhead can't follow (isolation holds it inside the isolated range), the line stays
+    on it.
   - **A pinned start flag stays pinned until unpinned** (supersedes UI-10's "until P moves to or
     before it"): scrubbing is now the commonest gesture, so moving the playhead never unpins it.
     With P on or before a pinned S the window falls back to the page box holding P, as after Stop.

@@ -569,10 +569,10 @@ const useRulerScrub = (
                 latest.current.pixelsPerBeat,
                 isPageSnapDisabled(event),
             );
-            // The seek only goes out when the beat changes; the line stays under the pointer,
-            // unless the playhead was held short of the beat sent (`scrubLineBeat`)
+            // The seek only goes out when the beat changes; the line steps to the beat the playhead
+            // is on (`scrubLineBeat`) in this move, without waiting for a render
             const landed = onSeek?.(current.lastBeat, { gesture: "drag" });
-            scrubLine?.set(scrubLineBeat(beat, current.lastBeat, landed));
+            scrubLine?.set(scrubLineBeat(current.lastBeat, landed));
         };
         const finish = (beat?: number) => {
             const current = drag;
@@ -2122,25 +2122,17 @@ const nearSeekSnap = (
 };
 
 /**
- * Where a scrub draws the playhead line while the pointer is down (UI-12): under the pointer
- * (`pointerBeat`, view beats, between beats), so it glides with the pointer at any zoom, while the
- * playhead itself (the readout, the field) moves by whole beats. Nothing snaps until the release.
+ * Where a scrub draws the playhead line while the pointer is down (UI-12): on the beat the playhead
+ * is on, so the line steps beat by beat, with the downbeat or page line a release would land on
+ * (project owner, 2026-10-07: "I like the beat-level drag"). It's written on the pointer move that
+ * moves it, through a transform, so it doesn't wait for React to render the new beat.
  *
- * `sent` is the beat the move seeked to and `landed` where the playhead is after it, when the
- * owner says (`TimelineSeek`). When the playhead couldn't follow (held inside an isolated range),
- * the line goes no further than the held playhead, so it never leaves it.
+ * `sent` is the beat the move seeked to (`snapSeekBeat`) and `landed` where the playhead is after it,
+ * when the owner says (`TimelineSeek`): the same beat, or the held playhead when it couldn't follow
+ * (inside an isolated range).
  */
-export const scrubLineBeat = (
-    pointerBeat: number,
-    sent: number,
-    landed: number | null | void,
-) => {
-    if (typeof landed !== "number") return pointerBeat;
-    const whole = Math.round(sent);
-    if (landed < whole) return Math.min(pointerBeat, landed);
-    if (landed > whole) return Math.max(pointerBeat, landed);
-    return pointerBeat;
-};
+export const scrubLineBeat = (sent: number, landed: number | null | void) =>
+    typeof landed === "number" ? landed : sent;
 
 /** macOS, where Ctrl+click is a right-click and Cmd is the modifier */
 export const isMac = () =>
@@ -2239,11 +2231,11 @@ export const useTimelinePointer = ({
                     ? undefined
                     : { gesture: seekGesture },
             );
-            // During a scrub the line follows the pointer between beats, and stays on a playhead
-            // that couldn't follow (`scrubLineBeat`). A timeline that can't seek (read-only) keeps
-            // its line where it is.
+            // During a scrub the line steps to the beat the playhead is on (`scrubLineBeat`) in this
+            // move, without waiting for a render. A timeline that can't seek (read-only) keeps its
+            // line where it is.
             if (onSeek && (seekGesture === "press" || seekGesture === "drag"))
-                scrubLine.set(scrubLineBeat(beat, snapped, landed));
+                scrubLine.set(scrubLineBeat(snapped, landed));
         },
         [onSeek, pixelsPerBeat, scrubLine, seekSnapBeats],
     );
