@@ -38,6 +38,16 @@ import {
 } from "./update";
 import { repairDatabase } from "../database/repair";
 import { removeIfPresent, replaceFileDurably } from "../database/atomicFile";
+import {
+    type RecoverableShow,
+    type RecoverableWorkingCopy,
+    type SaveOutcome,
+    type WorkingCopyConflictChoice,
+    type WorkingCopyStatus,
+    WorkingCopySession,
+    discardWorkingCopy,
+    scanWorkingCopies,
+} from "../database/workingCopy/WorkingCopySession";
 import { choosePreviousDotsFile } from "./services/previous-dots-import-service";
 import {
     initAuthBeforeReady,
@@ -57,6 +67,7 @@ import {
 //
 
 let isQuitting = false;
+let windowIsClosing = false;
 const store = new Store();
 const DB_USER_VERSION = 7;
 
@@ -240,6 +251,22 @@ async function createWindow(title?: string) {
         if (isQuitting) return;
 
         event.preventDefault();
+        if (windowIsClosing) return;
+        windowIsClosing = true;
+
+        // A working copy saves before the window hides, so a save problem
+        // can still be shown and the user can cancel quitting.
+        if (workingCopy) {
+            const proceed = await endWorkingCopy("quit").catch((e) => {
+                console.error("Error saving before quit:", e);
+                return true;
+            });
+            if (!proceed) {
+                windowIsClosing = false;
+                return;
+            }
+        }
+
         win!.hide(); // use non-null assertion now that we're inside the if-block
 
         try {
@@ -252,6 +279,11 @@ async function createWindow(title?: string) {
         win!.destroy();
         win = null;
         app.quit();
+    });
+
+    // Save when the user switches away, so the show on disk is current.
+    win.on("blur", () => {
+        void workingCopy?.flush("blur");
     });
 
     // Make all links open with the browser, not with the application
@@ -385,6 +417,8 @@ function initDatabaseIpcHandlers() {
     );
     ipcMain.handle("database:repair", async (_, dbPath: string) => {
         try {
+            // Repair reads the show file, so it must hold the latest changes.
+            if (!(await endWorkingCopy("repair"))) return dbPath;
             DatabaseServices.closePersistentConnection();
             const newPath = await repairDatabase(dbPath);
             await setActiveDb(newPath);
@@ -395,6 +429,7 @@ function initDatabaseIpcHandlers() {
         }
     });
     ipcMain.handle("audio:insert", async () => insertAudioFile());
+    initWorkingCopyIpcHandlers();
 }
 
 function initRecentFilesIpcHandlers() {
@@ -426,8 +461,15 @@ void app.whenReady().then(async () => {
 
     Menu.setApplicationMenu(applicationMenu);
 
+    // Working copies left by a crash. Their shows open from the launch page,
+    // where the user can recover or discard the unsaved changes.
+    recoverableWorkingCopies = scanWorkingCopies(getWorkingCopyRoot());
     const pathToOpen = resolveStartupDatabasePath();
-    if (pathToOpen.length > 0) await setActiveDb(pathToOpen);
+    const pendingRecovery = recoverableWorkingCopies.some(
+        (entry) => resolve(entry.manifest.showPath) === resolve(pathToOpen),
+    );
+    if (pathToOpen.length > 0 && !pendingRecovery)
+        await setActiveDb(pathToOpen);
     DatabaseServices.initHandlers();
 
     console.log("db_path: " + DatabaseServices.getDbPath());
@@ -449,6 +491,7 @@ void app.whenReady().then(async () => {
 function initGetters() {
     // Exports
     ipcMain.handle("export:pdf", async (_, params) => {
+        await saveBeforeExport();
         return await PDFExportService.export(
             params.sheets,
             params.organizeBySection,
@@ -460,6 +503,7 @@ function initGetters() {
     ipcMain.handle(
         "export:createExportDirectory",
         async (_, defaultName: string) => {
+            await saveBeforeExport();
             return await PDFExportService.createExportDirectory(defaultName);
         },
     );
@@ -471,6 +515,7 @@ function initGetters() {
 
     // Video export (streamed file writing)
     ipcMain.handle("export:videoStart", async (_, fileExtension: string) => {
+        await saveBeforeExport();
         return await VideoExportService.start(fileExtension);
     });
     ipcMain.handle(
@@ -566,7 +611,9 @@ ipcMain.on("window:maximize", () => {
 });
 
 ipcMain.on("window:close", () => {
-    void closeCurrentFile();
+    // With a working copy, the window's close handler saves and closes the
+    // show once, and can still be cancelled.
+    if (!workingCopy) void closeCurrentFile();
     win?.close();
 });
 
@@ -749,6 +796,7 @@ async function openDatabaseAtPathWithoutReload(
     isNewFile: boolean,
 ): Promise<number> {
     if (!filePath || !win) return -1;
+    if (!(await endWorkingCopy("switch"))) return -1;
 
     if (!filePath.endsWith(".dots")) {
         filePath = `${filePath}.dots`;
@@ -1083,7 +1131,10 @@ export async function saveFile() {
 
         // A copy over the open show would replace the file under the open
         // connection. Its contents are already the show's, so there is nothing to do.
-        if (target === resolve(DatabaseServices.getDbPath())) return 200;
+        if (target === resolve(DatabaseServices.getDbPath())) {
+            const outcome = await workingCopy?.flush("save");
+            return !outcome || outcome.ok ? 200 : -1;
+        }
 
         await writeSnapshotTo(target);
         addRecentFile(target);
@@ -1216,6 +1267,9 @@ export async function closeCurrentFile(isAppQuitting = false) {
         console.error("Error getting SVG on close:", error);
     }
 
+    // Save and release a working copy; the user may cancel if that fails.
+    if (!(await endWorkingCopy(isAppQuitting ? "quit" : "close"))) return 0;
+
     // Close the current file
     DatabaseServices.closeDatabase();
     store.set("databasePath", "");
@@ -1337,12 +1391,77 @@ export async function insertAudioFile(): Promise<
 }
 
 /**
+ * Applies pending migrations to an open show connection, backing up the show
+ * file first. A new file is initialized instead.
+ */
+async function prepareShowDatabase(
+    db: ReturnType<typeof DatabaseServices.connect>,
+    showPath: string,
+    isNewFile: boolean,
+) {
+    const drizzleDb = getOrm(db);
+    const migrator = new DrizzleMigrationService(drizzleDb, db);
+
+    const migrationsFolder = join(
+        app.getAppPath(),
+        "electron",
+        "database",
+        "migrations",
+    );
+
+    // If this isn't a new file, create backups before applying migrations
+    if (!isNewFile) {
+        console.log("Checking database version to see if migration is needed");
+        if (migrator.hasPendingMigrations(migrationsFolder)) {
+            const backupDir = join(app.getPath("userData"), "backups");
+            if (!fs.existsSync(backupDir)) {
+                fs.mkdirSync(backupDir);
+            }
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const originalName = showPath.split(/[\\/]/).pop();
+            const backupPath = join(
+                backupDir,
+                `backup_${timestamp}_${originalName}`,
+            );
+            console.log("Creating backup of database in " + backupPath);
+            fs.copyFileSync(showPath, backupPath);
+
+            console.log("Deleting backups older than 30 days");
+            // Delete backups older than 30 days
+            const files = fs.readdirSync(backupDir);
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+            files.forEach((file) => {
+                const filePath = join(backupDir, file);
+                const stats = fs.statSync(filePath);
+                if (stats.birthtime < thirtyDaysAgo) {
+                    fs.unlinkSync(filePath);
+                }
+            });
+        }
+    } else {
+        db.prepare(`PRAGMA user_version = ${DB_USER_VERSION}`).run();
+    }
+    await migrator.applyPendingMigrations(migrationsFolder);
+
+    if (isNewFile) {
+        await DrizzleMigrationService.initializeDatabase(drizzleDb, db);
+    }
+}
+
+/**
  * Sets the active database path and reloads the window.
  *
  * @param path path to the database file
  * @param isNewFile True if this is a new file, false if it is an existing file
+ * @param recover A crashed session's working copy to continue from
  */
-async function setActiveDb(path: string, isNewFile = false) {
+async function setActiveDb(
+    path: string,
+    isNewFile = false,
+    recover?: RecoverableWorkingCopy,
+) {
     let openConnection: ReturnType<typeof DatabaseServices.connect> | null =
         null;
     try {
@@ -1350,84 +1469,50 @@ async function setActiveDb(path: string, isNewFile = false) {
         // I.e. last opened file
         if (path === ".") path = store.get("databasePath") as string;
 
-        const resCode = DatabaseServices.setDbPath(path, isNewFile);
+        // Save and release the show that's open now.
+        if (!(await endWorkingCopy("switch"))) return 409;
 
-        if (resCode !== 200) {
-            store.delete("databasePath");
-            console.error(
-                `Error loading database file [code=${resCode}] [path=${path}]`,
-            );
-            return resCode;
+        if (
+            recover ||
+            (workingCopySavesEnabled() && !isNewShowDraftPath(path))
+        ) {
+            const resCode = await openWorkingCopy(path, isNewFile, recover);
+            if (resCode !== 200) {
+                store.delete("databasePath");
+                console.error(
+                    `Error loading database file [code=${resCode}] [path=${path}]`,
+                );
+                return resCode;
+            }
+            path = workingCopy!.showPath;
+        } else {
+            const resCode = DatabaseServices.setDbPath(path, isNewFile);
+
+            if (resCode !== 200) {
+                store.delete("databasePath");
+                console.error(
+                    `Error loading database file [code=${resCode}] [path=${path}]`,
+                );
+                return resCode;
+            }
+
+            const db = DatabaseServices.connect();
+            if (!db) {
+                console.error("Error connecting to database");
+                return 500;
+            }
+            // The renderer opens its own connection after the reload below.
+            openConnection = db;
+            await prepareShowDatabase(db, path, isNewFile);
         }
 
         win?.setTitle("OpenMarch - " + path);
-
-        const db = DatabaseServices.connect();
-        if (!db) {
-            console.error("Error connecting to database");
-            return 500;
-        }
-        // The renderer opens its own connection after the reload below.
-        openConnection = db;
-
-        const drizzleDb = getOrm(db);
-        const migrator = new DrizzleMigrationService(drizzleDb, db);
-
-        const migrationsFolder = join(
-            app.getAppPath(),
-            "electron",
-            "database",
-            "migrations",
-        );
-
-        // If this isn't a new file, create backups before applying migrations
-        if (!isNewFile) {
-            console.log(
-                "Checking database version to see if migration is needed",
-            );
-            if (migrator.hasPendingMigrations(migrationsFolder)) {
-                const backupDir = join(app.getPath("userData"), "backups");
-                if (!fs.existsSync(backupDir)) {
-                    fs.mkdirSync(backupDir);
-                }
-                const timestamp = new Date()
-                    .toISOString()
-                    .replace(/[:.]/g, "-");
-                const originalName = path.split(/[\\/]/).pop();
-                const backupPath = join(
-                    backupDir,
-                    `backup_${timestamp}_${originalName}`,
-                );
-                console.log("Creating backup of database in " + backupPath);
-                fs.copyFileSync(path, backupPath);
-
-                console.log("Deleting backups older than 30 days");
-                // Delete backups older than 30 days
-                const files = fs.readdirSync(backupDir);
-                const thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-                files.forEach((file) => {
-                    const filePath = join(backupDir, file);
-                    const stats = fs.statSync(filePath);
-                    if (stats.birthtime < thirtyDaysAgo) {
-                        fs.unlinkSync(filePath);
-                    }
-                });
-            }
-        } else {
-            db.prepare(`PRAGMA user_version = ${DB_USER_VERSION}`).run();
-        }
-        await migrator.applyPendingMigrations(migrationsFolder);
-
-        if (isNewFile) {
-            await DrizzleMigrationService.initializeDatabase(drizzleDb, db);
-        }
+        if (process.platform === "darwin") win?.setRepresentedFilename(path);
 
         store.set("databasePath", path); // Save current db path
         win?.webContents.reload();
 
-        return resCode;
+        return 200;
     } catch (error) {
         captureException(error);
         store.delete("databasePath"); // Reset database path
@@ -1438,4 +1523,318 @@ async function setActiveDb(path: string, isNewFile = false) {
     } finally {
         openConnection?.close();
     }
+}
+
+/************************************** WORKING COPY **************************************/
+// Saving through a private working copy (docs/adr/0001). Opt-in through the
+// "workingCopySaves" setting, or OPENMARCH_WORKING_COPY=1 / =0 to force it.
+
+const WORKING_COPY_SETTING = "workingCopySaves";
+
+/** The working copy of the open show, when the show is edited through one. */
+let workingCopy: WorkingCopySession | null = null;
+/** Set while the open show is being saved and released. */
+let endingWorkingCopy: Promise<boolean> | null = null;
+/** Working copies with unsaved changes left by a crash. */
+let recoverableWorkingCopies: RecoverableWorkingCopy[] = [];
+
+function getWorkingCopyRoot(): string {
+    return join(app.getPath("userData"), "working-copies");
+}
+
+function workingCopySavesEnabled(): boolean {
+    const forced = process.env.OPENMARCH_WORKING_COPY;
+    if (forced === "1") return true;
+    if (forced === "0") return false;
+    return store.get(WORKING_COPY_SETTING) === true;
+}
+
+function reportWorkingCopyStatus(status: WorkingCopyStatus) {
+    if (!win || win.isDestroyed()) return;
+    win.webContents.send("working-copy:status", status);
+    if (process.platform === "darwin")
+        win.setDocumentEdited(
+            status.state !== "saved" && status.state !== "closed",
+        );
+}
+
+/**
+ * Checks that a show can be opened and later saved: it exists, is readable
+ * and writable, and its folder accepts the temp file a save writes beside it.
+ * Nothing is written to the show itself.
+ */
+function checkShowFileForWorkingCopy(showPath: string): number {
+    if (!fs.existsSync(showPath)) return 404;
+    try {
+        fs.accessSync(showPath, fs.constants.R_OK | fs.constants.W_OK);
+    } catch {
+        return 403;
+    }
+    // On macOS, access checks can pass for Documents or Downloads while
+    // writes still fail without folder access.
+    const probe = join(
+        dirname(showPath),
+        `.~${basename(showPath)}.${randomUUID().slice(0, 8)}.tmp`,
+    );
+    try {
+        fs.writeFileSync(probe, "", { flag: "wx" });
+        fs.unlinkSync(probe);
+    } catch (error) {
+        console.error("Can't write beside the show:", error);
+        return 403;
+    }
+    return 200;
+}
+
+/** Opens `showPath` through a new working copy, or continues a crashed one. */
+async function openWorkingCopy(
+    showPath: string,
+    isNewFile: boolean,
+    recover?: RecoverableWorkingCopy,
+): Promise<number> {
+    if (isNewFile) {
+        // A new show starts as a file at its final path, then opens like
+        // any other show.
+        const created = DatabaseServices.setDbPath(showPath, true);
+        if (created !== 200) return created;
+        const db = DatabaseServices.connect();
+        try {
+            await prepareShowDatabase(db, showPath, true);
+        } finally {
+            db.close();
+            DatabaseServices.closeDatabase();
+        }
+    }
+
+    if (!recover) {
+        const resCode = checkShowFileForWorkingCopy(showPath);
+        if (resCode !== 200) return resCode;
+    }
+
+    const prepare = async (db: ReturnType<typeof DatabaseServices.connect>) => {
+        const { user_version } = db.prepare("PRAGMA user_version").get() as {
+            user_version: number;
+        };
+        if (user_version === -1)
+            throw new Error(
+                "user_version is -1, meaning the database was not created successfully",
+            );
+        // Migrations change only the working copy. The show file keeps its
+        // old format until the first save after an edit.
+        await prepareShowDatabase(db, showPath, false);
+    };
+    const options = {
+        workingRoot: getWorkingCopyRoot(),
+        appVersion: app.getVersion(),
+        onStatus: reportWorkingCopyStatus,
+    };
+    const session = recover
+        ? await WorkingCopySession.resume(recover, options, prepare)
+        : await WorkingCopySession.open(showPath, options, prepare);
+    if (recover)
+        recoverableWorkingCopies = recoverableWorkingCopies.filter(
+            (entry) => entry.id !== recover.id,
+        );
+
+    workingCopy = session;
+    DatabaseServices.connectToWorkingCopy({
+        showPath: session.showPath,
+        workingPath: session.workingPath,
+        onActivity: () => session.noteActivity(),
+    });
+    console.log(
+        `Editing ${session.showPath} through working copy ${session.workingPath}`,
+    );
+    return 200;
+}
+
+/** Saves the open show before an export reads it from disk or shares it. */
+async function saveBeforeExport() {
+    const outcome = await workingCopy?.flush("export");
+    if (outcome && !outcome.ok)
+        console.warn("Exporting without saving first:", outcome.message);
+}
+
+type UnsavedChoice = "retry" | "overwrite" | "saveCopy" | "keep" | "cancel";
+
+/** Asks what to do when the last save before closing didn't happen. */
+async function askAboutUnsavedChanges(
+    session: WorkingCopySession,
+    outcome: Extract<SaveOutcome, { ok: false }>,
+): Promise<UnsavedChoice> {
+    const name = basename(session.showPath);
+    const choices: { label: string; choice: UnsavedChoice }[] =
+        outcome.state === "conflict"
+            ? [
+                  { label: "Keep My Version", choice: "overwrite" },
+                  { label: "Save My Version As…", choice: "saveCopy" },
+              ]
+            : outcome.state === "readOnly"
+              ? [{ label: "Save As…", choice: "saveCopy" }]
+              : [
+                    { label: "Try Again", choice: "retry" },
+                    { label: "Save As…", choice: "saveCopy" },
+                ];
+    choices.push(
+        { label: "Close and Recover Later", choice: "keep" },
+        { label: "Cancel", choice: "cancel" },
+    );
+    const options: Electron.MessageBoxOptions = {
+        type: "warning",
+        message: `Your latest changes to ${name} haven't been saved.`,
+        detail: `${outcome.message}\n\nIf you close now, OpenMarch keeps your changes and offers to recover them the next time it starts.`,
+        buttons: choices.map((choice) => choice.label),
+        defaultId: 0,
+        cancelId: choices.length - 1,
+        noLink: true,
+    };
+    const { response } =
+        win && !win.isDestroyed()
+            ? await dialog.showMessageBox(win, options)
+            : await dialog.showMessageBox(options);
+    return choices[response]?.choice ?? "cancel";
+}
+
+/** Asks where to save the user's version of a show as a new file. */
+async function chooseCopyPath(showPath: string): Promise<string | null> {
+    const name = basename(showPath).replace(/\.dots$/i, "");
+    const options: Electron.SaveDialogOptions = {
+        buttonLabel: "Save",
+        defaultPath: join(dirname(showPath), `${name} (my changes).dots`),
+        filters: [{ name: "OpenMarch File", extensions: ["dots"] }],
+    };
+    const result = await showSaveDialogHandler(options);
+    if (result.canceled || !result.filePath) return null;
+    return result.filePath.endsWith(".dots")
+        ? result.filePath
+        : `${result.filePath}.dots`;
+}
+
+/** Makes `newShowPath` the open show's file and saves to it. */
+async function saveWorkingCopyAs(
+    session: WorkingCopySession,
+    newShowPath: string,
+): Promise<SaveOutcome> {
+    const outcome = await session.retarget(newShowPath);
+    DatabaseServices.setWorkingCopyShowPath(session.showPath);
+    store.set("databasePath", session.showPath);
+    addRecentFile(session.showPath);
+    win?.setTitle("OpenMarch - " + session.showPath);
+    if (process.platform === "darwin")
+        win?.setRepresentedFilename(session.showPath);
+    reportWorkingCopyStatus(session.status());
+    return outcome;
+}
+
+/**
+ * Saves the open show for the last time and releases its working copy.
+ * When the save fails, asks the user; returns false if they cancel.
+ * Concurrent calls share one run.
+ */
+function endWorkingCopy(reason: string): Promise<boolean> {
+    if (!workingCopy) return Promise.resolve(true);
+    endingWorkingCopy ??= (async () => {
+        const session = workingCopy!;
+        try {
+            let outcome = await session.flush(reason);
+            while (!outcome.ok && session.hasUnsavedChanges) {
+                const choice = await askAboutUnsavedChanges(session, outcome);
+                if (choice === "cancel") return false;
+                if (choice === "keep") break;
+                if (choice === "retry") outcome = await session.flush(reason);
+                else if (choice === "overwrite")
+                    outcome = await session.overwriteShow();
+                else {
+                    const target = await chooseCopyPath(session.showPath);
+                    if (target)
+                        outcome = await saveWorkingCopyAs(session, target);
+                }
+            }
+            workingCopy = null;
+            DatabaseServices.closeDatabase();
+            const { keptForRecovery } = await session.close();
+            if (keptForRecovery)
+                recoverableWorkingCopies =
+                    scanWorkingCopies(getWorkingCopyRoot());
+            if (process.platform === "darwin" && win && !win.isDestroyed())
+                win.setDocumentEdited(false);
+            return true;
+        } finally {
+            endingWorkingCopy = null;
+        }
+    })();
+    return endingWorkingCopy;
+}
+
+function describeRecoverable(entry: RecoverableWorkingCopy): RecoverableShow {
+    return {
+        id: entry.id,
+        showPath: entry.manifest.showPath,
+        showExists: fs.existsSync(entry.manifest.showPath),
+        lastEditAt: entry.manifest.lastEditAt,
+    };
+}
+
+function initWorkingCopyIpcHandlers() {
+    ipcMain.handle(
+        "working-copy:get-status",
+        () => workingCopy?.status() ?? null,
+    );
+    ipcMain.handle(
+        "working-copy:resolve-conflict",
+        async (_, choice: WorkingCopyConflictChoice) => {
+            const session = workingCopy;
+            if (!session)
+                return {
+                    ok: false,
+                    state: "closed",
+                    message: "No show is open",
+                };
+            if (choice === "keepMine") return session.overwriteShow();
+            if (choice === "keepTheirs") {
+                // Drop the working copy and reopen the show as it is on disk.
+                const showPath = session.showPath;
+                workingCopy = null;
+                DatabaseServices.closeDatabase();
+                await session.close({ discard: true });
+                await setActiveDb(showPath);
+                return { ok: true };
+            }
+            const target = await chooseCopyPath(session.showPath);
+            if (!target) return { ok: false, cancelled: true };
+            return saveWorkingCopyAs(session, target);
+        },
+    );
+    ipcMain.handle("working-copy:save-as", async () => {
+        const session = workingCopy;
+        if (!session)
+            return { ok: false, state: "closed", message: "No show is open" };
+        const target = await chooseCopyPath(session.showPath);
+        if (!target) return { ok: false, cancelled: true };
+        return saveWorkingCopyAs(session, target);
+    });
+    ipcMain.handle("working-copy:list-recoverable", () =>
+        recoverableWorkingCopies.map(describeRecoverable),
+    );
+    ipcMain.handle("working-copy:recover", async (_, id: string) => {
+        const entry = recoverableWorkingCopies.find((item) => item.id === id);
+        if (!entry) return 404;
+        const resCode = await setActiveDb(
+            entry.manifest.showPath,
+            false,
+            entry,
+        );
+        if (resCode === 200) {
+            addRecentFile(entry.manifest.showPath);
+        }
+        return resCode;
+    });
+    ipcMain.handle("working-copy:discard", (_, id: string) => {
+        const entry = recoverableWorkingCopies.find((item) => item.id === id);
+        if (!entry) return;
+        discardWorkingCopy(entry);
+        recoverableWorkingCopies = recoverableWorkingCopies.filter(
+            (item) => item.id !== id,
+        );
+    });
 }

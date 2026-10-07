@@ -21,6 +21,12 @@ import type {
 } from "@om-electron/main/auth/types";
 import { AUTH_IPC_CHANNELS } from "../../src/global/auth/constants";
 import type { HistoryResponse } from "@/db-functions";
+import type {
+    RecoverableShow,
+    SaveOutcome,
+    WorkingCopyConflictChoice,
+    WorkingCopyStatus,
+} from "@om-electron/database/workingCopy/WorkingCopySession";
 
 function domReady(
     condition: DocumentReadyState[] = ["complete", "interactive"],
@@ -179,6 +185,40 @@ const APP_API = {
             callback(value);
         ipcRenderer.on("load-file-response", listener);
         return () => ipcRenderer.removeListener("load-file-response", listener);
+    },
+
+    // Saving through a working copy (docs/adr/0001)
+    workingCopy: {
+        getStatus: () =>
+            ipcRenderer.invoke(
+                "working-copy:get-status",
+            ) as Promise<WorkingCopyStatus | null>,
+        onStatus: (callback: (status: WorkingCopyStatus) => void) => {
+            const listener = (
+                _event: Electron.IpcRendererEvent,
+                status: WorkingCopyStatus,
+            ) => callback(status);
+            ipcRenderer.on("working-copy:status", listener);
+            return () =>
+                ipcRenderer.removeListener("working-copy:status", listener);
+        },
+        resolveConflict: (choice: WorkingCopyConflictChoice) =>
+            ipcRenderer.invoke(
+                "working-copy:resolve-conflict",
+                choice,
+            ) as Promise<SaveOutcome | { ok: false; cancelled: true }>,
+        saveAs: () =>
+            ipcRenderer.invoke("working-copy:save-as") as Promise<
+                SaveOutcome | { ok: false; cancelled: true }
+            >,
+        listRecoverable: () =>
+            ipcRenderer.invoke("working-copy:list-recoverable") as Promise<
+                RecoverableShow[]
+            >,
+        recover: (id: string) =>
+            ipcRenderer.invoke("working-copy:recover", id) as Promise<number>,
+        discard: (id: string) =>
+            ipcRenderer.invoke("working-copy:discard", id) as Promise<void>,
     },
 
     // SVG Generation

@@ -72,6 +72,9 @@ function registerHandlers() {
             console[level]("[Renderer]", ...rest);
     });
     ipcMain.handle("recent-files:get", () => []);
+    // The harness edits the show file directly, never a working copy.
+    ipcMain.handle("working-copy:get-status", () => null);
+    ipcMain.handle("working-copy:list-recoverable", () => []);
     ipcMain.handle("newShow:getPending", () => false);
     ipcMain.handle("newShow:getDraftPath", () => null);
     ipcMain.handle("plugins:list", () => []);

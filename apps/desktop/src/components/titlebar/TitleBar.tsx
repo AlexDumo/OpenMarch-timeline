@@ -16,6 +16,7 @@ import FileControls from "./FileControls";
 import { T } from "@tolgee/react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import MarcherLogo from "@/components/MarcherLogo";
+import { useWorkingCopyStatus } from "@/hooks/useWorkingCopyStatus";
 
 // eslint-disable-next-line max-lines-per-function
 export default function TitleBar({ showControls }: { showControls?: boolean }) {
@@ -42,12 +43,23 @@ export default function TitleBar({ showControls }: { showControls?: boolean }) {
         void fetchDbPath();
     }, []);
 
+    // A working copy reports the show file, which Save As can change.
+    const workingCopyStatus = useWorkingCopyStatus();
+    const showPath = workingCopyStatus?.showPath ?? dbPath;
+    const saveStateKey = {
+        unsaved: "workingCopy.status.unsaved",
+        saving: "workingCopy.status.saving",
+        conflict: "workingCopy.status.notSaved",
+        deferred: "workingCopy.status.notSaved",
+        readOnly: "workingCopy.status.notSaved",
+    }[workingCopyStatus?.state as string];
+
     const displayDbPath = uiSettings.showFullDatabasePath
-        ? dbPath
-        : (dbPath
+        ? showPath
+        : (showPath
               .split(/[/\\]/)
               .filter((segment) => segment.length > 0)
-              .pop() ?? dbPath);
+              .pop() ?? showPath);
 
     return (
         <>
@@ -104,6 +116,15 @@ export default function TitleBar({ showControls }: { showControls?: boolean }) {
                 </div>
                 <p className="text-sub absolute top-1/2 left-1/2 w-[30%] -translate-x-1/2 -translate-y-1/2 text-center">
                     {displayDbPath}
+                    {saveStateKey && (
+                        <span
+                            className={`ml-8 opacity-60 ${workingCopyStatus?.state === "saving" || workingCopyStatus?.state === "unsaved" ? "" : "text-red opacity-100"}`}
+                            data-testid="working-copy-state"
+                            data-state={workingCopyStatus?.state}
+                        >
+                            <T keyName={saveStateKey} />
+                        </span>
+                    )}
                 </p>
                 <div
                     className={`titlebar-button flex gap-12 ${isMacOS ? "pr-24" : ""}`}

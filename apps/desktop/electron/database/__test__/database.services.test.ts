@@ -15,7 +15,7 @@ import {
     isUsingWorkingCopy,
     setDbPath,
     setWorkingCopyShowPath,
-    useWorkingCopy,
+    connectToWorkingCopy,
 } from "../database.services";
 
 describe("Database Services", () => {
@@ -177,7 +177,11 @@ describe("Database Services", () => {
         });
 
         it("reports the show's path while connections use the working copy", async () => {
-            useWorkingCopy({ showPath, workingPath, onActivity: () => {} });
+            connectToWorkingCopy({
+                showPath,
+                workingPath,
+                onActivity: () => {},
+            });
 
             expect(getDbPath()).toBe(showPath);
             expect(getConnectionPath()).toBe(workingPath);
@@ -211,7 +215,11 @@ describe("Database Services", () => {
         });
 
         it("goes back to the show file when another show opens directly", () => {
-            useWorkingCopy({ showPath, workingPath, onActivity: () => {} });
+            connectToWorkingCopy({
+                showPath,
+                workingPath,
+                onActivity: () => {},
+            });
             setDbPath(showPath);
             expect(getDbPath()).toBe(showPath);
             expect(getConnectionPath()).toBe(showPath);

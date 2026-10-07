@@ -1040,6 +1040,8 @@
         "general.appearance.dark": "Dark",
         "general.appearance.light": "Light",
         "general.automaticUpdates": "Automatically download and install updates",
+        "general.workingCopySaves": "Save shows through a working copy (beta)",
+        "general.workingCopySaves.description": "Edits go to a private copy and are written to your show file a moment later, all at once. Safer in cloud folders such as OneDrive, iCloud and Dropbox. Applies to the next show you open.",
         "general.language": "Language",
         "general.showFullDatabasePath": "Show full file path",
         "mouse": "Mouse & Trackpad",
@@ -1193,6 +1195,29 @@
     "welcome": {
         "description": "No files found. Create one, and make sure to check out the guides. Customize your theme and navigation in Settings.",
         "title": "Welcome to OpenMarch"
+    },
+    "workingCopy": {
+        "status.unsaved": "Edited",
+        "status.saving": "Saving…",
+        "status.notSaved": "Not saved",
+        "conflict.title": "This show changed on disk",
+        "conflict.description": "{name} was changed by another program or computer since OpenMarch last saved it, so your latest changes haven't been saved to it. Which version do you want to keep?",
+        "conflict.keepMine": "Keep my version",
+        "conflict.keepTheirs": "Use the version on disk",
+        "conflict.saveCopy": "Save mine as a copy…",
+        "missing.title": "This show was moved or deleted",
+        "missing.description": "{name} isn't where OpenMarch opened it from, so your latest changes haven't been saved.",
+        "missing.saveHere": "Save it to the old location",
+        "deferred": "Couldn't save {name} yet",
+        "readOnly": "{name} is read-only, so your changes can't be saved to it.",
+        "saveAs": "Save As…",
+        "recovery.title": "Recover unsaved changes",
+        "recovery.description": "OpenMarch closed before these changes were saved.",
+        "recovery.lastEdited": "Last edited {time}",
+        "recovery.missing": "the show file is missing",
+        "recovery.recover": "Recover",
+        "recovery.discard": "Discard",
+        "recovery.error": "Couldn't recover the changes: {error}"
     },
     "workspaceSettings": {
         "audioOffsetSeconds": "Audio Offset",

@@ -13,6 +13,7 @@ import TimelineContainer from "@/components/timeline/TimelineContainer";
 import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import TitleBar from "@/components/titlebar/TitleBar";
+import WorkingCopyNotices from "@/components/workingCopy/WorkingCopyNotices";
 import { useUiSettingsStore } from "./stores/UiSettingsStore";
 import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
 import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
@@ -268,6 +269,7 @@ function App() {
                                             <RegisteredActionsHandler />
                                             <SvgPreviewHandler />
                                             <TitleBar showControls />
+                                            <WorkingCopyNotices />
                                             <FocusNotice />
                                             <div
                                                 id="app"

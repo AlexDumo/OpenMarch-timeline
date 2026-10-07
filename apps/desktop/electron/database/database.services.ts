@@ -56,7 +56,7 @@ export function closeDatabase() {
  * Points every connection at a working copy of a show. `getDbPath` keeps
  * reporting the show file.
  */
-export function useWorkingCopy(args: {
+export function connectToWorkingCopy(args: {
     showPath: string;
     workingPath: string;
     onActivity: () => void;

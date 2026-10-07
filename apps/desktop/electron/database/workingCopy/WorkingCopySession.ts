@@ -75,6 +75,17 @@ export type WorkingCopyStatus = {
     retryAt?: number;
 };
 
+/** How the user resolves a show that changed on disk. */
+export type WorkingCopyConflictChoice = "keepMine" | "keepTheirs" | "saveCopy";
+
+/** A crashed session's unsaved changes, as the launch page lists them. */
+export type RecoverableShow = {
+    id: string;
+    showPath: string;
+    showExists: boolean;
+    lastEditAt: string | null;
+};
+
 export type SaveOutcome =
     | {
           ok: true;

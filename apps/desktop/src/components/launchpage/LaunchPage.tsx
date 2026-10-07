@@ -19,6 +19,7 @@ import FilesContent from "./files/FilesContent";
 import LearnContent from "./learn/LearnContent";
 import Toaster from "../ui/Toaster";
 import NewShowDialog from "./NewShowDialog";
+import RecoverableShows from "./RecoverableShows";
 import { useQueryClient } from "@tanstack/react-query";
 import { databaseReadyQueryOptions } from "@/hooks/useDatabaseReady";
 import {
@@ -84,6 +85,7 @@ export default function LaunchPage({ setDatabaseIsReady }: LaunchPageProps) {
     return (
         <div className="from-bg-1 to-accent flex h-screen w-screen flex-col bg-linear-to-br from-[60%] to-[150%]">
             <TitleBar />
+            <RecoverableShows onRecovered={handleCreated} />
             <Tabs.Root
                 value={selectedTab}
                 onValueChange={setSelectedTab}

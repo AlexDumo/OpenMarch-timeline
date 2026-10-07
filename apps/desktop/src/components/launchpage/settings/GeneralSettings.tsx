@@ -27,6 +27,7 @@ export default function GeneralSettings() {
     const [currentLanguage, setCurrentLanguage] = useState("en");
     const [automaticUpdatesEnabled, setAutomaticUpdatesEnabled] =
         useState(true);
+    const [workingCopySaves, setWorkingCopySaves] = useState(false);
     const { uiSettings, setUiSettings } = useUiSettingsStore();
 
     useEffect(() => {
@@ -52,6 +53,11 @@ export default function GeneralSettings() {
                 "automaticUpdates",
             );
             if (isMounted) setAutomaticUpdatesEnabled(savedValue !== false);
+            const workingCopyValue = await window.electron.invoke(
+                "settings:get",
+                "workingCopySaves",
+            );
+            if (isMounted) setWorkingCopySaves(workingCopyValue === true);
         };
         void loadAutomaticUpdatesSetting();
         return () => {
@@ -157,6 +163,27 @@ export default function GeneralSettings() {
                         setAutomaticUpdatesEnabled(checked);
                         window.electron.send("settings:set", {
                             automaticUpdates: checked,
+                        });
+                    }}
+                />
+            </div>
+
+            <div className="flex items-center justify-between gap-16 px-8">
+                <div className="flex flex-col gap-4">
+                    <p className="text-body text-text-subtitle">
+                        <T keyName="settings.general.workingCopySaves" />
+                    </p>
+                    <p className="text-sub text-text-subtitle opacity-70">
+                        <T keyName="settings.general.workingCopySaves.description" />
+                    </p>
+                </div>
+                <Switch
+                    id="working-copy-saves"
+                    checked={workingCopySaves}
+                    onCheckedChange={(checked) => {
+                        setWorkingCopySaves(checked);
+                        window.electron.send("settings:set", {
+                            workingCopySaves: checked,
                         });
                     }}
                 />
