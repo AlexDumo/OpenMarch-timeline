@@ -58,6 +58,7 @@ import type {
     TimelineNavigation,
     TimelinePageMarker,
     TimelineRangeChange,
+    TimelineSeek,
     TimelineSeekGesture,
     TimelineSeekOptions,
     TimelineSelection,
@@ -503,9 +504,7 @@ const useScrubEdgeScroll = () => {
  * gesture and its release (or cancel) an `end` (UI-12 review).
  */
 const useRulerScrub = (
-    onSeek:
-        | ((beat: BeatPosition, options?: TimelineSeekOptions) => void)
-        | undefined,
+    onSeek: TimelineSeek | undefined,
     beatCount: number,
     pixelsPerBeat: number,
     seekSnapBeats: readonly number[],
@@ -542,18 +541,16 @@ const useRulerScrub = (
         const current = drag.current;
         if (!current) return;
         const beat = pointerBeat(clientX, current.surface);
-        const snapDisabled = isPageSnapDisabled(event);
         current.lastBeat = snapSeekBeat(
             beat,
             seekSnapBeats,
             pixelsPerBeat,
-            snapDisabled,
+            isPageSnapDisabled(event),
         );
-        // The line glides with the pointer; the seek only goes out when the beat changes
-        scrubLine?.set(
-            scrubLineBeat(beat, seekSnapBeats, pixelsPerBeat, snapDisabled),
-        );
-        onSeek?.(current.lastBeat, { gesture: "drag" });
+        // The seek only goes out when the beat changes; the line stays under the pointer, unless
+        // the playhead was held short of the beat sent (`scrubLineBeat`)
+        const landed = onSeek?.(current.lastBeat, { gesture: "drag" });
+        scrubLine?.set(scrubLineBeat(beat, current.lastBeat, landed));
     };
     const finish = (beat?: number) => {
         const current = drag.current;
@@ -687,7 +684,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     selection?: TimelineSelection;
     onSelectionChange?: (selection: TimelineSelection) => void;
     /** Dragging along the page boxes scrubs (UI-12); a click still selects the box */
-    onSeek?: (beat: BeatPosition, options?: TimelineSeekOptions) => void;
+    onSeek?: TimelineSeek;
     initialPageWidth: number;
     /** The measure numbers under the boxes; compact leaves them out */
     showMeasures?: boolean;
@@ -1554,7 +1551,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     useScrubStretch(
         [tintRef, barRef],
         endsOnPlayhead ? scrubLine : undefined,
-        positionBeat ?? 0,
         startX,
         endX,
         pixelsPerBeat,
@@ -1728,24 +1724,14 @@ const useArrowKeySteps = (
 };
 
 /**
- * Where a scrub's line is drawn, given the beat the playhead is on (`positionBeat`, view beats):
- * the line (`scrubLineBeat`) while the playhead is on its nearest beat, as it is whenever the
- * playhead follows the pointer; on the playhead when it can't follow (held inside an isolated
- * range), so the line never leaves it.
- */
-export const scrubLineNear = (line: number, positionBeat: number) =>
-    Math.abs(line - positionBeat) <= 0.5 ? line : positionBeat;
-
-/**
- * Moves an element drawn at the playhead (`restingLeft`, where React put it for `positionBeat`)
- * to where a scrub draws the line (`scrubLine`, view beats, `scrubLineNear`) with a transform: on
- * every pointer move, without a render, and again before paint after a render that moved it (a
- * beat the scrub crossed). With no scrub, or while `paused` is false, the transform is cleared.
+ * Moves an element drawn at the playhead (`restingLeft`, where React put it) to where a scrub
+ * draws the line (`scrubLine`, view beats, `scrubLineBeat`) with a transform: on every pointer
+ * move, without a render, and again before paint after a render that moved it (a beat the scrub
+ * crossed). With no scrub, or while `paused` is false, the transform is cleared.
  */
 export const useScrubFollow = (
     ref: RefObject<HTMLElement | null>,
     scrubLine: TimelineLiveValue<number | null> | undefined,
-    positionBeat: number,
     restingLeft: number,
     pixelsPerBeat: number,
     paused = true,
@@ -1758,25 +1744,25 @@ export const useScrubFollow = (
             if (element.style.transform) element.style.transform = "";
             return;
         }
-        const beat = scrubLineNear(line, positionBeat);
         // Device pixels, as while playing: crisp, and smooth on a high-density screen
         const ratio = window.devicePixelRatio || 1;
-        const x = Math.round(beatToX(beat, pixelsPerBeat) * ratio) / ratio;
+        const x = Math.round(beatToX(line, pixelsPerBeat) * ratio) / ratio;
         element.style.transform = `translateX(${x - restingLeft}px)`;
-    }, [paused, pixelsPerBeat, positionBeat, ref, restingLeft, scrubLine]);
+    }, [paused, pixelsPerBeat, ref, restingLeft, scrubLine]);
     useLayoutEffect(apply, [apply]);
-    useEffect(() => scrubLine?.subscribe(apply), [apply, scrubLine]);
+    // Subscribed in the commit that changed `apply`, so a move right after it never reads the
+    // `restingLeft` of the element's previous position
+    useLayoutEffect(() => scrubLine?.subscribe(apply), [apply, scrubLine]);
 };
 
 /**
- * Stretches flat fills that run from `startX` to the playhead (`endX`, for `positionBeat`) to
- * where a scrub draws the line, with a transform (scaleX from the left edge), so the window keeps
- * up with the line between beats. Cleared, as `useScrubFollow`, with the scrub.
+ * Stretches flat fills that run from `startX` to the playhead (`endX`) to where a scrub draws the
+ * line, with a transform (scaleX from the left edge), so the window keeps up with the line between
+ * beats. Cleared, as `useScrubFollow`, with the scrub.
  */
 const useScrubStretch = (
     refs: readonly RefObject<HTMLElement | null>[],
     scrubLine: TimelineLiveValue<number | null> | undefined,
-    positionBeat: number,
     startX: number,
     endX: number,
     pixelsPerBeat: number,
@@ -1786,11 +1772,7 @@ const useScrubStretch = (
         let transform = "";
         if (line !== null && endX > startX) {
             const ratio = window.devicePixelRatio || 1;
-            const x =
-                Math.round(
-                    beatToX(scrubLineNear(line, positionBeat), pixelsPerBeat) *
-                        ratio,
-                ) / ratio;
+            const x = Math.round(beatToX(line, pixelsPerBeat) * ratio) / ratio;
             transform = `scaleX(${Math.max(0, x - startX) / (endX - startX)})`;
         }
         for (const ref of refs) {
@@ -1800,9 +1782,9 @@ const useScrubStretch = (
         }
         // The refs are fixed for the caller's lifetime
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [endX, pixelsPerBeat, positionBeat, scrubLine, startX]);
+    }, [endX, pixelsPerBeat, scrubLine, startX]);
     useLayoutEffect(apply, [apply]);
-    useEffect(() => scrubLine?.subscribe(apply), [apply, scrubLine]);
+    useLayoutEffect(() => scrubLine?.subscribe(apply), [apply, scrubLine]);
 };
 
 export const TimelinePlayhead = memo(function TimelinePlayhead({
@@ -1847,20 +1829,20 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     useScrubFollow(
         anchorRef,
         scrubLine,
-        positionBeat,
         left,
         pixelsPerBeat,
         !livePositionBeat,
     );
-    // While playing, puts the line at the live position
+    // While playing, puts the line at the live position; while the pointer is down on the
+    // timeline (a press that may still be a click, a scrub not yet suspended), under it
     const placeLive = useCallback(() => {
         const element = anchorRef.current;
-        const beat = livePositionBeat?.() ?? null;
+        const beat = scrubLine?.get() ?? livePositionBeat?.() ?? null;
         if (!element || beat === null) return;
         // Device pixels while playing: crisp, and still smooth on a high-density screen
         const ratio = window.devicePixelRatio || 1;
         element.style.left = `${Math.round(beatToX(beat, pixelsPerBeat) * ratio) / ratio}px`;
-    }, [anchorRef, livePositionBeat, pixelsPerBeat]);
+    }, [anchorRef, livePositionBeat, pixelsPerBeat, scrubLine]);
     // Layout effects, as the played waveform's: a commit inside an animation frame (a zoom's
     // flushSync) writes the resting `left` and paints in that same frame, so the live position is
     // put back before paint rather than in the next frame
@@ -1873,12 +1855,14 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
             frame = requestAnimationFrame(follow);
         };
         follow();
+        const unsubscribe = scrubLine?.subscribe(placeLive);
         return () => {
             cancelAnimationFrame(frame);
+            unsubscribe?.();
             // React only writes `left` when its value changes, so put the line back itself
             element.style.left = `${restingLeft.current}px`;
         };
-    }, [anchorRef, livePositionBeat, placeLive]);
+    }, [anchorRef, livePositionBeat, placeLive, scrubLine]);
     // After any other commit while playing, such as a new `positionBeat`, React may have written
     // the resting `left`
     useLayoutEffect(() => {
@@ -2010,19 +1994,25 @@ const nearSeekSnap = (
 };
 
 /**
- * Where a scrub draws the playhead line while the pointer is down: on the downbeat or page line a
- * release would land on (`snapSeekBeat`), else under the pointer, between beats. So the line
- * glides with the pointer instead of stepping a beat at a time, while the playhead itself (the
- * readout, the field, where the release lands) still moves by whole beats.
+ * Where a scrub draws the playhead line while the pointer is down (UI-12): under the pointer
+ * (`pointerBeat`, view beats, between beats), so it glides with the pointer at any zoom, while the
+ * playhead itself (the readout, the field) moves by whole beats. Nothing snaps until the release.
+ *
+ * `sent` is the beat the move seeked to and `landed` where the playhead is after it, when the
+ * owner says (`TimelineSeek`). When the playhead couldn't follow (held inside an isolated range),
+ * the line goes no further than the held playhead, so it never leaves it.
  */
 export const scrubLineBeat = (
-    beat: number,
-    seekSnapBeats: readonly number[],
-    pixelsPerBeat: number,
-    snapDisabled: boolean,
-) =>
-    (snapDisabled ? null : nearSeekSnap(beat, seekSnapBeats, pixelsPerBeat)) ??
-    beat;
+    pointerBeat: number,
+    sent: number,
+    landed: number | null | void,
+) => {
+    if (typeof landed !== "number") return pointerBeat;
+    const whole = Math.round(sent);
+    if (landed < whole) return Math.min(pointerBeat, landed);
+    if (landed > whole) return Math.max(pointerBeat, landed);
+    return pointerBeat;
+};
 
 /** macOS, where Ctrl+click is a right-click and Cmd is the modifier */
 export const isMac = () =>
@@ -2046,7 +2036,7 @@ export const useTimelinePointer = ({
     snapBeats = [],
     seekSnapBeats = [],
 }: {
-    onSeek?: (beat: number, options?: TimelineSeekOptions) => void;
+    onSeek?: TimelineSeek;
     onRangeSelect?: (range: TimelineBeatRange) => void;
     pixelsPerBeat: number;
     beatCount: number;
@@ -2061,8 +2051,9 @@ export const useTimelinePointer = ({
             (a, b) => a === b || sameRange(a, b),
         ),
     );
-    // Every move of a scrub writes where the line is drawn (`scrubLineBeat`, view beats); the
-    // playhead moves itself to it without a render (`useScrubFollow`). `null` when not scrubbing.
+    // Every move of a scrub writes where the line is drawn (`scrubLineBeat`, view beats): the
+    // playhead, **+**, the played waveform and the window's tint move themselves to it without a
+    // render (`useScrubFollow`, `useScrubStretch`). `null` when not scrubbing.
     const [scrubLine] = useState(() => createLiveValue<number | null>(null));
     const gesture = useRef<{
         mode: "scrub" | "press" | "range";
@@ -2105,43 +2096,38 @@ export const useTimelinePointer = ({
             event: { readonly altKey: boolean },
             seekGesture?: TimelineSeekGesture,
         ) => {
-            const snapDisabled = isPageSnapDisabled(event);
             const snapped = snapSeekBeat(
                 beat,
                 seekSnapBeats,
                 pixelsPerBeat,
-                snapDisabled,
+                isPageSnapDisabled(event),
             );
             if (gesture.current && seekGesture !== undefined)
                 gesture.current.lastBeat = snapped;
-            // During a scrub the line follows the pointer between beats; the seek below only
-            // goes out when the beat changes (`seekTimeline`). A timeline that can't seek
-            // (read-only) keeps its line where it is.
-            if (onSeek && (seekGesture === "press" || seekGesture === "drag"))
-                scrubLine.set(
-                    scrubLineBeat(
-                        beat,
-                        seekSnapBeats,
-                        pixelsPerBeat,
-                        snapDisabled,
-                    ),
-                );
-            onSeek?.(
+            // The seek only goes out when the beat changes (`seekTimeline`)
+            const landed = onSeek?.(
                 snapped,
                 seekGesture === undefined
                     ? undefined
                     : { gesture: seekGesture },
             );
+            // During a scrub the line follows the pointer between beats, and stays on a playhead
+            // that couldn't follow (`scrubLineBeat`). A timeline that can't seek (read-only) keeps
+            // its line where it is.
+            if (onSeek && (seekGesture === "press" || seekGesture === "drag"))
+                scrubLine.set(scrubLineBeat(beat, snapped, landed));
         },
         [onSeek, pixelsPerBeat, scrubLine, seekSnapBeats],
     );
 
+    // The scrub's line is let go after the gesture's last seek (`release`), so a line drawn over
+    // playback goes straight to where playback jumped
     const end = () => {
         gesture.current = null;
         edgeScroll.stop();
         rangePreview.set(null);
-        scrubLine.set(null);
     };
+    const release = () => scrubLine.set(null);
     /** Ends a gesture without its release: a range isn't selected, a scrub ends where it was */
     const cancel = () => {
         const current = gesture.current;
@@ -2150,6 +2136,7 @@ export const useTimelinePointer = ({
         // The scrub ends where it was, so a suspended playback resumes and S settles
         if (current.mode === "scrub" && current.lastBeat !== null)
             onSeek?.(current.lastBeat, { gesture: "end" });
+        release();
     };
     // A gesture still down when the timeline goes (a variant switch, focusing the page timeline)
     // is cancelled, so the seek's owner doesn't wait for a release that never comes
@@ -2236,6 +2223,7 @@ export const useTimelinePointer = ({
                 // A range-modifier press that didn't move is a click: one seek
                 if (current.mode === "press") seek(current.startBeat, event);
                 else seek(pointerBeat(event), event, "end");
+                release();
             },
             onPointerCancel: cancel,
             // The capture can go without a pointerup or pointercancel (the window loses focus

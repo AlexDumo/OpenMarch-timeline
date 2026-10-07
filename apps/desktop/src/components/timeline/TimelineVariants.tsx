@@ -37,7 +37,6 @@ import {
     TimelineTrackClip,
     TimelineTransport,
     useElementWidth,
-    scrubLineNear,
     useScrubFollow,
     useTimelinePointer,
 } from "./TimelinePrimitives";
@@ -372,7 +371,7 @@ const TimelineWaveformLane = memo(function TimelineWaveformLane({
     pixelsPerBeat: number;
     positionBeat: number;
     livePositionBeat?: () => number | null;
-    /** While a scrub is down, the played part follows its line (`useScrubFollow`) */
+    /** While a scrub is down, the played part follows its line (`scrubLineBeat`) */
     scrubLine?: TimelineLiveValue<number | null>;
 }) {
     const playedRef = useRef<HTMLDivElement>(null);
@@ -381,24 +380,28 @@ const TimelineWaveformLane = memo(function TimelineWaveformLane({
         if (!played) return;
         if (!livePositionBeat) {
             const draw = () => {
-                const line = scrubLine?.get() ?? null;
-                const beat =
-                    line === null
-                        ? positionBeat
-                        : scrubLineNear(line, positionBeat);
+                const beat = scrubLine?.get() ?? positionBeat;
                 played.style.width = `${Math.max(0, beat * pixelsPerBeat)}px`;
             };
             draw();
             return scrubLine?.subscribe(draw);
         }
+        // While playing, and under the pointer while it is down on the timeline (`TimelinePlayhead`)
+        const draw = () => {
+            const beat = scrubLine?.get() ?? livePositionBeat() ?? positionBeat;
+            played.style.width = `${Math.max(0, beat * pixelsPerBeat)}px`;
+        };
         let frame = 0;
         const update = () => {
-            const beat = livePositionBeat() ?? positionBeat;
-            played.style.width = `${Math.max(0, beat * pixelsPerBeat)}px`;
+            draw();
             frame = requestAnimationFrame(update);
         };
         update();
-        return () => cancelAnimationFrame(frame);
+        const unsubscribe = scrubLine?.subscribe(draw);
+        return () => {
+            cancelAnimationFrame(frame);
+            unsubscribe?.();
+        };
     }, [livePositionBeat, pixelsPerBeat, positionBeat, scrubLine]);
     return (
         <div
@@ -633,7 +636,6 @@ const TimelineSurface = memo(function TimelineSurface({
     useScrubFollow(
         addPageFlagRef,
         pointer.scrubLine,
-        positionBeat,
         beatToX(positionBeat, pixelsPerBeat),
         pixelsPerBeat,
     );

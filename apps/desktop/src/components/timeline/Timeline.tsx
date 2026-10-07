@@ -78,12 +78,13 @@ export interface TimelinePlayback {
     readonly isPlaying: boolean;
     /**
      * Seek to a whole beat index, already clamped to the show. `options.gesture` says where the
-     * seek sits in a scrub (UI-12 review); without it, the seek is one explicit action.
+     * seek sits in a scrub (UI-12 review); without it, the seek is one explicit action. During a
+     * scrub it may return the beat the playhead landed on (`TimelineSeek`, `seekTimeline`).
      */
     readonly onSeek?: (
         beatIndex: number,
         options?: TimelineSeekOptions,
-    ) => void;
+    ) => number | null | void;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** **Stop** (UI-11): back to the playhead */
     readonly onStop?: () => void;
@@ -337,10 +338,15 @@ export function Timeline(props: TimelineProps) {
         playback.onSeek
             ? (viewBeat: number, options?: TimelineSeekOptions) => {
                   if (beats.length === 0) return;
-                  playback.onSeek?.(
-                      clamp(axis.toSpec(Math.round(viewBeat)), 0, beats.length),
-                      options,
-                  );
+                  const target = Math.round(viewBeat);
+                  const spec = clamp(axis.toSpec(target), 0, beats.length);
+                  const landed = playback.onSeek?.(spec, options);
+                  if (typeof landed !== "number") return;
+                  // The beat sent comes back as sent: the view axis folds spec beats 0 and 1
+                  // together, so mapping it back could move it
+                  return landed === spec
+                      ? target
+                      : clamp(axis.toView(landed), 0, beatCount);
               }
             : undefined,
     );

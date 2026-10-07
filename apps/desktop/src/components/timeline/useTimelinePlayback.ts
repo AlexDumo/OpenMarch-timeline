@@ -38,10 +38,10 @@ const playbackCommands = (
     "onSeek" | "onNavigate" | "onStop" | "onPlayingChange"
 > => ({
     // UI-12: while playing, a click or page button jumps playback there, and a scrub suspends it
-    // until it ends (`seekTimeline`)
+    // until it ends (`seekTimeline`), which says where a scrub's seek landed
     onSeek: (beatIndex, options) => {
         const { beats, isPlaying, setIsPlaying } = latest.current;
-        seekTimeline(beats, beatIndex, options?.gesture, {
+        return seekTimeline(beats, beatIndex, options?.gesture, {
             isPlaying,
             setIsPlaying,
         });

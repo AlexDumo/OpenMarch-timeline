@@ -742,6 +742,46 @@ describe("production timeline interface", () => {
         timelines: timelineStoryData.timelines,
     };
 
+    it("maps where a scrub's seek landed back to the timeline's beats", () => {
+        // A converted show: spec beat 0 has no duration, so view beat v is spec beat v + 1
+        const beats = [
+            { ...timelineStoryData.beats[0]!, duration: 0 },
+            ...timelineStoryData.beats.slice(1),
+        ];
+        const held = { current: null as number | null };
+        const onSeek = vi.fn((spec: number) => held.current ?? spec);
+        render(
+            <TimelineWaveformProvider waveform={timelineStoryData.waveform}>
+                <Timeline
+                    {...shared}
+                    beats={beats}
+                    mode="expanded"
+                    showTransport={false}
+                    // Spec 12 is view 11, at 176px
+                    playback={{ positionBeat: 12, isPlaying: false, onSeek }}
+                />
+            </TimelineWaveformProvider>,
+        );
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        const playhead = screen.getByTestId("timeline-playhead");
+        expect(playhead).toHaveStyle({ left: "176px" });
+        const press = (type: string, clientX: number) =>
+            fireEvent(
+                surface,
+                new MouseEvent(type, { bubbles: true, button: 0, clientX }),
+            );
+        // Landed where sent (view 5, spec 6): the line is on the pointer
+        press("pointerdown", 5 * 16 + 2);
+        expect(onSeek).toHaveBeenLastCalledWith(6, { gesture: "press" });
+        expect(playhead.style.transform).toBe(`translateX(${82 - 176}px)`);
+        // Held on spec 12 (view 11) while view 5 was sent: the line stays on it
+        held.current = 12;
+        press("pointermove", 5 * 16 + 4);
+        expect(playhead.style.transform).toBe("translateX(0px)");
+        press("pointerup", 5 * 16 + 4);
+        expect(playhead.style.transform).toBe("");
+    });
+
     it("supports exactly the collapsed view with the controlled selection", () => {
         render(
             <TimelineWaveformProvider waveform={timelineStoryData.waveform}>
@@ -1104,20 +1144,93 @@ describe("a calmer timeline (UI-12)", () => {
     });
 
     it("a scrub's line stays on a playhead that can't follow", () => {
-        // As inside an isolated range: the owner holds the playhead on beat 11
+        // As inside an isolated range: the owner holds the playhead on beat 11, and says so
         render(
             <ExpandedTimeline
                 {...commonProps}
                 showTransport={false}
-                onSeek={vi.fn()}
+                onSeek={() => 11}
+            />,
+        );
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        const playhead = screen.getByTestId("timeline-playhead");
+        const plus = screen.queryByTestId("timeline-add-page-flag");
+        press(surface, "pointerdown", 3 * 16);
+        press(surface, "pointermove", 4 * 16);
+        expect(playhead.style.transform).toBe("translateX(0px)");
+        // On the held beat the line follows the pointer again, up to the held playhead
+        press(surface, "pointermove", 11 * 16 - 4);
+        expect(playhead.style.transform).toBe("translateX(-4px)");
+        press(surface, "pointermove", 11 * 16 + 4);
+        expect(playhead.style.transform).toBe("translateX(4px)");
+        press(surface, "pointermove", 14 * 16);
+        expect(playhead.style.transform).toBe("translateX(0px)");
+        expect(plus?.style.transform ?? "").toBe(plus ? "translateX(0px)" : "");
+        press(surface, "pointerup", 14 * 16);
+        expect(playhead.style.transform).toBe("");
+    });
+
+    it("a scrub's line stays under the pointer near a downbeat; only the release snaps (UI-12)", () => {
+        const onSeek = vi.fn((beat: number) => beat);
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSeek={onSeek}
             />,
         );
         const surface = screen.getByTestId("timeline-pointer-surface");
         const playhead = screen.getByTestId("timeline-playhead");
         press(surface, "pointerdown", 3 * 16);
-        press(surface, "pointermove", 4 * 16);
+        // 4px past downbeat 8 (128px): the seek lands on it, the line stays on the pointer
+        press(surface, "pointermove", 132);
+        expect(onSeek).toHaveBeenLastCalledWith(8, { gesture: "drag" });
+        expect(playhead.style.transform).toBe(`translateX(${132 - 176}px)`);
+        press(surface, "pointermove", 125);
+        expect(onSeek).toHaveBeenLastCalledWith(8, { gesture: "drag" });
+        expect(playhead.style.transform).toBe(`translateX(${125 - 176}px)`);
+        press(surface, "pointerup", 125);
+        expect(onSeek).toHaveBeenLastCalledWith(8, { gesture: "end" });
+        expect(playhead.style.transform).toBe("");
+    });
+
+    it("a scrub's line doesn't wait for the owner to render the beat it seeked to", () => {
+        // The owner takes each seek but hasn't re-rendered yet: positionBeat stays 11
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSeek={(beat) => beat}
+            />,
+        );
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        const playhead = screen.getByTestId("timeline-playhead");
+        press(surface, "pointerdown", 3 * 16);
+        expect(playhead.style.transform).toBe(`translateX(${48 - 176}px)`);
+        press(surface, "pointermove", 20 * 16 + 5);
+        expect(playhead.style.transform).toBe(`translateX(${325 - 176}px)`);
+        press(surface, "pointerup", 20 * 16 + 5);
+        expect(playhead.style.transform).toBe("");
+    });
+
+    it("a scrub along the page boxes stays on a playhead that can't follow", () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSeek={() => 11}
+            />,
+        );
+        const box = screen.getByRole("button", { name: "Page 2" });
+        const playhead = screen.getByTestId("timeline-playhead");
+        press(box, "pointerdown", 130);
+        // Beat 12.5 seeks 13; the playhead is held on 11
+        press(box, "pointermove", 200);
         expect(playhead.style.transform).toBe("translateX(0px)");
-        press(surface, "pointerup", 4 * 16);
+        // Beat 10.6 seeks 11, where it is: the line is on the pointer
+        press(box, "pointermove", 170);
+        expect(playhead.style.transform).toBe("translateX(-6px)");
+        press(box, "pointerup", 170);
         expect(playhead.style.transform).toBe("");
     });
 
@@ -1394,13 +1507,28 @@ describe("a calmer timeline (UI-12)", () => {
 });
 
 describe("where a scrub draws the line", () => {
-    it("is under the pointer, or on the downbeat or page line a release would land on", () => {
-        expect(scrubLineBeat(13.4, [12, 16], 16, false)).toBe(13.4);
-        // 4px from beat 12: drawn where the release lands
-        expect(scrubLineBeat(12.25, [12, 16], 16, false)).toBe(12);
+    it("is under the pointer, even where the seek snaps", () => {
+        expect(scrubLineBeat(13.4, 13, 13)).toBe(13.4);
+        // 4px from beat 12: the seek lands on it, the line stays on the pointer
         expect(snapSeekBeat(12.25, [12, 16], 16, false)).toBe(12);
-        // Alt: no magnet
-        expect(scrubLineBeat(12.25, [12, 16], 16, true)).toBe(12.25);
+        expect(scrubLineBeat(12.25, 12, 12)).toBe(12.25);
+        // Snapped to a downbeat a beat or more away (zoomed out): still on the pointer
+        expect(scrubLineBeat(10.6, 12, 12)).toBe(10.6);
+        // An owner that doesn't say where the seek landed
+        expect(scrubLineBeat(12.25, 12, undefined)).toBe(12.25);
+        expect(scrubLineBeat(12.25, 12, null)).toBe(12.25);
+    });
+
+    it("goes no further than a playhead held short of the beat sent", () => {
+        // Held at the end of an isolated range, beat 20
+        expect(scrubLineBeat(23.2, 23, 20)).toBe(20);
+        // Snapped past it while the pointer is still inside: on the pointer
+        expect(scrubLineBeat(19.2, 22, 20)).toBe(19.2);
+        // Held after the start of the range, beat 13
+        expect(scrubLineBeat(10.4, 10, 13)).toBe(13);
+        expect(scrubLineBeat(13.6, 12, 13)).toBe(13.6);
+        // Sent fractional (a snap target): compared as the whole beat the seek moves to
+        expect(scrubLineBeat(20.3, 20.2, 20)).toBe(20.3);
     });
 });
 
