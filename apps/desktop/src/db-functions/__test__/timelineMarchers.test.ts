@@ -35,9 +35,9 @@ keepFixturesInPageMode(
 
 /**
  * Marcher add and delete in timeline mode (docs/timeline/phases/07-page-parity.md P7.3, reworked
- * for UI-9 by P8.14), mostly on a converted `marchersAndPages` show: page 0 plus six pages, one
- * show-wide timeline holding one shapeless direct transition per page N ≥ 1 with one slot per
- * marcher.
+ * for UI-9 by P8.14), mostly on a converted `marchersAndPages` show: page 0 plus six pages, and
+ * one timeline per page N ≥ 1 (C-11) over exactly its beats, holding one shapeless direct
+ * transition with a slot for each marcher that moves on it.
  */
 
 afterEach(() => stopTimelineResolver());
