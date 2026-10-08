@@ -546,6 +546,61 @@ from it. The spec still wins on the model; this file decides presentation.
   - Deferred (UX review): counts along the selected page box in shows with measures, a count
     under the pointer while hovering, and thinning to downbeats in odd meters.
 
+- **UI-14: editing, renaming and deleting a move (lead, 2026-10-07).** The owner asked whether a
+  custom track can be edited or removed once it's made: "If we can, it's not obvious as a user."
+  It couldn't: in timeline mode a clip (a timeline off the page boxes, UI-10) had no menu, no
+  name, and no Delete, and the inspector explained at the selected page's end, so a clip ending
+  between flags showed another move's transitions. A clip is now called a **move** in all UI text.
+  Items marked _lead default_ were filled in by the lead; feel-based ones are V-38 to V-44 in
+  research/ownership/VALIDATION.md. Built on branch `timeline/edit-moves`.
+  - **The clip menu.** Right-clicking a clip opens **Edit move**, **Rename move…** and **Delete
+    move** (red, last, after a separator). Page boxes keep **Delete page flag**; a dragged range
+    still has no menu in timeline mode. While playing, Edit and Delete are disabled with the reason
+    ("Pause to edit or delete a move."); Rename stays, since it changes only a label (_lead
+    default_, V-42).
+  - **The ⋯ button.** The selected clip (a click selects it, UI-12) shows a ⋯ button at its right
+    end that opens the same menu, so it is found without right-clicking. A clip too narrow for its
+    label and the button keeps the button just past its right edge, so the only visible way in
+    never hides. With the clip focused, the ContextMenu key or Shift+F10 opens the menu there. In
+    compact the button sits on the thin bar.
+  - **Clips show their label** (_lead default_, V-39). A clip at least 40px wide shows its name in
+    expanded mode, truncated, beside the ⋯ button; narrower clips and compact bars keep it in the
+    tooltip. Clips had no visible text before, so a name would have nowhere to show.
+  - **Delete move** deletes the timeline, its transitions and their assignments as one undoable
+    edit (`deleteTimeline`). Moves it passed through are stored underneath (UI-10) and come back.
+    The window (S, P) stays put and now resolves to no stored timeline; an isolated move that is
+    deleted ends isolation through the existing "timeline goes away" path, which puts S and P back
+    where they were before isolating (09-isolation.md). A toast says "Deleted Go company front"
+    with **Undo**, which runs the app's undo, so after a later edit it undoes that edit first
+    (_lead default_, V-44). There is no confirmation dialog: the edit is undoable (V-38). **Delete**
+    or **Backspace** on a focused clip deletes its move; the clip handles the key and stops it, so
+    it never reaches the app's shortcuts (Delete deletes a shape there).
+  - **Rename move…** turns the clip into an inline name field with its text selected. Enter or
+    leaving the field saves, Esc cancels. Names are trimmed and at most 80 characters; an empty
+    name clears it, back to the default label "Timeline 7"; an unchanged name writes nothing. One
+    undoable edit (`renameTimeline`). Keys typed in the field stay there (G, Space, Shift+Z,
+    Delete). The inspector's Move card has the same field.
+  - **Edit move** selects the move's window, S on its start (pinned when that isn't a flag, as a
+    clip click does) and P on its end, selects its marchers (those with an assignment in it),
+    leaves fullscreen if the inspector is hidden, opens the inspector's Timeline section and
+    scrolls the Move card into view with a brief highlight. It doesn't isolate; double-click still
+    does (_lead default_, V-40).
+  - **The Move card.** While the window is a move with a clip, the inspector's Timeline section
+    starts with a **Move** card: the name field; when it happens, in the field line's words ("Page
+    3, counts 1–4", or "Page 2 count 5 to page 3 count 4"; UI-13's one vocabulary); "16 marchers"
+    with **Select them**; and **Delete move**. A page timeline gets no card: pages are moved with
+    their flags.
+  - **The inspector explains at the playhead** in timeline mode, not the selected page's end
+    (_lead default_, V-41). On a flag that is the same beat; between flags it is where edits land
+    (UI-10), so a mid-page move's transitions show. "Select a page to see why…" is gone, since
+    there is always a playhead.
+  - **The timeline is its own stacking context**, so nothing on it (**+**, the playhead) paints
+    over a menu, and a press inside a menu opened from the timeline never reaches the timeline
+    (React events bubble out of portals).
+  - Not in scope, follow-ups: deleting or renaming a page's moves (a page timeline has no clip),
+    moving marchers between moves, a name on page boxes, and a default label "Move 7" to match the
+    menu (it stays "Timeline 7").
+
 ## Mapping the spec onto the view model
 
 The reference `TimelineViewModel` becomes a derived view: an adapter builds it
@@ -565,8 +620,9 @@ from the stored tables and the resolver, and nothing in it is stored.
 ## What the timeline doesn't show
 
 _Under UI-9, the inspector reads the playhead instead of the selected page's
-end beat, and edits the selected timeline (P8.12, P8.15). The text below
-describes what is built today._
+end beat, and edits the selected timeline (P8.12, P8.15). It reads the playhead
+since UI-14, and starts with a move's Move card. The text below describes what
+was built before._
 
 These belong in the inspector (P8.5), not the timeline:
 
@@ -785,6 +841,8 @@ points (P7.2).
   - Clearing a marcher's dimming while the line or lasso tool has every marcher
     switched off makes it selectable mid-tool (`CanvasMarcher.setTimelineDimmed`).
   - Ctrl+click is ignored on the timeline on every platform, not only macOS.
+  - Deleting or renaming a page's moves (a page timeline has no clip or Move card), and a default
+    move label "Move 7" in place of "Timeline 7". UI-14.
   - A one-time hint for Ctrl+drag (Cmd+drag on macOS) after the first plain scrub on empty
     timeline: "Ctrl+drag to mark a range" (project owner, 2026-10-05: not yet). UI-12.
   - Start flag behavior (project owner, 2026-10-04: "a longer conversation",
