@@ -721,6 +721,41 @@ describeDbTests("completeNewShow", (it) => {
                 expect([m.home_x, m.home_y]).not.toEqual([321, 654]);
     });
 
+    it("in page mode, every page of the new show starts at the imported coordinates", async ({
+        task,
+        db,
+    }) => {
+        // The tempo step creates the pages before the performers step adds the marchers, so
+        // each page already has a row for them, in the default line
+        await setTimelineModeFlag(db, false);
+        const state: NewShowWizardState = {
+            ...importedTrumpets(task.id),
+            tempo: { method: "tempo_only", tempo: 120, timeSignature: "4/4" },
+        };
+
+        await completeNewShow(wizardStateToFormState(state), queryClient);
+
+        const pages = await queryClient.fetchQuery(
+            allDatabasePagesQueryOptions(),
+        );
+        expect(pages.length).toBeGreaterThan(2);
+        const marchers = await getMarchers({ db });
+        const drillById = new Map(
+            marchers.map((m) => [m.id, `${m.drill_prefix}${m.drill_order}`]),
+        );
+        for (const page of pages) {
+            const positions = Object.fromEntries(
+                (await marcherPagesByPageId({ db, pageId: page.id })).map(
+                    (mp) => [drillById.get(mp.marcher_id), [mp.x, mp.y]],
+                ),
+            );
+            expect(positions, `page ${page.id}`).toEqual({
+                T1: [321, 654],
+                T2: [987, 123],
+            });
+        }
+    });
+
     it("finishes quietly when the main process stopped the open and already said why", async ({
         task,
         db,
