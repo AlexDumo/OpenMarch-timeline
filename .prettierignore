@@ -126,3 +126,6 @@ docs/superpowers/
 
 # 3D View reference demo (docs/3d/ref/README.md)
 docs/3d/ref/
+
+# Vendored om-pose modules (apps/desktop/src/view3d/vendor/om-pose/README.md)
+**/view3d/vendor/

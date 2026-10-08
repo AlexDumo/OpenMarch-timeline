@@ -196,6 +196,7 @@ words:
 ignorePaths:
   - node_modules/**
   - docs/3d/ref/**
+  - "**/view3d/vendor/**"
   - "**/node_modules/**"
   - "**/dist/**"
   - dist/**
