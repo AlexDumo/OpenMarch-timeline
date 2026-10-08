@@ -2,7 +2,7 @@
 
 # Resizing a move: drag its start and its end
 
-Status: design, being built on `timeline/resize-move` (2026-10-08). The feel-based defaults
+Status: built (2026-10-08), now shipped with moving a page flag on `timeline/timeline-edges`; the rules the two share (snapping, beats an edge can't take, readouts) are in [../timeline-edges/README.md](../timeline-edges/README.md) and ui.md UI-15, and win over this note where they differ. The feel-based defaults
 below are _lead defaults_, logged as V-120 to V-128 (V-121 and V-127 are also owner questions) in
 [ownership/VALIDATION.md](../ownership/VALIDATION.md). Open owner questions are in §6.
 

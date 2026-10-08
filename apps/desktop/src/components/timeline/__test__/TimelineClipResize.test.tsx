@@ -120,9 +120,14 @@ describe("resizedRange", () => {
         expect(
             resizedRange({ ...base, limits, edge: "end", beat: 20 }),
         ).toMatchObject({
-            endBeatIndex: 20,
+            // UI-15: it waits on the nearest beat back toward where it started, and says why
+            endBeatIndex: 19,
             blockedBy: "Page 2's move already has these counts",
         });
+        // Past the forbidden beat it lands as usual
+        expect(
+            resizedRange({ ...base, limits, edge: "end", beat: 21 }),
+        ).toMatchObject({ endBeatIndex: 21, blockedBy: null });
     });
 });
 
@@ -152,6 +157,9 @@ describe("clipResizeTagText", () => {
             "8 → 22 counts · through 2 page flags",
         );
         expect(clipResizeTagText(from, preview(8, 9), [])).toBe("8 → 1 count");
+        expect(clipResizeTagText(from, preview(8, 9), [], "Move 3")).toBe(
+            "Move 3: 8 → 1 count",
+        );
     });
 });
 
@@ -325,7 +333,7 @@ describe("resizing a clip by its edges", () => {
         pointer(end, "pointermove", 32);
         expect(resize.commit).not.toHaveBeenCalled();
         expect(screen.getByTestId("timeline-clip-resize-tag").textContent).toBe(
-            "6 → 8 counts",
+            "A: 6 → 8 counts",
         );
         pointer(end, "pointerup", 32);
         fireEvent.click(end);
@@ -370,7 +378,7 @@ describe("resizing a clip by its edges", () => {
         await flush();
         pointer(end, "pointermove", 160);
         expect(screen.getByTestId("timeline-clip-resize-tag").textContent).toBe(
-            "6 → 8 counts · stops at Move 4",
+            "A: 6 → 8 counts · stops at Move 4",
         );
         pointer(end, "pointerup", 160);
         expect(resize.commit).toHaveBeenCalledWith({
@@ -380,7 +388,7 @@ describe("resizing a clip by its edges", () => {
         });
     });
 
-    it("won't commit another move's exact range (E8)", async () => {
+    it("never lands on another move's exact range: it waits a count short and commits there (E8, UI-15)", async () => {
         const { resize } = setup(
             openLimits({
                 taken: [
@@ -403,7 +411,12 @@ describe("resizing a clip by its edges", () => {
             screen.getByTestId("timeline-clip-resize-preview").className,
         ).toContain("border-dashed");
         pointer(end, "pointerup", 32);
-        expect(resize.commit).not.toHaveBeenCalled();
+        // View end 10 is forbidden: it waits on 9 (spec 10)
+        expect(resize.commit).toHaveBeenCalledWith({
+            timelineId: "A",
+            startBeatIndex: 3,
+            endBeatIndex: 10,
+        });
     });
 
     it("Esc cancels: nothing is committed or selected (E14)", async () => {

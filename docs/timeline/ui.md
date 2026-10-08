@@ -690,11 +690,48 @@ from it. The spec still wins on the model; this file decides presentation.
     the path (order, destinations as a shape). Seen in the review and left as they were on
     `timeline-try-2`: undo of a delete taking 1.5–2 seconds, the clip lane lagging the field after
     undo and redo, and developer wording in the per-marcher details (D-REBASE, founding span).
+- **UI-15: dragging timeline edges (project owner, 2026-10-08).** The owner asked for two edge
+  drags: "I should be able to move the start and end of a timeline/track, i.e. changing its
+  length" (resizing a move), and "I should be able to MOVE where a page flag is" (UI-16), then asked
+  for both as one feature. Design notes:
+  [research/timeline-edges/README.md](research/timeline-edges/README.md) (the shared rules),
+  [research/resize-move/README.md](research/resize-move/README.md) (edge cases E1–E22) and
+  [research/move-page-flag/README.md](research/move-page-flag/README.md). Feel-based defaults are
+  V-120 to V-128 (move edges) and V-60 to V-68 (flags).
+  - **What stretches.** What you drag, and anything with an edge on it, takes the new counts; what
+    you don't touch keeps its counts. The sets keep their coordinates (D-5): a move's set stays at
+    its end and its path is re-timed, so the step size changes. Nothing is trimmed: a marcher never
+    stops partway along its path.
+  - **Snapping, for every edge.** Page lines and the paused playhead pull an edge from 12px,
+    downbeats from 6px, else it lands on a whole beat. Alt keeps only the whole beat
+    (`timelineEdgeSnap.ts`). Dragging a whole move keeps its own 24px page-line snap.
+  - **Beats an edge can't take.** An edge never lands where two timelines would share a range
+    (C-12), or where the rows can't follow. With the pointer over such a beat, the edge waits on the
+    nearest allowed beat back toward where it started; the readout says why, and a move's clip gets
+    a dashed red outline. Release commits where it waits. Merging into the other timeline instead is
+    the owner's open question (V-127).
+  - **Walls.** An edge stops at what it would collide with or be cut short by, and the readout names
+    it: a neighboring flag, a move attached to the flag, another move on the same marchers at the
+    same or a higher layer, a marcher joining or leaving partway, or 1 count. It grows over moves it
+    already overrides (the page moves under a breakaway), which catch up where it ends (V-20, V-21).
+  - **Readouts.** One wording: "Page 3: 8 → 11 counts", "Move 3: 4 → 6 counts", then the reason.
+  - **One edit, Esc cancels.** A drag commits once, on release, as one undoable edit. Esc, a lost
+    pointer, or a drag brought back writes nothing. Esc during a clip drag never also leaves
+    isolation.
+  - **Where they're grabbed.** A flag only by its grip in the ruler's lower half (UI-16). A move by
+    the handles inside its clip's two ends: up to 6px, at most a quarter of the clip, none on a clip
+    under 8px (V-120). The ⋯ button keeps clear of the end handle. Over the clip rows the start flag
+    and the playhead are drawn but not grabbed (UI-14), so a selected clip's edges can be reached.
+  - **Afterwards.** A selected move's start flag and playhead follow its new start and end; an
+    isolated move keeps the playhead unless it was on the end. A playhead or start flag on a moved
+    flag goes with it.
+  - Not built (both gestures): keyboard resizing of a move's edges, live preview of moves attached
+    to a dragged flag, edge scrolling while dragging, and a ripple mode that pushes later material.
 - **UI-16: moving a page flag (project owner, 2026-10-08).** The owner: "I should be able to MOVE
   where a page flag is. Currently, once it's made, it's stuck there." Built on branch
   `timeline/move-page-flag`. Design note, edge-case table and prior art:
   [research/move-page-flag/README.md](research/move-page-flag/README.md). Items marked _lead
-  default_ are V-60 to V-68. (UI-14 is edit-moves; UI-15 is left to resize-move, in flight.)
+  default_ are V-60 to V-68. The rules it shares with resizing a move are in UI-15.
   - **A roll edit.** Dragging page N's flag gives page N what page N+1 loses. Every other flag,
     the beats, measures, tempo and music stay put. Timelines track the moving flag (U-Q5): a
     row edge on the flag follows it, and every other edge keeps its beat. So the sets keep their
@@ -709,8 +746,8 @@ from it. The spec still wins on the model; this file decides presentation.
     stops before its far end. A beat the timeline rows can't take (two moves would share a range,
     C-12, or the ripple would refuse) is a hole the flag passes over but can't land on. A readout
     by the flag shows both pages' counts ("Page 3: 8 → 11 counts") and what stopped it.
-  - **Snapping.** Whole beats; within 6px a downbeat, a page line or the playhead. Alt turns it
-    off.
+  - **Snapping.** UI-15's edge rule: page lines and the playhead within 12px, downbeats within 6px,
+    else whole beats. Alt turns it off.
   - **Afterwards.** A paused playhead or start flag on the moved flag goes with it, so the selected
     page stays selected and the field shows the same set. Appearance by beat follows by itself.
   - **Keys and cancel.** ← and → move a focused grip one count (one edit each). Esc, a lost

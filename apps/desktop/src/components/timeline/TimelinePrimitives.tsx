@@ -1240,6 +1240,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     snapBeats = [],
     micro = false,
     barHeight,
+    downbeats,
+    snapPlayhead,
     moveCommands,
     renaming = false,
     onRenameStart,
@@ -1277,6 +1279,10 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     onRenameStart?: (trackId: TimelineTrackId) => void;
     /** The name field closed */
     onRenameEnd?: (trackId: TimelineTrackId) => void;
+    /** Downbeats a resized edge lands on when near (UI-15's edge rule) */
+    downbeats?: readonly number[];
+    /** The playhead, read when an edge drag starts, which the edge lands on when near */
+    snapPlayhead?: () => number;
     /** Dragging the clip's start or end edge resizes it (resize-move); without it, no handles */
     resize?: TimelineClipResizeCommands;
 }) {
@@ -1362,6 +1368,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     });
     const edgeResize = useClipEdgeResize({
         trackId: track.id,
+        label: track.label,
         range,
         width: range
             ? (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat
@@ -1370,6 +1377,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         pixelsPerBeat,
         beatCount,
         snapBeats,
+        downbeats,
+        snapPlayhead,
         resize,
     });
 

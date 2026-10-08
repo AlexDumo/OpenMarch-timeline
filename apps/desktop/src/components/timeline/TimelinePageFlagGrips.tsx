@@ -1,3 +1,4 @@
+import { snapEdgeBeat, stepOffForbidden } from "./timelineEdgeSnap";
 import clsx from "clsx";
 import {
     type KeyboardEvent as ReactKeyboardEvent,
@@ -28,7 +29,8 @@ import type {
  * - **Limits** (cases 1, 4, 6, 9, 10): the flag stops at the beats `pageFlagMove.limits` allows,
  *   asked when the drag starts; until they arrive, at the neighboring flags. It passes over a hole
  *   (a beat it can't land on) and lands just before it. The readout names what stops it.
- * - **Snapping** (case 12): whole beats; within 6px a downbeat, page line or the playhead. Alt
+ * - **Snapping** (case 12; UI-15's edge rule): page lines and the playhead within 12px, downbeats
+ *   within 6px, else whole beats. Alt
  *   turns that off.
  * - **Cancel** (cases 19, 20): Esc, a cancelled pointer or a lost capture put it back and write
  *   nothing; so does a drag released where it started.
@@ -37,8 +39,6 @@ import type {
 
 /** How far, in pixels, a press on a grip must move to drag the flag */
 export const FLAG_DRAG_PX = 4;
-/** Within this many pixels a dragged flag lands on a snap beat */
-const FLAG_SNAP_PX = 6;
 /** The grip's widest, in pixels; narrow boxes get a narrower one (`gripWidth`) */
 const GRIP_WIDTH = 12;
 /** The grip's top, in the 28px ruler: the lower half */
@@ -79,27 +79,6 @@ export function previewPagesForFlag(
     );
 }
 
-/** The nearest snap beat within `FLAG_SNAP_PX` of `beat`, else the nearest whole beat */
-const snapFlagBeat = (
-    beat: number,
-    snapBeats: readonly number[],
-    pixelsPerBeat: number,
-    snapDisabled: boolean,
-) => {
-    if (!snapDisabled) {
-        let best: number | null = null;
-        for (const candidate of snapBeats)
-            if (
-                Math.abs(candidate - beat) * pixelsPerBeat <= FLAG_SNAP_PX &&
-                (best === null ||
-                    Math.abs(candidate - beat) < Math.abs(best - beat))
-            )
-                best = candidate;
-        if (best !== null) return Math.round(best);
-    }
-    return Math.round(beat);
-};
-
 /** The neighbors' limits, used until `pageFlagMove.limits` answers */
 const neighborLimits = (
     boxes: readonly TimelineFlagBox[],
@@ -137,10 +116,11 @@ const landOutsideHoles = (
     const holes = limits.holes ?? [];
     const hole = holes.find((h) => h.beat === preview.beat);
     if (!hole) return preview;
-    const back = preview.beat > preview.from ? -1 : 1;
-    const holeBeats = new Set(holes.map((h) => h.beat));
-    let beat = preview.beat;
-    while (holeBeats.has(beat)) beat += back;
+    const beat = stepOffForbidden(
+        preview.beat,
+        preview.from,
+        new Set(holes.map((h) => h.beat)),
+    );
     return { ...preview, beat, blocked: hole.reason };
 };
 
@@ -214,7 +194,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
     pixelsPerBeat: number;
     /** The timeline's height, for the dragged flag's line */
     height: number;
-    /** Downbeats and page lines: where a dragged flag lands when near */
+    /** Downbeats (and page lines): where a dragged flag lands when near (UI-15's edge rule) */
     snapBeats: readonly number[];
     /** The playhead, which a dragged flag lands on when near too */
     snapPlayhead?: () => BeatPosition;
@@ -229,8 +209,8 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
         index: number;
         startClientX: number;
         surface: Element;
-        /** `snapBeats` and the playhead when the drag started */
-        snaps: readonly number[];
+        /** The playhead when the drag started, which the flag lands on when near */
+        playhead: number | null;
         moved: boolean;
         limits: TimelinePageFlagLimits;
         /** Set once `pageFlagMove.limits` answers */
@@ -254,12 +234,20 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
         if (!current) return null;
         const left = current.surface.getBoundingClientRect().left;
         const raw = clamp((clientX - left) / pixelsPerBeat, 0, beatCount);
-        const snapped = snapFlagBeat(
-            raw,
-            current.snaps,
+        // The edge rule (UI-15): page lines and the playhead within 12px, downbeats within 6px
+        const snapped = snapEdgeBeat({
+            beat: raw,
+            // The other flags: its own line would only pull it back
+            pageBeats: boxes.flatMap((b) =>
+                b.range && b.range.endBeatIndex !== current.limits.flag
+                    ? [b.range.endBeatIndex]
+                    : [],
+            ),
+            downbeats: snapBeats,
+            playheadBeat: current.playhead,
             pixelsPerBeat,
-            isPageSnapDisabled({ altKey }),
-        );
+            snapDisabled: isPageSnapDisabled({ altKey }),
+        });
         const { min, max, minReason, maxReason } = current.limits;
         return landOutsideHoles(current.limits, {
             pageId: current.pageId,
@@ -299,9 +287,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
             index,
             startClientX: event.clientX,
             surface,
-            snaps: snapPlayhead
-                ? [...snapBeats, Math.round(snapPlayhead())]
-                : snapBeats,
+            playhead: snapPlayhead ? Math.round(snapPlayhead()) : null,
             moved: false,
             limits,
             checked: false,

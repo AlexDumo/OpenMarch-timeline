@@ -6,7 +6,8 @@ import {
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
-import { clamp, isPageSnapDisabled, snapBoundary } from "./TimelineGeometry";
+import { clamp, isPageSnapDisabled } from "./TimelineGeometry";
+import { snapEdgeBeat, stepOffForbidden } from "./timelineEdgeSnap";
 import type {
     TimelineBeatRange,
     TimelineRangeChange,
@@ -55,11 +56,6 @@ export interface TimelineClipResizeCommands {
 const RESIZE_DRAG_PX = 4;
 /** A handle's widest, inside the clip's edge. */
 const HANDLE_MAX_PX = 6;
-/**
- * How close a page line pulls a dragged edge (V-125). Half the clip move's 24 px: at the default
- * 16 px per beat, an edge one count from a flag can still be placed without Alt.
- */
-const RESIZE_SNAP_PX = 12;
 /** Narrower clips have no handles: their whole width is the body (V-120). */
 const HANDLE_MIN_CLIP_PX = 8;
 
@@ -109,20 +105,27 @@ export interface ClipResizePreview extends TimelineBeatRange {
     readonly edge: Edge;
     /** Why the edge stopped short of the pointer, if it did */
     readonly stoppedBy: string | null;
-    /** Set when the range can't be committed (another move's or page's range) */
+    /**
+     * Why the pointer's beat can't be taken (another move or page has exactly that range, C-12):
+     * the edge waits on the nearest beat back toward where it started (UI-15)
+     */
     readonly blockedBy: string | null;
 }
 
 /**
- * Where the dragged edge lands for a pointer at `beat`: snapped to a page line within 12 px, else
- * to a whole beat (Alt only drops the page lines), then held inside the limits and the show.
- * Pure, for tests.
+ * Where the dragged edge lands for a pointer at `beat`, by UI-15's edge rule: snapped
+ * (`snapEdgeBeat`: page lines and the playhead within 12 px, downbeats within 6 px, else a whole
+ * beat; Alt drops all but the whole beat), held inside the limits and the show, and off any beat
+ * that would give the move another's exact range. Pure, for tests.
  */
 export function resizedRange({
     range,
     edge,
     beat,
     snapBeats,
+    downbeats = [],
+    playheadBeat = null,
+    snapDisabled = false,
     pixelsPerBeat,
     beatCount,
     limits,
@@ -130,16 +133,22 @@ export function resizedRange({
     range: TimelineBeatRange;
     edge: Edge;
     beat: number;
+    /** The page lines */
     snapBeats: readonly number[];
+    downbeats?: readonly number[];
+    playheadBeat?: number | null;
+    snapDisabled?: boolean;
     pixelsPerBeat: number;
     beatCount: number;
     limits: ClipResizeLimits | null;
 }): ClipResizePreview {
-    const snapped = snapBoundary({
+    const snapped = snapEdgeBeat({
         beat,
-        snapBeats,
+        pageBeats: snapBeats,
+        downbeats,
+        playheadBeat,
         pixelsPerBeat,
-        thresholdPx: RESIZE_SNAP_PX,
+        snapDisabled,
     });
     const bounds =
         edge === "start"
@@ -168,39 +177,44 @@ export function resizedRange({
         max = { ...one, beat: range.endBeatIndex - 1 };
     if (edge === "end" && min.beat < range.startBeatIndex + 1)
         min = { ...one, beat: range.startBeatIndex + 1 };
-    const landed = clamp(snapped, min.beat, Math.max(min.beat, max.beat));
+    const clamped = clamp(snapped, min.beat, Math.max(min.beat, max.beat));
     const stoppedBy =
-        snapped < landed ? min.reason : snapped > landed ? max.reason : null;
-    const next =
-        edge === "start"
-            ? { startBeatIndex: landed, endBeatIndex: range.endBeatIndex }
-            : { startBeatIndex: range.startBeatIndex, endBeatIndex: landed };
-    const taken = limits?.taken.find(
-        (t) =>
-            t.startBeatIndex === next.startBeatIndex &&
-            t.endBeatIndex === next.endBeatIndex,
-    );
+        snapped < clamped ? min.reason : snapped > clamped ? max.reason : null;
+    // The beats where this edge would give the move another's exact range (C-12)
+    const forbidden = new Map<number, string>();
+    for (const t of limits?.taken ?? []) {
+        if (edge === "start" && t.endBeatIndex === range.endBeatIndex)
+            forbidden.set(t.startBeatIndex, t.reason);
+        if (edge === "end" && t.startBeatIndex === range.startBeatIndex)
+            forbidden.set(t.endBeatIndex, t.reason);
+    }
+    const from = edge === "start" ? range.startBeatIndex : range.endBeatIndex;
+    const landed = stepOffForbidden(clamped, from, new Set(forbidden.keys()));
     return {
-        ...next,
+        ...(edge === "start"
+            ? { startBeatIndex: landed, endBeatIndex: range.endBeatIndex }
+            : { startBeatIndex: range.startBeatIndex, endBeatIndex: landed }),
         edge,
         stoppedBy,
-        blockedBy: taken?.reason ?? null,
+        blockedBy: forbidden.get(clamped) ?? null,
     };
 }
 
 const counts = (n: number) => `${n} count${n === 1 ? "" : "s"}`;
 
 /**
- * The drag tag's text: the length change, then why the edge stopped, why the range can't be
- * taken, or how many page flags the move now passes that it didn't (E4).
+ * The drag tag's text, worded as a dragged page flag's readout (UI-15): "Move 3: 4 → 6 counts",
+ * then why the edge stopped, why it waits short of the pointer, or how many page flags the move
+ * now passes that it didn't (E4).
  */
 export function clipResizeTagText(
     from: TimelineBeatRange,
     preview: ClipResizePreview,
     snapBeats: readonly number[],
+    label?: string,
 ): string {
     const length = (r: TimelineBeatRange) => r.endBeatIndex - r.startBeatIndex;
-    const change = `${length(from)} → ${counts(length(preview))}`;
+    const change = `${label ? `${label}: ` : ""}${length(from)} → ${counts(length(preview))}`;
     const note =
         preview.blockedBy ??
         preview.stoppedBy ??
@@ -224,22 +238,32 @@ export function clipResizeTagText(
  */
 export function useClipEdgeResize({
     trackId,
+    label,
     range,
     width,
     height,
     pixelsPerBeat,
     beatCount,
     snapBeats,
+    downbeats,
+    snapPlayhead,
     resize,
 }: {
     trackId: TimelineTrackId;
+    /** The move's name, which the tag starts with */
+    label?: string;
     range: TimelineBeatRange | null;
     /** The clip's drawn width in px (the handles shrink with it) */
     width: number;
     height: number;
     pixelsPerBeat: number;
     beatCount: number | undefined;
+    /** The page lines */
     snapBeats: readonly number[];
+    /** The measures' downbeats, which pull an edge more weakly (UI-15) */
+    downbeats?: readonly number[];
+    /** The playhead, read when a drag starts; an edge lands on it when near (UI-15) */
+    snapPlayhead?: () => number;
     resize: TimelineClipResizeCommands | undefined;
 }): {
     preview: ClipResizePreview | null;
@@ -260,6 +284,8 @@ export function useClipEdgeResize({
         /** The latest pointer, so the edge can settle when the limits arrive */
         clientX: number;
         snapDisabled: boolean;
+        /** The playhead when the drag started */
+        playhead: number | null;
         limits: ClipResizeLimits | null;
         preview: ClipResizePreview | null;
         /** Settles once the limits are read (or failed to be) */
@@ -297,7 +323,10 @@ export function useClipEdgeResize({
             edge: drag.edge,
             beat:
                 drag.startBeat + (clientX - drag.startClientX) / pixelsPerBeat,
-            snapBeats: snapDisabled ? [] : snapBeats,
+            snapBeats,
+            downbeats,
+            playheadBeat: drag.playhead,
+            snapDisabled,
             pixelsPerBeat,
             beatCount: beatCount!,
             limits: drag.limits,
@@ -323,6 +352,7 @@ export function useClipEdgeResize({
                 moved: false,
                 clientX: event.clientX,
                 snapDisabled: isPageSnapDisabled(event),
+                playhead: snapPlayhead ? Math.round(snapPlayhead()) : null,
                 limits: null as ClipResizeLimits | null,
                 preview: null as ClipResizePreview | null,
                 limitsRead: Promise.resolve() as Promise<unknown>,
@@ -381,10 +411,10 @@ export function useClipEdgeResize({
             const snapDisabled = isPageSnapDisabled(event);
             const finish = () => {
                 const next = landAt(drag, clientX, snapDisabled);
+                // It commits where it waits: never on a forbidden beat (UI-15)
                 if (
-                    next.blockedBy !== null ||
-                    (next.startBeatIndex === range!.startBeatIndex &&
-                        next.endBeatIndex === range!.endBeatIndex)
+                    next.startBeatIndex === range!.startBeatIndex &&
+                    next.endBeatIndex === range!.endBeatIndex
                 )
                     return;
                 resize!.commit({
@@ -432,7 +462,7 @@ export function useClipEdgeResize({
                     preview.edge === "start" ? "left-0" : "right-0",
                 )}
             >
-                {clipResizeTagText(range, preview, snapBeats)}
+                {clipResizeTagText(range, preview, snapBeats, label)}
             </span>
         ) : null;
 
