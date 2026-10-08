@@ -292,14 +292,7 @@ async function applyPreviousDotsCoordinates(
     const updates = marchers.flatMap((marcher) => {
         const coordinate = coordinateByDrillNumber.get(drillNumberKey(marcher));
         if (!coordinate) return [];
-        return [
-            {
-                marcher_id: marcher.id,
-                page_id: FIRST_PAGE_ID,
-                x: coordinate.x,
-                y: coordinate.y,
-            },
-        ];
+        return [{ marcher_id: marcher.id, x: coordinate.x, y: coordinate.y }];
     });
 
     if (updates.length === 0) return;
@@ -311,7 +304,7 @@ async function applyPreviousDotsCoordinates(
             // A new show made with convert on open on starts in timeline mode (P9.3): the
             // first-page positions are the marchers' homes, as the converter seeds them, and
             // marcher pages are frozen (P9.5)
-            if (await timelineModeInTransaction(tx))
+            if (await timelineModeInTransaction(tx)) {
                 await updateMarcherHomesInTransaction({
                     tx,
                     modifiedHomes: updates.map((u) => ({
@@ -319,11 +312,21 @@ async function applyPreviousDotsCoordinates(
                         home: [u.x, u.y],
                     })),
                 });
-            else
-                await updateMarcherPagesInTransaction({
-                    tx,
-                    modifiedMarcherPages: updates,
-                });
+                return;
+            }
+            // Page mode: the tempo step made the pages before the marchers were added, so every
+            // page has a row for them in the default line. The new show starts at the source's
+            // last page on every page, as it does in timeline mode, where the home holds.
+            const pages = await tx
+                .select({ id: schema.pages.id })
+                .from(schema.pages)
+                .all();
+            await updateMarcherPagesInTransaction({
+                tx,
+                modifiedMarcherPages: pages.flatMap((page) =>
+                    updates.map((u) => ({ ...u, page_id: page.id })),
+                ),
+            });
         },
     );
 
