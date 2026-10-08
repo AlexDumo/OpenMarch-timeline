@@ -10,8 +10,44 @@ import {
     smoothTube,
     triangleCount,
     tube,
+    uPath,
     PART_METAL,
+    type Piece,
 } from "../mesh";
+
+/** How many triangles face along their vertex normals (outward) and against them. */
+function winding(p: Piece) {
+    let out = 0;
+    let inward = 0;
+    const P = p.positions;
+    const N = p.normals;
+    for (let t = 0; t < p.indices.length; t += 3) {
+        const [a, b, c] = [p.indices[t], p.indices[t + 1], p.indices[t + 2]];
+        const e1 = [
+            P[b * 3] - P[a * 3],
+            P[b * 3 + 1] - P[a * 3 + 1],
+            P[b * 3 + 2] - P[a * 3 + 2],
+        ];
+        const e2 = [
+            P[c * 3] - P[a * 3],
+            P[c * 3 + 1] - P[a * 3 + 1],
+            P[c * 3 + 2] - P[a * 3 + 2],
+        ];
+        const n = [
+            e1[1] * e2[2] - e1[2] * e2[1],
+            e1[2] * e2[0] - e1[0] * e2[2],
+            e1[0] * e2[1] - e1[1] * e2[0],
+        ];
+        const vn = [
+            N[a * 3] + N[b * 3] + N[c * 3],
+            N[a * 3 + 1] + N[b * 3 + 1] + N[c * 3 + 1],
+            N[a * 3 + 2] + N[b * 3 + 2] + N[c * 3 + 2],
+        ];
+        if (n[0] * vn[0] + n[1] * vn[1] + n[2] * vn[2] >= 0) out++;
+        else inward++;
+    }
+    return { out, inward };
+}
 
 describe("lathe", () => {
     it("revolves a profile into a closed, bounded shape", () => {
@@ -135,6 +171,69 @@ describe("smooth primitives", () => {
             ];
             expect(Math.hypot(...n)).toBeCloseTo(1, 6);
             expect(Math.abs(n[2])).toBeLessThan(1e-6); // perpendicular to the +Z axis
+        }
+    });
+
+    it("winds every smooth triangle outward, with its normals", () => {
+        const t = smoothTube(
+            [
+                [0, 0, 0],
+                [0, 0, 0.2],
+                [0.1, 0, 0.3],
+            ],
+            0.01,
+            12,
+            PART_METAL,
+        );
+        expect(winding(t).inward).toBe(0);
+        const l = smoothLathe(
+            [
+                [0.02, 0],
+                [0.05, 0.1],
+                [0.05, 0.2],
+            ],
+            12,
+            PART_METAL,
+        );
+        expect(winding(l).inward).toBe(0);
+        const open = smoothTube(
+            [
+                [0, 0, 0],
+                [0, 0, 0.2],
+            ],
+            0.01,
+            8,
+            PART_METAL,
+            { capStart: false, capEnd: false },
+        );
+        expect(winding(open).inward).toBe(0);
+    });
+
+    it("uPath runs out, around a closed crook and back, with no long jumps", () => {
+        for (const dir of [1, -1] as const) {
+            const path = uPath(
+                [0.1, 0, 0],
+                [0, 0, dir],
+                [1, 0, 0],
+                0.2,
+                0.04,
+                6,
+            );
+            expect(path[0]).toEqual([0.1, 0, 0]);
+            const last = path[path.length - 1];
+            expect(last[0]).toBeCloseTo(0.14, 9);
+            expect(last[2]).toBeCloseTo(0, 9);
+            // the crook's far point is beyond the legs' ends, on the leg side
+            const far = Math.max(...path.map((q) => q[2] * dir));
+            expect(far).toBeGreaterThan(0.2);
+            for (let i = 1; i < path.length; i++) {
+                const d = Math.hypot(
+                    path[i][0] - path[i - 1][0],
+                    path[i][2] - path[i - 1][2],
+                );
+                expect(d).toBeLessThanOrEqual(0.2 + 1e-9);
+                expect(d).toBeGreaterThan(1e-6);
+            }
         }
     });
 

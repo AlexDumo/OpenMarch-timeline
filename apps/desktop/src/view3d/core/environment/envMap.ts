@@ -71,15 +71,25 @@ export function disposeEnvironmentScene(scene: Scene): void {
     });
 }
 
-/** The preset's environment map. The caller sets `scene.environment` and disposes it. */
+/**
+ * The preset's environment map. The caller sets `scene.environment` to
+ * `texture` and calls `dispose` when done. Each call builds and throws away
+ * a PMREM generator, which compiles its shaders again: fine per preset change.
+ */
+export interface EnvironmentMap {
+    texture: Texture;
+    /** Frees the render target behind the texture. */
+    dispose(): void;
+}
+
 export function createEnvironmentMap(
     renderer: WebGLRenderer,
     preset: LightingPreset,
-): Texture {
+): EnvironmentMap {
     const scene = environmentScene(preset);
     const generator = new PMREMGenerator(renderer);
     const target = generator.fromScene(scene, 0.04);
     generator.dispose();
     disposeEnvironmentScene(scene);
-    return target.texture;
+    return { texture: target.texture, dispose: () => target.dispose() };
 }

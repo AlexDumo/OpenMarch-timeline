@@ -130,27 +130,28 @@ const TROMBONE: Record<HoldState, Hold> = {
     trail: { ...BRASS.trail, family: "trombone" },
 };
 
-/** Contra: shouldered on the left, right hand at the valves at chest height. */
 /**
- * Contra: the loop lies along the left shoulder behind the bell, so the
- * valves (the grip) sit high in front of the face; the right hand is on
- * them, the left supports the bottom tube at the front.
+ * Contra: the loop lies along the left shoulder behind the bell, its plane
+ * outside the head (x 0.17 against a head half-width of about 0.1), the
+ * bottom tube resting on the shoulder. The valves sit at chin height in
+ * front, left of center: the right hand reaches across to them, the left
+ * supports the bottom tube at the front.
  */
 const CONTRA_UP: Hold = {
     family: "contra",
     state: "up",
     right: {
-        elbow: [-0.172, 1.501, 0.171],
-        wrist: [0.08, 1.58, 0.17],
+        elbow: [-0.119, 1.513, 0.151],
+        wrist: [0.13, 1.6, 0.14],
         fingers: unit([0.3, 0.1, 0.0]),
     },
     left: {
-        elbow: [0.275, 1.245, 0.098],
-        wrist: [0.1, 1.4, 0.22],
+        elbow: [0.334, 1.258, -0.026],
+        wrist: [0.26, 1.44, 0.15],
         fingers: unit([-0.2, 0.3, 0.3]),
     },
     instrument: {
-        origin: [0.1, 1.6, 0.18],
+        origin: [0.17, 1.62, 0.14],
         bellAxis: [0, 0, 1],
         capsAxis: [0, 1, 0],
     },

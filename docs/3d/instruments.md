@@ -183,10 +183,13 @@ points and where the elbows go.
   straight down, closed fist, thumb on top, along the leg.
 - **trombone, horns up.** As brass with the left hand at the bell brace and
   the right hand on the slide at first position.
-- **contra, horns up and carry.** The body lies along the left shoulder,
-  bell forward and a little above the head, valves at the rear by the
-  player's right chest: right hand on the valves, left hand under the
-  bottom bow in front of the chest.
+- **contra, horns up and carry.** The loop lies along the left shoulder,
+  its plane outside the head and its bottom tube resting on the shoulder,
+  bell forward and a little above the head. The valves sit at chin height
+  in front, left of center; the right hand reaches across to them and the
+  left supports the bottom tube at the front. (Placed by reasoning from the
+  instrument's layout, 2026-10-08; the owner checks it against a photo of a
+  player.)
 - **flute.** Horizontal to the player's right, lips at the head joint, left
   hand near, right hand far. Carry: the same hands with the head joint
   raised so the embouchure hole sits at eye level.

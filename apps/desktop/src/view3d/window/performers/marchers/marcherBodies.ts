@@ -348,7 +348,11 @@ export class MarcherBodies {
             brassModel(carry.model, this.blockSource ? "low" : "high"),
             g.look.options.finish,
         );
-        this.hornMaterial ??= instrumentMaterial(this.bake);
+        if (!this.hornMaterial) {
+            // in `materials` so writeFrame drives its clip clock and dispose frees it
+            this.hornMaterial = instrumentMaterial(this.bake);
+            this.materials.push(this.hornMaterial);
+        }
         const horn = new THREE.InstancedMesh(
             instancedGeometry(THREE, source, g.slots.length),
             this.hornMaterial,
@@ -448,7 +452,6 @@ export class MarcherBodies {
             }
         }
         for (const m of this.materials) m.dispose();
-        this.hornMaterial?.dispose();
         this.blockSource?.dispose();
         this.contact.geometry.dispose();
         const cm = this.contact.material as THREE.MeshBasicMaterial;

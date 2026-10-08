@@ -13,6 +13,7 @@
 import {
     arc,
     bellProfile,
+    uPath,
     colorPieces,
     smoothLathe,
     smoothTube,
@@ -76,6 +77,11 @@ const SEGMENTS: Record<Detail, SegmentCounts> = {
     high: { tube: 28, bell: 64, small: 14, crook: 10 },
     low: { tube: 8, bell: 16, small: 5, crook: 4 },
 };
+/** The contra: long, fat tubing. */
+const CONTRA_SEGMENTS: Record<Detail, SegmentCounts> = {
+    high: { tube: 32, bell: 72, small: 16, crook: 12 },
+    low: { tube: 8, bell: 16, small: 5, crook: 4 },
+};
 /** Trombones are long, thin tubes seen end-on: they need finer rings. */
 const TROMBONE_SEGMENTS: Record<Detail, SegmentCounts> = {
     high: { tube: 48, bell: 96, small: 24, crook: 14 },
@@ -137,32 +143,17 @@ function tools(s: SegmentCounts) {
             y,
             z0,
         );
-    /** A U slide: out along `dir` from `start`, a 180 degree crook of `width`, back. Parallel to the x axis when dir is ±z. */
+    /** A U slide out along ±Z from `start`, crook of `width` toward +X, and back. */
     const uSlide = (
         start: Vec3,
         dirZ: 1 | -1,
         length: number,
         width: number,
         r: number,
-    ) => {
-        const [x, y, z] = start;
-        const end = z + dirZ * length;
-        const path: Vec3[] = [
-            [x, y, z],
-            [x, y, end],
-            ...arc(
-                [x + width / 2, y, end],
-                width / 2,
-                dirZ > 0 ? 180 : 0,
-                dirZ > 0 ? 0 : 180,
-                s.crook,
-                "y",
-            ).map((p): Vec3 => [p[0], p[1], p[2]]),
-            [x + width, y, z],
-        ];
-        // the arc about y runs from +Z (0°) through +X (90°) to −Z (180°)
-        return run(path, r);
-    };
+    ) => run(uPath(start, [0, 0, dirZ], [1, 0, 0], length, width, s.crook), r);
+    /** A valve slide out along +X from `start`, crook of `depth` toward −Z, and back. */
+    const xSlide = (start: Vec3, length: number, depth: number, r: number) =>
+        run(uPath(start, [1, 0, 0], [0, 0, -1], length, depth, s.crook), r);
     /** Three piston valves at z offsets, standing on the block: casing, cap, stem, button, bottom cap. */
     const valves = (
         zs: number[],
@@ -275,6 +266,7 @@ function tools(s: SegmentCounts) {
         thin,
         bell,
         uSlide,
+        xSlide,
         valves,
         mouthpiece,
         brace,
@@ -319,42 +311,20 @@ function valvedHorn(id: BrassModelId, detail: Detail): InstrumentModel {
         t.bell(bore * 1.4, d.bell / 2, bellStart, bellLen, 0, bellLift),
         // tuning slide: back under the leadpipe with a crook
         t.uSlide([-0.016, -0.03, -0.02], -1, big ? 0.14 : 0.1, 0.032, bore),
-        // first valve slide: short, to the performer's left
-        t.uSlide([0.012, -0.012, -0.024], 1, 0.0, 0.0, bore), // placeholder replaced below
-        // third valve slide: longer, to the left, with a crook
+        // valve slides out to the performer's left: first short, second a stub behind, third long
+        t.xSlide([0.016, -0.012, -0.024], 0.03, 0.02, bore * 0.9),
         t.run(
-            [
-                [0.016, -0.015, 0.024],
-                [0.07, -0.015, 0.024],
-                ...arc(
-                    [0.07, -0.015, 0.012],
-                    0.012,
-                    90,
-                    270,
-                    SEGMENTS[detail].crook,
-                    "y",
-                ),
-                [0.016, -0.015, 0.0],
-            ],
-            bore * 0.9,
-        ),
-        // second valve slide: a small U behind the middle valve
-        t.run(
-            [
+            uPath(
                 [-0.012, -0.015, 0.006],
-                [-0.03, -0.015, 0.006],
-                ...arc(
-                    [-0.03, -0.015, 0.0],
-                    0.006,
-                    90,
-                    270,
-                    SEGMENTS[detail].crook,
-                    "y",
-                ),
-                [-0.012, -0.015, -0.006],
-            ],
+                [-1, 0, 0],
+                [0, 0, -1],
+                0.018,
+                0.012,
+                SEGMENTS[detail].crook,
+            ),
             bore * 0.9,
         ),
+        t.xSlide([0.016, -0.015, 0.024], 0.054, 0.024, bore * 0.9),
         // braces
         t.brace([0.012, lead, -0.08], [-0.016, -0.03, -0.08]),
         t.brace(
@@ -379,23 +349,6 @@ function valvedHorn(id: BrassModelId, detail: Detail): InstrumentModel {
             true,
         ),
     ];
-    // replace the placeholder first slide with a real short U
-    pieces[5] = t.run(
-        [
-            [0.016, -0.012, -0.024],
-            [0.045, -0.012, -0.024],
-            ...arc(
-                [0.045, -0.012, -0.034],
-                0.01,
-                90,
-                270,
-                SEGMENTS[detail].crook,
-                "y",
-            ),
-            [0.016, -0.012, -0.044],
-        ],
-        bore * 0.9,
-    );
     if (big || mello) {
         // the lower body: a second, larger bow under the tuning slide
         pieces.push(
@@ -466,12 +419,16 @@ function trombone(
             ],
             bore * 1.12,
         ),
+        // the outer slide's bow beyond the slide end
         t.run(
-            [
-                [0.03, 0, slideLen],
-                ...arc([0, 0, slideLen], 0.03, 90, 270, s.crook, "y"),
-                [-0.03, 0, slideLen],
-            ],
+            uPath(
+                [0.03, 0, slideLen - 0.02],
+                [0, 0, 1],
+                [-1, 0, 0],
+                0.02,
+                0.06,
+                s.crook,
+            ),
             bore * 1.12,
         ),
         // slide braces: the grip and the outer brace
@@ -485,25 +442,24 @@ function trombone(
             ],
             bore,
         ),
+        // the tuning bow behind the grip, then the bell pipe forward on the other side
         t.run(
             [
                 [0.03, 0, -0.02],
-                [0.03, y * 0.5, -0.2],
-                ...arc([0, y, -0.26], 0.03, 270, 90, s.crook, "y").map(
-                    (p): Vec3 => [p[0], y, p[2]],
-                ),
+                [0.03, y, -0.2],
+            ],
+            [bore, bore * 1.1],
+        ),
+        t.run(
+            uPath([0.03, y, -0.2], [0, 0, -1], [-1, 0, 0], 0.06, 0.06, s.crook),
+            bore * 1.1,
+        ),
+        t.run(
+            [
                 [-0.03, y, -0.2],
                 [-0.03, y, bellStart],
             ],
-            [
-                bore,
-                bore,
-                bore * 1.1,
-                bore * 1.1,
-                bore * 1.1,
-                bore * 1.2,
-                bore * 1.3,
-            ],
+            [bore * 1.15, bore * 1.3],
         ),
         t.bell(bore * 1.4, d.bell / 2, bellStart, bellLen, -0.03, y),
         // bell brace (the left hand) and a cross brace
@@ -543,7 +499,8 @@ function trombone(
  */
 function contra(detail: Detail): InstrumentModel {
     const d = BRASS_DIMENSIONS.contra;
-    const s = SEGMENTS[detail];
+    // the loop is long, fat tubing: finer rings than the small horns
+    const s = CONTRA_SEGMENTS[detail];
     const t = tools(s);
     const bore = d.bore;
     const loopBack = -0.62; // the far bow

@@ -303,21 +303,22 @@ export function smoothTube(
             const b = i * segments + ((k + 1) % segments);
             const c = (i + 1) * segments + ((k + 1) % segments);
             const d = (i + 1) * segments + k;
-            p.indices.push(a, d, c, a, c, b);
+            // outward: (u, v, t) is right-handed, so a -> b runs counterclockwise seen from outside
+            p.indices.push(a, b, c, a, c, d);
         }
-    const capAt = (ring: number, center: Vec3, axis: Vec3) => {
+    const capAt = (ring: number, center: Vec3, axis: Vec3, flip: boolean) => {
         const ci = p.positions.length / 3;
         p.positions.push(center[0], center[1], center[2]);
         p.normals.push(axis[0], axis[1], axis[2]);
         for (let k = 0; k < segments; k++) {
             const a = ring * segments + k;
             const b = ring * segments + ((k + 1) % segments);
-            if (axis === tangents[n - 1]) p.indices.push(ci, a, b);
-            else p.indices.push(ci, b, a);
+            if (flip) p.indices.push(ci, b, a);
+            else p.indices.push(ci, a, b);
         }
     };
-    if (capStart) capAt(0, path[0], scale(tangents[0], -1));
-    if (capEnd) capAt(n - 1, path[n - 1], tangents[n - 1]);
+    if (capStart) capAt(0, path[0], scale(tangents[0], -1), true);
+    if (capEnd) capAt(n - 1, path[n - 1], tangents[n - 1], false);
     return p;
 }
 
@@ -384,6 +385,41 @@ export function arc(
             axis === "x" ? [0, c, s] : axis === "y" ? [s, 0, c] : [c, s, 0];
         out.push(add(center, d));
     }
+    return out;
+}
+
+/**
+ * A U-shaped slide path: out from `start` along unit `dir` for `length`, a
+ * 180 degree crook of `width` toward unit `across`, and back. The crook's
+ * far point lies beyond the legs' ends; no point repeats.
+ */
+export function uPath(
+    start: Vec3,
+    dir: Vec3,
+    across: Vec3,
+    length: number,
+    width: number,
+    steps: number,
+): Vec3[] {
+    const d = norm(dir);
+    const a = norm(across);
+    const legEnd = add(start, scale(d, length));
+    const center = add(legEnd, scale(a, width / 2));
+    const out: Vec3[] = [start, legEnd];
+    for (let i = 1; i < steps; i++) {
+        const t = (i / steps) * Math.PI;
+        out.push(
+            add(
+                center,
+                add(
+                    scale(a, -Math.cos(t) * (width / 2)),
+                    scale(d, Math.sin(t) * (width / 2)),
+                ),
+            ),
+        );
+    }
+    const back = add(legEnd, scale(a, width));
+    out.push(back, add(start, scale(a, width)));
     return out;
 }
 

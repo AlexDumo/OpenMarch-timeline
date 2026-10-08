@@ -286,10 +286,10 @@ function SceneContents({
     useEffect(() => {
         if (!appliedLighting || !gl.capabilities.isWebGL2) return;
         const map = createEnvironmentMap(gl, appliedLighting);
-        scene.environment = map;
+        scene.environment = map.texture;
         scene.environmentIntensity = 0.6;
         return () => {
-            if (scene.environment === map) scene.environment = null;
+            if (scene.environment === map.texture) scene.environment = null;
             map.dispose();
         };
     }, [gl, scene, appliedLighting]);

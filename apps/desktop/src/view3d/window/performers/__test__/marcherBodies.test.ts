@@ -185,6 +185,24 @@ describe("horns as their own meshes", () => {
         set.dispose();
     });
 
+    it("drives the horn's clip clock with the bodies' each frame", async () => {
+        const { set } = await trumpetAndFlute("high");
+        const horn = set.group.children.find((o) =>
+            o.name.startsWith("view3d-horn-"),
+        ) as THREE.InstancedMesh;
+        set.writeFrame(
+            new Float32Array(4),
+            new Float32Array(2),
+            Uint8Array.from([1, 1]),
+            7,
+        );
+        const u = (horn.material as THREE.Material).userData.uniforms as {
+            uCount: { value: number };
+        };
+        expect(u.uCount.value).toBe(7);
+        set.dispose();
+    });
+
     it("disposes the horn geometry and material with the set", async () => {
         const { set } = await trumpetAndFlute("high");
         const horn = set.group.children.find((o) =>
