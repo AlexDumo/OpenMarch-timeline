@@ -18,15 +18,10 @@ export const InspectorCollapsible = ({
     title,
     translatableTitle,
     defaultOpen,
-    open: controlledOpen,
-    onOpenChange,
     ...props
 }: InspectorCollapsibleProps) => {
     const { t } = useTranslate();
-    const [ownOpen, setOwnOpen] = useState<boolean>(defaultOpen || false);
-    // Controlled when the owner passes `open` (the timeline section opens for Edit move, UI-14)
-    const open = controlledOpen ?? ownOpen;
-    const setOpen = onOpenChange ?? setOwnOpen;
+    const [open, setOpen] = useState<boolean>(defaultOpen || false);
 
     const getTitleText = () => {
         if (translatableTitle) {

@@ -13,9 +13,8 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
 import {
-    isolatedTimeline,
-    selectedStoredTimeline,
     useTimelineSelectionStore,
+    windowMove,
 } from "@/stores/TimelineSelectionStore";
 import {
     groupDiagnosticsByTransition,
@@ -29,7 +28,6 @@ import type {
 import type { AssignmentEditTarget } from "@/timeline/timelineAssignmentEditor";
 import { shapeFrameFor } from "@/timeline/timelineShapeEditor";
 import { InspectorCollapsible } from "./InspectorCollapsible";
-import { moveCardTimeline } from "./TimelineMoveCard";
 import { TimelineAssignmentsEditor } from "./TimelineAssignmentsEditor";
 import { TimelineShapesEditor } from "./TimelineShapesEditor";
 import { TimelineTransitionEditor } from "./TimelineTransitionEditor";
@@ -365,6 +363,23 @@ export function ShowDiagnosticsList({
     );
 }
 
+/**
+ * The playhead's beat, held while it is scrubbed (code review): the inspector's explanations and
+ * editors are rebuilt once the scrub ends, not on every beat it passes, and keep showing the last
+ * settled beat meanwhile rather than going blank. As `useTimelinePageBridge` waits for the scrub.
+ */
+function useSettledPlayheadBeat(): number {
+    const live = useTimelineSelectionStore((s) =>
+        s.scrubbing ? null : s.playheadBeat,
+    );
+    const [held, setHeld] = useState(
+        () => live ?? useTimelineSelectionStore.getState().playheadBeat,
+    );
+    // Adjusted while rendering, so a settled beat shows in the same render
+    if (live !== null && live !== held) setHeld(live);
+    return live ?? held;
+}
+
 function TimelineInspectorContent() {
     const t = useInspectorTranslate();
     const { selectedMarchers } = useSelectedMarchers()!;
@@ -379,21 +394,15 @@ function TimelineInspectorContent() {
     // UI-14: in timeline mode the inspector explains at the paused playhead P, where edits land
     // (UI-10). On a flag that is the page's end beat, as before; between flags a mid-page move's
     // transitions show.
-    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    const playheadBeat = useSettledPlayheadBeat();
     // The move the window is (isolated, P may be anywhere inside it), if it has a clip
-    const move = useTimelineSelectionStore((s) =>
-        moveCardTimeline(
-            isolatedTimeline(s) ?? selectedStoredTimeline(s),
-            s.pageBoxes,
-        ),
-    );
+    const move = useTimelineSelectionStore(windowMove);
     // UI-14: with a move, explain inside it: at P, or its last beat when P is on its end, where
     // the next move starts. So the details below are about this move's transitions.
     const beat = move
         ? Math.min(Math.max(playheadBeat, move.start), move.end - 1)
         : playheadBeat;
     const [detailsOpen, setDetailsOpen] = useState(false);
-    const [open, setOpen] = useState(true);
     const {
         inspections,
         omitted,
@@ -453,8 +462,7 @@ function TimelineInspectorContent() {
     );
     return (
         <InspectorCollapsible
-            open={open}
-            onOpenChange={setOpen}
+            defaultOpen
             translatableTitle={{ keyName: "inspector.timeline.title" }}
             className="mt-12 flex flex-col gap-16"
         >

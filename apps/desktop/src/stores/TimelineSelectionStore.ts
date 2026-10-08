@@ -326,6 +326,26 @@ export const isolatedTimeline = (
           ) ?? null);
 
 /**
+ * The move the window is on (UI-14): the isolated timeline (P may be anywhere inside it), else the
+ * stored timeline the window resolves to, when it is off the page boxes. A page's own timeline
+ * isn't a move (pages are moved with their flags), so it is `null` there, and with no timeline.
+ * The Move card, the inspector's beat and **Select them**'s cleanup all go by this.
+ */
+export const windowMove = (
+    state: Pick<
+        TimelineSelectionState,
+        "selection" | "storedTimelines" | "isolation" | "pageBoxes"
+    >,
+): StoredTimelineMembership | null => {
+    const timeline = isolatedTimeline(state) ?? selectedStoredTimeline(state);
+    if (!timeline) return null;
+    const onPageBox = state.pageBoxes.some(
+        (box) => box.start === timeline.start && box.end === timeline.end,
+    );
+    return onPageBox ? null : timeline;
+};
+
+/**
  * Whether a marcher is dimmed. Under UI-10 nothing is dimmed: dragging a marcher is what adds it
  * to the window's timeline, so every marcher must stay selectable (_lead default_). Isolating a
  * timeline dims and locks every marcher that isn't in it.

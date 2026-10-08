@@ -352,6 +352,37 @@ describe("TimelineInspectorSection", () => {
         );
         expect(screen.queryByText(/Select a page/)).toBeNull();
     });
+
+    it("holds its beat while the playhead is scrubbed, and explains where the scrub ends", () => {
+        mocks.selectedMarchers = [{ id: 2, drill_number: "T2" }];
+        const store = useTimelineSelectionStore.getState();
+        store.setPageBoxes([{ start: 0, end: 16 }]);
+        store.seek(5);
+        renderSection();
+        const beats = () =>
+            vi
+                .mocked(useTimelineInspections)
+                .mock.calls.map(([args]) => args.beat);
+        act(() => {
+            store.beginScrub();
+        });
+        const during = beats().length;
+        for (const beat of [6, 7, 8, 9])
+            act(() => {
+                useTimelineSelectionStore.getState().seek(beat);
+            });
+        // Nothing is explained on the beats it passes, and nothing blanks: still beat 5
+        expect(beats().slice(during)).not.toContain(6);
+        expect(beats().slice(during)).not.toContain(8);
+        expect(beats().at(-1)).toBe(5);
+        act(() => {
+            useTimelineSelectionStore.getState().endScrub();
+        });
+        expect(beats().at(-1)).toBe(
+            useTimelineSelectionStore.getState().playheadBeat,
+        );
+        expect(beats().at(-1)).not.toBe(5);
+    });
 });
 
 /** Page 1 over beats [1, 9) and page 2 over [9, 17), as the store and the pages see them */

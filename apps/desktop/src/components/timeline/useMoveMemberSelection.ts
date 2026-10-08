@@ -5,24 +5,14 @@ import {
     type MoveMemberSelection,
 } from "@/stores/MoveMemberSelectionStore";
 import {
-    isolatedTimeline,
-    selectedStoredTimeline,
     useTimelineSelectionStore,
+    windowMove,
     type TimelineSelectionState,
 } from "@/stores/TimelineSelectionStore";
 
-/**
- * The move the window is on: the isolated one, else the stored timeline the window resolves to
- * when it is off the page boxes (a page's own timeline isn't a move). `null` otherwise.
- */
-export function windowMoveId(s: TimelineSelectionState): number | null {
-    const timeline = isolatedTimeline(s) ?? selectedStoredTimeline(s);
-    if (!timeline) return null;
-    const onPageBox = s.pageBoxes.some(
-        (b) => b.start === timeline.start && b.end === timeline.end,
-    );
-    return onPageBox ? null : timeline.id;
-}
+/** The id of the move the window is on (`windowMove`), or `null` */
+export const windowMoveId = (s: TimelineSelectionState): number | null =>
+    windowMove(s)?.id ?? null;
 
 /**
  * Whether going to move `moveId` should clear the selection (UI-14 round-2 review): **Select
