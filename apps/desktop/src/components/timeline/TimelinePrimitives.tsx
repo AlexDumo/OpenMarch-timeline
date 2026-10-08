@@ -14,7 +14,7 @@ import {
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
-import { isTyping, overlayOpen } from "./timelineHotkeys";
+import { isTyping, overlayOpen, spaceStaysPlay } from "./timelineHotkeys";
 import {
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
@@ -24,6 +24,7 @@ import {
     type RefObject,
     memo,
     useCallback,
+    useId,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -435,8 +436,11 @@ export const TimelineShell = ({
             <div
                 ref={viewportRef}
                 data-testid="timeline-viewport"
+                // Where focus goes when the clip it was on is deleted (UI-14 review)
+                tabIndex={-1}
+                aria-label="Timeline"
                 // The scrollbar's track is always there, so zooming never changes the height
-                className="min-w-0 overflow-x-scroll overflow-y-hidden"
+                className="focus-visible:ring-accent rounded-4 min-w-0 overflow-x-scroll overflow-y-hidden outline-hidden focus-visible:ring-2"
             >
                 {children}
             </div>
@@ -1094,6 +1098,19 @@ export function TimelineMoveNameField({
         done.current = true;
         onDone(name);
     };
+    // UI-14 review: a field removed before it blurs (a click elsewhere on the timeline changes
+    // the selection first) still saves what was typed, unless Esc cancelled it
+    const latest = useRef({ value, finish });
+    latest.current = { value, finish };
+    useEffect(
+        () => () => {
+            // Only an edited field: StrictMode's mount check unmounts it untouched
+            if (latest.current.value !== initial)
+                latest.current.finish(latest.current.value);
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [],
+    );
     const atLimit = value.length >= MOVE_NAME_MAX_LENGTH;
     return (
         <>
@@ -1101,6 +1118,7 @@ export function TimelineMoveNameField({
                 ref={ref}
                 data-testid="timeline-move-name-field"
                 data-timeline-interactive="true"
+                data-timeline-own-keys="true"
                 aria-label={ariaLabel}
                 maxLength={MOVE_NAME_MAX_LENGTH}
                 value={value}
@@ -1206,6 +1224,18 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     // Rename focuses its field and Delete removes the clip: after those, focus stays put
     const keepFocus = useRef(false);
     const trackId = track.id;
+    const clipRef = useRef<HTMLButtonElement>(null);
+    // More about the clip for screen readers (UI-14 round-2 review): why it is dashed, its keys
+    const descriptionId = useId();
+    const description =
+        [
+            track.description,
+            moveCommands
+                ? "Enter to rename, Shift+F10 for options, Delete to delete"
+                : undefined,
+        ]
+            .filter(Boolean)
+            .join(". ") || undefined;
     const moveMenu = useMemo<TimelineMoveMenuActions | undefined>(
         () =>
             moveCommands && {
@@ -1218,12 +1248,19 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     );
     const onRenameDone = (name: string | null) => {
         onRenameEnd?.(trackId);
+        // UI-14 review: back on the clip, whether saved or cancelled
+        requestAnimationFrame(() => clipRef.current?.focus());
         // Unchanged writes nothing (an empty edit is refused)
         if (name !== null && name.trim() !== track.label.trim())
             moveCommands?.onRename(trackId, name);
     };
     const menuActions = moveMenu && {
         ...moveMenu,
+        // Edit move puts focus on the Move card (UI-14 review), so don't take it back either
+        onEdit: () => {
+            keepFocus.current = true;
+            moveMenu.onEdit();
+        },
         onRename: () => {
             keepFocus.current = true;
             moveMenu.onRename();
@@ -1286,21 +1323,30 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 type="button"
                 data-timeline-interactive="true"
                 data-testid="timeline-clip"
+                data-move-id={track.linkId}
+                data-selected={selected}
+                // UI-14 review: its keys are its own; the app's Enter, arrows and WASD don't run
+                data-timeline-own-keys={moveMenu ? "true" : undefined}
+                ref={clipRef}
                 {...timelineRangeTargetProps(range, track.id)}
-                aria-label={`${track.label} timeline, beats ${range.startBeatIndex + 1} through ${range.endBeatIndex}${
+                // UI-14 review: a move is named as one, in counts (`describeMoveClips`)
+                aria-label={`${track.accessibleName ?? `${track.label} timeline, beats ${range.startBeatIndex + 1} through ${range.endBeatIndex}`}${
                     track.diagnostics
                         ? `, ${track.diagnostics.messages.length} ${track.diagnostics.messages.length === 1 ? "diagnostic" : "diagnostics"}`
                         : ""
-                }`}
-                aria-pressed={selected}
+                }${moveMenu && selected ? ", selected" : ""}`}
+                // A move says "selected" in its name (UI-14 round-2 review: "pressed" read as a
+                // toggle); other clips keep the pressed state
+                aria-pressed={moveMenu ? undefined : selected}
+                aria-describedby={description ? descriptionId : undefined}
                 data-linked={linked || undefined}
-                title={
-                    track.diagnostics
-                        ? [track.label, ...track.diagnostics.messages].join(
-                              "\n",
-                          )
-                        : track.label
-                }
+                title={[
+                    track.label,
+                    track.description,
+                    ...(track.diagnostics?.messages ?? []),
+                ]
+                    .filter(Boolean)
+                    .join("\n")}
                 onClick={(event) => {
                     const dragged = draggedRef.current;
                     draggedRef.current = false;
@@ -1317,6 +1363,20 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         event.stopPropagation();
                         if (moveMenu.disabledReason == null)
                             moveMenu.onDelete();
+                    } else if (
+                        event.key.startsWith("Arrow") ||
+                        (/^[wasdWASD]$/.test(event.key) &&
+                            !event.ctrlKey &&
+                            !event.metaKey &&
+                            !event.altKey)
+                    ) {
+                        // UI-14 review: arrows on a focused clip do nothing; they would nudge
+                        // the selected marchers unseen
+                        event.preventDefault();
+                        event.stopPropagation();
+                    } else if (event.key === " ") {
+                        // Space stays Play (the app's shortcut): it mustn't also click the clip
+                        spaceStaysPlay(event);
                     } else if (event.key === "Enter" || event.key === "F2") {
                         // Rename, as in a file list; Enter would otherwise reach the app's
                         // Enter shortcut (create a shape) too
@@ -1339,6 +1399,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         event.stopPropagation();
                     }
                 }}
+                onKeyUp={moveMenu ? spaceStaysPlay : undefined}
                 onPointerDown={(event) => {
                     draggedRef.current = false;
                     // Ctrl (Cmd on macOS) draws a range from here instead (the surface handles it)
@@ -1410,7 +1471,9 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     setPreviewOffset(0);
                 }}
                 className={clsx(
-                    "focus-visible:ring-accent absolute overflow-visible outline-hidden transition-[filter,box-shadow] duration-150 focus-visible:ring-2 enabled:hover:brightness-110",
+                    // Focus is an offset outline, so it reads apart from the selected clip's
+                    // flush ring (UI-14 review)
+                    "focus-visible:outline-accent absolute overflow-visible outline-hidden transition-[filter,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 enabled:hover:brightness-110",
                     canMove && "cursor-grab touch-none active:cursor-grabbing",
                     micro ? "rounded-full" : "rounded-4",
                 )}
@@ -1525,6 +1588,10 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                                 type="button"
                                 data-testid="timeline-clip-menu-button"
                                 data-timeline-interactive="true"
+                                data-timeline-own-keys="true"
+                                // Space stays Play (UI-14 round-2 review): it doesn't open the menu
+                                onKeyDown={spaceStaysPlay}
+                                onKeyUp={spaceStaysPlay}
                                 aria-label={`${track.label} options`}
                                 title="Move options"
                                 onPointerDown={(event) =>
@@ -1565,6 +1632,11 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         </DropdownMenu.Content>
                     </DropdownMenu.Portal>
                 </DropdownMenu.Root>
+            )}
+            {description && (
+                <span id={descriptionId} hidden>
+                    {description}
+                </span>
             )}
             {renaming && onRenameDone && (
                 <TimelineMoveNameField

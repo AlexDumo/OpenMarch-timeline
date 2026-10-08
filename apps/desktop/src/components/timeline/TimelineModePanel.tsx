@@ -42,10 +42,7 @@ import {
     peaksByBeat,
     useAudioEnvelopeStore,
 } from "@/timeline/timelineWaveform";
-import {
-    createTimelineBeatAxis,
-    moveLabels,
-} from "@/timeline/timelineViewModel";
+import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { timeAtBeat } from "@/timeline/timeMap";
 import {
     moveCommandBlocker,
@@ -53,6 +50,9 @@ import {
     useTimelineCommands,
 } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
+import { describeMoveClips } from "./moveClipText";
+import { useMoveNotesStore } from "@/stores/MoveNotesStore";
+import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
@@ -147,19 +147,26 @@ export default function TimelineModePanel() {
         enabled: useTimelineMode(),
     });
     // UI-10: a page box already stands for its page timeline, so only the others get a clip.
-    // UI-14: each is a move, labelled by its name or "Move 2", its place among the moves
+    // UI-14: each is a move, labelled by its name ("Move 2" since it was made), named for
+    // screen readers in counts, and saying why it is dashed where it is (`describeMoveClips`)
     const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
     const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
-    const offPage = useMemo(() => {
-        const labels = moveLabels(storedTimelines ?? [], pageBoxes);
-        return timelinesOffPages(timelines, pages).map((t) => {
-            const label =
-                t.linkId === undefined
-                    ? undefined
-                    : labels.get(Number(t.linkId));
-            return label === undefined ? t : { ...t, label };
-        });
-    }, [timelines, pages, storedTimelines, pageBoxes]);
+    const { clips: offPage, overridden } = useMemo(
+        () =>
+            describeMoveClips({
+                clips: timelinesOffPages(timelines, pages),
+                storedTimelines: storedTimelines ?? [],
+                pageBoxes,
+                pages,
+            }),
+        [timelines, pages, storedTimelines, pageBoxes],
+    );
+    // The Move card says it too
+    useEffect(() => {
+        useMoveNotesStore.getState().setOverridden(overridden);
+    }, [overridden]);
+    // UI-14 round-2 review: a "Select them" selection doesn't follow you to another move
+    useClearLeftoverMoveSelection();
     const commands = useTimelineCommands({
         database: db,
         timelines,

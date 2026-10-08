@@ -60,6 +60,7 @@ import { requestOpenNewShowDialog } from "@/utilities/openNewShowDialog";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
 import { AlertDialogAction, AlertDialogCancel, Button } from "@openmarch/ui";
 import { CircleNotchIcon } from "@phosphor-icons/react";
+import { isTimelineOwnKey } from "@/components/timeline/timelineHotkeys";
 
 /**
  * The interface for the registered actions. This exists so it is easy to see what actions are available.
@@ -1491,6 +1492,9 @@ function RegisteredActionsHandler() {
                 document.activeElement?.id !== "sentry-feedback" &&
                 document.activeElement?.id !== "__tolgee_dev_tools"
             ) {
+                // UI-14 round-2 review: Enter and the arrows on the timeline's move controls
+                // are theirs; Space still plays
+                if (isTimelineOwnKey(e, document.activeElement)) return;
                 // Check the key code and convert it to a key string
                 // This must happen rather than using e.key because e.key changes on MacOS with the option key
                 const code = e.code;

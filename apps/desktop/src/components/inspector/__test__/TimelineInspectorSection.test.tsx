@@ -5,6 +5,7 @@ import {
     fireEvent,
     render,
     screen,
+    waitFor,
     within,
 } from "@testing-library/react";
 import {
@@ -39,6 +40,8 @@ import {
     TimelineInspectorSection,
     type InspectorTranslate,
 } from "../TimelineInspectorSection";
+import { MovePathRadios, TimelineMoveCardSlot } from "../TimelineMoveCard";
+import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 
 /**
  * P8.5: the inspector's timeline section renders what `explain` says, for each span kind and for
@@ -275,6 +278,8 @@ const renderSection = () =>
     render(
         <QueryClientProvider client={new QueryClient()}>
             <TolgeeProvider tolgee={tolgee} fallback="Loading...">
+                {/* As the inspector lays them out: a move's card first (UI-14 round-2 review) */}
+                <TimelineMoveCardSlot />
                 <TimelineInspectorSection />
             </TolgeeProvider>
         </QueryClientProvider>,
@@ -394,8 +399,12 @@ describe("the Move card (UI-14)", () => {
             "3 marchers",
         );
         expect(within(card).getByText("Delete move")).toBeTruthy();
-        // It comes first in the section
+        // It comes first in the inspector, above the Timeline section
         expect(card.previousElementSibling).toBeNull();
+        expect(
+            card.compareDocumentPosition(screen.getByText("Timeline")) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
     });
 
     it("doesn't show for a page timeline, a window with no move, or home", () => {
@@ -491,18 +500,126 @@ describe("the Move card (UI-14)", () => {
         expect(useTimelineSelectionStore.getState().playheadBeat).toBe(12);
     });
 
-    it("Edit move's request opens the section and flashes the card", () => {
+    it("Edit move's request flashes the card and puts focus on its heading, not the menu button", () => {
         twoPages().selectRange(9, 12);
         renderSection();
-        // Closed by the user first
+        // A closed Timeline section doesn't hide the card, which sits above it
         fireEvent.click(screen.getByText("Timeline"));
-        expect(screen.queryByTestId("timeline-move-card")).toBeNull();
+        expect(screen.getByTestId("timeline-move-card")).toBeTruthy();
         act(() => {
             useMoveCardRevealStore.setState({ pending: 7 });
         });
         const card = screen.getByTestId("timeline-move-card");
         expect(card.dataset.flash).toBe("true");
+        expect(document.activeElement).toBe(
+            screen.getByTestId("timeline-move-card-heading"),
+        );
+        expect(
+            screen.getByTestId("timeline-move-card-heading").textContent,
+        ).toBe("Company front");
         // The request is taken once
         expect(useMoveCardRevealStore.getState().pending).toBeNull();
+    });
+});
+
+describe("the Move card after the round-2 review (UI-14)", () => {
+    it("Enter in the name field keeps focus there", () => {
+        twoPages().selectRange(9, 12);
+        renderSection();
+        const name = screen.getByTestId("timeline-move-card-name");
+        name.focus();
+        fireEvent.change(name, { target: { value: "Opener" } });
+        fireEvent.keyDown(name, { key: "Enter" });
+        expect(document.activeElement).toBe(name);
+    });
+
+    it("says why its clip is dashed", () => {
+        twoPages().selectRange(9, 12);
+        useMoveNotesStore
+            .getState()
+            .setOverridden(
+                new Map([[7, "Overridden by Move 4 on Page 2, counts 2–3"]]),
+            );
+        try {
+            renderSection();
+            expect(
+                screen.getByTestId("timeline-move-card-overridden").textContent,
+            ).toBe("Overridden by Move 4 on Page 2, counts 2–3");
+        } finally {
+            useMoveNotesStore.getState().setOverridden(new Map());
+        }
+    });
+
+    it("its Path is a radio group: the arrows move the choice and apply it, Space doesn't press", () => {
+        const onChange = vi.fn();
+        render(
+            <MovePathRadios
+                value="direct"
+                disabled={false}
+                label="Path"
+                optionLabel={(style) => style}
+                onChange={onChange}
+            />,
+        );
+        const [direct, arc] = screen.getAllByRole("radio");
+        expect(direct!.getAttribute("aria-checked")).toBe("true");
+        expect(direct!.tabIndex).toBe(0);
+        expect(arc!.tabIndex).toBe(-1);
+        direct!.focus();
+        expect(fireEvent.keyDown(direct!, { key: "ArrowRight" })).toBe(false);
+        expect(onChange).toHaveBeenLastCalledWith("arc");
+        expect(document.activeElement).toBe(arc);
+        fireEvent.keyDown(arc!, { key: "ArrowLeft" });
+        expect(onChange).toHaveBeenLastCalledWith("direct");
+        // Nothing is chosen while members differ; the first radio takes Tab
+        cleanup();
+        render(
+            <MovePathRadios
+                value={null}
+                disabled={false}
+                label="Path"
+                optionLabel={(style) => style}
+                onChange={onChange}
+            />,
+        );
+        const radios = screen.getAllByRole("radio");
+        expect(radios.map((r) => r.getAttribute("aria-checked"))).toEqual([
+            "false",
+            "false",
+        ]);
+        expect(radios[0]!.tabIndex).toBe(0);
+    });
+
+    it("Space on its buttons is cancelled, so it plays instead of pressing them", () => {
+        twoPages().selectRange(9, 12);
+        renderSection();
+        const del = screen.getByTestId("timeline-move-card-delete");
+        expect(fireEvent.keyDown(del, { key: " " })).toBe(false);
+        expect(fireEvent.keyUp(del, { key: " " })).toBe(false);
+        // The name field keeps its Space
+        expect(
+            fireEvent.keyDown(screen.getByTestId("timeline-move-card-name"), {
+                key: " ",
+            }),
+        ).toBe(true);
+    });
+});
+
+describe("the Move card's name field, Esc (UI-14 round-2 review)", () => {
+    it("puts the stored name back and focus on the card's heading, not the page", async () => {
+        twoPages().selectRange(9, 12);
+        renderSection();
+        const name = screen.getByTestId(
+            "timeline-move-card-name",
+        ) as HTMLInputElement;
+        name.focus();
+        fireEvent.change(name, { target: { value: "XX" } });
+        fireEvent.keyDown(name, { key: "Escape" });
+        await waitFor(() =>
+            expect(document.activeElement).toBe(
+                screen.getByTestId("timeline-move-card-heading"),
+            ),
+        );
+        expect(name.value).toBe("Company front");
     });
 });

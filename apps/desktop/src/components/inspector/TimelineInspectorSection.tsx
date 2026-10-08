@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { useTranslate } from "@tolgee/react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -28,9 +28,8 @@ import type {
 } from "@/timeline/timelineTransitionEditor";
 import type { AssignmentEditTarget } from "@/timeline/timelineAssignmentEditor";
 import { shapeFrameFor } from "@/timeline/timelineShapeEditor";
-import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { InspectorCollapsible } from "./InspectorCollapsible";
-import { moveCardTimeline, TimelineMoveCard } from "./TimelineMoveCard";
+import { moveCardTimeline } from "./TimelineMoveCard";
 import { TimelineAssignmentsEditor } from "./TimelineAssignmentsEditor";
 import { TimelineShapesEditor } from "./TimelineShapesEditor";
 import { TimelineTransitionEditor } from "./TimelineTransitionEditor";
@@ -394,14 +393,7 @@ function TimelineInspectorContent() {
         ? Math.min(Math.max(playheadBeat, move.start), move.end - 1)
         : playheadBeat;
     const [detailsOpen, setDetailsOpen] = useState(false);
-    // **Edit move** opens the section, so the Move card can come into view
     const [open, setOpen] = useState(true);
-    const revealing = useMoveCardRevealStore(
-        (s) => move !== null && s.pending === move.id,
-    );
-    useEffect(() => {
-        if (revealing) setOpen(true);
-    }, [revealing]);
     const {
         inspections,
         omitted,
@@ -466,13 +458,15 @@ function TimelineInspectorContent() {
             translatableTitle={{ keyName: "inspector.timeline.title" }}
             className="mt-12 flex flex-col gap-16"
         >
-            {move && <TimelineMoveCard key={move.id} timeline={move} t={t} />}
             {move ? (
                 inspections.length > 0 && (
                     <div className="flex flex-col gap-16">
                         <button
                             type="button"
                             data-testid="timeline-move-details-toggle"
+                            // A move's control (UI-14 round-2 review): Enter opens it, rather than
+                            // reaching the app's Enter shortcut (create a shape)
+                            data-timeline-own-keys="true"
                             aria-expanded={detailsOpen}
                             onClick={() => setDetailsOpen((o) => !o)}
                             className="text-body focus-visible:text-accent flex items-center gap-6 text-left font-medium outline-hidden"

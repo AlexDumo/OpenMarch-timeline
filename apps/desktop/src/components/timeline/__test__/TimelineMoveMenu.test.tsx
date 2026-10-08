@@ -8,7 +8,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
-import { Timeline, type TimelineInput } from "../Timeline";
+import {
+    Timeline,
+    TimelineWaveformProvider,
+    type TimelineInput,
+} from "../Timeline";
 import type { TimelineSelection } from "../TimelineViewModel";
 import type { TimelineMoveCommands } from "../TimelineRangeMenu";
 
@@ -441,5 +445,144 @@ describe("short clips under the flags and the playhead (UI-14)", () => {
             expect(parseFloat(handle.style.height)).toBeLessThanOrEqual(
                 clipTop,
             );
+    });
+});
+
+describe("the round-2 review's keys and focus (UI-14)", () => {
+    const reached = windowKeys();
+
+    it("Space on a focused clip or its ⋯ button plays: it reaches the app, and presses nothing", async () => {
+        const moves = show({ selection: SELECTED });
+        for (const target of [
+            clipButton(),
+            screen.getByTestId("timeline-clip-menu-button"),
+        ]) {
+            target.focus();
+            const down = fireEvent.keyDown(target, { key: " " });
+            const up = fireEvent.keyUp(target, { key: " " });
+            // Cancelled: the button's own Space click doesn't happen
+            expect(down).toBe(false);
+            expect(up).toBe(false);
+        }
+        expect(reached).toEqual([" ", " "]);
+        expect(screen.queryAllByRole("menuitem")).toEqual([]);
+        expect(moves.onRename).not.toHaveBeenCalled();
+    });
+
+    it("the arrows and WASD on a focused clip do nothing, and don't reach the app", () => {
+        show();
+        for (const key of ["ArrowLeft", "ArrowUp", "d", "W"])
+            expect(fireEvent.keyDown(clipButton(), { key })).toBe(false);
+        expect(reached).toEqual([]);
+    });
+
+    it("after a rename, saved or cancelled, focus is back on the clip", async () => {
+        show();
+        for (const finish of ["Enter", "Escape"]) {
+            fireEvent.keyDown(clipButton(), { key: "F2" });
+            const field = screen.getByTestId("timeline-move-name-field");
+            await waitFor(() => expect(document.activeElement).toBe(field));
+            fireEvent.change(field, { target: { value: "Opener" } });
+            fireEvent.keyDown(field, { key: finish });
+            await waitFor(() =>
+                expect(document.activeElement).toBe(clipButton()),
+            );
+        }
+    });
+
+    it("a name being typed is saved when its field goes away before it blurs", async () => {
+        const moves = show();
+        fireEvent.keyDown(clipButton(), { key: "F2" });
+        const field = screen.getByTestId("timeline-move-name-field");
+        fireEvent.change(field, { target: { value: "Opener" } });
+        // A click on the lane selects another window first: the timeline goes, field and all
+        cleanup();
+        expect(moves.onRename).toHaveBeenCalledWith(7, "Opener");
+        expect(moves.onRename).toHaveBeenCalledTimes(1);
+    });
+
+    it("an untouched field that goes away saves nothing", async () => {
+        const moves = show();
+        fireEvent.keyDown(clipButton(), { key: "F2" });
+        cleanup();
+        expect(moves.onRename).not.toHaveBeenCalled();
+    });
+});
+
+describe("a move clip's words (UI-14 round-2 review)", () => {
+    const named: TimelineInput = {
+        ...clip,
+        accessibleName: "Company front, move, Page 1, counts 3–6",
+        description: "Overridden by Move 4 on Page 1, counts 5–6",
+    };
+    const render1 = (selection: TimelineSelection) =>
+        render(
+            <Timeline
+                mode="expanded"
+                beats={BEATS}
+                pages={PAGES}
+                measures={[]}
+                timelines={[named]}
+                showTransport={false}
+                pixelsPerBeat={16}
+                selection={selection}
+                onSelectionChange={vi.fn()}
+                moveCommands={commands()}
+            />,
+        );
+
+    it("is named as a move in counts, says selected rather than pressed, and hints its keys", () => {
+        render1(SELECTED);
+        const button = screen.getByTestId("timeline-clip");
+        expect(button.getAttribute("aria-label")).toBe(
+            "Company front, move, Page 1, counts 3–6, selected",
+        );
+        expect(button.hasAttribute("aria-pressed")).toBe(false);
+        expect(
+            document.getElementById(button.getAttribute("aria-describedby")!)
+                ?.textContent,
+        ).toBe(
+            "Overridden by Move 4 on Page 1, counts 5–6. Enter to rename, Shift+F10 for options, Delete to delete",
+        );
+        expect(button.title).toContain("Overridden by Move 4");
+        cleanup();
+        render1(null);
+        expect(
+            screen.getByTestId("timeline-clip").getAttribute("aria-label"),
+        ).toBe("Company front, move, Page 1, counts 3–6");
+    });
+});
+
+describe("the flags over the waveform row (UI-14 round-2 review)", () => {
+    it("take the pointer only in the ruler and measure rows, so a Ctrl+drag on the waveform draws", () => {
+        render(
+            <TimelineWaveformProvider
+                waveform={{ peaksByBeat: BEATS.map(() => [0.4, 0.6]) }}
+            >
+                <Timeline
+                    mode="expanded"
+                    beats={BEATS}
+                    pages={PAGES}
+                    measures={[]}
+                    timelines={[clip]}
+                    showTransport={false}
+                    pixelsPerBeat={16}
+                    selection={SELECTED}
+                    onSelectionChange={vi.fn()}
+                    playback={{
+                        positionBeat: 7,
+                        isPlaying: false,
+                        onSeek: vi.fn(),
+                    }}
+                    moveCommands={commands()}
+                />
+            </TimelineWaveformProvider>,
+        );
+        // The ruler (28px), the measure row (20px) and a 2px gap; the waveform row starts there
+        for (const handle of [
+            screen.getByRole("button", { name: /^Start flag/ }),
+            screen.getByTestId("timeline-playhead"),
+        ])
+            expect(parseFloat(handle.style.height)).toBe(50);
     });
 });

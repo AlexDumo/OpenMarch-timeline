@@ -16,6 +16,7 @@ import { moveLabel, moveLabels } from "@/timeline/timelineViewModel";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { timelineExists } from "@/db-functions/timelines";
 import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
+import { useMoveMemberSelectionStore } from "@/stores/MoveMemberSelectionStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import type { TimelineInput } from "./Timeline";
 import type { TimelineAddMarchersMenu } from "./TimelineRangeMenu";
@@ -136,6 +137,25 @@ export function moveCommandBlocker(isPlaying: boolean): string | null {
     return isPlaying ? "Pause to edit or delete a move." : null;
 }
 
+/**
+ * Before a move's clip goes (UI-14 review): focus moves to the next clip, else the previous one,
+ * else the timeline itself, never to the page (where Space and the arrows would act unseen).
+ */
+export function focusAfterMoveDelete(timelineId: number): void {
+    const clips = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-testid="timeline-clip"]'),
+    );
+    const index = clips.findIndex(
+        (clip) => clip.dataset.moveId === String(timelineId),
+    );
+    const next =
+        (index >= 0 ? (clips[index + 1] ?? clips[index - 1]) : undefined) ??
+        document.querySelector<HTMLElement>(
+            '[data-testid="timeline-viewport"]',
+        );
+    next?.focus({ preventScroll: true });
+}
+
 /** Moves being deleted now, across every caller, so a repeated Delete doesn't delete twice */
 const deletingMoves = new Set<number>();
 
@@ -171,10 +191,12 @@ export function toastMoveDeleted(label: string, undo: () => void): void {
  *   stale button), is ignored without an error.
  * - **Rename** stores the name as `renameTimeline` normalizes it; an unchanged name writes nothing,
  *   and a move that is gone (its field left open while it was deleted) is skipped.
- * - **Select its marchers** selects the marchers with an assignment in it on the canvas.
+ * - **Select its marchers** selects the marchers with an assignment in it on the canvas, and
+ *   records them, so going to another move clears them (`useClearLeftoverMoveSelection`).
  * - **Edit move** isolates the move (09-isolation.md), so its paths show and canvas drags edit
- *   where it ends; on a move already isolated it stays so. It selects the move's marchers and
- *   brings the inspector's Move card into view.
+ *   where it ends; on a move already isolated it stays so. It selects nobody (one Esc leaves),
+ *   and brings the inspector's Move card into view, with focus on it.
+ * - Deleting moves focus to the next clip, else the previous one, else the timeline.
  */
 export function useMoveCommands(database: DbConnection) {
     const { mutate: performHistoryAction } = usePerformHistoryAction();
@@ -232,7 +254,12 @@ export function createMoveCommands({
     };
     const selectMarchers = async (timelineId: number) => {
         const members = stored(timelineId)?.marcherIds;
-        if (members) await selectMembers(members);
+        if (!members) return;
+        await selectMembers(members);
+        // Going to another move clears them while they are still the selection
+        useMoveMemberSelectionStore
+            .getState()
+            .record({ timelineId, marcherIds: new Set(members) });
     };
     return {
         /** Resolves once the delete has settled (tests wait on it) */
@@ -240,6 +267,7 @@ export function createMoveCommands({
             if (deletingMoves.has(timelineId) || !stored(timelineId)) return;
             deletingMoves.add(timelineId);
             const label = labelOf(timelineId);
+            focusAfterMoveDelete(timelineId);
             try {
                 await deleteTimeline({ db: database, timelineId });
                 toastMoveDeleted(label, undo);
@@ -263,12 +291,10 @@ export function createMoveCommands({
         selectMarchers,
         editMove: (timelineId: number) => {
             if (!stored(timelineId)) return;
+            // UI-14 review: isolation shows who is in it, so nobody is selected (one Esc
+            // leaves); **Select them** on the card selects them
             useTimelineSelectionStore.getState().isolate(timelineId);
-            // The card comes into view once the selected marchers' editors are in the inspector
-            // above it, so they don't push it back out
-            void selectMarchers(timelineId).then(() =>
-                useMoveCardRevealStore.getState().reveal(timelineId),
-            );
+            useMoveCardRevealStore.getState().reveal(timelineId);
         },
     };
 }

@@ -853,8 +853,9 @@ const TimelineSurface = memo(function TimelineSurface({
                         onSeek={props.onSeek}
                         isPlaying={props.isPlaying}
                         scrubLine={pointer.scrubLine}
-                        // UI-14: over the clip rows the playhead is drawn, not grabbed
-                        hitHeight={trackTop}
+                        // UI-14: below the ruler and measure rows (over the waveform and the clip
+                        // rows) the playhead is drawn, not grabbed
+                        hitHeight={audioTop}
                     />
                     {props.onAddPageFlag && !props.isPlaying && (
                         <button
@@ -902,8 +903,10 @@ const TimelineSurface = memo(function TimelineSurface({
                             beatCount={model.beatCount}
                             pixelsPerBeat={pixelsPerBeat}
                             height={timelineHeight}
-                            // UI-14: over the clip rows the flags are drawn, not grabbed
-                            hitHeight={trackTop}
+                            // UI-14: below the ruler and measure rows the flags are drawn, not
+                            // grabbed, so a Ctrl+drag or a short clip there isn't taken by a flag
+                            // (round-2 review: the waveform row took it)
+                            hitHeight={audioTop}
                             snapBeats={snapBeats}
                             onCommit={commitSelection}
                             onInteractionChange={selectionInteraction.set}

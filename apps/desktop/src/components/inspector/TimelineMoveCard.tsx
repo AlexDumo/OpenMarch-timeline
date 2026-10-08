@@ -5,11 +5,15 @@ import {
     UsersThreeIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { Button, Input, ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
+import { Button, Input } from "@openmarch/ui";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { db } from "@/global/database/db";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
-import { MOVE_NAME_MAX_LENGTH, moveLabels } from "@/timeline/timelineViewModel";
+import {
+    autoMoveNumber,
+    MOVE_NAME_MAX_LENGTH,
+    moveLabels,
+} from "@/timeline/timelineViewModel";
 import { useTimelineViewVersions } from "@/timeline/useTimelineViewVersions";
 import { DEFAULT_BULGE, clampBulge } from "@/timeline/timelineTransitionEditor";
 import {
@@ -21,13 +25,21 @@ import {
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { isolatedTimelineName } from "@/components/timeline/TimelineIsolationBar";
 import { useMoveCommands } from "@/components/timeline/useTimelineCommands";
+import { spaceStaysPlay } from "@/components/timeline/timelineHotkeys";
 import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
+import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import {
+    isolatedTimeline,
+    selectedStoredTimeline,
     useTimelineSelectionStore,
     type PageBox,
     type StoredTimelineMembership,
 } from "@/stores/TimelineSelectionStore";
-import type { InspectorTranslate } from "./TimelineInspectorSection";
+import {
+    useInspectorTranslate,
+    type InspectorTranslate,
+} from "./TimelineInspectorSection";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { BulgeEditor, Field, Help } from "./TimelineTransitionEditor";
 
 /**
@@ -72,6 +84,81 @@ function useMovePath(timelineId: number): MovePath | null {
     return path;
 }
 
+/** The app's focus ring, for the card's controls (UI-14 review) */
+const FOCUS_RING = "focus-visible:ring-accent focus-visible:ring-2";
+
+/**
+ * The Move card's Path, a radio group (UI-14 review): the arrows move the choice and apply it, as
+ * radios do; Enter or a click applies the focused one. Nothing is chosen while members differ.
+ */
+export function MovePathRadios({
+    value,
+    disabled,
+    label,
+    optionLabel,
+    onChange,
+}: {
+    value: MovePathStyle | null;
+    disabled: boolean;
+    label: string;
+    optionLabel: (style: MovePathStyle) => string;
+    onChange: (style: MovePathStyle) => void;
+}) {
+    const refs = useRef<(HTMLButtonElement | null)[]>([]);
+    const focusable = value === null ? 0 : MOVE_PATH_STYLES.indexOf(value);
+    return (
+        <div
+            role="radiogroup"
+            aria-label={label}
+            data-testid="timeline-move-card-path"
+            className="rounded-6 border-stroke flex border p-2"
+        >
+            {MOVE_PATH_STYLES.map((style, index) => (
+                <button
+                    key={style}
+                    ref={(el) => {
+                        refs.current[index] = el;
+                    }}
+                    type="button"
+                    role="radio"
+                    aria-checked={value === style}
+                    tabIndex={index === focusable ? 0 : -1}
+                    disabled={disabled}
+                    onClick={() => {
+                        if (style !== value) onChange(style);
+                    }}
+                    onKeyDown={(event) => {
+                        const step =
+                            event.key === "ArrowRight" ||
+                            event.key === "ArrowDown"
+                                ? 1
+                                : event.key === "ArrowLeft" ||
+                                    event.key === "ArrowUp"
+                                  ? -1
+                                  : 0;
+                        if (step === 0) return;
+                        event.preventDefault();
+                        const next =
+                            (index + step + MOVE_PATH_STYLES.length) %
+                            MOVE_PATH_STYLES.length;
+                        refs.current[next]?.focus();
+                        onChange(MOVE_PATH_STYLES[next]!);
+                    }}
+                    className={clsx(
+                        "text-sub rounded-4 px-8 py-4 outline-hidden disabled:opacity-50",
+                        FOCUS_RING,
+                        value === style
+                            ? "bg-accent text-text-invert"
+                            : "hover:bg-fg-2",
+                    )}
+                >
+                    {optionLabel(style)}
+                </button>
+            ))}
+        </div>
+    );
+}
+
 /** How long **Edit move**'s highlight stays on the card */
 const REVEAL_FLASH_MS = 1200;
 
@@ -100,32 +187,68 @@ export function TimelineMoveCard({
     const [name, setName] = useState(stored);
     // The stored name changed (a rename here or on the clip, an undo): show it
     useEffect(() => setName(stored), [stored, timeline.id]);
-    // "Move 2": the label it has while unnamed
+    // Its label ("Move 2"), shown while the field is empty
     const defaultLabel = useTimelineSelectionStore(
         (s) =>
-            moveLabels(
-                (s.storedTimelines ?? []).map((t) => ({ ...t, name: null })),
-                s.pageBoxes,
-            ).get(timeline.id) ?? "Move",
+            moveLabels(s.storedTimelines ?? [], s.pageBoxes).get(timeline.id) ??
+            "Move",
     );
+    // Why the clip is dashed, when it is (UI-14 review)
+    const overridden = useMoveNotesStore((s) => s.overridden.get(timeline.id));
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     const path = useMovePath(timeline.id);
-    const [pathPending, setPathPending] = useState(false);
+    // One path edit at a time; a choice made meanwhile (the arrows pressed again) goes next. The
+    // controls stay enabled while one is written, so a focused radio keeps focus (UI-14 round-2
+    // review: disabling it dropped focus to the page, where the next key went to the canvas)
+    const pathWriting = useRef(false);
+    const nextPath = useRef<{ style: MovePathStyle; bulge?: number } | null>(
+        null,
+    );
     const editPath = (style: MovePathStyle, bulge?: number) => {
-        setPathPending(true);
+        if (pathWriting.current) {
+            nextPath.current = { style, bulge };
+            return;
+        }
+        pathWriting.current = true;
         setMovePath({ db, timelineId: timeline.id, style, bulge })
             .catch((error: unknown) => toastTimelineError(error))
-            .finally(() => setPathPending(false));
+            .finally(() => {
+                pathWriting.current = false;
+                const next = nextPath.current;
+                nextPath.current = null;
+                if (next) editPath(next.style, next.bulge);
+            });
     };
     const commit = () => {
-        if (name.trim() === stored.trim()) {
+        // Unchanged, or cleared while it has its automatic "Move N" (which it keeps): nothing to
+        // write, and the field shows the stored name again
+        if (
+            name.trim() === stored.trim() ||
+            (name.trim() === "" && autoMoveNumber(stored) !== null)
+        ) {
             setName(stored);
             return;
         }
         void moves.renameMove(timeline.id, name);
     };
+    // UI-14 review: a field that goes away before it blurs (a click on the timeline selects
+    // another window first) still saves what was typed, unless Esc put the name back
+    const pendingName = useRef({ name, stored, rename: moves.renameMove });
+    pendingName.current = { name, stored, rename: moves.renameMove };
+    useEffect(
+        () => () => {
+            const { name: typed, stored: was, rename } = pendingName.current;
+            if (
+                typed.trim() !== was.trim() &&
+                !(typed.trim() === "" && autoMoveNumber(was) !== null)
+            )
+                void rename(timeline.id, typed);
+        },
+        [timeline.id],
+    );
 
     const ref = useRef<HTMLElement>(null);
+    const headingRef = useRef<HTMLHeadingElement>(null);
     const [flash, setFlash] = useState(false);
     // Each **Edit move** request for this card, taken once
     const [reveals, setReveals] = useState(0);
@@ -138,7 +261,10 @@ export function TimelineMoveCard({
     useEffect(() => {
         if (reveals === 0) return;
         setFlash(true);
-        // Once the section has opened and the selection's editors have laid out above it
+        // UI-14 review: focus goes to the card's heading, off the ⋯ button, so Space plays
+        // instead of opening the menu again, and Tab goes on to the card's controls
+        headingRef.current?.focus({ preventScroll: true });
+        // Once the inspector has laid out
         const scroll = setTimeout(
             () =>
                 ref.current?.scrollIntoView?.({
@@ -160,15 +286,27 @@ export function TimelineMoveCard({
             ref={ref}
             data-testid="timeline-move-card"
             data-flash={flash || undefined}
+            // UI-14 review: Enter and the arrows work the card's controls, not the canvas
+            data-timeline-own-keys="true"
             aria-label={t("inspector.timeline.move.title")}
+            onKeyDown={spaceStaysPlay}
+            onKeyUp={spaceStaysPlay}
             className={clsx(
                 "rounded-6 border-stroke flex flex-col gap-12 border p-12 transition-shadow duration-300",
                 flash && "ring-accent ring-2",
             )}
         >
-            <h5 className="text-body font-medium">
-                {t("inspector.timeline.move.title")}
+            <h5
+                ref={headingRef}
+                tabIndex={-1}
+                data-testid="timeline-move-card-heading"
+                className="text-body focus-visible:ring-accent rounded-4 font-medium outline-hidden focus-visible:ring-2"
+            >
+                {defaultLabel}
             </h5>
+            {overridden && (
+                <Help testId="timeline-move-card-overridden">{overridden}</Help>
+            )}
             <Field label={t("inspector.timeline.move.name")}>
                 <Input
                     compact
@@ -182,16 +320,21 @@ export function TimelineMoveCard({
                     onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                         // Its keys are its own: blurring first would hand Enter to the app's
                         // Enter shortcut (create a shape)
+                        // UI-14 review: Enter saves and stays in the field
                         if (e.key === "Enter") {
                             e.preventDefault();
                             e.stopPropagation();
-                            e.currentTarget.blur();
+                            commit();
                         } else if (e.key === "Escape") {
-                            // Back to the stored name, then leave without saving
+                            // Back to the stored name, then leave without saving, to the
+                            // card's heading (UI-14 round-2 review: focus stays in the card)
                             e.stopPropagation();
                             setName(stored);
-                            const input = e.currentTarget;
-                            requestAnimationFrame(() => input.blur());
+                            requestAnimationFrame(() =>
+                                headingRef.current?.focus({
+                                    preventScroll: true,
+                                }),
+                            );
                         }
                     }}
                 />
@@ -210,30 +353,19 @@ export function TimelineMoveCard({
             </Field>
             <Field label={t("inspector.timeline.move.path")}>
                 <div className="flex items-center gap-8">
-                    <ToggleGroup
-                        type="single"
-                        data-testid="timeline-move-card-path"
-                        aria-label={t("inspector.timeline.move.path")}
+                    <MovePathRadios
                         value={
                             path?.style === "direct" || path?.style === "arc"
                                 ? path.style
-                                : ""
+                                : null
                         }
-                        disabled={pathPending || !path?.transitions}
-                        onValueChange={(value: string) => {
-                            if (value) editPath(value as MovePathStyle);
-                        }}
-                    >
-                        {MOVE_PATH_STYLES.map((style) => (
-                            <ToggleGroupItem
-                                key={style}
-                                value={style}
-                                className="text-sub px-8"
-                            >
-                                {t(`inspector.timeline.pathStyle.${style}`)}
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
+                        disabled={!path?.transitions}
+                        label={t("inspector.timeline.move.path")}
+                        optionLabel={(style) =>
+                            t(`inspector.timeline.pathStyle.${style}`)
+                        }
+                        onChange={(style) => editPath(style)}
+                    />
                     {path !== null &&
                         path.style !== "direct" &&
                         path.style !== "arc" &&
@@ -250,7 +382,7 @@ export function TimelineMoveCard({
             {path?.style === "arc" && (
                 <BulgeEditor
                     bulge={path.bulge ?? DEFAULT_BULGE}
-                    disabled={pathPending}
+                    disabled={!path?.transitions}
                     t={t}
                     onCommit={(value) => {
                         const bulge = clampBulge(value);
@@ -266,7 +398,7 @@ export function TimelineMoveCard({
                     <Button
                         size="compact"
                         variant="secondary"
-                        className="w-fit"
+                        className={clsx("w-fit", FOCUS_RING)}
                         data-testid="timeline-move-card-go-to-end"
                         disabled={isPlaying}
                         onClick={() =>
@@ -287,6 +419,8 @@ export function TimelineMoveCard({
                 <Button
                     size="compact"
                     variant="secondary"
+                    className={FOCUS_RING}
+                    data-testid="timeline-move-card-select"
                     disabled={count === 0}
                     onClick={() => void moves.selectMarchers(timeline.id)}
                 >
@@ -298,7 +432,7 @@ export function TimelineMoveCard({
                 <Button
                     size="compact"
                     variant="secondary"
-                    className="text-red w-fit"
+                    className={clsx("text-red w-fit", FOCUS_RING)}
                     data-testid="timeline-move-card-delete"
                     disabled={isPlaying}
                     onClick={() => void moves.deleteMove(timeline.id)}
@@ -312,4 +446,27 @@ export function TimelineMoveCard({
             </div>
         </section>
     );
+}
+
+/**
+ * The Move card's place in the inspector: first, above the page and marcher editors, whenever the
+ * window is a move (UI-14 review), isolated or not. Only in timeline mode.
+ */
+export function TimelineMoveCardSlot() {
+    const timelineMode = useTimelineMode();
+    if (!timelineMode) return null;
+    return <MoveCardSlotContent />;
+}
+
+function MoveCardSlotContent() {
+    const t = useInspectorTranslate();
+    const move = useTimelineSelectionStore((s) =>
+        moveCardTimeline(
+            isolatedTimeline(s) ?? selectedStoredTimeline(s),
+            s.pageBoxes,
+        ),
+    );
+    return move ? (
+        <TimelineMoveCard key={move.id} timeline={move} t={t} />
+    ) : null;
 }
