@@ -16,5 +16,5 @@ The shader patches were checked against three r186 (the app's version) with om-p
 the instanced renderer differs from plain `SkinnedMesh` skinning on at most 0.003% of pixels for unblended
 clips, the same as on r160.
 
-TODO(licence): om-pose has no licence yet. These files and its assets must not ship, and no pull request
+TODO(license): om-pose has no license yet. These files and its assets must not ship, and no pull request
 may go to OpenMarch/OpenMarch, until it has one compatible with AGPL-3.0.

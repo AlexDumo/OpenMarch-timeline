@@ -35,6 +35,12 @@ import {
 } from "three";
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
+import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
+import { marcherHeading } from "@/view3d/core/marchers/facing";
+import {
+    defaultPerformerBody,
+    sectionUniform,
+} from "@/view3d/core/marchers/looks";
 import { usePerformerTimelines } from "@/view3d/positions";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import type { View3dSelection } from "@/view3d/sync/protocol";
@@ -51,6 +57,12 @@ import {
     writePerformerPositions,
     writeRingMatrices,
 } from "./performerData";
+import type { MarcherSlotLook } from "./marchers/marcherBodies";
+import {
+    clipName,
+    useMarcherAssets,
+    useMarcherBodies,
+} from "./marchers/useMarcherBodies";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -88,6 +100,54 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         [marcherIdsKey, timelines],
     );
     const count = slots.ids.length;
+
+    // om-pose marchers (ADR 0002 D-7); the cylinders stand in until they load.
+    const { data: sectionAppearances } = useQuery(
+        allSectionAppearancesQueryOptions(),
+    );
+    const marcherLooks = useMemo<MarcherSlotLook[] | null>(() => {
+        if (!marchers || !sectionAppearances) return null;
+        const sectionById = new Map(marchers.map((m) => [m.id, m.section]));
+        const fillBySection = new Map(
+            sectionAppearances.map((a) => [a.section, a.fill_color]),
+        );
+        return slots.ids.map((id) => {
+            const section = sectionById.get(id) ?? "";
+            return {
+                body: defaultPerformerBody(id),
+                uniform: sectionUniform(section, fillBySection.get(section)),
+            };
+        });
+    }, [marchers, sectionAppearances, slots]);
+    const heightClasses = useMemo(
+        () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
+        [marcherLooks],
+    );
+    const marcherAssets = useMarcherAssets(heightClasses);
+    const clipNames = useMemo(
+        () => heightClasses.map((h) => clipName("attention", h)),
+        [heightClasses],
+    );
+    const marcherBodies = useMarcherBodies(
+        marcherAssets,
+        clipNames,
+        marcherLooks,
+        quality,
+    );
+    useEffect(() => {
+        if (!marcherBodies || !marcherLooks) return;
+        marcherLooks.forEach((look, i) => {
+            const row =
+                marcherBodies.bake.rows[
+                    clipName("attention", look.body.heightClass)
+                ];
+            marcherBodies.setClip(i, { row });
+        });
+    }, [marcherBodies, marcherLooks]);
+    const headings = useMemo(
+        () => new Float32Array(count).fill(marcherHeading()),
+        [count],
+    );
 
     // Shared geometry and materials, for the component's lifetime.
     const assets = useMemo(() => {
@@ -189,7 +249,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const dirtyRef = useRef(true);
     useEffect(() => {
         dirtyRef.current = true;
-    }, [meshes, slots, fieldProperties, appearances]);
+    }, [meshes, slots, fieldProperties, appearances, marcherBodies]);
 
     // Colors and visibility, only when the looks change.
     useEffect(() => {
@@ -246,13 +306,17 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 xz,
                 placed,
             );
-            writePerformerMatrices(
-                count,
-                xz,
-                placed,
-                bodies.instanceMatrix.array as Float32Array,
-            );
-            bodies.instanceMatrix.needsUpdate = true;
+            if (marcherBodies) {
+                marcherBodies.writeFrame(xz, headings, placed, 0);
+            } else {
+                writePerformerMatrices(
+                    count,
+                    xz,
+                    placed,
+                    bodies.instanceMatrix.array as Float32Array,
+                );
+                bodies.instanceMatrix.needsUpdate = true;
+            }
         }
         const ringCount = writeRingMatrices(
             slots,
@@ -272,7 +336,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     if (!meshes) return null;
     return (
         <>
-            <primitive object={meshes.bodies} />
+            {marcherBodies ? (
+                <primitive object={marcherBodies.group} />
+            ) : (
+                <primitive object={meshes.bodies} />
+            )}
             <primitive object={meshes.rings} />
         </>
     );

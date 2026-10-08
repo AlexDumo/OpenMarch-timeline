@@ -197,6 +197,7 @@ ignorePaths:
   - node_modules/**
   - docs/3d/ref/**
   - "**/view3d/vendor/**"
+  - "**/view3d/assets/om-pose/**"
   - "**/node_modules/**"
   - "**/dist/**"
   - dist/**

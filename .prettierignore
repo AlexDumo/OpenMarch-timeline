@@ -129,3 +129,5 @@ docs/3d/ref/
 
 # Vendored om-pose modules (apps/desktop/src/view3d/vendor/om-pose/README.md)
 **/view3d/vendor/
+# om-pose assets, byte-identical to their SOURCE.json hashes
+**/view3d/assets/om-pose/
