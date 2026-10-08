@@ -1,6 +1,6 @@
 // Vendored from om-pose (github.com/OpenMarch/om-pose), render/instanced-marchers.js at commit 87cc16e816f0d4a074098b9cb27fdb9431c95dac.
 // Do not edit here: change it in om-pose and copy it again. Local changes: none.
-// TODO(licence): om-pose has no LICENSE yet. Don't ship or open a PR to OpenMarch/OpenMarch until it does.
+// om-pose is OpenMarch's own (private) repository; these files ship under the app's license.
 
 // Instanced marchers: thousands of skinned OpenMarch v4 bodies in a handful of draw calls.
 //

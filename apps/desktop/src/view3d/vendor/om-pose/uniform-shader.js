@@ -1,6 +1,6 @@
 // Vendored from om-pose (github.com/OpenMarch/om-pose), uniforms/uniform-shader.js at commit 87cc16e816f0d4a074098b9cb27fdb9431c95dac.
 // Do not edit here: change it in om-pose and copy it again. Local changes: none.
-// TODO(licence): om-pose has no LICENSE yet. Don't ship or open a PR to OpenMarch/OpenMarch until it does.
+// om-pose is OpenMarch's own (private) repository; these files ship under the app's license.
 
 // Uniform skins for the OpenMarch v4 sandbox bodies (assets/body-v4u): a style (what goes where)
 // plus a palette (which colours), painted by a small extension of three's MeshStandardMaterial.

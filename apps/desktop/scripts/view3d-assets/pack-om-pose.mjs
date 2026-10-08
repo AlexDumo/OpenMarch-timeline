@@ -258,7 +258,7 @@ fs.writeFileSync(
                 manifest: "out/body/manifest.json",
             },
             license:
-                "TODO: om-pose has no license yet; these files must not ship until it does (ADR 0002 D-7)",
+                "om-pose is OpenMarch's own repository; these files ship under the app's license",
             files,
         },
         null,

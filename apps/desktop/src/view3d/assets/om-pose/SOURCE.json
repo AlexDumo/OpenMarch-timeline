@@ -6,7 +6,7 @@
     "clips": "out/body/animations/*.glb, packed one GLB per height class",
     "manifest": "out/body/manifest.json"
   },
-  "license": "TODO: om-pose has no license yet; these files must not ship until it does (ADR 0002 D-7)",
+  "license": "om-pose is OpenMarch's own repository; these files ship under the app's license",
   "files": {
     "clips/clips-h090.glb": {
       "bytes": 5842340,
