@@ -4,7 +4,7 @@ import {
     fieldPropertiesQueryOptions,
     swapMarchersMutationOptions,
     useUpdateSelectedMarchersOnSelectedPage,
-    moveMarchersOnPageMutationOptions,
+    moveMarchersToNeighborPageMutationOptions,
     moveMarchersInTargetMutationOptions,
 } from "@/hooks/queries";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
@@ -604,9 +604,9 @@ function RegisteredActionsHandler() {
     const { mutate: updateMarcherPages } = useMutation(
         updateMarcherPagesMutationOptions(queryClient),
     );
-    // "Set marchers to the previous or next page" still writes by page (P7.6) until P8.12
-    const { mutateAsync: moveMarchersOnPageAsync } = useMutation(
-        moveMarchersOnPageMutationOptions(),
+    // "Set marchers to the previous or next page" writes over the selected page's box (P7.6)
+    const { mutateAsync: moveMarchersToNeighborPageAsync } = useMutation(
+        moveMarchersToNeighborPageMutationOptions(),
     );
     const { mutate: moveMarchersInTarget } = useMutation(
         moveMarchersInTargetMutationOptions(),
@@ -761,7 +761,7 @@ function RegisteredActionsHandler() {
                         ? previousMarcherPages
                         : nextMarcherPages,
                 writePages: updateMarcherPages,
-                writeTimeline: moveMarchersOnPageAsync,
+                writeTimeline: moveMarchersToNeighborPageAsync,
                 notify: toast,
                 t: (key, params) => t(key, params),
             });
@@ -775,7 +775,7 @@ function RegisteredActionsHandler() {
             previousMarcherPages,
             nextMarcherPages,
             updateMarcherPages,
-            moveMarchersOnPageAsync,
+            moveMarchersToNeighborPageAsync,
             t,
         ],
     );

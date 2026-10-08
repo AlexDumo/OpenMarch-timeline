@@ -35,14 +35,11 @@ import { FieldProperties } from "@openmarch/core";
 import { fieldPropertiesQueryOptions } from "./useFieldProperties";
 import { appearanceModelRawToParsed } from "@/entity-components/appearance";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
-import {
-    moveMarchersInTarget,
-    moveMarchersOnPage,
-} from "@/db-functions/timelineMoves";
+import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
 import {
     transformMarchersInSelection,
     type TimelineEditRequest,
-    type TimelineMoveRequest,
+    type TimelineNeighborPageRequest,
 } from "@/timeline/timelineCoordinateWrites";
 import { useTimelineMode } from "./useWorkspaceSettings";
 
@@ -158,15 +155,21 @@ export const updateMarcherPagesMutationOptions = (queryClient: QueryClient) => {
 };
 
 /**
- * Timeline mode's write for "move these marchers on this page" (P7.2): one undoable edit through
- * `moveMarchersOnPage`. The resolver store picks the change up from the change log, so there is
- * nothing to invalidate. A refused move (for example a marcher with no move ending on the page)
- * shows its friendly message (P8.6).
+ * Timeline mode's write for "set marchers to the previous or next page" (P7.6): one undoable edit
+ * through `moveMarchersInTarget` over the page's box, clearing the marchers' own moves there for
+ * set to previous page. The resolver store picks the change up from the change log, so there is
+ * nothing to invalidate. A refused move shows its friendly message (P8.6); one that passed through
+ * other moves says so (`toastPassThrough`).
  */
-export const moveMarchersOnPageMutationOptions = () => {
+export const moveMarchersToNeighborPageMutationOptions = () => {
     return mutationOptions({
-        mutationFn: ({ page, moves }: TimelineMoveRequest) =>
-            moveMarchersOnPage({ db, page, moves }),
+        mutationFn: ({
+            target,
+            moves,
+            clearOwn,
+        }: TimelineNeighborPageRequest) =>
+            moveMarchersInTarget({ db, target, moves, clearOwn }),
+        onSuccess: (result) => toastPassThrough(result.passThrough),
         onError: (e, variables) => {
             toastTimelineError(e, `Error moving marchers`, variables);
         },
