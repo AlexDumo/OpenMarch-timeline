@@ -448,6 +448,8 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                         data-testid="timeline-page-flag-grip"
                         data-page-id={page.id}
                         data-timeline-interactive="true"
+                        // Its arrow keys move the flag, not the selected marchers (UI-14's marker)
+                        data-timeline-own-keys="true"
                         aria-label={`Page ${page.label}'s flag, after ${countsText(counts(range))}. Drag, or use the arrow keys, to move it`}
                         title={`Page ${page.label}'s flag: drag to move it. Page ${page.label} gains what the next page loses; other flags stay.`}
                         onPointerDown={(event) => onPointerDown(event, index)}
