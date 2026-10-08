@@ -173,6 +173,34 @@ describe("page flag grips", () => {
         expect(commit).toHaveBeenCalledWith(2, 12);
     });
 
+    it("passes over a hole and lands just before it, saying why", async () => {
+        const { commit } = show({
+            limits: {
+                ...LIMITS,
+                holes: [
+                    {
+                        beat: 12,
+                        reason: '"Breakaway" already has these counts',
+                    },
+                ],
+            },
+        });
+        pointer(grip(2), "pointerdown", 80);
+        await settle();
+        // View 11 is spec 12, the hole: back to view 10 (spec 11)
+        pointer(grip(2), "pointermove", 110);
+        expect(readout()!.textContent).toContain("already has these counts");
+        pointer(grip(2), "pointerup", 110);
+        expect(commit).toHaveBeenLastCalledWith(2, 11);
+        await settle();
+        // Past it, it lands
+        pointer(grip(2), "pointerdown", 80);
+        await settle();
+        pointer(grip(2), "pointermove", 120);
+        pointer(grip(2), "pointerup", 120);
+        expect(commit).toHaveBeenLastCalledWith(2, 13);
+    });
+
     it("snaps to the playhead near it, and Alt turns that off", async () => {
         // The playhead is at spec beat 3, view beat 2
         const { commit } = show();

@@ -289,6 +289,7 @@ describeDbTests("moving a page flag (roll edit)", (it) => {
                 max: 32,
                 minBlock: { kind: "flag", pageId: 2 },
                 maxBlock: { kind: "flag", pageId: 4 },
+                holes: [],
             });
             expect(await pageFlagMoveLimits({ db, pageId: 1 })).toMatchObject({
                 min: 2,
@@ -328,7 +329,7 @@ describeDbTests("moving a page flag (roll edit)", (it) => {
             await roundTrip(db, before, await snapshot(db));
         });
 
-        it("refuses to give the page timeline a clip's range (C-12)", async ({
+        it("passes over the one beat that would give the page timeline a clip's range (C-12)", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -338,13 +339,24 @@ describeDbTests("moving a page flag (roll edit)", (it) => {
             const clipId = (
                 await db.select().from(schema.timelines).all()
             ).find((t) => t.start_beat === 17 && t.end_beat === 29)!.id;
-            // Page 3's flag (25) moving to 29 would make page 3's timeline [17, 29) too
+            // Page 3's flag (25) at 29 would make page 3's timeline [17, 29) too: a hole
             const limits = await pageFlagMoveLimits({ db, pageId: 3 });
             expect(limits).toMatchObject({
-                max: 28,
-                maxBlock: { kind: "move", timelineId: clipId },
+                max: 32,
+                maxBlock: { kind: "flag", pageId: 4 },
+                holes: [
+                    { beat: 29, block: { kind: "move", timelineId: clipId } },
+                ],
             });
+            const before = await snapshot(db);
             await expectRefused(movePageFlag({ db, pageId: 3, beat: 29 }));
+            expect(await snapshot(db)).toEqual(before);
+            // Past it is fine
+            await movePageFlag({ db, pageId: 3, beat: 30 });
+            expect(await timelineRanges(db)).toContainEqual([17, 29]);
+            expect(await timelineRanges(db)).toContainEqual([17, 30]);
+            expect(await violations(db)).toEqual([]);
+            await roundTrip(db, before, await snapshot(db));
         });
 
         it("a flag may land inside a clip that doesn't touch it: the clip keeps its beats", async ({

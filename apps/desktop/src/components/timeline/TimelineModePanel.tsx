@@ -190,6 +190,14 @@ export default function TimelineModePanel() {
                                   pages,
                                   timelines,
                               ),
+                              holes: limits.holes.map((h) => ({
+                                  beat: h.beat,
+                                  reason: describePageFlagBlock(
+                                      h.block,
+                                      pages,
+                                      timelines,
+                                  ),
+                              })),
                           };
                       },
                       commit: async (pageId, beat) => {

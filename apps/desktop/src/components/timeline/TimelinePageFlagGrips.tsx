@@ -25,8 +25,8 @@ import type {
  *   box on that side of the flag, as a click on the box does. A drag shows the flag, the two boxes
  *   and their counts where it would land, and writes once, on release.
  * - **Limits** (cases 1, 4, 6, 9, 10): the flag stops at the beats `pageFlagMove.limits` allows,
- *   asked when the drag starts; until they arrive, at the neighboring flags. The readout names
- *   what stops it.
+ *   asked when the drag starts; until they arrive, at the neighboring flags. It passes over a hole
+ *   (a beat it can't land on) and lands just before it. The readout names what stops it.
  * - **Snapping** (case 12): whole beats; within 6px a downbeat, page line or the playhead. Alt
  *   turns that off.
  * - **Cancel** (cases 19, 20): Esc, a cancelled pointer or a lost capture put it back and write
@@ -123,8 +123,28 @@ const neighborLimits = (
     };
 };
 
+/**
+ * A landing on a hole (a beat the flag passes over but can't land on) moves back toward where the
+ * flag started, to the nearest beat it can land on, and says why.
+ */
+const landOutsideHoles = (
+    limits: TimelinePageFlagLimits,
+    preview: TimelinePageFlagPreview,
+): TimelinePageFlagPreview => {
+    const holes = limits.holes ?? [];
+    const hole = holes.find((h) => h.beat === preview.beat);
+    if (!hole) return preview;
+    const back = preview.beat > preview.from ? -1 : 1;
+    const holeBeats = new Set(holes.map((h) => h.beat));
+    let beat = preview.beat;
+    while (holeBeats.has(beat)) beat += back;
+    return { ...preview, beat, blocked: hole.reason };
+};
+
 const counts = (range: TimelineBeatRange | null) =>
     range ? range.endBeatIndex - range.startBeatIndex : 0;
+
+const countsText = (n: number) => (n === 1 ? "1 count" : `${n} counts`);
 
 /**
  * What the drag readout says: each page's counts, before and after ("Page 2: 8 → 10 counts"), and
@@ -142,13 +162,13 @@ export function describeFlagPreview(
     if (box) {
         const before = counts(box.range);
         pages.push(
-            `Page ${box.page.label}: ${before} → ${before + delta} counts`,
+            `Page ${box.page.label}: ${before} → ${countsText(before + delta)}`,
         );
     }
     if (next) {
         const before = counts(next.range);
         pages.push(
-            `Page ${next.page.label}: ${before} → ${before - delta} counts`,
+            `Page ${next.page.label}: ${before} → ${countsText(before - delta)}`,
         );
     }
     return { pages, blocked: preview.blocked };
@@ -222,14 +242,13 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
             isPageSnapDisabled({ altKey }),
         );
         const { min, max, minReason, maxReason } = current.limits;
-        const beat = clamp(snapped, min, max);
-        return {
+        return landOutsideHoles(current.limits, {
             pageId: current.pageId,
             from: current.limits.flag,
-            beat,
+            beat: clamp(snapped, min, max),
             blocked:
                 snapped < min ? minReason : snapped > max ? maxReason : null,
-        };
+        });
     };
 
     const cancel = (element?: Element | null) => {
@@ -289,7 +308,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                 started.checked = true;
                 if (!started.moved) return;
                 const beat = clamp(started.last.beat, checked.min, checked.max);
-                started.last = {
+                started.last = landOutsideHoles(checked, {
                     ...started.last,
                     beat,
                     blocked:
@@ -298,7 +317,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                                 ? checked.maxReason
                                 : checked.minReason
                             : started.last.blocked,
-                };
+                });
                 onPreviewChange(started.last);
             },
             () => {
@@ -384,7 +403,10 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
             .then(() => pageFlagMove.limits(box.page.id))
             .then((limits) => {
                 if (!limits) return;
-                const beat = limits.flag + delta;
+                // A hole is stepped over, as a drag passes over it
+                const holeBeats = new Set(limits.holes?.map((h) => h.beat));
+                let beat = limits.flag + delta;
+                while (holeBeats.has(beat)) beat += delta;
                 if (beat < limits.min || beat > limits.max) return;
                 return pageFlagMove.commit(box.page.id, beat);
             })
@@ -407,7 +429,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                         data-testid="timeline-page-flag-grip"
                         data-page-id={page.id}
                         data-timeline-interactive="true"
-                        aria-label={`Page ${page.label}'s flag, after ${counts(range)} counts. Drag, or use the arrow keys, to move it`}
+                        aria-label={`Page ${page.label}'s flag, after ${countsText(counts(range))}. Drag, or use the arrow keys, to move it`}
                         title={`Page ${page.label}'s flag: drag to move it. Page ${page.label} gains what the next page loses; other flags stay.`}
                         onPointerDown={(event) => onPointerDown(event, index)}
                         onPointerMove={onPointerMove}
@@ -460,7 +482,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                 <div
                     role="status"
                     data-testid="timeline-page-flag-readout"
-                    className="bg-fg-1 border-stroke rounded-6 text-text pointer-events-none absolute top-30 z-[60] flex flex-col gap-2 border px-6 py-4 font-mono text-[11px] leading-tight whitespace-nowrap shadow-sm"
+                    className="bg-bg-1 border-stroke rounded-6 text-text pointer-events-none absolute top-30 z-[60] flex flex-col gap-2 border px-6 py-4 font-mono text-[11px] leading-tight whitespace-nowrap shadow-sm"
                     style={{
                         left:
                             Math.round(beatToX(preview.beat, pixelsPerBeat)) +

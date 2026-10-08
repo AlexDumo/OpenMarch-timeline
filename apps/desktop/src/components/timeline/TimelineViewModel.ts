@@ -43,6 +43,11 @@ export interface TimelinePageFlagLimits {
     /** Why it stops at `min`, such as "Page 2's flag" */
     readonly minReason: string;
     readonly maxReason: string;
+    /** Beats between `min` and `max` the flag passes over but can't land on, and why */
+    readonly holes?: readonly {
+        readonly beat: BeatPosition;
+        readonly reason: string;
+    }[];
 }
 
 /** Moving a page flag (docs/timeline/research/move-page-flag), in view beats */

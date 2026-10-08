@@ -469,6 +469,10 @@ export function Timeline(props: TimelineProps) {
                                     flag: axis.toView(limits.flag),
                                     min: axis.toView(limits.min),
                                     max: axis.toView(limits.max),
+                                    holes: limits.holes?.map((h) => ({
+                                        ...h,
+                                        beat: axis.toView(h.beat),
+                                    })),
                                 }
                               : null;
                       },

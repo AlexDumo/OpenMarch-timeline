@@ -321,6 +321,11 @@ export interface PageFlagMoveLimits {
     max: number;
     minBlock: PageFlagMoveBlock;
     maxBlock: PageFlagMoveBlock;
+    /**
+     * Beats between `min` and `max` the flag can't land on, though it can pass them: say, the one
+     * beat where the page's timeline would have a clip's range (C-12). In beat order.
+     */
+    holes: { beat: number; block: PageFlagMoveBlock }[];
 }
 
 /** The page grid with page `index`'s flag at `beat`: the page and the one after it change. */
@@ -439,7 +444,12 @@ export function planPageFlagMoveLimits(
                 : next
                   ? { kind: "flag", pageId: next.id }
                   : { kind: "show-end" };
+        // Walk every beat to the neighbor: a refused beat with an allowed one past it is a hole
+        // the flag passes over; the refused beats past the last allowed one stop it
         let reached = from;
+        let stop: PageFlagMoveBlock | null = null;
+        const refused: { beat: number; block: PageFlagMoveBlock }[] = [];
+        const holes: { beat: number; block: PageFlagMoveBlock }[] = [];
         for (
             let beat = from + step;
             step < 0 ? beat >= bound : beat <= bound;
@@ -452,10 +462,16 @@ export function planPageFlagMoveLimits(
                 from,
                 beat,
             );
-            if (block) return { beat: reached, block };
+            if (block) {
+                refused.push({ beat, block });
+                stop ??= block;
+                continue;
+            }
+            holes.push(...refused.splice(0));
+            stop = null;
             reached = beat;
         }
-        return { beat: reached, block: edge };
+        return { beat: reached, block: stop ?? edge, holes };
     };
     const down = walk(-1);
     const up = walk(1);
@@ -466,6 +482,7 @@ export function planPageFlagMoveLimits(
         max: up.beat,
         minBlock: down.block,
         maxBlock: up.block,
+        holes: [...down.holes, ...up.holes].sort((a, b) => a.beat - b.beat),
     };
 }
 
@@ -540,8 +557,11 @@ export async function movePageFlagInTransaction({
         await readRippleRows(tx),
         pageId,
     )!;
-    if (beat < limits.min || beat > limits.max) {
-        const block = beat < limits.min ? limits.minBlock : limits.maxBlock;
+    const hole = limits.holes.find((h) => h.beat === beat);
+    if (beat < limits.min || beat > limits.max || hole) {
+        const block =
+            hole?.block ??
+            (beat < limits.min ? limits.minBlock : limits.maxBlock);
         refuse(
             `page ${pageId}'s flag can't move to beat ${beat}: ${
                 block.kind === "flag"
