@@ -70,3 +70,30 @@ describe("flagSnapBeat (review: zoomed out, page lines trapped a flag)", () => {
         expect(flagSnapBeat({ ...base, downbeats: [28], beat: 26.4 })).toBe(26);
     });
 });
+
+describe("the edge's own start is never a snap target (review)", () => {
+    it("a flag on a downbeat moves one count at 4 px per beat", async () => {
+        const { flagSnapBeat } = await import("../TimelinePageFlagGrips");
+        const base = {
+            downbeats: [24, 28, 32],
+            playheadBeat: null,
+            pixelsPerBeat: 4,
+            snapDisabled: false,
+        };
+        expect(flagSnapBeat({ ...base, beat: 25, from: 24 })).toBe(25);
+        // Without `from` it was pulled back onto 24
+        expect(flagSnapBeat({ ...base, beat: 25 })).toBe(24);
+    });
+
+    it("a move's edge on a page line moves one count when zoomed out", () => {
+        expect(
+            snapEdgeBeat({
+                beat: 17,
+                pageBeats: [16, 32],
+                downbeats: [16, 20],
+                pixelsPerBeat: 4,
+                from: 16,
+            }),
+        ).toBe(17);
+    });
+});

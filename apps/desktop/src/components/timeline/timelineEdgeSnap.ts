@@ -37,6 +37,7 @@ export function snapEdgeBeat({
     playheadBeat,
     pixelsPerBeat,
     snapDisabled = false,
+    from,
 }: {
     beat: number;
     /** The page lines (flags) */
@@ -47,18 +48,27 @@ export function snapEdgeBeat({
     playheadBeat?: number | null;
     pixelsPerBeat: number;
     snapDisabled?: boolean;
+    /**
+     * Where the edge started. Never a target: zoomed out, its own line or downbeat would pull a
+     * one-count drag back to the start, and the drop would do nothing (review)
+     */
+    from?: number;
 }): number {
     if (!snapDisabled) {
+        const away = (b: number) => b !== from;
         const strong = nearestWithin(
             beat,
-            playheadBeat == null ? pageBeats : [...pageBeats, playheadBeat],
+            (playheadBeat == null
+                ? pageBeats
+                : [...pageBeats, playheadBeat]
+            ).filter(away),
             pixelsPerBeat,
             EDGE_SNAP_STRONG_PX,
         );
         if (strong !== null) return Math.round(strong);
         const weak = nearestWithin(
             beat,
-            downbeats,
+            downbeats.filter(away),
             pixelsPerBeat,
             EDGE_SNAP_WEAK_PX,
         );

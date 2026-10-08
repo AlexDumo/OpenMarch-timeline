@@ -49,8 +49,11 @@ export function flagSnapBeat({
     playheadBeat,
     pixelsPerBeat,
     snapDisabled,
+    from,
 }: {
     beat: number;
+    /** The flag's beat before the drag: never a snap target */
+    from?: number;
     /** The measures' downbeats only, not the page lines */
     downbeats: readonly number[];
     playheadBeat: number | null;
@@ -64,6 +67,7 @@ export function flagSnapBeat({
         playheadBeat,
         pixelsPerBeat,
         snapDisabled,
+        from,
     });
 }
 
@@ -271,6 +275,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
             playheadBeat: current.playhead,
             pixelsPerBeat,
             snapDisabled: isPageSnapDisabled({ altKey }),
+            from: current.limits.flag,
         });
         const { min, max, minReason, maxReason } = current.limits;
         return landOutsideHoles(current.limits, {

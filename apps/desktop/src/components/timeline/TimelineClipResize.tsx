@@ -149,6 +149,7 @@ export function resizedRange({
         playheadBeat,
         pixelsPerBeat,
         snapDisabled,
+        from: edge === "start" ? range.startBeatIndex : range.endBeatIndex,
     });
     const bounds =
         edge === "start"
