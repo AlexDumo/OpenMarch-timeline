@@ -568,8 +568,9 @@ from it. The spec still wins on the model; this file decides presentation.
     right-clicking. While the clip's end is scrolled past the timeline's right edge the button
     sticks to that edge, inside the visible part of the clip. A clip too narrow for its label and
     the button keeps the button just past its right edge, so the only visible way in never hides.
-    With the clip focused, the ContextMenu key or Shift+F10 opens the menu there, and Enter or F2
-    renames (as in a file list; V-48). In compact the button sits on the thin bar.
+    With the clip focused, the ContextMenu key or Shift+F10 opens the menu there. Enter on a clip
+    that isn't selected selects it, as a click does; Enter on the selected clip, or F2 on any,
+    renames (as in a file list; V-48, code review). In compact the button sits on the thin bar.
   - **Clips show their label** (_lead default_, V-39). A clip at least 40px wide shows its name in
     expanded mode, cut with an ellipsis, beside the ⋯ button; narrower clips and compact bars keep
     it in the tooltip. Clips had no visible text before, so a name would have nowhere to show.
@@ -605,7 +606,9 @@ from it. The spec still wins on the model; this file decides presentation.
     field says so once a name reaches 80 ("80 characters at most") rather than cutting silently;
     an empty name gives the move its number back (above); an unchanged name writes nothing.
     One undoable edit (`renameTimeline`). Keys typed in the field stay there (G, Space, Shift+Z,
-    Delete, Enter). After it, saved or cancelled, focus is back on the clip (round 2). A name
+    Delete, Enter). After Enter or Esc, saved or cancelled, focus is back on the clip (round 2);
+    closed by a click elsewhere (another clip), focus stays where the click put it, so a Delete
+    then never deletes the renamed move (code review). A name
     being typed is saved when the field goes away before it blurs (a click on the lane selects
     another window first), in the clip's field and the card's (round 2). The inspector's Move card
     has the same field. A name field left open while its move is deleted writes nothing and says
@@ -631,7 +634,11 @@ from it. The spec still wins on the model; this file decides presentation.
     marcher (UI-9), so the transition editor bent one marcher at a time. The card's Path is Direct
     or Arc with one bulge, written to every transition of the move as one undoable edit
     (`setMovePath`); "Mixed" shows when they differ, and choosing a style makes them all the same.
-    Follow the leader isn't offered: it needs a shape, which a move's transitions don't have.
+    Follow the leader isn't offered: it needs a shape, which a move's transitions don't usually
+    have. A move whose transitions all follow the leader (the shape editor can leave one so) shows
+    "Follow the leader", not "Mixed", with neither radio chosen; Direct or Arc still changes them
+    all as one edit (code review). The edit reads the paths under the write lock, so a choice sent
+    twice is one edit.
     It is a radio group (round 2): the arrows move the choice and apply it.
   - **Per-marcher details** (_lead default_, V-46). With a move, the selected marchers'
     explanations and transition editors are about that move: they explain inside it, at P, or at
@@ -641,13 +648,15 @@ from it. The spec still wins on the model; this file decides presentation.
   - **The inspector explains at the playhead** in timeline mode, not the selected page's end
     (_lead default_, V-41), except inside a move, above. On a flag that is the same beat; between
     flags it is where edits land (UI-10). "Select a page to see why…" is gone, since there is
-    always a playhead.
+    always a playhead. While the playhead is scrubbed it holds the last settled beat and explains
+    once the scrub ends, rather than rebuilding on every beat passed (code review).
   - **Keys on the move controls** (_lead default_, round 2, V-50). On a clip, its ⋯ button, the
     Move card and the isolation bar (`data-timeline-own-keys`), Space always plays and presses
     nothing; Enter activates the focused control; the arrows (and WASD) work the Path radios and
-    do nothing on a focused clip. The app's registered shortcuts skip Enter, the arrows and WASD
-    there (`isTimelineOwnKey`), so Enter on the card's Delete move deletes the move instead of
-    creating a shape. Elsewhere every shortcut works as before. Focused clips show an offset
+    do nothing on a focused clip. WASD goes by the physical key (`event.code`), as the app's nudge
+    does, so another keyboard layout can't slip a nudge past. The app's registered shortcuts skip
+    Enter, the arrows and WASD there (`isTimelineOwnKey`), so Enter on the card's Delete move
+    deletes the move instead of creating a shape. Elsewhere every shortcut works as before. Focused clips show an offset
     outline, apart from the selected clip's ring, and the card's controls a focus ring.
   - **A leftover selection** (_lead default_, round 2, V-52). Going to another move (a clip click,
     a double-click, Edit move) clears the marchers the previous move's **Select them** selected,
@@ -659,8 +668,9 @@ from it. The spec still wins on the model; this file decides presentation.
     `describeMoveClips`).
   - **Words for screen readers** (round 2). A move's clip is named "Company front, move, Page 3,
     counts 1–4", in counts rather than beats, and ends in ", selected" when it is (it was a
-    toggle, read as "pressed"); its description says why it is dashed and "Enter to rename,
-    Shift+F10 for options, Delete to delete". The isolation bar's key reads "Key: dotted gray
+    toggle, read as "pressed"); its description says why it is dashed and its keys: "Enter to
+    select, F2 to rename, Shift+F10 for options, Delete to delete", or once selected "Enter or F2
+    to rename, …". The isolation bar's key reads "Key: dotted gray
     paths show where this move would take marchers who left it". The field line's sentence is
     announced at once when it comes back after isolation, not the one from before isolating, and
     a one-count window is "count 3", not "counts 3–3".
