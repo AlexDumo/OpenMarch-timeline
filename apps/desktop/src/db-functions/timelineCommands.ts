@@ -11,7 +11,7 @@ import {
     normalizeMoveName,
 } from "@/timeline/timelineViewModel";
 import { castSlots, transitionSlotPoints } from "@/timeline/timelineCasting";
-import { DEFAULT_BULGE } from "@/timeline/timelineTransitionEditor";
+import { DEFAULT_BULGE } from "@/timeline/timelinePathDefaults";
 import { DbConnection, DbTransaction } from "./types";
 import {
     createRangeTimelineInTransaction,
@@ -545,10 +545,12 @@ export const deleteTimeline = async ({
  * Renames a move (UI-14) as one undoable edit; `normalizeMoveName` decides what is stored. A move
  * always has a name since the round-2 review, so its label never shifts: clearing an automatic
  * "Move N" keeps it, and clearing a typed name gives the move the next number
- * (`nextMoveNameInTransaction`), as a new move would get. A name equal to the stored one opens no
- * edit and returns `null`, since an edit that writes nothing is refused. A timeline that no longer
- * exists (a name field left open while its move was deleted) has nothing to rename: `null` too,
- * not an error.
+ * (`nextMoveNameInTransaction`), as a new move would get. The stored name is read inside the edit,
+ * under the write lock; when it already equals the new one, the edit is rolled back before it is
+ * recorded (`transactionWithHistoryUnlessUnchanged`) and it returns `null`: no history step, no
+ * change notice, and so a rename sent twice is one edit. Clearing an automatic "Move N" is the
+ * same. A timeline that no longer exists (a name field left open while its move was deleted) has
+ * nothing to rename: `null` too, not an error.
  */
 export const renameTimeline = async ({
     db,
@@ -648,8 +650,10 @@ export const readMovePath = async (
 /**
  * Gives every transition of a move the same path (UI-14's Move card): `direct`, or `arc` with
  * `bulge`, as one undoable edit. A move is one one-slot transition per marcher (UI-9), so this is
- * how the move as a whole bends. Transitions that already have that path are left alone; when all
- * of them do, no edit opens and it returns `null`. Otherwise it returns how many changed. The
+ * how the move as a whole bends. The paths are read inside the edit, under the write lock.
+ * Transitions that already have that path are left alone; when all of them do, the edit is rolled
+ * back before it is recorded (`transactionWithHistoryUnlessUnchanged`) and it returns `null`: no
+ * history step, no change notice. Otherwise it returns how many changed. The
  * bulge is validated by the write (|bulge| at most 0.5, spec §5.2).
  */
 export const setMovePath = async ({
