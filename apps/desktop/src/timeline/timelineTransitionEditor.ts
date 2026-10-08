@@ -31,8 +31,6 @@ import { DEFAULT_BULGE } from "./timelinePathDefaults";
  * edit (`TimelineTransitionEditor`).
  */
 
-export { DEFAULT_BULGE };
-
 /** One shape a transition can head to. */
 export interface TransitionShapeOption {
     id: number;
