@@ -26,7 +26,8 @@ import tolgee from "@/global/singletons/Tolgee";
 import { toast } from "sonner";
 import { toastPassThrough } from "@/timeline/timelinePassThrough";
 import { db, schema } from "@/global/database/db";
-import { invalidateByPage } from "./sharedInvalidators";
+import { invalidateAfterMarcherPagesWrite } from "./sharedInvalidators";
+import { toastCarryForward } from "@/utilities/carryForwardToast";
 import type MarcherPage from "@/global/classes/MarcherPage";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -143,10 +144,13 @@ export const updateMarcherPagesMutationOptions = (queryClient: QueryClient) => {
     return mutationOptions({
         mutationFn: (modifiedMarcherPages: ModifiedMarcherPageArgs[]) =>
             updateMarcherPages({ db, modifiedMarcherPages }),
-        onSuccess: (_, variables) => {
-            // Invalidate all marcher pages queries
-            const pageIds = new Set<number>(variables.map((m) => m.page_id));
-            invalidateByPage(queryClient, pageIds);
+        onSuccess: (result, variables) => {
+            invalidateAfterMarcherPagesWrite(
+                queryClient,
+                variables.map((m) => m.page_id),
+                result,
+            );
+            void toastCarryForward(queryClient, result);
         },
         onError: (e, variables) => {
             toastTimelineError(e, `Error updating pages`, variables);
@@ -204,8 +208,13 @@ export const swapMarchersMutationOptions = (queryClient: QueryClient) => {
             marcher1Id: number;
             marcher2Id: number;
         }) => swapMarchers({ db, pageId, marcher1Id, marcher2Id }),
-        onSuccess: (_, variables) => {
-            void invalidateByPage(queryClient, new Set([variables.pageId]));
+        onSuccess: (result, variables) => {
+            invalidateAfterMarcherPagesWrite(
+                queryClient,
+                [variables.pageId],
+                result,
+            );
+            void toastCarryForward(queryClient, result);
 
             // Get the marchers so we can get the drill numbers for the success message
             const marcher1Promise = db.query.marchers.findFirst({
@@ -351,18 +360,20 @@ export const useUpdateSelectedMarchers = (
                     };
                 });
 
-            await updateMarcherPages({
+            const write = await updateMarcherPages({
                 db,
                 modifiedMarcherPages,
             });
-            return { newCoordinates };
+            return { newCoordinates, write };
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
             // Timeline mode: the resolver store follows the change log
             if (timelineMode) return;
-            if (pageId != null)
-                void invalidateByPage(queryClient, new Set([pageId]));
-            else
+            if (pageId != null) {
+                const write = data && "write" in data ? data.write : undefined;
+                invalidateAfterMarcherPagesWrite(queryClient, [pageId], write);
+                void toastCarryForward(queryClient, write);
+            } else
                 console.error(
                     "No page ID provided on update success. This should never happen.",
                 );

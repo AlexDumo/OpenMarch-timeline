@@ -215,6 +215,8 @@ const _createMarcherPages = async ({
                         ),
                     });
 
+                // A new page holds where the previous one ends. Its pathway isn't copied: that
+                // curve is the previous page's move, and sharing it would replay it here.
                 for (const marcherPage of previousPageMarcherPages)
                     newMarcherPages.push({
                         marcher_id: marcherPage.marcher_id,
@@ -222,9 +224,6 @@ const _createMarcherPages = async ({
                         x: marcherPage.x,
                         y: marcherPage.y,
                         notes: marcherPage.notes,
-                        path_data_id: marcherPage.path_data_id,
-                        path_start_position: marcherPage.path_start_position,
-                        path_end_position: marcherPage.path_end_position,
                     });
             } else {
                 for (const marcher of allMarchers) {
