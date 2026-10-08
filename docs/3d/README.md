@@ -25,6 +25,11 @@ MVP; don't build them yet.
 | [findings.md](findings.md)               | Measurements and human verdicts. Append-only.                                              |
 | [ref/](ref/)                             | The approved visual reference: a standalone three.js demo of every kit. Port from it.      |
 
+**Web preview, fork only.** `apps/desktop/view3d-web/` runs the 3D View in a
+browser so other developers can try it. Its README explains how. It is
+temporary: it and its demo `.dots` files must not be merged into `main`.
+Delete it, and the `view3d-web:*` scripts, before the 3D View goes upstream.
+
 ## Status board
 
 Each phase file's front matter is the **only** source of truth for status.
