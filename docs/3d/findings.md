@@ -29,4 +29,19 @@ Budgets are in [design.md](design.md) §9.
 - Machine and commit: AMD Ryzen 5 3600 <!-- cspell:ignore Ryzen --> (6 cores, 12 threads), 7 GB RAM, Debian 13, no GPU. Electron on SwiftShader (ANGLE) in Docker plus Xvfb (`~/om-capture` toolkit). Branch `3d/p5-perf` on `3d-async` `da4782c2`, with a temporary measurement hook (`window.__view3dDebug`) that was not committed.
 - Fixture and command: a 300-marcher, 7-page show built from `src/test/mock-data/marchers-and-pages.sql` (pages and beats kept; marchers replaced by a 25 × 12 block that turns and shifts every page). The 3D window was 1280 × 720 and the editor 640 × 1080. For each kit at its default lighting with crowd on: `setQuality("high")`, then 3 s paused and 4 s playing, and the same at `low`. Build times came from calling the kit, crowd, field and environment builders five times inside the window. The scenario and run folders are listed in the P5.1 pull request.
 
+### 2026-10-08 · trevor (3d/p7-instruments) · instruments PR 1
+
+- Bake with holds (`bakeForBodies`, node, Apple Silicon laptop, CPU only): 40 clips
+  × 1 hold 2.1 MB in 29 ms (texture 92 × 1420); × 2 holds 6.0 MB in 37 ms
+  (184 × 2048); × 4 holds (none, brass, trombone, contra) 9.0 MB in 63 ms
+  (276 × 2048). Rows wrap into 2048-row columns, so a fourth hold widens the
+  texture rather than failing. Well inside the 64 MB float-texture concern in
+  `instruments.md` §8.
+- Horn geometry: trumpet, mellophone, baritone and euphonium 576 triangles
+  each, trombone 456, bass trombone 488, contra 596 (the `brass.test.ts`
+  budget check), so 150 brass add about 85 k triangles.
+- Frame time on real hardware and the visual check of each hold against the
+  reference photos: not done in this pass; no GPU or browser was reachable
+  from the session. The owner checks the web preview's Horn state picker.
+
 ## Verdicts
