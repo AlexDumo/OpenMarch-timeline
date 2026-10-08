@@ -1,16 +1,9 @@
-import { and, asc, eq, gt, lt } from "drizzle-orm";
-import { createResolver, validateDestination, type XY } from "@openmarch/core";
+import { asc, eq } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import { isTimelineModeEnabled } from "@/settings/workspaceSettings";
-import { readTimelineTables } from "@/timeline/timelineRows";
 import { DbTransaction } from "./types";
 import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
-import {
-    createTimelineTransitionsInTransaction,
-    deleteTimelineTransitionsInTransaction,
-} from "./timelineTransitions";
-import { createTimelinesInTransaction, findTimelineByRange } from "./timelines";
-import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
+import { deleteTimelineTransitionsInTransaction } from "./timelineTransitions";
 
 /**
  * Page and beat ripple (docs/timeline/phases/07-page-parity.md P7.4, P7.5).
@@ -51,24 +44,17 @@ import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
  * (where those coordinates are lost and the earlier page's move runs until the next page starts).
  * A timeline left with no transition goes too (C-11: a timeline is the container for its moves).
  *
- * **When a page is added** (inserted, split off, or added at the end), page mode copies the
- * previous page's coordinates onto it, so marchers hold through it. Here every transition that
- * ends where the new page starts gets a holding transition over the new page, with one slot per
- * assignment that ends there, at that assignment's layer, whose destination is the marcher's
- * position at the page start. If no transition ends there but a timeline contains the page start
- * (or ends there), one holding transition holds every marcher at layer 0. A transition spans its
- * whole timeline (C-11), so the holding transitions of a page share one new timeline over the
- * page. A marcher that already has a row at that layer over the new page is left out (it moves
- * there anyway). The holding transition is what "move the marchers on the new page" edits (D-16,
- * P7.2).
+ * **When a page is added** (inserted, split off, or added at the end), nothing is written for it.
+ * Page mode copies the previous page's coordinates onto a new page; here a marcher with no move over
+ * the new page simply holds where it last was (C-12: no path writes timeline rows on behalf of a
+ * page), so a later edit to an earlier page carries through the new page until that marcher's next
+ * own move. A move over the page is written only when the designer moves someone there.
  *
  * **Refusals.** The ripple of existing rows is planned before its first timeline write, and the
  * edit is refused when a row would end up with no beats (`E-ARGS`), an assignment would leave its
  * transition (`E-A1`), a transition would leave its timeline (`E-T1`), or two of a marcher's rows
- * at one layer would overlap or swap order (`E-A3`). The holding moves are planned after the
- * ripple has been written, so their one refusal (a marcher outside the field's bounds at the new
- * page's start, `E-ARGS`) comes after earlier writes. Either way the whole edit rolls back,
- * page-mode statements included, so nothing is written.
+ * at one layer would overlap or swap order (`E-A3`). The whole edit then rolls back, page-mode
+ * statements included, so nothing is written.
  *
  * **Statement order** (U-3: every intermediate state passes the row triggers, so undo can replay
  * the edit backwards):
@@ -80,8 +66,7 @@ import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
  *    layer, a row moves only after the rows its new range would overlap have moved out of the way
  *    (that order always exists when the rows keep their order);
  * 5. every changed transition shrinks to its new range;
- * 6. every changed timeline shrinks to its new range;
- * 7. holding transitions for added pages.
+ * 6. every changed timeline shrinks to its new range.
  */
 
 /** The largest beat a row may hold (spec I-N2). */
@@ -282,8 +267,9 @@ const checkBeats = (r: Range, what: string) => {
 };
 
 /**
- * A page move of `page`: what the converter writes for a page, and what a holding move for an
- * added page looks like. A shapeless transition over exactly the page's beats whose assignments
+ * A page move of `page`: what the converter writes for a page, and what a drag over exactly the
+ * page writes (stored files may also hold such moves from older builds' holds for added pages). A
+ * shapeless transition over exactly the page's beats whose assignments
  * are all at layer 0 and cover the whole transition. Only these go when their page goes; any other
  * transition (a track the user made) stays, and the edit is refused if it would lose its beats.
  */
@@ -510,138 +496,6 @@ export async function rippleTimelineToPageGridInTransaction({
         await shrink(T, transitions, newTransition);
         await shrink(L, rippled, newTimeline);
     });
-
-    // 7. Holding moves for added pages
-    const beforeIds = new Set(before.pages.map((p) => p.id));
-    for (const page of after.pages)
-        if (page.id !== 0 && !beforeIds.has(page.id) && page.end > page.start)
-            await addHoldingMoves(tx, page);
-}
-
-/**
- * Holding transitions over an added page (see the module comment): one per transition that ends
- * where the page starts, or one for every marcher when none does.
- */
-// eslint-disable-next-line max-lines-per-function
-async function addHoldingMoves(tx: DbTransaction, page: GridPage) {
-    const m = page.start;
-    const e = page.end;
-    const T = schema.timeline_transitions;
-    const A = schema.timeline_assignments;
-    const ending = await tx
-        .select()
-        .from(T)
-        .where(eq(T.end_beat, m))
-        .orderBy(asc(T.id))
-        .all();
-
-    type Plan = { rows: { marcherId: number; layer: number }[] };
-    const plans: Plan[] = [];
-    if (ending.length > 0) {
-        for (const t of ending) {
-            const rows = await tx
-                .select({ marcherId: A.marcher_id, layer: A.layer })
-                .from(A)
-                .where(and(eq(A.transition_id, t.id), eq(A.end_beat, m)))
-                .orderBy(asc(A.slot_index))
-                .all();
-            plans.push({ rows });
-        }
-    } else {
-        const timeline = await tx
-            .select()
-            .from(schema.timelines)
-            .orderBy(asc(schema.timelines.id))
-            .all()
-            .then((ls) =>
-                ls.find(
-                    (l) =>
-                        l.start_beat <= m &&
-                        (m < l.end_beat || l.end_beat === m),
-                ),
-            );
-        if (!timeline) return;
-        const marchers = await tx
-            .select({ id: schema.marchers.id })
-            .from(schema.marchers)
-            .orderBy(asc(schema.marchers.id))
-            .all();
-        plans.push({
-            rows: marchers.map((mr) => ({ marcherId: mr.id, layer: 0 })),
-        });
-    }
-
-    const { snapshot } = await readTimelineTables(tx);
-    const resolver = createResolver(snapshot);
-    // The page's holding transitions share one timeline over the page (C-11), made with the first
-    let timelineId: number | undefined;
-    for (const plan of plans) {
-        // Leave out a marcher that already has a row at that layer over the page
-        const rows: { marcherId: number; layer: number }[] = [];
-        for (const row of plan.rows) {
-            const busy = await tx
-                .select({ id: A.id })
-                .from(A)
-                .where(
-                    and(
-                        eq(A.marcher_id, row.marcherId),
-                        eq(A.layer, row.layer),
-                        lt(A.start_beat, e),
-                        gt(A.end_beat, m),
-                    ),
-                )
-                .get();
-            if (!busy) rows.push(row);
-        }
-        if (rows.length === 0) continue;
-        const points = rows.map((row) => {
-            const [x, y] = resolver.positionAt(row.marcherId, m);
-            const point: XY = [x, y];
-            if (!validateDestination(point).ok)
-                refuse(
-                    `marcher ${row.marcherId} is outside the field's bounds at beat ${m}`,
-                );
-            return point;
-        });
-
-        if (timelineId === undefined) {
-            // One timeline per range (C-12): a stored timeline over the page (say, one made by
-            // Add selected marchers) holds the holds too
-            const [timeline] = [
-                (await findTimelineByRange(tx, { start: m, end: e })) ??
-                    (
-                        await createTimelinesInTransaction({
-                            tx,
-                            newTimelines: [{ startBeat: m, endBeat: e }],
-                        })
-                    )[0],
-            ];
-            timelineId = timeline!.id;
-        }
-        const [hold] = await createTimelineTransitionsInTransaction({
-            tx,
-            newTransitions: [
-                {
-                    timelineId,
-                    startBeat: m,
-                    endBeat: e,
-                    slotCount: rows.length,
-                    destination: { kind: "individual", points },
-                },
-            ],
-        });
-        await createTimelineAssignmentsInTransaction({
-            tx,
-            newAssignments: rows.map((row, slotIndex) => ({
-                marcherId: row.marcherId,
-                transitionId: hold!.id,
-                slotIndex,
-                startBeat: m,
-                endBeat: e,
-                layer: row.layer,
-            })),
-        });
-    }
 }
 
 // ---------------------------------------------------------------------------
