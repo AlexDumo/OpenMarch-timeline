@@ -163,6 +163,12 @@ Owner, 2026-10-08, all four as recommended:
    moves" is explicit.
 4. **Lock here and Keep later pages are deferred** (no stored kind in this change).
 
+Owner, 2026-10-08, after the build (PR #112):
+
+5. **Delete page and its moves keeps long moves (tracks) inside the page box** ("I think no" to deleting
+   them). V-149.
+6. **Page-mode shape edits carry forward** to later copies that aren't in a shape ("I think so"). V-148.
+
 ## Built (branch `timeline/defined-coordinates`)
 
 | Branch (merged)        | What                                                                                                                                                       |
