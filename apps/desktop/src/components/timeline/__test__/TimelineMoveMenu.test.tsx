@@ -262,12 +262,33 @@ describe("the ⋯ button (UI-14)", () => {
                 moveCommands={commands()}
             />,
         );
-        const button = screen.getByTestId("timeline-clip-menu-button");
+        const anchor = screen.getByTestId("timeline-clip-menu-anchor");
         const clipEl = clipButton();
         const clipEnd =
             parseFloat(clipEl.style.left) + parseFloat(clipEl.style.width);
-        expect(parseFloat(button.style.left)).toBeGreaterThanOrEqual(clipEnd);
+        expect(parseFloat(anchor.style.left)).toBeGreaterThanOrEqual(clipEnd);
         expect(screen.queryByTestId("timeline-clip-label")).toBeNull();
+    });
+
+    it("sticks inside the visible timeline, with a 16px target and a tooltip", () => {
+        show({ selection: SELECTED });
+        const button = screen.getByTestId("timeline-clip-menu-button");
+        // Sticky inside a span over the clip: at its end, or the viewport's right edge
+        expect(button.className).toContain("sticky");
+        expect(parseFloat(button.style.width)).toBeGreaterThanOrEqual(16);
+        expect(parseFloat(button.style.height)).toBeGreaterThanOrEqual(16);
+        expect(button.title).toBe("Move options");
+        const anchor = screen.getByTestId("timeline-clip-menu-anchor");
+        const clipEl = clipButton();
+        expect(anchor.style.left).toBe(clipEl.style.left);
+    });
+
+    it("the label truncates with an ellipsis", () => {
+        show();
+        const label = screen.getByTestId("timeline-clip-label");
+        expect(label.className).toContain("truncate");
+        expect(label.className).toContain("block");
+        expect(label.className).not.toContain("flex");
     });
 
     it("shows in compact too", () => {
@@ -303,6 +324,19 @@ describe("the focused clip's keys (UI-14)", () => {
         show();
         fireEvent.keyDown(clipButton(), { key: "F10", shiftKey: true });
         await waitFor(() => expect(items()).toContain("Delete move"));
+    });
+
+    it("Enter and F2 open the rename field, and Enter never reaches the app's shortcuts", async () => {
+        show();
+        fireEvent.keyDown(clipButton(), { key: "Enter" });
+        expect(reached).toEqual([]);
+        await waitFor(() =>
+            expect(screen.getByTestId("timeline-move-name-field")).toBeTruthy(),
+        );
+        cleanup();
+        show();
+        fireEvent.keyDown(clipButton(), { key: "F2" });
+        expect(screen.getByTestId("timeline-move-name-field")).toBeTruthy();
     });
 
     it("other keys pass through", () => {
@@ -360,11 +394,52 @@ describe("renaming on the clip (UI-14)", () => {
         expect(moves.onRename).not.toHaveBeenCalled();
     });
 
+    it("says when the 80-character limit is reached, instead of cutting silently", async () => {
+        const { field } = await startRename();
+        expect(screen.queryByTestId("timeline-move-name-limit")).toBeNull();
+        fireEvent.change(field, { target: { value: "x".repeat(80) } });
+        expect(
+            screen.getByTestId("timeline-move-name-limit").textContent,
+        ).toMatch(/80 characters at most/);
+    });
+
     it("its keys stay its own: G, Space, Delete and Shift+Z reach no shortcut", async () => {
         const { moves, field } = await startRename();
         for (const key of ["g", " ", "Delete", "Backspace", "Z"])
             fireEvent.keyDown(field, { key, shiftKey: key === "Z" });
         expect(reached).toEqual([]);
         expect(moves.onDelete).not.toHaveBeenCalled();
+    });
+});
+
+describe("short clips under the flags and the playhead (UI-14)", () => {
+    it("the start flag and the playhead take the pointer only above the clip rows", () => {
+        render(
+            <Timeline
+                mode="expanded"
+                beats={BEATS}
+                pages={PAGES}
+                measures={[]}
+                timelines={[clip]}
+                showTransport={false}
+                pixelsPerBeat={16}
+                selection={SELECTED}
+                onSelectionChange={vi.fn()}
+                playback={{
+                    positionBeat: 7,
+                    isPlaying: false,
+                    onSeek: vi.fn(),
+                }}
+                moveCommands={commands()}
+            />,
+        );
+        const clipTop = parseFloat(clipButton().style.top);
+        for (const handle of [
+            screen.getByRole("button", { name: /^Start flag/ }),
+            screen.getByTestId("timeline-playhead"),
+        ])
+            expect(parseFloat(handle.style.height)).toBeLessThanOrEqual(
+                clipTop,
+            );
     });
 });

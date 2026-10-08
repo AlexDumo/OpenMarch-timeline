@@ -413,6 +413,84 @@ describe("the Move card (UI-14)", () => {
         expect(screen.queryByTestId("timeline-move-card")).toBeNull();
     });
 
+    it("Enter in the name field stays there: it never reaches the app's Enter shortcut", () => {
+        twoPages().selectRange(9, 12);
+        renderSection();
+        const reached: string[] = [];
+        const listener = (e: KeyboardEvent) => reached.push(e.key);
+        window.addEventListener("keydown", listener);
+        try {
+            const name = screen.getByTestId("timeline-move-card-name");
+            name.focus();
+            fireEvent.keyDown(name, { key: "Enter" });
+            fireEvent.keyDown(name, { key: "Escape" });
+        } finally {
+            window.removeEventListener("keydown", listener);
+        }
+        expect(reached).toEqual([]);
+    });
+
+    it("says when a name reaches 80 characters", () => {
+        twoPages().selectRange(9, 12);
+        renderSection();
+        expect(
+            screen.queryByTestId("timeline-move-card-name-limit"),
+        ).toBeNull();
+        fireEvent.change(screen.getByTestId("timeline-move-card-name"), {
+            target: { value: "x".repeat(80) },
+        });
+        expect(
+            screen.getByTestId("timeline-move-card-name-limit").textContent,
+        ).toBe("80 characters at most.");
+    });
+
+    it("unnamed, its placeholder is the move's label, Move N", () => {
+        const store = twoPages();
+        store.setStoredTimelines([
+            ...useTimelineSelectionStore
+                .getState()
+                .storedTimelines!.map((t) =>
+                    t.id === 7 ? { ...t, name: null } : t,
+                ),
+        ]);
+        store.selectRange(9, 12);
+        renderSection();
+        expect(
+            (screen.getByTestId("timeline-move-card-name") as HTMLInputElement)
+                .placeholder,
+        ).toBe("Move 1");
+    });
+
+    it("explains inside the move, at its last beat, under a closed Per-marcher details", () => {
+        mocks.selectedMarchers = [{ id: 2, drill_number: "T2" }];
+        mocks.inspections = [inspect(golden("G9"), 2, 8)];
+        twoPages().selectRange(9, 12);
+        renderSection();
+        // P is on beat 12, the move's end: where the next move starts
+        expect(vi.mocked(useTimelineInspections)).toHaveBeenLastCalledWith(
+            expect.objectContaining({ beat: 11 }),
+        );
+        const toggle = screen.getByTestId("timeline-move-details-toggle");
+        expect(toggle.getAttribute("aria-expanded")).toBe("false");
+        expect(screen.queryByTestId("timeline-inspection-2")).toBeNull();
+        fireEvent.click(toggle);
+        expect(screen.getByTestId("timeline-inspection-2")).toBeTruthy();
+    });
+
+    it("isolated with P inside the move, it still shows, explains at P and offers Go to end", () => {
+        const store = twoPages();
+        store.setShowEndBeat(17);
+        store.isolate(7);
+        store.seek(10);
+        renderSection();
+        expect(screen.getByTestId("timeline-move-card")).toBeTruthy();
+        expect(vi.mocked(useTimelineInspections)).toHaveBeenLastCalledWith(
+            expect.objectContaining({ beat: 10 }),
+        );
+        fireEvent.click(screen.getByTestId("timeline-move-card-go-to-end"));
+        expect(useTimelineSelectionStore.getState().playheadBeat).toBe(12);
+    });
+
     it("Edit move's request opens the section and flashes the card", () => {
         twoPages().selectRange(9, 12);
         renderSection();
