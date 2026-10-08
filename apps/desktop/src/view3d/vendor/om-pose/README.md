@@ -18,3 +18,7 @@ clips, the same as on r160.
 
 om-pose is OpenMarch's own (private) repository, so these files and its assets ship under the app's
 license.
+
+The app paints the instrument part ids (16, 18, 22; `docs/3d/instruments.md` §4) by wrapping
+`createUniformMaterial`'s `onBeforeCompile` in `window/performers/marchers/instrumentPaint.ts`.
+The vendored shader is unchanged; move those cases into om-pose's `uniform-shader.js` when convenient.
