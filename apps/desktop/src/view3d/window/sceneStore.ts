@@ -15,6 +15,8 @@
  *   default when the stored one doesn't fit the kit).
  * - `quality`: the render quality the scene builds for. `low` drops
  *   shadows and halves the crowd.
+ * - `hornState`: which hold the brass plays. Always `up` for shows; the
+ *   settings panel can switch it to check the other holds (`hornState.ts`).
  * - `qualityMode`: the viewer's choice in the settings panel (`auto`, `low`
  *   or `high`), saved per computer. Set it with `setQualityMode`. In `auto`
  *   the scene lowers `quality` once with `_autoLower()` when frames are slow
@@ -40,6 +42,7 @@ import {
     saveQualityMode,
     type QualityMode,
 } from "./qualityPreference";
+import type { HoldState } from "./hornState";
 
 /** People within this many meters of a seat camera are hidden (ui.md UI-3). */
 export const CROWD_CLEAR_RADIUS = 4.9;
@@ -54,6 +57,8 @@ export interface View3dSceneState {
     lighting: LightingPreset | null;
     quality: View3dQuality;
     setQuality: (quality: View3dQuality) => void;
+    hornState: HoldState;
+    setHornState: (state: HoldState) => void;
     qualityMode: QualityMode;
     /** Saves the choice and applies it. Choosing `auto` starts on `high` again. */
     setQualityMode: (mode: QualityMode) => void;
@@ -81,6 +86,8 @@ export const useView3dSceneStore = create<View3dSceneState>()((set) => ({
     lighting: null,
     quality: initialQuality(startMode),
     setQuality: (quality) => set({ quality }),
+    hornState: "up",
+    setHornState: (hornState) => set({ hornState }),
     qualityMode: startMode,
     setQualityMode: (mode) => {
         saveQualityMode(mode);

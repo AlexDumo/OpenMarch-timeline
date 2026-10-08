@@ -18,6 +18,7 @@ import { Input, Switch } from "@openmarch/ui";
 import clsx from "clsx";
 import { useView3dSceneStore } from "../sceneStore";
 import { QUALITY_MODES } from "../qualityPreference";
+import { HOLD_STATES } from "../hornState";
 import { Segmented } from "./Panel";
 import { LightingControl, VenuePicker, useVenueRequest } from "./VenueControls";
 
@@ -78,6 +79,7 @@ export function SettingsPanel({
                     hint={t("view3d.settings.graphicsHint")}
                 >
                     <QualityRow />
+                    <HornStateRow />
                 </Section>
                 <Section title={t("view3d.settings.keysSection")}>
                     <ShortcutList />
@@ -323,6 +325,30 @@ function QualityRow() {
                 data-testid="view3d-quality-hint"
             >
                 {hint}
+            </p>
+        </Row>
+    );
+}
+
+/** Which hold the brass plays: a test control until per-page horn states exist. */
+function HornStateRow() {
+    const { t } = useTranslate();
+    const state = useView3dSceneStore((s) => s.hornState);
+    const setState = useView3dSceneStore((s) => s.setHornState);
+    return (
+        <Row label={t("view3d.settings.hornState")} stacked>
+            <Segmented
+                value={state}
+                options={HOLD_STATES.map((value) => ({
+                    value,
+                    label: t(`view3d.settings.hornStateMode.${value}`),
+                }))}
+                onChange={setState}
+                label={t("view3d.settings.hornState")}
+                testId="view3d-horn-state-picker"
+            />
+            <p className="text-sub text-text/60">
+                {t("view3d.settings.hornStateHint")}
             </p>
         </Row>
     );

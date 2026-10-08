@@ -84,6 +84,7 @@ interface PerformersProps {
 export default function Performers({ fieldProperties }: PerformersProps) {
     const queryClient = useQueryClient();
     const quality = useView3dSceneStore((s) => s.quality);
+    const hornState = useView3dSceneStore((s) => s.hornState);
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
     );
@@ -138,9 +139,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         return rows.map(([id, section, fill]) => ({
             // varied heights at high quality; one height (one bake class) at low
             body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
-            uniform: sectionUniform(section, fill),
+            uniform: sectionUniform(section, fill, hornState),
         }));
-    }, [looksKey, quality]);
+    }, [looksKey, quality, hornState]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],

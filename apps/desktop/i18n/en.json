@@ -1282,6 +1282,14 @@
                 "high": "Shadows and a full crowd. Choose Low if playback stutters."
             },
             "qualityAutoLowered": "Switched to Low because the view was stuttering. Choose High to keep full quality.",
+            "hornState": "Horn state",
+            "hornStateMode": {
+                "up": "Up",
+                "carry": "Carry",
+                "down": "Down",
+                "trail": "Trail"
+            },
+            "hornStateHint": "Shows always play horns up. The other positions are here to check the poses.",
             "keysSection": "Keyboard and mouse"
         },
         "keys": {

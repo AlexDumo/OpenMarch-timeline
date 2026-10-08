@@ -1,0 +1,18 @@
+import { describe, expect, it } from "vitest";
+import { parseHornState } from "../hornState";
+import { useView3dSceneStore } from "../sceneStore";
+
+describe("horn state", () => {
+    it("defaults to up and accepts the four states", () => {
+        expect(parseHornState(undefined)).toBe("up");
+        expect(parseHornState("sideways")).toBe("up");
+        expect(parseHornState("trail")).toBe("trail");
+    });
+
+    it("starts up in the scene store and changes on request", () => {
+        expect(useView3dSceneStore.getState().hornState).toBe("up");
+        useView3dSceneStore.getState().setHornState("carry");
+        expect(useView3dSceneStore.getState().hornState).toBe("carry");
+        useView3dSceneStore.getState().setHornState("up");
+    });
+});
