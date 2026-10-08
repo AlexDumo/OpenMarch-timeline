@@ -749,8 +749,15 @@
             "move": {
                 "counts": "Counts",
                 "delete": "Delete move",
+                "details": "Per-marcher details ({count})",
+                "detailsCapped": "Showing the first {shown} of {count} marchers. Select fewer to see the others.",
+                "endHelp": "To change where they end up, drag marchers on the field at the move's end.",
+                "goToEnd": "Go to end",
                 "marchers": "{count, plural, one {# marcher} other {# marchers}}",
                 "name": "Name",
+                "nameLimit": "{max} characters at most.",
+                "path": "Path",
+                "pathMixed": "Mixed",
                 "paused": "Pause to delete a move.",
                 "selectMarchers": "Select them",
                 "title": "Move"

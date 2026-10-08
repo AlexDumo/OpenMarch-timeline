@@ -18,6 +18,15 @@ export const TIMELINE_INSPECTOR_STRINGS = {
     "inspector.timeline.move.selectMarchers": "Select them",
     "inspector.timeline.move.delete": "Delete move",
     "inspector.timeline.move.paused": "Pause to delete a move.",
+    "inspector.timeline.move.nameLimit": "{max} characters at most.",
+    "inspector.timeline.move.path": "Path",
+    "inspector.timeline.move.pathMixed": "Mixed",
+    "inspector.timeline.move.endHelp":
+        "To change where they end up, drag marchers on the field at the move's end.",
+    "inspector.timeline.move.goToEnd": "Go to end",
+    "inspector.timeline.move.details": "Per-marcher details ({count})",
+    "inspector.timeline.move.detailsCapped":
+        "Showing the first {shown} of {count} marchers. Select fewer to see the others.",
 
     "inspector.timeline.label.span": "Span",
     "inspector.timeline.label.beats": "Beats",

@@ -1,13 +1,19 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslate } from "@tolgee/react";
 import { useQuery } from "@tanstack/react-query";
-import { WarningIcon, InfoIcon } from "@phosphor-icons/react";
+import {
+    CaretDownIcon,
+    CaretRightIcon,
+    WarningIcon,
+    InfoIcon,
+} from "@phosphor-icons/react";
 import type { Diagnostic, SpanKind, XY } from "@openmarch/core";
 import { db } from "@/global/database/db";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
 import {
+    isolatedTimeline,
     selectedStoredTimeline,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
@@ -374,10 +380,20 @@ function TimelineInspectorContent() {
     // UI-14: in timeline mode the inspector explains at the paused playhead P, where edits land
     // (UI-10). On a flag that is the page's end beat, as before; between flags a mid-page move's
     // transitions show.
-    const beat = useTimelineSelectionStore((s) => s.playheadBeat);
+    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    // The move the window is (isolated, P may be anywhere inside it), if it has a clip
     const move = useTimelineSelectionStore((s) =>
-        moveCardTimeline(selectedStoredTimeline(s), s.pageBoxes),
+        moveCardTimeline(
+            isolatedTimeline(s) ?? selectedStoredTimeline(s),
+            s.pageBoxes,
+        ),
     );
+    // UI-14: with a move, explain inside it: at P, or its last beat when P is on its end, where
+    // the next move starts. So the details below are about this move's transitions.
+    const beat = move
+        ? Math.min(Math.max(playheadBeat, move.start), move.end - 1)
+        : playheadBeat;
+    const [detailsOpen, setDetailsOpen] = useState(false);
     // **Edit move** opens the section, so the Move card can come into view
     const [open, setOpen] = useState(true);
     const revealing = useMoveCardRevealStore(
@@ -406,14 +422,9 @@ function TimelineInspectorContent() {
         () => shapeFrameFor(fieldProperties ?? null),
         [fieldProperties],
     );
-    return (
-        <InspectorCollapsible
-            open={open}
-            onOpenChange={setOpen}
-            translatableTitle={{ keyName: "inspector.timeline.title" }}
-            className="mt-12 flex flex-col gap-16"
-        >
-            {move && <TimelineMoveCard key={move.id} timeline={move} t={t} />}
+    // Each selected marcher's explanation and its transition's editors
+    const details = (
+        <>
             {inspections.map((inspection) => (
                 <MarcherInspectionView
                     key={inspection.marcherId}
@@ -446,10 +457,60 @@ function TimelineInspectorContent() {
                     </Fragment>
                 );
             })}
-            {omitted > 0 && (
-                <p className="text-sub text-text/60">
-                    {t("inspector.timeline.omitted", { count: omitted })}
-                </p>
+        </>
+    );
+    return (
+        <InspectorCollapsible
+            open={open}
+            onOpenChange={setOpen}
+            translatableTitle={{ keyName: "inspector.timeline.title" }}
+            className="mt-12 flex flex-col gap-16"
+        >
+            {move && <TimelineMoveCard key={move.id} timeline={move} t={t} />}
+            {move ? (
+                inspections.length > 0 && (
+                    <div className="flex flex-col gap-16">
+                        <button
+                            type="button"
+                            data-testid="timeline-move-details-toggle"
+                            aria-expanded={detailsOpen}
+                            onClick={() => setDetailsOpen((o) => !o)}
+                            className="text-body focus-visible:text-accent flex items-center gap-6 text-left font-medium outline-hidden"
+                        >
+                            {detailsOpen ? (
+                                <CaretDownIcon size={16} />
+                            ) : (
+                                <CaretRightIcon size={16} />
+                            )}
+                            {t("inspector.timeline.move.details", {
+                                count: inspections.length + omitted,
+                            })}
+                        </button>
+                        {detailsOpen && omitted > 0 && (
+                            <p
+                                className="text-sub text-text/60"
+                                data-testid="timeline-move-details-capped"
+                            >
+                                {t("inspector.timeline.move.detailsCapped", {
+                                    shown: inspections.length,
+                                    count: inspections.length + omitted,
+                                })}
+                            </p>
+                        )}
+                        {detailsOpen && details}
+                    </div>
+                )
+            ) : (
+                <>
+                    {details}
+                    {omitted > 0 && (
+                        <p className="text-sub text-text/60">
+                            {t("inspector.timeline.omitted", {
+                                count: omitted,
+                            })}
+                        </p>
+                    )}
+                </>
             )}
             {unknownMarcherIds.map((id) => (
                 <p key={id} className="text-sub text-text/60">

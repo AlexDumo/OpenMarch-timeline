@@ -264,16 +264,42 @@ export function buildTimelineTracks(
 export const timelineTrackId = (timelineId: number) => `timeline-${timelineId}`;
 
 /**
- * A move's label (UI-14): its name, or "Timeline {id}" when it has none. The clip, the delete
- * toast and the inspector's Move card all say it this way.
+ * A move's label (UI-14): its name, or "Move {number}", its place among the moves (`moveLabels`).
+ * The clip, its menu's toast, the inspector's Move card and screen readers all say it this way.
  */
 export const moveLabel = ({
-    id,
     name,
+    number,
 }: {
-    readonly id: number;
     readonly name?: string | null;
-}): string => name ?? `Timeline ${id}`;
+    readonly number?: number;
+}): string => name ?? (number === undefined ? "Move" : `Move ${number}`);
+
+/**
+ * Every move's label by stored timeline id (UI-14). Moves are the stored timelines off the page
+ * boxes (the ones drawn as clips, UI-10), numbered 1, 2, 3… by start, then id; a named move
+ * shows its name.
+ */
+export function moveLabels(
+    timelines: readonly {
+        readonly id: number;
+        readonly start: number;
+        readonly end: number;
+        readonly name?: string | null;
+    }[],
+    pageBoxes: readonly { readonly start: number; readonly end: number }[],
+): Map<number, string> {
+    const boxes = new Set(pageBoxes.map((b) => `${b.start}:${b.end}`));
+    const moves = timelines
+        .filter((t) => !boxes.has(`${t.start}:${t.end}`))
+        .sort((a, b) => a.start - b.start || a.id - b.id);
+    return new Map(
+        moves.map((t, index) => [
+            t.id,
+            moveLabel({ name: t.name, number: index + 1 }),
+        ]),
+    );
+}
 
 /** The longest name a move keeps (UI-14); a longer one is cut to it. */
 export const MOVE_NAME_MAX_LENGTH = 80;
@@ -344,7 +370,7 @@ export function buildTimelineClipTracks(
                 linkId: timeline.id,
                 targetId: timeline.id,
                 targetType: "timeline",
-                label: moveLabel(timeline),
+                label: timeline.name ?? `Timeline ${timeline.id}`,
                 color: TIMELINE_TRACK_COLORS[
                     index % TIMELINE_TRACK_COLORS.length
                 ],

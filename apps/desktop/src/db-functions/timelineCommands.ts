@@ -1,5 +1,9 @@
 import { and, eq, inArray, lt, gt, notInArray, sql } from "drizzle-orm";
-import { createResolver, validateDestination } from "@openmarch/core";
+import {
+    createResolver,
+    validateDestination,
+    type PathStyle,
+} from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables, shapeFromRow } from "@/timeline/timelineRows";
 import { normalizeMoveName } from "@/timeline/timelineViewModel";
@@ -16,6 +20,10 @@ import {
 } from "./timelines";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitions";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
+import {
+    updateTimelineTransitionsInTransaction,
+    type ModifiedTimelineTransitionArgs,
+} from "./timelineTransitionsInTransaction";
 
 /**
  * The timeline's commands (docs/timeline/phases/08-authoring-ui.md P8.9, ui.md's mapping table):
@@ -506,7 +514,8 @@ export const deleteTimeline = async ({
 /**
  * Renames a move (UI-14) as one undoable edit; `normalizeMoveName` decides what is stored, so an
  * empty name clears it. A name equal to the stored one opens no edit and returns `null`, since
- * an edit that writes nothing is refused. Refused (E-ARGS) for a timeline that doesn't exist.
+ * an edit that writes nothing is refused. A timeline that no longer exists (a name field left
+ * open while its move was deleted) has nothing to rename: `null` too, not an error.
  */
 export const renameTimeline = async ({
     db,
@@ -523,8 +532,7 @@ export const renameTimeline = async ({
         .from(schema.timelines)
         .where(eq(schema.timelines.id, timelineId))
         .get();
-    if (!stored) refuse(`timeline ${timelineId} does not exist`);
-    if (stored.name === next) return null;
+    if (!stored || stored.name === next) return null;
     return await transactionWithHistory(db, "renameTimeline", async (tx) => {
         const [renamed] = await updateTimelinesInTransaction({
             tx,
@@ -532,4 +540,101 @@ export const renameTimeline = async ({
         });
         return renamed!;
     });
+};
+
+/** The path styles a whole move can take (UI-14): follow the leader needs a shape, which a move's
+ * one-slot transitions don't have. */
+export type MovePathStyle = Extract<PathStyle, "direct" | "arc">;
+
+/** A move's path as its Move card shows it (UI-14). */
+export interface MovePath {
+    /** Every transition's style, `"mixed"` when they differ, `null` with no transitions */
+    readonly style: PathStyle | "mixed" | null;
+    /** The arcs' bulge when every transition is an arc with the same bulge, else `null` */
+    readonly bulge: number | null;
+    readonly transitions: number;
+}
+
+const bulgeOf = (params: string | null): number | null => {
+    if (params === null) return null;
+    const parsed = JSON.parse(params) as { bulge?: unknown } | null;
+    return typeof parsed?.bulge === "number" ? parsed.bulge : null;
+};
+
+/** The transitions of a move, with their style and bulge. */
+const moveTransitions = async (
+    db: DbConnection | DbTransaction,
+    timelineId: number,
+) =>
+    (
+        await db
+            .select({
+                id: schema.timeline_transitions.id,
+                style: schema.timeline_transitions.path_style,
+                params: schema.timeline_transitions.path_params,
+            })
+            .from(schema.timeline_transitions)
+            .where(eq(schema.timeline_transitions.timeline_id, timelineId))
+            .all()
+    ).map((t) => ({
+        id: t.id,
+        style: t.style as PathStyle,
+        bulge: bulgeOf(t.params),
+    }));
+
+/** What a move's member transitions' paths are, for the Move card (UI-14). */
+export const readMovePath = async (
+    db: DbConnection | DbTransaction,
+    timelineId: number,
+): Promise<MovePath> => {
+    const rows = await moveTransitions(db, timelineId);
+    if (rows.length === 0) return { style: null, bulge: null, transitions: 0 };
+    const style = rows.every((r) => r.style === rows[0]!.style)
+        ? rows[0]!.style
+        : "mixed";
+    const bulge =
+        style === "arc" && rows.every((r) => r.bulge === rows[0]!.bulge)
+            ? rows[0]!.bulge
+            : null;
+    return { style, bulge, transitions: rows.length };
+};
+
+/**
+ * Gives every transition of a move the same path (UI-14's Move card): `direct`, or `arc` with
+ * `bulge`, as one undoable edit. A move is one one-slot transition per marcher (UI-9), so this is
+ * how the move as a whole bends. Transitions that already have that path are left alone; when all
+ * of them do, no edit opens and it returns `null`. Otherwise it returns how many changed. The
+ * bulge is validated by the write (|bulge| at most 0.5, spec §5.2).
+ */
+export const setMovePath = async ({
+    db,
+    timelineId,
+    style,
+    bulge = 0.25,
+}: {
+    db: DbConnection;
+    timelineId: number;
+    style: MovePathStyle;
+    bulge?: number;
+}): Promise<number | null> => {
+    const rows = await moveTransitions(db, timelineId);
+    const changed: ModifiedTimelineTransitionArgs[] = rows
+        .filter((r) =>
+            style === "arc"
+                ? r.style !== "arc" || r.bulge !== bulge
+                : r.style !== "direct",
+        )
+        .map((r) => ({
+            id: r.id,
+            pathStyle: style,
+            pathParams: style === "arc" ? { bulge } : null,
+        }));
+    if (changed.length === 0) return null;
+    await transactionWithHistory(db, "setMovePath", (tx) =>
+        updateTimelineTransitionsInTransaction({
+            tx,
+            modifiedTransitions: changed,
+        }),
+    );
+    return changed.length;
 };

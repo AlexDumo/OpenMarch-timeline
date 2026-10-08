@@ -42,7 +42,10 @@ import {
     peaksByBeat,
     useAudioEnvelopeStore,
 } from "@/timeline/timelineWaveform";
-import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
+import {
+    createTimelineBeatAxis,
+    moveLabels,
+} from "@/timeline/timelineViewModel";
 import { timeAtBeat } from "@/timeline/timeMap";
 import {
     moveCommandBlocker,
@@ -143,11 +146,20 @@ export default function TimelineModePanel() {
         database: db,
         enabled: useTimelineMode(),
     });
-    // UI-10: a page box already stands for its page timeline, so only the others get a clip
-    const offPage = useMemo(
-        () => timelinesOffPages(timelines, pages),
-        [timelines, pages],
-    );
+    // UI-10: a page box already stands for its page timeline, so only the others get a clip.
+    // UI-14: each is a move, labelled by its name or "Move 2", its place among the moves
+    const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
+    const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const offPage = useMemo(() => {
+        const labels = moveLabels(storedTimelines ?? [], pageBoxes);
+        return timelinesOffPages(timelines, pages).map((t) => {
+            const label =
+                t.linkId === undefined
+                    ? undefined
+                    : labels.get(Number(t.linkId));
+            return label === undefined ? t : { ...t, label };
+        });
+    }, [timelines, pages, storedTimelines, pageBoxes]);
     const commands = useTimelineCommands({
         database: db,
         timelines,
@@ -161,9 +173,10 @@ export default function TimelineModePanel() {
             onEdit: (id: number) => {
                 if (!isPlaying) moves.editMove(id);
             },
-            onRename: moves.renameMove,
+            onRename: (id: number, name: string) =>
+                void moves.renameMove(id, name),
             onDelete: (id: number) => {
-                if (!isPlaying) moves.deleteMove(id);
+                if (!isPlaying) void moves.deleteMove(id);
             },
         }),
         [isPlaying, moves],
