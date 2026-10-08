@@ -690,6 +690,7 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
                 { start: second.start_beat, end: second.end_beat },
             ],
             caughtUp: [],
+            flags: [first.end_beat],
             createdTimelineId: expect.any(Number),
         });
         await timelineResolverSettled();
@@ -752,7 +753,7 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
         expect(result.passThrough).toBeUndefined();
     });
 
-    it("Only change Page N: takes the marchers out of the long move, deletes it when empty, and edits the last page instead, as one undoable edit", async ({
+    it("Start from Page N: takes the marchers out of the long move, deletes it when empty, and edits the last page instead, as one undoable edit", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -797,7 +798,7 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
         expect(await snapshot(db)).toEqual(passedThrough);
     });
 
-    it("Only change Page N refuses a flag outside the range, and marchers no longer in the move", async ({
+    it("Start from Page N refuses a flag outside the range, and marchers no longer in the move", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -822,7 +823,7 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
             }),
         );
     });
-    it("Only change Page N keeps where the marchers are now, not where the first drag put them", async ({
+    it("Start from Page N keeps where the marchers are now, not where the first drag put them", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -855,7 +856,7 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
         expect(resolver().positionAt(5, range.end)).toEqual([204, 210]);
     });
 
-    it("Only change Page N keeps a timeline it didn't create, and other marchers in the long move", async ({
+    it("Start from Page N keeps a timeline it didn't create, and other marchers in the long move", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -901,7 +902,7 @@ describeDbTests("moving marchers in an edit window (UI-10)", (it) => {
         expect(resolver().positionAt(5, range.end)).toEqual([200, 210]);
     });
 
-    it("Only change Page N never deletes an empty timeline the user kept over the range", async ({
+    it("Start from Page N never deletes an empty timeline the user kept over the range", async ({
         db,
         marchersAndPages: _,
     }) => {
