@@ -1,14 +1,21 @@
 /**
- * The brass section's horns, built from a few dimensions
+ * The brass section's horns, traced from side-view reference photos
  * (docs/3d/instruments.md §3, §4). Instrument frame: origin at the right
- * hand's grip, +Z toward the bell, +Y up through the valve caps, +X the
- * performer's left. Proportions follow the reference pages; nothing is
- * copied from them. Pure: no three.js.
+ * hand's grip (the valve block, or the slide brace), +Z toward the bell,
+ * +Y up through the valve caps, +X the performer's left. Proportions follow
+ * the reference pages; nothing is copied from them. Pure: no three.js.
+ *
+ * Every horn is a list of tubing runs (a path and a bore), valve casings
+ * with caps, stems and buttons, slides with crooks, braces, water keys, a
+ * finger hook, a bell with a rim bead and a mouthpiece. `detail` sets the
+ * segment counts: "high" for the full bodies, "low" for the block tier.
  */
 import {
-    cylinder,
-    lathe,
-    tube,
+    arc,
+    bellProfile,
+    colorPieces,
+    smoothLathe,
+    smoothTube,
     transformPiece,
     PART_BLACK,
     PART_CHROME,
@@ -26,6 +33,8 @@ export type BrassModelId =
     | "trombone"
     | "bassTrombone"
     | "contra";
+
+export type Detail = "high" | "low";
 
 export interface InstrumentModel {
     id: BrassModelId;
@@ -50,13 +59,31 @@ export const BRASS_DIMENSIONS: Record<
     contra: { length: 0.95, bell: 0.5, bore: 0.0185 },
 };
 
-const SEG = 12;
+/** Default colors by part: gold lacquer, chrome, black. The window recolors silver. */
+export const BRASS_COLORS: Record<number, number> = {
+    [PART_METAL]: 0xd9ad4f,
+    [PART_CHROME]: 0xd9dde2,
+    [PART_BLACK]: 0x141416,
+};
+
+interface SegmentCounts {
+    tube: number;
+    bell: number;
+    small: number;
+    crook: number;
+}
+const SEGMENTS: Record<Detail, SegmentCounts> = {
+    high: { tube: 28, bell: 64, small: 14, crook: 10 },
+    low: { tube: 8, bell: 16, small: 5, crook: 4 },
+};
+/** Trombones are long, thin tubes seen end-on: they need finer rings. */
+const TROMBONE_SEGMENTS: Record<Detail, SegmentCounts> = {
+    high: { tube: 48, bell: 96, small: 24, crook: 14 },
+    low: { tube: 12, bell: 24, small: 6, crook: 5 },
+};
 
 /** A lathe along +Z instead of +Y: rotate the profile's axis. */
 const Y_TO_Z: Mat4 = [1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1];
-const latheZ = (profile: [number, number][], part: number) =>
-    transformPiece(lathe(profile, SEG, part), Y_TO_Z);
-
 const translate = (x: number, y: number, z: number): Mat4 => [
     1,
     0,
@@ -75,273 +102,532 @@ const translate = (x: number, y: number, z: number): Mat4 => [
     z,
     1,
 ];
+const at = (p: Piece, x: number, y: number, z: number) =>
+    transformPiece(p, translate(x, y, z));
 
-/** A bell flare from the throat radius at z0 to the rim radius at z1. */
-function bell(throat: number, rim: number, z0: number, z1: number): Piece {
-    const steps = 6;
-    const profile: [number, number][] = [];
-    for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        // exponential flare: slow at the throat, fast at the rim
-        const r =
-            throat +
-            (rim - throat) * ((Math.exp(3 * t) - 1) / (Math.exp(3) - 1));
-        profile.push([r, z0 + (z1 - z0) * t]);
-    }
-    return latheZ(profile, PART_METAL);
-}
-
-/** Three piston valves standing on the block at the origin, caps in chrome. */
-function valves(bore: number, spacing: number, height: number): Piece[] {
-    const out: Piece[] = [];
-    for (let i = -1; i <= 1; i++) {
-        const z = i * spacing;
-        out.push(
-            cylinder(
-                bore * 1.6,
-                [0, -height * 0.5 - 0.01, z],
-                [0, height * 0.5, z],
-                6,
-                PART_METAL,
+/** Builders bound to one detail level. */
+function tools(s: SegmentCounts) {
+    const run = (
+        path: Vec3[],
+        r: number | number[],
+        part = PART_METAL,
+        caps = false,
+    ) => smoothTube(path, r, s.tube, part, { capStart: caps, capEnd: caps });
+    const thin = (a: Vec3, b: Vec3, r: number, part = PART_CHROME) =>
+        smoothTube([a, b], r, s.small, part);
+    /** A bell along +Z from z0, flaring over `length` to `rim`, axis at (x, y). */
+    const bell = (
+        throat: number,
+        rim: number,
+        z0: number,
+        length: number,
+        x = 0,
+        y = 0,
+    ) =>
+        at(
+            transformPiece(
+                smoothLathe(
+                    bellProfile(throat, rim, length),
+                    s.bell,
+                    PART_METAL,
+                ),
+                Y_TO_Z,
             ),
-            cylinder(
-                bore * 1.3,
-                [0, height * 0.5, z],
-                [0, height * 0.5 + 0.018, z],
-                6,
-                PART_CHROME,
-            ),
+            x,
+            y,
+            z0,
         );
-    }
-    return out;
-}
-
-function mouthpieceAt(p: Vec3, bore: number): Piece {
-    return tube([p, [p[0], p[1], p[2] - 0.05]], bore * 1.4, 8, PART_CHROME);
-}
-
-function valvedHorn(id: BrassModelId, bellLift: number): InstrumentModel {
-    const d = BRASS_DIMENSIONS[id];
-    const bore = d.bore;
-    const back = -d.length * 0.35; // mouthpiece end
-    const front = d.length + back; // bell rim
-    const bellStart = front - d.length * 0.3;
-    const mouthpiece: Vec3 = [0.02, 0, back + 0.05];
-    const pieces: Piece[] = [
-        // leadpipe from the mouthpiece to the valve block
-        tube(
+    /** A U slide: out along `dir` from `start`, a 180 degree crook of `width`, back. Parallel to the x axis when dir is ±z. */
+    const uSlide = (
+        start: Vec3,
+        dirZ: 1 | -1,
+        length: number,
+        width: number,
+        r: number,
+    ) => {
+        const [x, y, z] = start;
+        const end = z + dirZ * length;
+        const path: Vec3[] = [
+            [x, y, z],
+            [x, y, end],
+            ...arc(
+                [x + width / 2, y, end],
+                width / 2,
+                dirZ > 0 ? 180 : 0,
+                dirZ > 0 ? 0 : 180,
+                s.crook,
+                "y",
+            ).map((p): Vec3 => [p[0], p[1], p[2]]),
+            [x + width, y, z],
+        ];
+        // the arc about y runs from +Z (0°) through +X (90°) to −Z (180°)
+        return run(path, r);
+    };
+    /** Three piston valves at z offsets, standing on the block: casing, cap, stem, button, bottom cap. */
+    const valves = (
+        zs: number[],
+        bore: number,
+        bottom: number,
+        top: number,
+    ) => {
+        const out: Piece[] = [];
+        const cr = bore * 1.55;
+        for (const z of zs) {
+            out.push(
+                smoothTube(
+                    [
+                        [0, bottom, z],
+                        [0, top, z],
+                    ],
+                    cr,
+                    s.tube,
+                    PART_METAL,
+                ),
+                smoothTube(
+                    [
+                        [0, top, z],
+                        [0, top + 0.012, z],
+                    ],
+                    cr * 1.08,
+                    s.small,
+                    PART_CHROME,
+                    { capStart: false },
+                ),
+                smoothTube(
+                    [
+                        [0, bottom - 0.008, z],
+                        [0, bottom, z],
+                    ],
+                    cr * 1.08,
+                    s.small,
+                    PART_CHROME,
+                    { capEnd: false },
+                ),
+                thin([0, top + 0.012, z], [0, top + 0.03, z], bore * 0.35),
+                smoothTube(
+                    [
+                        [0, top + 0.03, z],
+                        [0, top + 0.036, z],
+                    ],
+                    bore * 0.9,
+                    s.small,
+                    PART_CHROME,
+                ),
+                smoothTube(
+                    [
+                        [0, top + 0.036, z],
+                        [0, top + 0.038, z],
+                    ],
+                    bore * 0.75,
+                    s.small,
+                    PART_BLACK,
+                ),
+            );
+        }
+        return out;
+    };
+    /** Mouthpiece: cup rim, cup, shank, pointing −Z from `p`. */
+    const mouthpiece = (p: Vec3, bore: number) => {
+        const r = bore * 1.3;
+        const cup = smoothLathe(
             [
-                [0.02, 0, back + 0.05],
-                [0.02, 0, -0.03],
-                [0, 0, -0.02],
+                [r * 0.35, 0],
+                [r * 1.15, 0],
+                [r * 1.2, 0.004],
+                [r * 1.1, 0.012],
+                [r * 0.7, 0.03],
+                [r * 0.55, 0.055],
+                [r * 0.6, 0.075],
             ],
-            bore,
-            8,
-            PART_METAL,
-        ),
-        ...valves(bore, 0.022, 0.07),
-        // bell pipe from the block up and forward to the bell
-        tube(
+            s.tube,
+            PART_CHROME,
+        );
+        // the lathe's +Y becomes −Z (the mouthpiece points back)
+        const flip: Mat4 = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1];
+        return at(transformPiece(cup, flip), p[0], p[1], p[2] + 0.075);
+    };
+    const brace = (a: Vec3, b: Vec3, r = 0.003) => thin(a, b, r, PART_METAL);
+    const waterKey = (p: Vec3, dirZ: 1 | -1) => [
+        smoothTube(
             [
-                [0, 0.01, 0.02],
-                [0, 0.01 + bellLift * 0.5, 0.08],
-                [0, bellLift, bellStart],
+                [p[0], p[1] - 0.006, p[2]],
+                [p[0], p[1] + 0.004, p[2]],
             ],
-            bore * 1.2,
-            8,
-            PART_METAL,
+            0.006,
+            s.small,
+            PART_CHROME,
         ),
-        transformPiece(
-            bell(bore * 1.3, d.bell / 2, bellStart, front),
-            translate(0, bellLift, 0),
-        ),
-        // tuning slide loop under the block
-        tube(
+        thin(p, [p[0], p[1] + 0.006, p[2] + dirZ * 0.03], 0.0015),
+        smoothTube(
             [
-                [-0.02, -0.05, 0],
-                [-0.02, -0.05, 0.1],
-                [0.02, -0.05, 0.1],
-                [0.02, -0.05, 0],
+                [p[0], p[1] - 0.009, p[2]],
+                [p[0], p[1] - 0.006, p[2]],
             ],
-            bore,
-            8,
-            PART_METAL,
-        ),
-        // three valve slides out to the performer's left
-        tube(
-            [
-                [0.02, 0, -0.022],
-                [0.07, 0, -0.022],
-                [0.07, 0, 0.022],
-                [0.02, 0, 0.022],
-            ],
-            bore * 0.9,
-            6,
-            PART_METAL,
-        ),
-        mouthpieceAt(mouthpiece, bore),
-        // finger ring on the leadpipe for the left hand
-        cylinder(
-            0.012,
-            [0.035, -0.02, -0.06],
-            [0.035, 0.02, -0.06],
-            6,
+            0.005,
+            s.small,
             PART_BLACK,
         ),
     ];
-    return { id, pieces, leftGrip: [0.045, 0, -0.06], mouthpiece };
+    const hook = (p: Vec3) =>
+        run(arc(p, 0.014, 90, 330, s.crook, "x"), 0.002, PART_METAL, true);
+    return {
+        run,
+        thin,
+        bell,
+        uSlide,
+        valves,
+        mouthpiece,
+        brace,
+        waterKey,
+        hook,
+    };
 }
 
-function trombone(id: "trombone" | "bassTrombone"): InstrumentModel {
+function valvedHorn(id: BrassModelId, detail: Detail): InstrumentModel {
     const d = BRASS_DIMENSIONS[id];
+    const t = tools(SEGMENTS[detail]);
+    const bore = d.bore;
+    const big = id === "baritone" || id === "euphonium";
+    const mello = id === "mellophone";
+    const bellLift = big ? 0.06 : mello ? 0.02 : 0;
+    const back = -d.length * (big ? 0.36 : 0.35);
+    const front = d.length + back;
+    const bellLen = big ? d.length * 0.4 : d.length * 0.33;
+    const bellStart = front - bellLen;
+    const lead = 0.018; // leadpipe height above the grip
+    const mouthpieceAt: Vec3 = [0.012, lead, back + 0.075];
+    const pieces: Piece[] = [
+        // leadpipe: mouthpiece to the third valve, a gentle taper
+        t.run(
+            [
+                [0.012, lead, back + 0.075],
+                [0.012, lead, -0.05],
+                [0.004, lead, -0.026],
+            ],
+            [bore * 0.9, bore, bore],
+        ),
+        ...t.valves([-0.024, 0, 0.024], bore, -0.04, 0.03),
+        // bell pipe: first valve forward, rising to the bell axis
+        t.run(
+            [
+                [0, lead, 0.026],
+                [0, lead + bellLift * 0.3, bellStart * 0.5],
+                [0, bellLift, bellStart],
+            ],
+            [bore, bore * 1.15, bore * 1.35],
+        ),
+        t.bell(bore * 1.4, d.bell / 2, bellStart, bellLen, 0, bellLift),
+        // tuning slide: back under the leadpipe with a crook
+        t.uSlide([-0.016, -0.03, -0.02], -1, big ? 0.14 : 0.1, 0.032, bore),
+        // first valve slide: short, to the performer's left
+        t.uSlide([0.012, -0.012, -0.024], 1, 0.0, 0.0, bore), // placeholder replaced below
+        // third valve slide: longer, to the left, with a crook
+        t.run(
+            [
+                [0.016, -0.015, 0.024],
+                [0.07, -0.015, 0.024],
+                ...arc(
+                    [0.07, -0.015, 0.012],
+                    0.012,
+                    90,
+                    270,
+                    SEGMENTS[detail].crook,
+                    "y",
+                ),
+                [0.016, -0.015, 0.0],
+            ],
+            bore * 0.9,
+        ),
+        // second valve slide: a small U behind the middle valve
+        t.run(
+            [
+                [-0.012, -0.015, 0.006],
+                [-0.03, -0.015, 0.006],
+                ...arc(
+                    [-0.03, -0.015, 0.0],
+                    0.006,
+                    90,
+                    270,
+                    SEGMENTS[detail].crook,
+                    "y",
+                ),
+                [-0.012, -0.015, -0.006],
+            ],
+            bore * 0.9,
+        ),
+        // braces
+        t.brace([0.012, lead, -0.08], [-0.016, -0.03, -0.08]),
+        t.brace(
+            [0, lead + bellLift * 0.3, bellStart * 0.5],
+            [0, -0.03, bellStart * 0.5],
+        ),
+        ...t.waterKey([-0.016, -0.03, -0.1], -1),
+        t.hook([0.02, lead - 0.004, 0.06]),
+        t.mouthpiece(mouthpieceAt, bore),
+        // finger ring on the third slide
+        t.run(
+            arc(
+                [0.075, -0.015, 0.012],
+                0.01,
+                0,
+                360,
+                SEGMENTS[detail].crook * 2,
+                "x",
+            ),
+            0.0015,
+            PART_CHROME,
+            true,
+        ),
+    ];
+    // replace the placeholder first slide with a real short U
+    pieces[5] = t.run(
+        [
+            [0.016, -0.012, -0.024],
+            [0.045, -0.012, -0.024],
+            ...arc(
+                [0.045, -0.012, -0.034],
+                0.01,
+                90,
+                270,
+                SEGMENTS[detail].crook,
+                "y",
+            ),
+            [0.016, -0.012, -0.044],
+        ],
+        bore * 0.9,
+    );
+    if (big || mello) {
+        // the lower body: a second, larger bow under the tuning slide
+        pieces.push(
+            t.uSlide(
+                [-0.022, -0.065, 0.03],
+                -1,
+                big ? 0.2 : 0.16,
+                0.044,
+                bore * 1.25,
+            ),
+            t.brace([-0.022, -0.03, -0.1], [-0.022, -0.065, -0.1]),
+            ...t.waterKey([0.022, -0.065, -0.15], -1),
+        );
+    }
+    return {
+        id,
+        pieces: colorPieces(
+            pieces,
+            (part) => BRASS_COLORS[part] ?? BRASS_COLORS[PART_METAL],
+        ),
+        leftGrip: [0.05, -0.012, -0.034],
+        mouthpiece: mouthpieceAt,
+    };
+}
+
+function trombone(
+    id: "trombone" | "bassTrombone",
+    detail: Detail,
+): InstrumentModel {
+    const d = BRASS_DIMENSIONS[id];
+    const s = TROMBONE_SEGMENTS[detail];
+    const t = tools(s);
     const bore = d.bore;
     const back = -0.3; // mouthpiece behind the grip
     const front = d.length + back;
-    const bellStart = front - 0.32;
-    const mouthpiece: Vec3 = [0.03, 0, back + 0.05];
+    const bellLen = 0.34;
+    const bellStart = front - bellLen;
     const slideLen = 0.55;
+    const y = 0.05; // the bell section sits above the slide
+    const mouthpieceAt: Vec3 = [0.03, 0, back + 0.075];
     const pieces: Piece[] = [
-        // the two inner slide tubes from the brace forward
-        tube(
+        // inner slide tubes and the outer slide (slightly wider), with the bow
+        t.run(
             [
-                [0.03, 0, 0],
+                [0.03, 0, -0.02],
                 [0.03, 0, slideLen],
             ],
             bore,
-            8,
-            PART_METAL,
         ),
-        tube(
+        t.run(
             [
-                [-0.03, 0, 0],
+                [-0.03, 0, -0.02],
                 [-0.03, 0, slideLen],
             ],
             bore,
-            8,
-            PART_METAL,
         ),
-        // the slide bow
-        tube(
+        t.run(
+            [
+                [0.03, 0, 0.1],
+                [0.03, 0, slideLen],
+            ],
+            bore * 1.12,
+        ),
+        t.run(
+            [
+                [-0.03, 0, 0.1],
+                [-0.03, 0, slideLen],
+            ],
+            bore * 1.12,
+        ),
+        t.run(
             [
                 [0.03, 0, slideLen],
-                [0.03, 0, slideLen + 0.04],
-                [-0.03, 0, slideLen + 0.04],
+                ...arc([0, 0, slideLen], 0.03, 90, 270, s.crook, "y"),
                 [-0.03, 0, slideLen],
             ],
-            bore,
-            6,
-            PART_METAL,
+            bore * 1.12,
         ),
-        // slide brace (the right hand's grip)
-        cylinder(0.006, [-0.03, 0, 0], [0.03, 0, 0], 6, PART_CHROME),
-        // bell section: mouthpiece tube back, around, and forward to the bell
-        tube(
+        // slide braces: the grip and the outer brace
+        t.thin([-0.03, 0, 0], [0.03, 0, 0], 0.004),
+        t.thin([-0.03, 0, 0.1], [0.03, 0, 0.1], 0.004),
+        // bell section: from the inner slide back, around the tuning bow, forward to the bell
+        t.run(
             [
-                [0.03, 0, -0.26],
-                [0.03, 0, back + 0.05],
+                [0.03, 0, -0.02],
+                [0.03, 0, back + 0.075],
             ],
             bore,
-            8,
-            PART_METAL,
         ),
-        tube(
+        t.run(
             [
-                [0.03, 0, -0.26],
-                [0.03, 0.05, -0.3],
-                [-0.03, 0.05, -0.3],
-                [-0.03, 0.05, bellStart],
+                [0.03, 0, -0.02],
+                [0.03, y * 0.5, -0.2],
+                ...arc([0, y, -0.26], 0.03, 270, 90, s.crook, "y").map(
+                    (p): Vec3 => [p[0], y, p[2]],
+                ),
+                [-0.03, y, -0.2],
+                [-0.03, y, bellStart],
             ],
-            bore * 1.2,
-            8,
-            PART_METAL,
+            [
+                bore,
+                bore,
+                bore * 1.1,
+                bore * 1.1,
+                bore * 1.1,
+                bore * 1.2,
+                bore * 1.3,
+            ],
         ),
-        transformPiece(
-            bell(bore * 1.3, d.bell / 2, bellStart, front),
-            translate(-0.03, 0.05, 0),
-        ),
-        // bell brace, the left hand's grip
-        cylinder(0.006, [-0.03, 0.05, -0.08], [0.03, 0, -0.08], 6, PART_CHROME),
-        mouthpieceAt(mouthpiece, bore),
+        t.bell(bore * 1.4, d.bell / 2, bellStart, bellLen, -0.03, y),
+        // bell brace (the left hand) and a cross brace
+        t.thin([-0.03, y, -0.08], [0.03, 0, -0.08], 0.004),
+        t.thin([-0.03, y, 0.02], [0.03, 0, 0.02], 0.003),
+        ...t.waterKey([0, 0, slideLen + 0.01], -1),
+        t.mouthpiece(mouthpieceAt, bore),
     ];
     if (id === "bassTrombone")
         pieces.push(
-            cylinder(
-                0.025,
-                [-0.06, 0.05, -0.2],
-                [-0.02, 0.05, -0.2],
-                8,
+            smoothTube(
+                [
+                    [-0.07, y, -0.2],
+                    [-0.03, y, -0.2],
+                ],
+                0.024,
+                s.tube,
                 PART_METAL,
             ),
-        ); // rotor
-    return { id, pieces, leftGrip: [0, 0.025, -0.08], mouthpiece };
+            t.thin([-0.09, y + 0.01, -0.2], [-0.07, y, -0.2], 0.003),
+        );
+    return {
+        id,
+        pieces: colorPieces(
+            pieces,
+            (part) => BRASS_COLORS[part] ?? BRASS_COLORS[PART_METAL],
+        ),
+        leftGrip: [0, y / 2, -0.08],
+        mouthpiece: mouthpieceAt,
+    };
 }
 
-function contra(): InstrumentModel {
+/**
+ * The marching contra: a long horizontal loop that lies along the player's
+ * left shoulder behind the bell. The valves are at the rear by the mouthpiece
+ * (the grip, the origin); the bell flares forward and a little up.
+ */
+function contra(detail: Detail): InstrumentModel {
     const d = BRASS_DIMENSIONS.contra;
+    const s = SEGMENTS[detail];
+    const t = tools(s);
     const bore = d.bore;
-    const mouthpiece: Vec3 = [0.05, 0.25, -0.12];
-    // the body is a wrapped loop beside the player's head; the bell flares forward above
+    const loopBack = -0.62; // the far bow
+    const top = 0.1; // the bell branch's height
+    const bottom = -0.12; // the bottom tube
+    const bellLen = 0.36;
+    const bellStart = -0.06;
+    const mouthpieceAt: Vec3 = [0.03, bottom - 0.02, 0.12];
     const pieces: Piece[] = [
-        ...valves(bore, 0.03, 0.09),
-        tube(
+        // bottom tube from the valves back to the bow, the bow up, the top tube forward to the bell
+        t.run(
             [
-                [0.05, 0.25, -0.07],
-                [0.05, 0.1, -0.05],
-                [0, 0, -0.03],
+                [0, bottom, -0.04],
+                [0, bottom, loopBack + 0.11],
+                ...arc(
+                    [0, (top + bottom) / 2, loopBack + 0.11],
+                    (top - bottom) / 2,
+                    180,
+                    360,
+                    s.crook + 6,
+                    "x",
+                ).map((p): Vec3 => [0, p[1], p[2]]),
+                [0, top, loopBack + 0.11],
+                [0, top, bellStart],
+            ],
+            [
+                bore * 1.2,
+                bore * 1.5,
+                bore * 1.8,
+                bore * 2.0,
+                bore * 2.2,
+                bore * 2.4,
+                bore * 2.4,
+            ],
+        ),
+        t.bell(bore * 2.5, d.bell / 2, bellStart, bellLen, 0, top + 0.02),
+        // leadpipe from the mouthpiece up to the valves
+        t.run(
+            [
+                [0.03, bottom - 0.02, 0.12],
+                [0.03, bottom - 0.02, 0.0],
+                [0.004, -0.045, -0.02],
             ],
             bore,
-            8,
-            PART_METAL,
         ),
-        // main loop: down, back, up behind the shoulder and forward over it
-        tube(
-            [
-                [0, 0, 0.04],
-                [0, -0.25, 0.05],
-                [0.15, -0.3, -0.05],
-                [0.25, -0.1, -0.2],
-                [0.25, 0.3, -0.2],
-                [0.15, 0.55, -0.05],
-                [0.05, 0.6, 0.1],
-            ],
-            bore * 1.5,
-            10,
-            PART_METAL,
-        ),
-        tube(
-            [
-                [0.05, 0.6, 0.1],
-                [0.05, 0.62, 0.3],
-            ],
-            bore * 2,
-            8,
-            PART_METAL,
-        ),
-        transformPiece(
-            bell(bore * 2.1, d.bell / 2, 0.3, 0.3 + (d.length - 0.55)),
-            translate(0.05, 0.62, 0),
-        ),
-        // shoulder pad
-        cylinder(0.05, [0.12, 0.2, -0.1], [0.12, 0.2, 0.0], 8, PART_BLACK),
-        mouthpieceAt(mouthpiece, bore),
+        ...t.valves([-0.03, 0, 0.03], bore, -0.045, 0.045),
+        // tuning slide: a long U inside the loop
+        t.uSlide([-0.025, -0.02, -0.06], -1, 0.3, 0.05, bore * 1.1),
+        // valve slides: three Us to the performer's left, longest for the third
+        t.uSlide([0.02, 0.0, 0.03], -1, 0.12, 0.028, bore),
+        t.uSlide([0.02, 0.03, 0.0], -1, 0.06, 0.028, bore),
+        t.uSlide([0.02, -0.02, -0.03], -1, 0.2, 0.028, bore),
+        // braces between the tubes
+        t.brace([0, bottom, -0.3], [0, top, -0.3], 0.004),
+        t.brace([0, bottom, -0.5], [0, top, -0.5], 0.004),
+        t.brace([-0.025, -0.02, -0.3], [0, bottom, -0.3], 0.003),
+        ...t.waterKey([0, bottom, loopBack + 0.13], 1),
+        t.mouthpiece(mouthpieceAt, bore),
     ];
-    return { id: "contra", pieces, leftGrip: [0.2, 0.35, -0.2], mouthpiece };
+    return {
+        id: "contra",
+        pieces: colorPieces(
+            pieces,
+            (part) => BRASS_COLORS[part] ?? BRASS_COLORS[PART_METAL],
+        ),
+        leftGrip: [0, bottom, -0.3],
+        mouthpiece: mouthpieceAt,
+    };
 }
 
-export function brassModel(id: BrassModelId): InstrumentModel {
+export function brassModel(
+    id: BrassModelId,
+    detail: Detail = "high",
+): InstrumentModel {
     switch (id) {
         case "trumpet":
-            return valvedHorn(id, 0.0);
         case "mellophone":
-            return valvedHorn(id, 0.02);
         case "baritone":
-            return valvedHorn(id, 0.06);
         case "euphonium":
-            return valvedHorn(id, 0.07);
+            return valvedHorn(id, detail);
         case "trombone":
         case "bassTrombone":
-            return trombone(id);
+            return trombone(id, detail);
         case "contra":
-            return contra();
+            return contra(detail);
     }
 }

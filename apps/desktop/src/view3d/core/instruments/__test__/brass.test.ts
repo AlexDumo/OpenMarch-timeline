@@ -13,10 +13,13 @@ const IDS: BrassModelId[] = [
 ];
 
 describe("brass models", () => {
-    it.each(IDS)("%s stays within the triangle budget", (id) => {
-        const n = triangleCount(brassModel(id).pieces);
-        expect(n).toBeGreaterThanOrEqual(300);
-        expect(n).toBeLessThanOrEqual(600);
+    it.each(IDS)("%s stays within the high and low triangle budgets", (id) => {
+        const high = triangleCount(brassModel(id, "high").pieces);
+        expect(high).toBeGreaterThanOrEqual(8000);
+        expect(high).toBeLessThanOrEqual(12000);
+        const low = triangleCount(brassModel(id, "low").pieces);
+        expect(low).toBeGreaterThanOrEqual(1500);
+        expect(low).toBeLessThanOrEqual(3500);
     });
 
     it.each(IDS)(
@@ -24,9 +27,9 @@ describe("brass models", () => {
         (id) => {
             const { min, max } = bounds(brassModel(id).pieces);
             const d = BRASS_DIMENSIONS[id];
-            expect(max[2] - min[2]).toBeCloseTo(d.length, 1);
+            expect(Math.abs(max[2] - min[2] - d.length)).toBeLessThan(0.05);
             // the bell is the widest part: its diameter sets the x extent
-            expect(max[0] - min[0]).toBeCloseTo(d.bell, 1);
+            expect(Math.abs(max[0] - min[0] - d.bell)).toBeLessThan(0.05);
         },
     );
 
@@ -34,19 +37,34 @@ describe("brass models", () => {
         const m = brassModel("trumpet");
         expect(m.mouthpiece[2]).toBeLessThan(0);
         expect(Math.abs(m.leftGrip[2])).toBeLessThan(0.12);
-        // the valve caps rise above the grip
+        // the valve buttons rise above the grip
         const { max } = bounds(m.pieces.filter((p) => p.part === 18));
         expect(max[1]).toBeGreaterThan(0.03);
     });
 
-    it("builds the contra with its bell above the grip", () => {
-        const { max } = bounds(brassModel("contra").pieces);
-        expect(max[1]).toBeGreaterThan(0.5);
+    it("lays the contra's loop behind the grip with the bell forward", () => {
+        const m = brassModel("contra");
+        const { min, max } = bounds(m.pieces);
+        expect(min[2]).toBeLessThan(-0.5);
+        expect(max[2]).toBeGreaterThan(0.25);
+        // the widest ring at the front is the bell rim, not the loop
+        const front = m.pieces.filter(
+            (p) => bounds([p]).max[2] > max[2] - 0.01,
+        );
+        expect(front.length).toBeGreaterThan(0);
+        for (const p of front)
+            expect(bounds([p]).max[0] - bounds([p]).min[0]).toBeGreaterThan(
+                0.45,
+            );
+        // the bell sits above the loop's centerline, not overhead
+        expect(max[1]).toBeLessThan(0.45);
     });
 
-    it("uses only instrument part ids", () => {
+    it("uses only instrument part ids and colors every vertex at high detail", () => {
         for (const id of IDS)
-            for (const p of brassModel(id).pieces)
+            for (const p of brassModel(id, "high").pieces) {
                 expect([16, 18, 22]).toContain(p.part);
+                expect(p.colors?.length).toBe(p.positions.length);
+            }
     });
 });
