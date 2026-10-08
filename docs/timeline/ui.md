@@ -307,8 +307,10 @@ from it. The spec still wins on the model; this file decides presentation.
     the drag overrides the moved marchers' moves inside the window, which stay
     stored underneath and come back when it is deleted, and a move the window
     runs into partway catches up after it (R-5). An info toast names what was
-    passed through and offers **Only change Page N**, which moves them from the
-    last flag before P instead, as its own undoable edit.
+    passed through, including page flags with no stored move under sparse rows,
+    and offers **Start from Page N** (was "Only change Page N", renamed by
+    defined-coordinates 07c §2), which moves them from the last flag before P
+    instead, as its own undoable edit.
   - **Arrivals off a flag.** P may rest between flags. A drag there creates a
     timeline ending at P, not a page (project owner, 2026-10-03). Pages stay
     cosmetic flags; **+** still adds one.
