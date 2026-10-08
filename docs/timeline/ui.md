@@ -546,6 +546,34 @@ from it. The spec still wins on the model; this file decides presentation.
   - Deferred (UX review): counts along the selected page box in shows with measures, a count
     under the pointer while hovering, and thinning to downbeats in odd meters.
 
+- **UI-16: moving a page flag (project owner, 2026-10-08).** The owner: "I should be able to MOVE
+  where a page flag is. Currently, once it's made, it's stuck there." Built on branch
+  `timeline/move-page-flag`. Design note, edge-case table and prior art:
+  [research/move-page-flag/README.md](research/move-page-flag/README.md). Items marked _lead
+  default_ are V-60 to V-68. (UI-14 is edit-moves; UI-15 is left to resize-move, in flight.)
+  - **A roll edit.** Dragging page N's flag gives page N what page N+1 loses. Every other flag,
+    the beats, measures, tempo and music stay put. Timelines track the moving flag (U-Q5): a
+    row edge on the flag follows it, and every other edge keeps its beat. So the sets keep their
+    coordinates and the two pages' moves take the new counts. One undoable edit.
+  - **The grip** is the lower half of the ruler at a flag (12px wide, narrower on a narrow box),
+    with a bar on hover and a `col-resize` cursor. The upper half stays the playhead's head and
+    the start flag's pennant. A press that doesn't move selects the box on that side; a plain
+    drag elsewhere on a box still scrubs (UI-12). Home's flag has no grip. While playing or
+    isolated, there are no grips.
+  - **Limits.** Every page keeps one count, so flags never pass or push each other, and the last
+    flag stops at the show's end. A move with an edge on the flag can't be left behind: the flag
+    stops before its far end. A beat the timeline rows can't take (two moves would share a range,
+    C-12, or the ripple would refuse) is a hole the flag passes over but can't land on. A readout
+    by the flag shows both pages' counts ("Page 3: 8 → 11 counts") and what stopped it.
+  - **Snapping.** Whole beats; within 6px a downbeat, a page line or the playhead. Alt turns it
+    off.
+  - **Afterwards.** A paused playhead or start flag on the moved flag goes with it, so the selected
+    page stays selected and the field shows the same set. Appearance by beat follows by itself.
+  - **Keys and cancel.** ← and → move a focused grip one count (one edit each). Esc, a lost
+    pointer, or a drag brought back writes nothing.
+  - Not built: clips on the flag only move on release, not during the drag; edge scrolling while
+    dragging a flag; a ripple variant (Shift-drag, shifting every later flag).
+
 ## Mapping the spec onto the view model
 
 The reference `TimelineViewModel` becomes a derived view: an adapter builds it

@@ -19,7 +19,8 @@ import type {
  * Page flag grips (docs/timeline/research/move-page-flag): dragging one moves that page's flag, a
  * roll edit where the page gains what the next one loses. Beats here are view beats.
  *
- * - **Where it's grabbed** (case 13): the lower half of the ruler at the flag, 12px wide. The upper
+ * - **Where it's grabbed** (case 13): the lower half of the ruler at the flag, 12px wide (less
+ *   on a narrow box, `gripWidth`). The upper
  *   half stays the playhead's head and the start flag's pennant, which usually sit on flags.
  * - **Click or drag:** a press that moves less than `FLAG_DRAG_PX` is a click and selects the page
  *   box on that side of the flag, as a click on the box does. A drag shows the flag, the two boxes
@@ -38,6 +39,8 @@ import type {
 export const FLAG_DRAG_PX = 4;
 /** Within this many pixels a dragged flag lands on a snap beat */
 const FLAG_SNAP_PX = 6;
+/** The grip's widest, in pixels; narrow boxes get a narrower one (`gripWidth`) */
+const GRIP_WIDTH = 12;
 /** The grip's top, in the 28px ruler: the lower half */
 const GRIP_TOP = 14;
 const GRIP_HEIGHT = 14;
@@ -143,6 +146,22 @@ const landOutsideHoles = (
 
 const counts = (range: TimelineBeatRange | null) =>
     range ? range.endBeatIndex - range.startBeatIndex : 0;
+
+/**
+ * A grip's width: 12px, but at most a third of the narrower box beside it (at least 4px), so
+ * zoomed out a press on a box still mostly scrubs or selects it instead of grabbing a flag
+ */
+const gripWidth = (
+    left: TimelineBeatRange,
+    right: TimelineBeatRange | null,
+    pixelsPerBeat: number,
+) => {
+    const narrowest = Math.min(counts(left), right ? counts(right) : Infinity);
+    return Math.max(
+        4,
+        Math.min(GRIP_WIDTH, Math.floor((narrowest * pixelsPerBeat) / 3)),
+    );
+};
 
 const countsText = (n: number) => (n === 1 ? "1 count" : `${n} counts`);
 
@@ -443,8 +462,13 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                         onClick={(event) => {
                             if (event.detail === 0) onSelectPage(page);
                         }}
-                        className="group focus-visible:ring-accent pointer-events-auto absolute z-[56] w-12 -translate-x-1/2 cursor-col-resize touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
+                        className="group focus-visible:ring-accent pointer-events-auto absolute z-[56] -translate-x-1/2 cursor-col-resize touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
                         style={{
+                            width: gripWidth(
+                                range,
+                                boxes[index + 1]?.range ?? null,
+                                pixelsPerBeat,
+                            ),
                             left: Math.round(beatToX(beat, pixelsPerBeat)),
                             top: GRIP_TOP,
                             height: GRIP_HEIGHT,
