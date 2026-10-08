@@ -15,7 +15,8 @@ import {
     moveLabels,
 } from "@/timeline/timelineViewModel";
 import { useTimelineViewVersions } from "@/timeline/useTimelineViewVersions";
-import { DEFAULT_BULGE, clampBulge } from "@/timeline/timelineTransitionEditor";
+import { clampBulge } from "@/timeline/timelineTransitionEditor";
+import { DEFAULT_BULGE } from "@/timeline/timelinePathDefaults";
 import {
     readMovePath,
     setMovePath,
@@ -140,6 +141,16 @@ export function MovePathRadios({
     );
 }
 
+/**
+ * Whether a name typed in the Move card is an edit to save: changed, and not cleared while the
+ * move has its automatic "Move N" (which it keeps). A rename sent twice (a blur, then the card going
+ * before the stored name catches up) is still one edit: `renameTimeline` compares with the stored
+ * name under the write lock and writes nothing the second time.
+ */
+const isNameEdit = (typed: string, stored: string) =>
+    typed.trim() !== stored.trim() &&
+    !(typed.trim() === "" && autoMoveNumber(stored) !== null);
+
 /** How long **Edit move**'s highlight stays on the card */
 const REVEAL_FLASH_MS = 1200;
 
@@ -147,12 +158,13 @@ const REVEAL_FLASH_MS = 1200;
 const REVEAL_SCROLL_DELAY_MS = 120;
 
 /**
- * The Move card (UI-14), first in the timeline section while the window is a move with a clip: its
- * name (Enter or leaving the field saves, Esc goes back; empty clears it), when it happens in
- * pages and counts, its **Path** for every marcher in it at once (Direct, or Arc with one bend;
- * "Follow the leader" shown when all of them follow, "Mixed" when they differ), how to change where they end up, who is in it with **Select them**,
- * and **Delete move**. **Edit move** brings it into view with a brief highlight
- * (`useMoveCardRevealStore`), once the section has opened.
+ * The Move card (UI-14), first in the inspector, above the page and marcher editors and the
+ * Timeline section, while the window is a move with a clip (`TimelineMoveCardSlot`): its name
+ * (Enter or leaving the field saves, Esc goes back; empty clears it), when it happens in pages and
+ * counts, its **Path** for every marcher in it at once (Direct, or Arc with one bend; "Follow the
+ * leader" shown when all of them follow, "Mixed" when they differ), how to change where they end
+ * up, who is in it with **Select them**, and **Delete move**. **Edit move** brings it into view
+ * (`useMoveCardRevealStore`): focus on its heading, a scroll and a brief highlight.
  */
 export function TimelineMoveCard({
     timeline,
@@ -176,7 +188,10 @@ export function TimelineMoveCard({
     );
     // Why the clip is dashed, when it is (UI-14 review)
     const overridden = useMoveNotesStore((s) => s.overridden.get(timeline.id));
-    const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    // Only whether P is at the move's end, so the card doesn't render on every beat played
+    const atEnd = useTimelineSelectionStore(
+        (s) => s.playheadBeat === timeline.end,
+    );
     const path = useMovePath(timeline.id);
     // One path edit at a time; a choice made meanwhile (the arrows pressed again) goes next. The
     // controls stay enabled while one is written, so a focused radio keeps focus (UI-14 round-2
@@ -200,51 +215,22 @@ export function TimelineMoveCard({
                 if (next) editPath(next.style, next.bulge);
             });
     };
-    // The name last sent to be saved, while the stored one hasn't caught up with it: the field
-    // going away then has nothing left to save (code review: blur saved it, and the unmount, still
-    // seeing the old stored name, saved it again as a second history step)
-    const committed = useRef<string | null>(null);
-    useEffect(() => {
-        committed.current = null;
-    }, [stored]);
-    /** Whether `typed` is an edit still to save */
-    const unsaved = (typed: string, was: string) =>
-        typed !== committed.current &&
-        typed.trim() !== was.trim() &&
-        // Cleared while it has its automatic "Move N", which it keeps
-        !(typed.trim() === "" && autoMoveNumber(was) !== null);
     const commit = () => {
-        // Unchanged, already sent, or cleared while it is "Move N": nothing to write, and the
-        // field shows the stored name again (or the one on its way)
-        if (!unsaved(name, stored)) {
-            if (name !== committed.current) setName(stored);
+        // Nothing to write: the field shows the stored name again
+        if (!isNameEdit(name, stored)) {
+            setName(stored);
             return;
         }
-        committed.current = name;
-        // Once written (or refused, with its message), a later edit is judged afresh
-        void moves.renameMove(timeline.id, name).finally(() => {
-            if (committed.current === name) committed.current = null;
-        });
+        void moves.renameMove(timeline.id, name);
     };
     // UI-14 review: a field that goes away before it blurs (a click on the timeline selects
-    // another window first) still saves what was typed, unless Esc put the name back or it was
-    // saved already
-    const pendingName = useRef({
-        name,
-        stored,
-        rename: moves.renameMove,
-        unsaved,
-    });
-    pendingName.current = { name, stored, rename: moves.renameMove, unsaved };
+    // another window first) still saves what was typed, unless Esc put the name back
+    const pendingName = useRef({ name, stored, rename: moves.renameMove });
+    pendingName.current = { name, stored, rename: moves.renameMove };
     useEffect(
         () => () => {
-            const {
-                name: typed,
-                stored: was,
-                rename,
-                unsaved: edited,
-            } = pendingName.current;
-            if (edited(typed, was)) void rename(timeline.id, typed);
+            const { name: typed, stored: was, rename } = pendingName.current;
+            if (isNameEdit(typed, was)) void rename(timeline.id, typed);
         },
         [timeline.id],
     );
@@ -405,7 +391,7 @@ export function TimelineMoveCard({
                 <Help testId="timeline-move-card-end-help">
                     {t("inspector.timeline.move.endHelp")}
                 </Help>
-                {playheadBeat !== timeline.end && (
+                {!atEnd && (
                     <Button
                         size="compact"
                         variant="secondary"

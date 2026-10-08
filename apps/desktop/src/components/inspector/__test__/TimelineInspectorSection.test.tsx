@@ -31,7 +31,10 @@ import {
 } from "@/timeline/__test__/inspectorFixtures";
 import { buildTransitionEditTarget } from "@/timeline/timelineTransitionEditor";
 import { useTimelineInspections } from "@/timeline/useTimelineInspections";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    useTimelineSelectionStore,
+    windowMove,
+} from "@/stores/TimelineSelectionStore";
 import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { TIMELINE_INSPECTOR_STRINGS } from "../timelineInspectorStrings";
 import {
@@ -371,9 +374,8 @@ describe("TimelineInspectorSection", () => {
             act(() => {
                 useTimelineSelectionStore.getState().seek(beat);
             });
-        // Nothing is explained on the beats it passes, and nothing blanks: still beat 5
-        expect(beats().slice(during)).not.toContain(6);
-        expect(beats().slice(during)).not.toContain(8);
+        // Nothing is explained on the beats it passes, nor even rendered, and nothing blanks
+        expect(beats().length).toBe(during);
         expect(beats().at(-1)).toBe(5);
         act(() => {
             useTimelineSelectionStore.getState().endScrub();
@@ -382,6 +384,45 @@ describe("TimelineInspectorSection", () => {
             useTimelineSelectionStore.getState().playheadBeat,
         );
         expect(beats().at(-1)).not.toBe(5);
+    });
+});
+
+describe("the inspector while scrubbing over moves (code review)", () => {
+    it("holds the move with the beat: the held beat is never clamped into a move the scrub passes", () => {
+        mocks.selectedMarchers = [{ id: 2, drill_number: "T2" }];
+        const store = twoPages();
+        store.setShowEndBeat(17);
+        store.selectRange(9, 12);
+        renderSection();
+        const calls = () => vi.mocked(useTimelineInspections).mock.calls;
+        const beatNow = () => calls().at(-1)![0].beat;
+        // Move 7 (beats 9 to 12), P on its end: explained at its last beat
+        expect(beatNow()).toBe(11);
+        expect(screen.getByTestId("timeline-move-card")).toBeTruthy();
+        act(() => {
+            useTimelineSelectionStore.getState().beginScrub();
+        });
+        const during = calls().length;
+        for (const beat of [3, 7, 9, 12, 15])
+            act(() => {
+                useTimelineSelectionStore.getState().seek(beat);
+            });
+        expect(calls().length).toBe(during);
+        expect(beatNow()).toBe(11);
+        act(() => {
+            useTimelineSelectionStore.getState().endScrub();
+        });
+        // Settled: the beat and the move are read again, together
+        const settled = useTimelineSelectionStore.getState();
+        const move = windowMove(settled);
+        expect(beatNow()).toBe(
+            move
+                ? Math.min(
+                      Math.max(settled.playheadBeat, move.start),
+                      move.end - 1,
+                  )
+                : settled.playheadBeat,
+        );
     });
 });
 

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslate } from "@tolgee/react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -15,6 +15,7 @@ import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties"
 import {
     useTimelineSelectionStore,
     windowMove,
+    type StoredTimelineMembership,
 } from "@/stores/TimelineSelectionStore";
 import {
     groupDiagnosticsByTransition,
@@ -364,20 +365,35 @@ export function ShowDiagnosticsList({
 }
 
 /**
- * The playhead's beat, held while it is scrubbed (code review): the inspector's explanations and
- * editors are rebuilt once the scrub ends, not on every beat it passes, and keep showing the last
- * settled beat meanwhile rather than going blank. As `useTimelinePageBridge` waits for the scrub.
+ * The playhead's beat and the move the window is on, held together while the playhead is scrubbed
+ * (code review): the inspector's explanations and editors are rebuilt once the scrub ends, not on
+ * every beat it passes, and keep showing the last settled ones meanwhile rather than going blank.
+ * Held together, the held beat is never clamped into a move the scrubbing window passes over. As
+ * `useTimelinePageBridge` waits for the scrub. While scrubbing the store's selectors return the
+ * same value, so the scrub doesn't render this at all.
  */
-function useSettledPlayheadBeat(): number {
-    const live = useTimelineSelectionStore((s) =>
+function useSettledInspectorWindow(): {
+    beat: number;
+    move: StoredTimelineMembership | null;
+} {
+    const liveBeat = useTimelineSelectionStore((s) =>
         s.scrubbing ? null : s.playheadBeat,
     );
-    const [held, setHeld] = useState(
-        () => live ?? useTimelineSelectionStore.getState().playheadBeat,
+    const liveMove = useTimelineSelectionStore((s) =>
+        s.scrubbing ? undefined : windowMove(s),
     );
-    // Adjusted while rendering, so a settled beat shows in the same render
-    if (live !== null && live !== held) setHeld(live);
-    return live ?? held;
+    const held = useRef<{
+        beat: number;
+        move: StoredTimelineMembership | null;
+    } | null>(null);
+    if (held.current === null) {
+        // Mounted mid-scrub: what the store has now
+        const state = useTimelineSelectionStore.getState();
+        held.current = { beat: state.playheadBeat, move: windowMove(state) };
+    }
+    if (liveBeat !== null && liveMove !== undefined)
+        held.current = { beat: liveBeat, move: liveMove };
+    return held.current;
 }
 
 function TimelineInspectorContent() {
@@ -394,9 +410,8 @@ function TimelineInspectorContent() {
     // UI-14: in timeline mode the inspector explains at the paused playhead P, where edits land
     // (UI-10). On a flag that is the page's end beat, as before; between flags a mid-page move's
     // transitions show.
-    const playheadBeat = useSettledPlayheadBeat();
-    // The move the window is (isolated, P may be anywhere inside it), if it has a clip
-    const move = useTimelineSelectionStore(windowMove);
+    // With the move the window is (isolated, P may be anywhere inside it), if it has a clip
+    const { beat: playheadBeat, move } = useSettledInspectorWindow();
     // UI-14: with a move, explain inside it: at P, or its last beat when P is on its end, where
     // the next move starts. So the details below are about this move's transitions.
     const beat = move
