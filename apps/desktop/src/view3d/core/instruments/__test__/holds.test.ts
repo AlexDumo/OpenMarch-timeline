@@ -63,6 +63,17 @@ describe("holds", () => {
         expect(Math.abs(h.left.wrist[0] - 0.2)).toBeLessThan(0.08);
     });
 
+    it("contra up: bell forward, valves high in front of the face", () => {
+        const h = hold("contra", "up");
+        expect(h.instrument.bellAxis).toEqual([0, 0, 1]);
+        expect(h.instrument.origin[1]).toBeGreaterThan(1.5);
+        expect(h.instrument.origin[1]).toBeLessThan(1.7);
+        expect(h.instrument.origin[2]).toBeGreaterThan(0.1);
+        expect(h.instrument.origin[2]).toBeLessThan(0.3);
+        // the loop lies along the left shoulder: the grip is left of center
+        expect(h.instrument.origin[0]).toBeGreaterThan(0);
+    });
+
     it("keeps the wrists in front of the chest in every hold", () => {
         for (const family of FAMILIES)
             for (const state of HOLD_STATES) {
