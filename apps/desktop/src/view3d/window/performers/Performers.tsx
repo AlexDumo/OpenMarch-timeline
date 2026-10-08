@@ -136,10 +136,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             Parameters<typeof sectionUniform>[1],
         ][];
         return rows.map(([id, section, fill]) => ({
-            body: defaultPerformerBody(id),
+            // varied heights at high quality; one height (one bake class) at low
+            body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
             uniform: sectionUniform(section, fill),
         }));
-    }, [looksKey]);
+    }, [looksKey, quality]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],

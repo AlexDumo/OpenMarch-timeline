@@ -32,13 +32,36 @@ describe("performer bodies", () => {
             const b = defaultPerformerBody(id);
             types.set(b.bodyType, (types.get(b.bodyType) ?? 0) + 1);
             tones.set(b.skinTone, (tones.get(b.skinTone) ?? 0) + 1);
-            expect(b.heightClass).toBe(1);
+            expect(b.heightClass).toBe(1); // the low tier: one height
         }
         expect(types.size).toBe(BODY_TYPES.length);
         expect(tones.size).toBe(SKIN_TONES.length);
         // roughly even: every type within 30% of 2000 / 7
         for (const n of types.values())
             expect(Math.abs(n - 2000 / 7)).toBeLessThan((0.3 * 2000) / 7);
+    });
+
+    it("varies heights a quarter short, half middle, a quarter tall at high quality", () => {
+        const n = new Map<number, number>();
+        for (let id = 1; id <= 2000; id++) {
+            const h = defaultPerformerBody(id, {
+                varyHeight: true,
+            }).heightClass;
+            n.set(h, (n.get(h) ?? 0) + 1);
+        }
+        expect([...n.keys()].sort()).toEqual([0.95, 1, 1.05]);
+        expect(Math.abs(n.get(0.95)! / 2000 - 0.25)).toBeLessThan(0.03);
+        expect(Math.abs(n.get(1)! / 2000 - 0.5)).toBeLessThan(0.03);
+        expect(Math.abs(n.get(1.05)! / 2000 - 0.25)).toBeLessThan(0.03);
+    });
+
+    it("keeps a marcher's body type and skin tone whatever the tier", () => {
+        for (let id = 1; id <= 50; id++) {
+            const low = defaultPerformerBody(id);
+            const high = defaultPerformerBody(id, { varyHeight: true });
+            expect(high.bodyType).toBe(low.bodyType);
+            expect(high.skinTone).toBe(low.skinTone);
+        }
     });
 
     it("picks the height class nearest height / 1.80 m", () => {

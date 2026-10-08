@@ -6,7 +6,8 @@
  *
  * - body type and skin tone from a stable hash of the marcher ID, so a
  *   marcher looks the same every time the show opens;
- * - height class 1.00 (a 1.80 m figure);
+ * - height class 0.95, 1.00 or 1.05 by the same hash at high quality, and
+ *   1.00 for everyone at low quality;
  * - one uniform per section, in the section's 2D fill color, carrying the
  *   section's instrument when om-pose models it.
  *
@@ -78,14 +79,29 @@ export function hash32(n: number): number {
     return x >>> 0;
 }
 
-/** The derived body for a marcher with no stored body. */
-export function defaultPerformerBody(marcherId: number): PerformerBody {
+/** Height classes a band gets by default, a quarter short, half middle, a quarter tall. */
+export const VARIED_HEIGHTS: readonly HeightClass[] = [0.95, 1, 1, 1.05];
+
+/**
+ * The derived body for a marcher with no stored body. With `varyHeight`
+ * (the high quality tier) heights spread over 0.95, 1.00 and 1.05 so ranks
+ * don't look ruler-straight; without it (the low tier) everyone is 1.00, so
+ * only one height class is loaded and baked.
+ */
+export function defaultPerformerBody(
+    marcherId: number,
+    { varyHeight = false }: { varyHeight?: boolean } = {},
+): PerformerBody {
     const a = hash32(marcherId);
     const b = hash32(a ^ 0x9e3779b9);
+    const c = hash32(b ^ 0x85ebca6b);
     return {
         bodyType: BODY_TYPES[a % BODY_TYPES.length],
         skinTone: SKIN_TONES[b % SKIN_TONES.length],
-        heightClass: 1,
+        // high bits: this chained hash's low two bits are uneven
+        heightClass: varyHeight
+            ? VARIED_HEIGHTS[(c >>> 16) % VARIED_HEIGHTS.length]
+            : 1,
     };
 }
 
