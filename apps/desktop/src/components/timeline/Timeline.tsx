@@ -1,3 +1,7 @@
+import type {
+    ClipResizeBound,
+    TimelineClipResizeCommands,
+} from "./TimelineClipResize";
 import type Beat from "@/global/classes/Beat";
 import type Measure from "@/global/classes/Measure";
 import type Page from "@/global/classes/Page";
@@ -130,6 +134,8 @@ export interface TimelineProps {
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
+    /** Resizing a clip by its edges (resize-move), in spec beats */
+    readonly clipResize?: TimelineClipResizeCommands;
     /** Turns **From start** off (UI-11), from the range bar */
     readonly onPlayFromStartOff?: () => void;
     /** Unpins the start flag (UI-12), from its pin */
@@ -381,6 +387,56 @@ export function Timeline(props: TimelineProps) {
               }
             : undefined,
     );
+    // A resize sends each edge's own change: an edge that didn't move keeps its stored spec beat,
+    // and one that moved goes as far as it was dragged on the view axis (which folds spec beats 0
+    // and 1 together); the limits come back mapped onto the view axis
+    const { clipResize } = props;
+    const viewClipResize = useMemo(():
+        | TimelineClipResizeCommands
+        | undefined => {
+        if (!clipResize) return undefined;
+        const toView = (bound: ClipResizeBound): ClipResizeBound => ({
+            ...bound,
+            beat: axis.toView(bound.beat),
+        });
+        return {
+            limits: async (trackId) => {
+                const limits = await clipResize.limits(trackId);
+                if (!limits) return null;
+                return {
+                    startEdge: {
+                        min: toView(limits.startEdge.min),
+                        max: toView(limits.startEdge.max),
+                    },
+                    endEdge: {
+                        min: toView(limits.endEdge.min),
+                        max: toView(limits.endEdge.max),
+                    },
+                    taken: limits.taken.map((t) => ({
+                        ...t,
+                        startBeatIndex: axis.toView(t.startBeatIndex),
+                        endBeatIndex: axis.toView(t.endBeatIndex),
+                    })),
+                };
+            },
+            commit: (change) => {
+                const input = timelines.find(
+                    (timeline) => timeline.id === change.timelineId,
+                );
+                if (!input) return;
+                const edge = (spec: number, view: number) =>
+                    spec + (view - axis.toView(spec));
+                clipResize.commit({
+                    timelineId: change.timelineId,
+                    startBeatIndex: edge(
+                        input.startBeatIndex,
+                        change.startBeatIndex,
+                    ),
+                    endBeatIndex: edge(input.endBeatIndex, change.endBeatIndex),
+                });
+            },
+        };
+    }, [clipResize, axis, timelines]);
     const createTrack = useLatestCallback(
         onCreateTrack
             ? (request: TimelineCreateTrackRequest) =>
@@ -469,6 +525,7 @@ export function Timeline(props: TimelineProps) {
         onAddPageFlag: useLatestCallback(props.onAddPageFlag),
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
+        clipResize: viewClipResize,
         onPlayFromStartOff: useLatestCallback(props.onPlayFromStartOff),
         onUnpinStart: useLatestCallback(props.onUnpinStart),
         transportSecondary: props.transportSecondary,

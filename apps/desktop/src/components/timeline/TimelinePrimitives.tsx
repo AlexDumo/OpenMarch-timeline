@@ -46,6 +46,10 @@ import {
     snapRangeOffset,
 } from "./TimelineGeometry";
 import { timelineRangeTargetProps } from "./TimelineRangeMenu";
+import {
+    useClipEdgeResize,
+    type TimelineClipResizeCommands,
+} from "./TimelineClipResize";
 import { useLatestCallback } from "./useLatestCallback";
 import {
     createLiveValue,
@@ -1055,6 +1059,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     snapBeats = [],
     micro = false,
     barHeight,
+    resize,
 }: {
     track: TimelineTrack;
     pixelsPerBeat: number;
@@ -1074,6 +1079,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
      * area, so it can still be clicked, dragged and double-clicked). Without it the bar fills it.
      */
     barHeight?: number;
+    /** Dragging the clip's start or end edge resizes it (resize-move); without it, no handles */
+    resize?: TimelineClipResizeCommands;
 }) {
     const range = getTrackRange(track);
     const [previewOffset, setPreviewOffset] = useState(0);
@@ -1091,10 +1098,39 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         dragRef.current = null;
         setPreviewOffset(0);
     }, [range?.endBeatIndex, range?.startBeatIndex]);
+    // Esc cancels a move drag: nothing moves, and the click that ends it doesn't select (E14)
+    const moving = previewOffset !== 0;
+    useEffect(() => {
+        if (!moving) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            dragRef.current = null;
+            draggedRef.current = true;
+            setPreviewOffset(0);
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
+    }, [moving]);
+    const edgeResize = useClipEdgeResize({
+        trackId: track.id,
+        range,
+        width: range
+            ? (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat
+            : 0,
+        height,
+        pixelsPerBeat,
+        beatCount,
+        snapBeats,
+        resize,
+    });
 
     if (!range) return null;
-    const left = (range.startBeatIndex + previewOffset) * pixelsPerBeat;
-    const width = (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
+    // While an edge is dragged the clip draws the range it would take (resize-move)
+    const drawn = edgeResize.preview ?? range;
+    const left = (drawn.startBeatIndex + previewOffset) * pixelsPerBeat;
+    const width = (drawn.endBeatIndex - drawn.startBeatIndex) * pixelsPerBeat;
     const canMove = onRangeCommit != null && beatCount != null;
     const getOffset = (
         clientX: number,
@@ -1130,6 +1166,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     : track.label
             }
             onClick={(event) => {
+                if (edgeResize.swallowClick()) return;
                 const dragged = draggedRef.current;
                 draggedRef.current = false;
                 // macOS ctrl+click opens the context menu (UI-9: no selection change)
@@ -1221,46 +1258,71 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                       : undefined,
             }}
         >
-            {track.activitySpans.map((span) => {
-                const isFirst = span.startBeatIndex === range.startBeatIndex;
-                const isLast = span.endBeatIndex === range.endBeatIndex;
+            {edgeResize.handles}
+            {edgeResize.tag}
+            {edgeResize.preview && (
+                <span
+                    data-testid="timeline-clip-resize-preview"
+                    className={clsx(
+                        "absolute inset-x-0 border",
+                        barHeight === undefined && "inset-y-0",
+                        micro ? "rounded-full" : "rounded-4",
+                        edgeResize.preview.blockedBy
+                            ? "border-red border-dashed"
+                            : "border-transparent",
+                    )}
+                    style={{
+                        ...(barHeight !== undefined && {
+                            top: (height - barHeight) / 2,
+                            height: barHeight,
+                        }),
+                        backgroundColor: `color-mix(in srgb, ${track.color} 82%, var(--color-bg-1))`,
+                    }}
+                />
+            )}
+            {!edgeResize.preview &&
+                track.activitySpans.map((span) => {
+                    const isFirst =
+                        span.startBeatIndex === range.startBeatIndex;
+                    const isLast = span.endBeatIndex === range.endBeatIndex;
 
-                return (
-                    <span
-                        key={`${span.startBeatIndex}-${span.endBeatIndex}`}
-                        data-activity={span.active ? "active" : "inactive"}
-                        className={clsx(
-                            "absolute overflow-hidden",
-                            barHeight === undefined && "inset-y-0",
-                            isFirst &&
-                                (micro ? "rounded-l-full" : "rounded-l-4"),
-                            isLast &&
-                                (micro ? "rounded-r-full" : "rounded-r-4"),
-                            span.active
-                                ? "border border-transparent"
-                                : "border border-dashed",
-                        )}
-                        style={{
-                            ...(barHeight !== undefined && {
-                                top: (height - barHeight) / 2,
-                                height: barHeight,
-                            }),
-                            left:
-                                (span.startBeatIndex - range.startBeatIndex) *
-                                pixelsPerBeat,
-                            width:
-                                (span.endBeatIndex - span.startBeatIndex) *
-                                pixelsPerBeat,
-                            backgroundColor: span.active
-                                ? `color-mix(in srgb, ${track.color} 82%, var(--color-bg-1))`
-                                : `color-mix(in srgb, ${track.color} 12%, transparent)`,
-                            borderColor: span.active
-                                ? "transparent"
-                                : track.color,
-                        }}
-                    />
-                );
-            })}
+                    return (
+                        <span
+                            key={`${span.startBeatIndex}-${span.endBeatIndex}`}
+                            data-activity={span.active ? "active" : "inactive"}
+                            className={clsx(
+                                "absolute overflow-hidden",
+                                barHeight === undefined && "inset-y-0",
+                                isFirst &&
+                                    (micro ? "rounded-l-full" : "rounded-l-4"),
+                                isLast &&
+                                    (micro ? "rounded-r-full" : "rounded-r-4"),
+                                span.active
+                                    ? "border border-transparent"
+                                    : "border border-dashed",
+                            )}
+                            style={{
+                                ...(barHeight !== undefined && {
+                                    top: (height - barHeight) / 2,
+                                    height: barHeight,
+                                }),
+                                left:
+                                    (span.startBeatIndex -
+                                        range.startBeatIndex) *
+                                    pixelsPerBeat,
+                                width:
+                                    (span.endBeatIndex - span.startBeatIndex) *
+                                    pixelsPerBeat,
+                                backgroundColor: span.active
+                                    ? `color-mix(in srgb, ${track.color} 82%, var(--color-bg-1))`
+                                    : `color-mix(in srgb, ${track.color} 12%, transparent)`,
+                                borderColor: span.active
+                                    ? "transparent"
+                                    : track.color,
+                            }}
+                        />
+                    );
+                })}
             {track.diagnostics && (
                 <span
                     data-testid="timeline-track-diagnostics"
@@ -1295,6 +1357,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     beatCount,
     pixelsPerBeat,
     height,
+    hitHeight = height,
     snapBeats = [],
     onCommit,
     onInteractionChange,
@@ -1323,6 +1386,11 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
+    /**
+     * How far down the flags take the pointer (UI-14): over the clip rows they are only drawn, so
+     * a short clip under them can still be clicked. Defaults to the whole height.
+     */
+    hitHeight?: number;
     /** Page lines the dragged flag snaps to (ui.md UI-2); Alt turns snapping off */
     snapBeats?: readonly number[];
     onCommit?: (range: TimelineBeatRange) => void;
@@ -1572,10 +1640,13 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     aria-label={`Selection ${kind}`}
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
-                    className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 h-full w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize disabled:cursor-default"
-                    style={{ left: x, height }}
+                    className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize disabled:cursor-default"
+                    style={{ left: x, height: hitHeight }}
                 >
-                    <span className="bg-accent absolute inset-y-0 left-1/2 w-px" />
+                    <span
+                        className="bg-accent pointer-events-none absolute top-0 left-1/2 w-px"
+                        style={{ height }}
+                    />
                     <span className="bg-accent absolute top-0 right-1/2 h-10 w-8 rounded-l-sm" />
                 </button>
             );
@@ -1589,15 +1660,16 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     aria-label={`Start flag, beat ${beatIndex}`}
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
-                    className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 h-full w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize disabled:cursor-default"
-                    style={{ left: x, height }}
+                    className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize disabled:cursor-default"
+                    style={{ left: x, height: hitHeight }}
                 >
                     <span
                         className={clsx(
-                            "absolute top-px bottom-0 left-1/2",
+                            "pointer-events-none absolute top-px left-1/2",
                             START_INK.bg,
                             fromStart ? "w-2" : "w-px",
                         )}
+                        style={{ height: Math.max(0, height - 1) }}
                     />
                 </button>
                 {startPinned && (
@@ -1926,6 +1998,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     onSeek,
     isPlaying = false,
     scrubLine,
+    hitHeight = height,
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
@@ -1946,6 +2019,11 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
      * follows the pointer by a transform, without re-rendering (`useScrubFollow`)
      */
     scrubLine?: TimelineLiveValue<number | null>;
+    /**
+     * How far down it takes the pointer (UI-14): over the clip rows the line is only drawn, so a
+     * short clip under it can still be clicked. Defaults to the whole height.
+     */
+    hitHeight?: number;
 }) {
     const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
@@ -2034,12 +2112,15 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
             className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
             style={{
                 left,
-                height,
+                height: Math.min(hitHeight, height),
             }}
         >
             {/* The line runs from the page boxes' top (1px down, inside the ruler's border), and
                 the head is a fill centered on the line's pixel, so its tip runs into the line */}
-            <span className="bg-accent absolute top-px bottom-0 left-1/2 w-px" />
+            <span
+                className="bg-accent pointer-events-none absolute top-px left-1/2 w-px"
+                style={{ height: Math.max(0, height - 1) }}
+            />
             <svg
                 width="9"
                 height="6"

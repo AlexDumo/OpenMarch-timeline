@@ -45,6 +45,7 @@ import {
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { timeAtBeat } from "@/timeline/timeMap";
 import { useTimelineCommands } from "./useTimelineCommands";
+import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
@@ -148,6 +149,7 @@ export default function TimelineModePanel() {
         timelines,
         selectedMarcherIds,
     });
+    const clipResize = useTimelineClipResize({ database: db, timelines });
     const queryClient = useQueryClient();
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
     const { mutate: deletePageFlags } = useMutation(
@@ -198,6 +200,7 @@ export default function TimelineModePanel() {
                     transportViewControls={COMPACT_BUTTON}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
+                    clipResize={clipResize}
                     onPlayFromStartOff={() =>
                         useTimelineSelectionStore
                             .getState()

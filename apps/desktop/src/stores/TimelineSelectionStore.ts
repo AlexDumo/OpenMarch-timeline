@@ -200,6 +200,16 @@ export interface TimelineSelectionState {
         from: { readonly start: number; readonly end: number },
         delta: number,
     ) => void;
+    /**
+     * A stored timeline's range changed from `from` to `to` (a clip resize, resize-move): as
+     * `followTimelineShift`, a selection of exactly `from` becomes `to`, with the playhead on its
+     * end. An isolated timeline keeps the playhead where it was, clamped into `to`, unless it was
+     * on the old end, which it follows.
+     */
+    readonly followTimelineRange: (
+        from: { readonly start: number; readonly end: number },
+        to: { readonly start: number; readonly end: number },
+    ) => void;
     /** Used by `TimelineModePanel` only. */
     readonly setPageBoxes: (boxes: readonly PageBox[]) => void;
     /** Used by `useTimelineSelectionHost` only. */
@@ -618,7 +628,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                           )),
                     playheadRevision: s.playheadRevision + 1,
                 })),
-            followTimelineShift: (from, delta) =>
+            followTimelineRange: (from, to) =>
                 set(
                     keepCursorWhilePlaying((s) => {
                         const isolation =
@@ -626,21 +636,29 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                             s.isolation.end === from.end
                                 ? {
                                       ...s.isolation,
-                                      start: from.start + delta,
-                                      end: from.end + delta,
+                                      start: to.start,
+                                      end: to.end,
                                   }
                                 : s.isolation;
-                        // The isolated clip moved: S and P go with it, wherever P was in it
+                        // A shift carries P along; a resize keeps it, unless it was on the end
+                        const shift =
+                            to.end - to.start === from.end - from.start
+                                ? to.start - from.start
+                                : null;
+                        const playhead =
+                            shift !== null
+                                ? s.playheadBeat + shift
+                                : s.playheadBeat === from.end
+                                  ? to.end
+                                  : s.playheadBeat;
+                        // The isolated clip moved or resized: S and P go with it
                         if (isolation && isolation !== s.isolation)
                             return {
                                 isolation,
                                 ...isolatedWindow(
                                     s,
                                     isolation,
-                                    isolatedPlayhead(
-                                        isolation,
-                                        s.playheadBeat + delta,
-                                    ),
+                                    isolatedPlayhead(isolation, playhead),
                                 ),
                                 storedTimelines:
                                     s.storedTimelines?.map((t) =>
@@ -662,12 +680,11 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                             t.start === from.start && t.end === from.end
                                 ? {
                                       ...t,
-                                      start: t.start + delta,
-                                      end: t.end + delta,
+                                      start: to.start,
+                                      end: to.end,
                                   }
                                 : t;
-                        const start = from.start + delta;
-                        const end = from.end + delta;
+                        const { start, end } = to;
                         return {
                             isolation,
                             ...windowFields(
@@ -683,6 +700,11 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         };
                     }),
                 ),
+            followTimelineShift: (from, delta) =>
+                useTimelineSelectionStore.getState().followTimelineRange(from, {
+                    start: from.start + delta,
+                    end: from.end + delta,
+                }),
             setPageBoxes: (pageBoxes) =>
                 set(
                     keepCursorWhilePlaying((s) => {

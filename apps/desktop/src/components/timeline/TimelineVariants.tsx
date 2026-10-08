@@ -781,6 +781,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                 )}
                                 onSelect={selectTrack}
                                 onRangeCommit={props.onTimelineRangeCommit}
+                                resize={props.clipResize}
                                 beatCount={model.beatCount}
                                 snapBeats={snapBeats}
                                 micro={!expanded}
@@ -825,6 +826,8 @@ const TimelineSurface = memo(function TimelineSurface({
                         onSeek={props.onSeek}
                         isPlaying={props.isPlaying}
                         scrubLine={pointer.scrubLine}
+                        // UI-14: over the clip rows the playhead is drawn, not grabbed
+                        hitHeight={trackTop}
                     />
                     {props.onAddPageFlag && !props.isPlaying && (
                         <button
@@ -872,6 +875,8 @@ const TimelineSurface = memo(function TimelineSurface({
                             beatCount={model.beatCount}
                             pixelsPerBeat={pixelsPerBeat}
                             height={timelineHeight}
+                            // UI-14: over the clip rows the flags are drawn, not grabbed
+                            hitHeight={trackTop}
                             snapBeats={snapBeats}
                             onCommit={commitSelection}
                             onInteractionChange={selectionInteraction.set}
