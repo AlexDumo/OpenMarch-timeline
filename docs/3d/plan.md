@@ -87,7 +87,7 @@ Paths are relative to `apps/desktop/` unless they start at the repo root.
   field image.
 - **D-6** Full-show timelines in the window, through `src/view3d/positions.ts`
   only.
-- **D-7** Instanced cylinder performers.
+- **D-7** Instanced cylinder performers (amended 2026-10-07: om-pose marchers).
 - **D-8** Shared contracts land first.
 
 ## 3. Phases

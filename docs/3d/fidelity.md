@@ -543,8 +543,8 @@ Ranked by payoff per effort:
 Skip: individual seats, concourse interiors, animated crowds, cars,
 real-school likenesses, team logos.
 
-**Performers.** Whatever replaces the cylinders (the `3d/figures` branch is
-animating Blender figures), facing direction must be visible, the uniform
+**Performers.** Whatever replaces the cylinders (now om-pose's marchers, ADR
+0002 D-7 amended 2026-10-07; they superseded the `3d/figures` branch), facing direction must be visible, the uniform
 two-tone from section color, and a contact-shadow blob under every figure on
 every tier. **Camera:** keep the 1.1 s cubic fly-to; add damping to orbit and
 zoom; give the press box and upper deck a longer lens (30-35° FOV) so forms
