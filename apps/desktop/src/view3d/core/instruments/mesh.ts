@@ -17,6 +17,8 @@ export interface Piece {
     positions: number[];
     normals: number[];
     indices: number[];
+    /** Optional linear RGB per vertex (3 numbers each), from `colorPieces`. */
+    colors?: number[];
 }
 
 /** Uniform shader part ids for instruments (instrumentPaint.ts paints them). */
@@ -233,4 +235,204 @@ export function bounds(pieces: Piece[]): { min: Vec3; max: Vec3 } {
                 max[k] = Math.max(max[k], p.positions[i + k]);
             }
     return { min, max };
+}
+
+// ---- Smooth primitives: shared ring vertices and per-vertex normals ----
+
+/** The two unit vectors of a ring's plane for a tangent, transported from `prevU`. */
+function frame(t: Vec3, prevU: Vec3 | null): [Vec3, Vec3] {
+    let u = prevU
+        ? sub(prevU, scale(t, dot(prevU, t)))
+        : cross(t, Math.abs(t[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]);
+    if (len(u) < 1e-6)
+        u = cross(t, Math.abs(t[0]) < 0.9 ? [1, 0, 0] : [0, 0, 1]);
+    u = norm(u);
+    return [u, cross(t, u)];
+}
+
+/**
+ * Sweeps a circle along `path` with one ring of shared vertices per point,
+ * radial normals (smooth shading) and a radius per point when `radii` is an
+ * array (a conical bore). Caps are fans with axial normals.
+ */
+export function smoothTube(
+    path: Vec3[],
+    radii: number | number[],
+    segments: number,
+    part: number,
+    {
+        capStart = true,
+        capEnd = true,
+    }: { capStart?: boolean; capEnd?: boolean } = {},
+): Piece {
+    const p: Piece = { part, positions: [], normals: [], indices: [] };
+    const n = path.length;
+    if (n < 2) return p;
+    const r = (i: number) =>
+        Array.isArray(radii) ? radii[Math.min(i, radii.length - 1)] : radii;
+    const tangents: Vec3[] = path.map((_, i) => {
+        const prev = i > 0 ? norm(sub(path[i], path[i - 1])) : null;
+        const next = i + 1 < n ? norm(sub(path[i + 1], path[i])) : null;
+        return norm(prev && next ? add(prev, next) : (prev ?? next)!);
+    });
+    let u: Vec3 | null = null;
+    for (let i = 0; i < n; i++) {
+        const [ui, vi] = frame(tangents[i], u);
+        u = ui;
+        const widen =
+            i > 0 && i + 1 < n
+                ? 1 /
+                  Math.max(
+                      0.5,
+                      dot(tangents[i], norm(sub(path[i + 1], path[i]))),
+                  )
+                : 1;
+        for (let k = 0; k < segments; k++) {
+            const a = (k / segments) * Math.PI * 2;
+            const dir = norm(
+                add(scale(ui, Math.cos(a)), scale(vi, Math.sin(a))),
+            );
+            const pt = add(path[i], scale(dir, r(i) * widen));
+            p.positions.push(pt[0], pt[1], pt[2]);
+            p.normals.push(dir[0], dir[1], dir[2]);
+        }
+    }
+    for (let i = 0; i + 1 < n; i++)
+        for (let k = 0; k < segments; k++) {
+            const a = i * segments + k;
+            const b = i * segments + ((k + 1) % segments);
+            const c = (i + 1) * segments + ((k + 1) % segments);
+            const d = (i + 1) * segments + k;
+            p.indices.push(a, d, c, a, c, b);
+        }
+    const capAt = (ring: number, center: Vec3, axis: Vec3) => {
+        const ci = p.positions.length / 3;
+        p.positions.push(center[0], center[1], center[2]);
+        p.normals.push(axis[0], axis[1], axis[2]);
+        for (let k = 0; k < segments; k++) {
+            const a = ring * segments + k;
+            const b = ring * segments + ((k + 1) % segments);
+            if (axis === tangents[n - 1]) p.indices.push(ci, a, b);
+            else p.indices.push(ci, b, a);
+        }
+    };
+    if (capStart) capAt(0, path[0], scale(tangents[0], -1));
+    if (capEnd) capAt(n - 1, path[n - 1], tangents[n - 1]);
+    return p;
+}
+
+/**
+ * Revolves `profile` about +Y with shared ring vertices; normals follow the
+ * profile's slope, so a flare shades smoothly. Open at both ends.
+ */
+export function smoothLathe(
+    profile: [number, number][],
+    segments: number,
+    part: number,
+): Piece {
+    const p: Piece = { part, positions: [], normals: [], indices: [] };
+    const m = profile.length;
+    for (let i = 0; i < m; i++) {
+        const [r, y] = profile[i];
+        // slope: (dr, dy) along the profile; the normal is (dy, -dr) in (r, y)
+        const [r0, y0] = profile[Math.max(i - 1, 0)];
+        const [r1, y1] = profile[Math.min(i + 1, m - 1)];
+        const dr = r1 - r0;
+        const dy = y1 - y0;
+        const l = Math.hypot(dr, dy) || 1;
+        const nr = dy / l;
+        const ny = -dr / l;
+        for (let k = 0; k < segments; k++) {
+            const a = (k / segments) * Math.PI * 2;
+            const cx = Math.cos(a);
+            const cz = -Math.sin(a);
+            p.positions.push(r * cx, y, r * cz);
+            const nn = norm([nr * cx, ny, nr * cz]);
+            p.normals.push(nn[0], nn[1], nn[2]);
+        }
+    }
+    for (let i = 0; i + 1 < m; i++)
+        for (let k = 0; k < segments; k++) {
+            const a = i * segments + k;
+            const b = i * segments + ((k + 1) % segments);
+            const c = (i + 1) * segments + ((k + 1) % segments);
+            const d = (i + 1) * segments + k;
+            p.indices.push(a, b, c, a, c, d);
+        }
+    return p;
+}
+
+/**
+ * Points on a circle of `radius` about `center` in the plane normal to
+ * `axis`, from `fromDeg` to `toDeg`. About "x": 0° is +Y, 90° is +Z. About
+ * "y": 0° is +Z, 90° is +X. About "z": 0° is +X, 90° is +Y.
+ */
+export function arc(
+    center: Vec3,
+    radius: number,
+    fromDeg: number,
+    toDeg: number,
+    steps: number,
+    axis: "x" | "y" | "z",
+): Vec3[] {
+    const out: Vec3[] = [];
+    for (let i = 0; i <= steps; i++) {
+        const a = ((fromDeg + ((toDeg - fromDeg) * i) / steps) * Math.PI) / 180;
+        const c = Math.cos(a) * radius;
+        const s = Math.sin(a) * radius;
+        const d: Vec3 =
+            axis === "x" ? [0, c, s] : axis === "y" ? [s, 0, c] : [c, s, 0];
+        out.push(add(center, d));
+    }
+    return out;
+}
+
+/**
+ * A bell flare from `throat` to `rim` over `length`: slow at the throat and
+ * fast at the rim, ending in a rolled bead. (radius, distance) pairs.
+ */
+export function bellProfile(
+    throat: number,
+    rim: number,
+    length: number,
+    steps = 14,
+): [number, number][] {
+    const out: [number, number][] = [];
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const r =
+            throat +
+            (rim - throat) * ((Math.exp(3.2 * t) - 1) / (Math.exp(3.2) - 1));
+        out.push([r, length * t]);
+    }
+    // rim bead: a small roll outward and back
+    const bead = Math.max(rim * 0.03, 0.002);
+    out.push(
+        [rim + bead * 0.6, length + bead * 0.4],
+        [rim + bead * 0.8, length - bead * 0.2],
+        [rim - bead * 0.2, length - bead * 0.4],
+    );
+    return out;
+}
+
+/** sRGB hex to linear RGB, as three's Color does. */
+function linear(hex: number): Vec3 {
+    const f = (c: number) => {
+        const x = c / 255;
+        return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    };
+    return [f((hex >> 16) & 255), f((hex >> 8) & 255), f(hex & 255)];
+}
+
+/** Fills each piece's per-vertex colors from its part. */
+export function colorPieces(
+    pieces: Piece[],
+    colorOfPart: (part: number) => number,
+): Piece[] {
+    return pieces.map((p) => {
+        const [r, g, b] = linear(colorOfPart(p.part));
+        const colors: number[] = [];
+        for (let i = 0; i < p.positions.length / 3; i++) colors.push(r, g, b);
+        return { ...p, colors };
+    });
 }
