@@ -48,6 +48,7 @@ import {
 import { timelineRangeTargetProps } from "./TimelineRangeMenu";
 import {
     useClipEdgeResize,
+    useClipGestureEscape,
     type TimelineClipResizeCommands,
 } from "./TimelineClipResize";
 import { useLatestCallback } from "./useLatestCallback";
@@ -1099,20 +1100,13 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         setPreviewOffset(0);
     }, [range?.endBeatIndex, range?.startBeatIndex]);
     // Esc cancels a move drag: nothing moves, and the click that ends it doesn't select (E14)
-    const moving = previewOffset !== 0;
-    useEffect(() => {
-        if (!moving) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== "Escape") return;
-            event.preventDefault();
-            event.stopPropagation();
-            dragRef.current = null;
-            draggedRef.current = true;
-            setPreviewOffset(0);
-        };
-        window.addEventListener("keydown", onKeyDown, true);
-        return () => window.removeEventListener("keydown", onKeyDown, true);
-    }, [moving]);
+    const [moving, setMoving] = useState(false);
+    useClipGestureEscape(moving, () => {
+        dragRef.current = null;
+        draggedRef.current = true;
+        setMoving(false);
+        setPreviewOffset(0);
+    });
     const edgeResize = useClipEdgeResize({
         trackId: track.id,
         range,
@@ -1175,6 +1169,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
             }}
             onPointerDown={(event) => {
                 draggedRef.current = false;
+                edgeResize.resetClick();
                 // Ctrl (Cmd on macOS) draws a range from here instead (the surface handles it)
                 if (
                     !canMove ||
@@ -1201,6 +1196,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         TIMELINE_RANGE_DRAG_PX
                 )
                     return;
+                if (!drag.moved) setMoving(true);
                 drag.moved = true;
                 const offset = getOffset(
                     event.clientX,
@@ -1214,6 +1210,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 const drag = dragRef.current;
                 if (!drag || drag.pointerId !== event.pointerId) return;
                 dragRef.current = null;
+                setMoving(false);
                 event.currentTarget.releasePointerCapture?.(event.pointerId);
                 // A press that didn't move is a click: it selects (onClick) and moves nothing,
                 // even with an edge near a page line, which a zero offset would snap to
@@ -1239,6 +1236,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
             }}
             onPointerCancel={() => {
                 dragRef.current = null;
+                setMoving(false);
                 setPreviewOffset(0);
             }}
             className={clsx(

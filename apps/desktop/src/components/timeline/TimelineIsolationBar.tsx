@@ -5,6 +5,7 @@ import { FlagIcon, PushPinSlashIcon, XIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
+import { clipGestureActive } from "./TimelineClipResize";
 import { useTimingObjects } from "@/hooks";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import {
@@ -66,6 +67,8 @@ export function useIsolationEscape(): void {
             if (useAlignmentEventStore.getState().alignmentEvent !== "default")
                 return;
             if (selected.current > 0 || overlayOpen()) return;
+            // A clip move or resize in progress takes this Esc (resize-move E14)
+            if (clipGestureActive()) return;
             const store = useTimelineSelectionStore.getState();
             if (store.isolation) store.exitIsolation();
             else if (store.playFromStart) store.setPlayFromStart(false);

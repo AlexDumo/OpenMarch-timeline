@@ -71,6 +71,39 @@ export const clipHandleWidth = (width: number): number =>
 
 type Edge = "start" | "end";
 
+let clipGestures = 0;
+
+/**
+ * Whether a clip is being moved or resized. Esc then cancels the gesture only, so the isolation
+ * bar's Esc (`useIsolationEscape`, which listens on the window before any gesture starts) leaves
+ * isolation alone.
+ */
+export const clipGestureActive = (): boolean => clipGestures > 0;
+
+/**
+ * While `active` (a clip move or resize past its threshold), Esc calls `cancel` and goes no
+ * further (E14), and `clipGestureActive` is true.
+ */
+export function useClipGestureEscape(active: boolean, cancel: () => void) {
+    const cancelRef = useRef(cancel);
+    cancelRef.current = cancel;
+    useEffect(() => {
+        if (!active) return;
+        clipGestures += 1;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            cancelRef.current();
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => {
+            clipGestures -= 1;
+            window.removeEventListener("keydown", onKeyDown, true);
+        };
+    }, [active]);
+}
+
 /** A resize in progress, as drawn: the range so far, and why it can't go further. */
 export interface ClipResizePreview extends TimelineBeatRange {
     readonly edge: Edge;
@@ -124,11 +157,17 @@ export function resizedRange({
                   },
                   max: { beat: beatCount, reason: null },
               });
-    const max =
+    const one = { reason: "1 count minimum" };
+    let max =
         edge === "end" && bounds.max.beat > beatCount
             ? { beat: beatCount, reason: null }
             : bounds.max;
-    const min = bounds.min.beat < 0 ? { beat: 0, reason: null } : bounds.min;
+    let min = bounds.min.beat < 0 ? { beat: 0, reason: null } : bounds.min;
+    // At least a count on the clip's own axis too (a move stored from spec beat 0 folds onto 1)
+    if (edge === "start" && max.beat > range.endBeatIndex - 1)
+        max = { ...one, beat: range.endBeatIndex - 1 };
+    if (edge === "end" && min.beat < range.startBeatIndex + 1)
+        min = { ...one, beat: range.startBeatIndex + 1 };
     const landed = clamp(snapped, min.beat, Math.max(min.beat, max.beat));
     const stoppedBy =
         snapped < landed ? min.reason : snapped > landed ? max.reason : null;
@@ -207,6 +246,8 @@ export function useClipEdgeResize({
     handles: ReactNode;
     tag: ReactNode;
     swallowClick: () => boolean;
+    /** Forgets a swallowed click that never came (a new press on the clip) */
+    resetClick: () => void;
 } {
     const [preview, setPreview] = useState<ClipResizePreview | null>(null);
     const dragRef = useRef<{
@@ -221,6 +262,8 @@ export function useClipEdgeResize({
         snapDisabled: boolean;
         limits: ClipResizeLimits | null;
         preview: ClipResizePreview | null;
+        /** Settles once the limits are read (or failed to be) */
+        limitsRead: Promise<unknown>;
     } | null>(null);
     const swallowRef = useRef(false);
 
@@ -231,20 +274,11 @@ export function useClipEdgeResize({
     }, [range?.startBeatIndex, range?.endBeatIndex]);
 
     // Esc cancels a resize in progress: nothing is committed or selected (E14)
-    const resizing = preview !== null;
-    useEffect(() => {
-        if (!resizing) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== "Escape") return;
-            event.preventDefault();
-            event.stopPropagation();
-            dragRef.current = null;
-            swallowRef.current = true;
-            setPreview(null);
-        };
-        window.addEventListener("keydown", onKeyDown, true);
-        return () => window.removeEventListener("keydown", onKeyDown, true);
-    }, [resizing]);
+    useClipGestureEscape(preview !== null, () => {
+        dragRef.current = null;
+        swallowRef.current = true;
+        setPreview(null);
+    });
 
     const handleWidth = clipHandleWidth(width);
     const canResize =
@@ -291,15 +325,17 @@ export function useClipEdgeResize({
                 snapDisabled: isPageSnapDisabled(event),
                 limits: null as ClipResizeLimits | null,
                 preview: null as ClipResizePreview | null,
+                limitsRead: Promise.resolve() as Promise<unknown>,
             };
             dragRef.current = drag;
             event.currentTarget.setPointerCapture?.(event.pointerId);
             // The limits come from the database; until they arrive only the show and the one
             // count minimum hold, and the edge settles inside them once they do
-            void resize!.limits(trackId).then(
+            drag.limitsRead = resize!.limits(trackId).then(
                 (limits) => {
-                    if (dragRef.current !== drag) return;
+                    // Kept even after release: a release waiting for them commits with them
                     drag.limits = limits;
+                    if (dragRef.current !== drag) return;
                     if (drag.preview) {
                         const settled = landAt(
                             drag,
@@ -338,20 +374,27 @@ export function useClipEdgeResize({
             if (!drag.moved) return;
             event.stopPropagation();
             swallowRef.current = true;
-            // The modifiers held at release decide, as for the clip's move drag
-            const next = landAt(drag, event.clientX, isPageSnapDisabled(event));
             setPreview(null);
-            if (
-                next.blockedBy !== null ||
-                (next.startBeatIndex === range!.startBeatIndex &&
-                    next.endBeatIndex === range!.endBeatIndex)
-            )
-                return;
-            resize!.commit({
-                timelineId: trackId,
-                startBeatIndex: next.startBeatIndex,
-                endBeatIndex: next.endBeatIndex,
-            });
+            // The modifiers held at release decide, as for the clip's move drag. A release
+            // before the limits arrive waits for them, so it stops where a slower drag would
+            const clientX = event.clientX;
+            const snapDisabled = isPageSnapDisabled(event);
+            const finish = () => {
+                const next = landAt(drag, clientX, snapDisabled);
+                if (
+                    next.blockedBy !== null ||
+                    (next.startBeatIndex === range!.startBeatIndex &&
+                        next.endBeatIndex === range!.endBeatIndex)
+                )
+                    return;
+                resize!.commit({
+                    timelineId: trackId,
+                    startBeatIndex: next.startBeatIndex,
+                    endBeatIndex: next.endBeatIndex,
+                });
+            };
+            if (drag.limits) finish();
+            else void drag.limitsRead.then(finish);
         },
         onPointerCancel: () => {
             dragRef.current = null;
@@ -397,6 +440,9 @@ export function useClipEdgeResize({
         preview,
         handles,
         tag,
+        resetClick: () => {
+            swallowRef.current = false;
+        },
         swallowClick: () => {
             const swallowed = swallowRef.current;
             swallowRef.current = false;

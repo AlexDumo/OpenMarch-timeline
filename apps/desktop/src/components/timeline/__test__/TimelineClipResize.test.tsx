@@ -16,6 +16,7 @@ import { shiftTimeline } from "@/db-functions/timelineCommands";
 import type { DbConnection } from "@/db-functions/types";
 import { Timeline, type TimelineInput } from "../Timeline";
 import {
+    clipGestureActive,
     clipHandleWidth,
     clipResizeTagText,
     resizedRange,
@@ -346,6 +347,7 @@ describe("resizing a clip by its edges", () => {
         pointer(start, "pointerdown", 0);
         pointer(start, "pointermove", 16);
         pointer(start, "pointerup", 16);
+        await flush();
         expect(resize.commit).toHaveBeenCalledWith({
             timelineId: "A",
             startBeatIndex: 2,
@@ -452,6 +454,74 @@ describe("resizing a clip by its edges", () => {
         pointer(clip, "pointermove", 72);
         pointer(clip, "pointerup", 72);
         expect(shiftTimeline).toHaveBeenCalledTimes(1);
+    });
+
+    it("while a resize or move runs, Esc belongs to it, not to isolation (review)", () => {
+        setup();
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        expect(clipGestureActive()).toBe(false);
+        pointer(end, "pointerdown", 0);
+        pointer(end, "pointermove", 32);
+        expect(clipGestureActive()).toBe(true);
+        fireEvent.keyDown(window, { key: "Escape" });
+        expect(clipGestureActive()).toBe(false);
+        pointer(end, "pointerup", 32);
+        const clip = screen.getByLabelText(/^A timeline/);
+        pointer(clip, "pointerdown", 40);
+        pointer(clip, "pointermove", 72);
+        // Back where it started, still a drag: Esc is still its own
+        pointer(clip, "pointermove", 41);
+        expect(clipGestureActive()).toBe(true);
+        pointer(clip, "pointerup", 41);
+        expect(clipGestureActive()).toBe(false);
+    });
+
+    it("a release before the limits arrive waits for them, and stops at them (review)", async () => {
+        let arrive: (limits: ClipResizeLimits) => void = () => undefined;
+        const resize = {
+            limits: vi.fn(
+                () =>
+                    new Promise<ClipResizeLimits | null>((resolve) => {
+                        arrive = resolve;
+                    }),
+            ),
+            commit: vi.fn(),
+        };
+        render(<Harness timelines={[input("A", 7, 3, 9)]} resize={resize} />);
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        pointer(end, "pointerdown", 0);
+        pointer(end, "pointermove", 160);
+        pointer(end, "pointerup", 160);
+        expect(resize.commit).not.toHaveBeenCalled();
+        arrive(
+            openLimits({
+                endEdge: {
+                    min: { beat: 4, reason: null },
+                    max: { beat: 11, reason: "stops at Move 4" },
+                },
+            }),
+        );
+        await flush();
+        expect(resize.commit).toHaveBeenCalledWith({
+            timelineId: "A",
+            startBeatIndex: 3,
+            endBeatIndex: 11,
+        });
+    });
+
+    it("a move stored from spec beat 0 lands where its edge was drawn (review)", async () => {
+        const { resize } = setup(openLimits(), [input("A", 7, 0, 9)]);
+        const start = screen.getByTestId("timeline-clip-resize-start");
+        // View [0, 8): the start to view 3 is spec 4
+        pointer(start, "pointerdown", 0);
+        pointer(start, "pointermove", 48);
+        pointer(start, "pointerup", 48);
+        await flush();
+        expect(resize.commit).toHaveBeenCalledWith({
+            timelineId: "A",
+            startBeatIndex: 4,
+            endBeatIndex: 9,
+        });
     });
 
     it("a clip narrower than 8 px has no handles (V-120)", () => {

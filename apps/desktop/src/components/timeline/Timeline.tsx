@@ -387,9 +387,8 @@ export function Timeline(props: TimelineProps) {
               }
             : undefined,
     );
-    // A resize sends each edge's own change: an edge that didn't move keeps its stored spec beat,
-    // and one that moved goes as far as it was dragged on the view axis (which folds spec beats 0
-    // and 1 together); the limits come back mapped onto the view axis
+    // A resize sends each edge's own change: an edge that didn't move keeps its stored spec beat;
+    // the limits come back mapped onto the view axis
     const { clipResize } = props;
     const viewClipResize = useMemo(():
         | TimelineClipResizeCommands
@@ -424,8 +423,10 @@ export function Timeline(props: TimelineProps) {
                     (timeline) => timeline.id === change.timelineId,
                 );
                 if (!input) return;
+                // An edge that moved lands where it was drawn (`toSpec`), also for a move stored
+                // from spec beat 0, which the view folds onto beat 1
                 const edge = (spec: number, view: number) =>
-                    spec + (view - axis.toView(spec));
+                    view === axis.toView(spec) ? spec : axis.toSpec(view);
                 clipResize.commit({
                     timelineId: change.timelineId,
                     startBeatIndex: edge(
