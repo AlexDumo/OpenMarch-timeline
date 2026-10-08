@@ -113,6 +113,8 @@ export function instrumentMaterial(bake: Bake): THREE.MeshStandardMaterial {
         vertexColors: true,
         flatShading: false,
         envMapIntensity: 1,
+        // bells and tube ends are open surfaces: looking into a bell must show its inside
+        side: THREE.DoubleSide,
     });
     return instancedSkinning(THREE, material, bake);
 }

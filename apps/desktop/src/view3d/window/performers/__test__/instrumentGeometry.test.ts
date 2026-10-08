@@ -145,6 +145,8 @@ describe("instrument color and material", () => {
         expect(m.roughness).toBeLessThan(0.4);
         expect(m.vertexColors).toBe(true);
         expect(m.flatShading).toBe(false);
+        // bells and tube ends are open surfaces: their insides must draw too
+        expect(m.side).toBe(THREE.DoubleSide);
         expect(m.customProgramCacheKey()).toContain("baked-instances");
     });
 });
