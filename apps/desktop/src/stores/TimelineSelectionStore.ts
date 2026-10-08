@@ -202,6 +202,14 @@ export interface TimelineSelectionState {
         from: { readonly start: number; readonly end: number },
         delta: number,
     ) => void;
+    /**
+     * A page flag moved from beat `from` to `to` (docs/timeline/research/move-page-flag case 14):
+     * a playhead or start flag on it goes with it, so the selected page stays selected. The page
+     * boxes and the loaded stored timelines with an edge on it follow too, until the pages and the
+     * host reload. A pinned S stays pinned unless it is now where it would follow to. Nothing
+     * happens in isolation, where flags don't move.
+     */
+    readonly followPageFlagMove: (from: number, to: number) => void;
     /** Used by `TimelineModePanel` only. */
     readonly setPageBoxes: (boxes: readonly PageBox[]) => void;
     /** Used by `useTimelineSelectionHost` only. */
@@ -702,6 +710,58 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                             // selection still resolves to it meanwhile
                             storedTimelines:
                                 s.storedTimelines?.map(moved) ?? null,
+                        };
+                    }),
+                ),
+            followPageFlagMove: (from, to) =>
+                set(
+                    keepCursorWhilePlaying((s) => {
+                        if (s.isolation || from === to) return {};
+                        const follow = (beat: number) =>
+                            beat === from ? to : beat;
+                        const onFlag = (r: { start: number; end: number }) =>
+                            r.start === from || r.end === from;
+                        const pageBoxes = s.pageBoxes.map((b) =>
+                            onFlag(b)
+                                ? {
+                                      ...b,
+                                      start: follow(b.start),
+                                      end: follow(b.end),
+                                  }
+                                : b,
+                        );
+                        const startBeat = follow(s.startBeat);
+                        const playheadBeat = follow(s.playheadBeat);
+                        const fields =
+                            startBeat === s.startBeat &&
+                            playheadBeat === s.playheadBeat
+                                ? {}
+                                : s.selection.kind === "none"
+                                  ? { startBeat, playheadBeat }
+                                  : windowFields(
+                                        startBeat,
+                                        s.startPinned &&
+                                            startBeat !==
+                                                followingStart(
+                                                    playheadBeat,
+                                                    pageBoxes,
+                                                ),
+                                        playheadBeat,
+                                        pageBoxes,
+                                    );
+                        return {
+                            pageBoxes,
+                            ...fields,
+                            storedTimelines:
+                                s.storedTimelines?.map((t) =>
+                                    onFlag(t)
+                                        ? {
+                                              ...t,
+                                              start: follow(t.start),
+                                              end: follow(t.end),
+                                          }
+                                        : t,
+                                ) ?? null,
                         };
                     }),
                 ),
