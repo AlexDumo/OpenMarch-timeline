@@ -1286,7 +1286,6 @@
             "hornStateMode": {
                 "up": "Up",
                 "carry": "Carry",
-                "down": "Down",
                 "trail": "Trail"
             },
             "hornStateHint": "Shows always play horns up. The other positions are here to check the poses.",

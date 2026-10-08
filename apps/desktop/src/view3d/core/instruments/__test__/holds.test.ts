@@ -10,7 +10,7 @@ const FAMILIES: HoldFamily[] = ["brass", "trombone", "contra"];
 
 describe("holds", () => {
     it("lists the four states with up first", () => {
-        expect(HOLD_STATES).toEqual(["up", "carry", "down", "trail"]);
+        expect(HOLD_STATES).toEqual(["up", "carry", "trail"]);
         expect(holdId("brass", "up")).toBe("brass:up");
     });
 
@@ -49,12 +49,10 @@ describe("holds", () => {
         expect(h.right.elbow[0]).toBeLessThan(SHOULDER_R[0] - 0.08);
     });
 
-    it("brass carry and down: mouthpiece at eye level, bell vertical", () => {
-        for (const state of ["carry", "down"] as const) {
-            const h = hold("brass", state);
-            expect(Math.abs(h.instrument.bellAxis[1])).toBe(1);
-            expect(h.instrument.bellAxis[1]).toBe(state === "carry" ? 1 : -1);
-        }
+    it("brass carry: mouthpiece at eye level, bell to the ground", () => {
+        const h = hold("brass", "carry");
+        expect(h.instrument.bellAxis).toEqual([0, -1, 0]);
+        expect(h.instrument.origin[1]).toBeGreaterThan(1.2);
     });
 
     it("brass trail: right arm down the side, bell backward, left arm straight", () => {

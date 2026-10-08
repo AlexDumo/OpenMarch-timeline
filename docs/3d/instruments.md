@@ -152,18 +152,17 @@ Bake rows scale with holds, so §8 measures the budget first.
 The holds, from the owner's reference photos (kept outside the repo) and
 notes. Two rules hold across every state: **the hands never leave their
 playing grip** (right hand on the valve caps, left hand behind the valves;
-woodwind hands on their stacks), and in carry, set and down **the mouthpiece
-sits at eye level** (the ligature, for woodwinds). The states differ by
-where the bell points and where the elbows go.
+woodwind hands on their stacks), and at carry **the mouthpiece sits at eye
+level** (the ligature, for woodwinds). The states differ by where the bell
+points and where the elbows go.
 
 - **brass, horns up.** The bell is front: forward at face height, horizontal. Upper arms
   out to the sides near horizontal, forearms up and in: a triangle slightly
   wider than equilateral from shoulder to shoulder to the hands. Baritone
   and euphonium: the same with the bell above eye line.
-- **brass, carry (set is the same hold).** Instrument vertical in front of
-  the face, bell up, mouthpiece at eye level, elbows wide.
-- **brass, down.** Instrument vertical in front of the torso, mouthpiece at
-  eye level, bell toward the ground, elbows in.
+- **brass, carry (set and down are the same hold; owner, 2026-10-08).**
+  Instrument vertical in front of the torso, mouthpiece at eye level, bell
+  toward the ground, elbows in.
 - **brass, trail.** Instrument in the right hand only, bell backward, valve
   block perpendicular to the ground, arm straight down the side. Left arm
   straight down, closed fist, thumb on top, along the leg.
@@ -269,5 +268,5 @@ browser:
 2. Answered: always up; the panel exposes the others for testing.
 3. Props: the table in §6 is the real fix. Is the ADR amendment acceptable
    now, or should PR 4 start with the seed layout only and no persistence?
-4. Answered: carry and set are the same hold, bell up. Horns up is the bell
-   front.
+4. Answered: carry, set and down are one hold with the bell to the ground.
+   Horns up is the bell front.

@@ -71,27 +71,7 @@ const BRASS: Record<HoldState, Hold> = {
     carry: {
         family: "brass",
         state: "carry",
-        // vertical in front of the face, bell up, mouthpiece at eye level
-        right: {
-            elbow: [-0.295, 1.331, 0.155],
-            wrist: [-0.05, 1.38, 0.24],
-            fingers: unit([0.3, 0.1, 0.0]),
-        },
-        left: {
-            elbow: [0.3, 1.308, 0.14],
-            wrist: [0.05, 1.34, 0.22],
-            fingers: unit([-0.3, 0.2, 0.0]),
-        },
-        instrument: {
-            origin: [0, 1.38, 0.28],
-            bellAxis: [0, 1, 0],
-            capsAxis: [0, 0, -1],
-        },
-    },
-    down: {
-        family: "brass",
-        state: "down",
-        // vertical in front of the torso, bell down, mouthpiece at eye level
+        // vertical in front of the torso, bell to the ground, mouthpiece at eye level
         right: {
             elbow: [-0.258, 1.223, 0.076],
             wrist: [-0.05, 1.3, 0.22],
@@ -152,7 +132,6 @@ const TROMBONE: Record<HoldState, Hold> = {
         },
     },
     carry: { ...BRASS.carry, family: "trombone" },
-    down: { ...BRASS.down, family: "trombone" },
     trail: { ...BRASS.trail, family: "trombone" },
 };
 
@@ -179,7 +158,6 @@ const CONTRA_UP: Hold = {
 const CONTRA: Record<HoldState, Hold> = {
     up: CONTRA_UP,
     carry: { ...CONTRA_UP, state: "carry" },
-    down: { ...CONTRA_UP, state: "down" },
     trail: { ...CONTRA_UP, state: "trail" },
 };
 
