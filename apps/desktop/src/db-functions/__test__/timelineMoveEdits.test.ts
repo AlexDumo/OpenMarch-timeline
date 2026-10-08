@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { eq, getTableName } from "drizzle-orm";
+import { eq, getTableName, sql } from "drizzle-orm";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import type Page from "@/global/classes/Page";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
@@ -14,7 +14,14 @@ import {
     timelineResolverSettled,
     useTimelineResolverStore,
 } from "@/timeline/timelineStore";
-import { getUndoStackLength, performUndo } from "../history";
+import {
+    getUndoStackLength,
+    performUndo,
+    transactionWithHistory,
+} from "../history";
+import { createTimelinesInTransaction } from "../timelines";
+import { createTimelineShapesInTransaction } from "../timelineShapes";
+import { createTimelineTransitionsInTransaction } from "../timelineTransitions";
 import { TimelineWriteError } from "../timelineErrors";
 import {
     MOVE_NAME_MAX_LENGTH,
@@ -53,6 +60,15 @@ const snapshot = async (db: DbConnection) => {
         out[getTableName(table)] = await db.select().from(table).all();
     return out;
 };
+
+/** How many edits Undo can step back through */
+const undoSteps = async (db: DbConnection) =>
+    (await db
+        .select({
+            steps: sql<number>`count(distinct ${schema.history_undo.history_group})`,
+        })
+        .from(schema.history_undo)
+        .get())!.steps;
 
 const resolver = () => useTimelineResolverStore.getState().resolver!;
 
@@ -239,6 +255,23 @@ describeDbTests("renaming a move (UI-14)", (it) => {
         expect(await getUndoStackLength(db)).toBe(undoBefore);
     });
 
+    it("compares with the committed name: the same rename sent twice is one edit", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await setUp(db);
+        const { id } = await makeMove(db, pages);
+        const undoBefore = await undoSteps(db);
+        // Sent together, as a field's blur and its unmount can: the second sees the first's name
+        const [first, second] = await Promise.all([
+            renameTimeline({ db, timelineId: id, name: "Opener" }),
+            renameTimeline({ db, timelineId: id, name: "Opener" }),
+        ]);
+        expect(first?.name).toBe("Opener");
+        expect(second).toBeNull();
+        expect(await undoSteps(db)).toBe(undoBefore + 1);
+    });
+
     it("a timeline that no longer exists has nothing to rename: no edit, no error", async ({
         db,
         marchersAndPages: _,
@@ -322,6 +355,74 @@ describeDbTests("a move's path (UI-14 Move card)", (it) => {
             bulge: 0.25,
             transitions: 2,
         });
+    });
+
+    it("all following the leader is that path, not Mixed, and Direct changes them all as one edit", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        // Two one-slot transitions following the leader onto a line (follow the leader needs a
+        // shape), of one timeline, as the shape editor can leave a move
+        const id = await transactionWithHistory(db, "setUp", async (tx) => {
+            const [line] = await createTimelineShapesInTransaction({
+                tx,
+                newShapes: [
+                    {
+                        kind: "line",
+                        geometry: {
+                            points: [
+                                [0, 0],
+                                [60, 0],
+                            ],
+                        },
+                    },
+                ],
+            });
+            const [timeline] = await createTimelinesInTransaction({
+                tx,
+                newTimelines: [{ startBeat: 0, endBeat: 8 }],
+            });
+            await createTimelineTransitionsInTransaction({
+                tx,
+                newTransitions: [0, 1].map(() => ({
+                    timelineId: timeline!.id,
+                    startBeat: 0,
+                    endBeat: 8,
+                    slotCount: 1,
+                    destination: { kind: "shape" as const, shapeId: line!.id },
+                    pathStyle: "follow_the_leader" as const,
+                    pathParams: { waypoints: [] },
+                })),
+            });
+            return timeline!.id;
+        });
+        expect(await readMovePath(db, id)).toEqual({
+            style: "follow_the_leader",
+            bulge: null,
+            transitions: 2,
+        });
+        const before = await undoSteps(db);
+        expect(await setMovePath({ db, timelineId: id, style: "direct" })).toBe(
+            2,
+        );
+        expect(await undoSteps(db)).toBe(before + 1);
+        expect((await readMovePath(db, id)).style).toBe("direct");
+    });
+
+    it("judges what changes on the committed paths: the same path sent twice is one edit", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const id = await makeMove(db);
+        const undoBefore = await undoSteps(db);
+        // Sent together, as two quick presses do: the second sees the first's arcs
+        const [first, second] = await Promise.all([
+            setMovePath({ db, timelineId: id, style: "arc", bulge: 0.3 }),
+            setMovePath({ db, timelineId: id, style: "arc", bulge: 0.3 }),
+        ]);
+        expect(first).toBe(2);
+        expect(second).toBeNull();
+        expect(await undoSteps(db)).toBe(undoBefore + 1);
     });
 
     it("opens no edit when nothing changes, and refuses a bulge out of range", async ({

@@ -11,6 +11,7 @@ import {
     normalizeMoveName,
 } from "@/timeline/timelineViewModel";
 import { castSlots, transitionSlotPoints } from "@/timeline/timelineCasting";
+import { DEFAULT_BULGE } from "@/timeline/timelineTransitionEditor";
 import { DbConnection, DbTransaction } from "./types";
 import {
     createRangeTimelineInTransaction,
@@ -491,6 +492,34 @@ export const createTrack = async ({
 // Deleting and renaming a move (ui.md UI-14)
 // ---------------------------------------------------------------------------
 
+/** Thrown inside an edit that finds nothing to write, to leave without an (empty, refused) edit */
+class NoEdit extends Error {}
+
+/**
+ * `transactionWithHistory` for an edit that decides from the stored state whether it writes
+ * anything: `func` reads under the write lock, so it sees every committed edit and none can come
+ * between its read and its write, and returns `NO_EDIT` to write nothing. That rolls the edit back
+ * before it is recorded (an edit that writes nothing is refused) and returns `null`; no history
+ * step, no change notice.
+ */
+const NO_EDIT = Symbol("no edit");
+const transactionWithHistoryUnlessUnchanged = async <T>(
+    db: DbConnection,
+    funcName: string,
+    func: (tx: DbTransaction) => Promise<T | typeof NO_EDIT>,
+): Promise<T | null> => {
+    try {
+        return await transactionWithHistory(db, funcName, async (tx) => {
+            const result = await func(tx);
+            if (result === NO_EDIT) throw new NoEdit(funcName);
+            return result;
+        });
+    } catch (error: unknown) {
+        if (error instanceof NoEdit) return null;
+        throw error;
+    }
+};
+
 /**
  * Deletes a move (UI-14): the timeline, its transitions and their assignments, as one undoable
  * edit (`deleteTimelinesInTransaction`, child first). Moves it passed through are stored
@@ -531,25 +560,32 @@ export const renameTimeline = async ({
     name: string | null;
 }): Promise<DatabaseTimeline | null> => {
     const next = normalizeMoveName(name);
-    const stored = await db
-        .select({ name: schema.timelines.name })
-        .from(schema.timelines)
-        .where(eq(schema.timelines.id, timelineId))
-        .get();
-    if (!stored || stored.name === next) return null;
-    if (next === null && autoMoveNumber(stored.name) !== null) return null;
-    return await transactionWithHistory(db, "renameTimeline", async (tx) => {
-        const [renamed] = await updateTimelinesInTransaction({
-            tx,
-            modifiedTimelines: [
-                {
-                    id: timelineId,
-                    name: next ?? (await nextMoveNameInTransaction(tx)),
-                },
-            ],
-        });
-        return renamed!;
-    });
+    return await transactionWithHistoryUnlessUnchanged(
+        db,
+        "renameTimeline",
+        async (tx) => {
+            // Read in the edit, so a rename sent twice (or after an undo) compares with what is
+            // stored now
+            const stored = await tx
+                .select({ name: schema.timelines.name })
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, timelineId))
+                .get();
+            if (!stored || stored.name === next) return NO_EDIT;
+            if (next === null && autoMoveNumber(stored.name) !== null)
+                return NO_EDIT;
+            const [renamed] = await updateTimelinesInTransaction({
+                tx,
+                modifiedTimelines: [
+                    {
+                        id: timelineId,
+                        name: next ?? (await nextMoveNameInTransaction(tx)),
+                    },
+                ],
+            });
+            return renamed!;
+        },
+    );
 };
 
 /** The path styles a whole move can take (UI-14): follow the leader needs a shape, which a move's
@@ -620,31 +656,36 @@ export const setMovePath = async ({
     db,
     timelineId,
     style,
-    bulge = 0.25,
+    bulge = DEFAULT_BULGE,
 }: {
     db: DbConnection;
     timelineId: number;
     style: MovePathStyle;
     bulge?: number;
 }): Promise<number | null> => {
-    const rows = await moveTransitions(db, timelineId);
-    const changed: ModifiedTimelineTransitionArgs[] = rows
-        .filter((r) =>
-            style === "arc"
-                ? r.style !== "arc" || r.bulge !== bulge
-                : r.style !== "direct",
-        )
-        .map((r) => ({
-            id: r.id,
-            pathStyle: style,
-            pathParams: style === "arc" ? { bulge } : null,
-        }));
-    if (changed.length === 0) return null;
-    await transactionWithHistory(db, "setMovePath", (tx) =>
-        updateTimelineTransitionsInTransaction({
-            tx,
-            modifiedTransitions: changed,
-        }),
+    return await transactionWithHistoryUnlessUnchanged(
+        db,
+        "setMovePath",
+        async (tx) => {
+            // Read in the edit: what changes is judged on the committed paths
+            const rows = await moveTransitions(tx, timelineId);
+            const changed: ModifiedTimelineTransitionArgs[] = rows
+                .filter((r) =>
+                    style === "arc"
+                        ? r.style !== "arc" || r.bulge !== bulge
+                        : r.style !== "direct",
+                )
+                .map((r) => ({
+                    id: r.id,
+                    pathStyle: style,
+                    pathParams: style === "arc" ? { bulge } : null,
+                }));
+            if (changed.length === 0) return NO_EDIT;
+            await updateTimelineTransitionsInTransaction({
+                tx,
+                modifiedTransitions: changed,
+            });
+            return changed.length;
+        },
     );
-    return changed.length;
 };

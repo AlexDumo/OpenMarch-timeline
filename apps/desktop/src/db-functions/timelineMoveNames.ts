@@ -28,19 +28,29 @@ export const readPageBoxes = async (
     );
 };
 
-/** Whether `[start, end)` is exactly a page box: a page's timeline, not a move. */
+type PageBoxes = readonly { start: number; end: number }[];
+
+/**
+ * Whether `[start, end)` is exactly a page box: a page's timeline, not a move. `pageBoxes`, when
+ * the caller has read them already, saves reading them again.
+ */
 export const isPageBoxRange = async (
     db: DbConnection | DbTransaction,
     { start, end }: { start: number; end: number },
+    pageBoxes?: PageBoxes,
 ): Promise<boolean> =>
-    (await readPageBoxes(db)).some((b) => b.start === start && b.end === end);
+    (pageBoxes ?? (await readPageBoxes(db))).some(
+        (b) => b.start === start && b.end === end,
+    );
 
 /**
  * The name for a move being made now: "Move N", one more than any stored. Unnamed moves first
- * store the label they show (`moveLabels`), so their numbers stay put.
+ * store the label they show (`moveLabels`), so their numbers stay put. `pageBoxes`, when the
+ * caller has read them already, saves reading them again.
  */
 export const nextMoveNameInTransaction = async (
     tx: DbTransaction,
+    pageBoxes?: PageBoxes,
 ): Promise<string> => {
     const rows = await tx
         .select({
@@ -51,7 +61,7 @@ export const nextMoveNameInTransaction = async (
         })
         .from(schema.timelines)
         .all();
-    const labels = moveLabels(rows, await readPageBoxes(tx));
+    const labels = moveLabels(rows, pageBoxes ?? (await readPageBoxes(tx)));
     let highest = 0;
     for (const row of rows) {
         const label = row.name ?? labels.get(row.id);
@@ -73,9 +83,15 @@ export const createRangeTimelineInTransaction = async (
     tx: DbTransaction,
     { startBeat, endBeat }: { startBeat: number; endBeat: number },
 ): Promise<DatabaseTimeline> => {
-    const name = (await isPageBoxRange(tx, { start: startBeat, end: endBeat }))
+    // The beats and pages read once, for both
+    const pageBoxes = await readPageBoxes(tx);
+    const name = (await isPageBoxRange(
+        tx,
+        { start: startBeat, end: endBeat },
+        pageBoxes,
+    ))
         ? null
-        : await nextMoveNameInTransaction(tx);
+        : await nextMoveNameInTransaction(tx, pageBoxes);
     const [timeline] = await createTimelinesInTransaction({
         tx,
         newTimelines: [{ name, startBeat, endBeat }],
