@@ -35,8 +35,12 @@ Budgets are in [design.md](design.md) §9.
   × 1 hold 2.1 MB in 29 ms (texture 92 × 1420); × 2 holds 6.0 MB in 37 ms
   (184 × 2048); × 4 holds (none, brass, trombone, contra) 9.0 MB in 63 ms
   (276 × 2048). Rows wrap into 2048-row columns, so a fourth hold widens the
-  texture rather than failing. Well inside the 64 MB float-texture concern in
-  `instruments.md` §8.
+  texture rather than failing. The ceiling at the spec's scale (every clip of
+  3 height classes, 915 rows): 48 MB alone, 94 MB × 2 holds, 187 MB × 4 holds
+  (a 5704 × 2048 float texture). Rows scale as clips × holds; a show pays only
+  for the clips it plans, so a long show with many step sizes and directions,
+  three classes and three brass families can climb well past 9 MB. The 64 MB
+  concern in `instruments.md` §8 is not settled by the typical figure.
 - Horn geometry: trumpet, mellophone, baritone and euphonium 576 triangles
   each, trombone 456, bass trombone 488, contra 596 (the `brass.test.ts`
   budget check), so 150 brass add about 85 k triangles.

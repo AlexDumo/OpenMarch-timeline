@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import type { BufferGeometry, SkinnedMesh } from "three";
+import type * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { sectionUniform, type BodyType } from "@/view3d/core/marchers/looks";
 import type { LoadedBody } from "../marchers/marcherAssets";
+import { defaultPerformerBody } from "@/view3d/core/marchers/looks";
 import {
+    MarcherBodies,
     NO_HOLD,
     bakeForBodies,
     rowKey,
@@ -90,18 +93,38 @@ describe("rows per hold", () => {
             bake.rows["8to5"].frames,
         );
     });
+});
 
-    it("a new hold set disposes the previous bake texture", async () => {
+describe("the low tier", () => {
+    it("draws the horn on the block body too", async () => {
         const bodies = await loadedBodies();
         const clip = await clip8to5();
-        const a = bakeForBodies(bodies, { "8to5": clip }, ["brass:up"]);
-        let disposed = false;
-        a.texture.dispose = () => {
-            disposed = true;
-        };
-        // the hook's cleanup is `bake?.texture.dispose()`: call it as React would
-        a.texture.dispose();
-        expect(disposed).toBe(true);
+        const bake = bakeForBodies(bodies, { "8to5": clip }, [
+            "brass:up",
+            NO_HOLD,
+        ]);
+        const looks = [
+            {
+                body: defaultPerformerBody(1),
+                uniform: sectionUniform("Trumpet", null),
+            },
+            {
+                body: defaultPerformerBody(2),
+                uniform: sectionUniform("Flute", null),
+            },
+        ];
+        const set = new MarcherBodies(bodies, bake, looks, "low");
+        const meshes = set.group.children.filter((o) =>
+            o.name.startsWith("view3d-marchers-"),
+        ) as THREE.InstancedMesh[];
+        expect(meshes.length).toBe(2);
+        const triangles = meshes
+            .map((m) => m.geometry.index!.count / 3)
+            .sort((a, b) => a - b);
+        // the block body alone is 264 triangles; the trumpet adds its 576
+        expect(triangles[0]).toBe(264);
+        expect(triangles[1]).toBe(264 + 576);
+        set.dispose();
     });
 });
 

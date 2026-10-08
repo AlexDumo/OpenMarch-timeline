@@ -297,9 +297,10 @@ export class MarcherBodies {
     }
 
     /**
-     * One InstancedMesh for a group of slots sharing a body and a look. At
-     * high quality a look that carries an instrument draws the body's
-     * visible triangles merged with the horn, posed by the look's hold.
+     * One InstancedMesh for a group of slots sharing a body and a look. A
+     * look that carries an instrument draws the body's visible triangles
+     * (or the block body, at low quality) merged with the horn, posed by
+     * the look's hold.
      */
     private buildMesh(
         bodies: ReadonlyMap<BodyType, LoadedBody>,
@@ -310,9 +311,14 @@ export class MarcherBodies {
         let filtered = this.blockSource ? null : visibleIndex(source, g.look);
         let own: MeshEntry["own"] = filtered ? "index" : "shared";
         const carry = g.look.options.carry;
-        if (carry && !this.blockSource) {
+        if (carry) {
             const h = holdFor(carry.family, g.look.options.hold);
-            const skeleton = bodies.get(g.type)!.mesh.skeleton;
+            // every v4u body shares one skeleton; at low quality a group mixes body types
+            const skeleton = (
+                this.blockSource
+                    ? bodies.values().next().value!
+                    : bodies.get(g.type)!
+            ).mesh.skeleton;
             const horn = instrumentGeometry(
                 skeleton,
                 poseArms(skeleton, h),
