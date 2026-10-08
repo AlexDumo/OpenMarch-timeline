@@ -1355,6 +1355,31 @@
         "controls": {
             "label": "Playback Controls"
         },
+        "edit": {
+            "carryForward": {
+                "moves": "Also moves {pages}",
+                "movesUntil": "Also moves {pages} · stops at Page {stop}",
+                "page": "Page {page}",
+                "pages": "Pages {first}–{last}"
+            },
+            "passThrough": {
+                "catchUp": {
+                    "many": "{marchers} now catch up to {caughtUp}'s set by its end.",
+                    "one": "{marchers} now catches up to {caughtUp}'s set by its end."
+                },
+                "startFromBeat": "Start from beat {beat}",
+                "startFromPage": "Start from Page {page}",
+                "startFromPageSet": "Start from Page {page}'s set",
+                "through": {
+                    "many": "{marchers} now move straight through {through}.",
+                    "one": "{marchers} now moves straight through {through}."
+                },
+                "throughAndCatchUp": {
+                    "many": "{marchers} now move straight through {through}, then catch up to {caughtUp}'s set by its end.",
+                    "one": "{marchers} now moves straight through {through}, then catches up to {caughtUp}'s set by its end."
+                }
+            }
+        },
         "errors": {
             "assignmentDoesNotFit": "That marcher's move doesn't fit the transition: it must stay inside the transition's range, and use a slot the transition has.",
             "assignmentOutsideTransition": "A marcher's move must stay inside its transition. Adjust the transition's range, or the move's.",
