@@ -2,7 +2,8 @@
 
 <!-- cspell:words mellophone mellophones sousaphone sousaphones contras leadpipe Mylar lathed swept subwoofer spocks ligature -->
 
-Status: draft for owner review, 2026-10-08. Nothing here is built.
+Status: reviewed by the owner 2026-10-08; §9 item 3 (props persistence) is
+still open. Nothing here is built.
 
 How 3D View marchers come to carry instruments that read as the real thing,
 hold them the way a corps does, and how the front ensemble and its speakers
@@ -123,8 +124,8 @@ number. Hand-modeled GLB assets are the alternative if the result reads as
 too simple; the attachment and paint path below is the same either way.
 
 **Parts and finish.** The uniform shader paints parts by id; it knows ids 0
-to 15 today. Instruments take new ids from 16 upward: 16 lacquer brass, 17
-silver, 18 chrome, 19 drum shell (section color), 20 drum head, 21 bar
+to 15 today. Instruments take new ids from 16 upward: 16 brass finish (gold
+lacquer by default, silver lacquer as the alternative), 17 reserved, 18 chrome, 19 drum shell (section color), 20 drum head, 21 bar
 (rosewood), 22 black hardware, 23 wood (clarinet), 24 speaker grille. The
 finish choice per section (lacquer or silver) is a look option like the hat
 today. Painting new ids needs a change in the vendored
@@ -155,13 +156,12 @@ woodwind hands on their stacks), and in carry, set and down **the mouthpiece
 sits at eye level** (the ligature, for woodwinds). The states differ by
 where the bell points and where the elbows go.
 
-- **brass, horns up.** Bell forward at face height, horizontal. Upper arms
+- **brass, horns up.** The bell is front: forward at face height, horizontal. Upper arms
   out to the sides near horizontal, forearms up and in: a triangle slightly
   wider than equilateral from shoulder to shoulder to the hands. Baritone
   and euphonium: the same with the bell above eye line.
-- **brass, carry / set.** Instrument vertical in front of the face,
-  mouthpiece at eye level, elbows wide. The carry photo shows the bell up;
-  §9 asks the owner to confirm the bell direction for carry versus set.
+- **brass, carry (set is the same hold).** Instrument vertical in front of
+  the face, bell up, mouthpiece at eye level, elbows wide.
 - **brass, down.** Instrument vertical in front of the torso, mouthpiece at
   eye level, bell toward the ground, elbows in.
 - **brass, trail.** Instrument in the right hand only, bell backward, valve
@@ -265,10 +265,9 @@ browser:
 
 ## 9. Open questions for the owner
 
-1. Finish per section: lacquer brass for everyone by default, with silver
-   selectable per section in the panel? Or follow a single show-wide choice?
-2. The default horn state rule in §5 (up while moving, carry at attention).
+1. Answered: gold lacquer by default, silver lacquer per section.
+2. Answered: always up; the panel exposes the others for testing.
 3. Props: the table in §6 is the real fix. Is the ADR amendment acceptable
    now, or should PR 4 start with the seed layout only and no persistence?
-4. Carry versus set: with the mouthpiece at eye level, does the bell point
-   up (as in the carry photo) or down, and do carry and set differ?
+4. Answered: carry and set are the same hold, bell up. Horns up is the bell
+   front.
