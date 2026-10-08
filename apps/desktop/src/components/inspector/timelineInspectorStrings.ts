@@ -7,10 +7,17 @@
 export const TIMELINE_INSPECTOR_STRINGS = {
     "inspector.timeline.title": "Timeline",
     "inspector.timeline.marcherTitle": "{marcher} at beat {beat}",
-    "inspector.timeline.noPage":
-        "Select a page to see why each marcher is where it is.",
     "inspector.timeline.omitted": "and {count} more selected marchers",
     "inspector.timeline.notInTimeline": "{marcher} isn't in the timeline yet.",
+
+    "inspector.timeline.move.title": "Move",
+    "inspector.timeline.move.name": "Name",
+    "inspector.timeline.move.counts": "Counts",
+    "inspector.timeline.move.marchers":
+        "{count, plural, one {# marcher} other {# marchers}}",
+    "inspector.timeline.move.selectMarchers": "Select them",
+    "inspector.timeline.move.delete": "Delete move",
+    "inspector.timeline.move.paused": "Pause to delete a move.",
 
     "inspector.timeline.label.span": "Span",
     "inspector.timeline.label.beats": "Beats",

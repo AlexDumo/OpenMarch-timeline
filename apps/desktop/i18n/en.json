@@ -746,7 +746,15 @@
                 "waypoints": "Waypoints"
             },
             "marcherTitle": "{marcher} at beat {beat}",
-            "noPage": "Select a page to see why each marcher is where it is.",
+            "move": {
+                "counts": "Counts",
+                "delete": "Delete move",
+                "marchers": "{count, plural, one {# marcher} other {# marchers}}",
+                "name": "Name",
+                "paused": "Pause to delete a move.",
+                "selectMarchers": "Select them",
+                "title": "Move"
+            },
             "notInTimeline": "{marcher} isn't in the timeline yet.",
             "omitted": "and {count} more selected marchers",
             "orderMode": {

@@ -1,5 +1,12 @@
 // cspell:ignore NONFOUNDING
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+    within,
+} from "@testing-library/react";
 import {
     afterEach,
     beforeAll,
@@ -22,6 +29,9 @@ import {
     inspect,
 } from "@/timeline/__test__/inspectorFixtures";
 import { buildTransitionEditTarget } from "@/timeline/timelineTransitionEditor";
+import { useTimelineInspections } from "@/timeline/useTimelineInspections";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { TIMELINE_INSPECTOR_STRINGS } from "../timelineInspectorStrings";
 import {
     MarcherInspectionView,
@@ -42,7 +52,9 @@ const mocks = vi.hoisted(() => ({
     unknown: [] as number[],
     transitionEdits: [] as unknown[],
     selectedMarchers: [] as Array<{ id: number; drill_number: string }>,
+    /** The page the old inspector read; the section must not read it any more (UI-14) */
     selectedPage: null as unknown,
+    pages: [] as unknown[],
 }));
 
 vi.mock("@/hooks/queries/useWorkspaceSettings", () => ({
@@ -53,6 +65,12 @@ vi.mock("@/context/SelectedMarchersContext", () => ({
 }));
 vi.mock("@/context/SelectedPageContext", () => ({
     useSelectedPage: () => ({ selectedPage: mocks.selectedPage }),
+}));
+vi.mock("@/hooks/useTimingObjects", () => ({
+    useTimingObjects: () => ({ pages: mocks.pages }),
+}));
+vi.mock("@/hooks/queries/useHistory", () => ({
+    usePerformHistoryAction: () => ({ mutate: vi.fn() }),
 }));
 vi.mock("@/timeline/useTimelineInspections", () => ({
     MAX_INSPECTED_MARCHERS: 10,
@@ -84,6 +102,10 @@ beforeEach(() => {
     mocks.transitionEdits = [];
     mocks.selectedMarchers = [];
     mocks.selectedPage = null;
+    mocks.pages = [];
+    vi.mocked(useTimelineInspections).mockClear();
+    useTimelineSelectionStore.getState().reset();
+    useMoveCardRevealStore.getState().clear();
 });
 
 const view = (inspection: MarcherInspection, label = "T1") =>
@@ -268,7 +290,6 @@ describe("TimelineInspectorSection", () => {
 
     it("with the flag on, shows the selected marchers' inspections and the show's diagnostics", () => {
         mocks.selectedMarchers = [{ id: 2, drill_number: "T2" }];
-        mocks.selectedPage = { id: 1, beats: [{ index: 7 }] };
         mocks.inspections = [inspect(golden("G9"), 2, 8)];
         mocks.diagnostics = createResolver(golden("G9")).diagnostics();
         renderSection();
@@ -313,11 +334,97 @@ describe("TimelineInspectorSection", () => {
         expect(screen.getByText("Edit transition 1")).toBeTruthy();
     });
 
-    it("asks for a page when marchers are selected but no page is", () => {
+    it("explains at the paused playhead, not the selected page's end (UI-14)", () => {
         mocks.selectedMarchers = [{ id: 2, drill_number: "T2" }];
+        // A page ending on beat 7 is selected, but the playhead is between flags, on beat 5
+        mocks.selectedPage = { id: 1, beats: [{ index: 7 }] };
+        const store = useTimelineSelectionStore.getState();
+        store.setPageBoxes([{ start: 0, end: 8 }]);
+        store.seek(5);
         renderSection();
+        expect(vi.mocked(useTimelineInspections)).toHaveBeenLastCalledWith(
+            expect.objectContaining({ beat: 5, marcherIds: [2] }),
+        );
+        expect(screen.queryByText(/Select a page/)).toBeNull();
+    });
+});
+
+/** Page 1 over beats [1, 9) and page 2 over [9, 17), as the store and the pages see them */
+const twoPages = () => {
+    const beats = (from: number, to: number) =>
+        Array.from({ length: to - from }, (_, i) => ({ index: from + i }));
+    mocks.pages = [
+        { id: 1, name: "0", beats: beats(0, 1) },
+        { id: 2, name: "1", beats: beats(1, 9) },
+        { id: 3, name: "2", beats: beats(9, 17) },
+    ];
+    const store = useTimelineSelectionStore.getState();
+    store.setPageBoxes([
+        { start: 1, end: 9, name: "1" },
+        { start: 9, end: 17, name: "2" },
+    ]);
+    store.setStoredTimelines([
+        // Page 2's own move: a page box stands for it
+        { id: 1, start: 9, end: 17, marcherIds: new Set([1, 2]), name: null },
+        // A mid-page move, page 2 counts 1 to 3
+        {
+            id: 7,
+            start: 9,
+            end: 12,
+            marcherIds: new Set([1, 2, 3]),
+            name: "Company front",
+        },
+    ]);
+    return store;
+};
+
+describe("the Move card (UI-14)", () => {
+    it("shows for a move off the page boxes: its name, counts and marchers", () => {
+        twoPages().selectRange(9, 12);
+        renderSection();
+        const card = screen.getByTestId("timeline-move-card");
         expect(
-            screen.getByText(/Select a page to see why each marcher/),
-        ).toBeTruthy();
+            (screen.getByTestId("timeline-move-card-name") as HTMLInputElement)
+                .value,
+        ).toBe("Company front");
+        expect(screen.getByTestId("timeline-move-card-range").textContent).toBe(
+            "Page 2, counts 1–3",
+        );
+        expect(screen.getByTestId("timeline-move-card-count").textContent).toBe(
+            "3 marchers",
+        );
+        expect(within(card).getByText("Delete move")).toBeTruthy();
+        // It comes first in the section
+        expect(card.previousElementSibling).toBeNull();
+    });
+
+    it("doesn't show for a page timeline, a window with no move, or home", () => {
+        const store = twoPages();
+        store.selectRange(9, 17);
+        renderSection();
+        expect(screen.queryByTestId("timeline-move-card")).toBeNull();
+        cleanup();
+        store.selectRange(9, 13);
+        renderSection();
+        expect(screen.queryByTestId("timeline-move-card")).toBeNull();
+        cleanup();
+        store.selectHome();
+        renderSection();
+        expect(screen.queryByTestId("timeline-move-card")).toBeNull();
+    });
+
+    it("Edit move's request opens the section and flashes the card", () => {
+        twoPages().selectRange(9, 12);
+        renderSection();
+        // Closed by the user first
+        fireEvent.click(screen.getByText("Timeline"));
+        expect(screen.queryByTestId("timeline-move-card")).toBeNull();
+        act(() => {
+            useMoveCardRevealStore.setState({ pending: 7 });
+        });
+        const card = screen.getByTestId("timeline-move-card");
+        expect(card.dataset.flash).toBe("true");
+        // The request is taken once
+        expect(useMoveCardRevealStore.getState().pending).toBeNull();
     });
 });
