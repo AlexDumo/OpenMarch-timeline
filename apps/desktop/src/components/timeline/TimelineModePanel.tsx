@@ -8,6 +8,7 @@ import {
 } from "@/db-functions/pageFlags";
 import {
     deletePageFlagsMutationOptions,
+    deletePagesWithMovesMutationOptions,
     movePageFlagMutationOptions,
     useAddPageFlag,
 } from "@/hooks/queries/usePageFlags";
@@ -98,7 +99,8 @@ export const toTimelineSelection = (
  * selection is `useTimelineSelectionStore`'s (UI-9): the initial page box selects home, a page box
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
  * **+** after the free paused playhead adds a page flag there and selects the new page; a page
- * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15). Neither Create Track
+ * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15), or the page and its
+ * moves (defined coordinates, owner decision 3). Neither Create Track
  * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
  * A clip is a move: its menu, its ⋯ button and Delete edit, rename and delete it (UI-14).
@@ -255,6 +257,17 @@ export default function TimelineModePanel() {
     const { mutate: deletePageFlags } = useMutation(
         deletePageFlagsMutationOptions(queryClient),
     );
+    const { mutate: deletePagesWithMoves } = useMutation(
+        deletePagesWithMovesMutationOptions(queryClient),
+    );
+    const selectAfterDelete = (
+        after: ReturnType<typeof selectionAfterFlagDelete>,
+    ) => {
+        if (!after) return;
+        const store = useTimelineSelectionStore.getState();
+        if (after.kind === "home") store.selectHome();
+        else store.selectRange(after.start, after.end);
+    };
     // UI-9: selecting home seeks to beat 0 and a range to its end; not while playing
     const changeSelection = (next: TimelineSelection) => {
         // UI-17 follow-up: home while playing jumps playback to the start (a page box jumps by
@@ -345,13 +358,17 @@ export default function TimelineModePanel() {
                             useTimelineSelectionStore.getState().selection,
                         );
                         deletePageFlags(new Set([pageId]), {
-                            onSuccess: () => {
-                                if (!after) return;
-                                const store =
-                                    useTimelineSelectionStore.getState();
-                                if (after.kind === "home") store.selectHome();
-                                else store.selectRange(after.start, after.end);
-                            },
+                            onSuccess: () => selectAfterDelete(after),
+                        });
+                    }}
+                    onDeletePageWithMoves={(pageId) => {
+                        const after = selectionAfterDeleteWithMoves(
+                            pages,
+                            pageId,
+                            useTimelineSelectionStore.getState().selection,
+                        );
+                        deletePagesWithMoves(new Set([pageId]), {
+                            onSuccess: () => selectAfterDelete(after),
                         });
                     }}
                 />
@@ -487,6 +504,38 @@ export function selectionAfterFlagDelete(
         };
     const previous = flags[index - 1];
     return previous ? selectionOfPage(previous) : null;
+}
+
+/**
+ * What to select after **Delete page and its moves** on `pageId` (lead default, 2026-10-08): when
+ * that page was the selection, the box that now covers it. The page before it takes its beats, so
+ * that is the previous page's box running to the deleted page's flag; after home, the next page
+ * starts where the deleted one did. `null` when the deleted page wasn't selected.
+ */
+export function selectionAfterDeleteWithMoves(
+    pages: readonly FlagPage[],
+    pageId: number,
+    selection: TimelineEditSelection,
+): Exclude<TimelineEditSelection, { kind: "none" }> | null {
+    const flags = pageFlags(pages);
+    const index = flags.findIndex((f) => f.page.id === pageId);
+    const deleted = flags[index];
+    if (
+        !deleted?.range ||
+        !selectionIsRange(selection, deleted.range.start, deleted.range.end)
+    )
+        return null;
+    const previous = flags[index - 1];
+    if (previous?.range)
+        return {
+            kind: "range",
+            start: previous.range.start,
+            end: deleted.range.end,
+        };
+    const next = flags[index + 1];
+    return next?.range
+        ? { kind: "range", start: deleted.range.start, end: next.range.end }
+        : { kind: "home" };
 }
 
 /** **+** selects the new page's page timeline (UI-9: "The new page is selected"). */

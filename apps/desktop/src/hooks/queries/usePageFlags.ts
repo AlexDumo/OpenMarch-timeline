@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import { toast } from "sonner";
 import {
     mutationOptions,
     QueryClient,
@@ -16,8 +17,15 @@ import {
     type AddedPageFlag,
     type PageFlagInsertion,
 } from "@/db-functions/pageFlags";
+import {
+    deletePageYankWithMoves,
+    deletePagesWithMoves,
+    pageDeleteWithMovesMessage,
+    type PageDeleteWithMovesResult,
+} from "@/db-functions/pageDelete";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "./usePages";
+import { invalidateTagQueries } from "./tags/queries";
 
 /**
  * Page flag writes in timeline mode (ui.md UI-9 **+** and Deleting a flag, P8.13). They change only
@@ -42,12 +50,51 @@ export const addPageFlagMutationOptions = (
         onError: (e) => toastTimelineError(e),
     });
 
-/** Deleting page flags: each page's row only, so motion is unchanged. */
+/**
+ * Deleting page flags: each page's row only, so motion is unchanged. In timeline mode this is
+ * **Delete page**. A deleted page's tag appearances move to the next page.
+ */
 export const deletePageFlagsMutationOptions = (qc: QueryClient) =>
     mutationOptions({
         mutationFn: (pageIds: ReadonlySet<number>) =>
             deletePageFlags({ db, pageIds }),
-        onSuccess: () => void invalidatePageQueries(qc),
+        onSuccess: () => {
+            void invalidatePageQueries(qc);
+            invalidateTagQueries(qc);
+        },
+        onError: (e) => toastTimelineError(e),
+    });
+
+const toastDeleteWithMoves = (result: PageDeleteWithMovesResult) => {
+    if (result.deleted.length > 0)
+        toast.success(pageDeleteWithMovesMessage(result));
+};
+
+/**
+ * **Delete page and its moves** (timeline mode): the page goes with its page moves, through the
+ * timeline ripple. The toast names the pages that now look different.
+ */
+export const deletePagesWithMovesMutationOptions = (qc: QueryClient) =>
+    mutationOptions({
+        mutationFn: (pageIds: ReadonlySet<number>) =>
+            deletePagesWithMoves({ db, pageIds }),
+        onSuccess: (result) => {
+            void invalidatePageQueries(qc);
+            invalidateTagQueries(qc);
+            toastDeleteWithMoves(result);
+        },
+        onError: (e) => toastTimelineError(e),
+    });
+
+/** **Yank** in timeline mode, with the same toast as `deletePagesWithMovesMutationOptions`. */
+export const deletePageYankWithMovesMutationOptions = (qc: QueryClient) =>
+    mutationOptions({
+        mutationFn: (pageId: number) => deletePageYankWithMoves({ db, pageId }),
+        onSuccess: (result) => {
+            void invalidatePageQueries(qc);
+            invalidateTagQueries(qc);
+            toastDeleteWithMoves(result);
+        },
         onError: (e) => toastTimelineError(e),
     });
 

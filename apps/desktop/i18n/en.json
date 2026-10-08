@@ -1379,8 +1379,11 @@
             "contextMenu": {
                 "delete": "Delete",
                 "deleteInPlace": "In Place",
+                "deleteInPlaceTimelineTooltip": "Delete this page. Later pages keep their timing and look.",
                 "deleteInPlaceTooltip": "Delete this page and keep later pages where they are.",
                 "deletePage": "Delete",
+                "deleteWithMoves": "With Its Moves",
+                "deleteWithMovesTooltip": "Delete this page and its moves. Later pages that held its positions change.",
                 "deleteYank": "Yank",
                 "deleteYankTooltip": "Delete this page and pull later pages back by its length.",
                 "subsetToggle": "Subset",

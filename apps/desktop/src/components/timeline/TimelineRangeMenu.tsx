@@ -13,9 +13,11 @@ import type { TimelineBeatRange } from "./TimelineViewModel";
  * The timeline's right-click menu (ui.md UI-9 Adding marchers, P8.14). It offers **Add selected
  * marchers** on a page box, a clip (its timeline) or a dragged range, for the range under the
  * pointer. Opening it doesn't change the timeline selection: the marchers to add are picked first,
- * where they can be selected. On a page box it also offers **Delete page flag** (UI-9 Deleting a
- * flag, P8.15). On a clip it offers the move's entries (UI-14): **Edit move**, **Rename move…** and
- * **Delete move**, the same entries as the selected clip's ⋯ button.
+ * where they can be selected. On a page box it also offers **Delete page** (UI-9 Deleting a flag,
+ * P8.15), which keeps every later page's look, and next to it **Delete page and its moves**
+ * (defined coordinates, owner decision 3). On a clip it offers the move's entries (UI-14):
+ * **Edit move**, **Rename move…** and **Delete move**, the same entries as the selected clip's ⋯
+ * button.
  */
 
 /** The menus' entry style; `data-[disabled]` dims an unavailable one */
@@ -128,10 +130,15 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
     /** Why the command is unavailable (for example, no marchers are selected), or null */
     readonly disabledReason?: string | null;
     /**
-     * **Delete page flag** on a page box (UI-9 Deleting a flag, P8.15): the page whose flag goes.
+     * **Delete page** on a page box (UI-9 Deleting a flag, P8.15): the page whose flag goes.
      * Without it, the menu has no delete entry.
      */
     readonly onDeleteFlag?: (pageId: string | number) => void;
+    /**
+     * **Delete page and its moves** on a page box, shown after **Delete page**: the page goes with
+     * its page moves. Without it, the menu has no such entry.
+     */
+    readonly onDeleteWithMoves?: (pageId: string | number) => void;
 }
 
 /**
@@ -223,7 +230,9 @@ export function useTimelineRangeMenu({
         if (!target) return;
         // Nothing to offer here: no add, no page box to delete the flag of, and no move
         const canDelete =
-            menu?.onDeleteFlag !== undefined && target.pageId !== undefined;
+            (menu?.onDeleteFlag !== undefined ||
+                menu?.onDeleteWithMoves !== undefined) &&
+            target.pageId !== undefined;
         if (!menu?.onAdd && !canDelete && !movesOf(target)) return;
         event.preventDefault();
         setOpen({ target, x: event.clientX, y: event.clientY });
@@ -282,9 +291,24 @@ export function useTimelineRangeMenu({
                             className={`${ITEM_CLASS} text-red`}
                         >
                             <FlagIcon size={14} />
-                            Delete page flag
+                            Delete page
                         </DropdownMenu.Item>
                     )}
+                    {menu?.onDeleteWithMoves &&
+                        open.target.pageId !== undefined && (
+                            <DropdownMenu.Item
+                                data-testid="timeline-range-menu-delete-with-moves"
+                                onSelect={() =>
+                                    menu.onDeleteWithMoves?.(
+                                        open.target.pageId!,
+                                    )
+                                }
+                                className={`${ITEM_CLASS} text-red`}
+                            >
+                                <TrashIcon size={14} />
+                                Delete page and its moves
+                            </DropdownMenu.Item>
+                        )}
                     {moves && <TimelineMoveMenuItems actions={moves} />}
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
