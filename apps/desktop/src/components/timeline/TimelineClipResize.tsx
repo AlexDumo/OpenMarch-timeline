@@ -430,6 +430,15 @@ export function useClipEdgeResize({
             dragRef.current = null;
             setPreview(null);
         },
+        // A lost capture (the window losing the pointer mid-drag) cancels, as for a page flag's
+        // grip: the release may land off the handle, and the preview mustn't stick (E14)
+        onLostPointerCapture: () => {
+            const drag = dragRef.current;
+            if (!drag) return;
+            dragRef.current = null;
+            if (drag.moved) swallowRef.current = true;
+            setPreview(null);
+        },
         // The click ending a press on a handle still reaches the clip, which selects on it
         className:
             "group/resize absolute top-0 z-[1] cursor-ew-resize touch-none",

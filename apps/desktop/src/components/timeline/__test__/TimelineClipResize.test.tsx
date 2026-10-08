@@ -433,6 +433,20 @@ describe("resizing a clip by its edges", () => {
         expect(onSelection).not.toHaveBeenCalled();
     });
 
+    it("a lost pointer capture cancels: no commit, no stuck preview (E14)", () => {
+        const { resize, onSelection } = setup();
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        pointer(end, "pointerdown", 0);
+        pointer(end, "pointermove", 48);
+        expect(screen.getByTestId("timeline-clip-resize-tag")).toBeTruthy();
+        fireEvent(end, new MouseEvent("lostpointercapture", { bubbles: true }));
+        expect(screen.queryByTestId("timeline-clip-resize-tag")).toBeNull();
+        pointer(end, "pointerup", 48);
+        fireEvent.click(end);
+        expect(resize.commit).not.toHaveBeenCalled();
+        expect(onSelection).not.toHaveBeenCalled();
+    });
+
     it("dragged back to where it started, nothing is committed or selected (E14)", () => {
         const { resize, onSelection } = setup();
         const end = screen.getByTestId("timeline-clip-resize-end");
