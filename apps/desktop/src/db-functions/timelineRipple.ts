@@ -9,7 +9,8 @@ import {
     createTimelineTransitionsInTransaction,
     deleteTimelineTransitionsInTransaction,
 } from "./timelineTransitions";
-import { createTimelinesInTransaction, findTimelineByRange } from "./timelines";
+import { findTimelineByRange } from "./timelines";
+import { createRangeTimelineInTransaction } from "./timelineMoveNames";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
 
 /**
@@ -609,12 +610,10 @@ async function addHoldingMoves(tx: DbTransaction, page: GridPage) {
             // Add selected marchers) holds the holds too
             const [timeline] = [
                 (await findTimelineByRange(tx, { start: m, end: e })) ??
-                    (
-                        await createTimelinesInTransaction({
-                            tx,
-                            newTimelines: [{ startBeat: m, endBeat: e }],
-                        })
-                    )[0],
+                    (await createRangeTimelineInTransaction(tx, {
+                        startBeat: m,
+                        endBeat: e,
+                    })),
             ];
             timelineId = timeline!.id;
         }

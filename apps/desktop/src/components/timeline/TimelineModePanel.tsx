@@ -44,8 +44,15 @@ import {
 } from "@/timeline/timelineWaveform";
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { timeAtBeat } from "@/timeline/timeMap";
-import { useTimelineCommands } from "./useTimelineCommands";
+import {
+    moveCommandBlocker,
+    useMoveCommands,
+    useTimelineCommands,
+} from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
+import { describeMoveClips } from "./moveClipText";
+import { useMoveNotesStore } from "@/stores/MoveNotesStore";
+import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
@@ -89,6 +96,7 @@ export const toTimelineSelection = (
  * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15). Neither Create Track
  * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
+ * A clip is a move: its menu, its ⋯ button and Delete edit, rename and delete it (UI-14).
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
@@ -138,16 +146,48 @@ export default function TimelineModePanel() {
         database: db,
         enabled: useTimelineMode(),
     });
-    // UI-10: a page box already stands for its page timeline, so only the others get a clip
-    const offPage = useMemo(
-        () => timelinesOffPages(timelines, pages),
-        [timelines, pages],
+    // UI-10: a page box already stands for its page timeline, so only the others get a clip.
+    // UI-14: each is a move, labelled by its name ("Move 2" since it was made), named for
+    // screen readers in counts, and saying why it is dashed where it is (`describeMoveClips`)
+    const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
+    const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const { clips: offPage, overridden } = useMemo(
+        () =>
+            describeMoveClips({
+                clips: timelinesOffPages(timelines, pages),
+                storedTimelines: storedTimelines ?? [],
+                pageBoxes,
+                pages,
+            }),
+        [timelines, pages, storedTimelines, pageBoxes],
     );
+    // The Move card says it too
+    useEffect(() => {
+        useMoveNotesStore.getState().setOverridden(overridden);
+    }, [overridden]);
+    // UI-14 round-2 review: a "Select them" selection doesn't follow you to another move
+    useClearLeftoverMoveSelection();
     const commands = useTimelineCommands({
         database: db,
         timelines,
         selectedMarcherIds,
     });
+    // UI-14: a clip is a move; it can be edited, renamed and deleted
+    const moves = useMoveCommands(db);
+    const moveCommands = useMemo(
+        () => ({
+            disabledReason: moveCommandBlocker(isPlaying),
+            onEdit: (id: number) => {
+                if (!isPlaying) moves.editMove(id);
+            },
+            onRename: (id: number, name: string) =>
+                void moves.renameMove(id, name),
+            onDelete: (id: number) => {
+                if (!isPlaying) void moves.deleteMove(id);
+            },
+        }),
+        [isPlaying, moves],
+    );
     const queryClient = useQueryClient();
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
     const { mutate: deletePageFlags } = useMutation(
@@ -224,6 +264,7 @@ export default function TimelineModePanel() {
                                 "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
                             );
                     }}
+                    moveCommands={moveCommands}
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
                             pages,

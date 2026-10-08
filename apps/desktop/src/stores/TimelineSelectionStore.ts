@@ -67,6 +67,8 @@ export interface StoredTimelineMembership {
     readonly start: number;
     readonly end: number;
     readonly marcherIds: ReadonlySet<number>;
+    /** The timeline's name (UI-14 Rename), `null` or absent when it has none */
+    readonly name?: string | null;
 }
 
 /** An isolated stored timeline (see the module comment) and the window to restore after it. */
@@ -322,6 +324,26 @@ export const isolatedTimeline = (
         : (state.storedTimelines?.find(
               (t) => t.id === state.isolation!.timelineId,
           ) ?? null);
+
+/**
+ * The move the window is on (UI-14): the isolated timeline (P may be anywhere inside it), else the
+ * stored timeline the window resolves to, when it is off the page boxes. A page's own timeline
+ * isn't a move (pages are moved with their flags), so it is `null` there, and with no timeline.
+ * The Move card, the inspector's beat and **Select them**'s cleanup all go by this.
+ */
+export const windowMove = (
+    state: Pick<
+        TimelineSelectionState,
+        "selection" | "storedTimelines" | "isolation" | "pageBoxes"
+    >,
+): StoredTimelineMembership | null => {
+    const timeline = isolatedTimeline(state) ?? selectedStoredTimeline(state);
+    if (!timeline) return null;
+    const onPageBox = state.pageBoxes.some(
+        (box) => box.start === timeline.start && box.end === timeline.end,
+    );
+    return onPageBox ? null : timeline;
+};
 
 /**
  * Whether a marcher is dimmed. Under UI-10 nothing is dimmed: dragging a marcher is what adds it

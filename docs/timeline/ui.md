@@ -546,6 +546,151 @@ from it. The spec still wins on the model; this file decides presentation.
   - Deferred (UX review): counts along the selected page box in shows with measures, a count
     under the pointer while hovering, and thinning to downbeats in odd meters.
 
+- **UI-14: editing, renaming and deleting a move (lead, 2026-10-07).** The owner asked whether a
+  custom track can be edited or removed once it's made: "If we can, it's not obvious as a user."
+  It couldn't: in timeline mode a clip (a timeline off the page boxes, UI-10) had no menu, no
+  name, and no Delete, and the inspector explained at the selected page's end, so a clip ending
+  between flags showed another move's transitions. A clip is now called a **move** in all UI text.
+  Items marked _lead default_ were filled in by the lead; feel-based ones are V-38 to V-55 in
+  research/ownership/VALIDATION.md. Built on branch `timeline/edit-moves`. A review by four persona
+  testers (2026-10-08) found Edit move couldn't edit the move, the delete toast's Undo could undo
+  a later edit, Enter leaking to the app's shape shortcut, and hit-target problems; the items
+  below include that fix round. A second review by four more (round 2, the same day) found keys
+  and focus going astray, move numbers shifting, a leftover selection, and dashed clips that
+  didn't say why; the items marked _round 2_ are its fixes.
+  - **The clip menu.** Right-clicking a clip opens **Edit move**, **Rename move…** and **Delete
+    move** (red, last, after a separator). Page boxes keep **Delete page flag**; a dragged range
+    still has no menu in timeline mode. While playing, Edit and Delete are disabled with the reason
+    ("Pause to edit or delete a move."); Rename stays, since it changes only a label (_lead
+    default_, V-42).
+  - **The ⋯ button.** The selected clip (a click selects it, UI-12) shows a ⋯ button ("Move
+    options", an 18×16px target) at its right end that opens the same menu, so it is found without
+    right-clicking. While the clip's end is scrolled past the timeline's right edge the button
+    sticks to that edge, inside the visible part of the clip. A clip too narrow for its label and
+    the button keeps the button just past its right edge, so the only visible way in never hides.
+    With the clip focused, the ContextMenu key or Shift+F10 opens the menu there. Enter on a clip
+    that isn't selected selects it, as a click does; Enter on the selected clip, or F2 on any,
+    renames (as in a file list; V-48, code review). In compact the button sits on the thin bar.
+  - **Clips show their label** (_lead default_, V-39). A clip at least 40px wide shows its name in
+    expanded mode, cut with an ellipsis, beside the ⋯ button; narrower clips and compact bars keep
+    it in the tooltip. Clips had no visible text before, so a name would have nowhere to show.
+  - **"Move 2" for life** (_lead default_, round 2, V-49; reverses numbering by start). A new move
+    stores "Move N" as its name when it is made, one more than the highest stored
+    (`createRangeTimelineInTransaction`), so nothing renumbers it: deletes, undo, redo and reload
+    keep it, and SQLite reusing a deleted id doesn't matter. A page's own timeline stays unnamed.
+    A move from before this (unnamed) shows the number after the highest by start, then id, and
+    stores it the first time a new move is made, so the new one never takes a number on screen.
+    Clearing a typed name gives the next free number; clearing "Move N" keeps it. "Timeline 7"
+    read as part of the UI, and as "Timeline" once cut. A move's color goes by its stored id
+    (`timelineColor`), on the clip and its isolated paths, so it doesn't change either.
+  - **Short clips under the start flag and the playhead** (_lead default_, V-47). Below the ruler
+    and measure rows (over the waveform row and the clip rows) the start flag and the playhead are
+    drawn but don't take the pointer: they are grabbed in the ruler and measure rows. A clip only
+    a few counts long sat almost wholly under their 12px hit areas, so clicks on it missed; and
+    (round 2) a Ctrl+drag started on the waveform row just right of the start flag dragged the
+    flag, so a range drawn over counts 1–4 selected counts 5–8.
+  - **Delete move** deletes the timeline, its transitions and their assignments as one undoable
+    edit (`deleteTimeline`). Moves it passed through are stored underneath (UI-10) and come back.
+    The window (S, P) stays put and now resolves to no stored timeline; an isolated move that is
+    deleted ends isolation through the existing "timeline goes away" path, which puts S and P back
+    where they were before isolating (09-isolation.md). A toast says "Deleted Go company front"
+    with **Undo**, which runs the app's undo. It closes on the next edit, undo or redo, so its
+    Undo can only ever undo that delete (V-44); otherwise it stays 8 seconds. There is no
+    confirmation dialog: the edit is undoable (V-38). **Delete** or **Backspace** on a focused clip
+    deletes its move; the clip handles the key and stops it, so it never reaches the app's
+    shortcuts (Delete deletes a shape there). A Delete repeated while the move is being deleted,
+    or on a move already gone, does nothing and says nothing. Focus goes to the next clip, else
+    the previous one, else the timeline, never the page (round 2, V-55).
+  - **Rename move…** turns the clip into an inline name field with its text selected. Enter or
+    leaving the field saves, Esc cancels. Names are trimmed and at most 80 characters, and the
+    field says so once a name reaches 80 ("80 characters at most") rather than cutting silently;
+    an empty name gives the move its number back (above); an unchanged name writes nothing.
+    One undoable edit (`renameTimeline`). Keys typed in the field stay there (G, Space, Shift+Z,
+    Delete, Enter). After Enter or Esc, saved or cancelled, focus is back on the clip (round 2).
+    Closed any other way (a click, a blur), it leaves focus where it went, the page included: a
+    click on a marcher keeps Delete and the arrows for the marchers, and a click on another clip
+    keeps them for that clip, so Delete never deletes the renamed move (code review). A name
+    being typed is saved when the field goes away before it blurs (a click on the lane selects
+    another window first), in the clip's field and the card's (round 2). The inspector's Move card
+    has the same field. A name field left open while its move is deleted writes nothing and says
+    nothing.
+  - **Edit move isolates the move** (09-isolation.md; review, supersedes "doesn't isolate"): the
+    window is its range with P on its end, its paths show, other marchers are dimmed, and a canvas
+    drag sets where its marchers end up. On a move already isolated it stays isolated. It leaves
+    fullscreen if the inspector is hidden and scrolls the Move card into view with a brief
+    highlight, with focus on the card's heading, off the ⋯ button (_lead default_, V-40). It
+    selects nobody (round 2): isolation already shows who is in the move, **Select them** selects
+    them, and one Esc leaves. One Esc now leaves isolation however it was entered, also with
+    marchers selected, which the same press deselects; the bar says "Done (Esc)" (round 2, V-51).
+  - **The Move card.** While the window is a move with a clip (or that move is isolated, with P
+    anywhere inside it), the inspector starts with a **Move** card, above the page and marcher
+    editors (round 2, V-53), headed with the move's label: why its clip is dashed, when it is
+    (below); the name field, where Enter saves and stays and Esc puts the name back and goes to
+    the heading; when it happens, in the field line's words ("Page 3, counts 1–4", or "Page 2 count 5
+    to page 3 count 4"; UI-13's one vocabulary); **Path**, for the whole move; "To change where
+    they end up, drag marchers on the field at the move's end", with **Go to end** while P isn't
+    there; "16 marchers" with **Select them**; and **Delete move**. A page timeline gets no card:
+    pages are moved with their flags.
+  - **Path, for the whole move** (_lead default_, V-45). A move is one one-slot transition per
+    marcher (UI-9), so the transition editor bent one marcher at a time. The card's Path is Direct
+    or Arc with one bulge, written to every transition of the move as one undoable edit
+    (`setMovePath`); "Mixed" shows when they differ, and choosing a style makes them all the same.
+    Follow the leader isn't offered: it needs a shape, which a move's transitions don't usually
+    have. A move whose transitions all follow the leader (the shape editor can leave one so) shows
+    "Follow the leader", not "Mixed", with neither radio chosen; Direct or Arc still changes them
+    all as one edit (code review). The edit reads the paths under the write lock, so a choice sent
+    twice is one edit.
+    It is a radio group (round 2): the arrows move the choice and apply it.
+  - **Per-marcher details** (_lead default_, V-46). With a move, the selected marchers'
+    explanations and transition editors are about that move: they explain inside it, at P, or at
+    its last beat when P is on its end (where the next move starts). They sit under a closed
+    "Per-marcher details (16)" disclosure under the card, and when more marchers are selected than
+    are shown it says "Showing the first 10 of 16 marchers".
+  - **The inspector explains at the playhead** in timeline mode, not the selected page's end
+    (_lead default_, V-41), except inside a move, above. On a flag that is the same beat; between
+    flags it is where edits land (UI-10). "Select a page to see why…" is gone, since there is
+    always a playhead. While the playhead is scrubbed it holds the last settled beat, and the move
+    the window was on with it (the Move card too, so the two never differ), and explains once the
+    scrub ends, rather than rebuilding on every beat passed (code review).
+  - **Keys on the move controls** (_lead default_, round 2, V-50). On a clip, its ⋯ button, the
+    Move card and the isolation bar (`data-timeline-own-keys`), Space always plays and presses
+    nothing; Enter activates the focused control; the arrows (and WASD) work the Path radios and
+    do nothing on a focused clip. WASD goes by the physical key (`event.code`), as the app's nudge
+    does, so another keyboard layout can't slip a nudge past. The app's registered shortcuts skip
+    Enter, the arrows and WASD there (`isTimelineOwnKey`), so Enter on the card's Delete move
+    deletes the move instead of creating a shape. The app's nudge also takes Ctrl+WASD; on these
+    controls it skips them too (`skipsAppNudge`), while Ctrl+S still saves and Ctrl+A still
+    selects all. Elsewhere every shortcut works as before. Focused clips show an offset
+    outline, apart from the selected clip's ring, and the card's controls a focus ring.
+  - **A leftover selection** (_lead default_, round 2, V-52). Going to another move (a clip click,
+    a double-click, Edit move) clears the marchers the previous move's **Select them** selected,
+    while they are still exactly the selection; a selection changed since is the designer's own
+    and stays.
+  - **Dashed clips say why** (_lead default_, round 2, V-54). Where every member of a move is
+    taken by another (the dashed spans, UI-4), the clip's tooltip, its screen reader description
+    and its Move card say "Overridden by Move 4 on Page 3, counts 1–4" (`overriddenBy`,
+    `describeMoveClips`).
+  - **Words for screen readers** (round 2). A move's clip is named "Company front, move, Page 3,
+    counts 1–4", in counts rather than beats, and ends in ", selected" when it is (it was a
+    toggle, read as "pressed"); its description says why it is dashed and its keys: "Enter to
+    select, F2 to rename, Shift+F10 for options, Delete to delete", or once selected "Enter or F2
+    to rename, …". The isolation bar's key reads "Key: dotted gray
+    paths show where this move would take marchers who left it". The field line's sentence is
+    announced at once when it comes back after isolation, not the one from before isolating, and
+    a one-count window is "count 3", not "counts 3–3".
+  - **Tabbing through the rotation field** (round 2). The marcher inspector's rotation field saved
+    every selected marcher on blur, even unchanged, which in timeline mode made a new move at the
+    window (a tester saw a second move appear after pressing Enter in the card's Name field; it
+    came from tabbing past the rotation field). It saves only after the group was turned.
+  - **The timeline is its own stacking context**, so nothing on it (**+**, the playhead) paints
+    over a menu, and a press inside a menu opened from the timeline never reaches the timeline
+    (React events bubble out of portals).
+  - Not in scope, follow-ups: deleting or renaming a page's moves (a page timeline has no clip),
+    moving marchers between moves, a name on page boxes, and a move-wide editor for anything but
+    the path (order, destinations as a shape). Seen in the review and left as they were on
+    `timeline-try-2`: undo of a delete taking 1.5–2 seconds, the clip lane lagging the field after
+    undo and redo, and developer wording in the per-marcher details (D-REBASE, founding span).
+
 ## Mapping the spec onto the view model
 
 The reference `TimelineViewModel` becomes a derived view: an adapter builds it
@@ -565,8 +710,9 @@ from the stored tables and the resolver, and nothing in it is stored.
 ## What the timeline doesn't show
 
 _Under UI-9, the inspector reads the playhead instead of the selected page's
-end beat, and edits the selected timeline (P8.12, P8.15). The text below
-describes what is built today._
+end beat, and edits the selected timeline (P8.12, P8.15). It reads the playhead
+since UI-14, and starts with a move's Move card. The text below describes what
+was built before._
 
 These belong in the inspector (P8.5), not the timeline:
 
@@ -785,6 +931,7 @@ points (P7.2).
   - Clearing a marcher's dimming while the line or lasso tool has every marcher
     switched off makes it selectable mid-tool (`CanvasMarcher.setTimelineDimmed`).
   - Ctrl+click is ignored on the timeline on every platform, not only macOS.
+  - Deleting or renaming a page's moves (a page timeline has no clip or Move card). UI-14.
   - A one-time hint for Ctrl+drag (Cmd+drag on macOS) after the first plain scrub on empty
     timeline: "Ctrl+drag to mark a range" (project owner, 2026-10-05: not yet). UI-12.
   - Start flag behavior (project owner, 2026-10-04: "a longer conversation",

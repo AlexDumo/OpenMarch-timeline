@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type {
     TimelineAddMarchersMenu,
+    TimelineMoveCommands,
     TimelineMenuTarget,
 } from "./TimelineRangeMenu";
 
@@ -82,6 +83,13 @@ export interface TimelineTrack {
     /** A gap-free, non-overlapping partition of the track's complete range. */
     readonly activitySpans: readonly TimelineActivitySpan[];
     readonly diagnostics?: TimelineTrackDiagnostics;
+    /**
+     * What screen readers call the clip, when the owner can say more than the label (UI-14 review:
+     * "Move 1, Page 3, counts 1–4"); without it, the label and its beats
+     */
+    readonly accessibleName?: string;
+    /** More about the clip, for its tooltip and screen readers (UI-14 review: why it is dashed) */
+    readonly description?: string;
 }
 
 export interface TimelineWaveform {
@@ -175,6 +183,8 @@ export interface TimelineInteractionProps {
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
     /** The right-click menu's **Add selected marchers** (UI-9, P8.14), in view beats here */
     readonly addSelectedMarchers?: TimelineAddMarchersMenu<TimelineMenuTarget>;
+    /** A clip's move commands (UI-14), by track id here: its menu, ⋯ button and keys */
+    readonly moveCommands?: TimelineMoveCommands<TimelineTrackId>;
     /**
      * UI-9 **+**: adds a page whose flag is at the paused playhead. Shown just after the playhead
      * while it's given and the timeline isn't playing; the owner passes it only where **+** applies.
