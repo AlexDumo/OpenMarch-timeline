@@ -7,6 +7,7 @@ import type AudioFile from "../../src/global/classes/AudioFile";
 import type { ModifiedAudioFileArgs } from "../../src/global/classes/AudioFile";
 import { getOrm } from "./db";
 import { handleSqlProxyWithDb } from "./sqlProxy";
+import { sqlProxyRefusal, type SqlProxyRefusal } from "./sqlProxyRefusal";
 import {
     decideFileVersion,
     FILE_TOO_NEW_STATUS,
@@ -247,6 +248,27 @@ function assertSqlProxyNotSuspended() {
         );
 }
 
+/** The suspension whose refusals were logged already. */
+let refusalsLoggedFor: number | null = null;
+
+/**
+ * The marker the IPC handlers return while the renderer's SQL is suspended
+ * (see `sqlProxyRefusal.ts`), or undefined when it isn't. The refusal is
+ * expected while a file opens, so it is logged once per suspension, at debug
+ * level, not as an error.
+ */
+function refusalWhileSuspended(channel: string): SqlProxyRefusal | undefined {
+    if (sqlProxySuspension === null) return undefined;
+    const { token, reason } = sqlProxySuspension;
+    if (refusalsLoggedFor !== token) {
+        refusalsLoggedFor = token;
+        console.debug(
+            `${channel}: refused while ${reason}; further refusals until it has opened aren't logged`,
+        );
+    }
+    return sqlProxyRefusal(`The database is not available: ${reason}`);
+}
+
 /** How long the audio handlers' connections wait for another connection's lock. */
 const AUDIO_BUSY_TIMEOUT_MS = 5000;
 
@@ -306,14 +328,36 @@ export async function handleUnsafeSqlProxy(_: any, sql: string) {
     }
 }
 
+/** `sql:proxy`: like `handleSqlProxy`, but a suspension is returned as a refusal, not thrown. */
+export async function handleSqlProxyIpc(
+    event: unknown,
+    sql: string,
+    params: any[],
+    method: "all" | "run" | "get" | "values",
+) {
+    return (
+        refusalWhileSuspended("sql:proxy") ??
+        handleSqlProxy(event, sql, params, method)
+    );
+}
+
+/** `unsafeSql:proxy`: like `handleUnsafeSqlProxy`, but a suspension is returned as a refusal. */
+export async function handleUnsafeSqlProxyIpc(event: unknown, sql: string) {
+    return (
+        refusalWhileSuspended("unsafeSql:proxy") ??
+        handleUnsafeSqlProxy(event, sql)
+    );
+}
+
 /**
  * Handlers for the app api.
  * Whenever modifying this, you must also modify the app api in electron/preload/index.ts
  */
 export function initHandlers() {
     // Generic SQL proxy handler for Drizzle ORM
-    ipcMain.handle("sql:proxy", handleSqlProxy);
-    ipcMain.handle("unsafeSql:proxy", handleUnsafeSqlProxy);
+    // While an open suspends them, these return a refusal the preload rejects with (P9.9).
+    ipcMain.handle("sql:proxy", handleSqlProxyIpc);
+    ipcMain.handle("unsafeSql:proxy", handleUnsafeSqlProxyIpc);
 
     // File IO handlers located in electron/main/index.ts
 

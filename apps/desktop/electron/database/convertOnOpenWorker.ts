@@ -35,6 +35,20 @@ const blockFor = (ms: number) => {
     }
 };
 
+/** A test stand-in for a long native call: the thread can't be terminated until it returns. */
+const blockInSqlite = (rows: number) => {
+    const scratch = new DatabaseSync(":memory:");
+    try {
+        scratch
+            .prepare(
+                "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < ?) SELECT count(*) FROM c",
+            )
+            .get(Math.floor(rows));
+    } finally {
+        scratch.close();
+    }
+};
+
 function serializeResult(result: ConvertOnOpenResult): SerializedConvertResult {
     return result.status === "conversion-failed"
         ? { ...result, error: serializeError(result.error) }
@@ -58,6 +72,8 @@ export async function runConvertWorker(
                 post({ type: "progress", progress });
                 if (progress.phase === "convert" && test.blockPerPageMs)
                     blockFor(test.blockPerPageMs);
+                if (progress.phase === "convert" && test.nativeBlockRows)
+                    blockInSqlite(test.nativeBlockRows);
             },
             backup: (path) => {
                 const backup =

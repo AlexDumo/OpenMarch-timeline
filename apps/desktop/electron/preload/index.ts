@@ -8,6 +8,10 @@ import {
     type SaveDialogOptions,
 } from "electron";
 import * as DbServices from "@om-electron/database/database.services";
+import {
+    unwrapSqlProxyResult,
+    type SqlProxyRefusal,
+} from "@om-electron/database/sqlProxyRefusal";
 
 import Plugin from "../../src/global/classes/Plugin";
 import type { RecentFile } from "@om-electron/main/services/recent-files-service";
@@ -333,15 +337,19 @@ const APP_API = {
         params: any[],
         method: "all" | "run" | "get" | "values",
     ) =>
-        ipcRenderer.invoke("sql:proxy", sql, params, method) as Promise<{
-            rows: any[] | any;
-        }>,
+        // A refusal while a file opens becomes a rejection (sqlProxyRefusal.ts).
+        (
+            ipcRenderer.invoke("sql:proxy", sql, params, method) as Promise<
+                { rows: any[] | any } | SqlProxyRefusal
+            >
+        ).then(unwrapSqlProxyResult),
     /** Only needed for the triggers */
     unsafeSqlProxy: (sql: string) =>
-        ipcRenderer.invoke("unsafeSql:proxy", sql) as Promise<{
-            success: boolean;
-            changes: number;
-        }>,
+        (
+            ipcRenderer.invoke("unsafeSql:proxy", sql) as Promise<
+                { success: boolean; changes: number } | SqlProxyRefusal
+            >
+        ).then(unwrapSqlProxyResult),
 
     // Logging
     log: (

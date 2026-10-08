@@ -1,46 +1,47 @@
 /* eslint-disable no-console */
 /**
- * The native dialogs and the "preparing your file" window for convert on open
- * (P9.3). All of them belong to the main process, so no IPC channel is added.
- * The text is English only, like the other main-process dialogs; translating
- * it is left for when P9.4 makes the step permanent.
+ * The native dialogs and the "Preparing your file…" overlay for convert on
+ * open (P9.3). All of them belong to the main process, so no IPC channel is
+ * added. The text is English only, like the other main-process dialogs;
+ * translating it is left for when P9.4 makes the step permanent.
  */
-import { BrowserWindow, dialog, shell } from "electron";
+import { dialog, shell, type BrowserWindow } from "electron";
 import { captureException } from "@sentry/electron/main";
 import type { ConvertOnOpenDialogs } from "./convertOnOpenFlow";
 import {
+    hidePreparingOverlay,
+    showPreparingOverlay,
     showPreparingProgress,
-    showPreparingWindow,
     throttleProgress,
-    type PreparingWindow,
-} from "./preparingWindow";
-import { conversionWorkersStopped } from "./convertWorkerHost";
+} from "./preparingOverlay";
+import {
+    appQuitRequested,
+    beginPreparing,
+    conversionWorkersStopped,
+    onQuitRequested,
+} from "./convertWorkerHost";
 
-const createPreparingWindow = (parent: BrowserWindow): PreparingWindow =>
-    new BrowserWindow({
-        parent,
-        modal: true,
-        width: 440,
-        height: 150,
-        frame: false,
-        resizable: false,
-        closable: false,
-        skipTaskbar: true,
-        show: false,
-        webPreferences: {
-            sandbox: true,
-            contextIsolation: true,
-            nodeIntegration: false,
-        },
-    });
-
-function messageBox(
+/**
+ * A message box over `win` that closes as if cancelled once the app starts
+ * quitting (P9.9), so a dialog left on a window that is closing can't hold
+ * the open, and with it the quit, forever. (On macOS a message box with no
+ * parent window runs synchronously and can't be closed this way; that only
+ * happens at startup, before the main window exists.)
+ */
+async function messageBox(
     win: BrowserWindow | null,
     options: Electron.MessageBoxOptions,
 ): Promise<Electron.MessageBoxReturnValue> {
-    return win && !win.isDestroyed()
-        ? dialog.showMessageBox(win, options)
-        : dialog.showMessageBox(options);
+    const controller = new AbortController();
+    const stopListening = onQuitRequested(() => controller.abort());
+    try {
+        const withSignal = { ...options, signal: controller.signal };
+        return await (win && !win.isDestroyed()
+            ? dialog.showMessageBox(win, withSignal)
+            : dialog.showMessageBox(withSignal));
+    } finally {
+        stopListening();
+    }
 }
 
 /** Native dialogs over `win` (or app-modal when there is no window yet, at startup). */
@@ -49,30 +50,27 @@ export function electronConvertOnOpenDialogs(
 ): ConvertOnOpenDialogs {
     return {
         async whilePreparing(fileName, work) {
-            // Without a main window (a file opened at startup) nothing is on screen yet, and a
-            // lone extra window would quit the app on Windows and Linux when it closes.
-            const parent = win && !win.isDestroyed() ? win : undefined;
-            const preparing = parent
-                ? await showPreparingWindow(
-                      parent,
-                      fileName,
-                      createPreparingWindow,
-                  )
-                : undefined;
+            // A quit or a main-window close from here on stops the conversion first (P9.9).
+            const endPreparing = beginPreparing();
+            // Without a main window (a file opened at startup) nothing is on screen yet.
+            const target = win && !win.isDestroyed() ? win : undefined;
             try {
+                // An overlay in the main window's page, not a native window: a native modal
+                // that can't be closed refused the close a macOS Quit asks for (P9.9).
+                if (target) await showPreparingOverlay(target, fileName);
                 // The worker converts off this thread (P9.8): show how far it has got.
                 return await work(
-                    throttleProgress((p) =>
-                        showPreparingProgress(preparing, parent, p),
-                    ),
+                    throttleProgress((p) => showPreparingProgress(target, p)),
                 );
             } finally {
-                if (preparing && !preparing.isDestroyed()) preparing.destroy();
-                if (parent && !parent.isDestroyed()) parent.setProgressBar(-1);
+                hidePreparingOverlay(target);
+                endPreparing();
             }
         },
 
         async warnOlderRelease(fileName, backupPath) {
+            // Quitting: open nothing, as Cancel would.
+            if (appQuitRequested()) return "stop";
             const buttons = backupPath
                 ? ["Open Without Converting", "Show Backup", "Cancel"]
                 : ["Open Without Converting", "Cancel"];
@@ -98,6 +96,8 @@ export function electronConvertOnOpenDialogs(
         },
 
         converted(fileName, backupPath) {
+            // A conversion that finished just as the app quits: no sheet over a closing window.
+            if (appQuitRequested()) return;
             void messageBox(win, {
                 type: "info",
                 title: "Converted to timelines",
@@ -108,8 +108,8 @@ export function electronConvertOnOpenDialogs(
         },
 
         async backupFailed(fileName, message) {
-            // The app is quitting and stopped the worker: nothing to tell.
-            if (conversionWorkersStopped()) return;
+            // The app is quitting (and maybe stopped the worker): nothing to tell.
+            if (appQuitRequested()) return;
             await messageBox(win, {
                 type: "error",
                 title: "Couldn't back up your file",
@@ -122,6 +122,7 @@ export function electronConvertOnOpenDialogs(
         async conversionFailed(fileName, error, backupPath) {
             if (conversionWorkersStopped()) return;
             captureException(error);
+            if (appQuitRequested()) return;
             await messageBox(win, {
                 type: "error",
                 title: "Couldn't convert your file",
