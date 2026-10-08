@@ -413,6 +413,35 @@ export function planPageConversion(
     const lastPoint = new Map<number, XY>(
         homes.map(({ marcherId, home }) => [marcherId, home]),
     );
+    /** Page `pageId`'s transition, with a slot for each marcher that moves there. */
+    const planMoves = (
+        pageId: number,
+        range: { startBeat: number; endBeat: number },
+        slotted: number[],
+        rows: Map<number, ConversionMarcherPage>,
+        glides: Map<number, GapGlide>,
+    ) => {
+        const pointOf = (id: number): XY => {
+            const mp = rows.get(id);
+            return mp ? ([mp.x, mp.y] as XY) : glides.get(id)!.point;
+        };
+        // A marcher already standing on its point holds there without a slot (C-12): only
+        // exactly equal points are left out, so every flag's positions are unchanged
+        const moved = slotted.filter((id) => {
+            const [x, y] = pointOf(id);
+            const [px, py] = lastPoint.get(id) ?? [NaN, NaN];
+            return x !== px || y !== py;
+        });
+        for (const id of slotted) lastPoint.set(id, pointOf(id));
+        if (moved.length > 0)
+            transitions.push({
+                pageId,
+                startBeat: range.startBeat,
+                endBeat: range.endBeat,
+                marcherIds: moved,
+                points: moved.map(pointOf),
+            });
+    };
     const pages: PageLossReport[] = input.pages.map((page, i) => {
         const rows = rowOf.get(page.id)!;
         const range = ranges[i] ?? null;
@@ -431,28 +460,8 @@ export function planPageConversion(
                   : slotted.length === 0
                     ? "no-marchers"
                     : null;
-        if (i > 0 && range && !skipped) {
-            const pointOf = (id: number): XY => {
-                const mp = rows.get(id);
-                return mp ? ([mp.x, mp.y] as XY) : glides.get(id)!.point;
-            };
-            // A marcher already standing on its point holds there without a slot (C-12): only
-            // exactly equal points are left out, so every flag's positions are unchanged
-            const moved = slotted.filter((id) => {
-                const [x, y] = pointOf(id);
-                const [px, py] = lastPoint.get(id) ?? [NaN, NaN];
-                return x !== px || y !== py;
-            });
-            for (const id of slotted) lastPoint.set(id, pointOf(id));
-            if (moved.length > 0)
-                transitions.push({
-                    pageId: page.id,
-                    startBeat: range.startBeat,
-                    endBeat: range.endBeat,
-                    marcherIds: moved,
-                    points: moved.map(pointOf),
-                });
-        }
+        if (i > 0 && range && !skipped)
+            planMoves(page.id, range, slotted, rows, glides);
         const sortedRows = [...rows.values()].sort(
             (a, b) => a.marcher_id - b.marcher_id,
         );

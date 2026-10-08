@@ -89,6 +89,8 @@ interface BatchScan {
     transitionIds: Set<number>;
     /** Transitions whose assignments or destinations changed: those name the marchers */
     transitionsWithSlotChanges: Set<number>;
+    /** Marchers whose row the action inserted or deleted, rather than only moved their home */
+    addedOrRemovedMarchers: Set<number>;
 }
 
 const scanBatch = (batch: ChangeBatch, beatsChanged: boolean): BatchScan => {
@@ -99,6 +101,7 @@ const scanBatch = (batch: ChangeBatch, beatsChanged: boolean): BatchScan => {
         shapeIds: new Set(),
         transitionIds: new Set(),
         transitionsWithSlotChanges: new Set(),
+        addedOrRemovedMarchers: new Set(),
     };
     for (const change of batch.changes) {
         const image = current(change, scan.beatsChanged);
@@ -119,6 +122,11 @@ const scanBatch = (batch: ChangeBatch, beatsChanged: boolean): BatchScan => {
             scan.transitionsWithSlotChanges.add(change.rowId);
         } else if (change.table === "shapes") {
             scan.shapeIds.add(change.rowId);
+        } else if (
+            change.table === "marchers" &&
+            (change.before === null || change.after === null)
+        ) {
+            scan.addedOrRemovedMarchers.add(change.rowId);
         }
     }
     return scan;
@@ -199,23 +207,12 @@ const changedPages = (
         if (end !== undefined) add(pageForEndBeat(pages, end), marchers);
     };
 
-    // Marchers whose row the action inserted or deleted, rather than only moved their home
-    const addedOrRemoved = new Set(
-        batch.changes
-            .filter(
-                (c) =>
-                    c.table === "marchers" &&
-                    (c.before === null || c.after === null),
-            )
-            .map((c) => c.rowId),
-    );
-
     for (const change of batch.changes) {
         const image = current(change, scan.beatsChanged);
         switch (change.table) {
             case "marchers":
                 add(
-                    addedOrRemoved.has(change.rowId)
+                    scan.addedOrRemovedMarchers.has(change.rowId)
                         ? (currentPage ?? pages[0])
                         : pages[0],
                     [change.rowId],
