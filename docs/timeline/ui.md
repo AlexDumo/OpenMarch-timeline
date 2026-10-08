@@ -710,11 +710,12 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Beats an edge can't take.** An edge never lands where two timelines would share a range
     (C-12), or where the rows can't follow. With the pointer over such a beat, the edge waits on the
     nearest allowed beat back toward where it started; the readout says why, and a move's clip gets
-    a dashed red outline. Release commits where it waits. Merging into the other timeline instead is
-    the owner's open question (V-127).
+    a dashed red outline. Release commits where it waits. It never merges into the other timeline
+    (owner, 2026-10-08, V-127).
   - **Walls.** An edge stops at what it would collide with or be cut short by, and the readout names
     it: a neighboring flag, a move attached to the flag, another move on the same marchers at the
-    same or a higher layer, a marcher joining or leaving partway, or 1 count. It grows over moves it
+    same or a higher layer (it never takes over the overlap: owner, 2026-10-08, V-121), a marcher
+    joining or leaving partway, or 1 count. It grows over moves it
     already overrides (the page moves under a breakaway), which catch up where it ends (V-20, V-21).
   - **Readouts.** One wording: "Page 3: 8 → 11 counts", "Move 3: 4 → 6 counts", then the reason.
   - **One edit, Esc cancels.** A drag commits once, on release, as one undoable edit. Esc, a lost

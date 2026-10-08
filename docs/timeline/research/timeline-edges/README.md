@@ -44,15 +44,18 @@ the two were reconciled, so the next edge gesture follows the same rules.
     playhead, which must stay put.
   - The shared part is small. Each action documents its rule.
 
-## Open owner questions
+## Owner decisions and open questions (2026-10-08)
 
-- **V-127 (Q1):** an edge can't make a move cover exactly another stored move's or page's counts.
-  Should it merge into that timeline instead? That would delete the marchers' hidden page sets.
-- **V-121 (Q2):** growing into another move on the same marchers stops at its edge. Should it take
-  over the overlap instead?
-- **V-62:** does anyone expect moves to warp with the pages when a flag moves?
-- **V-65:** is the ruler grip found, and does it ever steal a playhead grab?
-- **V-67:** should a run of arrow presses on a grip be one undo step?
+- **V-127 (Q1), decided: don't merge.** An edge can't make a move cover exactly another stored
+  move's or page's counts; it waits a count short and says why.
+- **V-121 (Q2), decided: stop.** Growing into another move on the same marchers stops at its edge
+  and never takes over the overlap.
+- **V-62, open.** The owner said "maybe": moves warping with the pages when a flag moves has many
+  edge cases. Their idea is a multi-select that moves several things at once, where the moved moves
+  keep their length. That's unlike a flag move, which changes the pages' lengths by nature. Not
+  built; needs its own design pass.
+- **V-65, V-67, open.** The owner isn't sure: whether the ruler grip is found, and whether a run of
+  arrow presses should be one undo step. Both need hands-on checks.
 
 ## Not built (both gestures)
 
