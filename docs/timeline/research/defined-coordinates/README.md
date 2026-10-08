@@ -1,0 +1,155 @@
+<!-- cspell:disable -->
+
+# Defined coordinates: what it means for a page to "have coordinates"
+
+Status: research done, **waiting on owner decisions**. Started 2026-10-08 (session 4 of 4), on branch
+`timeline/defined-coordinates` off `timeline-try-2` (a4d42cd1). This changes what stored data means,
+so it needs an ADR 0001 amendment before anything is built.
+
+## The report
+
+> If I make multiple pages after page 1, say 2 3 4, all of those pages have the same coords as page
+> 1. Then I edit page 2 to be a new move. Then when I go to page 3, rather than being page 2 (which
+> is where they are now) they are still the page 1 coordinates.
+
+## Notes in this folder
+
+| File                                                                 | What                                                                                                                                                |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [01-current-model.md](01-current-model.md)                           | Where page coordinates come from in page mode and timeline mode, with the writers of stale copies; both reproduced                                  |
+| [03-prior-art.md](03-prior-art.md)                                   | Pyware, EnVision, Blender, After Effects, Pro Tools, Ableton, ETC Eos / grandMA tracking                                                            |
+| [04-model-touched.md](04-model-touched.md)                           | M1: dense rows plus a stored `defined` flag that carries edits forward                                                                              |
+| [05-model-sparse.md](05-model-sparse.md)                             | M2: only edited pages store positions; every other page holds                                                                                      |
+| [06-model-tracking.md](06-model-tracking.md)                         | M3: M2 plus Eos-style pins, "keep later pages" and cue-only delete; equality tracking as the page-mode bridge                                       |
+| [07a-validation-timeline-core.md](07a-validation-timeline-core.md)   | Validator: the sparse timeline core prototyped and run against the focused tests and the conversion corpus                                         |
+| [07b-validation-page-mode.md](07b-validation-page-mode.md)           | Validator: page-mode options prototyped (equality tracking), including precision, pathways and undo cost at 200 × 100                               |
+| [07c-validation-extras-ux.md](07c-validation-extras-ux.md)           | Validator: pins, keep-later-pages and cue-only delete broken with scenarios; personas; how it fits PR #106                                          |
+
+## What we found
+
+1. **There are two bugs with one symptom.**
+   - **Page mode** (what every user runs) stores a full copy of every marcher on every page. A new
+     page is a one-time copy, and editing page 2 writes only page 2.
+   - **Timeline mode is already sparse.** No move means a hold (spec R-6), so the **+** flag
+     behaves exactly as the owner expects. The bug there comes from automatic "stay" moves that
+     freeze a copy of the position: the converter, the page-add ripple (`addHoldingMoves`),
+     new-marcher stays, and set to previous/next page.
+2. **Prior art.** Drill tools copy sets and offer manual re-sync. Animation tools and DAWs store
+   only keys. **Lighting consoles' tracking** (ETC Eos) is the closest model: an edit carries
+   forward until the next cue that sets its own value. It comes with three escape hatches:
+   - *cue only*: change this cue alone;
+   - *block*: a stored value that upstream edits don't change;
+   - a delete that keeps later cues' look.
+3. **All three models agree on timeline mode:** stop writing automatic stays. The validator ran
+   this:
+   - Positions at every flag stay bit-identical across the 8-file conversion corpus. In real files,
+     38–61% of slots were copies.
+   - The owner's scenario is fixed on every way of adding pages.
+   - Undo round trips pass.
+   - About 15 tests that assert row shapes change.
+4. **It must ship with its companions, or it regresses:**
+   - **Set to next page** is refused on an inherited page.
+   - **Align and distribute** write unmoved marchers, which plants stays and brings the bug back.
+   - **Ripple delete** on a converted show makes later copied pages snap back.
+   - The "Only change Page N" toast disappears for windows over inherited pages.
+5. **The extras don't hold up as designed:**
+   - **"Keep later pages" goes stale.** It brings the owner's complaint back the first time an
+     earlier page is edited.
+   - **Pins worked out from coordinates can't be told apart from a drag-back.** Eos stores its
+     blocks.
+   - **"Pin" is already the start flag's word.**
+   - Defer them until intent can be stored. Adding a column is free while user version 8 is
+     unreleased.
+6. **Page mode: carrying edits forward through exact copies works, but needs hardening.**
+   - **Tolerance:** fabric moves 29% of a selection by ε without anything moving.
+   - **A merge leak:** an edit that makes a page equal to a later deliberate page lets the next
+     edit overwrite that page.
+   - **Undo cost:** history grows about 98×, and undo takes 5.6 s at 200 × 100, mostly in a broken
+     focus loop.
+   - **Pre-existing page-mode bugs to fix whatever is chosen:**
+     - a copied page shares the previous page's curved pathway, and editing either one corrupts
+       the other;
+     - `pathways` isn't in undo history;
+     - pages the edit followed don't refresh.
+   - A stored flag (M1) costs a migration on a table that freezes in Phase 9, and buys only pins
+     plus immunity to the merge leak.
+7. **Existing shows aren't repaired by any model.** The converter can't tell a stale copy from "back
+   to the opening set". A page the old app already left stale stays stale until the user fixes it
+   (Shift+P).
+
+## Recommendation (lead)
+
+**Meaning:** a marcher has a coordinate on a page only where the designer moved them there.
+Everywhere else they stay where they last were. An edit carries forward to that marcher's next page
+that has its own move, and stops there.
+
+**Timeline mode (sparse, M2 core), built as one change:**
+
+1. **No automatic stays.**
+   - Remove `addHoldingMoves`.
+   - New marchers get a home only.
+   - The converter skips points equal to the previous position.
+2. **Writes that don't move a marcher write nothing.** This covers align, distribute and inspector
+   edits on unmoved marchers (compared against the resolved position, with a tolerance). A drag back
+   to the start of a page box the marcher owns clears that move.
+3. **Set to previous page** clears the marcher's own move on that page, so the page follows again.
+   **Set to next page** writes a move on the range writer, so it works on inherited pages.
+4. **Delete page in timeline mode** is the UI-9 flag delete, which keeps every later page's look.
+   - "Delete page and its moves" stays as an explicit command whose toast names the pages that
+     change.
+   - Tag appearances move to the next page instead of cascading away.
+5. **Feedback:**
+   - The post-edit toast says "Also pages 3–7 · stops at Page 8", aggregated across marchers.
+   - The pass-through toast shows whenever a window contains a flag.
+   - The inspector says "Holding since Page X" or "Moves here", with a jump.
+6. Undoing "add marcher" keeps the current page.
+
+**Page mode:** carry an edit forward through the unbroken run of later pages that still equal the
+old value. This is per marcher. It stops at a shape, at its own pathway, or at a different value, and
+compares with a tolerance.
+
+- A toast offers "Only Page N", which redoes the edit without carrying it forward.
+- Ship it with the pathway-sharing fix, `pathways` in history, cache invalidation of the followed
+  pages, and the undo focus fix.
+- No schema change.
+
+**Defer, and keep the corner open:**
+
+- A "Lock here" (Eos block) with a **stored** kind.
+- "Keep later pages", which needs a stored kind or a live return link.
+- Cue-only ripple delete.
+- Live links (ownership 05).
+- Dot tints beyond the selection.
+- "Hold" on coordinate sheets.
+
+**ADR:** amend ADR 0001 C-12 to say:
+
+- no path writes timeline rows on behalf of a page;
+- the converter writes only changed positions;
+- a stored zero-motion move is designer intent;
+- page-mode edits carry forward through equal copies.
+
+Also add a ui.md decision (UI-15) and amend the P7.4 hold rule in phases/07.
+
+**Cost:**
+
+- Timeline: about 7–9 days, plus 3–4 for the feedback UI.
+- Page mode: about 4–6 days, plus 1–2 for the pre-existing fixes.
+
+## Owner questions
+
+See the "Decisions" section once answered.
+
+1. Adopt "coordinates exist only where you moved someone; otherwise they hold" as the model, and
+   amend ADR 0001?
+2. Page mode: carry edits forward through untouched copies now (recommended), or leave page mode
+   alone until timeline mode is the default (an explicit "Copy to following pages" command as a
+   stopgap), or a stored flag (M1)?
+3. Should Delete page in timeline mode keep later pages' look by default (flag delete), with "delete
+   its moves too" as an explicit command?
+4. Defer Lock and "Keep later pages" (recommended), or add a stored kind now while v8 is
+   unreleased?
+
+## Decisions
+
+_None yet._
