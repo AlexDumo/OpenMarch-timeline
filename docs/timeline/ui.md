@@ -704,7 +704,9 @@ from it. The spec still wins on the model; this file decides presentation.
     stops partway along its path.
   - **Snapping, for every edge.** Page lines and the paused playhead pull an edge from 12px,
     downbeats from 6px, else it lands on a whole beat. Alt keeps only the whole beat
-    (`timelineEdgeSnap.ts`). Dragging a whole move keeps its own 24px page-line snap.
+    (`timelineEdgeSnap.ts`). A dragged flag skips the page lines: it stops a count short of every
+    other flag, so they would only pull it toward beats it can't take (zoomed out, counts next to
+    a neighbor became unreachable). Dragging a whole move keeps its own 24px page-line snap.
   - **Beats an edge can't take.** An edge never lands where two timelines would share a range
     (C-12), or where the rows can't follow. With the pointer over such a beat, the edge waits on the
     nearest allowed beat back toward where it started; the readout says why, and a move's clip gets
@@ -746,8 +748,8 @@ from it. The spec still wins on the model; this file decides presentation.
     stops before its far end. A beat the timeline rows can't take (two moves would share a range,
     C-12, or the ripple would refuse) is a hole the flag passes over but can't land on. A readout
     by the flag shows both pages' counts ("Page 3: 8 → 11 counts") and what stopped it.
-  - **Snapping.** UI-15's edge rule: page lines and the playhead within 12px, downbeats within 6px,
-    else whole beats. Alt turns it off.
+  - **Snapping.** UI-15's edge rule without page lines: the playhead within 12px, downbeats within
+    6px, else whole beats. Alt turns it off.
   - **Afterwards.** A paused playhead or start flag on the moved flag goes with it, so the selected
     page stays selected and the field shows the same set. Appearance by beat follows by itself.
   - **Keys and cancel.** ← and → move a focused grip one count (one edit each). Esc, a lost

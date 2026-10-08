@@ -49,3 +49,24 @@ describe("stepOffForbidden", () => {
         expect(stepOffForbidden(17, 16, new Set([16, 17]))).toBe(16);
     });
 });
+
+describe("flagSnapBeat (review: zoomed out, page lines trapped a flag)", () => {
+    // Imported here so the edge rules sit together
+    it("ignores page lines: at 4 px per beat, near the next flag it lands where pointed", async () => {
+        const { flagSnapBeat } = await import("../TimelinePageFlagGrips");
+        const base = {
+            downbeats: [],
+            playheadBeat: null,
+            pixelsPerBeat: 4,
+            snapDisabled: false,
+        };
+        // The next flag is at 32 (a wall at 31): pointing at 30 lands on 30
+        expect(flagSnapBeat({ ...base, beat: 30 })).toBe(30);
+        // One beat from where it started (24) moves one beat
+        expect(flagSnapBeat({ ...base, beat: 25 })).toBe(25);
+        // The playhead still pulls from 12 px, downbeats from 6 px
+        expect(flagSnapBeat({ ...base, beat: 27, playheadBeat: 29 })).toBe(29);
+        expect(flagSnapBeat({ ...base, downbeats: [28], beat: 26.6 })).toBe(28);
+        expect(flagSnapBeat({ ...base, downbeats: [28], beat: 26.4 })).toBe(26);
+    });
+});
