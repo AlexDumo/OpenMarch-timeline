@@ -9,21 +9,22 @@ so it needs an ADR 0001 amendment before anything is built.
 ## The report
 
 > If I make multiple pages after page 1, say 2 3 4, all of those pages have the same coords as page
+>
 > 1. Then I edit page 2 to be a new move. Then when I go to page 3, rather than being page 2 (which
-> is where they are now) they are still the page 1 coordinates.
+>    is where they are now) they are still the page 1 coordinates.
 
 ## Notes in this folder
 
-| File                                                                 | What                                                                                                                                                |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [01-current-model.md](01-current-model.md)                           | Where page coordinates come from in page mode and timeline mode, with the writers of stale copies; both reproduced                                  |
-| [03-prior-art.md](03-prior-art.md)                                   | Pyware, EnVision, Blender, After Effects, Pro Tools, Ableton, ETC Eos / grandMA tracking                                                            |
-| [04-model-touched.md](04-model-touched.md)                           | M1: dense rows plus a stored `defined` flag that carries edits forward                                                                              |
-| [05-model-sparse.md](05-model-sparse.md)                             | M2: only edited pages store positions; every other page holds                                                                                      |
-| [06-model-tracking.md](06-model-tracking.md)                         | M3: M2 plus Eos-style pins, "keep later pages" and cue-only delete; equality tracking as the page-mode bridge                                       |
-| [07a-validation-timeline-core.md](07a-validation-timeline-core.md)   | Validator: the sparse timeline core prototyped and run against the focused tests and the conversion corpus                                         |
-| [07b-validation-page-mode.md](07b-validation-page-mode.md)           | Validator: page-mode options prototyped (equality tracking), including precision, pathways and undo cost at 200 × 100                               |
-| [07c-validation-extras-ux.md](07c-validation-extras-ux.md)           | Validator: pins, keep-later-pages and cue-only delete broken with scenarios; personas; how it fits PR #106                                          |
+| File                                                               | What                                                                                                                  |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| [01-current-model.md](01-current-model.md)                         | Where page coordinates come from in page mode and timeline mode, with the writers of stale copies; both reproduced    |
+| [03-prior-art.md](03-prior-art.md)                                 | Pyware, EnVision, Blender, After Effects, Pro Tools, Ableton, ETC Eos / grandMA tracking                              |
+| [04-model-touched.md](04-model-touched.md)                         | M1: dense rows plus a stored `defined` flag that carries edits forward                                                |
+| [05-model-sparse.md](05-model-sparse.md)                           | M2: only edited pages store positions; every other page holds                                                         |
+| [06-model-tracking.md](06-model-tracking.md)                       | M3: M2 plus Eos-style pins, "keep later pages" and cue-only delete; equality tracking as the page-mode bridge         |
+| [07a-validation-timeline-core.md](07a-validation-timeline-core.md) | Validator: the sparse timeline core prototyped and run against the focused tests and the conversion corpus            |
+| [07b-validation-page-mode.md](07b-validation-page-mode.md)         | Validator: page-mode options prototyped (equality tracking), including precision, pathways and undo cost at 200 × 100 |
+| [07c-validation-extras-ux.md](07c-validation-extras-ux.md)         | Validator: pins, keep-later-pages and cue-only delete broken with scenarios; personas; how it fits PR #106            |
 
 ## What we found
 
@@ -37,8 +38,8 @@ so it needs an ADR 0001 amendment before anything is built.
 2. **Prior art.** Drill tools copy sets and offer manual re-sync. Animation tools and DAWs store
    only keys. **Lighting consoles' tracking** (ETC Eos) is the closest model: an edit carries
    forward until the next cue that sets its own value. It comes with three escape hatches:
-   - *cue only*: change this cue alone;
-   - *block*: a stored value that upstream edits don't change;
+   - _cue only_: change this cue alone;
+   - _block_: a stored value that upstream edits don't change;
    - a delete that keeps later cues' look.
 3. **All three models agree on timeline mode:** stop writing automatic stays. The validator ran
    this:

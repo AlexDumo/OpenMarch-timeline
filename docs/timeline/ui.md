@@ -853,6 +853,36 @@ from it. The spec still wins on the model; this file decides presentation.
     and letters; macOS puts the key in the label (docs/adr/0003-menu-actions-ipc.md).
   - Deferred: a one-time hint the first time someone pins (dropped with the second play button,
     whose first click carried it).
+- **UI-15: a page has a position only where a marcher was moved (project owner, 2026-10-08).**
+  The owner made pages 2–4 after page 1, edited page 2, and found page 3 still showing page 1's
+  set. Research and validation are in `research/defined-coordinates/`. UI-14 is fork PR #106
+  (edit moves), so this is numbered after it.
+  - **The rule.** A marcher has a coordinate on a page only where the designer moved them there.
+    Everywhere else they hold where they last were (spec R-6). An edit carries forward, per marcher,
+    to that marcher's next page with its own move, and stops there.
+  - **Nothing is written on a page's behalf.** Adding, splitting or appending a page writes only
+    page rows (ADR 0001 C-12, now true on every path). New marchers get a home and no moves. The
+    converter writes a slot only where a marcher's position changes. A write that leaves a marcher
+    where it already is writes nothing for that marcher, so aligning or distributing on a held page
+    doesn't freeze the others. Dragging a marcher back onto the start of its own page move clears
+    that move.
+  - **Set to previous page** clears the marcher's own move on that page, so the page follows
+    earlier pages again. **Set to next page** writes a move, and works on a held page.
+  - **Delete page** (timeline mode) deletes the flag only. Motion is unchanged, the deleted page's
+    move ends between flags, and later pages keep their look. **Delete page and its moves** is the
+    old ripple delete, an explicit command whose toast names the pages that changed. Tag
+    appearances on a deleted page move to the next page.
+  - **The pass-through toast** shows whenever a window passes a page flag, even when there is no
+    stored move to override. Its action is renamed **Start from Page N** (it was "Only change Page
+    N", which read as "later pages are untouched").
+  - **Page mode** (until the flip) gets the same rule on its dense rows. An edit on page N also
+    moves the run of later pages that still equal the old position, per marcher, compared within
+    1e-6. The run stops at a different value, a page shape or the marcher's own pathway. A toast
+    says "Also moved on Pages 3–7" with **Only Page 2**, which puts those pages back. A new page no
+    longer shares the previous page's curved pathway.
+  - Deferred: a stored "lock here" (an Eos-style block), "keep later pages" on an edit,
+    look-preserving ripple delete, live return links, defined/held marks beyond the selection, and
+    "Hold" on coordinate sheets. Marchers are never "pinned": the start flag owns that word.
 
 ## Mapping the spec onto the view model
 

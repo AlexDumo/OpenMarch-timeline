@@ -12,12 +12,12 @@ scratch test was `zzV3Extras.test.ts`, and all 9 cases ran.
 
 ## 1. Pins derived from `dest == origin`, with no stored kind
 
-| Case                                                          | Result                                                                                                                                                                                                                                                                                  | Verdict                                                                       |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| T1: pin page 3, then edit page 2 to (123,456) (RAN)           | p2 = (123,456); p3–p5 = (10,10). The pin becomes a move from 123 back to 10.                                                                                                                                                                                                            | Holds, but after the edit nothing marks it as a pin any more                  |
-| T2: drag page 3 to (50,50), then drag it back to (10,10) (RAN) | The stored row is **byte-identical** to T1's pin. After a page-2 edit, page 3 doesn't follow.                                                                                                                                                                                           | **Breaks the mental model**: changing your mind leaves an invisible block      |
-| T8: pin a marcher who is mid-move under a move [13,29) (RAN)  | The pin lands on layer 1 and overrides the move, which then catches up from (10,10) to (200,200) in 4 beats.                                                                                                                                                                             | Breaks: a speed spike                                                         |
-| T5: pin plus a move ending inside the pinned page (RAN)       | The pin catches up from 200 to 10 over [21,25). "`dest == origin` at the row's start" is ill-defined.                                                                                                                                                                                   | Ambiguous display                                                             |
+| Case                                                           | Result                                                                                                       | Verdict                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| T1: pin page 3, then edit page 2 to (123,456) (RAN)            | p2 = (123,456); p3–p5 = (10,10). The pin becomes a move from 123 back to 10.                                 | Holds, but after the edit nothing marks it as a pin any more              |
+| T2: drag page 3 to (50,50), then drag it back to (10,10) (RAN) | The stored row is **byte-identical** to T1's pin. After a page-2 edit, page 3 doesn't follow.                | **Breaks the mental model**: changing your mind leaves an invisible block |
+| T8: pin a marcher who is mid-move under a move [13,29) (RAN)   | The pin lands on layer 1 and overrides the move, which then catches up from (10,10) to (200,200) in 4 beats. | Breaks: a speed spike                                                     |
+| T5: pin plus a move ending inside the pinned page (RAN)        | The pin catches up from 200 to 10 over [21,25). "`dest == origin` at the row's start" is ill-defined.        | Ambiguous display                                                         |
 
 - **The Eos analogy is wrong.** Eos draws a stored **block** (white) differently from an
   **auto-block** (underlined white), which is a value that happens to equal the tracked one
@@ -60,7 +60,7 @@ scratch test was `zzV3Extras.test.ts`, and all 9 cases ran.
   - Undo: as a modifier it is one step; as a toast action it is two, like "Only change Page N".
 - **Name clashes.**
   - UI-10's "Only change Page N" (`timelinePassThrough.ts:144-165`, `timelineMoves.ts:631-700`) is
-    a different axis: it narrows when the motion *starts*. Under sparse, pages after P still
+    a different axis: it narrows when the motion _starts_. Under sparse, pages after P still
     inherit the result, but users will believe "only Page N" means later pages are untouched.
   - The two can share one post-edit toast:
     - "Passes through Page 3 · Start at Page 4 instead"
@@ -71,12 +71,12 @@ scratch test was `zzV3Extras.test.ts`, and all 9 cases ran.
 
 ## 3. Cue-only delete
 
-| Case                                                                   | Result                                                                                                                                                                         |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| T6: delete defined page 2, which has a tag appearance (RAN)            | Page 1 takes page 2's beats and page 2's move is deleted. **Every later page snaps back to (10,10).** **`tag_appearances` left: 0**: the cascade at schema.ts:358-361 is confirmed. |
-| T6y: yank (RAN)                                                        | Same snap-back.                                                                                                                                                                |
-| T7: delete defined page 3 while page 2 is defined (RAN)                | Page 2's move stretches to [9,25) (16 counts); page 3's (300,300) is lost. A cue-only delete would write (300,300) over the new page 3's box, which matches page-mode parity.   |
-| T8b: delete page 3 when it holds a layer-1 pin (RAN)                   | The pin isn't `isPageMove`, so it survives as an off-flag timeline. Under PR #106 it becomes a "Move N" clip.                                                                  |
+| Case                                                        | Result                                                                                                                                                                              |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T6: delete defined page 2, which has a tag appearance (RAN) | Page 1 takes page 2's beats and page 2's move is deleted. **Every later page snaps back to (10,10).** **`tag_appearances` left: 0**: the cascade at schema.ts:358-361 is confirmed. |
+| T6y: yank (RAN)                                             | Same snap-back.                                                                                                                                                                     |
+| T7: delete defined page 3 while page 2 is defined (RAN)     | Page 2's move stretches to [9,25) (16 counts); page 3's (300,300) is lost. A cue-only delete would write (300,300) over the new page 3's box, which matches page-mode parity.       |
+| T8b: delete page 3 when it holds a layer-1 pin (RAN)        | The pin isn't `isPageMove`, so it survives as an off-flag timeline. Under PR #106 it becomes a "Move N" clip.                                                                       |
 
 - Tag appearances need cue-only treatment whatever model is chosen: move `start_page_id` to N+1, or
   drop it if N+1 already has one for that tag. About ½ day.

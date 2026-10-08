@@ -147,6 +147,27 @@ selected page. Rules on stored data, enforced by the write functions
 - Adding or deleting a page writes only page rows (and `last_page_counts`),
   never timeline rows.
 
+**Amendment (2026-10-08, project owner): a page has a position only where a marcher was
+moved.** No path writes timeline rows on a page's behalf:
+
+- Adding, splitting or appending a page writes only page rows. This removes the P7.4 holding
+  moves, which contradicted the rule above.
+- New marchers get a home and no moves.
+- The converter writes a slot only where a marcher's position differs from its previous one,
+  compared exactly. Positions at every flag are unchanged.
+
+A stored zero-motion move is designer intent, not filler. A marcher with no move over a page holds
+(spec R-6), so an edit carries forward to that marcher's next move. Deleting a page in timeline mode
+deletes its flag only.
+
+Page mode applies the same meaning to its dense `marcher_pages` rows until the flip, with no schema
+change. A page-mode edit also rewrites the following run of rows that equal the old position, within
+1e-6.
+
+There is no schema or file-version change. Files converted by earlier development builds keep their
+holding moves and are converted again by hand, as for C-11. Research and the decision record are in
+`docs/timeline/research/defined-coordinates/`; the interaction is UI-15 in `docs/timeline/ui.md`.
+
 Beat editing can still make two timelines share a range; that is in the
 `ui.md` backlog. The interaction is UI-9 in `docs/timeline/ui.md`.
 

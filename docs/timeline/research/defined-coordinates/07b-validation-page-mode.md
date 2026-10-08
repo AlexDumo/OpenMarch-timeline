@@ -14,13 +14,13 @@ Adversarial validator, 2026-10-08. It worked on a scratch copy at a4d42cd1 and p
 
 ## Scenarios
 
-| #   | Scenario                                                                                                   | Observed                                                                                                                                                                                                                                                       | Verdict                                                   |
-| --- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 1a  | Owner's scenario (RAN)                                                                                     | Tracking off: pages 3 and 4 keep page 1's spot. M1-lite: pages 3 and 4 follow page 2.                                                                                                                                                                          | Holds for M1 and M1-lite; M2 leaves the bug               |
-| 1a′ | A file the current app already damaged (RAN)                                                               | A later edit of page 2 doesn't repair page 3, because page 3 no longer equals page 2's old value. M1 is the same (normalize marks page 3 defined).                                                                                                              | **Existing shows need a manual fix** (Shift+P)            |
-| 1b  | Back to opening set on page 4, after real moves on pages 2–3, then edit page 1 (RAN)                       | Page 4 does **not** follow; the run ends at page 2.                                                                                                                                                                                                            | Holds                                                     |
-| 1c  | A marcher standing still for 41 pages, then edit page 1 (RAN)                                              | All 41 pages move.                                                                                                                                                                                                                                             | Right by the rule, but invisible without a toast          |
-| 1d  | **Merge leak** (RAN): p2=200, p4=400; edit p2 to 400 (arrive early); then edit p2 to 250                   | M1-lite: p3, p4 and p5 all become 250, so **page 4's deliberate 400 is lost**. M1: page 4 stays defined.                                                                                                                                                      | **Breaks M1-lite.** Mitigation: toast plus one-step undo  |
+| #   | Scenario                                                                                 | Observed                                                                                                                                           | Verdict                                                  |
+| --- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 1a  | Owner's scenario (RAN)                                                                   | Tracking off: pages 3 and 4 keep page 1's spot. M1-lite: pages 3 and 4 follow page 2.                                                              | Holds for M1 and M1-lite; M2 leaves the bug              |
+| 1a′ | A file the current app already damaged (RAN)                                             | A later edit of page 2 doesn't repair page 3, because page 3 no longer equals page 2's old value. M1 is the same (normalize marks page 3 defined). | **Existing shows need a manual fix** (Shift+P)           |
+| 1b  | Back to opening set on page 4, after real moves on pages 2–3, then edit page 1 (RAN)     | Page 4 does **not** follow; the run ends at page 2.                                                                                                | Holds                                                    |
+| 1c  | A marcher standing still for 41 pages, then edit page 1 (RAN)                            | All 41 pages move.                                                                                                                                 | Right by the rule, but invisible without a toast         |
+| 1d  | **Merge leak** (RAN): p2=200, p4=400; edit p2 to 400 (arrive early); then edit p2 to 250 | M1-lite: p3, p4 and p5 all become 250, so **page 4's deliberate 400 is lost**. M1: page 4 stays defined.                                           | **Breaks M1-lite.** Mitigation: toast plus one-step undo |
 
 ## Precision (RAN)
 
@@ -61,12 +61,12 @@ Adversarial validator, 2026-10-08. It worked on a scratch copy at a4d42cd1 and p
 
 200 marchers × 100 pages, all 200 edited on page 2, with 97 pages followed:
 
-| Measure                          | Tracking off | M1-lite                    |
-| -------------------------------- | ------------ | -------------------------- |
-| `history_undo` rows              | 200          | **19,600** (~11 MB)        |
-| Edit                             | 168 ms       | 2,242 ms (naive prototype) |
-| Undo, including the focus pass   | 68 ms        | **5,592 ms**               |
-| Redo                             | 17 ms        | 1,177 ms                   |
+| Measure                        | Tracking off | M1-lite                    |
+| ------------------------------ | ------------ | -------------------------- |
+| `history_undo` rows            | 200          | **19,600** (~11 MB)        |
+| Edit                           | 168 ms       | 2,242 ms (naive prototype) |
+| Undo, including the focus pass | 68 ms        | **5,592 ms**               |
+| Redo                           | 17 ms        | 1,177 ms                   |
 
 - These are test-environment numbers; over IPC they are probably worse.
 - **Undo focus (correcting 04):**
