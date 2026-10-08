@@ -30,7 +30,58 @@ import {
     type PerformerBody,
     type UniformLook,
 } from "@/view3d/core/marchers/looks";
+import { FIELD_SURFACE_Y } from "@/view3d/core/field";
 import type { LoadedBody } from "./marcherAssets";
+
+/**
+ * Contact shadow under each marcher: a soft dark disc on the turf, in place
+ * of real shadows (the instanced skinning has no depth pass yet).
+ */
+export const CONTACT_RADIUS = 0.38;
+export const CONTACT_OPACITY = 0.35;
+const CONTACT_Y = FIELD_SURFACE_Y + 0.005;
+
+/** A radial falloff, opaque at the center: the contact disc's alpha. */
+function contactAlpha(size = 64): THREE.DataTexture {
+    const data = new Uint8Array(size * size * 4);
+    for (let y = 0; y < size; y++)
+        for (let x = 0; x < size; x++) {
+            const r =
+                Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2) / (size / 2);
+            const a = Math.max(0, 1 - r);
+            const v = Math.round(255 * a * a * (3 - 2 * a));
+            const o = (y * size + x) * 4;
+            data[o] = data[o + 1] = data[o + 2] = v;
+            data[o + 3] = 255;
+        }
+    const t = new THREE.DataTexture(data, size, size);
+    t.needsUpdate = true;
+    return t;
+}
+
+/** One contact disc per marcher, at the feet. */
+function createContactMesh(n: number): THREE.InstancedMesh {
+    const disc = new THREE.CircleGeometry(CONTACT_RADIUS, 24);
+    disc.rotateX(-Math.PI / 2);
+    const mesh = new THREE.InstancedMesh(
+        disc,
+        new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            alphaMap: contactAlpha(),
+            transparent: true,
+            opacity: CONTACT_OPACITY,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -1,
+        }),
+        n,
+    );
+    mesh.name = "view3d-marcher-contact";
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    return mesh;
+}
 
 /** One marcher's instance: which body it wears and in which uniform. */
 export interface MarcherSlotLook {
@@ -62,6 +113,7 @@ export class MarcherBodies {
     private readonly entries: MeshEntry[] = [];
     private readonly materials: THREE.Material[] = [];
     private readonly blockSource: THREE.BufferGeometry | null = null;
+    private readonly contact: THREE.InstancedMesh;
     /** Mesh entry and instance index per slot. */
     private readonly meshOf: Int32Array;
     private readonly instanceOf: Int32Array;
@@ -78,6 +130,9 @@ export class MarcherBodies {
         this.meshOf = new Int32Array(looks.length).fill(-1);
         this.instanceOf = new Int32Array(looks.length);
         this.scaleOf = new Float32Array(looks.length);
+
+        this.contact = createContactMesh(looks.length);
+        this.group.add(this.contact);
 
         if (quality === "low") {
             const anyBody = bodies.values().next().value!;
@@ -189,6 +244,21 @@ export class MarcherBodies {
             }
             mesh.instanceMatrix.needsUpdate = true;
         }
+        const discs = this.contact.instanceMatrix.array as Float32Array;
+        for (let i = 0; i < placed.length; i++) {
+            const o = i * 16;
+            discs.fill(0, o, o + 16);
+            if (!placed[i]) continue;
+            const s = this.scaleOf[i];
+            discs[o] = s;
+            discs[o + 5] = 1;
+            discs[o + 10] = s;
+            discs[o + 12] = xz[i * 2];
+            discs[o + 13] = CONTACT_Y;
+            discs[o + 14] = xz[i * 2 + 1];
+            discs[o + 15] = 1;
+        }
+        this.contact.instanceMatrix.needsUpdate = true;
         for (const m of this.materials)
             (
                 m.userData.uniforms as { uCount: { value: number } }
@@ -202,6 +272,11 @@ export class MarcherBodies {
         }
         for (const m of this.materials) m.dispose();
         this.blockSource?.dispose();
+        this.contact.geometry.dispose();
+        const cm = this.contact.material as THREE.MeshBasicMaterial;
+        cm.alphaMap?.dispose();
+        cm.dispose();
+        this.contact.dispose();
         this.entries.length = 0;
         this.group.clear();
     }

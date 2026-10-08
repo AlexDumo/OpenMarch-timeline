@@ -13,6 +13,7 @@
  * Pure: no three.js, React or database.
  */
 import type { RgbaColor } from "@openmarch/core";
+import { FAMILIES, getSectionObjectByName } from "@/global/classes/Sections";
 
 /** om-pose's seven body types (`assets/body-v4u/<type>.glb`). */
 export const BODY_TYPES = [
@@ -100,6 +101,11 @@ export function instrumentForSection(section: string): Instrument {
     return "none";
 }
 
+/** Color guard sections (the "Guard" family: color guard, rifle, flag, dancer, twirler). */
+export function isGuard(section: string): boolean {
+    return getSectionObjectByName(section.trim()).family === FAMILIES.Guard;
+}
+
 /** A uniform: `createUniformMaterial`'s input. Colors are sRGB numbers. */
 export interface UniformLook {
     style: "classic" | "sash" | "plastron" | "military" | "split" | "fade";
@@ -115,7 +121,7 @@ export interface UniformLook {
         plume: number;
         visor: number;
     };
-    options: { hatType: "shako"; instrument: Instrument };
+    options: { hat: boolean; hatType: "shako"; instrument: Instrument };
 }
 
 /** Used when a section has no fill color: om-pose's "Royal" blue. */
@@ -124,7 +130,10 @@ export const DEFAULT_PRIMARY = 0x2d4f9e;
 const WHITE = 0xf2f2ee;
 const GOLD = 0xd8b04a;
 const BLACK = 0x111114;
-const NAVY = 0x1c1f2b;
+/** Darker than the pants, so the feet still separate from the legs. */
+const SHOE_BLACK = 0x0b0b0d;
+/** Lifted from om-pose's 0x1c1f2b, which renders as black legs. */
+const NAVY = 0x2b3150;
 
 const rgbToNumber = (c: RgbaColor) =>
     ((Math.round(c.r) & 255) << 16) |
@@ -133,7 +142,8 @@ const rgbToNumber = (c: RgbaColor) =>
 
 /**
  * A section's uniform: om-pose's classic style with the section's fill as
- * the jacket and hat, white and gold trim, dark pants.
+ * the jacket and hat, white and gold trim, navy pants. Guard sections go
+ * without the shako.
  */
 export function sectionUniform(
     section: string,
@@ -148,13 +158,15 @@ export function sectionUniform(
             accent: WHITE,
             trim: GOLD,
             pants: NAVY,
-            shoes: BLACK,
+            shoes: SHOE_BLACK,
             gloves: WHITE,
             hat: primary,
             plume: WHITE,
             visor: BLACK,
         },
         options: {
+            // guard doesn't wear a shako
+            hat: !isGuard(section),
             hatType: "shako",
             instrument: instrumentForSection(section),
         },

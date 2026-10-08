@@ -109,20 +109,33 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
     );
-    const marcherLooks = useMemo<MarcherSlotLook[] | null>(() => {
+    // Keyed on what a look depends on (marcher IDs, sections, section fills),
+    // not on the timelines: a drill edit must not rebuild every mesh.
+    const looksKey = useMemo(() => {
         if (!marchers || !sectionAppearances) return null;
         const sectionById = new Map(marchers.map((m) => [m.id, m.section]));
         const fillBySection = new Map(
             sectionAppearances.map((a) => [a.section, a.fill_color]),
         );
-        return slots.ids.map((id) => {
-            const section = sectionById.get(id) ?? "";
-            return {
-                body: defaultPerformerBody(id),
-                uniform: sectionUniform(section, fillBySection.get(section)),
-            };
-        });
-    }, [marchers, sectionAppearances, slots]);
+        return JSON.stringify(
+            slots.ids.map((id) => {
+                const section = sectionById.get(id) ?? "";
+                return [id, section, fillBySection.get(section) ?? null];
+            }),
+        );
+    }, [marchers, sectionAppearances, slots.ids]);
+    const marcherLooks = useMemo<MarcherSlotLook[] | null>(() => {
+        if (!looksKey) return null;
+        const rows = JSON.parse(looksKey) as [
+            number,
+            string,
+            Parameters<typeof sectionUniform>[1],
+        ][];
+        return rows.map(([id, section, fill]) => ({
+            body: defaultPerformerBody(id),
+            uniform: sectionUniform(section, fill),
+        }));
+    }, [looksKey]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
@@ -206,6 +219,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             ringMaterial: new MeshBasicMaterial({
                 color: new Color(readAccentColor()),
                 side: DoubleSide,
+                transparent: true,
+                opacity: 0.85,
                 depthWrite: false,
                 polygonOffset: true,
                 polygonOffsetFactor: -2,

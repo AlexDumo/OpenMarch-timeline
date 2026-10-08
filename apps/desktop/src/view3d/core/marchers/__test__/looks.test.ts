@@ -75,6 +75,13 @@ describe("performer bodies", () => {
 });
 
 describe("section uniforms", () => {
+    it("leaves the shako off the guard sections only", () => {
+        for (const g of ["Color Guard", "Rifle", "Flag", "Dancer", "Twirler"])
+            expect(sectionUniform(g, null).options.hat).toBe(false);
+        for (const b of ["Trumpet", "Snare", "Flute", "Drum Major", "Unknown"])
+            expect(sectionUniform(b, null).options.hat).toBe(true);
+    });
+
     it("gives brass sections the instrument om-pose models", () => {
         expect(instrumentForSection("Trumpet")).toBe("trumpet");
         expect(instrumentForSection("Mellophone")).toBe("mellophone");

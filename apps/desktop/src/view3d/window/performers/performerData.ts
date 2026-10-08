@@ -19,9 +19,12 @@ import { positionAtInto } from "@/view3d/positions";
 export const PERFORMER_RADIUS = 0.3;
 /** Cylinder height in meters. */
 export const PERFORMER_HEIGHT = 1.75;
-/** The selection ring's inner and outer radius, in meters. */
-export const RING_INNER_RADIUS = 0.45;
-export const RING_OUTER_RADIUS = 0.95;
+/**
+ * The selection ring's inner and outer radius, in meters: one ring per
+ * performer even in a block at two-step (1.14 m) intervals.
+ */
+export const RING_INNER_RADIUS = 0.34;
+export const RING_OUTER_RADIUS = 0.46;
 /** Just above the field surface, so the ring doesn't z-fight with it. */
 export const RING_Y = FIELD_SURFACE_Y + 0.01;
 /** The accent when the page has no `--color-accent` (dark theme value). */
