@@ -1,3 +1,5 @@
+<!-- cspell:disable -->
+
 # M3: tracking with pins (modeled on ETC Eos)
 
 Read-only research on `/home/alex/GitHub/OpenMarch-defined-coords` (a4d42cd1), 2026-10-08. Paths are
@@ -7,7 +9,7 @@ relative to `apps/desktop/` unless they start with `docs/` or `packages/`.
 
 - **M3 = M2 + three pieces of designer intent, almost all expressible with today's rows.**
   Timeline mode: no row = inherited hold (R-6, already true at `packages/core/src/timeline/resolver.ts:495`).
-  A stored row ending at a flag = *defined*. A defined row whose destination equals where the
+  A stored row ending at a flag = _defined_. A defined row whose destination equals where the
   marcher would be by inheritance = a **pin** (Eos block). A pin is an ordinary one-slot shapeless
   `direct` row — the same shape today's automatic stays have. What changes is **who writes it**:
   only the designer (Pin, This page only, Set to previous/next, cue-only delete), never the app.
@@ -15,7 +17,7 @@ relative to `apps/desktop/` unless they start with `docs/` or `packages/`.
   origin at the flag, like Eos showing a value equal to the tracked one as a block). File stays at
   user version 8 (no release reads 8 yet; `fileVersion.ts:23-25`).
 - **Page mode bridge: track by exact equality, no schema change** (not M1's flag). An edit on page N
-  also rewrites the unbroken run of later rows that are bit-equal to page N's *old* value, per
+  also rewrites the unbroken run of later rows that are bit-equal to page N's _old_ value, per
   marcher, stopping at a shape membership. "This page only" is an undo-style toast action. Same
   rule as the converter uses, so page mode and timeline mode agree before and after the Phase 9 flip.
 - **Why automatic holds existed** (§2): page-mode parity plus P7.2's editor, which could only edit a
@@ -30,12 +32,12 @@ relative to `apps/desktop/` unless they start with `docs/` or `packages/`.
 
 ### Timeline mode (the model)
 
-| | Stored | Derived |
-|---|---|---|
-| Defined at flag F for marcher m | a winning assignment row of m whose span ends at F (any transition, any layer) | — |
-| Inherited at F | nothing | position = R-6 hold at the end of m's previous span (or home) |
-| Pinned at F | a defined row (normally one-slot shapeless direct over F's page box) | "pin" = destination == m's inherited position at the row's start, exactly; drawn as a pin, not a move |
-| Pin that upstream edits made non-zero | the same row | drawn as a move with a "pinned" note only if we add the deferred `intent` column (§4) |
+|                                       | Stored                                                                         | Derived                                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Defined at flag F for marcher m       | a winning assignment row of m whose span ends at F (any transition, any layer) | —                                                                                                     |
+| Inherited at F                        | nothing                                                                        | position = R-6 hold at the end of m's previous span (or home)                                         |
+| Pinned at F                           | a defined row (normally one-slot shapeless direct over F's page box)           | "pin" = destination == m's inherited position at the row's start, exactly; drawn as a pin, not a move |
+| Pin that upstream edits made non-zero | the same row                                                                   | drawn as a move with a "pinned" note only if we add the deferred `intent` column (§4)                 |
 
 Rules: (T1) the app never writes a row the designer didn't ask for (removes the five writers in
 `01-current-model.md`); (T2) an edit at F writes rows only for moved marchers, so later inherited flags
@@ -54,7 +56,7 @@ Storage unchanged (dense `marcher_pages`, `schema.ts:180-233`). Derived "inherit
   holding transition is what 'move the marchers on the new page' edits (D-16, P7.2)."
 - P7.2's `moveMarchersOnPage` refused any marcher "with no move ending at the page's end beat"
   (`docs/timeline/phases/07-page-parity.md:439`; structural moves deferred to P8.9, line 517). So a
-  new page without holds was *uneditable* in timeline mode; the holds made it editable.
+  new page without holds was _uneditable_ in timeline mode; the holds made it editable.
 - That reason is gone: UI-10 "Dragging adds" creates the window's timeline and transitions on drag
   (`docs/timeline/ui.md:294-305`; `moveMarchersInRangeInTransaction`, `src/db-functions/timelineMoves.ts:560-628`).
   The UI-9 **+** flag already writes no timeline rows (`src/db-functions/pageFlags.ts:20-31`), as C-12 says.
@@ -66,59 +68,59 @@ Storage unchanged (dense `marcher_pages`, `schema.ts:180-233`). Derived "inherit
 
 ## 3. Effect table
 
-| Dimension | M3 behavior (proposed default) | Cost / risk | Code that changes |
-|---|---|---|---|
-| Playback / paths | Unchanged: no row = hold (R-6). Pins replay as moves when non-zero. Fewer rows = cheaper resolve. | none | none (`resolver.ts:495`) |
-| Page vs timeline mode | Timeline: sparse + pins. Page: dense + equality tracking (bridge). Same visible semantics except pins. | Page-mode default changes for all users | `src/db-functions/marcherPage.ts:142-205` (opt-in `track`), canvas writers `src/components/canvas/Canvas.tsx:266`, `src/utilities/RegisteredActionsHandler.tsx:714,763` |
-| Insert page: append / middle / split | No rows: new page inherits. **+** already does this; createPages/createLastPage/split stop writing holds. | Tests assume holds | delete `addHoldingMoves` `timelineRipple.ts:517-646`; tests `src/db-functions/__test__/timelineRipple.test.ts` |
-| Delete page flag only (UI-9) | Already look-preserving: motion unchanged, page 2's move becomes an off-flag clip. | none | none (`pageFlags.ts`) |
-| Delete page with beats (ripple) | **Cue-only by default**: before dropping page N's page moves, for each marcher whose page N+1 was inherited, write N's old destination as a definition over N+1 (join N+1's page timeline). Later flags keep their look. Option "Delete and let later pages follow" = today's behavior. | 1.5–2 d; must stay U-3 ordered; N+1 then shows a move a1→a2 | `timelineRipple.ts:330-350` (removed set) + new step after 7 |
-| Delete a defined page between inherited ones | as above: N+1 gets the definition, N+2.. inherit from it | as above | as above |
-| Remove one marcher's move (not a page) | **Track** (later inherited pages revert), toast "Pages 3–4 changed too · Keep their look" (writes the definition on N+1) | owner question Q3 | `removeAssignmentRowsInTransaction`, `src/db-functions/timelineMembership.ts:393+` |
-| Reorder / retime pages, beat insert/delete | Unchanged ripple of existing rows (row edges follow flags/beats). Inherited pages have no rows to move. | none new | `timelineRipple.ts` (minus holds) |
-| Edit earlier page (ripple) | Stops at m's next defined flag (move or pin). Toast: "Moved on pages 2–4; page 5 is defined" + "This page only". | Edits leak far forward unseen (risk 1) | toast in `src/timeline/timelineCoordinateWrites.ts:364+` result handling |
-| "This page only" | Same edit also writes a pin on the next window `[P, min(next flag, m's next row start))` at m's *old* position, only for moved marchers that were inheriting there. Offered as a toast action (applies as its own edit) and a modifier (Alt+drag/nudge) in the same edit. | Name clashes with UI-10's **Only change Page N** (`timelineMoves.ts:637`); rename to "Keep later pages" | new option on `moveMarchersInRangeInTransaction` `timelineMoves.ts:560` |
-| Pin / Hold here, Unpin | Context menu on selected marchers at P: Pin writes a zero-motion row over the page box ending at P (via the same range write, destination = current position). Unpin deletes m's rows ending at P in that window. Pin on an already defined marcher = no-op. | over-pinning recreates the bug (risk 2) | `timelineMoves.ts:560` (reuse), `timelineMembership.ts:393` |
-| Partial edits | Per marcher by construction (S3). | none | none |
-| Moved back to exactly inherited position | Not defined → no row written (stays inherited, Eos records no move for a tracked value). Already defined → row kept, now shown as pin. | exact compare only | `moveMarchersInTimelineInTransaction` `timelineMoves.ts:403+` |
-| Undo / redo | Every variant is one `transactionWithHistory` edit (tracked page-mode rows, pins, cue-only delete). No new tables, so no history trigger changes. Toast actions are their own edits. | none | — |
-| Appearances | Already tracking: `tag_appearances`/section appearances apply "on a page and onward" (`schema.ts:350-367`) = Eos model; timeline shows last flag crossed (owner, 2026-10-06). Same latent bug on page delete: `start_page_id` cascades (TODO at `schema.ts:360`); cue-only delete should move them to N+1 too. | small follow-up | `schema.ts:358-361` FK + page delete |
-| 3D view | Reads resolved positions; no change. Can draw pins later. | none | none |
-| Exports (PDF sheets, page positions, video, dots-to-om) | Timeline mode samples the resolver at flags (`src/timeline/timelinePagePositions.ts:56`); page mode reads dense rows. No change. | none | none |
-| .dots format / migration | No schema change in either mode. v8 stays (unreleased). Dev v8 files with automatic stays: re-convert by hand (precedent: ADR 0001 C-11 "converted again by hand") or a dev console "remove automatic holds" that deletes zero-motion page-box rows. Intent can't be recovered. | dev files only | `src/timeline/convert/planPageConversion.ts:425-435` |
-| Older releases / legacy readers | Page mode tracked rows are plain rows; old releases read and edit them (without tracking). Timeline tables invisible to old releases (ADR §6). | none new | — |
-| Copy tools | Set to previous page (timeline) = **Unpin** for that page (inherit) if m's row lies inside the window, else pin at previous position. Set to next = absolute pin-like copy (as today). Page mode: these are edits, so they track by equality too. | changes set-to-previous semantics slightly | `timelineCoordinateWrites.ts:305-332`, `src/utilities/setMarchersToNeighborPage.ts:105-127` |
-| Shapes / curved SVG shapes | Page mode: equality tracking **stops at a page where m is in a shape** (shape_page_marchers), so shapes never diverge from their marchers; shape writes (`shapePages.ts:156`) don't track. Timeline shape-backed rows are definitions. | page shapes need the extra stop | `marcherPage.ts:142` track option |
-| New marchers mid-show | Home only, no rows: holds at home everywhere (inherited). Page mode keeps creating rows (identical, so they track). | none | drop join `marcher.ts:225-229`, `timelineMarchers.ts:100-172` |
-| Converter (page→timeline) | A marcher whose page N row equals its page N-1 row gets no slot; pages with no movers already skip ("no-marchers"). Deliberate stays become inherited; loss report counts them and offers "Pin these stays". | changes `test:timeline` fixtures | `planPageConversion.ts:410-435` |
-| Mental model / UI | Three states, only for selected marchers (UI-12 calm): defined (solid dot, key mark on the flag), inherited (hollow/dimmed, hold bar), pinned (pin glyph). Inspector: "Defined on page 2" with jump (Eos About). | 3–5 d; most visible cost | canvas `src/timeline/useTimelineStaticRender.ts`, strip `useTimelineTracks.ts`, `src/timeline/timelineInspector.ts` |
+| Dimension                                               | M3 behavior (proposed default)                                                                                                                                                                                                                                                                                 | Cost / risk                                                                                             | Code that changes                                                                                                                                                       |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Playback / paths                                        | Unchanged: no row = hold (R-6). Pins replay as moves when non-zero. Fewer rows = cheaper resolve.                                                                                                                                                                                                              | none                                                                                                    | none (`resolver.ts:495`)                                                                                                                                                |
+| Page vs timeline mode                                   | Timeline: sparse + pins. Page: dense + equality tracking (bridge). Same visible semantics except pins.                                                                                                                                                                                                         | Page-mode default changes for all users                                                                 | `src/db-functions/marcherPage.ts:142-205` (opt-in `track`), canvas writers `src/components/canvas/Canvas.tsx:266`, `src/utilities/RegisteredActionsHandler.tsx:714,763` |
+| Insert page: append / middle / split                    | No rows: new page inherits. **+** already does this; createPages/createLastPage/split stop writing holds.                                                                                                                                                                                                      | Tests assume holds                                                                                      | delete `addHoldingMoves` `timelineRipple.ts:517-646`; tests `src/db-functions/__test__/timelineRipple.test.ts`                                                          |
+| Delete page flag only (UI-9)                            | Already look-preserving: motion unchanged, page 2's move becomes an off-flag clip.                                                                                                                                                                                                                             | none                                                                                                    | none (`pageFlags.ts`)                                                                                                                                                   |
+| Delete page with beats (ripple)                         | **Cue-only by default**: before dropping page N's page moves, for each marcher whose page N+1 was inherited, write N's old destination as a definition over N+1 (join N+1's page timeline). Later flags keep their look. Option "Delete and let later pages follow" = today's behavior.                        | 1.5–2 d; must stay U-3 ordered; N+1 then shows a move a1→a2                                             | `timelineRipple.ts:330-350` (removed set) + new step after 7                                                                                                            |
+| Delete a defined page between inherited ones            | as above: N+1 gets the definition, N+2.. inherit from it                                                                                                                                                                                                                                                       | as above                                                                                                | as above                                                                                                                                                                |
+| Remove one marcher's move (not a page)                  | **Track** (later inherited pages revert), toast "Pages 3–4 changed too · Keep their look" (writes the definition on N+1)                                                                                                                                                                                       | owner question Q3                                                                                       | `removeAssignmentRowsInTransaction`, `src/db-functions/timelineMembership.ts:393+`                                                                                      |
+| Reorder / retime pages, beat insert/delete              | Unchanged ripple of existing rows (row edges follow flags/beats). Inherited pages have no rows to move.                                                                                                                                                                                                        | none new                                                                                                | `timelineRipple.ts` (minus holds)                                                                                                                                       |
+| Edit earlier page (ripple)                              | Stops at m's next defined flag (move or pin). Toast: "Moved on pages 2–4; page 5 is defined" + "This page only".                                                                                                                                                                                               | Edits leak far forward unseen (risk 1)                                                                  | toast in `src/timeline/timelineCoordinateWrites.ts:364+` result handling                                                                                                |
+| "This page only"                                        | Same edit also writes a pin on the next window `[P, min(next flag, m's next row start))` at m's _old_ position, only for moved marchers that were inheriting there. Offered as a toast action (applies as its own edit) and a modifier (Alt+drag/nudge) in the same edit.                                      | Name clashes with UI-10's **Only change Page N** (`timelineMoves.ts:637`); rename to "Keep later pages" | new option on `moveMarchersInRangeInTransaction` `timelineMoves.ts:560`                                                                                                 |
+| Pin / Hold here, Unpin                                  | Context menu on selected marchers at P: Pin writes a zero-motion row over the page box ending at P (via the same range write, destination = current position). Unpin deletes m's rows ending at P in that window. Pin on an already defined marcher = no-op.                                                   | over-pinning recreates the bug (risk 2)                                                                 | `timelineMoves.ts:560` (reuse), `timelineMembership.ts:393`                                                                                                             |
+| Partial edits                                           | Per marcher by construction (S3).                                                                                                                                                                                                                                                                              | none                                                                                                    | none                                                                                                                                                                    |
+| Moved back to exactly inherited position                | Not defined → no row written (stays inherited, Eos records no move for a tracked value). Already defined → row kept, now shown as pin.                                                                                                                                                                         | exact compare only                                                                                      | `moveMarchersInTimelineInTransaction` `timelineMoves.ts:403+`                                                                                                           |
+| Undo / redo                                             | Every variant is one `transactionWithHistory` edit (tracked page-mode rows, pins, cue-only delete). No new tables, so no history trigger changes. Toast actions are their own edits.                                                                                                                           | none                                                                                                    | —                                                                                                                                                                       |
+| Appearances                                             | Already tracking: `tag_appearances`/section appearances apply "on a page and onward" (`schema.ts:350-367`) = Eos model; timeline shows last flag crossed (owner, 2026-10-06). Same latent bug on page delete: `start_page_id` cascades (TODO at `schema.ts:360`); cue-only delete should move them to N+1 too. | small follow-up                                                                                         | `schema.ts:358-361` FK + page delete                                                                                                                                    |
+| 3D view                                                 | Reads resolved positions; no change. Can draw pins later.                                                                                                                                                                                                                                                      | none                                                                                                    | none                                                                                                                                                                    |
+| Exports (PDF sheets, page positions, video, dots-to-om) | Timeline mode samples the resolver at flags (`src/timeline/timelinePagePositions.ts:56`); page mode reads dense rows. No change.                                                                                                                                                                               | none                                                                                                    | none                                                                                                                                                                    |
+| .dots format / migration                                | No schema change in either mode. v8 stays (unreleased). Dev v8 files with automatic stays: re-convert by hand (precedent: ADR 0001 C-11 "converted again by hand") or a dev console "remove automatic holds" that deletes zero-motion page-box rows. Intent can't be recovered.                                | dev files only                                                                                          | `src/timeline/convert/planPageConversion.ts:425-435`                                                                                                                    |
+| Older releases / legacy readers                         | Page mode tracked rows are plain rows; old releases read and edit them (without tracking). Timeline tables invisible to old releases (ADR §6).                                                                                                                                                                 | none new                                                                                                | —                                                                                                                                                                       |
+| Copy tools                                              | Set to previous page (timeline) = **Unpin** for that page (inherit) if m's row lies inside the window, else pin at previous position. Set to next = absolute pin-like copy (as today). Page mode: these are edits, so they track by equality too.                                                              | changes set-to-previous semantics slightly                                                              | `timelineCoordinateWrites.ts:305-332`, `src/utilities/setMarchersToNeighborPage.ts:105-127`                                                                             |
+| Shapes / curved SVG shapes                              | Page mode: equality tracking **stops at a page where m is in a shape** (shape_page_marchers), so shapes never diverge from their marchers; shape writes (`shapePages.ts:156`) don't track. Timeline shape-backed rows are definitions.                                                                         | page shapes need the extra stop                                                                         | `marcherPage.ts:142` track option                                                                                                                                       |
+| New marchers mid-show                                   | Home only, no rows: holds at home everywhere (inherited). Page mode keeps creating rows (identical, so they track).                                                                                                                                                                                            | none                                                                                                    | drop join `marcher.ts:225-229`, `timelineMarchers.ts:100-172`                                                                                                           |
+| Converter (page→timeline)                               | A marcher whose page N row equals its page N-1 row gets no slot; pages with no movers already skip ("no-marchers"). Deliberate stays become inherited; loss report counts them and offers "Pin these stays".                                                                                                   | changes `test:timeline` fixtures                                                                        | `planPageConversion.ts:410-435`                                                                                                                                         |
+| Mental model / UI                                       | Three states, only for selected marchers (UI-12 calm): defined (solid dot, key mark on the flag), inherited (hollow/dimmed, hold bar), pinned (pin glyph). Inspector: "Defined on page 2" with jump (Eos About).                                                                                               | 3–5 d; most visible cost                                                                                | canvas `src/timeline/useTimelineStaticRender.ts`, strip `useTimelineTracks.ts`, `src/timeline/timelineInspector.ts`                                                     |
 
 ## 4. Scenario walkthroughs (pages 1–5, marchers A, B; positions at each flag)
 
 Start for all: page 1 A=a1, B=b1 (defined).
 
 **S1 owner's scenario.** Add pages 2–4: no rows; 2,3,4 show a1/b1 (inherited, hollow). Edit page 2 to
-a2/b2: rows on page 2 only. Page 3, 4 = a2/b2 (inherited). Toast "Moved on pages 2–4". *Page mode:*
-rows 3,4 equal old a1 → rewritten to a2; same view. *Today:* page 3 = a1 (bug).
+a2/b2: rows on page 2 only. Page 3, 4 = a2/b2 (inherited). Toast "Moved on pages 2–4". _Page mode:_
+rows 3,4 equal old a1 → rewritten to a2; same view. _Today:_ page 3 = a1 (bug).
 
 **S2.** Edit page 4 to a4/b4: defined on 4; 5 inherits a4. Re-edit page 2 to a2': page 3 follows
 (a2', inherited); page 4 stays a4 (defined; A now moves a2'→a4 on page 4); toast "page 4 is defined".
-*Page mode:* row 3 equals old a2 → a2'; row 4 = a4 ≠ a2 → stop. Same.
+_Page mode:_ row 3 equals old a2 → a2'; row 4 = a4 ≠ a2 → stop. Same.
 
 **S3 only A on page 2.** A defined on 2; B inherited on 2–5. Page 3: A=a2, B=b1. Key mark on page 2
 for A only.
 
 **S4 delete page 2 after S1.** Flag delete: motion unchanged; old page 3 (now 2) shows a2; page-2
 move is an off-flag clip. Delete with beats: cue-only → page 3 gets a definition a1→a2 over its beats;
-page 4 inherits a2. M2 would snap pages 3–4 back to a1. *Page mode:* dense, page 3 keeps a2.
+page 4 inherits a2. M2 would snap pages 3–4 back to a1. _Page mode:_ dense, page 3 keeps a2.
 
 **S5 insert between 2 and 3 after S1.** New page inherits a2; nothing else changes (no holds).
-*Page mode:* copy of page 2 (a2) → part of the equal run; a later page-2 edit tracks through it.
+_Page mode:_ copy of page 2 (a2) → part of the equal run; a later page-2 edit tracks through it.
 
 **S6 deliberate stay on 3, then edit 2.** Designer selects A,B at page 3, **Pin** → zero-motion rows
 on 3 (pin glyph). Edit page 2 to a2: page 3 pinned → A moves a2→a1 on page 3; page 4 inherits a1;
 toast "Stopped at page 3 (pinned)". Without pinning first: edit page 2 with "Keep later pages" → same
-rows. *M2:* no way to express it; page 3 follows. *Page mode bridge:* page 3 equals old value, so it
+rows. _M2:_ no way to express it; page 3 follows. _Page mode bridge:_ page 3 equals old value, so it
 tracks; designer must use the toast action (pins don't exist in page mode).
 
 **S7 undo the page-2 edit.** One step: page-2 rows (and any pins written with it, or tracked page-mode
@@ -141,7 +143,7 @@ Report: "2 stays now follow earlier pages · Pin them".
   is edited later, an absolute pin keeps the stale old spot; a link to the defining move's
   destination D(H, i) would follow page 1 and make page 2 a true detour — the ownership "exit then
   linked return" (README §Confirmed) with a hold as host. Obstacles: 05 L-2 refuses `j = H.end`
-  (`05-link-semantics.md:83,182`, open Q4), and this link points *back* (H.end < T.end), outside
+  (`05-link-semantics.md:83,182`, open Q4), and this link points _back_ (H.end < T.end), outside
   05's increasing-end chain proof; it needs its own acyclicity rule (forbid D(H) chains that reach T).
 - **Recommendation:** absolute in v1 (no schema). When `timeline_links` (08 §2.2) lands, add an
   optional "return" link flavour for "Keep later pages", decided with 05 Q4. Pins never need links.
@@ -151,14 +153,14 @@ Report: "2 stays now follow earlier pages · Pin them".
 
 ## 6. Compared with M2 and M1
 
-| | M1 (touched flag) | M2 (sparse) | M3 (this) |
-|---|---|---|---|
-| Owner's bug fixed | page mode yes; timeline needs M2 anyway | timeline yes; page mode no | both (page mode by equality) |
-| Deliberate stay survives upstream edit | only via "touched" on an unmoved page (needs a command) | no | yes (Pin) |
-| Delete keeps later look | dense: yes | no (snap back on beat delete) | yes (cue-only) |
-| Schema | column on a table frozen Phase 9, dropped Phase 10; history triggers recreated; converter must read it | none | none (v1) |
-| UI | touched marker | defined/inherited markers | + pin glyph, Pin/Unpin, Keep later pages, delete option |
-| Days | ~4–6 | ~3–5 core + 3–5 UI | ~15–21 total |
+|                                        | M1 (touched flag)                                                                                      | M2 (sparse)                   | M3 (this)                                               |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------- |
+| Owner's bug fixed                      | page mode yes; timeline needs M2 anyway                                                                | timeline yes; page mode no    | both (page mode by equality)                            |
+| Deliberate stay survives upstream edit | only via "touched" on an unmoved page (needs a command)                                                | no                            | yes (Pin)                                               |
+| Delete keeps later look                | dense: yes                                                                                             | no (snap back on beat delete) | yes (cue-only)                                          |
+| Schema                                 | column on a table frozen Phase 9, dropped Phase 10; history triggers recreated; converter must read it | none                          | none (v1)                                               |
+| UI                                     | touched marker                                                                                         | defined/inherited markers     | + pin glyph, Pin/Unpin, Keep later pages, delete option |
+| Days                                   | ~4–6                                                                                                   | ~3–5 core + 3–5 UI            | ~15–21 total                                            |
 
 Extra intent buys: S6 and S4 work, and lighting-proven "cue only" escape hatches. Costs: two more
 commands, a modifier, a toast flow and a third visual state. **Deferrable:** live-link returns,

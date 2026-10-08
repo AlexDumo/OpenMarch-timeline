@@ -29,12 +29,12 @@ The three changes:
 - **Sparse: 10 fail, in 4 files.** Every failure asserts the shape of stored rows; none asserts a
   position that changes. All are expected by design:
 
-  | File                          | Tests | Note                                                                                       |
-  | ----------------------------- | ----- | ------------------------------------------------------------------------------------------ |
-  | timelineRipple                | 4     | The split test's page-end positions would still pass; it fails on `ranges`                 |
-  | timelineMarchers              | 3     |                                                                                            |
-  | timelineMembershipAdversarial | 2     |                                                                                            |
-  | planPageConversion            | 1     | A slot equal to home is dropped                                                            |
+  | File                          | Tests | Note                                                                       |
+  | ----------------------------- | ----- | -------------------------------------------------------------------------- |
+  | timelineRipple                | 4     | The split test's page-end positions would still pass; it fails on `ranges` |
+  | timelineMarchers              | 3     |                                                                            |
+  | timelineMembershipAdversarial | 2     |                                                                            |
+  | planPageConversion            | 1     | A slot equal to home is dropped                                            |
 
 - **15 more files that use the changed writers:**
   - p910Adversarial: 3 failures, all row shape. Expected.
@@ -50,12 +50,12 @@ The three changes:
 
 Page 1 move to (50,50), add pages 2–4, then drag page 2 to X = (123,456).
 
-| How pages were added                    | Base p2 / p3 / p4                     | Sparse p2 / p3 / p4             |
-| --------------------------------------- | ------------------------------------- | ------------------------------- |
-| **+** flag                              | X / X / X                             | X / X / X                       |
-| `createLastPage` ×3                     | X / **50 / 50**                       | X / X / X                       |
-| Split ×2                                | X / **50 / 50**                       | X / X / X                       |
-| Page-mode copies, converted, then edit  | X / **old / old** (4 transitions, 304 asg) | X / X / X (1 transition, 76 asg) |
+| How pages were added                   | Base p2 / p3 / p4                          | Sparse p2 / p3 / p4              |
+| -------------------------------------- | ------------------------------------------ | -------------------------------- |
+| **+** flag                             | X / X / X                                  | X / X / X                        |
+| `createLastPage` ×3                    | X / **50 / 50**                            | X / X / X                        |
+| Split ×2                               | X / **50 / 50**                            | X / X / X                        |
+| Page-mode copies, converted, then edit | X / **old / old** (4 transitions, 304 asg) | X / X / X (1 transition, 76 asg) |
 
 ## 3. Page-scoped writers on an inherited page
 
@@ -79,11 +79,11 @@ Page 1 move to (50,50), add pages 2–4, then drag page 2 to X = (123,456).
 
 ## 4. Layers and steals (RAN)
 
-| Case                                    | Base                                                                                  | Sparse                                                                                                          |
-| --------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Window [9,25) over inherited pages 2–3  | `passThrough` overrides both stays; assignment at L1; "Only change Page 3" toast      | `passThrough` null; L0; page 2's flag silently shows mid-glide (86.5,253); **no toast**                          |
-| Window [9,21), ending partway into a page | The stay is caught up; p3 snaps back to (50,50)                                     | Holds at X                                                                                                      |
-| Window [9,25) over a defined p3         | –                                                                                     | Steals only the real move. Correct, with fewer layers.                                                          |
+| Case                                      | Base                                                                             | Sparse                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Window [9,25) over inherited pages 2–3    | `passThrough` overrides both stays; assignment at L1; "Only change Page 3" toast | `passThrough` null; L0; page 2's flag silently shows mid-glide (86.5,253); **no toast** |
+| Window [9,21), ending partway into a page | The stay is caught up; p3 snaps back to (50,50)                                  | Holds at X                                                                              |
+| Window [9,25) over a defined p3           | –                                                                                | Steals only the real move. Correct, with fewer layers.                                  |
 
 - **Default:** show the pass-through toast whenever the window contains a flag, not only when it
   overrides rows.
@@ -93,11 +93,11 @@ Page 1 move to (50,50), add pages 2–4, then drag page 2 to X = (123,456).
 
 ## 5. Page delete (RAN)
 
-| Delete                                                         | Base p3 / p4            | Sparse p3 / p4               |
-| -------------------------------------------------------------- | ----------------------- | ---------------------------- |
-| Ripple `deletePages` (made in timeline mode)                   | 50 / 50 (already stale) | **50 / 50** (was X)          |
-| Yank                                                           | 50 / 50                 | **50** (was X)               |
-| Flag delete                                                    | 50 / 50                 | X / X (kept)                 |
+| Delete                                                          | Base p3 / p4             | Sparse p3 / p4                   |
+| --------------------------------------------------------------- | ------------------------ | -------------------------------- |
+| Ripple `deletePages` (made in timeline mode)                    | 50 / 50 (already stale)  | **50 / 50** (was X)              |
+| Yank                                                            | 50 / 50                  | **50** (was X)                   |
+| Flag delete                                                     | 50 / 50                  | X / X (kept)                     |
 | **Converted show:** p2 = X, p3/p4 copies of X; ripple delete p2 | X / X (page-mode parity) | **page 1's (134.6,320): breaks** |
 
 - `isPageMove` matches a UI-10 drag over exactly a page.

@@ -63,31 +63,31 @@ It happens in both modes, for different reasons.
   - A beat range with no assignment is a hold at the end of the previous span (R-2, R-6;
     `packages/core/src/timeline/resolver.ts:495`).
   - So "page 3 shows page 2" already works when nothing is stored for page 3.
-  - A page is *defined* for a marcher when a winning span ends at its flag, and *inherited* when
+  - A page is _defined_ for a marcher when a winning span ends at its flag, and _inherited_ when
     the marcher holds through it.
 - **The bug comes from stored "stays".** A stay is a shapeless `direct` transition whose
   destination is a frozen copy of where the marcher stood when the row was written. Storage
   can't tell a stay the designer meant from one that was filled in automatically. Writers:
 
-  | Writer                                                                                                              | Where                                                                       | When                                                                                                                         |
-  | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-  | Converter: every page N ≥ 1 becomes a transition, even when its coordinates equal the previous page's               | `src/timeline/convert/planPageConversion.ts:425-435`                        | older files opened with convert-on-open, the dev console `convertPages`, all `test:timeline` fixtures                        |
-  | Page-add ripple `addHoldingMoves`: destination = `positionAt(m, pageStart)`; holds chain onto holds                 | `src/db-functions/timelineRipple.ts:526-646`                                | `createPages`, `createLastPage` (the page-timeline + button while the beat view is focused), Split page                      |
-  | New marchers get a stay to home in every stored timeline                                                            | `src/db-functions/marcher.ts:200-232`, `src/timeline/timelineMarchers.ts:97-100` | adding marchers                                                                                                         |
-  | Set to previous/next page copies resolved positions as fixed destinations                                           | `src/timeline/timelineCoordinateWrites.ts:290-305`                          | Shift(+Ctrl)+P/N                                                                                                             |
-  | Add selected marchers: destination = position at the end of the range (a drag overwrites it for marchers that move) | `src/db-functions/timelineMembership.ts:192-198`                            | UI-9 add                                                                                                                     |
-
+  | Writer                                                                                                              | Where                                                                            | When                                                                                                    |
+  | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+  | Converter: every page N ≥ 1 becomes a transition, even when its coordinates equal the previous page's               | `src/timeline/convert/planPageConversion.ts:425-435`                             | older files opened with convert-on-open, the dev console `convertPages`, all `test:timeline` fixtures   |
+  | Page-add ripple `addHoldingMoves`: destination = `positionAt(m, pageStart)`; holds chain onto holds                 | `src/db-functions/timelineRipple.ts:526-646`                                     | `createPages`, `createLastPage` (the page-timeline + button while the beat view is focused), Split page |
+  | New marchers get a stay to home in every stored timeline                                                            | `src/db-functions/marcher.ts:200-232`, `src/timeline/timelineMarchers.ts:97-100` | adding marchers                                                                                         |
+  | Set to previous/next page copies resolved positions as fixed destinations                                           | `src/timeline/timelineCoordinateWrites.ts:290-305`                               | Shift(+Ctrl)+P/N                                                                                        |
+  | Add selected marchers: destination = position at the end of the range (a drag overwrites it for marchers that move) | `src/db-functions/timelineMembership.ts:192-198`                                 | UI-9 add                                                                                                |
   - The ripple contradicts ADR 0001 C-12 ("adding or deleting a page writes only page rows").
     Only the UI-9 **+** flag and flag delete (`pageFlags.ts:20-31`) honor it.
+
 - **Reproduced [RAN].** Scratch test: flags at 17, 25 and 33, then page 2 edited with a UI-10 drag
   over [9,17) to (123,456).
 
-  | How pages 2–4 were added                     | Page 3 / page 4 after editing page 2                                                                |
-  | -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-  | **+** flags                                  | (123,456) / (123,456): correct                                                                      |
-  | `createLastPage`, no page-1 move             | correct (no holds written)                                                                          |
-  | `createLastPage` after a page-1 move (50,50) | holds [9,17), [17,25) and [25,33) all go to (50,50), so page 3 / page 4 show **(50,50): the bug**   |
-  | page-mode pages ×3, then convert             | four transitions all at page 1's coordinates; **page 3 = page 4 = page 1: the bug**                 |
+  | How pages 2–4 were added                     | Page 3 / page 4 after editing page 2                                                              |
+  | -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+  | **+** flags                                  | (123,456) / (123,456): correct                                                                    |
+  | `createLastPage`, no page-1 move             | correct (no holds written)                                                                        |
+  | `createLastPage` after a page-1 move (50,50) | holds [9,17), [17,25) and [25,33) all go to (50,50), so page 3 / page 4 show **(50,50): the bug** |
+  | page-mode pages ×3, then convert             | four transitions all at page 1's coordinates; **page 3 = page 4 = page 1: the bug**               |
 
 - **Live links and stored ghost starts don't exist in code.** They are only in ownership notes
   05 and 08. A link to "host at beat j" is the general form of "page 3 inherits page 2".
