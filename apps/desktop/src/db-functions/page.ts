@@ -33,6 +33,7 @@ import {
     tempoGroupFromWorkspaceSettings,
 } from "@/components/music/TempoGroup/TempoGroup";
 import { FIRST_PAGE_ID, realDatabasePageToDatabasePage } from "./rowMappers";
+import { moveTagAppearancesOffPagesInTransaction } from "./tagAppearancePageDelete";
 
 export { FIRST_PAGE_ID, realDatabasePageToDatabasePage };
 
@@ -541,6 +542,9 @@ export const deletePagesInTransaction = async ({
         lastPageBeforeDeletion != null,
         "Last page before deletion not found",
     );
+
+    // Before the rows go: their tag appearances would cascade away with them
+    await moveTagAppearancesOffPagesInTransaction({ tx, pageIds });
 
     const deleteMarcherPages = () =>
         tx
