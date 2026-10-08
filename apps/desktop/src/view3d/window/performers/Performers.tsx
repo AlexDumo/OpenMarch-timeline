@@ -36,7 +36,10 @@ import {
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
+import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
+import { buildCountClock, countAt } from "@/view3d/core/marchers/countClock";
+import { plannedClips } from "@/view3d/core/marchers/planner";
 import {
     defaultPerformerBody,
     sectionUniform,
@@ -58,6 +61,7 @@ import {
     writeRingMatrices,
 } from "./performerData";
 import type { MarcherSlotLook } from "./marchers/marcherBodies";
+import { MarcherMotion, planShow } from "./marchers/marcherMotion";
 import {
     clipName,
     useMarcherAssets,
@@ -124,30 +128,56 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         [marcherLooks],
     );
     const marcherAssets = useMarcherAssets(heightClasses);
-    const clipNames = useMemo(
-        () => heightClasses.map((h) => clipName("attention", h)),
-        [heightClasses],
-    );
+    // The count clock and every marcher's clip plan for the whole show.
+    const { beats } = useTimingObjects();
+    const clock = useMemo(() => buildCountClock(beats), [beats]);
+    const showPlans = useMemo(() => {
+        if (!marcherAssets || !marcherLooks) return null;
+        const planned = planShow(
+            slots.timelines,
+            marcherLooks.map((l) => l.body.heightClass),
+            clock,
+            fieldProperties,
+            marcherAssets.manifest,
+            marcherHeading(),
+        );
+        // eslint-disable-next-line no-console -- planning time is a cost to watch at 2,000 marchers
+        console.info(
+            `3D View: planned ${planned.plans.length} marchers over ` +
+                `${clock.counts} counts in ${planned.planMs.toFixed(0)} ms`,
+        );
+        return planned;
+    }, [marcherAssets, marcherLooks, slots, clock, fieldProperties]);
+    const clipNames = useMemo(() => {
+        const names = plannedClips(
+            (showPlans?.plans ?? []).filter((p) => p !== null),
+        );
+        for (const h of heightClasses) names.add(clipName("attention", h));
+        return [...names];
+    }, [showPlans, heightClasses]);
     const marcherBodies = useMarcherBodies(
         marcherAssets,
         clipNames,
         marcherLooks,
         quality,
     );
-    useEffect(() => {
-        if (!marcherBodies || !marcherLooks) return;
-        marcherLooks.forEach((look, i) => {
-            const row =
-                marcherBodies.bake.rows[
-                    clipName("attention", look.body.heightClass)
-                ];
-            marcherBodies.setClip(i, { row });
-        });
-    }, [marcherBodies, marcherLooks]);
+    const motion = useMemo(
+        () =>
+            marcherBodies && showPlans && marcherAssets
+                ? new MarcherMotion(
+                      showPlans.plans,
+                      marcherAssets.manifest,
+                      marcherBodies,
+                      marcherHeading(),
+                  )
+                : null,
+        [marcherBodies, showPlans, marcherAssets],
+    );
     const headings = useMemo(
         () => new Float32Array(count).fill(marcherHeading()),
         [count],
     );
+    const countRef = useRef(0);
 
     // Shared geometry and materials, for the component's lifetime.
     const assets = useMemo(() => {
@@ -249,7 +279,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const dirtyRef = useRef(true);
     useEffect(() => {
         dirtyRef.current = true;
-    }, [meshes, slots, fieldProperties, appearances, marcherBodies]);
+    }, [meshes, slots, fieldProperties, appearances, marcherBodies, motion]);
 
     // Colors and visibility, only when the looks change.
     useEffect(() => {
@@ -307,7 +337,10 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 placed,
             );
             if (marcherBodies) {
-                marcherBodies.writeFrame(xz, headings, placed, 0);
+                const c = countAt(clock, ms, countRef.current);
+                countRef.current = c;
+                motion?.update(c, xz, placed);
+                marcherBodies.writeFrame(xz, headings, placed, c);
             } else {
                 writePerformerMatrices(
                     count,
