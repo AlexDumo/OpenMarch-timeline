@@ -2,11 +2,18 @@ import { and, eq, inArray, lt, gt, notInArray, sql } from "drizzle-orm";
 import { createResolver, validateDestination } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables, shapeFromRow } from "@/timeline/timelineRows";
+import { normalizeMoveName } from "@/timeline/timelineViewModel";
 import { castSlots, transitionSlotPoints } from "@/timeline/timelineCasting";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
-import { createTimelinesInTransaction, findTimelineByRange } from "./timelines";
+import {
+    createTimelinesInTransaction,
+    deleteTimelinesInTransaction,
+    findTimelineByRange,
+    updateTimelinesInTransaction,
+    type DatabaseTimeline,
+} from "./timelines";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitions";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
 
@@ -14,7 +21,7 @@ import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
  * The timeline's commands (docs/timeline/phases/08-authoring-ui.md P8.9, ui.md's mapping table):
  * moving a clip moves its whole spec timeline, and Create Track makes a timeline with one
  * transition and its assignments. Both are one undoable edit, decided before the first write, so
- * a refusal writes nothing.
+ * a refusal writes nothing. A move (a clip's timeline) can be deleted and renamed (ui.md UI-14).
  */
 
 /** The largest beat a row may hold (spec I-N2). */
@@ -470,3 +477,59 @@ export const createTrack = async ({
     await transactionWithHistory(db, "createTrack", (tx) =>
         createTrackInTransaction({ tx, target, startBeat, endBeat }),
     );
+
+// ---------------------------------------------------------------------------
+// Deleting and renaming a move (ui.md UI-14)
+// ---------------------------------------------------------------------------
+
+/**
+ * Deletes a move (UI-14): the timeline, its transitions and their assignments, as one undoable
+ * edit (`deleteTimelinesInTransaction`, child first). Moves it passed through are stored
+ * underneath it (UI-10) and come back. Refused (E-ARGS) for a timeline that doesn't exist.
+ */
+export const deleteTimeline = async ({
+    db,
+    timelineId,
+}: {
+    db: DbConnection;
+    timelineId: number;
+}): Promise<DatabaseTimeline> =>
+    await transactionWithHistory(db, "deleteTimeline", async (tx) => {
+        const [deleted] = await deleteTimelinesInTransaction({
+            tx,
+            timelineIds: new Set([timelineId]),
+        });
+        if (!deleted) refuse(`timeline ${timelineId} does not exist`);
+        return deleted;
+    });
+
+/**
+ * Renames a move (UI-14) as one undoable edit; `normalizeMoveName` decides what is stored, so an
+ * empty name clears it. A name equal to the stored one opens no edit and returns `null`, since
+ * an edit that writes nothing is refused. Refused (E-ARGS) for a timeline that doesn't exist.
+ */
+export const renameTimeline = async ({
+    db,
+    timelineId,
+    name,
+}: {
+    db: DbConnection;
+    timelineId: number;
+    name: string | null;
+}): Promise<DatabaseTimeline | null> => {
+    const next = normalizeMoveName(name);
+    const stored = await db
+        .select({ name: schema.timelines.name })
+        .from(schema.timelines)
+        .where(eq(schema.timelines.id, timelineId))
+        .get();
+    if (!stored) refuse(`timeline ${timelineId} does not exist`);
+    if (stored.name === next) return null;
+    return await transactionWithHistory(db, "renameTimeline", async (tx) => {
+        const [renamed] = await updateTimelinesInTransaction({
+            tx,
+            modifiedTimelines: [{ id: timelineId, name: next }],
+        });
+        return renamed!;
+    });
+};

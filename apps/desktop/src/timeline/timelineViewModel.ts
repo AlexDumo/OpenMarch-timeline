@@ -264,6 +264,30 @@ export function buildTimelineTracks(
 export const timelineTrackId = (timelineId: number) => `timeline-${timelineId}`;
 
 /**
+ * A move's label (UI-14): its name, or "Timeline {id}" when it has none. The clip, the delete
+ * toast and the inspector's Move card all say it this way.
+ */
+export const moveLabel = ({
+    id,
+    name,
+}: {
+    readonly id: number;
+    readonly name?: string | null;
+}): string => name ?? `Timeline ${id}`;
+
+/** The longest name a move keeps (UI-14); a longer one is cut to it. */
+export const MOVE_NAME_MAX_LENGTH = 80;
+
+/**
+ * The name a move's name field stores (UI-14): trimmed and cut to `MOVE_NAME_MAX_LENGTH`; a field
+ * left empty clears the name, so the move shows its default label again.
+ */
+export function normalizeMoveName(name: string | null): string | null {
+    const trimmed = (name ?? "").trim().slice(0, MOVE_NAME_MAX_LENGTH).trim();
+    return trimmed === "" ? null : trimmed;
+}
+
+/**
  * One track per stored timeline (ui.md UI-9 "Tracks"; P8.11), however many transitions it holds,
  * so a group of one-slot transitions is one clip. This supersedes the marcher and shape tracks of
  * `buildTimelineTracks` (UI-3) in timeline mode.
@@ -320,7 +344,7 @@ export function buildTimelineClipTracks(
                 linkId: timeline.id,
                 targetId: timeline.id,
                 targetType: "timeline",
-                label: timeline.name ?? `Timeline ${timeline.id}`,
+                label: moveLabel(timeline),
                 color: TIMELINE_TRACK_COLORS[
                     index % TIMELINE_TRACK_COLORS.length
                 ],
