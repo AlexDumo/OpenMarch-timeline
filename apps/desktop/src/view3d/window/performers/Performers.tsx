@@ -35,6 +35,15 @@ import {
 } from "three";
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
+import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
+import { useTimingObjects } from "@/hooks/useTimingObjects";
+import { marcherHeading } from "@/view3d/core/marchers/facing";
+import { buildCountClock, countAt } from "@/view3d/core/marchers/countClock";
+import { plannedClips } from "@/view3d/core/marchers/planner";
+import {
+    defaultPerformerBody,
+    sectionUniform,
+} from "@/view3d/core/marchers/looks";
 import { usePerformerTimelines } from "@/view3d/positions";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import type { View3dSelection } from "@/view3d/sync/protocol";
@@ -51,6 +60,17 @@ import {
     writePerformerPositions,
     writeRingMatrices,
 } from "./performerData";
+import type { MarcherSlotLook } from "./marchers/marcherBodies";
+import {
+    MarcherMotion,
+    planShow,
+    type ShowPlans,
+} from "./marchers/marcherMotion";
+import {
+    clipName,
+    useMarcherAssets,
+    useMarcherBodies,
+} from "./marchers/useMarcherBodies";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -89,6 +109,99 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     );
     const count = slots.ids.length;
 
+    // om-pose marchers (ADR 0002 D-7); the cylinders stand in until they load.
+    const { data: sectionAppearances } = useQuery(
+        allSectionAppearancesQueryOptions(),
+    );
+    // Keyed on what a look depends on (marcher IDs, sections, section fills),
+    // not on the timelines: a drill edit must not rebuild every mesh.
+    const looksKey = useMemo(() => {
+        if (!marchers || !sectionAppearances) return null;
+        const sectionById = new Map(marchers.map((m) => [m.id, m.section]));
+        const fillBySection = new Map(
+            sectionAppearances.map((a) => [a.section, a.fill_color]),
+        );
+        return JSON.stringify(
+            slots.ids.map((id) => {
+                const section = sectionById.get(id) ?? "";
+                return [id, section, fillBySection.get(section) ?? null];
+            }),
+        );
+    }, [marchers, sectionAppearances, slots.ids]);
+    const marcherLooks = useMemo<MarcherSlotLook[] | null>(() => {
+        if (!looksKey) return null;
+        const rows = JSON.parse(looksKey) as [
+            number,
+            string,
+            Parameters<typeof sectionUniform>[1],
+        ][];
+        return rows.map(([id, section, fill]) => ({
+            // varied heights at high quality; one height (one bake class) at low
+            body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
+            uniform: sectionUniform(section, fill),
+        }));
+    }, [looksKey, quality]);
+    const heightClasses = useMemo(
+        () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
+        [marcherLooks],
+    );
+    const marcherAssets = useMarcherAssets(heightClasses);
+    // The count clock and every marcher's clip plan for the whole show.
+    const { beats } = useTimingObjects();
+    const clock = useMemo(() => buildCountClock(beats), [beats]);
+    const previousPlans = useRef<ShowPlans | null>(null);
+    const showPlans = useMemo(() => {
+        if (!marcherAssets || !marcherLooks) return null;
+        const planned = planShow(
+            slots.ids,
+            slots.timelines,
+            marcherLooks.map((l) => l.body.heightClass),
+            clock,
+            fieldProperties,
+            marcherAssets.manifest,
+            marcherHeading(),
+            previousPlans.current,
+        );
+        previousPlans.current = planned;
+        // eslint-disable-next-line no-console -- planning time is a cost to watch at 2,000 marchers
+        console.info(
+            `3D View: planned ${planned.replanned} of ` +
+                `${planned.plans.length} marchers over ` +
+                `${clock.counts} counts in ${planned.planMs.toFixed(0)} ms`,
+        );
+        return planned;
+    }, [marcherAssets, marcherLooks, slots, clock, fieldProperties]);
+    const clipNames = useMemo(() => {
+        const names = plannedClips(
+            (showPlans?.plans ?? []).filter((p) => p !== null),
+        );
+        for (const h of heightClasses) names.add(clipName("attention", h));
+        return [...names];
+    }, [showPlans, heightClasses]);
+    const marcherBodies = useMarcherBodies(
+        marcherAssets,
+        clipNames,
+        marcherLooks,
+        quality,
+    );
+    const motion = useMemo(
+        () =>
+            marcherBodies && showPlans && marcherAssets
+                ? new MarcherMotion(
+                      showPlans.plans,
+                      marcherAssets.manifest,
+                      marcherBodies,
+                      marcherHeading(),
+                  )
+                : null,
+        [marcherBodies, showPlans, marcherAssets],
+    );
+    const headings = useMemo(
+        () => new Float32Array(count).fill(marcherHeading()),
+        [count],
+    );
+    const countRef = useRef(0);
+
     // Shared geometry and materials, for the component's lifetime.
     const assets = useMemo(() => {
         const body = new CylinderGeometry(
@@ -116,6 +229,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             ringMaterial: new MeshBasicMaterial({
                 color: new Color(readAccentColor()),
                 side: DoubleSide,
+                transparent: true,
+                opacity: 0.85,
                 depthWrite: false,
                 polygonOffset: true,
                 polygonOffsetFactor: -2,
@@ -189,7 +304,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const dirtyRef = useRef(true);
     useEffect(() => {
         dirtyRef.current = true;
-    }, [meshes, slots, fieldProperties, appearances]);
+    }, [meshes, slots, fieldProperties, appearances, marcherBodies, motion]);
 
     // Colors and visibility, only when the looks change.
     useEffect(() => {
@@ -246,13 +361,20 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 xz,
                 placed,
             );
-            writePerformerMatrices(
-                count,
-                xz,
-                placed,
-                bodies.instanceMatrix.array as Float32Array,
-            );
-            bodies.instanceMatrix.needsUpdate = true;
+            if (marcherBodies) {
+                const c = countAt(clock, ms, countRef.current);
+                countRef.current = c;
+                motion?.update(c, xz, placed);
+                marcherBodies.writeFrame(xz, headings, placed, c);
+            } else {
+                writePerformerMatrices(
+                    count,
+                    xz,
+                    placed,
+                    bodies.instanceMatrix.array as Float32Array,
+                );
+                bodies.instanceMatrix.needsUpdate = true;
+            }
         }
         const ringCount = writeRingMatrices(
             slots,
@@ -272,7 +394,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     if (!meshes) return null;
     return (
         <>
-            <primitive object={meshes.bodies} />
+            {marcherBodies ? (
+                <primitive object={marcherBodies.group} />
+            ) : (
+                <primitive object={meshes.bodies} />
+            )}
             <primitive object={meshes.rings} />
         </>
     );

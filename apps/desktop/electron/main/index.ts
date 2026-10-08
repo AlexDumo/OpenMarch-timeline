@@ -135,8 +135,10 @@ process.env.VITE_PUBLIC = process.env.VITE_DEV_SERVER_URL
     ? join(process.env.DIST_ELECTRON, "../public")
     : process.env.DIST;
 
-// Disable GPU Acceleration for Windows 7
-if (release().startsWith("6.1")) app.disableHardwareAcceleration();
+// Disable GPU Acceleration for Windows 7. Only on Windows: elsewhere
+// `release()` is the kernel version, and Linux 6.1x kernels match too.
+if (process.platform === "win32" && release().startsWith("6.1"))
+    app.disableHardwareAcceleration();
 
 // Set application name for Windows 10+ notifications
 if (process.platform === "win32") app.setAppUserModelId(app.getName());

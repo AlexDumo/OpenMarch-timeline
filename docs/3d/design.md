@@ -251,10 +251,28 @@ approved reference, converted to meters (1 ft = 0.3048 m).
   coordinate data in the window and combines it into one `MarcherTimeline` per
   marcher. It also exports `positionAt(timeline, ms) -> {x, z}` in world
   meters, built on `getCoordinatesAtTime` and `pixelsToWorld`.
-- Performers: one `InstancedMesh` of cylinders (radius 0.3 m, height 1.75 m),
-  with per-instance colors resolved like the 2D canvas (`marcherAppearancesQueryOptions` for the selected page; `useMarchersWithVisuals` only returns theme defaults in the window). Selected marchers
-  get an accent ring at their feet. Matrices update in `useFrame` from
-  `showMs()`.
+- Performers (ADR 0002 D-7, amended 2026-10-07): om-pose's animated
+  marchers, drawn by its instanced renderer (vendored in
+  `src/view3d/vendor/om-pose/`) as one `InstancedMesh` per (body type,
+  section uniform), skinned on the GPU from one texture of baked clips.
+  - Looks (`core/marchers/looks.ts`): body type and skin tone by a hash of
+    the marcher; height class 0.95/1.00/1.05 by the same hash at `high`,
+    1.00 at `low`; a classic uniform per section in its 2D fill color, with
+    the section's instrument and no shako for guard. Each mesh draws only the
+    parts its look wears.
+  - Motion (`core/marchers/planner.ts`, `countClock.ts`): per count, not per
+    page. A count with travel steps along that count's vector (family, leg
+    turn and size blend from om-pose's `step-blend.js`); a count without is
+    mark time while the band moves and attention while it holds. Step-offs,
+    loops, halts by parity, change clips (or a cut) between moves, and a
+    landing correction that puts the body on its dot at every rest. The
+    upper body always faces the front sideline.
+  - `low` quality draws om-pose's block bodies with the same clips.
+    Cylinders show only while the assets load.
+  - Selected marchers get an accent ring at their feet, and every marcher a
+    soft contact disc (there is no shadow pass for the instanced skinning).
+  - Assets: `src/view3d/assets/om-pose/` (bodies, one clip pack per height
+    class, manifest), packed by `scripts/view3d-assets/pack-om-pose.mjs`.
 
 ## 9. Budgets
 
