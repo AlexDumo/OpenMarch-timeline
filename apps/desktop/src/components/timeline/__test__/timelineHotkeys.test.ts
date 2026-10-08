@@ -10,8 +10,10 @@ afterEach(() => {
     document.body.innerHTML = "";
 });
 
+/** A key press; letters are pressed where QWERTY has them unless `code` says otherwise */
 const key = (k: string, mods: Partial<KeyboardEvent> = {}) => ({
     key: k,
+    code: /^[a-z]$/i.test(k) ? `Key${k.toUpperCase()}` : k,
     ctrlKey: false,
     metaKey: false,
     altKey: false,
@@ -35,9 +37,29 @@ describe("isTimelineOwnKey", () => {
         expect(isTimelineOwnKey(key("a", { metaKey: true }), inside)).toBe(
             false,
         );
+        // Alt+WASD is a nudge without snapping
+        expect(isTimelineOwnKey(key("w", { altKey: true }), inside)).toBe(true);
         // Elsewhere, the app keeps all of them
         expect(isTimelineOwnKey(key("Enter"), outside)).toBe(false);
         expect(isTimelineOwnKey(key("Enter"), null)).toBe(false);
+    });
+});
+
+describe("isTimelineOwnKey on other keyboard layouts", () => {
+    it("matches WASD by physical key, as the app's nudge does", () => {
+        document.body.innerHTML = `<section data-timeline-own-keys="true"><button id="in">Move 1</button></section>`;
+        const inside = document.getElementById("in");
+        // A French layout: the key where QWERTY has A types "q", and the app nudges left by its code
+        expect(isTimelineOwnKey(key("q", { code: "KeyA" }), inside)).toBe(true);
+        expect(isTimelineOwnKey(key("z", { code: "KeyW" }), inside)).toBe(true);
+        // On a French layout, "a" sits on KeyQ, which nudges nothing
+        expect(isTimelineOwnKey(key("a", { code: "KeyQ" }), inside)).toBe(
+            false,
+        );
+        // Numpad arrows with Num Lock off
+        expect(
+            isTimelineOwnKey(key("ArrowUp", { code: "Numpad8" }), inside),
+        ).toBe(true);
     });
 });
 

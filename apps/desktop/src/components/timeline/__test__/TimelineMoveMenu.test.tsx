@@ -85,16 +85,35 @@ const commands = (
     ...overrides,
 });
 
+/** Another move, over spec beats [9, 13), stored as timeline 8 */
+const otherClip: TimelineInput = {
+    ...clip,
+    id: "timeline-8",
+    linkId: 8,
+    targetId: 8,
+    label: "Diagonal",
+    startBeatIndex: 9,
+    endBeatIndex: 13,
+    legs: [
+        { id: "leg-8", startBeatIndex: 9, endBeatIndex: 13, texture: "move" },
+    ],
+    activitySpans: [{ startBeatIndex: 9, endBeatIndex: 13, active: true }],
+};
+
 const show = ({
     moves = commands(),
     selection = null,
     onDeletePageFlag,
     mode = "expanded",
+    onSelectionChange = vi.fn(),
+    timelines = [clip],
 }: {
     moves?: TimelineMoveCommands;
     selection?: TimelineSelection;
     onDeletePageFlag?: (pageId: number) => void;
     mode?: "expanded" | "collapsed";
+    onSelectionChange?: (selection: TimelineSelection) => void;
+    timelines?: TimelineInput[];
 } = {}) => {
     render(
         <Timeline
@@ -102,11 +121,11 @@ const show = ({
             beats={BEATS}
             pages={PAGES}
             measures={[]}
-            timelines={[clip]}
+            timelines={timelines}
             showTransport={false}
             pixelsPerBeat={16}
             selection={selection}
-            onSelectionChange={vi.fn()}
+            onSelectionChange={onSelectionChange}
             moveCommands={moves}
             onDeletePageFlag={onDeletePageFlag}
         />,
@@ -330,8 +349,23 @@ describe("the focused clip's keys (UI-14)", () => {
         await waitFor(() => expect(items()).toContain("Delete move"));
     });
 
-    it("Enter and F2 open the rename field, and Enter never reaches the app's shortcuts", async () => {
-        show();
+    it("Enter on a clip that isn't selected selects it, as a click does, and renames nothing", () => {
+        const onSelectionChange = vi.fn();
+        const moves = show({ onSelectionChange });
+        expect(fireEvent.keyDown(clipButton(), { key: "Enter" })).toBe(false);
+        expect(onSelectionChange).toHaveBeenCalledTimes(1);
+        fireEvent.click(clipButton());
+        // The same selection a click makes
+        expect(onSelectionChange.mock.calls[1]).toEqual(
+            onSelectionChange.mock.calls[0],
+        );
+        expect(screen.queryByTestId("timeline-move-name-field")).toBeNull();
+        expect(moves.onRename).not.toHaveBeenCalled();
+        expect(reached).toEqual([]);
+    });
+
+    it("Enter on the selected clip and F2 on any open the rename field, and Enter never reaches the app's shortcuts", async () => {
+        show({ selection: SELECTED });
         fireEvent.keyDown(clipButton(), { key: "Enter" });
         expect(reached).toEqual([]);
         await waitFor(() =>
@@ -471,9 +505,41 @@ describe("the round-2 review's keys and focus (UI-14)", () => {
 
     it("the arrows and WASD on a focused clip do nothing, and don't reach the app", () => {
         show();
-        for (const key of ["ArrowLeft", "ArrowUp", "d", "W"])
-            expect(fireEvent.keyDown(clipButton(), { key })).toBe(false);
+        for (const [key, code] of [
+            ["ArrowLeft", "ArrowLeft"],
+            ["ArrowUp", "ArrowUp"],
+            ["d", "KeyD"],
+            ["W", "KeyW"],
+            // A French layout: the app nudges by the physical key, whatever it types
+            ["q", "KeyA"],
+            ["z", "KeyW"],
+        ])
+            expect(fireEvent.keyDown(clipButton(), { key, code })).toBe(false);
         expect(reached).toEqual([]);
+    });
+
+    it("a rename left by clicking another clip leaves focus there: Delete never deletes the renamed one", async () => {
+        const moves = show({ timelines: [clip, otherClip] });
+        const first = clipButton();
+        const second = screen.getByRole("button", {
+            name: /Diagonal timeline/,
+        });
+        fireEvent.keyDown(first, { key: "F2" });
+        const field = screen.getByTestId("timeline-move-name-field");
+        await waitFor(() => expect(document.activeElement).toBe(field));
+        fireEvent.change(field, { target: { value: "Opener" } });
+        // A click on the other clip: the press, focus going there, the click
+        fireEvent.pointerDown(second);
+        second.focus();
+        fireEvent.click(second);
+        expect(moves.onRename).toHaveBeenCalledWith(7, "Opener");
+        // Past the frame the field would have taken focus back in
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        expect(document.activeElement).toBe(second);
+        fireEvent.keyDown(document.activeElement!, { key: "Delete" });
+        expect(moves.onDelete).not.toHaveBeenCalledWith(7);
+        expect(moves.onDelete).toHaveBeenCalledWith(8);
     });
 
     it("after a rename, saved or cancelled, focus is back on the clip", async () => {
@@ -542,14 +608,23 @@ describe("a move clip's words (UI-14 round-2 review)", () => {
             document.getElementById(button.getAttribute("aria-describedby")!)
                 ?.textContent,
         ).toBe(
-            "Overridden by Move 4 on Page 1, counts 5–6. Enter to rename, Shift+F10 for options, Delete to delete",
+            "Overridden by Move 4 on Page 1, counts 5–6. Enter or F2 to rename, Shift+F10 for options, Delete to delete",
         );
         expect(button.title).toContain("Overridden by Move 4");
         cleanup();
         render1(null);
+        const unselected = screen.getByTestId("timeline-clip");
+        expect(unselected.getAttribute("aria-label")).toBe(
+            "Company front, move, Page 1, counts 3–6",
+        );
+        // Not selected, Enter selects it
         expect(
-            screen.getByTestId("timeline-clip").getAttribute("aria-label"),
-        ).toBe("Company front, move, Page 1, counts 3–6");
+            document.getElementById(
+                unselected.getAttribute("aria-describedby")!,
+            )?.textContent,
+        ).toBe(
+            "Overridden by Move 4 on Page 1, counts 5–6. Enter to select, F2 to rename, Shift+F10 for options, Delete to delete",
+        );
     });
 });
 

@@ -35,6 +35,21 @@ export const spaceStaysPlay = (event: {
     if (event.key === " " && !isTyping(event.target)) event.preventDefault();
 };
 
+/** The WASD nudge keys, by physical key as the app's nudge reads them (`RegisteredActionsHandler`) */
+const NUDGE_CODES = new Set(["KeyW", "KeyA", "KeyS", "KeyD"]);
+
+/**
+ * A key the app's registered shortcuts would take as a nudge of the selected marchers: an arrow,
+ * or W, A, S or D by physical key (`event.code`, so another keyboard layout can't slip one past),
+ * Alt included (it turns snapping off). Ctrl and Cmd make it another shortcut (Ctrl+S saves).
+ */
+export const isNudgeKey = (
+    event: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey">,
+): boolean =>
+    event.key.startsWith("Arrow") ||
+    event.code.startsWith("Arrow") ||
+    (NUDGE_CODES.has(event.code) && !event.ctrlKey && !event.metaKey);
+
 /**
  * Whether a key belongs to the focused timeline move control (UI-14 round-2 review): on a clip,
  * its ⋯ button or name field, the Move card or the isolation bar (`data-timeline-own-keys`),
@@ -43,13 +58,8 @@ export const spaceStaysPlay = (event: {
  * the arrows and WASD would nudge the selected marchers unseen. Space isn't one: it still plays.
  */
 export const isTimelineOwnKey = (
-    event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey">,
+    event: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey">,
     focused: Element | null,
 ): boolean =>
     focused?.closest("[data-timeline-own-keys]") != null &&
-    (event.key === "Enter" ||
-        event.key.startsWith("Arrow") ||
-        (/^[wasd]$/i.test(event.key) &&
-            !event.ctrlKey &&
-            !event.metaKey &&
-            !event.altKey));
+    (event.key === "Enter" || isNudgeKey(event));
