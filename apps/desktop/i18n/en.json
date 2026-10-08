@@ -584,6 +584,11 @@
             "stepSize": "Step Size",
             "stepSizeWarning": "Step size exceeds threshold",
             "swapMarchers": "Swap marchers",
+            "timeline": {
+                "goToPage": "Go to Page {page}",
+                "holdingSince": "Holding since Page {page}",
+                "movesHere": "Moves here"
+            },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}"
         },
