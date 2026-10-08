@@ -2,7 +2,7 @@
 
 # Defined coordinates: what it means for a page to "have coordinates"
 
-Status: research done, **waiting on owner decisions**. Started 2026-10-08 (session 4 of 4), on branch
+Status: owner decided 2026-10-08 (see Decisions); building. Started 2026-10-08 (session 4 of 4), on branch
 `timeline/defined-coordinates` off `timeline-try-2` (a4d42cd1). This changes what stored data means,
 so it needs an ADR 0001 amendment before anything is built.
 
@@ -152,4 +152,12 @@ See the "Decisions" section once answered.
 
 ## Decisions
 
-_None yet._
+Owner, 2026-10-08, all four as recommended:
+
+1. **Sparse model adopted.** A marcher has a coordinate on a page only where the designer moved
+   them; otherwise they hold. Amend ADR 0001.
+2. **Page mode carries edits forward now** through untouched equal copies (per marcher, with a
+   tolerance), with an "Only Page N" toast and the pre-existing fixes. No schema change.
+3. **Delete page in timeline mode keeps later pages' look** (flag delete); "delete page and its
+   moves" is explicit.
+4. **Lock here and Keep later pages are deferred** (no stored kind in this change).
