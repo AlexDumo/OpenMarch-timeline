@@ -21,7 +21,7 @@ export interface Piece {
     colors?: number[];
 }
 
-/** Uniform shader part ids for instruments (instrumentPaint.ts paints them). */
+/** Part ids for instruments: the metal in the look's finish, chrome, and black hardware. */
 export const PART_METAL = 16;
 export const PART_CHROME = 18;
 export const PART_BLACK = 22;

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import type { BufferGeometry, SkinnedMesh } from "three";
@@ -95,8 +95,8 @@ describe("rows per hold", () => {
     });
 });
 
-describe("the low tier", () => {
-    it("draws the horn on the block body too", async () => {
+describe("horns as their own meshes", () => {
+    async function trumpetAndFlute(quality: "high" | "low") {
         const bodies = await loadedBodies();
         const clip = await clip8to5();
         const bake = bakeForBodies(bodies, { "8to5": clip }, [
@@ -105,25 +105,123 @@ describe("the low tier", () => {
         ]);
         const looks = [
             {
-                body: defaultPerformerBody(1),
+                body: {
+                    ...defaultPerformerBody(1),
+                    bodyType: "neutral-average" as const,
+                },
                 uniform: sectionUniform("Trumpet", null),
             },
             {
-                body: defaultPerformerBody(2),
+                body: {
+                    ...defaultPerformerBody(2),
+                    bodyType: "neutral-average" as const,
+                },
                 uniform: sectionUniform("Flute", null),
             },
         ];
-        const set = new MarcherBodies(bodies, bake, looks, "low");
-        const meshes = set.group.children.filter((o) =>
+        return { bake, set: new MarcherBodies(bodies, bake, looks, quality) };
+    }
+
+    it("draws a brass group as a body mesh plus a metallic horn mesh", async () => {
+        const { set } = await trumpetAndFlute("high");
+        const bodiesMeshes = set.group.children.filter((o) =>
+            o.name.startsWith("view3d-marchers-"),
+        );
+        const horns = set.group.children.filter((o) =>
+            o.name.startsWith("view3d-horn-"),
+        ) as THREE.InstancedMesh[];
+        expect(bodiesMeshes.length).toBe(2);
+        expect(horns.length).toBe(1);
+        expect(set.drawCalls).toBe(3);
+        const horn = horns[0];
+        expect(horn.geometry.getAttribute("color")).toBeDefined();
+        expect(horn.geometry.index!.count / 3).toBeGreaterThan(8000);
+        const m = horn.material as THREE.MeshStandardMaterial;
+        expect(m.metalness).toBeGreaterThan(0.9);
+        expect(m.vertexColors).toBe(true);
+        expect(m.flatShading).toBe(false);
+        set.dispose();
+    });
+
+    it("keeps the body mesh free of horn triangles", async () => {
+        const { set } = await trumpetAndFlute("high");
+        const bodiesMeshes = set.group.children.filter((o) =>
             o.name.startsWith("view3d-marchers-"),
         ) as THREE.InstancedMesh[];
-        expect(meshes.length).toBe(2);
-        const triangles = meshes
-            .map((m) => m.geometry.index!.count / 3)
-            .sort((a, b) => a - b);
-        // the block body alone is 264 triangles; the trumpet adds its 576
-        expect(triangles[0]).toBe(264);
-        expect(triangles[1]).toBe(264 + 576);
+        for (const m of bodiesMeshes)
+            expect(m.geometry.index!.count / 3).toBe(1256);
+        set.dispose();
+    });
+
+    it("gives the low tier a horn too, at low detail", async () => {
+        const { set } = await trumpetAndFlute("low");
+        const horns = set.group.children.filter((o) =>
+            o.name.startsWith("view3d-horn-"),
+        ) as THREE.InstancedMesh[];
+        expect(horns.length).toBe(1);
+        expect(horns[0].geometry.index!.count / 3).toBeLessThan(3500);
+        expect(set.drawCalls).toBe(3); // two block meshes (the looks differ) plus the horn
+        set.dispose();
+    });
+
+    it("writes the same clip into the body and the horn", async () => {
+        const { set, bake } = await trumpetAndFlute("high");
+        const row = bake.rows["8to5@brass:up"];
+        set.setClip(0, { row, phase: -3, rate: 1, legYaw: 0.1 });
+        const bodyMesh = set.group.children.find(
+            (o) => o.name === "view3d-marchers-neutral-average",
+        ) as THREE.InstancedMesh;
+        const horn = set.group.children.find((o) =>
+            o.name.startsWith("view3d-horn-"),
+        ) as THREE.InstancedMesh;
+        const clipOf = (m: THREE.InstancedMesh) =>
+            Array.from(
+                (
+                    m.geometry.getAttribute("aClip") as THREE.BufferAttribute
+                ).array.slice(0, 3),
+            );
+        expect(clipOf(horn)).toEqual([row.row, row.frames, row.counts]);
+        expect(clipOf(horn)).toEqual(clipOf(bodyMesh));
+        set.dispose();
+    });
+
+    it("disposes the horn geometry and material with the set", async () => {
+        const { set } = await trumpetAndFlute("high");
+        const horn = set.group.children.find((o) =>
+            o.name.startsWith("view3d-horn-"),
+        ) as THREE.InstancedMesh;
+        const geometryDispose = vi.spyOn(horn.geometry, "dispose");
+        const materialDispose = vi.spyOn(
+            horn.material as THREE.Material,
+            "dispose",
+        );
+        set.dispose();
+        expect(geometryDispose).toHaveBeenCalledTimes(1);
+        expect(materialDispose).toHaveBeenCalledTimes(1);
+    });
+
+    it("gives a flute-only set no horn and one draw call", async () => {
+        const bodies = await loadedBodies();
+        const clip = await clip8to5();
+        const bake = bakeForBodies(bodies, { "8to5": clip }, [NO_HOLD]);
+        const set = new MarcherBodies(
+            bodies,
+            bake,
+            [
+                {
+                    body: {
+                        ...defaultPerformerBody(2),
+                        bodyType: "neutral-average" as const,
+                    },
+                    uniform: sectionUniform("Flute", null),
+                },
+            ],
+            "high",
+        );
+        expect(set.drawCalls).toBe(1);
+        expect(
+            set.group.children.some((o) => o.name.startsWith("view3d-horn-")),
+        ).toBe(false);
         set.dispose();
     });
 });

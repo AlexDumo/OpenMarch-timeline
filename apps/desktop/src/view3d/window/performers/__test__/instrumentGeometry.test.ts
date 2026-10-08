@@ -10,9 +10,9 @@ import { sectionUniform } from "@/view3d/core/marchers/looks";
 import { poseArms } from "../marchers/armPose";
 import {
     instrumentGeometry,
-    withInstrument,
+    instrumentMaterial,
 } from "../marchers/instrumentGeometry";
-import { visibleIndex } from "../marchers/marcherBodies";
+import { NO_HOLD, bakeForBodies } from "../marchers/marcherBodies";
 
 async function body() {
     const b = fs.readFileSync(
@@ -88,37 +88,64 @@ describe("instrumentGeometry", () => {
     });
 });
 
-describe("withInstrument", () => {
-    it("appends the instrument after the look's visible body triangles", async () => {
+describe("instrument color and material", () => {
+    it("carries per-vertex linear colors from the model", async () => {
         const mesh = await body();
-        const look = sectionUniform("Trumpet", null);
-        const index = visibleIndex(mesh.geometry, look);
         const h = hold("brass", "up");
-        const horn = instrumentGeometry(
+        const g = instrumentGeometry(
             mesh.skeleton,
             poseArms(mesh.skeleton, h),
             h,
             brassModel("trumpet"),
         );
-        const merged = withInstrument(mesh.geometry, index, horn);
-        const bodyTriangles = index!.count / 3;
-        const hornTriangles = horn.index!.count / 3;
-        expect(merged.index!.count / 3).toBe(bodyTriangles + hornTriangles);
-        expect(merged.getAttribute("position").count).toBe(
-            mesh.geometry.getAttribute("position").count +
-                horn.getAttribute("position").count,
+        const color = g.getAttribute("color");
+        expect(color.itemSize).toBe(3);
+        expect(color.count).toBe(g.getAttribute("position").count);
+    });
+
+    it("recolors the metal for a silver finish", async () => {
+        const mesh = await body();
+        const h = hold("brass", "up");
+        const gold = instrumentGeometry(
+            mesh.skeleton,
+            poseArms(mesh.skeleton, h),
+            h,
+            brassModel("trumpet"),
+            "brass",
         );
-        for (const name of [
-            "position",
-            "normal",
-            "skinIndex",
-            "skinWeight",
-            "_part",
-        ])
-            expect(merged.getAttribute(name)).toBeDefined();
-        // the body's own buffers are not shared with the merge: disposing the merge is safe
-        expect(merged.getAttribute("position")).not.toBe(
-            mesh.geometry.getAttribute("position"),
+        const silver = instrumentGeometry(
+            mesh.skeleton,
+            poseArms(mesh.skeleton, h),
+            h,
+            brassModel("trumpet"),
+            "silver",
         );
+        const part = gold.getAttribute("_part");
+        let i = 0;
+        while (part.getX(i) !== 16) i++;
+        expect(gold.getAttribute("color").getX(i)).not.toBeCloseTo(
+            silver.getAttribute("color").getX(i),
+            3,
+        );
+    });
+
+    it("builds a smooth metallic material under the instanced skinning", async () => {
+        const mesh = await body();
+        const bake = bakeForBodies(
+            new Map([
+                [
+                    "neutral-average",
+                    { scene: mesh.parent as THREE.Object3D, mesh },
+                ],
+            ]) as never,
+            {},
+            [NO_HOLD],
+        );
+        const m = instrumentMaterial(bake);
+        expect(m.metalness).toBeGreaterThan(0.9);
+        expect(m.roughness).toBeLessThan(0.4);
+        expect(m.vertexColors).toBe(true);
+        expect(m.flatShading).toBe(false);
+        expect(m.customProgramCacheKey()).toContain("baked-instances");
     });
 });
