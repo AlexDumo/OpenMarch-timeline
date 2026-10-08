@@ -1,6 +1,12 @@
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useTimingObjects } from "@/hooks";
@@ -24,7 +30,15 @@ import {
     getAvailableOffsets,
     useCreateLastPageOnTimeline,
 } from "./PageTimeline.utils";
-import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    useTimelineMode,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
+import {
+    deletePageFlagsMutationOptions,
+    deletePageYankWithMovesMutationOptions,
+    deletePagesWithMovesMutationOptions,
+} from "@/hooks/queries/usePageFlags";
 
 // eslint-disable-next-line max-lines-per-function
 export default function PageTimeline() {
@@ -43,6 +57,19 @@ export default function PageTimeline() {
     );
     const { mutate: deletePageYank } = useMutation(
         deletePageYankMutationOptions(queryClient),
+    );
+    // Timeline mode (defined coordinates, owner decision 3): In Place deletes only the page's
+    // flag, so later pages keep their look; With Its Moves and Yank take its moves along, and
+    // name the pages that change
+    const timelineMode = useTimelineMode();
+    const { mutate: deletePageFlag } = useMutation(
+        deletePageFlagsMutationOptions(queryClient),
+    );
+    const { mutate: deletePageWithMoves } = useMutation(
+        deletePagesWithMovesMutationOptions(queryClient),
+    );
+    const { mutate: deletePageYankWithMoves } = useMutation(
+        deletePageYankWithMovesMutationOptions(queryClient),
     );
 
     // Page clicking and dragging
@@ -253,25 +280,49 @@ export default function PageTimeline() {
 
     const handleDeletePage = useCallback(
         (page: Page) => {
-            deletePages(new Set([page.id]), {
+            const onSuccess = () => {
+                if (page.previousPageId != null)
+                    setSelectedPage({ id: page.previousPageId });
+            };
+            if (timelineMode)
+                deletePageFlag(new Set([page.id]), {
+                    // The next page takes this page's box and keeps its own flag
+                    onSuccess: () => {
+                        if (page.nextPageId != null)
+                            setSelectedPage({ id: page.nextPageId });
+                        else onSuccess();
+                    },
+                });
+            else deletePages(new Set([page.id]), { onSuccess });
+        },
+        [timelineMode, deletePageFlag, deletePages, setSelectedPage],
+    );
+    const handleDeletePageWithMoves = useCallback(
+        (page: Page) => {
+            deletePageWithMoves(new Set([page.id]), {
                 onSuccess: () => {
                     if (page.previousPageId != null)
                         setSelectedPage({ id: page.previousPageId });
                 },
             });
         },
-        [deletePages, setSelectedPage],
+        [deletePageWithMoves, setSelectedPage],
     );
     const handleDeletePageYank = useCallback(
         (page: Page) => {
-            deletePageYank(page.id, {
-                onSuccess: () => {
-                    if (page.previousPageId != null)
-                        setSelectedPage({ id: page.previousPageId });
-                },
-            });
+            const onSuccess = () => {
+                if (page.previousPageId != null)
+                    setSelectedPage({ id: page.previousPageId });
+            };
+            if (timelineMode) deletePageYankWithMoves(page.id, { onSuccess });
+            else deletePageYank(page.id, { onSuccess });
         },
-        [deletePageYank, setSelectedPage],
+        [
+            timelineMode,
+            deletePageYankWithMoves,
+            deletePageYank,
+            setSelectedPage,
+        ],
     );
     return (
         <div className="flex h-fit gap-0" id="pages">
@@ -312,6 +363,50 @@ export default function PageTimeline() {
                     const width = getWidth(page);
                     const selectedIndex = pages.findIndex(
                         (p) => p.id === selectedPage?.id,
+                    );
+                    const yankOption = (
+                        <DeleteOption
+                            label={
+                                <T keyName="timeline.page.contextMenu.deleteYank" />
+                            }
+                            tooltip={t(
+                                "timeline.page.contextMenu.deleteYankTooltip",
+                            )}
+                            onClick={() => handleDeletePageYank(page)}
+                        />
+                    );
+                    const inPlaceOption = (
+                        <DeleteOption
+                            label={
+                                <T keyName="timeline.page.contextMenu.deleteInPlace" />
+                            }
+                            tooltip={
+                                timelineMode
+                                    ? t(
+                                          "timeline.page.contextMenu.deleteInPlaceTimelineTooltip",
+                                          "Delete this page. Later pages keep their timing and look.",
+                                      )
+                                    : t(
+                                          "timeline.page.contextMenu.deleteInPlaceTooltip",
+                                      )
+                            }
+                            onClick={() => handleDeletePage(page)}
+                        />
+                    );
+                    const withMovesOption = (
+                        <DeleteOption
+                            label={
+                                <T
+                                    keyName="timeline.page.contextMenu.deleteWithMoves"
+                                    defaultValue="With Its Moves"
+                                />
+                            }
+                            tooltip={t(
+                                "timeline.page.contextMenu.deleteWithMovesTooltip",
+                                "Delete this page and its moves. Later pages that held its positions change.",
+                            )}
+                            onClick={() => handleDeletePageWithMoves(page)}
+                        />
                     );
                     return (
                         <ContextMenu.Root
@@ -460,52 +555,18 @@ export default function PageTimeline() {
                                             <TrashIcon size={16} />
                                             <T keyName="timeline.page.contextMenu.delete" />
                                         </div>
-                                        <ToolTip.Root delayDuration={500}>
-                                            <ToolTip.Trigger asChild>
-                                                <button
-                                                    className="text-body text-text-subtitle hover:text-red cursor-pointer text-left transition-colors"
-                                                    onClick={() =>
-                                                        handleDeletePageYank(
-                                                            page,
-                                                        )
-                                                    }
-                                                >
-                                                    <T keyName="timeline.page.contextMenu.deleteYank" />
-                                                </button>
-                                            </ToolTip.Trigger>
-                                            <ToolTip.Portal>
-                                                <ToolTip.Content
-                                                    className={TooltipClassName}
-                                                    side="right"
-                                                >
-                                                    {t(
-                                                        "timeline.page.contextMenu.deleteYankTooltip",
-                                                    )}
-                                                </ToolTip.Content>
-                                            </ToolTip.Portal>
-                                        </ToolTip.Root>
-                                        <ToolTip.Root delayDuration={500}>
-                                            <ToolTip.Trigger asChild>
-                                                <button
-                                                    className="text-body text-text-subtitle hover:text-red cursor-pointer text-left transition-colors"
-                                                    onClick={() =>
-                                                        handleDeletePage(page)
-                                                    }
-                                                >
-                                                    <T keyName="timeline.page.contextMenu.deleteInPlace" />
-                                                </button>
-                                            </ToolTip.Trigger>
-                                            <ToolTip.Portal>
-                                                <ToolTip.Content
-                                                    className={TooltipClassName}
-                                                    side="right"
-                                                >
-                                                    {t(
-                                                        "timeline.page.contextMenu.deleteInPlaceTooltip",
-                                                    )}
-                                                </ToolTip.Content>
-                                            </ToolTip.Portal>
-                                        </ToolTip.Root>
+                                        {timelineMode ? (
+                                            <>
+                                                {inPlaceOption}
+                                                {withMovesOption}
+                                                {yankOption}
+                                            </>
+                                        ) : (
+                                            <>
+                                                {yankOption}
+                                                {inPlaceOption}
+                                            </>
+                                        )}
                                     </div>
                                 </ContextMenu.Content>
                             </ContextMenu.Portal>
@@ -523,5 +584,34 @@ export default function PageTimeline() {
                 </button>
             )}
         </div>
+    );
+}
+
+/** One of a page's delete commands in its context menu, with its tooltip. */
+function DeleteOption({
+    label,
+    tooltip,
+    onClick,
+}: {
+    label: ReactNode;
+    tooltip: string;
+    onClick: () => void;
+}) {
+    return (
+        <ToolTip.Root delayDuration={500}>
+            <ToolTip.Trigger asChild>
+                <button
+                    className="text-body text-text-subtitle hover:text-red cursor-pointer text-left transition-colors"
+                    onClick={onClick}
+                >
+                    {label}
+                </button>
+            </ToolTip.Trigger>
+            <ToolTip.Portal>
+                <ToolTip.Content className={TooltipClassName} side="right">
+                    {tooltip}
+                </ToolTip.Content>
+            </ToolTip.Portal>
+        </ToolTip.Root>
     );
 }

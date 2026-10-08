@@ -33,6 +33,7 @@ import {
     tempoGroupFromWorkspaceSettings,
 } from "@/components/music/TempoGroup/TempoGroup";
 import { FIRST_PAGE_ID, realDatabasePageToDatabasePage } from "./rowMappers";
+import { moveTagAppearancesOffPagesInTransaction } from "./tagAppearancePageDelete";
 
 export { FIRST_PAGE_ID, realDatabasePageToDatabasePage };
 
@@ -542,6 +543,9 @@ export const deletePagesInTransaction = async ({
         "Last page before deletion not found",
     );
 
+    // Before the rows go: their tag appearances would cascade away with them
+    await moveTagAppearancesOffPagesInTransaction({ tx, pageIds });
+
     const deleteMarcherPages = () =>
         tx
             .delete(schema.marcher_pages)
@@ -635,16 +639,20 @@ export async function deletePages({
     return response;
 }
 
-export async function deletePageYank({
+/**
+ * Deletes a page and pulls every later page back by its length (Yank), inside a
+ * `transactionWithHistory`. In timeline mode the caller wraps it in `withTimelinePageRipple`.
+ */
+export async function deletePageYankInTransaction({
     pageId,
-    db,
+    tx,
 }: {
     pageId: number;
-    db: DbConnection;
+    tx: DbTransaction;
 }): Promise<DatabasePage[]> {
     if (pageId === FIRST_PAGE_ID) return [];
 
-    const pagesBeforeDeletion = await getPagesInOrder({ tx: db });
+    const pagesBeforeDeletion = await getPagesInOrder({ tx });
     const pageToDeleteIndex = pagesBeforeDeletion.findIndex(
         (p) => p.id === pageId,
     );
@@ -657,40 +665,51 @@ export async function deletePageYank({
         : 0;
     const laterPages = pagesBeforeDeletion.slice(pageToDeleteIndex + 1);
 
-    const response = await transactionWithHistory(
+    const response = await deletePagesInTransaction({
+        pageIds: new Set([pageId]),
+        tx,
+    });
+
+    if (yankLength > 0) {
+        for (const page of laterPages) {
+            const targetBeat = await tx.query.beats.findFirst({
+                where: eq(
+                    schema.beats.position,
+                    page.beatObject.position - yankLength,
+                ),
+            });
+            assert(
+                targetBeat != null,
+                `Could not find target beat for yanked page ${page.id}`,
+            );
+            await tx
+                .update(schema.pages)
+                .set({ start_beat: targetBeat.id })
+                .where(eq(schema.pages.id, page.id));
+        }
+    }
+
+    await ensureSecondBeatHasPage({ tx });
+    return response;
+}
+
+export async function deletePageYank({
+    pageId,
+    db,
+}: {
+    pageId: number;
+    db: DbConnection;
+}): Promise<DatabasePage[]> {
+    if (pageId === FIRST_PAGE_ID) return [];
+    return await transactionWithHistory(
         db,
         "deletePageYank",
         async (tx) =>
-            await withTimelinePageRipple(tx, async () => {
-                const response = await deletePagesInTransaction({
-                    pageIds: new Set([pageId]),
-                    tx,
-                });
-
-                if (yankLength > 0) {
-                    for (const page of laterPages) {
-                        const targetBeat = await tx.query.beats.findFirst({
-                            where: eq(
-                                schema.beats.position,
-                                page.beatObject.position - yankLength,
-                            ),
-                        });
-                        assert(
-                            targetBeat != null,
-                            `Could not find target beat for yanked page ${page.id}`,
-                        );
-                        await tx
-                            .update(schema.pages)
-                            .set({ start_beat: targetBeat.id })
-                            .where(eq(schema.pages.id, page.id));
-                    }
-                }
-
-                await ensureSecondBeatHasPage({ tx });
-                return response;
-            }),
+            await withTimelinePageRipple(
+                tx,
+                async () => await deletePageYankInTransaction({ pageId, tx }),
+            ),
     );
-    return response;
 }
 
 /**

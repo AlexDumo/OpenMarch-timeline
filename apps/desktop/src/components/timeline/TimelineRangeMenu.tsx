@@ -1,14 +1,15 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { FlagIcon, UserPlusIcon } from "@phosphor-icons/react";
+import { FlagIcon, TrashIcon, UserPlusIcon } from "@phosphor-icons/react";
 import type { TimelineBeatRange } from "./TimelineViewModel";
 
 /**
  * The timeline's right-click menu (ui.md UI-9 Adding marchers, P8.14). It offers **Add selected
  * marchers** on a page box, a clip (its timeline) or a dragged range, for the range under the
  * pointer. Opening it doesn't change the timeline selection: the marchers to add are picked first,
- * where they can be selected. On a page box it also offers **Delete page flag** (UI-9 Deleting a
- * flag, P8.15).
+ * where they can be selected. On a page box it also offers **Delete page** (UI-9 Deleting a flag,
+ * P8.15), which keeps every later page's look, and next to it **Delete page and its moves**
+ * (defined coordinates, owner decision 3).
  */
 
 /**
@@ -21,10 +22,15 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
     /** Why the command is unavailable (for example, no marchers are selected), or null */
     readonly disabledReason?: string | null;
     /**
-     * **Delete page flag** on a page box (UI-9 Deleting a flag, P8.15): the page whose flag goes.
+     * **Delete page** on a page box (UI-9 Deleting a flag, P8.15): the page whose flag goes.
      * Without it, the menu has no delete entry.
      */
     readonly onDeleteFlag?: (pageId: string | number) => void;
+    /**
+     * **Delete page and its moves** on a page box, shown after **Delete page**: the page goes with
+     * its page moves. Without it, the menu has no such entry.
+     */
+    readonly onDeleteWithMoves?: (pageId: string | number) => void;
 }
 
 /**
@@ -109,7 +115,9 @@ export function useTimelineRangeMenu({
         if (!target) return;
         // Nothing to offer here: no add, and no page box to delete the flag of
         const canDelete =
-            menu.onDeleteFlag !== undefined && target.pageId !== undefined;
+            (menu.onDeleteFlag !== undefined ||
+                menu.onDeleteWithMoves !== undefined) &&
+            target.pageId !== undefined;
         if (!menu.onAdd && !canDelete) return;
         event.preventDefault();
         setOpen({ target, x: event.clientX, y: event.clientY });
@@ -163,9 +171,24 @@ export function useTimelineRangeMenu({
                             className="rounded-4 data-[highlighted]:bg-fg-2 text-red flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none"
                         >
                             <FlagIcon size={14} />
-                            Delete page flag
+                            Delete page
                         </DropdownMenu.Item>
                     )}
+                    {menu.onDeleteWithMoves &&
+                        open.target.pageId !== undefined && (
+                            <DropdownMenu.Item
+                                data-testid="timeline-range-menu-delete-with-moves"
+                                onSelect={() =>
+                                    menu.onDeleteWithMoves?.(
+                                        open.target.pageId!,
+                                    )
+                                }
+                                className="rounded-4 data-[highlighted]:bg-fg-2 text-red flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none"
+                            >
+                                <TrashIcon size={14} />
+                                Delete page and its moves
+                            </DropdownMenu.Item>
+                        )}
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
         </DropdownMenu.Root>

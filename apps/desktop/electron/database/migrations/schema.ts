@@ -358,7 +358,8 @@ export const tag_appearances = sqliteTable(
             .references(() => tags.id, { onDelete: "cascade" }),
         start_page_id: integer()
             .notNull()
-            // TODO: Restrict deletion so that when a page is deleted, we ensure the tag is moved to another page
+            // Every page delete moves these to the next page first (`moveTagAppearancesOffPagesInTransaction`);
+            // the cascade only clears what that drops
             .references(() => pages.id, { onDelete: "cascade" }),
         priority: integer().default(0).notNull(),
         ...appearance_columns,
