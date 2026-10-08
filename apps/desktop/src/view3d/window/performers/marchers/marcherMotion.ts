@@ -13,7 +13,7 @@ import { REST_EPS, planMarcher } from "@/view3d/core/marchers/planner";
 import type { MarcherPlan } from "@/view3d/core/marchers/planner";
 import { bodyAt, eventIndexAt } from "@/view3d/core/marchers/planner";
 import type { HeightClass } from "@/view3d/core/marchers/looks";
-import type { MarcherBodies } from "./marcherBodies";
+import { rowKey, type MarcherBodies } from "./marcherBodies";
 
 export interface ShowPlans {
     /** Per slot; null when the marcher has no positions. */
@@ -171,12 +171,14 @@ export class MarcherMotion {
     private apply(slot: number, plan: MarcherPlan, index: number): void {
         const e = plan.events[index];
         const rows: Bake["rows"] = this.bodies.bake.rows;
-        const row = rows[e.clip];
+        const hold = this.bodies.holdOf(slot);
+        const row = rows[rowKey(e.clip, hold)];
         if (!row) return; // not baked yet (the bake set is catching up)
+        const row2 = e.clip2 ? (rows[rowKey(e.clip2, hold)] ?? null) : null;
         this.bodies.setClip(slot, {
             row,
-            row2: e.clip2 ? (rows[e.clip2] ?? null) : null,
-            weight: e.clip2 && rows[e.clip2] ? e.weight : 0,
+            row2,
+            weight: row2 ? e.weight : 0,
             phase: -e.phaseStart,
             rate: 1,
             legYaw: e.legYaw,

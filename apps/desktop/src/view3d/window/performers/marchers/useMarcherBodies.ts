@@ -21,6 +21,7 @@ import {
 import {
     MarcherBodies,
     bakeForBodies,
+    slotHoldId,
     type MarcherQuality,
     type MarcherSlotLook,
 } from "./marcherBodies";
@@ -77,9 +78,10 @@ export const clipName = (base: string, h: HeightClass) =>
     `${base}${classSuffix(h)}`;
 
 /**
- * Bakes `names` (clip names with their class suffix) and builds the meshes.
- * Rebuilt when the assets, clip set, looks or quality change; the previous
- * set and its bake texture are disposed.
+ * Bakes `names` (clip names with their class suffix), once per hold the
+ * looks play, and builds the meshes. Rebuilt when the assets, clip set,
+ * looks or quality change; the previous set and its bake texture are
+ * disposed.
  */
 export function useMarcherBodies(
     assets: MarcherAssets | null,
@@ -88,24 +90,30 @@ export function useMarcherBodies(
     quality: MarcherQuality,
 ): MarcherBodies | null {
     const namesKey = [...new Set(names)].sort().join(",");
+    const holdsKey = [
+        ...new Set((looks ?? []).map((l) => slotHoldId(l.uniform))),
+    ]
+        .sort()
+        .join(",");
     const bake = useMemo<Bake | null>(() => {
-        if (!assets || !namesKey) return null;
+        if (!assets || !namesKey || !holdsKey) return null;
         const clips: Record<string, AnimationClip> = {};
         for (const n of namesKey.split(",")) {
             const clip = assets.clips.get(n);
             if (!clip) throw new Error(`3D View: clip ${n} isn't loaded`);
             clips[n] = clip;
         }
+        const holds = holdsKey.split(",");
         const t0 = performance.now();
-        const baked = bakeForBodies(assets.bodies, clips);
+        const baked = bakeForBodies(assets.bodies, clips, holds);
         // eslint-disable-next-line no-console -- the bake size and time are the main cost to watch
         console.info(
-            `3D View: baked ${Object.keys(clips).length} clips, ` +
+            `3D View: baked ${Object.keys(clips).length} clips × ${holds.length} holds, ` +
                 `${(baked.bytes / 1e6).toFixed(1)} MB, in ` +
                 `${(performance.now() - t0).toFixed(0)} ms`,
         );
         return baked;
-    }, [assets, namesKey]);
+    }, [assets, namesKey, holdsKey]);
     useEffect(() => () => bake?.texture.dispose(), [bake]);
 
     const bodies = useMemo(() => {

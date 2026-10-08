@@ -32,7 +32,17 @@ import {
     type UniformLook,
 } from "@/view3d/core/marchers/looks";
 import { FIELD_SURFACE_Y } from "@/view3d/core/field";
+import { brassModel } from "@/view3d/core/instruments/brass";
+import {
+    hold as holdFor,
+    holdId,
+    type HoldFamily,
+    type HoldState,
+} from "@/view3d/core/instruments/holds";
 import type { LoadedBody } from "./marcherAssets";
+import { holdClip, poseArms } from "./armPose";
+import { instrumentGeometry, withInstrument } from "./instrumentGeometry";
+import { paintInstruments } from "./instrumentPaint";
 
 /**
  * Contact shadow under each marcher: a soft dark disc on the turf, in place
@@ -91,10 +101,18 @@ export function visibleIndex(
 /**
  * `disposeInstancedGeometry` for a geometry with its own index: frees the
  * per-instance buffers and that index, never the body's shared buffers.
+ * A merged geometry (body plus instrument) shares nothing: dispose it whole.
  */
-function disposeMarcherGeometry(g: THREE.BufferGeometry, ownIndex: boolean) {
-    if (!ownIndex) {
+function disposeMarcherGeometry(
+    g: THREE.BufferGeometry,
+    own: "shared" | "index" | "all",
+) {
+    if (own === "shared") {
         disposeInstancedGeometry(g);
+        return;
+    }
+    if (own === "all") {
+        g.dispose();
         return;
     }
     for (const k of Object.keys(g.attributes))
@@ -142,18 +160,56 @@ interface MeshEntry {
     mesh: THREE.InstancedMesh;
     /** Slot index per instance. */
     slots: number[];
-    /** Whether the geometry has its own (part-filtered) index. */
-    ownIndex: boolean;
+    /**
+     * What the geometry owns: nothing (the body's shared buffers), its own
+     * part-filtered index, or everything (a body merged with an instrument).
+     */
+    own: "shared" | "index" | "all";
 }
 
-/** Every v4u body shares one skeleton, so any of them bakes for all. */
+/** The hold id of a slot that carries nothing: its clips bake unposed. */
+export const NO_HOLD = "none";
+
+/** The hold a look plays: `<family>:<state>`, or NO_HOLD when it carries nothing. */
+export function slotHoldId(look: UniformLook): string {
+    const c = look.options.carry;
+    return c ? holdId(c.family, look.options.hold) : NO_HOLD;
+}
+
+/** The bake row name of a clip played in a hold. */
+export function rowKey(clip: string, hold: string): string {
+    return hold === NO_HOLD ? clip : `${clip}@${hold}`;
+}
+
+const parseHoldId = (id: string) => {
+    const [family, state] = id.split(":") as [HoldFamily, HoldState];
+    return holdFor(family, state);
+};
+
+/**
+ * Every v4u body shares one skeleton, so any of them bakes for all. Each
+ * clip is baked once per hold in `holds` (docs/3d/instruments.md §5): the
+ * arm tracks replaced by the hold's pose, under `rowKey` names.
+ */
 export function bakeForBodies(
     bodies: ReadonlyMap<BodyType, LoadedBody>,
     clips: Record<string, THREE.AnimationClip>,
+    holds: readonly string[] = [NO_HOLD],
 ): Bake {
     const first = bodies.values().next().value;
     if (!first) throw new Error("3D View: no bodies to bake on");
-    return bakeClips(THREE, first.scene, clips);
+    const all: Record<string, THREE.AnimationClip> = {};
+    for (const h of holds) {
+        const pose =
+            h === NO_HOLD
+                ? null
+                : poseArms(first.mesh.skeleton, parseHoldId(h));
+        for (const [name, clip] of Object.entries(clips))
+            all[rowKey(name, h)] = pose
+                ? holdClip(clip, pose, rowKey(name, h))
+                : clip;
+    }
+    return bakeClips(THREE, first.scene, all);
 }
 
 export class MarcherBodies {
@@ -167,6 +223,8 @@ export class MarcherBodies {
     private readonly meshOf: Int32Array;
     private readonly instanceOf: Int32Array;
     private readonly scaleOf: Float32Array;
+    /** The hold id each slot plays (`slotHoldId`). */
+    private readonly holdIds: string[];
 
     constructor(
         bodies: ReadonlyMap<BodyType, LoadedBody>,
@@ -179,6 +237,7 @@ export class MarcherBodies {
         this.meshOf = new Int32Array(looks.length).fill(-1);
         this.instanceOf = new Int32Array(looks.length);
         this.scaleOf = new Float32Array(looks.length);
+        this.holdIds = looks.map((l) => slotHoldId(l.uniform));
 
         this.contact = createContactMesh(looks.length);
         this.group.add(this.contact);
@@ -210,19 +269,19 @@ export class MarcherBodies {
             if (!material) {
                 material = instancedSkinning(
                     THREE,
-                    createUniformMaterial(THREE, {
-                        style: g.look.style,
-                        colors: g.look.colors,
-                        options: g.look.options,
-                    }),
+                    paintInstruments(
+                        createUniformMaterial(THREE, {
+                            style: g.look.style,
+                            colors: g.look.colors,
+                            options: g.look.options,
+                        }),
+                    ),
                     bake,
                 );
                 materialByLook.set(u, material);
                 this.materials.push(material);
             }
-            const source =
-                this.blockSource ?? bodies.get(g.type)!.mesh.geometry;
-            const { mesh, filtered } = this.buildMesh(source, material, g);
+            const { mesh, own } = this.buildMesh(bodies, material, g);
             const entry = this.entries.length;
             g.slots.forEach((slot, k) => {
                 this.meshOf[slot] = entry;
@@ -232,23 +291,40 @@ export class MarcherBodies {
                     skin: looks[slot].body.skinTone,
                 });
             });
-            this.entries.push({
-                mesh,
-                slots: g.slots,
-                ownIndex: filtered !== null,
-            });
+            this.entries.push({ mesh, slots: g.slots, own });
             this.group.add(mesh);
         }
     }
 
-    /** One InstancedMesh for a group of slots sharing a body and a look. */
+    /**
+     * One InstancedMesh for a group of slots sharing a body and a look. At
+     * high quality a look that carries an instrument draws the body's
+     * visible triangles merged with the horn, posed by the look's hold.
+     */
     private buildMesh(
-        source: THREE.BufferGeometry,
+        bodies: ReadonlyMap<BodyType, LoadedBody>,
         material: THREE.Material,
         g: { type: BodyType; look: UniformLook; slots: number[] },
     ) {
+        let source = this.blockSource ?? bodies.get(g.type)!.mesh.geometry;
+        let filtered = this.blockSource ? null : visibleIndex(source, g.look);
+        let own: MeshEntry["own"] = filtered ? "index" : "shared";
+        const carry = g.look.options.carry;
+        if (carry && !this.blockSource) {
+            const h = holdFor(carry.family, g.look.options.hold);
+            const skeleton = bodies.get(g.type)!.mesh.skeleton;
+            const horn = instrumentGeometry(
+                skeleton,
+                poseArms(skeleton, h),
+                h,
+                brassModel(carry.model),
+            );
+            source = withInstrument(source, filtered, horn);
+            horn.dispose();
+            filtered = null;
+            own = "all";
+        }
         const geometry = instancedGeometry(THREE, source, g.slots.length);
-        const filtered = this.blockSource ? null : visibleIndex(source, g.look);
         if (filtered) geometry.setIndex(filtered);
         const mesh = new THREE.InstancedMesh(
             geometry,
@@ -263,7 +339,12 @@ export class MarcherBodies {
         // would show the rest pose (openmarch-3d.md, "Not done yet").
         mesh.castShadow = false;
         mesh.receiveShadow = false;
-        return { mesh, filtered };
+        return { mesh, own };
+    }
+
+    /** The hold id slot `slot` plays, for `rowKey`. */
+    holdOf(slot: number): string {
+        return this.holdIds[slot] ?? NO_HOLD;
     }
 
     private firstRow() {
@@ -331,8 +412,8 @@ export class MarcherBodies {
     }
 
     dispose(): void {
-        for (const { mesh, ownIndex } of this.entries) {
-            disposeMarcherGeometry(mesh.geometry, ownIndex);
+        for (const { mesh, own } of this.entries) {
+            disposeMarcherGeometry(mesh.geometry, own);
             mesh.dispose();
         }
         for (const m of this.materials) m.dispose();
