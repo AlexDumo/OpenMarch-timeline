@@ -549,8 +549,8 @@ function contra(detail: Detail): InstrumentModel {
     const loopBack = -0.62; // the far bow
     const top = 0.1; // the bell branch's height
     const bottom = -0.12; // the bottom tube
-    const bellLen = 0.36;
-    const bellStart = -0.06;
+    const bellLen = 0.42;
+    const bellStart = -0.12;
     const mouthpieceAt: Vec3 = [0.03, bottom - 0.02, 0.12];
     const pieces: Piece[] = [
         // bottom tube from the valves back to the bow, the bow up, the top tube forward to the bell
@@ -570,16 +570,17 @@ function contra(detail: Detail): InstrumentModel {
                 [0, top, bellStart],
             ],
             [
-                bore * 1.2,
-                bore * 1.5,
-                bore * 1.8,
+                // the bell branch is a fat taper along the whole top of the loop
+                bore * 1.1,
+                bore * 1.4,
+                bore * 1.7,
                 bore * 2.0,
-                bore * 2.2,
-                bore * 2.4,
-                bore * 2.4,
+                bore * 2.3,
+                bore * 2.6,
+                bore * 3.2,
             ],
         ),
-        t.bell(bore * 2.5, d.bell / 2, bellStart, bellLen, 0, top + 0.02),
+        t.bell(bore * 3.3, d.bell / 2, bellStart, bellLen, 0, top + 0.02),
         // leadpipe from the mouthpiece up to the valves
         t.run(
             [
