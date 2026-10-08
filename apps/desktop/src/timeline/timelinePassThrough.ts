@@ -14,9 +14,12 @@ import { toastTimelineError } from "./timelineErrorMessages";
 
 /**
  * What the app says after a drag passed through pages (research/ownership/10-cross-page-windows.md
- * §4.1, §4.2): which marchers now move straight through which moves, which moves catch up after
- * it, and the one-click way back, **Only change Page N**, which moves them from the last flag
- * before the drag's end instead (`moveMarchersFromFlagInstead`).
+ * §4.1, §4.2): which marchers now move straight through which moves and page flags, which moves
+ * catch up after it, and the one-click way back, **Start from Page N**, which moves them from the
+ * last flag before the drag's end instead (`moveMarchersFromFlagInstead`). It shows whenever the
+ * drag added marchers over a page flag, even where no stored move ended there (sparse rows,
+ * defined-coordinates 07a §4). The action was "Only change Page N" until defined-coordinates
+ * 07c §2: later pages that hold still follow the edit, so "only" promised too much.
  */
 
 /** Translates with ICU parameters; the Tolgee singleton by default, anything in tests. */
@@ -58,7 +61,7 @@ export function moveName(range: BeatRange, boxes: readonly PageBox[]): string {
         : `the move over beats [${range.start}, ${range.end})`;
 }
 
-/** Where **Only change** narrows a drag to, from `narrowingFlag`. */
+/** Where **Start from** narrows a drag to, from `narrowingFlag`. */
 export interface NarrowingFlag {
     /** The last page flag strictly inside the drag's range */
     beat: number;
@@ -71,7 +74,7 @@ export interface NarrowingFlag {
 }
 
 /**
- * The flag **Only change** narrows to: the last page flag strictly inside the drag's range.
+ * The flag **Start from** narrows to: the last page flag strictly inside the drag's range.
  * `null` when no flag is inside (the range crossed only clips).
  */
 export function narrowingFlag(
@@ -99,7 +102,15 @@ export function passThroughMessage(
     translate: PassThroughTranslate = defaultTranslate,
 ): string {
     const marchers = marcherList(pass.labels);
-    const through = joinList(pass.overridden.map((r) => moveName(r, boxes)));
+    // A flag inside the range that no overridden move ends on is named by its page
+    const flagPages = pass.flags
+        .filter((beat) => !pass.overridden.some((r) => r.end === beat))
+        .flatMap((beat) => boxes.filter((b) => b.end === beat));
+    const through = joinList(
+        [...pass.overridden, ...flagPages]
+            .sort((a, b) => a.end - b.end || a.start - b.start)
+            .map((r) => moveName(r, boxes)),
+    );
     const caughtUp = joinList(pass.caughtUp.map((r) => moveName(r, boxes)));
     const one = pass.labels.length === 1;
     const params = { marchers, through, caughtUp };
@@ -141,8 +152,8 @@ export function passThroughMessage(
 }
 
 /**
- * The action's label: "Only change Page 3" when the drag ends on Page 3's flag; otherwise (it ends
- * partway into a page) "Only change from Page 2's set", or by beat for an unnamed page.
+ * The action's label: "Start from Page 3" when the drag ends on Page 3's flag; otherwise (it ends
+ * partway into a page) "Start from Page 2's set", or by beat for an unnamed page.
  */
 export function narrowingLabel(
     flag: NarrowingFlag,
@@ -150,25 +161,25 @@ export function narrowingLabel(
 ): string {
     if (flag.endsOnFlag && flag.nextPage !== undefined)
         return translate(
-            "timeline.edit.passThrough.onlyChangePage",
-            "Only change Page {page}",
+            "timeline.edit.passThrough.startFromPage",
+            "Start from Page {page}",
             { page: flag.nextPage },
         );
     if (flag.flagPage !== undefined)
         return translate(
-            "timeline.edit.passThrough.onlyChangeFromPage",
-            "Only change from Page {page}'s set",
+            "timeline.edit.passThrough.startFromPageSet",
+            "Start from Page {page}'s set",
             { page: flag.flagPage },
         );
     return translate(
-        "timeline.edit.passThrough.onlyChangeFrom",
-        "Only change from beat {beat}",
+        "timeline.edit.passThrough.startFromBeat",
+        "Start from beat {beat}",
         { beat: String(flag.beat) },
     );
 }
 
 /**
- * Shows what a range move passed through, if anything, with **Only change** when a page flag lies
+ * Shows what a range move passed through, if anything, with **Start from** when a page flag lies
  * inside the range. The action narrows the passed marchers (`moveMarchersFromFlagInstead`, which
  * keeps where they are now), and says in turn what the narrowed move passed through, if anything.
  */

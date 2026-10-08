@@ -48,16 +48,16 @@ describe("timeline pass-through messages (research/ownership/10)", () => {
             nextPage: "4",
             endsOnFlag: true,
         });
-        expect(narrowingLabel(onFlag, english)).toBe("Only change Page 4");
+        expect(narrowingLabel(onFlag, english)).toBe("Start from Page 4");
         // Ends partway into Page 4: from Page 3's set, and Page 4 still catches up after it
         const midPage = narrowingFlag({ start: 4, end: 40 }, boxes)!;
         expect(midPage.endsOnFlag).toBe(false);
         expect(narrowingLabel(midPage, english)).toBe(
-            "Only change from Page 3's set",
+            "Start from Page 3's set",
         );
         expect(narrowingFlag({ start: 16, end: 32 }, boxes)).toBeNull();
         expect(narrowingLabel({ beat: 32, endsOnFlag: false }, english)).toBe(
-            "Only change from beat 32",
+            "Start from beat 32",
         );
     });
 
@@ -71,6 +71,7 @@ describe("timeline pass-through messages (research/ownership/10)", () => {
                 { start: 16, end: 32 },
             ],
             caughtUp: [{ start: 32, end: 48 }],
+            flags: [],
         };
         expect(passThroughMessage(pass, boxes, english)).toBe(
             "T3 and T4 now move straight through Page 2 and Page 3, then catch up to Page 4's set by its end.",
@@ -91,5 +92,40 @@ describe("timeline pass-through messages (research/ownership/10)", () => {
         expect(
             passThroughMessage({ ...one, overridden: [] }, boxes, english),
         ).toBe("T3 now catches up to Page 4's set by its end.");
+    });
+
+    it("names the pages whose flags it passes, where no stored move was overridden (sparse rows)", () => {
+        const pass = {
+            range: { start: 4, end: 48 },
+            marcherIds: [3],
+            labels: ["T3"],
+            overridden: [],
+            caughtUp: [],
+            flags: [16, 32],
+        };
+        expect(passThroughMessage(pass, boxes, english)).toBe(
+            "T3 now moves straight through Page 2 and Page 3.",
+        );
+        // A flag an overridden move already ends on isn't named twice
+        expect(
+            passThroughMessage(
+                { ...pass, overridden: [{ start: 16, end: 32 }] },
+                boxes,
+                english,
+            ),
+        ).toBe("T3 now moves straight through Page 2 and Page 3.");
+        expect(
+            passThroughMessage(
+                {
+                    ...pass,
+                    range: { start: 4, end: 40 },
+                    caughtUp: [{ start: 32, end: 48 }],
+                },
+                boxes,
+                english,
+            ),
+        ).toBe(
+            "T3 now moves straight through Page 2 and Page 3, then catches up to Page 4's set by its end.",
+        );
     });
 });
