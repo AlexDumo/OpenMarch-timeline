@@ -10,6 +10,7 @@ import {
     defaultPerformerBody,
     heightClassFor,
     instrumentForSection,
+    partVisible,
     sectionUniform,
     uniformKey,
 } from "../looks";
@@ -106,5 +107,20 @@ describe("section uniforms", () => {
         expect(uniformKey(sectionUniform("Flute", fill))).not.toBe(
             uniformKey(sectionUniform("Trumpet", fill)),
         );
+    });
+
+    it("hides exactly the parts the shader would discard", () => {
+        const visible = (section: string) =>
+            Array.from({ length: 16 }, (_, p) => p).filter((p) =>
+                partVisible(sectionUniform(section, null), p),
+            );
+        // body parts 0-6 always; shako 7-9; one instrument 13-15
+        expect(visible("Trumpet")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 13]);
+        expect(visible("Mellophone")).toEqual([
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14,
+        ]);
+        expect(visible("Baritone")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15]);
+        expect(visible("Flute")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        expect(visible("Color Guard")).toEqual([0, 1, 2, 3, 4, 5, 6]);
     });
 });

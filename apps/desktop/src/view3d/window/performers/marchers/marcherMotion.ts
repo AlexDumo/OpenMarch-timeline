@@ -20,24 +20,37 @@ export interface ShowPlans {
     plans: (MarcherPlan | null)[];
     /** How long planning took, in ms. */
     planMs: number;
+    /** How many marchers were planned again (the rest were reused). */
+    replanned: number;
+    /** What each plan was made from, so the next call can reuse it. */
+    inputs: {
+        positions: (Float64Array | null)[];
+        heightClasses: readonly HeightClass[];
+        bandMoving: Uint8Array;
+        bpm: Float64Array;
+        ids: readonly number[];
+    };
 }
 
-/**
- * Samples every marcher's drill at each count boundary and plans its clips.
- * A count is a band-moving count when any marcher travels on it.
- */
-export function planShow(
+const sameArray = (
+    a: ArrayLike<number> | null,
+    b: ArrayLike<number> | null,
+) => {
+    if (a === b) return true;
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+};
+
+/** Each marcher's drill position at every count boundary (x, z interleaved). */
+function sampleDrill(
     timelines: readonly (MarcherTimeline | null)[],
-    heightClasses: readonly HeightClass[],
     clock: CountClock,
     fieldProperties: FieldProperties,
-    manifest: Manifest,
-    heading: number,
-): ShowPlans {
-    const t0 = performance.now();
+): (Float64Array | null)[] {
     const K = clock.counts;
     const point = { x: 0, z: 0 };
-    const sampled = timelines.map((timeline) => {
+    return timelines.map((timeline) => {
         if (!timeline || K === 0) return null;
         const p = new Float64Array((K + 1) * 2);
         for (let k = 0; k <= K; k++) {
@@ -55,6 +68,13 @@ export function planShow(
         }
         return p;
     });
+}
+
+/** 1 for each count on which any marcher travels. */
+function bandMovingCounts(
+    sampled: readonly (Float64Array | null)[],
+    K: number,
+): Uint8Array {
     const bandMoving = new Uint8Array(K);
     for (const p of sampled) {
         if (!p) continue;
@@ -68,19 +88,70 @@ export function planShow(
             )
                 bandMoving[k] = 1;
     }
-    const plans = sampled.map((positions, i) =>
-        positions
-            ? planMarcher({
-                  manifest,
-                  heightClass: heightClasses[i] ?? 1,
-                  heading,
-                  positions,
-                  bpm: clock.bpm,
-                  bandMoving,
-              })
-            : null,
-    );
-    return { plans, planMs: performance.now() - t0 };
+    return bandMoving;
+}
+
+/**
+ * Samples every marcher's drill at each count boundary and plans its clips.
+ * A count is a band-moving count when any marcher travels on it.
+ */
+export function planShow(
+    ids: readonly number[],
+    timelines: readonly (MarcherTimeline | null)[],
+    heightClasses: readonly HeightClass[],
+    clock: CountClock,
+    fieldProperties: FieldProperties,
+    manifest: Manifest,
+    heading: number,
+    previous: ShowPlans | null = null,
+): ShowPlans {
+    const t0 = performance.now();
+    const sampled = sampleDrill(timelines, clock, fieldProperties);
+    const bandMoving = bandMovingCounts(sampled, clock.counts);
+    // A drill edit usually moves a few marchers: reuse every plan whose
+    // inputs are unchanged (same marcher, drill samples, class and band rests).
+    const prev = previous?.inputs;
+    const reuseAll =
+        !!prev &&
+        sameArray(prev.bandMoving, bandMoving) &&
+        sameArray(prev.bpm, clock.bpm) &&
+        clock.counts + 1 === (prev.positions.find((p) => p)?.length ?? 0) / 2;
+    const prevIndex = new Map((prev?.ids ?? []).map((id, i) => [id, i]));
+    let replanned = 0;
+    const plans = sampled.map((positions, i) => {
+        if (!positions) return null;
+        const h = heightClasses[i] ?? 1;
+        const j = prevIndex.get(ids[i]);
+        if (
+            reuseAll &&
+            j !== undefined &&
+            prev!.heightClasses[j] === h &&
+            sameArray(prev!.positions[j], positions) &&
+            previous!.plans[j]
+        )
+            return previous!.plans[j];
+        replanned++;
+        return planMarcher({
+            manifest,
+            heightClass: h,
+            heading,
+            positions,
+            bpm: clock.bpm,
+            bandMoving,
+        });
+    });
+    return {
+        plans,
+        planMs: performance.now() - t0,
+        replanned,
+        inputs: {
+            positions: sampled,
+            heightClasses,
+            bandMoving,
+            bpm: clock.bpm,
+            ids,
+        },
+    };
 }
 
 /** Per-frame state: which event each marcher plays. */

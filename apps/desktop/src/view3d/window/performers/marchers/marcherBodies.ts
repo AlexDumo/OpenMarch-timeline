@@ -25,6 +25,7 @@ import {
 } from "@/view3d/vendor/om-pose/instanced-marchers.js";
 import { createUniformMaterial } from "@/view3d/vendor/om-pose/uniform-shader.js";
 import {
+    partVisible,
     uniformKey,
     type BodyType,
     type PerformerBody,
@@ -57,6 +58,52 @@ function contactAlpha(size = 64): THREE.DataTexture {
     const t = new THREE.DataTexture(data, size, size);
     t.needsUpdate = true;
     return t;
+}
+
+/**
+ * The source's triangles that a look shows: parts the look doesn't wear
+ * (other instruments, the aussie hat, the cape, the shako on guard) are
+ * left out of the draw instead of skinned and then discarded. Every v4u
+ * triangle belongs to one part, so this draws exactly what the shader would.
+ */
+export function visibleIndex(
+    source: THREE.BufferGeometry,
+    look: UniformLook,
+): THREE.BufferAttribute | null {
+    const index = source.index;
+    const part = source.getAttribute("_part");
+    if (!index || !part) return null;
+    const keep: number[] = [];
+    for (let t = 0; t < index.count; t += 3) {
+        const a = index.getX(t);
+        if (partVisible(look, Math.round(part.getX(a))))
+            keep.push(a, index.getX(t + 1), index.getX(t + 2));
+    }
+    if (keep.length === index.count) return null;
+    return new THREE.BufferAttribute(
+        index.count > 65535 || source.attributes.position.count > 65535
+            ? new Uint32Array(keep)
+            : new Uint16Array(keep),
+        1,
+    );
+}
+
+/**
+ * `disposeInstancedGeometry` for a geometry with its own index: frees the
+ * per-instance buffers and that index, never the body's shared buffers.
+ */
+function disposeMarcherGeometry(g: THREE.BufferGeometry, ownIndex: boolean) {
+    if (!ownIndex) {
+        disposeInstancedGeometry(g);
+        return;
+    }
+    for (const k of Object.keys(g.attributes))
+        if (
+            !(g.attributes[k] as THREE.InstancedBufferAttribute)
+                .isInstancedBufferAttribute
+        )
+            g.deleteAttribute(k);
+    g.dispose();
 }
 
 /** One contact disc per marcher, at the feet. */
@@ -95,6 +142,8 @@ interface MeshEntry {
     mesh: THREE.InstancedMesh;
     /** Slot index per instance. */
     slots: number[];
+    /** Whether the geometry has its own (part-filtered) index. */
+    ownIndex: boolean;
 }
 
 /** Every v4u body shares one skeleton, so any of them bakes for all. */
@@ -173,20 +222,7 @@ export class MarcherBodies {
             }
             const source =
                 this.blockSource ?? bodies.get(g.type)!.mesh.geometry;
-            const geometry = instancedGeometry(THREE, source, g.slots.length);
-            const mesh = new THREE.InstancedMesh(
-                geometry,
-                material,
-                g.slots.length,
-            );
-            mesh.name = `view3d-marchers-${g.type}`;
-            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-            // The bounds are computed once and don't follow the instances.
-            mesh.frustumCulled = false;
-            // No shadows: om-pose's depth pass isn't patched, so a shadow
-            // would show the rest pose (openmarch-3d.md, "Not done yet").
-            mesh.castShadow = false;
-            mesh.receiveShadow = false;
+            const { mesh, filtered } = this.buildMesh(source, material, g);
             const entry = this.entries.length;
             g.slots.forEach((slot, k) => {
                 this.meshOf[slot] = entry;
@@ -196,9 +232,38 @@ export class MarcherBodies {
                     skin: looks[slot].body.skinTone,
                 });
             });
-            this.entries.push({ mesh, slots: g.slots });
+            this.entries.push({
+                mesh,
+                slots: g.slots,
+                ownIndex: filtered !== null,
+            });
             this.group.add(mesh);
         }
+    }
+
+    /** One InstancedMesh for a group of slots sharing a body and a look. */
+    private buildMesh(
+        source: THREE.BufferGeometry,
+        material: THREE.Material,
+        g: { type: BodyType; look: UniformLook; slots: number[] },
+    ) {
+        const geometry = instancedGeometry(THREE, source, g.slots.length);
+        const filtered = this.blockSource ? null : visibleIndex(source, g.look);
+        if (filtered) geometry.setIndex(filtered);
+        const mesh = new THREE.InstancedMesh(
+            geometry,
+            material,
+            g.slots.length,
+        );
+        mesh.name = `view3d-marchers-${g.type}`;
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        // The bounds are computed once and don't follow the instances.
+        mesh.frustumCulled = false;
+        // No shadows: om-pose's depth pass isn't patched, so a shadow
+        // would show the rest pose (openmarch-3d.md, "Not done yet").
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        return { mesh, filtered };
     }
 
     private firstRow() {
@@ -266,8 +331,8 @@ export class MarcherBodies {
     }
 
     dispose(): void {
-        for (const { mesh } of this.entries) {
-            disposeInstancedGeometry(mesh.geometry);
+        for (const { mesh, ownIndex } of this.entries) {
+            disposeMarcherGeometry(mesh.geometry, ownIndex);
             mesh.dispose();
         }
         for (const m of this.materials) m.dispose();

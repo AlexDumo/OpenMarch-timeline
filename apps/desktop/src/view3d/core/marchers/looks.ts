@@ -173,6 +173,31 @@ export function sectionUniform(
     };
 }
 
+/** The uniform shader's part ids (om-pose `uniforms/uniform-shader.js`). */
+export const PART = {
+    shako: [7, 8, 9],
+    aussie: [10, 11],
+    cape: 12,
+    /** trumpet, mellophone, baritone */
+    instruments: [13, 14, 15],
+} as const;
+
+/**
+ * Whether a look shows a body part: the same rules the uniform shader uses
+ * to discard the parts a look doesn't wear, so their triangles can be left
+ * out of the draw instead of skinned and discarded.
+ */
+export function partVisible(look: UniformLook, part: number): boolean {
+    const { hat, hatType, instrument } = look.options;
+    if ((PART.shako as readonly number[]).includes(part))
+        return hat && hatType === "shako";
+    if ((PART.aussie as readonly number[]).includes(part)) return false;
+    if (part === PART.cape) return false;
+    const i = (PART.instruments as readonly number[]).indexOf(part);
+    if (i >= 0) return ["trumpet", "mellophone", "baritone"][i] === instrument;
+    return true;
+}
+
 /** Identifies a uniform, so equal looks share one material. */
 export function uniformKey(look: UniformLook): string {
     return JSON.stringify(look);

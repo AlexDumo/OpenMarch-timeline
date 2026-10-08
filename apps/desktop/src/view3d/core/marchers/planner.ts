@@ -414,11 +414,23 @@ export function planMarcher(input: PlanInput): MarcherPlan {
         const d = drafts[k];
         const isTransition = d.kind === "transition";
         const lastEvent = events[events.length - 1];
+        // The correction is constant across this count (the offset doesn't
+        // change between its anchors): then a span change doesn't matter.
+        const flat = (e: PlanEvent) => e.oaX === e.obX && e.oaZ === e.obZ;
+        const sameSpan =
+            lastEvent &&
+            (lastEvent.a === a ||
+                (lastEvent.b === a &&
+                    flat(lastEvent) &&
+                    ox[a] === lastEvent.obX &&
+                    oz[a] === lastEvent.obZ &&
+                    ox[b] === ox[a] &&
+                    oz[b] === oz[a]));
         const mergeable =
             !isTransition &&
             lastEvent &&
             lastEvent.kind === d.kind &&
-            lastEvent.a === a &&
+            sameSpan &&
             lastEvent.clip === d.clip &&
             lastEvent.clip2 === d.clip2 &&
             Math.abs(lastEvent.weight - d.weight) < 1e-6 &&
@@ -428,7 +440,15 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             Math.abs(lastEvent.phaseStart - d.phaseStart) % 2 === 0 &&
             Math.abs(lastEvent.baseX - ox[k]) < 1e-9 &&
             Math.abs(lastEvent.baseZ - oz[k]) < 1e-9;
-        if (mergeable) continue;
+        if (mergeable) {
+            if (lastEvent.a !== a) {
+                // extend the event's flat span
+                lastEvent.b = b;
+                lastEvent.obX = ox[b];
+                lastEvent.obZ = oz[b];
+            }
+            continue;
+        }
         events.push({
             count: k,
             kind: d.kind,

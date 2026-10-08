@@ -61,7 +61,11 @@ import {
     writeRingMatrices,
 } from "./performerData";
 import type { MarcherSlotLook } from "./marchers/marcherBodies";
-import { MarcherMotion, planShow } from "./marchers/marcherMotion";
+import {
+    MarcherMotion,
+    planShow,
+    type ShowPlans,
+} from "./marchers/marcherMotion";
 import {
     clipName,
     useMarcherAssets,
@@ -144,19 +148,24 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // The count clock and every marcher's clip plan for the whole show.
     const { beats } = useTimingObjects();
     const clock = useMemo(() => buildCountClock(beats), [beats]);
+    const previousPlans = useRef<ShowPlans | null>(null);
     const showPlans = useMemo(() => {
         if (!marcherAssets || !marcherLooks) return null;
         const planned = planShow(
+            slots.ids,
             slots.timelines,
             marcherLooks.map((l) => l.body.heightClass),
             clock,
             fieldProperties,
             marcherAssets.manifest,
             marcherHeading(),
+            previousPlans.current,
         );
+        previousPlans.current = planned;
         // eslint-disable-next-line no-console -- planning time is a cost to watch at 2,000 marchers
         console.info(
-            `3D View: planned ${planned.plans.length} marchers over ` +
+            `3D View: planned ${planned.replanned} of ` +
+                `${planned.plans.length} marchers over ` +
                 `${clock.counts} counts in ${planned.planMs.toFixed(0)} ms`,
         );
         return planned;
