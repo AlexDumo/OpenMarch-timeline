@@ -18,6 +18,8 @@ export const tablesWithHistory = [
     schema.measures,
     schema.marchers,
     schema.marcher_pages,
+    // Page-mode edits move pathway ends with their marcher pages, so undo restores both
+    schema.pathways,
     schema.shapes,
     schema.shape_pages,
     schema.shape_page_marchers,
