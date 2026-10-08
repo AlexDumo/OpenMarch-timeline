@@ -1071,7 +1071,7 @@ const CLIP_LABEL_MIN_WIDTH = 40;
 
 /**
  * A move's inline name field (UI-14 Rename): it opens with the text selected; Enter or leaving it
- * commits, Esc cancels (`onDone(null)`). Its keys stay its own, so typing never reaches the
+ * commits, Esc cancels (`onDone(null)`); `byKey` says it closed by Enter or Esc. Its keys stay its own, so typing never reaches the
  * timeline's or the app's shortcuts (G, Space, Delete…), and a press in it never scrubs.
  */
 export function TimelineMoveNameField({
@@ -1082,7 +1082,7 @@ export function TimelineMoveNameField({
     ariaLabel = "Move name",
 }: {
     initial: string;
-    onDone: (name: string | null) => void;
+    onDone: (name: string | null, byKey: boolean) => void;
     className?: string;
     style?: CSSProperties;
     ariaLabel?: string;
@@ -1098,10 +1098,10 @@ export function TimelineMoveNameField({
         });
         return () => cancelAnimationFrame(frame);
     }, []);
-    const finish = (name: string | null) => {
+    const finish = (name: string | null, byKey = false) => {
         if (done.current) return;
         done.current = true;
-        onDone(name);
+        onDone(name, byKey);
     };
     // UI-14 review: a field removed before it blurs (a click elsewhere on the timeline changes
     // the selection first) still saves what was typed, unless Esc cancelled it
@@ -1132,10 +1132,10 @@ export function TimelineMoveNameField({
                     event.stopPropagation();
                     if (event.key === "Enter") {
                         event.preventDefault();
-                        finish(value);
+                        finish(value, true);
                     } else if (event.key === "Escape") {
                         event.preventDefault();
-                        finish(null);
+                        finish(null, true);
                     }
                 }}
                 onBlur={() => finish(value)}
@@ -1253,17 +1253,13 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
             },
         [moveCommands, onRenameStart, trackId],
     );
-    const onRenameDone = (name: string | null) => {
+    const onRenameDone = (name: string | null, byKey: boolean) => {
         onRenameEnd?.(trackId);
-        // UI-14 review: focus back on the clip, saved or cancelled, once the field has gone, when
-        // it would otherwise fall to the page (Enter, Esc, a click on the empty lane or ruler).
-        // Never taken from a control a click put it on (code review: a click on another clip
-        // selected it while focus came back here, and Delete then deleted this one)
-        requestAnimationFrame(() => {
-            const active = document.activeElement;
-            if (active === null || active === document.body)
-                clipRef.current?.focus();
-        });
+        // UI-14 review: Enter or Esc puts focus back on the clip, saved or cancelled. A field
+        // closed any other way (a click, a blur, its clip going) leaves focus where it went, even
+        // the page: a click on a marcher then keeps Delete and the arrows for the marchers, and a
+        // click on another clip keeps them for that clip (code review)
+        if (byKey) requestAnimationFrame(() => clipRef.current?.focus());
         // Unchanged writes nothing (an empty edit is refused)
         if (name !== null && name.trim() !== track.label.trim())
             moveCommands?.onRename(trackId, name);

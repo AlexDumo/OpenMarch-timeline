@@ -559,24 +559,22 @@ describe("the round-2 review's keys and focus (UI-14)", () => {
         expect(moves.onDelete).toHaveBeenCalledWith(8);
     });
 
-    it("a rename left by a click on the empty lane puts focus back on the clip, not the page", async () => {
+    it("a rename left by a click on something that takes no focus (the lane, a marcher) leaves focus there, not on the clip", async () => {
         const moves = show();
         fireEvent.keyDown(clipButton(), { key: "F2" });
         const field = screen.getByTestId("timeline-move-name-field");
         await waitFor(() => expect(document.activeElement).toBe(field));
         fireEvent.change(field, { target: { value: "Opener" } });
-        // A press on nothing focusable: focus falls to the page
+        // A press on nothing focusable: focus falls to the page, and stays there
         fireEvent.pointerDown(document.body);
         field.blur();
         expect(moves.onRename).toHaveBeenCalledWith(7, "Opener");
-        await waitFor(() => expect(document.activeElement).toBe(clipButton()));
-        // A second rename, left the same way, comes back too
-        fireEvent.keyDown(clipButton(), { key: "F2" });
-        const again = screen.getByTestId("timeline-move-name-field");
-        await waitFor(() => expect(document.activeElement).toBe(again));
-        fireEvent.pointerDown(document.body);
-        again.blur();
-        await waitFor(() => expect(document.activeElement).toBe(clipButton()));
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        expect(document.activeElement).toBe(document.body);
+        // So Delete is the app's (the selected marchers'), not the move's
+        fireEvent.keyDown(document.activeElement!, { key: "Delete" });
+        expect(moves.onDelete).not.toHaveBeenCalled();
     });
 
     it("after a rename, saved or cancelled, focus is back on the clip", async () => {
