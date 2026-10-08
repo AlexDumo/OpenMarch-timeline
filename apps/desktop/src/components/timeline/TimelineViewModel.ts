@@ -83,6 +83,13 @@ export interface TimelineTrack {
     /** A gap-free, non-overlapping partition of the track's complete range. */
     readonly activitySpans: readonly TimelineActivitySpan[];
     readonly diagnostics?: TimelineTrackDiagnostics;
+    /**
+     * What screen readers call the clip, when the owner can say more than the label (UI-14 review:
+     * "Move 1, Page 3, counts 1–4"); without it, the label and its beats
+     */
+    readonly accessibleName?: string;
+    /** More about the clip, for its tooltip and screen readers (UI-14 review: why it is dashed) */
+    readonly description?: string;
 }
 
 export interface TimelineWaveform {

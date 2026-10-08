@@ -173,13 +173,29 @@ describeDbTests("deleting a move (UI-14)", (it) => {
 });
 
 describeDbTests("renaming a move (UI-14)", (it) => {
-    it("stores the trimmed name as one undoable edit, and clears it when empty", async ({
+    /** A mid-page move on page 4, made by a drag: it is "Move 1" from the start */
+    const makeMove = async (db: DbConnection, pages: Page[]) => {
+        const page = await timelineOf(db, pages[3]!);
+        const mid = page.start_beat + 3;
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: page.start_beat, end: mid },
+            moves: [{ marcherId: 5, x: 200, y: 210 }],
+        });
+        return (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.end_beat, mid))
+            .get())!;
+    };
+
+    it("stores the trimmed name as one undoable edit; cleared, it takes the next free number", async ({
         db,
         marchersAndPages: _,
     }) => {
         const pages = await setUp(db);
-        const { id } = await timelineOf(db, pages[2]!);
-        const original = await nameOf(db, id);
+        const { id } = await makeMove(db, pages);
+        expect(await nameOf(db, id)).toBe("Move 1");
 
         const renamed = await renameTimeline({
             db,
@@ -189,36 +205,38 @@ describeDbTests("renaming a move (UI-14)", (it) => {
         expect(renamed?.name).toBe("Company front");
         expect(await nameOf(db, id)).toBe("Company front");
 
+        // UI-14 round-2 review: a move always has a name, so its label never shifts. Cleared,
+        // it takes the next number not on screen; its own "Move 1" went with the typed name
         await renameTimeline({ db, timelineId: id, name: "" });
-        expect(await nameOf(db, id)).toBeNull();
+        expect(await nameOf(db, id)).toBe("Move 1");
 
         let undo = await performUndo(db);
         expect(undo.success, undo.error?.message).toBe(true);
         expect(await nameOf(db, id)).toBe("Company front");
         undo = await performUndo(db);
         expect(undo.success, undo.error?.message).toBe(true);
-        expect(await nameOf(db, id)).toBe(original);
+        expect(await nameOf(db, id)).toBe("Move 1");
     });
 
-    it("writes nothing when the name doesn't change", async ({
+    it("writes nothing when the name doesn't change, or when an automatic name is cleared", async ({
         db,
         marchersAndPages: _,
     }) => {
         const pages = await setUp(db);
-        const { id } = await timelineOf(db, pages[2]!);
+        const { id } = await makeMove(db, pages);
+        const undoAuto = await getUndoStackLength(db);
+        expect(
+            await renameTimeline({ db, timelineId: id, name: "  " }),
+        ).toBeNull();
+        expect(await nameOf(db, id)).toBe("Move 1");
+        expect(await getUndoStackLength(db)).toBe(undoAuto);
+
         await renameTimeline({ db, timelineId: id, name: "Opener" });
         const undoBefore = await getUndoStackLength(db);
         expect(
             await renameTimeline({ db, timelineId: id, name: " Opener " }),
         ).toBeNull();
         expect(await getUndoStackLength(db)).toBe(undoBefore);
-
-        await renameTimeline({ db, timelineId: id, name: "" });
-        const cleared = await getUndoStackLength(db);
-        expect(
-            await renameTimeline({ db, timelineId: id, name: "  " }),
-        ).toBeNull();
-        expect(await getUndoStackLength(db)).toBe(cleared);
     });
 
     it("a timeline that no longer exists has nothing to rename: no edit, no error", async ({

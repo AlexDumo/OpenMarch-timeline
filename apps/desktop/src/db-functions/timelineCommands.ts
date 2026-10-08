@@ -6,13 +6,19 @@ import {
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables, shapeFromRow } from "@/timeline/timelineRows";
-import { normalizeMoveName } from "@/timeline/timelineViewModel";
+import {
+    autoMoveNumber,
+    normalizeMoveName,
+} from "@/timeline/timelineViewModel";
 import { castSlots, transitionSlotPoints } from "@/timeline/timelineCasting";
 import { DbConnection, DbTransaction } from "./types";
+import {
+    createRangeTimelineInTransaction,
+    nextMoveNameInTransaction,
+} from "./timelineMoveNames";
 import { transactionWithHistory } from "./history";
 import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
 import {
-    createTimelinesInTransaction,
     deleteTimelinesInTransaction,
     findTimelineByRange,
     updateTimelinesInTransaction,
@@ -433,12 +439,7 @@ export const createTrackInTransaction = async ({
     // takes the new transition alongside its others (C-11)
     const timeline =
         (await findTimelineByRange(tx, { start: startBeat, end: endBeat })) ??
-        (
-            await createTimelinesInTransaction({
-                tx,
-                newTimelines: [{ startBeat, endBeat }],
-            })
-        )[0];
+        (await createRangeTimelineInTransaction(tx, { startBeat, endBeat }));
     const [transition] = await createTimelineTransitionsInTransaction({
         tx,
         newTransitions: [
@@ -512,10 +513,13 @@ export const deleteTimeline = async ({
     });
 
 /**
- * Renames a move (UI-14) as one undoable edit; `normalizeMoveName` decides what is stored, so an
- * empty name clears it. A name equal to the stored one opens no edit and returns `null`, since
- * an edit that writes nothing is refused. A timeline that no longer exists (a name field left
- * open while its move was deleted) has nothing to rename: `null` too, not an error.
+ * Renames a move (UI-14) as one undoable edit; `normalizeMoveName` decides what is stored. A move
+ * always has a name since the round-2 review, so its label never shifts: clearing an automatic
+ * "Move N" keeps it, and clearing a typed name gives the move the next number
+ * (`nextMoveNameInTransaction`), as a new move would get. A name equal to the stored one opens no
+ * edit and returns `null`, since an edit that writes nothing is refused. A timeline that no longer
+ * exists (a name field left open while its move was deleted) has nothing to rename: `null` too,
+ * not an error.
  */
 export const renameTimeline = async ({
     db,
@@ -533,10 +537,16 @@ export const renameTimeline = async ({
         .where(eq(schema.timelines.id, timelineId))
         .get();
     if (!stored || stored.name === next) return null;
+    if (next === null && autoMoveNumber(stored.name) !== null) return null;
     return await transactionWithHistory(db, "renameTimeline", async (tx) => {
         const [renamed] = await updateTimelinesInTransaction({
             tx,
-            modifiedTimelines: [{ id: timelineId, name: next }],
+            modifiedTimelines: [
+                {
+                    id: timelineId,
+                    name: next ?? (await nextMoveNameInTransaction(tx)),
+                },
+            ],
         });
         return renamed!;
     });

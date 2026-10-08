@@ -64,6 +64,19 @@ export interface TimelineInput {
     readonly legs: readonly TimelineLegInput[];
     readonly activitySpans: readonly TimelineActivitySpan[];
     readonly diagnostics?: TimelineTrackDiagnostics;
+    /**
+     * Where other timelines take every member of this one (the dashed spans, UI-4), in spec beats:
+     * which timeline, and its part of the range (UI-14 review)
+     */
+    readonly overriddenBy?: readonly {
+        readonly timelineId: number;
+        readonly start: number;
+        readonly end: number;
+    }[];
+    /** See `TimelineTrack.accessibleName` */
+    readonly accessibleName?: string;
+    /** See `TimelineTrack.description` */
+    readonly description?: string;
 }
 
 /**
@@ -202,6 +215,10 @@ const toTrack = (timeline: TimelineInput): TimelineTrack => ({
     })),
     activitySpans: timeline.activitySpans,
     diagnostics: timeline.diagnostics,
+    ...(timeline.accessibleName
+        ? { accessibleName: timeline.accessibleName }
+        : {}),
+    ...(timeline.description ? { description: timeline.description } : {}),
 });
 
 /**
