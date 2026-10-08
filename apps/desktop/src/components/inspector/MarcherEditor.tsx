@@ -45,6 +45,7 @@ import {
 } from "@phosphor-icons/react";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
+import TimelineHoldLine from "./TimelineHoldLine";
 
 const DEFAULT_SORTING_THRESHOLD = 0.1;
 
@@ -719,6 +720,9 @@ function MarcherEditor() {
                                     .map((marcher) => marcher.drill_number)
                                     .join(", ")}
                             </p>
+                            <TimelineHoldLine
+                                marcherIds={selectedMarcherIdList}
+                            />
                             {minMaxStepSize &&
                                 minMaxStepSize.min &&
                                 minMaxStepSize.max && (
@@ -848,6 +852,9 @@ function MarcherEditor() {
                             }}
                             className="mt-12 flex flex-col gap-24"
                         >
+                            <TimelineHoldLine
+                                marcherIds={selectedMarcherIdList}
+                            />
                             {!rCoords ? (
                                 <p className="text-body text-red">
                                     <T keyName="inspector.marcher.errorLoadingCoords" />
