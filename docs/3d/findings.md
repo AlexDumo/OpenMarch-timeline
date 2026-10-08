@@ -48,4 +48,23 @@ Budgets are in [design.md](design.md) §9.
   reference photos: not done in this pass; no GPU or browser was reachable
   from the session. The owner checks the web preview's Horn state picker.
 
+### 2026-10-08 · trevor (3d/p7-instruments) · instruments PR 1, detail pass
+
+- Horns retraced from the reference photos at two detail levels
+  (`brass.test.ts` pins 8,000–12,000 high and 1,500–3,500 low): trumpet
+  9,484 / 1,934; mellophone, baritone and euphonium 10,436 / 2,126 each;
+  trombone 8,256 / 1,632; bass trombone 8,544 / 1,704; contra 8,084 / 1,830.
+  150 brass at high add about 1.5 M triangles in instanced draws.
+- Draw calls: one body mesh per (body type, look) group plus one horn mesh per
+  brass group, so a band with four brass sections over seven body types adds
+  up to 28 draw calls at high and up to 4 at low (one group per look there).
+- The horn material is a smooth metallic `MeshStandardMaterial` (metalness 1,
+  roughness 0.25, vertex colors) under the same bake; the scene now has a
+  PMREM environment map from the preset's sky at intensity 0.6, which every
+  glossy surface sees.
+- Bake cost unchanged from the first pass (holds only; the horn adds no rows).
+- Frame time on real hardware and the look of each horn and hold in the
+  renderer: left to the owner; no GPU or browser in the session. Wireframe
+  side views were checked against the photos for silhouette only.
+
 ## Verdicts
