@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { isTimelineOwnKey, spaceStaysPlay } from "../timelineHotkeys";
+import {
+    isNudgeKey,
+    isTimelineOwnKey,
+    skipsAppNudge,
+    spaceStaysPlay,
+} from "../timelineHotkeys";
 
 /**
  * UI-14 round-2 review: on the timeline's move controls Enter and the arrows are theirs, never the
@@ -30,7 +35,7 @@ describe("isTimelineOwnKey", () => {
         // Space plays, and the app's other shortcuts still work there
         for (const k of [" ", "g", "Delete", "z"])
             expect(isTimelineOwnKey(key(k), inside)).toBe(false);
-        // Ctrl+S, Cmd+A: shortcuts, not nudges
+        // Ctrl+S, Cmd+A: their shortcuts run (the app skips the nudge, skipsAppNudge)
         expect(isTimelineOwnKey(key("s", { ctrlKey: true }), inside)).toBe(
             false,
         );
@@ -60,6 +65,38 @@ describe("isTimelineOwnKey on other keyboard layouts", () => {
         expect(
             isTimelineOwnKey(key("ArrowUp", { code: "Numpad8" }), inside),
         ).toBe(true);
+    });
+});
+
+describe("Ctrl+WASD on a move control (code review)", () => {
+    it("is a nudge, as the app's nudge matches it, and only Cmd makes WASD something else", () => {
+        expect(isNudgeKey(key("s", { ctrlKey: true }))).toBe(true);
+        expect(isNudgeKey(key("a", { ctrlKey: true }))).toBe(true);
+        expect(isNudgeKey(key("w", { altKey: true }))).toBe(true);
+        expect(isNudgeKey(key("s", { metaKey: true }))).toBe(false);
+        expect(isNudgeKey(key("ArrowUp", { metaKey: true }))).toBe(true);
+        expect(isNudgeKey(key("g", { ctrlKey: true }))).toBe(false);
+    });
+
+    it("on a move control the app's nudge skips it, while Ctrl+S and Ctrl+A still reach their shortcuts", () => {
+        document.body.innerHTML = `<section data-timeline-own-keys="true"><button id="in">Move 1</button></section><button id="out">Other</button>`;
+        const inside = document.getElementById("in");
+        const outside = document.getElementById("out");
+        for (const mods of [{ ctrlKey: true }, {}]) {
+            for (const k of ["s", "a", "w", "d"])
+                expect(skipsAppNudge(key(k, mods), inside)).toBe(true);
+        }
+        // The control doesn't take Ctrl+S or Ctrl+A for itself: save and select all still run
+        expect(isTimelineOwnKey(key("s", { ctrlKey: true }), inside)).toBe(
+            false,
+        );
+        expect(isTimelineOwnKey(key("a", { ctrlKey: true }), inside)).toBe(
+            false,
+        );
+        // Elsewhere the nudge works as before
+        expect(skipsAppNudge(key("s", { ctrlKey: true }), outside)).toBe(false);
+        expect(skipsAppNudge(key("ArrowUp"), outside)).toBe(false);
+        expect(skipsAppNudge(key("ArrowUp"), null)).toBe(false);
     });
 });
 

@@ -38,17 +38,30 @@ export const spaceStaysPlay = (event: {
 /** The WASD nudge keys, by physical key as the app's nudge reads them (`RegisteredActionsHandler`) */
 const NUDGE_CODES = new Set(["KeyW", "KeyA", "KeyS", "KeyD"]);
 
+type KeyFields = Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey">;
+
+const isArrow = (event: KeyFields) =>
+    event.key.startsWith("Arrow") || event.code.startsWith("Arrow");
+
 /**
- * A key the app's registered shortcuts would take as a nudge of the selected marchers: an arrow,
- * or W, A, S or D by physical key (`event.code`, so another keyboard layout can't slip one past),
- * Alt included (it turns snapping off). Ctrl and Cmd make it another shortcut (Ctrl+S saves).
+ * A key the app's nudge (`RegisteredActionsHandler`) moves the selected marchers on, exactly as it
+ * matches them: any arrow, or W, A, S or D by physical key (`event.code`, so another keyboard
+ * layout can't slip one past), with any modifier but Cmd. Ctrl+S and Ctrl+A nudge there too,
+ * before their own shortcuts (save, select all) run.
  */
-export const isNudgeKey = (
-    event: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey">,
-): boolean =>
-    event.key.startsWith("Arrow") ||
-    event.code.startsWith("Arrow") ||
-    (NUDGE_CODES.has(event.code) && !event.ctrlKey && !event.metaKey);
+export const isNudgeKey = (event: KeyFields): boolean =>
+    isArrow(event) || (NUDGE_CODES.has(event.code) && !event.metaKey);
+
+/**
+ * A nudge key that is nothing else: an arrow, or WASD without Ctrl or Cmd. With Ctrl it is also
+ * another shortcut (Ctrl+S saves), which a move control lets through, without the nudge.
+ */
+export const isPlainNudgeKey = (event: KeyFields): boolean =>
+    isNudgeKey(event) && (isArrow(event) || !event.ctrlKey);
+
+/** Focus is on a timeline move control: a clip, its ⋯ button or name field, the Move card or the isolation bar */
+const onMoveControl = (focused: Element | null) =>
+    focused?.closest("[data-timeline-own-keys]") != null;
 
 /**
  * Whether a key belongs to the focused timeline move control (UI-14 round-2 review): on a clip,
@@ -58,8 +71,16 @@ export const isNudgeKey = (
  * the arrows and WASD would nudge the selected marchers unseen. Space isn't one: it still plays.
  */
 export const isTimelineOwnKey = (
-    event: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey">,
+    event: KeyFields,
     focused: Element | null,
 ): boolean =>
-    focused?.closest("[data-timeline-own-keys]") != null &&
-    (event.key === "Enter" || isNudgeKey(event));
+    onMoveControl(focused) && (event.key === "Enter" || isPlainNudgeKey(event));
+
+/**
+ * Whether the app's nudge must skip a key (code review): on a move control no nudge key moves the
+ * selected marchers, Ctrl+WASD included; Ctrl+S still saves and Ctrl+A still selects all.
+ */
+export const skipsAppNudge = (
+    event: KeyFields,
+    focused: Element | null,
+): boolean => onMoveControl(focused) && isNudgeKey(event);

@@ -60,7 +60,10 @@ import { requestOpenNewShowDialog } from "@/utilities/openNewShowDialog";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
 import { AlertDialogAction, AlertDialogCancel, Button } from "@openmarch/ui";
 import { CircleNotchIcon } from "@phosphor-icons/react";
-import { isTimelineOwnKey } from "@/components/timeline/timelineHotkeys";
+import {
+    isTimelineOwnKey,
+    skipsAppNudge,
+} from "@/components/timeline/timelineHotkeys";
 
 /**
  * The interface for the registered actions. This exists so it is easy to see what actions are available.
@@ -1515,16 +1518,18 @@ function RegisteredActionsHandler() {
                     "ArrowRight",
                 ]);
 
-                // Special handling for WASD/Arrow keys
+                // Special handling for WASD/Arrow keys; never on a timeline move control, where
+                // Ctrl+S and Ctrl+A keep only their own shortcut (code review)
                 if (
-                    code === "KeyW" ||
-                    code === "KeyA" ||
-                    code === "KeyS" ||
-                    code === "KeyD" ||
-                    code === "ArrowUp" ||
-                    code === "ArrowDown" ||
-                    code === "ArrowLeft" ||
-                    code === "ArrowRight"
+                    !skipsAppNudge(e, document.activeElement) &&
+                    (code === "KeyW" ||
+                        code === "KeyA" ||
+                        code === "KeyS" ||
+                        code === "KeyD" ||
+                        code === "ArrowUp" ||
+                        code === "ArrowDown" ||
+                        code === "ArrowLeft" ||
+                        code === "ArrowRight")
                 ) {
                     e.preventDefault();
 
