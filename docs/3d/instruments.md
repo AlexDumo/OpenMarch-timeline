@@ -55,19 +55,19 @@ reference pages during the build.
 
 ### Brass (`FAMILIES.Brass`)
 
-| Section       | Model                                    | Working dimensions      | Hold     |
-| ------------- | ---------------------------------------- | ----------------------- | -------- |
-| Trumpet       | Bb trumpet, 3 piston valves              | length 0.48, bell 0.125 | brass    |
-| Mellophone    | marching mellophone, front bell          | length 0.55, bell 0.26  | brass    |
-| Baritone      | marching baritone, front bell            | length 0.62, bell 0.25  | brass    |
-| Euphonium     | marching euphonium, front bell           | length 0.66, bell 0.28  | brass    |
-| Trombone      | tenor trombone, slide                    | length 1.18, bell 0.21  | trombone |
-| Bass Trombone | same with larger bell and a second rotor | bell 0.24               | trombone |
-| Tuba          | marching contra, shouldered, front bell  | bell 0.50, body 0.95    | contra   |
+| Section       | Model                                                                    | Working dimensions          | Hold     |
+| ------------- | ------------------------------------------------------------------------ | --------------------------- | -------- |
+| Trumpet       | Bb trumpet, 3 piston valves                                              | length 0.48, bell 0.125     | brass    |
+| Mellophone    | marching mellophone, front bell                                          | length 0.55, bell 0.26      | brass    |
+| Baritone      | marching baritone, front bell                                            | length 0.62, bell 0.25      | brass    |
+| Euphonium     | marching euphonium, front bell                                           | length 0.66, bell 0.28      | brass    |
+| Trombone      | tenor trombone, slide                                                    | length 1.18, bell 0.21      | trombone |
+| Bass Trombone | same with larger bell and a second rotor                                 | bell 0.24                   | trombone |
+| Tuba          | marching contra: a long horizontal loop on the left shoulder, front bell | body 0.95 × 0.40, bell 0.50 | contra   |
 
-Sousaphones are not a section today; the contra model and hold cover tubas.
-A sousaphone variant (bell overhead, wrapped body) is a follow-up if the
-section is added.
+The Tuba section renders the marching contra. A sousaphone (circular wrap,
+bell overhead) becomes a per-section choice on Tuba later (owner,
+2026-10-08); the catalog's `Carry.model` is where that choice lands.
 
 The app has no French horn section; mellophone covers it. If one is added
 later it gets its own hold (bell under the right arm, left hand on the
@@ -114,14 +114,29 @@ functions from a few dimensions to triangle lists, in the manner of
 blocks as cylinders with caps, drum shells as open cylinders with hoops and
 lugs, bars as boxes on a frame. Each piece is rigidly weighted to one bone
 of the v4 skeleton and carries a `_part` id so the uniform shader paints it.
-Triangle budget: 300 to 600 per horn, 400 per drum, so a 150-piece band adds
-under 100 k triangles.
+Triangle budget, revised 2026-10-08 after the owner saw the first pass:
+8,000 to 12,000 per horn at high quality and about 2,500 at low, from the
+same code at lower segment counts; drums follow the same ratio. 150 brass
+at high add about 1.5 M triangles in instanced draws; the frame time is
+measured, not assumed.
 
 Why procedural: no modeling tool is available on this side, the maquette
 style lives in proportion and finish rather than surface detail, the
 geometry instances with the body for free, and a dimension change is a
 number. Hand-modeled GLB assets are the alternative if the result reads as
 too simple; the attachment and paint path below is the same either way.
+
+**Material (revised 2026-10-08).** The first pass painted horns through the
+uniform shader: flat-shaded, no metalness, one color. It cannot read as
+brass. Instruments are instead their own instanced mesh per look group,
+driven by the same bake texture through `instancedSkinning`, with a smooth
+metallic `MeshStandardMaterial` (metalness about 1, roughness about 0.25) in
+the look's finish color, with chrome and black hardware by part. Metal needs
+something to reflect, so the scene gains an environment map generated from
+the sky gradient over a bright ground, applied scene-wide (the fidelity
+brief's "sky-baked environment lighting"). One extra draw call per brass
+group. The part ids below remain the mesh's own attribute for the material
+to color by.
 
 **Parts and finish.** The uniform shader paints parts by id; it knows ids 0
 to 15 today. Instruments take new ids from 16 upward: 16 brass finish (gold
@@ -168,9 +183,10 @@ points and where the elbows go.
   straight down, closed fist, thumb on top, along the leg.
 - **trombone, horns up.** As brass with the left hand at the bell brace and
   the right hand on the slide at first position.
-- **contra, horns up and carry.** Shouldered on the left shoulder, bell
-  forward above the head, right hand on the valves at chest height, left
-  hand on the bell branch.
+- **contra, horns up and carry.** The body lies along the left shoulder,
+  bell forward and a little above the head, valves at the rear by the
+  player's right chest: right hand on the valves, left hand under the
+  bottom bow in front of the chest.
 - **flute.** Horizontal to the player's right, lips at the head joint, left
   hand near, right hand far. Carry: the same hands with the head joint
   raised so the embouchure hole sits at eye level.
