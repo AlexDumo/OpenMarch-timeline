@@ -26,6 +26,7 @@ import type {
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineNavigation,
+    TimelinePageFlagMove,
     TimelineRangeChange,
     TimelineSeekOptions,
     TimelineSelection,
@@ -146,6 +147,11 @@ export interface TimelineProps {
     readonly onAddPageFlag?: () => void;
     /** The page box menu's **Delete page flag** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
+    /**
+     * Moving page flags by their grips (docs/timeline/research/move-page-flag), in spec beats:
+     * where page `pageId`'s flag can go, and the move. Omit both where flags can't move.
+     */
+    readonly pageFlagMove?: TimelinePageFlagMove;
     /**
      * Double-clicking a page box or a clip: isolate that range's stored timeline. It gets the
      * range in spec beats (a clip's stored range).
@@ -447,6 +453,31 @@ export function Timeline(props: TimelineProps) {
                 : undefined,
         [addMarchers, deleteFlag, disabledReason, hasMarchersMenu],
     );
+    // Page flags move in spec beats; the grips work in view beats
+    const flagMove = props.pageFlagMove;
+    const flagLimits = useLatestCallback(flagMove?.limits);
+    const flagCommit = useLatestCallback(flagMove?.commit);
+    const pageFlagMove = useMemo<TimelinePageFlagMove | undefined>(
+        () =>
+            flagLimits && flagCommit
+                ? {
+                      limits: async (pageId) => {
+                          const limits = await flagLimits(pageId);
+                          return limits
+                              ? {
+                                    ...limits,
+                                    flag: axis.toView(limits.flag),
+                                    min: axis.toView(limits.min),
+                                    max: axis.toView(limits.max),
+                                }
+                              : null;
+                      },
+                      commit: (pageId, beat) =>
+                          flagCommit(pageId, axis.toSpec(beat)),
+                  }
+                : undefined,
+        [axis, flagCommit, flagLimits],
+    );
     const commonProps = {
         model,
         positionBeat,
@@ -467,6 +498,7 @@ export function Timeline(props: TimelineProps) {
         onCreateTrack: createTrack,
         addSelectedMarchers: addMarchersMenu,
         onAddPageFlag: useLatestCallback(props.onAddPageFlag),
+        pageFlagMove,
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
         onPlayFromStartOff: useLatestCallback(props.onPlayFromStartOff),

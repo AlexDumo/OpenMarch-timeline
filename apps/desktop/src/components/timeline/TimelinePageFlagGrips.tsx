@@ -1,0 +1,480 @@
+import clsx from "clsx";
+import {
+    type KeyboardEvent as ReactKeyboardEvent,
+    type PointerEvent as ReactPointerEvent,
+    memo,
+    useEffect,
+    useRef,
+} from "react";
+import { beatToX, clamp, isPageSnapDisabled } from "./TimelineGeometry";
+import type {
+    BeatPosition,
+    TimelineBeatRange,
+    TimelinePageFlagLimits,
+    TimelinePageFlagMove,
+    TimelinePageMarker,
+} from "./TimelineViewModel";
+
+/**
+ * Page flag grips (docs/timeline/research/move-page-flag): dragging one moves that page's flag, a
+ * roll edit where the page gains what the next one loses. Beats here are view beats.
+ *
+ * - **Where it's grabbed** (case 13): the lower half of the ruler at the flag, 12px wide. The upper
+ *   half stays the playhead's head and the start flag's pennant, which usually sit on flags.
+ * - **Click or drag:** a press that moves less than `FLAG_DRAG_PX` is a click and selects the page
+ *   box on that side of the flag, as a click on the box does. A drag shows the flag, the two boxes
+ *   and their counts where it would land, and writes once, on release.
+ * - **Limits** (cases 1, 4, 6, 9, 10): the flag stops at the beats `pageFlagMove.limits` allows,
+ *   asked when the drag starts; until they arrive, at the neighboring flags. The readout names
+ *   what stops it.
+ * - **Snapping** (case 12): whole beats; within 6px a downbeat, page line or the playhead. Alt
+ *   turns that off.
+ * - **Cancel** (cases 19, 20): Esc, a cancelled pointer or a lost capture put it back and write
+ *   nothing; so does a drag released where it started.
+ * - **Keys** (case 18): ← and → move a focused grip one beat, as one edit each.
+ */
+
+/** How far, in pixels, a press on a grip must move to drag the flag */
+export const FLAG_DRAG_PX = 4;
+/** Within this many pixels a dragged flag lands on a snap beat */
+const FLAG_SNAP_PX = 6;
+/** The grip's top, in the 28px ruler: the lower half */
+const GRIP_TOP = 14;
+const GRIP_HEIGHT = 14;
+
+/** A flag being dragged: where it would land, and why it stopped there, if it did */
+export interface TimelinePageFlagPreview {
+    readonly pageId: string | number;
+    /** The flag's beat before the drag */
+    readonly from: BeatPosition;
+    readonly beat: BeatPosition;
+    /** What stopped the flag, when the pointer is past where it may go */
+    readonly blocked: string | null;
+}
+
+/** A page box on the ruler, in show order, with its range (`TimelineRuler`) */
+export interface TimelineFlagBox {
+    readonly page: TimelinePageMarker;
+    readonly range: TimelineBeatRange | null;
+}
+
+/**
+ * `pages` with a dragged flag drawn where it would land: its page ends there, and the page after
+ * it starts there.
+ */
+export function previewPagesForFlag(
+    pages: readonly TimelinePageMarker[],
+    preview: TimelinePageFlagPreview | null,
+): readonly TimelinePageMarker[] {
+    if (!preview || preview.beat === preview.from) return pages;
+    return pages.map((page) =>
+        page.id === preview.pageId
+            ? { ...page, endBeat: preview.beat }
+            : !page.isInitial && page.atBeat === preview.from
+              ? { ...page, atBeat: preview.beat }
+              : page,
+    );
+}
+
+/** The nearest snap beat within `FLAG_SNAP_PX` of `beat`, else the nearest whole beat */
+const snapFlagBeat = (
+    beat: number,
+    snapBeats: readonly number[],
+    pixelsPerBeat: number,
+    snapDisabled: boolean,
+) => {
+    if (!snapDisabled) {
+        let best: number | null = null;
+        for (const candidate of snapBeats)
+            if (
+                Math.abs(candidate - beat) * pixelsPerBeat <= FLAG_SNAP_PX &&
+                (best === null ||
+                    Math.abs(candidate - beat) < Math.abs(best - beat))
+            )
+                best = candidate;
+        if (best !== null) return Math.round(best);
+    }
+    return Math.round(beat);
+};
+
+/** The neighbors' limits, used until `pageFlagMove.limits` answers */
+const neighborLimits = (
+    boxes: readonly TimelineFlagBox[],
+    index: number,
+    beatCount: number,
+    homeLabel: string | undefined,
+): TimelinePageFlagLimits | null => {
+    const box = boxes[index];
+    if (!box?.range) return null;
+    const next = boxes[index + 1];
+    const previous = boxes[index - 1];
+    return {
+        flag: box.range.endBeatIndex,
+        min: box.range.startBeatIndex + 1,
+        max: next?.range ? next.range.endBeatIndex - 1 : beatCount,
+        minReason: previous
+            ? `Page ${previous.page.label}'s flag`
+            : homeLabel
+              ? `Page ${homeLabel}'s flag`
+              : "The start of the show",
+        maxReason: next
+            ? `Page ${next.page.label}'s flag`
+            : "The end of the show",
+    };
+};
+
+const counts = (range: TimelineBeatRange | null) =>
+    range ? range.endBeatIndex - range.startBeatIndex : 0;
+
+/**
+ * What the drag readout says: each page's counts, before and after ("Page 2: 8 → 10 counts"), and
+ * what stopped the flag.
+ */
+export function describeFlagPreview(
+    boxes: readonly TimelineFlagBox[],
+    preview: TimelinePageFlagPreview,
+): { pages: string[]; blocked: string | null } {
+    const index = boxes.findIndex((b) => b.page.id === preview.pageId);
+    const box = boxes[index];
+    const next = boxes[index + 1];
+    const delta = preview.beat - preview.from;
+    const pages: string[] = [];
+    if (box) {
+        const before = counts(box.range);
+        pages.push(
+            `Page ${box.page.label}: ${before} → ${before + delta} counts`,
+        );
+    }
+    if (next) {
+        const before = counts(next.range);
+        pages.push(
+            `Page ${next.page.label}: ${before} → ${before - delta} counts`,
+        );
+    }
+    return { pages, blocked: preview.blocked };
+}
+
+export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
+    boxes,
+    homeLabel,
+    beatCount,
+    pixelsPerBeat,
+    height,
+    snapBeats,
+    snapPlayhead,
+    pageFlagMove,
+    preview,
+    onPreviewChange,
+    onSelectPage,
+}: {
+    /** The page boxes as they are, without the preview */
+    boxes: readonly TimelineFlagBox[];
+    /** Home's page label, for "Page 0's flag" */
+    homeLabel: string | undefined;
+    beatCount: number;
+    pixelsPerBeat: number;
+    /** The timeline's height, for the dragged flag's line */
+    height: number;
+    /** Downbeats and page lines: where a dragged flag lands when near */
+    snapBeats: readonly number[];
+    /** The playhead, which a dragged flag lands on when near too */
+    snapPlayhead?: () => BeatPosition;
+    pageFlagMove: TimelinePageFlagMove;
+    preview: TimelinePageFlagPreview | null;
+    onPreviewChange: (preview: TimelinePageFlagPreview | null) => void;
+    onSelectPage: (page: TimelinePageMarker) => void;
+}) {
+    const drag = useRef<{
+        pointerId: number;
+        pageId: string | number;
+        index: number;
+        startClientX: number;
+        surface: Element;
+        /** `snapBeats` and the playhead when the drag started */
+        snaps: readonly number[];
+        moved: boolean;
+        limits: TimelinePageFlagLimits;
+        /** Set once `pageFlagMove.limits` answers */
+        checked: boolean;
+        last: TimelinePageFlagPreview;
+    } | null>(null);
+    const keySteps = useRef<Promise<void>>(Promise.resolve());
+    // A drag that ends unmounted (the grips hide when playback starts) writes nothing
+    useEffect(
+        () => () => {
+            drag.current = null;
+        },
+        [],
+    );
+
+    const landing = (
+        clientX: number,
+        altKey: boolean,
+    ): TimelinePageFlagPreview | null => {
+        const current = drag.current;
+        if (!current) return null;
+        const left = current.surface.getBoundingClientRect().left;
+        const raw = clamp((clientX - left) / pixelsPerBeat, 0, beatCount);
+        const snapped = snapFlagBeat(
+            raw,
+            current.snaps,
+            pixelsPerBeat,
+            isPageSnapDisabled({ altKey }),
+        );
+        const { min, max, minReason, maxReason } = current.limits;
+        const beat = clamp(snapped, min, max);
+        return {
+            pageId: current.pageId,
+            from: current.limits.flag,
+            beat,
+            blocked:
+                snapped < min ? minReason : snapped > max ? maxReason : null,
+        };
+    };
+
+    const cancel = (element?: Element | null) => {
+        const current = drag.current;
+        if (!current) return false;
+        drag.current = null;
+        if (element?.hasPointerCapture?.(current.pointerId))
+            element.releasePointerCapture(current.pointerId);
+        onPreviewChange(null);
+        return true;
+    };
+
+    const onPointerDown = (
+        event: ReactPointerEvent<HTMLButtonElement>,
+        index: number,
+    ) => {
+        if (event.button !== 0 || event.ctrlKey || event.metaKey) return;
+        // The press is the grip's: no scrub, no range
+        event.stopPropagation();
+        const box = boxes[index];
+        const limits = neighborLimits(boxes, index, beatCount, homeLabel);
+        const surface = event.currentTarget.closest(
+            '[data-testid="timeline-pointer-surface"]',
+        );
+        if (!box || !limits || !surface) return;
+        const started: NonNullable<typeof drag.current> = {
+            pointerId: event.pointerId,
+            pageId: box.page.id,
+            index,
+            startClientX: event.clientX,
+            surface,
+            snaps: snapPlayhead
+                ? [...snapBeats, Math.round(snapPlayhead())]
+                : snapBeats,
+            moved: false,
+            limits,
+            checked: false,
+            last: {
+                pageId: box.page.id,
+                from: limits.flag,
+                beat: limits.flag,
+                blocked: null,
+            },
+        };
+        drag.current = started;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        void pageFlagMove.limits(box.page.id).then(
+            (checked) => {
+                if (drag.current !== started) return;
+                if (!checked) {
+                    // The flag can't move after all (say, the show changed under the press)
+                    drag.current = null;
+                    onPreviewChange(null);
+                    return;
+                }
+                started.limits = checked;
+                started.checked = true;
+                if (!started.moved) return;
+                const beat = clamp(started.last.beat, checked.min, checked.max);
+                started.last = {
+                    ...started.last,
+                    beat,
+                    blocked:
+                        beat !== started.last.beat
+                            ? beat < started.last.beat
+                                ? checked.maxReason
+                                : checked.minReason
+                            : started.last.blocked,
+                };
+                onPreviewChange(started.last);
+            },
+            () => {
+                if (drag.current === started) cancel();
+            },
+        );
+    };
+
+    const onPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        const current = drag.current;
+        if (!current || current.pointerId !== event.pointerId) return;
+        if (
+            !current.moved &&
+            Math.abs(event.clientX - current.startClientX) < FLAG_DRAG_PX
+        )
+            return;
+        current.moved = true;
+        const next = landing(event.clientX, event.altKey);
+        if (
+            !next ||
+            (next.beat === current.last.beat &&
+                next.blocked === current.last.blocked &&
+                preview !== null)
+        )
+            return;
+        current.last = next;
+        onPreviewChange(next);
+    };
+
+    const onPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        const current = drag.current;
+        if (!current || current.pointerId !== event.pointerId) return;
+        const element = event.currentTarget;
+        if (current.moved) {
+            const next = landing(event.clientX, event.altKey) ?? current.last;
+            cancel(element);
+            // A drop where it started writes nothing (case 20)
+            if (next.beat === next.from) return;
+            // The flag stays drawn where it was dropped until the pages reload, so it doesn't
+            // jump back for a moment. A drop before the limits answered keeps to the neighbors,
+            // and the write refuses anything else with a toast.
+            const settling = { ...next, blocked: null };
+            onPreviewChange(settling);
+            void Promise.resolve(
+                pageFlagMove.commit(current.pageId, next.beat),
+            ).finally(() => {
+                if (!drag.current) onPreviewChange(null);
+            });
+            return;
+        }
+        cancel(element);
+        // A click: the box on the side of the flag that was pressed
+        const box = boxes[current.index];
+        const after = boxes[current.index + 1];
+        const flagX =
+            element.getBoundingClientRect().left +
+            element.getBoundingClientRect().width / 2;
+        onSelectPage(event.clientX >= flagX && after ? after.page : box!.page);
+    };
+
+    const onKeyDown = (
+        event: ReactKeyboardEvent<HTMLButtonElement>,
+        index: number,
+    ) => {
+        if (event.key === "Escape") {
+            if (cancel(event.currentTarget)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            return;
+        }
+        const delta =
+            event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+        if (delta === 0) return;
+        // The arrow moves the flag, not the selected marchers (the window's nudge keys)
+        event.preventDefault();
+        event.stopPropagation();
+        if (drag.current) return;
+        const box = boxes[index];
+        if (!box) return;
+        // One press at a time, each from where the last one left the flag
+        keySteps.current = keySteps.current
+            .then(() => pageFlagMove.limits(box.page.id))
+            .then((limits) => {
+                if (!limits) return;
+                const beat = limits.flag + delta;
+                if (beat < limits.min || beat > limits.max) return;
+                return pageFlagMove.commit(box.page.id, beat);
+            })
+            .catch(() => {});
+    };
+
+    const shownPreview =
+        preview && preview.beat !== preview.from ? preview : null;
+    const readout = preview ? describeFlagPreview(boxes, preview) : null;
+    return (
+        <>
+            {boxes.map(({ page, range }, index) => {
+                if (!range) return null;
+                const dragging = preview?.pageId === page.id;
+                const beat = dragging ? preview.beat : range.endBeatIndex;
+                return (
+                    <button
+                        key={page.id}
+                        type="button"
+                        data-testid="timeline-page-flag-grip"
+                        data-page-id={page.id}
+                        data-timeline-interactive="true"
+                        aria-label={`Page ${page.label}'s flag, after ${counts(range)} counts. Drag, or use the arrow keys, to move it`}
+                        title={`Page ${page.label}'s flag: drag to move it. Page ${page.label} gains what the next page loses; other flags stay.`}
+                        onPointerDown={(event) => onPointerDown(event, index)}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        onPointerCancel={(event) => cancel(event.currentTarget)}
+                        onLostPointerCapture={() => {
+                            if (drag.current) cancel();
+                        }}
+                        onKeyDown={(event) => onKeyDown(event, index)}
+                        // The click is the pointer's (`onPointerUp`); a keyboard Enter selects too
+                        onClick={(event) => {
+                            if (event.detail === 0) onSelectPage(page);
+                        }}
+                        className="group focus-visible:ring-accent pointer-events-auto absolute z-[56] w-12 -translate-x-1/2 cursor-col-resize touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
+                        style={{
+                            left: Math.round(beatToX(beat, pixelsPerBeat)),
+                            top: GRIP_TOP,
+                            height: GRIP_HEIGHT,
+                        }}
+                    >
+                        <span
+                            aria-hidden="true"
+                            className={clsx(
+                                "bg-text absolute top-2 left-1/2 h-10 w-[3px] -translate-x-1/2 rounded-full transition-opacity",
+                                dragging
+                                    ? "opacity-90"
+                                    : "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70",
+                            )}
+                        />
+                    </button>
+                );
+            })}
+            {shownPreview && (
+                <span
+                    aria-hidden="true"
+                    data-testid="timeline-page-flag-drag-line"
+                    className={clsx(
+                        "pointer-events-none absolute top-0 z-[57] w-px",
+                        shownPreview.blocked ? "bg-red" : "bg-text",
+                    )}
+                    style={{
+                        left: Math.round(
+                            beatToX(shownPreview.beat, pixelsPerBeat),
+                        ),
+                        height,
+                    }}
+                />
+            )}
+            {preview && readout && drag.current?.moved && (
+                <div
+                    role="status"
+                    data-testid="timeline-page-flag-readout"
+                    className="bg-fg-1 border-stroke rounded-6 text-text pointer-events-none absolute top-30 z-[60] flex flex-col gap-2 border px-6 py-4 font-mono text-[11px] leading-tight whitespace-nowrap shadow-sm"
+                    style={{
+                        left:
+                            Math.round(beatToX(preview.beat, pixelsPerBeat)) +
+                            8,
+                    }}
+                >
+                    {readout.pages.map((line) => (
+                        <span key={line}>{line}</span>
+                    ))}
+                    {readout.blocked && (
+                        <span className="text-red">{readout.blocked}</span>
+                    )}
+                </div>
+            )}
+        </>
+    );
+});

@@ -46,6 +46,11 @@ import {
     snapRangeOffset,
 } from "./TimelineGeometry";
 import { timelineRangeTargetProps } from "./TimelineRangeMenu";
+import {
+    previewPagesForFlag,
+    TimelinePageFlagGrips,
+    type TimelinePageFlagPreview,
+} from "./TimelinePageFlagGrips";
 import { useLatestCallback } from "./useLatestCallback";
 import {
     createLiveValue,
@@ -57,6 +62,7 @@ import type {
     TimelineBeatRange,
     TimelineMeasureMarker,
     TimelineNavigation,
+    TimelinePageFlagMove,
     TimelinePageMarker,
     TimelineRangeChange,
     TimelineSeek,
@@ -701,6 +707,24 @@ const PageBoxLabel = memo(function PageBoxLabel({
 const pageLabelFits = (label: string, width: number) =>
     width >= label.length * 7 + 10;
 
+/** The ruler's page boxes in show order, each with its range (UI-9: previous flag to its own) */
+const pageBoxesOf = (
+    pages: readonly TimelinePageMarker[],
+    beatCount: number,
+) => {
+    const orderedPages = pages
+        .filter((page) => !page.isInitial)
+        .sort((a, b) => a.atBeat - b.atBeat);
+    return orderedPages.map((page) => ({
+        page,
+        range: getPageRange({
+            pages: orderedPages,
+            pageId: page.id,
+            beatCount,
+        }),
+    }));
+};
+
 export const TimelineRuler = memo(function TimelineRuler({
     pages,
     measures,
@@ -714,6 +738,9 @@ export const TimelineRuler = memo(function TimelineRuler({
     seekSnapBeats = [],
     positionBeat,
     scrubLine,
+    pageFlagMove,
+    height = 28,
+    flagSnapPlayhead,
 }: {
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
@@ -732,7 +759,19 @@ export const TimelineRuler = memo(function TimelineRuler({
     positionBeat?: BeatPosition;
     /** Where a scrub draws the playhead line, between beats (`useTimelinePointer`) */
     scrubLine?: TimelineLiveValue<number | null>;
+    /** Moving page flags by their grips (research/move-page-flag); without it, no grips */
+    pageFlagMove?: TimelinePageFlagMove;
+    /** The timeline's height, for a dragged flag's line */
+    height?: number;
+    /** The playhead, which a dragged flag lands on when near, as on downbeats and page lines */
+    flagSnapPlayhead?: () => BeatPosition;
 }) {
+    // A dragged flag, drawn where it would land: its box and the next one resize with it
+    const [flagPreview, setFlagPreview] =
+        useState<TimelinePageFlagPreview | null>(null);
+    useEffect(() => {
+        if (!pageFlagMove) setFlagPreview(null);
+    }, [pageFlagMove]);
     // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
     const visibleMeasures = useMemo(() => {
         const tabBeats = measures
@@ -761,19 +800,14 @@ export const TimelineRuler = memo(function TimelineRuler({
     const initialPage = pages.find((page) => page.isInitial);
     // UI-9: the initial box is home; a page box is its range, previous flag to its own flag.
     // Worked out once per change of the pages, not for each box on every render.
+    const flagBoxes = useMemo(
+        () => pageBoxesOf(pages, beatCount),
+        [beatCount, pages],
+    );
     const pageBoxes = useMemo(() => {
-        const orderedPages = pages
-            .filter((page) => !page.isInitial)
-            .sort((a, b) => a.atBeat - b.atBeat);
-        return orderedPages.map((page) => ({
-            page,
-            range: getPageRange({
-                pages: orderedPages,
-                pageId: page.id,
-                beatCount,
-            }),
-        }));
-    }, [beatCount, pages]);
+        const shown = previewPagesForFlag(pages, flagPreview);
+        return shown === pages ? flagBoxes : pageBoxesOf(shown, beatCount);
+    }, [beatCount, flagBoxes, flagPreview, pages]);
     const pageRanges = useMemo(
         () => new Map(pageBoxes.map(({ page, range }) => [page.id, range])),
         [pageBoxes],
@@ -817,6 +851,21 @@ export const TimelineRuler = memo(function TimelineRuler({
                 scrub={scrub}
                 onSelectPage={selectPage}
             />
+            {pageFlagMove && (
+                <TimelinePageFlagGrips
+                    boxes={flagBoxes}
+                    homeLabel={initialPage?.label}
+                    beatCount={beatCount}
+                    pixelsPerBeat={pixelsPerBeat}
+                    height={height}
+                    snapBeats={seekSnapBeats}
+                    snapPlayhead={flagSnapPlayhead}
+                    pageFlagMove={pageFlagMove}
+                    preview={flagPreview}
+                    onPreviewChange={setFlagPreview}
+                    onSelectPage={selectPage}
+                />
+            )}
             {showMeasures && (
                 <TimelineRulerNumbers
                     visibleMeasures={visibleMeasures}
