@@ -409,6 +409,8 @@ describe("the inspector while scrubbing over moves (code review)", () => {
             });
         expect(calls().length).toBe(during);
         expect(beatNow()).toBe(11);
+        // The Move card holds the same move: it stays, rather than going (and saving) mid-scrub
+        expect(screen.getByTestId("timeline-move-card")).toBeTruthy();
         act(() => {
             useTimelineSelectionStore.getState().endScrub();
         });

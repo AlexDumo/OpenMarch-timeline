@@ -31,11 +31,11 @@ import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import {
     useTimelineSelectionStore,
-    windowMove,
     type StoredTimelineMembership,
 } from "@/stores/TimelineSelectionStore";
 import {
     useInspectorTranslate,
+    useSettledInspectorWindow,
     type InspectorTranslate,
 } from "./TimelineInspectorSection";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
@@ -215,22 +215,37 @@ export function TimelineMoveCard({
                 if (next) editPath(next.style, next.bulge);
             });
     };
+    // The name last sent, until the stored name changes: Enter, the blur and the card going can
+    // each send the same rename before it lands, and a refused one would say so each time
+    const lastSent = useRef<string | null>(null);
+    useEffect(() => {
+        lastSent.current = null;
+    }, [stored]);
+    const send = (typed: string) => {
+        if (typed === lastSent.current) return;
+        lastSent.current = typed;
+        void moves.renameMove(timeline.id, typed);
+    };
     const commit = () => {
         // Nothing to write: the field shows the stored name again
         if (!isNameEdit(name, stored)) {
             setName(stored);
             return;
         }
-        void moves.renameMove(timeline.id, name);
+        send(name);
     };
     // UI-14 review: a field that goes away before it blurs (a click on the timeline selects
     // another window first) still saves what was typed, unless Esc put the name back
-    const pendingName = useRef({ name, stored, rename: moves.renameMove });
-    pendingName.current = { name, stored, rename: moves.renameMove };
+    const pendingName = useRef({ name, stored, send });
+    pendingName.current = { name, stored, send };
     useEffect(
         () => () => {
-            const { name: typed, stored: was, rename } = pendingName.current;
-            if (isNameEdit(typed, was)) void rename(timeline.id, typed);
+            const {
+                name: typed,
+                stored: was,
+                send: save,
+            } = pendingName.current;
+            if (isNameEdit(typed, was)) save(typed);
         },
         [timeline.id],
     );
@@ -457,7 +472,9 @@ export function TimelineMoveCardSlot() {
 
 function MoveCardSlotContent() {
     const t = useInspectorTranslate();
-    const move = useTimelineSelectionStore(windowMove);
+    // The move the Timeline section is about, held with it while the playhead is scrubbed, so the
+    // two never differ and the card doesn't go (saving a typed name) mid-scrub (code review)
+    const { move } = useSettledInspectorWindow();
     return move ? (
         <TimelineMoveCard key={move.id} timeline={move} t={t} />
     ) : null;

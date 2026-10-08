@@ -372,7 +372,7 @@ export function ShowDiagnosticsList({
  * `useTimelinePageBridge` waits for the scrub. While scrubbing the store's selectors return the
  * same value, so the scrub doesn't render this at all.
  */
-function useSettledInspectorWindow(): {
+export function useSettledInspectorWindow(): {
     beat: number;
     move: StoredTimelineMembership | null;
 } {

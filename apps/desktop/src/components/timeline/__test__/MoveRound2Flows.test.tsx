@@ -308,7 +308,8 @@ describeDbTests("a move's flows after the round-2 review (UI-14)", (it) => {
                 .then((row) => row!.n);
         const before = await steps();
         fireEvent.change(field, { target: { value: "Company front" } });
-        // Blur saves; the card goes before the stored name catches up
+        // Enter saves, then the blur and the card going before the stored name catches up
+        fireEvent.keyDown(field, { key: "Enter" });
         fireEvent.blur(field);
         result.unmount();
         await waitFor(async () =>
