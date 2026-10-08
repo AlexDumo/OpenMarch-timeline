@@ -112,7 +112,8 @@ const show = ({
     selection?: TimelineSelection;
     onDeletePageFlag?: (pageId: number) => void;
     mode?: "expanded" | "collapsed";
-    onSelectionChange?: (selection: TimelineSelection) => void;
+    /** `null`: a timeline whose clips can't be selected */
+    onSelectionChange?: ((selection: TimelineSelection) => void) | null;
     timelines?: TimelineInput[];
 } = {}) => {
     render(
@@ -125,7 +126,7 @@ const show = ({
             showTransport={false}
             pixelsPerBeat={16}
             selection={selection}
-            onSelectionChange={onSelectionChange}
+            onSelectionChange={onSelectionChange ?? undefined}
             moveCommands={moves}
             onDeletePageFlag={onDeletePageFlag}
         />,
@@ -364,6 +365,22 @@ describe("the focused clip's keys (UI-14)", () => {
         expect(reached).toEqual([]);
     });
 
+    it("where a clip can't be selected, Enter renames it rather than doing nothing", async () => {
+        show({ onSelectionChange: null });
+        expect(fireEvent.keyDown(clipButton(), { key: "Enter" })).toBe(false);
+        expect(screen.getByTestId("timeline-move-name-field")).toBeTruthy();
+        expect(reached).toEqual([]);
+        cleanup();
+        show({ onSelectionChange: null });
+        expect(
+            document.getElementById(
+                clipButton().getAttribute("aria-describedby")!,
+            )?.textContent,
+        ).toBe(
+            "Enter or F2 to rename, Shift+F10 for options, Delete to delete",
+        );
+    });
+
     it("Enter on the selected clip and F2 on any open the rename field, and Enter never reaches the app's shortcuts", async () => {
         show({ selection: SELECTED });
         fireEvent.keyDown(clipButton(), { key: "Enter" });
@@ -540,6 +557,26 @@ describe("the round-2 review's keys and focus (UI-14)", () => {
         fireEvent.keyDown(document.activeElement!, { key: "Delete" });
         expect(moves.onDelete).not.toHaveBeenCalledWith(7);
         expect(moves.onDelete).toHaveBeenCalledWith(8);
+    });
+
+    it("a rename left by a click on the empty lane puts focus back on the clip, not the page", async () => {
+        const moves = show();
+        fireEvent.keyDown(clipButton(), { key: "F2" });
+        const field = screen.getByTestId("timeline-move-name-field");
+        await waitFor(() => expect(document.activeElement).toBe(field));
+        fireEvent.change(field, { target: { value: "Opener" } });
+        // A press on nothing focusable: focus falls to the page
+        fireEvent.pointerDown(document.body);
+        field.blur();
+        expect(moves.onRename).toHaveBeenCalledWith(7, "Opener");
+        await waitFor(() => expect(document.activeElement).toBe(clipButton()));
+        // A second rename, left the same way, comes back too
+        fireEvent.keyDown(clipButton(), { key: "F2" });
+        const again = screen.getByTestId("timeline-move-name-field");
+        await waitFor(() => expect(document.activeElement).toBe(again));
+        fireEvent.pointerDown(document.body);
+        again.blur();
+        await waitFor(() => expect(document.activeElement).toBe(clipButton()));
     });
 
     it("after a rename, saved or cancelled, focus is back on the clip", async () => {

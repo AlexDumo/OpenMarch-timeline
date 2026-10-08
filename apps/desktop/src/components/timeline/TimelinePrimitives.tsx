@@ -15,7 +15,7 @@ import {
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
 import {
-    isNudgeKey,
+    isPlainNudgeKey,
     isTyping,
     overlayOpen,
     spaceStaysPlay,
@@ -1070,15 +1070,6 @@ const CLIP_MENU_BUTTON_MIN_HEIGHT = 16;
 const CLIP_LABEL_MIN_WIDTH = 40;
 
 /**
- * How the name field closed: `byKey` for Enter or Esc; `byPointer` when a press elsewhere (a click
- * on another clip, the lane, the field) took it away, so focus is where that press put it
- */
-export type TimelineMoveNameFieldClose = {
-    readonly byKey: boolean;
-    readonly byPointer: boolean;
-};
-
-/**
  * A move's inline name field (UI-14 Rename): it opens with the text selected; Enter or leaving it
  * commits, Esc cancels (`onDone(null)`). Its keys stay its own, so typing never reaches the
  * timeline's or the app's shortcuts (G, Space, Delete…), and a press in it never scrubs.
@@ -1091,7 +1082,7 @@ export function TimelineMoveNameField({
     ariaLabel = "Move name",
 }: {
     initial: string;
-    onDone: (name: string | null, close: TimelineMoveNameFieldClose) => void;
+    onDone: (name: string | null) => void;
     className?: string;
     style?: CSSProperties;
     ariaLabel?: string;
@@ -1099,28 +1090,18 @@ export function TimelineMoveNameField({
     const ref = useRef<HTMLInputElement>(null);
     const [value, setValue] = useState(initial);
     const done = useRef(false);
-    // A press outside the field while it is open: whatever closes it next, the pointer did
-    const pressedOutside = useRef(false);
     // After the frame, so a menu closing doesn't take the focus back
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
             ref.current?.focus();
             ref.current?.select();
         });
-        const onPointerDown = (event: PointerEvent) => {
-            if (!ref.current?.contains(event.target as Node | null))
-                pressedOutside.current = true;
-        };
-        document.addEventListener("pointerdown", onPointerDown, true);
-        return () => {
-            cancelAnimationFrame(frame);
-            document.removeEventListener("pointerdown", onPointerDown, true);
-        };
+        return () => cancelAnimationFrame(frame);
     }, []);
-    const finish = (name: string | null, byKey = false) => {
+    const finish = (name: string | null) => {
         if (done.current) return;
         done.current = true;
-        onDone(name, { byKey, byPointer: pressedOutside.current });
+        onDone(name);
     };
     // UI-14 review: a field removed before it blurs (a click elsewhere on the timeline changes
     // the selection first) still saves what was typed, unless Esc cancelled it
@@ -1151,10 +1132,10 @@ export function TimelineMoveNameField({
                     event.stopPropagation();
                     if (event.key === "Enter") {
                         event.preventDefault();
-                        finish(value, true);
+                        finish(value);
                     } else if (event.key === "Escape") {
                         event.preventDefault();
-                        finish(null, true);
+                        finish(null);
                     }
                 }}
                 onBlur={() => finish(value)}
@@ -1255,7 +1236,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         [
             track.description,
             moveCommands
-                ? selected
+                ? selected || !onSelect
                     ? "Enter or F2 to rename, Shift+F10 for options, Delete to delete"
                     : "Enter to select, F2 to rename, Shift+F10 for options, Delete to delete"
                 : undefined,
@@ -1272,21 +1253,17 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
             },
         [moveCommands, onRenameStart, trackId],
     );
-    const onRenameDone = (
-        name: string | null,
-        { byKey, byPointer }: TimelineMoveNameFieldClose,
-    ) => {
+    const onRenameDone = (name: string | null) => {
         onRenameEnd?.(trackId);
-        // UI-14 review: Enter or Esc puts focus back on the clip, whether saved or cancelled.
-        // A field closed otherwise gives it back only when it would fall to the page, and never
-        // takes it from where a click put it (code review: a click on another clip selected it
-        // while focus came back here, and Delete then deleted this one)
-        if (byKey || !byPointer)
-            requestAnimationFrame(() => {
-                const active = document.activeElement;
-                if (byKey || active === null || active === document.body)
-                    clipRef.current?.focus();
-            });
+        // UI-14 review: focus back on the clip, saved or cancelled, once the field has gone, when
+        // it would otherwise fall to the page (Enter, Esc, a click on the empty lane or ruler).
+        // Never taken from a control a click put it on (code review: a click on another clip
+        // selected it while focus came back here, and Delete then deleted this one)
+        requestAnimationFrame(() => {
+            const active = document.activeElement;
+            if (active === null || active === document.body)
+                clipRef.current?.focus();
+        });
         // Unchanged writes nothing (an empty edit is refused)
         if (name !== null && name.trim() !== track.label.trim())
             moveCommands?.onRename(trackId, name);
@@ -1400,7 +1377,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         event.stopPropagation();
                         if (moveMenu.disabledReason == null)
                             moveMenu.onDelete();
-                    } else if (isNudgeKey(event)) {
+                    } else if (isPlainNudgeKey(event)) {
                         // UI-14 review: arrows on a focused clip do nothing; they would nudge
                         // the selected marchers unseen
                         event.preventDefault();
@@ -1408,15 +1385,16 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     } else if (event.key === " ") {
                         // Space stays Play (the app's shortcut): it mustn't also click the clip
                         spaceStaysPlay(event);
-                    } else if (event.key === "Enter" && !selected) {
+                    } else if (event.key === "Enter" && !selected && onSelect) {
                         // Code review: Enter on a clip that isn't selected selects it, as a
                         // click does; it would otherwise reach the app's Enter shortcut (create
                         // a shape) too
                         event.preventDefault();
                         event.stopPropagation();
-                        onSelect?.(track.id);
+                        onSelect(track.id);
                     } else if (event.key === "Enter" || event.key === "F2") {
-                        // Rename, as in a file list: Enter on the selected clip, F2 on any
+                        // Rename, as in a file list: Enter on the selected clip (or on any, where
+                        // a clip can't be selected), F2 on any
                         event.preventDefault();
                         event.stopPropagation();
                         moveMenu.onRename();
