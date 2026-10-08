@@ -3,6 +3,8 @@ import { db } from "@/global/database/db";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     moveMarchersFromFlagInstead,
+    type TimelineEditTarget,
+    type TimelineMoveResult,
     type TimelinePassThrough,
 } from "@/db-functions/timelineMoves";
 import type { BeatRange } from "@/db-functions/timelineMembership";
@@ -10,7 +12,16 @@ import {
     useTimelineSelectionStore,
     type PageBox,
 } from "@/stores/TimelineSelectionStore";
+import {
+    carryForwardMessage,
+    editCarryForward,
+    type CarryForwardSummary,
+} from "./timelineCarryForward";
 import { toastTimelineError } from "./timelineErrorMessages";
+import {
+    timelineResolverSettled,
+    useTimelineResolverStore,
+} from "./timelineStore";
 
 /**
  * What the app says after a drag passed through pages (research/ownership/10-cross-page-windows.md
@@ -20,6 +31,10 @@ import { toastTimelineError } from "./timelineErrorMessages";
  * drag added marchers over a page flag, even where no stored move ended there (sparse rows,
  * defined-coordinates 07a §4). The action was "Only change Page N" until defined-coordinates
  * 07c §2: later pages that hold still follow the edit, so "only" promised too much.
+ *
+ * An edit also says which later pages it moved, where the marchers hold through them
+ * (`timelineCarryForward.ts`, docs/timeline/ui.md UI-15). Both go in one toast (UI-12: one
+ * post-edit toast), which keeps **Start from**; the carry-forward part has no action of its own.
  */
 
 /** Translates with ICU parameters; the Tolgee singleton by default, anything in tests. */
@@ -178,36 +193,104 @@ export function narrowingLabel(
     );
 }
 
+/** The one toast an edit shows (`toastTimelineEdit`), so a later edit replaces it. */
+const EDIT_TOAST_ID = "timeline-edit";
+
 /**
- * Shows what a range move passed through, if anything, with **Start from** when a page flag lies
- * inside the range. The action narrows the passed marchers (`moveMarchersFromFlagInstead`, which
- * keeps where they are now), and says in turn what the narrowed move passed through, if anything.
+ * The post-edit toast's text: what the move passed through, then what it also moved after its
+ * window, as one message. `null` when there is nothing to say.
  */
-export function toastPassThrough(pass: TimelinePassThrough | undefined): void {
-    if (!pass) return;
+export function timelineEditMessage(
+    pass: TimelinePassThrough | undefined,
+    carry: CarryForwardSummary | null,
+    boxes: readonly PageBox[],
+    translate: PassThroughTranslate = defaultTranslate,
+): string | null {
+    const parts = [
+        pass ? passThroughMessage(pass, boxes, translate) : null,
+        carry ? carryForwardMessage(carry, translate) : null,
+    ].filter((part): part is string => part !== null);
+    return parts.length > 0 ? parts.join(" ") : null;
+}
+
+/**
+ * Shows what a range move passed through, and what it also moved after its window, if anything,
+ * with **Start from** when a page flag lies inside the range. The action narrows the passed
+ * marchers (`moveMarchersFromFlagInstead`, which keeps where they are now), and says in turn what
+ * the narrowed move did.
+ */
+function showTimelineEditToast(
+    pass: TimelinePassThrough | undefined,
+    carry: CarryForwardSummary | null,
+): void {
     const boxes = useTimelineSelectionStore.getState().pageBoxes;
-    const flag = narrowingFlag(pass.range, boxes);
-    toast.info(passThroughMessage(pass, boxes), {
-        duration: 10000,
-        action: flag
-            ? {
-                  label: narrowingLabel(flag),
-                  onClick: () => {
-                      moveMarchersFromFlagInstead({
-                          db,
-                          range: pass.range,
-                          from: flag.beat,
-                          marcherIds: pass.marcherIds,
-                          deleteIfEmpty: pass.createdTimelineId,
-                      })
-                          .then((result) =>
-                              toastPassThrough(result.passThrough),
-                          )
-                          .catch((e: unknown) =>
-                              toastTimelineError(e, "Error moving marchers"),
-                          );
-                  },
-              }
-            : undefined,
+    const message = timelineEditMessage(pass, carry, boxes);
+    if (message === null) return;
+    const flag = pass ? narrowingFlag(pass.range, boxes) : null;
+    toast.info(message, {
+        id: EDIT_TOAST_ID,
+        duration: flag ? 10000 : 6000,
+        action:
+            pass && flag
+                ? {
+                      label: narrowingLabel(flag),
+                      onClick: () => {
+                          moveMarchersFromFlagInstead({
+                              db,
+                              range: pass.range,
+                              from: flag.beat,
+                              marcherIds: pass.marcherIds,
+                              deleteIfEmpty: pass.createdTimelineId,
+                          })
+                              .then((result) =>
+                                  toastTimelineEdit(
+                                      {
+                                          kind: "range",
+                                          start: flag.beat,
+                                          end: pass.range.end,
+                                      },
+                                      result,
+                                  ),
+                              )
+                              .catch((e: unknown) =>
+                                  toastTimelineError(
+                                      e,
+                                      "Error moving marchers",
+                                  ),
+                              );
+                      },
+                  }
+                : undefined,
     });
+}
+
+/**
+ * After a timeline-mode edit (`moveMarchersInTarget` and the like) has committed: once the
+ * resolver has it, one toast says what the edit passed through and which later pages it also
+ * moved (`editCarryForward`). Says nothing when neither applies.
+ */
+export async function toastTimelineEdit(
+    target: TimelineEditTarget,
+    result: Pick<
+        TimelineMoveResult,
+        "homes" | "slots" | "cleared" | "passThrough"
+    >,
+): Promise<void> {
+    let carry: CarryForwardSummary | null = null;
+    try {
+        // The write delivered its batch before returning; a cold build may still be running
+        await timelineResolverSettled();
+        const { resolver } = useTimelineResolverStore.getState();
+        if (resolver)
+            carry = editCarryForward(
+                resolver,
+                target,
+                result,
+                useTimelineSelectionStore.getState().pageBoxes,
+            );
+    } catch (e) {
+        // The edit is saved either way; only the extra words are lost
+        console.error("Couldn't read what the edit also moved", e);
+    }
+    showTimelineEditToast(result.passThrough, carry);
 }
