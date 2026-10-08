@@ -6,7 +6,6 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { brassModel } from "@/view3d/core/instruments/brass";
 import { hold } from "@/view3d/core/instruments/holds";
-import { sectionUniform } from "@/view3d/core/marchers/looks";
 import { poseArms } from "../marchers/armPose";
 import {
     instrumentGeometry,

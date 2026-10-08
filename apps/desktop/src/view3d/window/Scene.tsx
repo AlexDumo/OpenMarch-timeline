@@ -41,6 +41,7 @@ import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import {
     buildCrowd,
     createEnvironment,
+    createEnvironmentMap,
     defaultCrowdPalette,
     type Environment,
 } from "@/view3d/core/environment";
@@ -278,6 +279,20 @@ function SceneContents({
         litKitRef.current = kit;
         useView3dSceneStore.getState()._setLighting(preset);
     }, [gl, env, kit, settings.lighting]);
+
+    // Environment map: what brass and glossy surfaces reflect, in the
+    // preset's sky (instruments.md §4). Rebuilt for a new preset.
+    const appliedLighting = useView3dSceneStore((s) => s.lighting);
+    useEffect(() => {
+        if (!appliedLighting || !gl.capabilities.isWebGL2) return;
+        const map = createEnvironmentMap(gl, appliedLighting);
+        scene.environment = map;
+        scene.environmentIntensity = 0.6;
+        return () => {
+            if (scene.environment === map) scene.environment = null;
+            map.dispose();
+        };
+    }, [gl, scene, appliedLighting]);
 
     // Clear the store when the scene goes away.
     useEffect(
