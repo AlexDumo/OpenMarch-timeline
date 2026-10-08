@@ -15,13 +15,8 @@
  */
 import type { Vec3 } from "./mesh";
 
-export type HoldState = "up" | "carry" | "down" | "trail";
-export const HOLD_STATES: readonly HoldState[] = [
-    "up",
-    "carry",
-    "down",
-    "trail",
-];
+export type HoldState = "up" | "carry" | "trail";
+export const HOLD_STATES: readonly HoldState[] = ["up", "carry", "trail"];
 export type HoldFamily = "brass" | "trombone" | "contra";
 
 export interface ArmTargets {
