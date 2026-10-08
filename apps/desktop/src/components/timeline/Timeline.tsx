@@ -142,8 +142,10 @@ export interface TimelineProps {
      * show (on a flag, at home, past the beats).
      */
     readonly onAddPageFlag?: () => void;
-    /** The page box menu's **Delete page flag** (UI-9 Deleting a flag), by page id */
+    /** The page box menu's **Delete page** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
+    /** The page box menu's **Delete page and its moves**, by page id */
+    readonly onDeletePageWithMoves?: (pageId: number) => void;
     /**
      * Double-clicking a page box or a clip: isolate that range's stored timeline. It gets the
      * range in spec beats (a clip's stored range).
@@ -376,7 +378,12 @@ export function Timeline(props: TimelineProps) {
                   },
               })
         : undefined;
-    const { addSelectedMarchers, onDeletePageFlag, onOpenRange } = props;
+    const {
+        addSelectedMarchers,
+        onDeletePageFlag,
+        onDeletePageWithMoves,
+        onOpenRange,
+    } = props;
     // A clip's stored spec range, else the view range mapped back (as the menu's Add does)
     const specRangeOf = ({ range, trackId }: TimelineMenuTarget) => {
         const input =
@@ -401,12 +408,20 @@ export function Timeline(props: TimelineProps) {
     // The right-click menu has an entry for each command given: add, and delete on page boxes
     const addMarchersMenu:
         | TimelineAddMarchersMenu<TimelineMenuTarget>
-        | undefined = (addSelectedMarchers || onDeletePageFlag) && {
+        | undefined = (addSelectedMarchers ||
+        onDeletePageFlag ||
+        onDeletePageWithMoves) && {
         disabledReason: addSelectedMarchers?.disabledReason,
         ...(onDeletePageFlag
             ? {
                   onDeleteFlag: (pageId: string | number) =>
                       onDeletePageFlag(Number(pageId)),
+              }
+            : {}),
+        ...(onDeletePageWithMoves
+            ? {
+                  onDeleteWithMoves: (pageId: string | number) =>
+                      onDeletePageWithMoves(Number(pageId)),
               }
             : {}),
         onAdd:
