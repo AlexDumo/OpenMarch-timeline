@@ -36,12 +36,15 @@ import { deleteTimelineTransitionsInTransaction } from "./timelineTransitions";
  *   beat was deleted moves to the next surviving beat (a start) or the previous one (an end).
  *
  * **When a page goes away** (deleted, or its start beat is deleted), its page moves go with it:
- * each shapeless transition over exactly the page's beats whose assignments are all layer 0 and
- * cover it (what the converter writes, `isPageMove`) is deleted with its assignments and
- * destinations. Any other transition is never deleted here; one that would lose all its beats
- * refuses the edit instead (`E-ARGS`, naming it and its timeline). The page before then ends where
- * the deleted page ended, so its move stretches over the deleted page's beats, as in page mode
- * (where those coordinates are lost and the earlier page's move runs until the next page starts).
+ * each shapeless transition whose assignments are all layer 0 and cover it, and that ends at the
+ * page's flag or lies inside its box (what the converter writes, and every such move a merged box
+ * holds after flag deletes, `isPageMove`), is deleted with its assignments and destinations. Any
+ * other transition is never deleted here; one that would lose all its beats refuses the edit
+ * instead (`E-ARGS`, naming it and its timeline). The page before then ends where the deleted page
+ * ended, so its move stretches over the deleted page's beats, as in page mode (where those
+ * coordinates are lost and the earlier page's move runs until the next page starts). A marcher's
+ * row that would stretch into its next row at the same layer (a track, or a move crossing the
+ * deleted page's flag) stops where that row starts instead.
  * A timeline left with no transition goes too (C-11: a timeline is the container for its moves).
  *
  * **When a page is added** (inserted, split off, or added at the end), nothing is written for it.
@@ -267,20 +270,22 @@ const checkBeats = (r: Range, what: string) => {
 };
 
 /**
- * A page move of `page`: what the converter writes for a page, and what a drag over exactly the
- * page writes (stored files may also hold such moves from older builds' holds for added pages). A
- * shapeless transition over exactly the page's beats whose assignments
- * are all at layer 0 and cover the whole transition. Only these go when their page goes; any other
- * transition (a track the user made) stays, and the edit is refused if it would lose its beats.
+ * A page move of `page`, which goes when the page goes: a shapeless transition whose assignments
+ * are all at layer 0 and cover the whole transition, that ends at the page's flag or lies entirely
+ * inside its box. That is what the converter writes for a page and what a drag over a page writes
+ * where the marcher has no move yet (stored files may also hold such moves from older builds'
+ * holds for added pages). After flag deletes merge pages, the merged box holds several of them,
+ * and they all go. Any other transition (a track the user made) stays, and the edit is refused if
+ * it would lose its beats.
  */
 const isPageMove = (
     t: { start_beat: number; end_beat: number; dest_shape_id: number | null },
     rows: readonly { start_beat: number; end_beat: number; layer: number }[],
     page: GridPage,
 ) =>
-    t.start_beat === page.start &&
-    t.end_beat === page.end &&
     t.dest_shape_id === null &&
+    t.end_beat <= page.end &&
+    (t.end_beat === page.end || t.start_beat >= page.start) &&
     rows.every(
         (a) =>
             a.layer === 0 &&
@@ -405,11 +410,20 @@ export async function rippleTimelineToPageGridInTransaction({
         if (chain) chain.push(a);
         else chains.set(key, [a]);
     }
+    // A row whose end followed a page edge past the marcher's next row ends where that row starts
+    // instead: the move carries until the marcher's next own move (a page before a deleted page
+    // takes its box, but a track or a move crossing its flag may still be in it)
     for (const chain of chains.values()) {
         chain.sort((a, b) => a.start_beat - b.start_beat);
         for (let i = 1; i < chain.length; i++) {
             const prev = newAssignment.get(chain[i - 1]!.id)!;
             const cur = newAssignment.get(chain[i]!.id)!;
+            if (
+                prev[1] > cur[0] &&
+                prev[0] < cur[0] &&
+                map.beatEnd(chain[i - 1]!.end_beat) <= cur[0]
+            )
+                prev[1] = cur[0];
             if (prev[1] > cur[0])
                 throw new TimelineWriteError(
                     "E-A3",

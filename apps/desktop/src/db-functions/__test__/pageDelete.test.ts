@@ -7,8 +7,8 @@ import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { convertPagesToTimeline } from "@/timeline/convert/writePageConversion";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import { performUndo } from "../history";
-import { deletePages, deletePageYank } from "../page";
-import { deletePageFlags } from "../pageFlags";
+import { createPages, deletePages, deletePageYank } from "../page";
+import { addPageFlag, deletePageFlags } from "../pageFlags";
 import {
     deletePageYankWithMoves,
     deletePagesWithMoves,
@@ -335,6 +335,201 @@ describeDbTests("deleting a page in timeline mode", (it) => {
     });
 });
 
+/**
+ * A converted show after a flag delete: one page's box now holds the moves of the pages merged
+ * into it, which no longer start at the box's start. Deleting the merged page with its moves takes
+ * every page move ending at its flag or inside its box (wp3 found it refused with E-A3).
+ */
+describeDbTests("deleting a page with its moves after a flag delete", (it) => {
+    const converted = async (db: DbConnection) => {
+        await setTimelineFlag(db);
+        await convertPagesToTimeline(db);
+        await clearHistory(db);
+    };
+
+    /** Marcher `id`'s rows at `layer`, as `[start, end)`, in order. */
+    const rowsOf = async (db: DbConnection, id: number, layer = 0) =>
+        (await db.select().from(schema.timeline_assignments).all())
+            .filter((r) => r.marcher_id === id && r.layer === layer)
+            .map((r) => [r.start_beat, r.end_beat])
+            .sort((a, b) => a[0]! - b[0]!);
+
+    it("the merged page and both moves in its box go; page 1's move runs to its flag", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await converted(db);
+        const [m] = await marcherIds(db);
+        await deletePageFlags({ db, pageIds: new Set([2]) });
+        const before = await resolverOf(db);
+
+        const result = await deletePagesWithMoves({
+            db,
+            pageIds: new Set([3]),
+        });
+
+        expect(result.deletedNames).toEqual(["2"]);
+        expect(await flags(db)).toEqual([25, 33, 41, 49]);
+        expect(await rowsOf(db, m!)).toEqual([
+            [1, 25],
+            [25, 33],
+            [33, 41],
+            [41, 49],
+        ]);
+        const after = await resolverOf(db);
+        // Page 1's set now arrives at its flag; later flags are as they were
+        expect(after.positionAt(m!, 25)).toEqual(before.positionAt(m!, 9));
+        expect(positionsAt(after, [33, 41, 49])).toEqual(
+            positionsAt(before, [33, 41, 49]),
+        );
+    });
+
+    it("two flag deletes, then the page holding three moves goes with them", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await converted(db);
+        const [m] = await marcherIds(db);
+        await deletePageFlags({ db, pageIds: new Set([2]) });
+        await deletePageFlags({ db, pageIds: new Set([3]) });
+        await deletePagesWithMoves({ db, pageIds: new Set([4]) });
+        expect(await flags(db)).toEqual([33, 41, 49]);
+        expect(await rowsOf(db, m!)).toEqual([
+            [1, 33],
+            [33, 41],
+            [41, 49],
+        ]);
+    });
+
+    it("yank: the merged page's moves go and later pages move back with theirs", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await converted(db);
+        const [m] = await marcherIds(db);
+        await deletePageFlags({ db, pageIds: new Set([2]) });
+        const before = await resolverOf(db);
+        const result = await deletePageYankWithMoves({ db, pageId: 3 });
+        expect(await flags(db)).toEqual([9, 17, 25, 33]);
+        expect(await rowsOf(db, m!)).toEqual([
+            [1, 9],
+            [9, 17],
+            [17, 25],
+            [25, 33],
+        ]);
+        // Pages 4 to 6 keep their look, a box earlier
+        expect(positionsAt(await resolverOf(db), [17, 25, 33])).toEqual(
+            positionsAt(before, [33, 41, 49]).map(([id, beat, x, y]) => [
+                id,
+                (beat as number) - 16,
+                x,
+                y,
+            ]),
+        );
+        expect(result.changedPages).toEqual([]);
+    });
+
+    it("a page added inside the merged box can be deleted with its moves; moves crossing its edges stay", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await converted(db);
+        const [m] = await marcherIds(db);
+        await deletePageFlags({ db, pageIds: new Set([2]) });
+        // Page mode's add at beat 13 (a split), then a timeline flag at 21
+        const beats = await db
+            .select()
+            .from(schema.beats)
+            .orderBy(schema.beats.position)
+            .all();
+        await createPages({
+            db,
+            newPages: [{ start_beat: beats[13]!.id, is_subset: false }],
+        });
+        const { page: added } = await addPageFlag({ db, beat: 21 });
+        expect(
+            (await grid(db)).pages.find((p) => p.id === added.id),
+        ).toMatchObject({ start: 13, end: 21 });
+
+        await deletePagesWithMoves({ db, pageIds: new Set([added.id]) });
+        expect(await rowsOf(db, m!)).toEqual([
+            [1, 9],
+            [9, 17],
+            [17, 25],
+            [25, 33],
+            [33, 41],
+            [41, 49],
+        ]);
+        // The page before it (page 3, what the split left it) now ends at its flag
+        expect((await grid(db)).pages.find((p) => p.id === 3)).toMatchObject({
+            start: 9,
+            end: 21,
+        });
+    });
+
+    it("after a drag over the merged box, its page moves go; the drag's move on top stays", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await converted(db);
+        const [m] = await marcherIds(db);
+        await deletePageFlags({ db, pageIds: new Set([2]) });
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 9, end: 25 },
+            moves: [{ marcherId: m!, x: 123, y: 456 }],
+        });
+        expect(await rowsOf(db, m!, 1)).toEqual([[9, 25]]);
+
+        await deletePagesWithMoves({ db, pageIds: new Set([3]) });
+        expect(await rowsOf(db, m!)).toEqual([
+            [1, 25],
+            [25, 33],
+            [33, 41],
+            [41, 49],
+        ]);
+        // A move above a page move is a track (not a page move), so it stays
+        expect(await rowsOf(db, m!, 1)).toEqual([[9, 25]]);
+        expect((await resolverOf(db)).positionAt(m!, 25)).toEqual([123, 456]);
+    });
+
+    it("a move crossing the deleted page's flag stays, and the page before's move stops where it starts", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await madeInTimelineMode(db);
+        const [m] = await marcherIds(db);
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 1, end: 9 },
+            moves: [{ marcherId: m!, x: 100, y: 100 }],
+        });
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 13, end: 29 },
+            moves: [{ marcherId: m!, x: 200, y: 200 }],
+        });
+        expect(await rowsOf(db, m!)).toEqual([
+            [1, 9],
+            [13, 29],
+        ]);
+
+        await deletePagesWithMoves({ db, pageIds: new Set([2]) });
+        // Page 1 now ends at 17, but the marcher's next move starts at 13, so it takes over there
+        expect(await rowsOf(db, m!)).toEqual([
+            [1, 13],
+            [13, 29],
+        ]);
+        const after = await resolverOf(db);
+        const [hx, hy] = after.positionAt(m!, 0);
+        const [x, y] = after.positionAt(m!, 13);
+        // Page 1's move still runs to its flag (17): at 13 it is 12 of its 16 beats along
+        expect(x).toBeCloseTo(hx + (100 - hx) * 0.75);
+        expect(y).toBeCloseTo(hy + (100 - hy) * 0.75);
+        expect(after.positionAt(m!, 29)).toEqual([200, 200]);
+    });
+});
+
 describeDbTests("tag appearances survive a page delete", (it) => {
     const appearances = async (db: DbConnection) =>
         (await db.select().from(schema.tag_appearances).all())
@@ -516,6 +711,19 @@ describeDbTests("tag appearances survive a page delete", (it) => {
                 await deletePagesWithMoves({ db, pageIds: new Set([3]) });
                 await deletePageFlags({ db, pageIds: new Set([2]) });
                 await deletePageYankWithMoves({ db, pageId: 5 });
+                await expectNumberOfChanges.test(db, 3, state);
+            },
+        );
+
+        testWithHistory(
+            "a flag delete, then delete page and its moves on the merged page, undo one at a time",
+            async ({ db, marchersAndPages: _, expectNumberOfChanges }) => {
+                await setTimelineFlag(db);
+                await convertPagesToTimeline(db);
+                const state = await expectNumberOfChanges.getDatabaseState(db);
+                await deletePageFlags({ db, pageIds: new Set([2]) });
+                await deletePagesWithMoves({ db, pageIds: new Set([3]) });
+                await deletePageYankWithMoves({ db, pageId: 4 });
                 await expectNumberOfChanges.test(db, 3, state);
             },
         );
