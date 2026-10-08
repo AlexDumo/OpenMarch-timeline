@@ -8,8 +8,10 @@
  * - no travel: a rest count, `marktime` while any marcher moves on that
  *   count, `attention` while the whole band holds;
  * - travel: a step along that count's own vector. The family and leg turn
- *   come from `pickDirection`, the two sizes and weight from `pickBlend`.
- *   A curved path is a new vector every count.
+ *   come from `travelDirection`, the two sizes and weight from `pickBlend`.
+ *   A curved path is a new vector every count. A run of slide counts faces
+ *   the 50: forward when the run ends nearer the 50 than it started, backward
+ *   when farther (`facing.ts`).
  *
  * From the sequence of counts it builds clip events:
  *
@@ -17,13 +19,16 @@
  *   time `change_marktime__<move>` when that clip exists;
  * - step to step: the loop, phased from its step-off; a different family or
  *   a size jump uses `change_<a>__<b>` (or `change2_`, by the loop's time on
- *   that count) when it exists, and otherwise cuts between the loops keeping
- *   the loop time (the spec's stopgap);
+ *   that count) when it exists, and otherwise a `crossfade`: the old loop
+ *   blends into the new one over that count, both at the running loop time,
+ *   while the leg turn eases from the old travel to the new. The swinging
+ *   foot then takes the straight line between the two gaits' plants instead
+ *   of a cut;
  * - step to rest: `halt_<move>` when the loop is at time 0, `halt2_<move>`
- *   when it is at 0.5 s (to mark time: the change clip, or a cut).
+ *   when it is at 0.5 s (to mark time: the change clip, or a crossfade).
  *
- * Body placement: during loops and rests the body follows the drill; during
- * a one-count transition it moves by the clip's own root travel. Where that
+ * Body placement: during loops, crossfades and rests the body follows the
+ * drill; during a one-count transition it moves by the clip's own root travel. Where that
  * leaves the body off the drill (the step-off covers about 0.31 m against an
  * 8-to-5 step's 0.57 m; a halt closes onto the last planted foot), the
  * landing correction spreads the difference linearly between anchors: count
@@ -34,8 +39,8 @@
 
 import {
     pickBlend,
-    pickDirection,
     turnedClips,
+    turnEase,
     turnRoot,
     type ClipPair,
     type Direction,
@@ -46,6 +51,7 @@ import {
     type TurnedPair,
 } from "../../vendor/om-pose/step-blend.js";
 import { classSuffix, type HeightClass } from "./looks";
+import { isSlide, travelDirection, type SlideSense } from "./facing";
 
 /** Less travel than this in a count is a rest (meters). */
 export const REST_EPS = 0.01;
@@ -71,7 +77,7 @@ export interface PlanInput {
     bandMoving: Uint8Array;
 }
 
-export type EventKind = "rest" | "loop" | "transition";
+export type EventKind = "rest" | "loop" | "transition" | "crossfade";
 
 export interface PlanEvent {
     /** First count it covers; it lasts until the next event's count. */
@@ -79,7 +85,9 @@ export interface PlanEvent {
     kind: EventKind;
     /** Clip names (with the height class suffix), as `bake.rows` keys. */
     clip: string;
+    /** Loops: the second size. Crossfades: the loop faded in over the count. */
     clip2: string | null;
+    /** Crossfades: unused; the weight runs 0 to 1 over the count (`crossfadeWeight`). */
     weight: number;
     legYaw: number | [number, number, number, number];
     /** The count clock value at which the clip is at its time 0. */
@@ -168,11 +176,57 @@ function snapPick(p: Pick): Pick {
     return p;
 }
 
+/**
+ * Which way each count's slide goes relative to the 50 (x = 0): decided per
+ * run of consecutive slide counts in the same lateral direction, by whether
+ * the run ends nearer the 50 than it started. One gait per run, so a slide
+ * across the 50 doesn't flip halfway.
+ */
+function slideSenses(input: PlanInput): SlideSense[] {
+    const { positions, heading } = input;
+    const K = positions.length / 2 - 1;
+    const out: SlideSense[] = new Array(K).fill(null);
+    let k = 0;
+    while (k < K) {
+        const dx = positions[(k + 1) * 2] - positions[k * 2];
+        const dz = positions[(k + 1) * 2 + 1] - positions[k * 2 + 1];
+        const side = Math.sign(dx);
+        if (
+            !(Math.hypot(dx, dz) > REST_EPS) ||
+            side === 0 ||
+            !isSlide(travelDirection(dx, dz, heading))
+        ) {
+            k++;
+            continue;
+        }
+        let end = k + 1;
+        while (end < K) {
+            const ex = positions[(end + 1) * 2] - positions[end * 2];
+            const ez = positions[(end + 1) * 2 + 1] - positions[end * 2 + 1];
+            if (
+                !(Math.hypot(ex, ez) > REST_EPS) ||
+                Math.sign(ex) !== side ||
+                !isSlide(travelDirection(ex, ez, heading))
+            )
+                break;
+            end++;
+        }
+        const x0 = Math.abs(positions[k * 2]);
+        const x1 = Math.abs(positions[end * 2]);
+        const sense: SlideSense =
+            x1 < x0 - REST_EPS ? "toward" : x1 > x0 + REST_EPS ? "away" : null;
+        for (let i = k; i < end; i++) out[i] = sense;
+        k = end;
+    }
+    return out;
+}
+
 /** The states of every count from the drill. */
 function countStates(input: PlanInput): State[] {
     const { positions, bpm, bandMoving, manifest, heightClass, heading } =
         input;
     const K = positions.length / 2 - 1;
+    const senses = slideSenses(input);
     const out: State[] = [];
     for (let k = 0; k < K; k++) {
         const dx = positions[(k + 1) * 2] - positions[k * 2];
@@ -182,7 +236,7 @@ function countStates(input: PlanInput): State[] {
             out.push({ type: bandMoving[k] ? "marktime" : "attention" });
             continue;
         }
-        const dir = pickDirection(heading, dx, dz);
+        const dir = travelDirection(dx, dz, heading, senses[k]);
         const family = dir.family as Family;
         const pick = snapPick(
             pickBlend(manifest, family, d, {
@@ -193,6 +247,11 @@ function countStates(input: PlanInput): State[] {
         out.push({ type: "move", family, dir, pick, d, dx, dz });
     }
     return out;
+}
+
+/** The blend weight of a crossfade at `u` in [0, 1] of its count. */
+export function crossfadeWeight(u: number): number {
+    return turnEase(u);
 }
 
 interface Draft {
@@ -284,6 +343,23 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             st.type !== "move" || Math.abs(st.dir.legYaw) <= TURN_EPS;
         const baseOf = (st: State) =>
             st.type === "move" ? nearestBase(st.pick) : "marktime";
+        // the loop a state plays alone (its nearest size), for a crossfade
+        const soloLoop = (st: State) =>
+            st.type === "move"
+                ? st.pick.weight < 0.5
+                    ? st.pick.a
+                    : st.pick.b
+                : restBase(st) + sfx;
+        const yawOf = (st: State) => (st.type === "move" ? st.dir.legYaw : 0);
+        const crossfade = (from: State, to: State): Draft => ({
+            kind: "crossfade",
+            clip: soloLoop(from),
+            clip2: soloLoop(to),
+            weight: 0,
+            legYaw: [yawOf(from), yawOf(to), 0, 1],
+            phaseStart: k - p,
+            root: null,
+        });
 
         if (s.type === "move") {
             if (prev.type === "attention") {
@@ -309,7 +385,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                     draft =
                         (unturned(prev) && unturned(s)
                             ? change(baseOf(prev), baseOf(s))
-                            : null) ?? loopOf(s, s.dir.legYaw);
+                            : null) ?? crossfade(prev, s);
                 }
                 prevYaw = s.dir.legYaw;
                 parity ^= 1;
@@ -328,7 +404,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                 draft =
                     (unturned(prev)
                         ? change(nearestBase(prev.pick), "marktime")
-                        : null) ?? loopOf(s, 0);
+                        : null) ?? crossfade(prev, s);
                 parity ^= 1;
             }
         } else if (prev.type === "attention" && s.type === "marktime") {
@@ -413,6 +489,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
         }
         const d = drafts[k];
         const isTransition = d.kind === "transition";
+        const oneCount = isTransition || d.kind === "crossfade";
         const lastEvent = events[events.length - 1];
         // The correction is constant across this count (the offset doesn't
         // change between its anchors): then a span change doesn't matter.
@@ -427,7 +504,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                     ox[b] === ox[a] &&
                     oz[b] === oz[a]));
         const mergeable =
-            !isTransition &&
+            !oneCount &&
             lastEvent &&
             lastEvent.kind === d.kind &&
             sameSpan &&
