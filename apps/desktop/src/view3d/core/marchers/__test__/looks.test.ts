@@ -9,7 +9,7 @@ import {
     classTag,
     defaultPerformerBody,
     heightClassFor,
-    instrumentForSection,
+    PART,
     partVisible,
     sectionUniform,
     uniformKey,
@@ -106,20 +106,34 @@ describe("section uniforms", () => {
             expect(sectionUniform(b, null).options.hat).toBe(true);
     });
 
-    it("gives brass sections the instrument om-pose models", () => {
-        expect(instrumentForSection("Trumpet")).toBe("trumpet");
-        expect(instrumentForSection("Mellophone")).toBe("mellophone");
-        expect(instrumentForSection("Baritone")).toBe("baritone");
-        expect(instrumentForSection("Euphonium")).toBe("baritone");
-        expect(instrumentForSection("Snare")).toBe("none");
-        expect(instrumentForSection("Color Guard")).toBe("none");
+    it("puts the section's carry, gold lacquer and the hold in the look", () => {
+        const u = sectionUniform("Trumpet", null);
+        expect(u.options.carry).toEqual({ model: "trumpet", family: "brass" });
+        expect(u.options.finish).toBe("brass");
+        expect(u.options.hold).toBe("up");
+        expect(u.options.instrument).toBe("none");
+        expect(sectionUniform("Trumpet", null, "carry").options.hold).toBe(
+            "carry",
+        );
+        expect(sectionUniform("Snare", null).options.carry).toBeNull();
+    });
+
+    it("never shows the placeholder instruments, for any section", () => {
+        for (const s of ["Trumpet", "Mellophone", "Baritone", "Flute"])
+            for (const part of PART.instruments)
+                expect(partVisible(sectionUniform(s, null), part)).toBe(false);
+    });
+
+    it("keys looks by carry, finish and hold", () => {
+        const a = uniformKey(sectionUniform("Trumpet", null, "up"));
+        const b = uniformKey(sectionUniform("Trumpet", null, "carry"));
+        expect(a).not.toBe(b);
     });
 
     it("uses the section's fill color for the jacket and hat", () => {
         const u = sectionUniform("Trumpet", { r: 200, g: 16, b: 46, a: 1 });
         expect(u.colors.primary).toBe(0xc8102e);
         expect(u.colors.hat).toBe(0xc8102e);
-        expect(u.options.instrument).toBe("trumpet");
     });
 
     it("shares one look between sections that only differ in name when the instrument matches", () => {
@@ -137,12 +151,10 @@ describe("section uniforms", () => {
             Array.from({ length: 16 }, (_, p) => p).filter((p) =>
                 partVisible(sectionUniform(section, null), p),
             );
-        // body parts 0-6 always; shako 7-9; one instrument 13-15
-        expect(visible("Trumpet")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 13]);
-        expect(visible("Mellophone")).toEqual([
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14,
-        ]);
-        expect(visible("Baritone")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15]);
+        // body parts 0-6 always; shako 7-9; the placeholder instruments 13-15 never
+        expect(visible("Trumpet")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        expect(visible("Mellophone")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        expect(visible("Baritone")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         expect(visible("Flute")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         expect(visible("Color Guard")).toEqual([0, 1, 2, 3, 4, 5, 6]);
     });

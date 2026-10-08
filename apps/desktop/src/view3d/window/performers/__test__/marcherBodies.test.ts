@@ -31,8 +31,8 @@ describe("part-filtered index", () => {
         expect(geo.index!.count / 3).toBe(1796);
         const triangles = (section: string) =>
             visibleIndex(geo, sectionUniform(section, null))!.count / 3;
-        // no aussie hat (64), no cape (116), two of three instruments (240)
-        expect(triangles("Trumpet")).toBe(1376);
+        // no aussie hat (64), no cape (116), no placeholder instruments (360)
+        expect(triangles("Trumpet")).toBe(1256);
         // no instrument at all (360)
         expect(triangles("Flute")).toBe(1256);
         // and no shako (80)
@@ -47,7 +47,7 @@ describe("part-filtered index", () => {
         for (let i = 0; i < index.count; i++)
             parts.add(Math.round(part.getX(index.getX(i))));
         expect([...parts].sort((a, b) => a - b)).toEqual([
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14,
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
         ]);
     });
 });

@@ -9,12 +9,18 @@
  * - height class 0.95, 1.00 or 1.05 by the same hash at high quality, and
  *   1.00 for everyone at low quality;
  * - one uniform per section, in the section's 2D fill color, carrying the
- *   section's instrument when om-pose models it.
+ *   section's instrument from `core/instruments` in the hold it plays.
  *
  * Pure: no three.js, React or database.
  */
 import type { RgbaColor } from "@openmarch/core";
 import { FAMILIES, getSectionObjectByName } from "@/global/classes/Sections";
+import {
+    carryForSection,
+    type Carry,
+    type Finish,
+} from "../instruments/catalog";
+import type { HoldState } from "../instruments/holds";
 
 /** om-pose's seven body types (`assets/body-v4u/<type>.glb`). */
 export const BODY_TYPES = [
@@ -105,17 +111,12 @@ export function defaultPerformerBody(
     };
 }
 
-/** Instruments the uniform shader can put in a performer's right hand. */
-export type Instrument = "none" | "trumpet" | "mellophone" | "baritone";
-
-/** The instrument om-pose models for a section, by the section's name. */
-export function instrumentForSection(section: string): Instrument {
-    const name = section.trim().toLowerCase();
-    if (name === "trumpet" || name === "cornet") return "trumpet";
-    if (name === "mellophone" || name === "french horn") return "mellophone";
-    if (name === "baritone" || name === "euphonium") return "baritone";
-    return "none";
-}
+/**
+ * The vendored shader's own instrument option. Always "none": the horns
+ * are this app's geometry (`core/instruments`), and the shader's built-in
+ * placeholders stay discarded.
+ */
+export type Instrument = "none";
 
 /** Color guard sections (the "Guard" family: color guard, rifle, flag, dancer, twirler). */
 export function isGuard(section: string): boolean {
@@ -137,7 +138,16 @@ export interface UniformLook {
         plume: number;
         visor: number;
     };
-    options: { hat: boolean; hatType: "shako"; instrument: Instrument };
+    options: {
+        hat: boolean;
+        hatType: "shako";
+        instrument: Instrument;
+        /** What the section carries, or null. */
+        carry: Carry | null;
+        /** Gold lacquer ("brass") or silver lacquer. */
+        finish: Finish;
+        hold: HoldState;
+    };
 }
 
 /** Used when a section has no fill color: om-pose's "Royal" blue. */
@@ -159,11 +169,13 @@ const rgbToNumber = (c: RgbaColor) =>
 /**
  * A section's uniform: om-pose's classic style with the section's fill as
  * the jacket and hat, white and gold trim, navy pants. Guard sections go
- * without the shako.
+ * without the shako. Brass carry their horn in gold lacquer, held as `hold`
+ * says (docs/3d/instruments.md §5).
  */
 export function sectionUniform(
     section: string,
     fill: RgbaColor | null | undefined,
+    hold: HoldState = "up",
 ): UniformLook {
     const primary = fill ? rgbToNumber(fill) : DEFAULT_PRIMARY;
     return {
@@ -184,7 +196,10 @@ export function sectionUniform(
             // guard doesn't wear a shako
             hat: !isGuard(section),
             hatType: "shako",
-            instrument: instrumentForSection(section),
+            instrument: "none",
+            carry: carryForSection(section),
+            finish: "brass",
+            hold,
         },
     };
 }
@@ -194,7 +209,7 @@ export const PART = {
     shako: [7, 8, 9],
     aussie: [10, 11],
     cape: 12,
-    /** trumpet, mellophone, baritone */
+    /** the shader's placeholder trumpet, mellophone, baritone: never drawn */
     instruments: [13, 14, 15],
 } as const;
 
@@ -204,13 +219,13 @@ export const PART = {
  * out of the draw instead of skinned and discarded.
  */
 export function partVisible(look: UniformLook, part: number): boolean {
-    const { hat, hatType, instrument } = look.options;
+    const { hat, hatType } = look.options;
     if ((PART.shako as readonly number[]).includes(part))
         return hat && hatType === "shako";
     if ((PART.aussie as readonly number[]).includes(part)) return false;
     if (part === PART.cape) return false;
-    const i = (PART.instruments as readonly number[]).indexOf(part);
-    if (i >= 0) return ["trumpet", "mellophone", "baritone"][i] === instrument;
+    // the shader's placeholder instruments never draw: the horns are our own geometry
+    if ((PART.instruments as readonly number[]).includes(part)) return false;
     return true;
 }
 
