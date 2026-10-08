@@ -54,6 +54,7 @@ import {
     useMoveCommands,
     useTimelineCommands,
 } from "./useTimelineCommands";
+import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
@@ -193,6 +194,7 @@ export default function TimelineModePanel() {
         }),
         [isPlaying, moves],
     );
+    const clipResize = useTimelineClipResize({ database: db, timelines });
     const queryClient = useQueryClient();
     // Moving a page flag (research/move-page-flag): the playhead and start flag on it go with it
     const { mutateAsync: movePageFlag } = useMutation(
@@ -299,6 +301,7 @@ export default function TimelineModePanel() {
                     transportViewControls={COMPACT_BUTTON}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
+                    clipResize={clipResize}
                     onPlayFromStartOff={() =>
                         useTimelineSelectionStore
                             .getState()

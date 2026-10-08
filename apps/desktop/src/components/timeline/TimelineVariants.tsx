@@ -813,6 +813,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                 )}
                                 onSelect={selectTrack}
                                 onRangeCommit={props.onTimelineRangeCommit}
+                                resize={props.clipResize}
                                 beatCount={model.beatCount}
                                 snapBeats={snapBeats}
                                 micro={!expanded}

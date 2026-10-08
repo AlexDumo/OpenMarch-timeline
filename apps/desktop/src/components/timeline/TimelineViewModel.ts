@@ -1,3 +1,4 @@
+import type { TimelineClipResizeCommands } from "./TimelineClipResize";
 import type { ReactNode } from "react";
 import type {
     TimelineAddMarchersMenu,
@@ -249,6 +250,8 @@ export interface TimelineCommonProps
     readonly transportAccessories?: ReactNode;
     readonly className?: string;
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
+    /** Resizing a clip by its edges (resize-move), in view beats; without it clips have no handles */
+    readonly clipResize?: TimelineClipResizeCommands;
     /** Turns **From start** off (UI-11), from the range bar */
     readonly onPlayFromStartOff?: () => void;
     /** Unpins the start flag (UI-12), from its pin */
