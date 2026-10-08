@@ -236,16 +236,16 @@ describeDbTests("deleting a page in timeline mode", (it) => {
 
             expect(result.deleted.map((p) => p.id)).toEqual([2]);
             expect(result.deletedNames).toEqual(["2"]);
-            // Page 1 now ends at page 2's old flag, and pages 3 to 6 (now 2 to 5) held page 2's set
+            // Page 1 now ends at page 2's old flag but still shows its own set; pages 3 to 6 (now 2
+            // to 5) held page 2's set
             expect(result.changedPages.map((p) => [p.id, p.name])).toEqual([
-                [1, "1"],
                 [3, "2"],
                 [4, "3"],
                 [5, "4"],
                 [6, "5"],
             ]);
             expect(pageDeleteWithMovesMessage(result)).toBe(
-                "Deleted Page 2 and its moves · Pages 1–5 changed",
+                "Deleted Page 2 and its moves · Pages 2–5 changed",
             );
             const after = await resolverOf(db);
             expect(after.positionAt(a, 25)).toEqual(homeA);
@@ -273,18 +273,30 @@ describeDbTests("deleting a page in timeline mode", (it) => {
         }) => {
             await convertedWithCopies(db);
             const before = await resolverOf(db);
+            const endBefore = new Map(
+                (await grid(db)).pages.map((p) => [p.id, p.end]),
+            );
             const result = await deletePagesWithMoves({
                 db,
                 pageIds: new Set([2]),
             });
             const after = await resolverOf(db);
-            // Pages keep their beats, so each flag left is compared at its beat
+            // Each page left is compared with its own flag before the delete, which may be at
+            // another beat now, so only marcher and position are compared
+            const look = (resolver: Resolver, beat: number) =>
+                JSON.stringify(
+                    positionsAt(resolver, [beat]).map(([id, , x, y]) => [
+                        id,
+                        x,
+                        y,
+                    ]),
+                );
             const expected = (await grid(db)).pages
                 .filter((p) => p.id !== 0)
                 .filter(
                     (p) =>
-                        JSON.stringify(positionsAt(before, [p.end])) !==
-                        JSON.stringify(positionsAt(after, [p.end])),
+                        look(before, endBefore.get(p.id)!) !==
+                        look(after, p.end),
                 )
                 .map((p) => p.id);
             expect(result.changedPages.map((p) => p.id)).toEqual(expected);

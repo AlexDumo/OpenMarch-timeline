@@ -172,8 +172,7 @@ async function deleteAndCompare(
 
 /**
  * **Delete page and its moves**: the page-mode delete (`deletePages`) as one undoable edit. Pages
- * that stay keep their beats, so each remaining flag is compared at the same beat. The page before
- * a deleted page takes its box, and so ends at its flag.
+ * that stay keep their beats; the page before a deleted page takes its box, and so ends at its flag.
  */
 export async function deletePagesWithMoves({
     db,
@@ -199,14 +198,24 @@ export async function deletePagesWithMoves({
                     await ensureSecondBeatHasPage({ tx });
                     return deleted;
                 },
-                () => (page) => page.end,
+                flagOfSamePage,
             ),
     );
 }
 
 /**
- * **Yank** with the same report: the page goes and every later page moves back by its length, so a
- * remaining page's flag is compared with where that page's flag was before.
+ * Compares each page left with its own flag before the delete, so the page before a deleted one,
+ * which now ends at the deleted page's flag, counts as changed only if it shows something else.
+ */
+function flagOfSamePage(
+    before: PageGrid,
+): (page: GridPage) => number | undefined {
+    const endOf = new Map(before.pages.map((p) => [p.id, p.end]));
+    return (page) => endOf.get(page.id);
+}
+
+/**
+ * **Yank** with the same report: the page goes and every later page moves back by its length.
  */
 export async function deletePageYankWithMoves({
     db,
@@ -224,12 +233,7 @@ export async function deletePageYankWithMoves({
             await deleteAndCompare(
                 tx,
                 async () => await deletePageYankInTransaction({ pageId, tx }),
-                (before) => {
-                    const endOf = new Map(
-                        before.pages.map((p) => [p.id, p.end]),
-                    );
-                    return (page) => endOf.get(page.id);
-                },
+                flagOfSamePage,
             ),
     );
 }
