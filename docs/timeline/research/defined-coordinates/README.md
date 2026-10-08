@@ -162,3 +162,16 @@ Owner, 2026-10-08, all four as recommended:
 3. **Delete page in timeline mode keeps later pages' look** (flag delete); "delete page and its
    moves" is explicit.
 4. **Lock here and Keep later pages are deferred** (no stored kind in this change).
+
+## Built (branch `timeline/defined-coordinates`)
+
+| Branch (merged)        | What                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dc/wp1-no-auto-stays` | No holding moves on page add, split or append; new marchers get a home only; the converter skips unchanged positions; undoing a marcher add keeps the page |
+| `dc/wp2-writers`       | Writes that move nobody write nothing; a drag back clears an own page move; set to previous/next page on held pages; **Start from Page N**                 |
+| `dc/wp3-delete`        | Timeline Delete page = flag delete; **Delete page and its moves** with a changed-pages toast; tag appearances move to the next page                        |
+| `dc/wp4-page-mode`     | Page-mode carry-forward with **Only Page N**; no copied pathways; pathways in undo; undo focus fix; cache invalidation                                     |
+| `dc/wp5-feedback`      | Carry-forward toast in timeline mode; inspector "Holding since Page X" / "Moves here"                                                                      |
+| `dc/wp6-followups`     | Delete with moves after a flag delete (E-A3 fix); English toast strings                                                                                    |
+
+Lead defaults are logged as V-140..V-149 in [VALIDATION.md](../ownership/VALIDATION.md).
