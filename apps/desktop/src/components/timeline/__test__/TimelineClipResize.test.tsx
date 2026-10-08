@@ -162,7 +162,7 @@ describe("the panel's names for limits", () => {
             label: "Move 3",
         } as unknown as TimelineInput,
     ];
-    const boxes = [{ start: 1, end: 9, name: "Page 1" }];
+    const boxes = [{ start: 1, end: 9, name: "1" }];
 
     it("names a page's move by its page, and another move by its clip", () => {
         expect(timelineName({ start: 1, end: 9 }, 2, timelines, boxes)).toBe(

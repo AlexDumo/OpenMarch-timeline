@@ -31,7 +31,7 @@ export function timelineName(
     const page = pageBoxes.find(
         (b) => b.start === range.start && b.end === range.end,
     );
-    if (page?.name) return `${page.name}'s move`;
+    if (page?.name) return `Page ${page.name}'s move`;
     const clip = timelines.find(
         (t) => t.linkId !== undefined && Number(t.linkId) === timelineId,
     );

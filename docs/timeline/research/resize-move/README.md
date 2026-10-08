@@ -3,7 +3,7 @@
 # Resizing a move: drag its start and its end
 
 Status: design, being built on `timeline/resize-move` (2026-10-08). The feel-based defaults
-below are _lead defaults_, logged as V-120 to V-128 in
+below are _lead defaults_, logged as V-120 to V-128 (V-121 and V-127 are also owner questions) in
 [ownership/VALIDATION.md](../ownership/VALIDATION.md). Open owner questions are in §6.
 
 Owner's words (2026-10-08): "I should be able to move the start and end of a timeline/track,
@@ -56,9 +56,11 @@ Prior art (subagent research, sources in the PR):
   than 8 px has no handles; zoom in to resize it. The body keeps at least half the clip, so a
   1-count clip at the default zoom (16 px) keeps an 8 px body to grab or click
   (_lead default_, V-120). Compact mode uses the same rule over the 12 px hit row.
-- **Snapping.** The dragged edge snaps the way the start flag's edge does (`snapBoundary`): to a
-  page line within 24 px, otherwise to the nearest whole beat. Alt turns page snapping off, and
-  the edge still lands on whole beats. The modifiers held at release decide the result.
+- **Snapping.** The dragged edge snaps with `snapBoundary`: to a page line within 12 px,
+  otherwise to the nearest whole beat. Alt turns page snapping off, and the edge still lands on
+  whole beats. The modifiers held at release decide the result. 12 px is half the clip move's
+  24 px. The first in-app run used 24 px: at the default 16 px per beat, an edge one count from a
+  flag snapped back onto it, so a 1-count change next to a flag needed Alt (_lead default_, V-125).
 - **Drag tag.** While dragging, a tag over the clip reads `12 → 16 counts`, and adds why when
   the edge is held back ("stops at Move 4", "1 count minimum").
 - **Commit.** Release commits once, as one undoable edit (`resizeTimeline`, one
@@ -68,7 +70,11 @@ Prior art (subagent research, sources in the PR):
 - **Selection follows.** If the clip's range was the selection, or the isolated move, the window
   follows the new range: start flag on the new start, playhead on the new end (a playhead inside
   an isolated move stays where it was, clamped into the move) (`followTimelineRange`, the
-  generalisation of `followTimelineShift`).
+  generalisation of `followTimelineShift`). Undo restores the move but not the window, as for
+  the whole-move drag today (undo moves only the playhead, P8.12).
+- **Flags over the clip rows.** On the base branch the start flag's and the playhead's hit areas
+  run the full timeline height and cover a selected clip's edges. This branch takes PR #106's
+  UI-14 change verbatim (V-47 there): over the clip rows they are drawn but not grabbed.
 
 ## 4. Edge cases
 

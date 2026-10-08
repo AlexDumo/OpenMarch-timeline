@@ -55,6 +55,11 @@ export interface TimelineClipResizeCommands {
 const RESIZE_DRAG_PX = 4;
 /** A handle's widest, inside the clip's edge. */
 const HANDLE_MAX_PX = 6;
+/**
+ * How close a page line pulls a dragged edge (V-125). Half the clip move's 24 px: at the default
+ * 16 px per beat, an edge one count from a flag can still be placed without Alt.
+ */
+const RESIZE_SNAP_PX = 12;
 /** Narrower clips have no handles: their whole width is the body (V-120). */
 const HANDLE_MIN_CLIP_PX = 8;
 
@@ -76,9 +81,9 @@ export interface ClipResizePreview extends TimelineBeatRange {
 }
 
 /**
- * Where the dragged edge lands for a pointer at `beat`: snapped as the start flag snaps (a page
- * line within reach, else a whole beat; Alt only drops the page lines), then held inside the
- * limits and the show. Pure, for tests.
+ * Where the dragged edge lands for a pointer at `beat`: snapped to a page line within 12 px, else
+ * to a whole beat (Alt only drops the page lines), then held inside the limits and the show.
+ * Pure, for tests.
  */
 export function resizedRange({
     range,
@@ -97,7 +102,12 @@ export function resizedRange({
     beatCount: number;
     limits: ClipResizeLimits | null;
 }): ClipResizePreview {
-    const snapped = snapBoundary({ beat, snapBeats, pixelsPerBeat });
+    const snapped = snapBoundary({
+        beat,
+        snapBeats,
+        pixelsPerBeat,
+        thresholdPx: RESIZE_SNAP_PX,
+    });
     const bounds =
         edge === "start"
             ? (limits?.startEdge ?? {
