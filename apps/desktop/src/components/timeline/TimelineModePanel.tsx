@@ -44,7 +44,11 @@ import {
 } from "@/timeline/timelineWaveform";
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { timeAtBeat } from "@/timeline/timeMap";
-import { useTimelineCommands } from "./useTimelineCommands";
+import {
+    moveCommandBlocker,
+    useMoveCommands,
+    useTimelineCommands,
+} from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
@@ -89,6 +93,7 @@ export const toTimelineSelection = (
  * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15). Neither Create Track
  * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
+ * A clip is a move: its menu, its ⋯ button and Delete edit, rename and delete it (UI-14).
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
@@ -148,6 +153,21 @@ export default function TimelineModePanel() {
         timelines,
         selectedMarcherIds,
     });
+    // UI-14: a clip is a move; it can be edited, renamed and deleted
+    const moves = useMoveCommands(db);
+    const moveCommands = useMemo(
+        () => ({
+            disabledReason: moveCommandBlocker(isPlaying),
+            onEdit: (id: number) => {
+                if (!isPlaying) moves.editMove(id);
+            },
+            onRename: moves.renameMove,
+            onDelete: (id: number) => {
+                if (!isPlaying) moves.deleteMove(id);
+            },
+        }),
+        [isPlaying, moves],
+    );
     const queryClient = useQueryClient();
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
     const { mutate: deletePageFlags } = useMutation(
@@ -224,6 +244,7 @@ export default function TimelineModePanel() {
                                 "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
                             );
                     }}
+                    moveCommands={moveCommands}
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
                             pages,

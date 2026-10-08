@@ -67,6 +67,8 @@ export interface StoredTimelineMembership {
     readonly start: number;
     readonly end: number;
     readonly marcherIds: ReadonlySet<number>;
+    /** The timeline's name (UI-14 Rename), `null` or absent when it has none */
+    readonly name?: string | null;
 }
 
 /** An isolated stored timeline (see the module comment) and the window to restore after it. */

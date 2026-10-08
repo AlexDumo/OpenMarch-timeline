@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type {
     TimelineAddMarchersMenu,
+    TimelineMoveCommands,
     TimelineMenuTarget,
 } from "./TimelineRangeMenu";
 
@@ -175,6 +176,8 @@ export interface TimelineInteractionProps {
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
     /** The right-click menu's **Add selected marchers** (UI-9, P8.14), in view beats here */
     readonly addSelectedMarchers?: TimelineAddMarchersMenu<TimelineMenuTarget>;
+    /** A clip's move commands (UI-14), by track id here: its menu, ⋯ button and keys */
+    readonly moveCommands?: TimelineMoveCommands<TimelineTrackId>;
     /**
      * UI-9 **+**: adds a page whose flag is at the paused playhead. Shown just after the playhead
      * while it's given and the timeline isn't playing; the owner passes it only where **+** applies.

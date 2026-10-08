@@ -20,6 +20,7 @@ import { CollapsedTimeline, ExpandedTimeline } from "./TimelineVariants";
 import type {
     TimelineAddMarchersMenu,
     TimelineMenuTarget,
+    TimelineMoveCommands,
 } from "./TimelineRangeMenu";
 import type {
     TimelineActivitySpan,
@@ -146,6 +147,12 @@ export interface TimelineProps {
     readonly onAddPageFlag?: () => void;
     /** The page box menu's **Delete page flag** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
+    /**
+     * A clip's move commands (UI-14): **Edit move**, **Rename move…** and **Delete move**, from
+     * its right-click menu, the selected clip's ⋯ button, and Delete on the focused clip. They get
+     * the stored timeline's id (the clip's `linkId`).
+     */
+    readonly moveCommands?: TimelineMoveCommands;
     /**
      * Double-clicking a page box or a clip: isolate that range's stored timeline. It gets the
      * range in spec beats (a clip's stored range).
@@ -447,6 +454,52 @@ export function Timeline(props: TimelineProps) {
                 : undefined,
         [addMarchers, deleteFlag, disabledReason, hasMarchersMenu],
     );
+    // A clip's track id to its stored timeline (`linkId`), for the move commands (UI-14)
+    const { moveCommands } = props;
+    const storedIdOf = (trackId: string | number) => {
+        const linkId = timelines.find(
+            (t) => String(t.id) === String(trackId),
+        )?.linkId;
+        return linkId === undefined ? null : Number(linkId);
+    };
+    const editMove = useLatestCallback(
+        moveCommands
+            ? (trackId: string | number) => {
+                  const id = storedIdOf(trackId);
+                  if (id !== null) moveCommands.onEdit(id);
+              }
+            : undefined,
+    );
+    const deleteMove = useLatestCallback(
+        moveCommands
+            ? (trackId: string | number) => {
+                  const id = storedIdOf(trackId);
+                  if (id !== null) moveCommands.onDelete(id);
+              }
+            : undefined,
+    );
+    const renameMove = useLatestCallback(
+        moveCommands
+            ? (trackId: string | number, name: string) => {
+                  const id = storedIdOf(trackId);
+                  if (id !== null) moveCommands.onRename(id, name);
+              }
+            : undefined,
+    );
+    const moveDisabledReason = moveCommands?.disabledReason;
+    // Stable while only closures change, like the other commands, so memoized clips don't redraw
+    const trackMoveCommands = useMemo(
+        () =>
+            editMove && deleteMove && renameMove
+                ? {
+                      disabledReason: moveDisabledReason,
+                      onEdit: editMove,
+                      onDelete: deleteMove,
+                      onRename: renameMove,
+                  }
+                : undefined,
+        [deleteMove, editMove, moveDisabledReason, renameMove],
+    );
     const commonProps = {
         model,
         positionBeat,
@@ -466,6 +519,7 @@ export function Timeline(props: TimelineProps) {
         onSelectionChange: changeSelection,
         onCreateTrack: createTrack,
         addSelectedMarchers: addMarchersMenu,
+        moveCommands: trackMoveCommands,
         onAddPageFlag: useLatestCallback(props.onAddPageFlag),
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,

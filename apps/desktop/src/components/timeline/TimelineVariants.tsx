@@ -658,8 +658,32 @@ const TimelineSurface = memo(function TimelineSurface({
     );
     // The right-click menu's target: a page box or clip under the pointer, else a dragged range
     // the pointer is inside (UI-9 Adding marchers, Creating a timeline)
+    // UI-14: the clip whose inline name field is open
+    const [renaming, setRenaming] = useState<string | null>(null);
+    const { moveCommands } = props;
+    // Stable, so the memoized clips don't redraw on every render
+    const startRename = useCallback(
+        (trackId: TimelineTrackId) => setRenaming(String(trackId)),
+        [],
+    );
+    const endRename = useCallback(() => setRenaming(null), []);
+    const moveActions = (trackId: TimelineTrackId) =>
+        moveCommands && {
+            onEdit: () => moveCommands.onEdit(trackId),
+            onRename: () => setRenaming(String(trackId)),
+            onDelete: () => moveCommands.onDelete(trackId),
+            disabledReason: moveCommands.disabledReason,
+        };
     const rangeMenu = useTimelineRangeMenu({
         menu: props.addSelectedMarchers,
+        movesFor: moveCommands
+            ? (trackId) => {
+                  const track = model.tracks.find(
+                      (t) => String(t.id) === trackId,
+                  );
+                  return track ? (moveActions(track.id) ?? null) : null;
+              }
+            : undefined,
         resolveRange: (event: MouseEvent<HTMLElement>) => {
             const marked = markedRangeAt(event.target);
             if (marked) return marked;
@@ -784,6 +808,10 @@ const TimelineSurface = memo(function TimelineSurface({
                                 beatCount={model.beatCount}
                                 snapBeats={snapBeats}
                                 micro={!expanded}
+                                moveCommands={moveCommands}
+                                renaming={renaming === String(track.id)}
+                                onRenameStart={startRename}
+                                onRenameEnd={endRename}
                             />
                         )),
                     )}

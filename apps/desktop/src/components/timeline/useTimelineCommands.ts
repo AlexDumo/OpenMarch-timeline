@@ -1,8 +1,19 @@
 import { useCallback, useMemo } from "react";
-import { shiftTimeline } from "@/db-functions/timelineCommands";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+    deleteTimeline,
+    renameTimeline,
+    shiftTimeline,
+} from "@/db-functions/timelineCommands";
 import { addMarchersToTimeline } from "@/db-functions/timelineMembership";
 import type { DbConnection } from "@/db-functions/types";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
+import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { moveLabel } from "@/timeline/timelineViewModel";
+import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import type { TimelineInput } from "./Timeline";
 import type { TimelineAddMarchersMenu } from "./TimelineRangeMenu";
@@ -116,4 +127,81 @@ function useAddSelectedMarchers(
         }),
         [database, selectedMarcherIds],
     );
+}
+
+/** Why **Edit move** and **Delete move** are unavailable (UI-14), or null when they can run. */
+export function moveCommandBlocker(isPlaying: boolean): string | null {
+    return isPlaying ? "Pause to edit or delete a move." : null;
+}
+
+/**
+ * A move's commands (ui.md UI-14), for the timeline's clips and the inspector's Move card. Each
+ * write is one undoable edit, and a refusal is a toast (P8.6).
+ *
+ * - **Delete move** deletes the timeline, its transitions and assignments; moves it passed through
+ *   come back (UI-10). The window stays put, and an isolated move that goes ends isolation (the
+ *   store's "timeline goes away" path). A toast names what went, with **Undo** (the app's undo).
+ * - **Rename** stores the name as `renameTimeline` normalizes it; an unchanged name writes nothing.
+ * - **Select its marchers** selects the marchers with an assignment in it on the canvas.
+ * - **Edit move** selects the move's window (S on its start, pinned when that isn't a flag; P on
+ *   its end), selects its marchers, and brings the inspector's Move card into view. It doesn't
+ *   isolate (double-click does).
+ */
+export function useMoveCommands(database: DbConnection) {
+    const { mutate: performHistoryAction } = usePerformHistoryAction();
+    const queryClient = useQueryClient();
+    const setSelectedMarchers = useSelectedMarchers()?.setSelectedMarchers;
+    return useMemo(() => {
+        const stored = (timelineId: number) =>
+            useTimelineSelectionStore
+                .getState()
+                .storedTimelines?.find((t) => t.id === timelineId);
+        const selectMarchers = async (timelineId: number) => {
+            const members = stored(timelineId)?.marcherIds;
+            if (!members || !setSelectedMarchers) return;
+            try {
+                const marchers = await queryClient.ensureQueryData(
+                    allMarchersQueryOptions(),
+                );
+                setSelectedMarchers(marchers.filter((m) => members.has(m.id)));
+            } catch (error: unknown) {
+                console.error("Couldn't read the marchers", error);
+            }
+        };
+        return {
+            deleteMove: (timelineId: number) => {
+                const label = moveLabel(
+                    stored(timelineId) ?? { id: timelineId },
+                );
+                deleteTimeline({ db: database, timelineId }).then(
+                    () =>
+                        toast.success(`Deleted ${label}`, {
+                            action: {
+                                label: "Undo",
+                                onClick: () => performHistoryAction("undo"),
+                            },
+                        }),
+                    (error: unknown) => toastTimelineError(error),
+                );
+            },
+            renameMove: (timelineId: number, name: string | null) => {
+                renameTimeline({ db: database, timelineId, name }).catch(
+                    (error: unknown) => toastTimelineError(error),
+                );
+            },
+            selectMarchers,
+            editMove: (timelineId: number) => {
+                const timeline = stored(timelineId);
+                if (!timeline) return;
+                useTimelineSelectionStore
+                    .getState()
+                    .selectRange(timeline.start, timeline.end);
+                // The card comes into view once the selected marchers' editors are in the
+                // inspector above it, so they don't push it back out
+                void selectMarchers(timelineId).then(() =>
+                    useMoveCardRevealStore.getState().reveal(timelineId),
+                );
+            },
+        };
+    }, [database, performHistoryAction, queryClient, setSelectedMarchers]);
 }
