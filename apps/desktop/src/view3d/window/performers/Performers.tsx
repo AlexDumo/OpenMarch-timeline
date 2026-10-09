@@ -87,6 +87,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const quality = useView3dSceneStore((s) => s.quality);
     const hornState = useView3dSceneStore((s) => s.hornState);
     const stepOffFoot = useView3dSceneStore((s) => s.stepOffFoot);
+    const beatLead = useView3dSceneStore((s) => s.beatLead);
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
     );
@@ -197,10 +198,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                       marcherAssets.manifest,
                       marcherBodies,
                       marcherHeading(),
+                      useView3dSceneStore.getState().beatLead,
                   )
                 : null,
         [marcherBodies, showPlans, marcherAssets],
     );
+    useEffect(() => {
+        motion?.setLead(beatLead);
+    }, [motion, beatLead]);
     const headings = useMemo(
         () => new Float32Array(count).fill(marcherHeading()),
         [count],

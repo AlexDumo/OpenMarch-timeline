@@ -81,6 +81,7 @@ export function SettingsPanel({
                     <QualityRow />
                     <HornStateRow />
                     <StepOffFootRow />
+                    <BeatLeadRow />
                 </Section>
                 <Section title={t("view3d.settings.keysSection")}>
                     <ShortcutList />
@@ -350,6 +351,31 @@ function HornStateRow() {
             />
             <p className="text-sub text-text/60">
                 {t("view3d.settings.hornStateHint")}
+            </p>
+        </Row>
+    );
+}
+
+/** How far ahead of the beat the feet run, in counts: a test control. */
+function BeatLeadRow() {
+    const { t } = useTranslate();
+    const lead = useView3dSceneStore((s) => s.beatLead);
+    const setLead = useView3dSceneStore((s) => s.setBeatLead);
+    const options = [0, 0.1, 0.2, 0.3].map((value) => ({
+        value: String(value),
+        label: value === 0 ? t("view3d.settings.beatLeadNone") : `+${value}`,
+    }));
+    return (
+        <Row label={t("view3d.settings.beatLead")} stacked>
+            <Segmented
+                value={String(lead)}
+                options={options}
+                onChange={(v) => setLead(Number(v))}
+                label={t("view3d.settings.beatLead")}
+                testId="view3d-beat-lead-picker"
+            />
+            <p className="text-sub text-text/60">
+                {t("view3d.settings.beatLeadHint")}
             </p>
         </Row>
     );

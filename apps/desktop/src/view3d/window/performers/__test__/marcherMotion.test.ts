@@ -246,3 +246,70 @@ describe("playing a slot's rows", () => {
         expect(writes.length).toBe(1);
     });
 });
+
+describe("leading the beat", () => {
+    // 4 counts of 8-to-5 forward, then a hold: a step-off, loops, a halt
+    const positions = new Float64Array(2 * 6);
+    for (let k = 0; k < 6; k++) {
+        positions[k * 2] = 0;
+        positions[k * 2 + 1] = -20 + Math.min(k, 4) * 0.5715;
+    }
+    const plan = planMarcher({
+        manifest,
+        heightClass: 1,
+        positions,
+        heading: 0,
+        bpm: new Float64Array(5).fill(120),
+        bandMoving: Uint8Array.from([1, 1, 1, 1, 0]),
+    });
+    const rows: Record<
+        string,
+        { row: number; frames: number; counts: number }
+    > = {};
+    let r = 0;
+    for (const e of plan.events) {
+        rows[e.clip] = { row: r++, frames: 60, counts: 2 };
+        if (e.clip2) rows[e.clip2] = { row: r++, frames: 60, counts: 2 };
+    }
+    function motion(lead: number) {
+        const writes: { slot: number; clip: MarcherClip }[] = [];
+        const bodies = {
+            bake: { rows },
+            holdOf: () => "none",
+            setClip(slot: number, clip: MarcherClip) {
+                writes.push({ slot, clip });
+            },
+        } as unknown as MarcherBodies;
+        const m = new MarcherMotion([plan], manifest, bodies, 0, lead);
+        return {
+            m,
+            writes,
+            xz: new Float32Array(2),
+            placed: Uint8Array.from([1]),
+        };
+    }
+
+    it("switches events and phases clips early by the lead, in counts", () => {
+        const loop = plan.events.find((e) => e.kind === "loop")!;
+        const { m, writes, xz, placed } = motion(0.1);
+        m.update(loop.count - 0.05, xz, placed); // 0.05 before the loop's count: already the loop with the lead
+        expect(writes[0].clip.row).toBe(rows[loop.clip]);
+        expect(writes[0].clip.phase).toBeCloseTo(-loop.phaseStart + 0.1, 9);
+    });
+
+    it("does not switch early without a lead", () => {
+        const loop = plan.events.find((e) => e.kind === "loop")!;
+        const { m, writes, xz, placed } = motion(0);
+        m.update(loop.count - 0.05, xz, placed);
+        expect(writes[0].clip.row).not.toBe(rows[loop.clip]);
+        expect(writes[0].clip.phase).toBeCloseTo(-plan.events[0].phaseStart, 9);
+    });
+
+    it("can change the lead after construction", () => {
+        const loop = plan.events.find((e) => e.kind === "loop")!;
+        const { m, writes, xz, placed } = motion(0);
+        m.setLead(0.2);
+        m.update(loop.count - 0.1, xz, placed);
+        expect(writes[0].clip.row).toBe(rows[loop.clip]);
+    });
+});

@@ -25,3 +25,12 @@ describe("step-off foot", () => {
         useView3dSceneStore.getState().setStepOffFoot("left");
     });
 });
+
+describe("beat lead", () => {
+    it("starts at a tenth of a count and changes on request", () => {
+        expect(useView3dSceneStore.getState().beatLead).toBe(0.1);
+        useView3dSceneStore.getState().setBeatLead(0.2);
+        expect(useView3dSceneStore.getState().beatLead).toBe(0.2);
+        useView3dSceneStore.getState().setBeatLead(0.1);
+    });
+});

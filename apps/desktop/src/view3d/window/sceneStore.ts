@@ -19,6 +19,9 @@
  *   settings panel can switch it to check the other holds (`hornState.ts`).
  * - `stepOffFoot`: which foot the band steps off on; `right` plays every
  *   clip mirrored. A window setting until the show stores it.
+ * - `beatLead`: counts the marchers' clips run ahead of the count clock, so
+ *   the heel's first touch lands on the beat (`MarcherMotion`). A test
+ *   control until a value is settled.
  * - `qualityMode`: the viewer's choice in the settings panel (`auto`, `low`
  *   or `high`), saved per computer. Set it with `setQualityMode`. In `auto`
  *   the scene lowers `quality` once with `_autoLower()` when frames are slow
@@ -64,6 +67,8 @@ export interface View3dSceneState {
     setHornState: (state: HoldState) => void;
     stepOffFoot: StepOffFoot;
     setStepOffFoot: (foot: StepOffFoot) => void;
+    beatLead: number;
+    setBeatLead: (lead: number) => void;
     qualityMode: QualityMode;
     /** Saves the choice and applies it. Choosing `auto` starts on `high` again. */
     setQualityMode: (mode: QualityMode) => void;
@@ -95,6 +100,8 @@ export const useView3dSceneStore = create<View3dSceneState>()((set) => ({
     setHornState: (hornState) => set({ hornState }),
     stepOffFoot: "left",
     setStepOffFoot: (stepOffFoot) => set({ stepOffFoot }),
+    beatLead: 0.1,
+    setBeatLead: (beatLead) => set({ beatLead }),
     qualityMode: startMode,
     setQualityMode: (mode) => {
         saveQualityMode(mode);

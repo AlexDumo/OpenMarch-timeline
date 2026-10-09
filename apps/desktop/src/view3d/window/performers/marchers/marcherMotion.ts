@@ -164,13 +164,27 @@ export class MarcherMotion {
     private readonly cursor: Int32Array;
     private readonly out = { x: 0, z: 0 };
 
+    /**
+     * @param lead counts the clips run ahead of the count clock. om-pose's
+     * clips land the foot flat on the beat; a lead of about a tenth of a
+     * count puts the heel's first touch on the beat instead, and the body
+     * still follows the drill in real time.
+     */
     constructor(
         private readonly plans: readonly (MarcherPlan | null)[],
         private readonly manifest: Manifest,
         private readonly bodies: MarcherBodies,
         private readonly heading: number,
+        private lead = 0,
     ) {
         this.cursor = new Int32Array(plans.length).fill(-1);
+    }
+
+    /** Changes the lead; every slot is rewritten on the next update. */
+    setLead(lead: number): void {
+        if (lead === this.lead) return;
+        this.lead = lead;
+        this.cursor.fill(-1);
     }
 
     private apply(
@@ -202,7 +216,7 @@ export class MarcherMotion {
             row,
             row2,
             weight: row2 ? weight : 0,
-            phase: -e.phaseStart,
+            phase: -e.phaseStart + this.lead,
             rate: 1,
             legYaw,
         });
@@ -214,22 +228,24 @@ export class MarcherMotion {
      */
     update(count: number, xz: Float32Array, placed: Uint8Array): void {
         const out = this.out;
+        // the clips run ahead by the lead; the body stays on the drill's clock
+        const led = count + this.lead;
         for (let i = 0; i < this.plans.length; i++) {
             const plan = this.plans[i];
             if (!plan || plan.events.length === 0) continue;
-            const index = eventIndexAt(plan, count, this.cursor[i]);
+            const index = eventIndexAt(plan, led, this.cursor[i]);
             if (
                 index !== this.cursor[i] ||
                 plan.events[index].kind === "crossfade"
             ) {
-                this.apply(i, plan, index, count);
+                this.apply(i, plan, index, led);
                 this.cursor[i] = index;
             }
             if (!placed[i]) continue;
             bodyAt(
                 this.manifest,
                 plan,
-                index,
+                eventIndexAt(plan, count, index),
                 count,
                 xz[i * 2],
                 xz[i * 2 + 1],

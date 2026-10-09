@@ -1294,6 +1294,9 @@
                 "left": "Left foot",
                 "right": "Right foot"
             },
+            "beatLead": "Feet lead the beat by",
+            "beatLeadNone": "None",
+            "beatLeadHint": "Counts the feet run ahead of the clock, so the heel lands on the beat. Here to find the right value.",
             "keysSection": "Keyboard and mouse"
         },
         "keys": {
