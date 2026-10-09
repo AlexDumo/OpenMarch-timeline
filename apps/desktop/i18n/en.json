@@ -82,6 +82,9 @@
             "success": "Swapped marchers {marcher1} and {marcher2}",
             "swap": "Swap marchers"
         },
+        "timeline": {
+            "toggleKeepOnNextPage": "Keep the selected marchers on the next page, or let them follow again"
+        },
         "ui": {
             "focusCanvas": "Focus the canvas",
             "focusTimeline": "Focus the timeline",
@@ -587,11 +590,29 @@
             "stepSizeWarning": "Step size exceeds threshold",
             "swapMarchers": "Swap marchers",
             "timeline": {
+                "followAgain": "Follow again",
+                "followAgainHint": "Let these marchers follow Page {from} again, so editing Page {from} moves them here too",
+                "followAgainHintEarlier": "Let these marchers follow earlier pages again",
+                "followSomeHint": "Let {count} of these marchers follow Page {from} again, so editing Page {from} moves them here too",
+                "followSomeHintEarlier": "Let {count} of these marchers follow earlier pages again",
                 "goToPage": "Go to Page {page}",
                 "goToStart": "Go to the start",
                 "holdFrom": "Hold from Page {page}",
                 "holdFromStart": "Hold from the start",
-                "movesOnThisPage": "Moves on this page"
+                "holdHere": "These marchers hold here",
+                "keepHere": "Keep here",
+                "keepHereHint": "Keep these marchers on Page {page}, so editing Page {from} won't move them here",
+                "keepHereHintEarlier": "Keep these marchers on Page {page}, so editing earlier pages won't move them here",
+                "keepSomeHint": "Keep {count} of these marchers on Page {page}, so editing Page {from} won't move them here",
+                "keepSomeHintEarlier": "Keep {count} of these marchers on Page {page}, so editing earlier pages won't move them here",
+                "keptOnThisPage": "Kept on this page",
+                "movesOnThisPage": "Moves on this page",
+                "pageFollows": "Page {page} follows these marchers",
+                "pageFollowsSome": "Page {page} follows some of these marchers",
+                "pagesFollow": "Pages {first}–{last} follow these marchers",
+                "pagesFollowSome": "Pages {first}–{last} follow some of these marchers",
+                "someHoldHere": "Some of these marchers hold here",
+                "someKeptOnThisPage": "Some of these marchers are kept on this page"
             },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}"
@@ -1423,6 +1444,27 @@
             "mixedHint": "Some have their own move here",
             "moves": "Selected marchers move on this page",
             "movesHint": "They have their own move here"
+        },
+        "keep": {
+            "chain": {
+                "followHint": "Click to follow Page {from} again",
+                "followHintEarlier": "Click to follow earlier pages again",
+                "keep": "Keep {count} marchers on Page {page}",
+                "keepHint": "They won't follow Page {from} any more",
+                "keepHintEarlier": "They won't follow earlier pages any more",
+                "keepHintOne": "It won't follow Page {from} any more",
+                "keepOne": "Keep 1 marcher on Page {page}",
+                "kept": "{count} marchers kept on Page {page}",
+                "keptOne": "1 marcher kept on Page {page}",
+                "mixed": "{kept} of {total} kept on Page {page}",
+                "mixedHint": "Click to keep the other {count} too",
+                "mixedHintOne": "Click to keep the other one too"
+            },
+            "followed": {
+                "onePage": "Page {page} followed",
+                "only": "Only Page {page}",
+                "pages": "Pages {first}–{last} followed"
+            }
         },
         "label": "Timeline",
         "masterVolume": "Master Volume",
