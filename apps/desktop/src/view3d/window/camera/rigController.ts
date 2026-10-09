@@ -7,6 +7,7 @@ import { PerspectiveCamera, type Camera, type Vector3Tuple } from "three";
 import {
     clampRadius,
     FLY_MS,
+    MAX_PAN,
     maxPhiAboveGround,
     MIN_EYE_Y,
     orbitPhi,
@@ -16,9 +17,20 @@ import {
     sphericalFromPose,
     tweenPose,
     zoomRadius,
+    ZOOM_PER_WHEEL,
     type Spherical,
     type Tween,
 } from "./rigMath";
+import { damp, zoomTargetTowards } from "./inputMath";
+
+/** A wheel zoom eases in with this half-life (ms): quick, but not a jump. */
+export const ZOOM_HALF_LIFE_MS = 45;
+/** A flung orbit coasts down with this half-life (ms). */
+export const FLING_HALF_LIFE_MS = 120;
+/** Drag movement within this window (ms) before release sets the fling speed. */
+export const FLING_WINDOW_MS = 80;
+/** Coasting stops below this speed (radians per ms). */
+const FLING_STOP = 1e-6;
 
 export interface FlyOptions {
     nowMs: number;
@@ -44,6 +56,14 @@ export class RigController {
     target: Vector3Tuple = [0, 0, 0];
     spherical: Spherical = { radius: 100, phi: 1, theta: 0 };
     private active: ActiveTween | null = null;
+    private lastUpdateMs: number | null = null;
+    /** Wheel zoom still to apply, as a log of the radius ratio. */
+    private pendingZoom = 0;
+    private zoomAnchor: Vector3Tuple | null = null;
+    /** Coasting orbit speed, radians per ms. */
+    private velocity = { theta: 0, phi: 0 };
+    /** Recent drag steps, for the fling speed on release. */
+    private samples: { t: number; theta: number; phi: number }[] = [];
 
     constructor(private readonly camera: Camera) {}
 
@@ -54,6 +74,7 @@ export class RigController {
     /** Places the camera at once and makes the pose the orbit state. */
     jumpTo(position: Vector3Tuple, target: Vector3Tuple, fovDeg?: number) {
         this.active = null;
+        this.stopMotion();
         this.setPose(position, target);
         if (fovDeg !== undefined) this.setFov(fovDeg);
         this.apply();
@@ -61,6 +82,7 @@ export class RigController {
 
     /** Starts a fly-to from wherever the camera is now. */
     flyTo(position: Vector3Tuple, target: Vector3Tuple, options: FlyOptions) {
+        this.stopMotion();
         const p = this.camera.position;
         const fromFov = this.fov();
         this.active = {
@@ -123,8 +145,102 @@ export class RigController {
         return true;
     }
 
+    /**
+     * Wheel zoom toward `point` (the ground under the cursor), eased over a
+     * few frames by `update`. `pixels` is the wheel's deltaY in pixels.
+     */
+    zoomWheelAt(
+        pixels: number,
+        point: Vector3Tuple | null,
+        nowMs: number,
+    ): boolean {
+        if (this.active) return false;
+        void nowMs;
+        this.pendingZoom += pixels * ZOOM_PER_WHEEL;
+        this.zoomAnchor = point ? [...point] : null;
+        return true;
+    }
+
+    /** Pinch zoom toward `point`: `ratio` is the new radius over the old. */
+    zoomRatioAt(ratio: number, point: Vector3Tuple | null): boolean {
+        if (this.active) return false;
+        this.zoomBy(ratio, point);
+        return true;
+    }
+
+    /** Drag orbit that remembers its speed, so `release` can fling it. */
+    orbitDrag(dxPx: number, dyPx: number, nowMs: number): boolean {
+        if (!this.orbit(dxPx, dyPx)) return false;
+        this.velocity = { theta: 0, phi: 0 };
+        this.samples.push({
+            t: nowMs,
+            theta: -dxPx * ORBIT_PER_PX,
+            phi: -dyPx * ORBIT_PER_PX,
+        });
+        while (
+            this.samples.length &&
+            nowMs - this.samples[0].t > FLING_WINDOW_MS
+        )
+            this.samples.shift();
+        return true;
+    }
+
+    /** The drag ended: coast at the speed of its last moments, if it was still moving. */
+    release(nowMs: number) {
+        const recent = this.samples.filter(
+            (s) => nowMs - s.t <= FLING_WINDOW_MS,
+        );
+        this.samples = [];
+        if (recent.length === 0 || this.active) return;
+        // the first step covers the frame before its own timestamp
+        const span = Math.max(16, nowMs - recent[0].t + 16);
+        this.velocity = {
+            theta: recent.reduce((n, s) => n + s.theta, 0) / span,
+            phi: recent.reduce((n, s) => n + s.phi, 0) / span,
+        };
+    }
+
+    /** Places the camera at the current orbit pose now, between frames (for raycasts). */
+    sync() {
+        if (!this.active) this.apply();
+    }
+
+    /** Stops coasting (a new press catches the camera). */
+    stopMotion() {
+        this.velocity = { theta: 0, phi: 0 };
+        this.samples = [];
+    }
+
+    /**
+     * Grab pan: the ground point that was under the pointer (`from`) moves
+     * to where the pointer is now (`to`) by moving the target the other way.
+     */
+    grabPan(
+        from: Vector3Tuple,
+        to: Vector3Tuple,
+        focus: Vector3Tuple,
+    ): boolean {
+        if (this.active) return false;
+        let x = this.target[0] + from[0] - to[0];
+        let z = this.target[2] + from[2] - to[2];
+        const ox = x - focus[0];
+        const oz = z - focus[2];
+        const d = Math.hypot(ox, oz);
+        if (d > MAX_PAN) {
+            x = focus[0] + (ox / d) * MAX_PAN;
+            z = focus[2] + (oz / d) * MAX_PAN;
+        }
+        this.target = [x, this.target[1], z];
+        return true;
+    }
+
     /** Moves the camera for this frame: the tween, or the orbit pose. */
     update(nowMs: number) {
+        const dt =
+            this.lastUpdateMs === null
+                ? 0
+                : Math.max(0, nowMs - this.lastUpdateMs);
+        this.lastUpdateMs = nowMs;
         const a = this.active;
         if (a) {
             const pose = tweenPose(a.tween, nowMs - a.startMs);
@@ -145,7 +261,50 @@ export class RigController {
             this.camera.updateMatrixWorld();
             return;
         }
+        this.ease(dt);
         this.apply();
+    }
+
+    /** Applies this frame's share of the eased wheel zoom and the coasting orbit. */
+    private ease(dt: number) {
+        if (this.pendingZoom !== 0 && dt > 0) {
+            let remaining = damp(this.pendingZoom, dt, ZOOM_HALF_LIFE_MS);
+            if (Math.abs(remaining) < 1e-4) remaining = 0;
+            const step = this.pendingZoom - remaining;
+            this.pendingZoom = remaining;
+            const before = this.spherical.radius;
+            this.zoomBy(Math.exp(step), this.zoomAnchor);
+            // at a limit the rest of the step would do nothing: drop it
+            if (this.spherical.radius === before) this.pendingZoom = 0;
+            if (this.pendingZoom === 0) this.zoomAnchor = null;
+        }
+        const v = this.velocity;
+        if ((v.theta !== 0 || v.phi !== 0) && dt > 0) {
+            // the distance a decaying speed covers over dt
+            const k =
+                (FLING_HALF_LIFE_MS / Math.LN2) *
+                (1 - Math.pow(0.5, dt / FLING_HALF_LIFE_MS));
+            const s = this.spherical;
+            s.theta += v.theta * k;
+            s.phi = orbitPhi(
+                s.phi,
+                v.phi * k,
+                maxPhiAboveGround(s.radius, this.target[1]),
+            );
+            v.theta = damp(v.theta, dt, FLING_HALF_LIFE_MS);
+            v.phi = damp(v.phi, dt, FLING_HALF_LIFE_MS);
+            if (Math.abs(v.theta) < FLING_STOP && Math.abs(v.phi) < FLING_STOP)
+                this.velocity = { theta: 0, phi: 0 };
+        }
+    }
+
+    /** Scales the radius by `ratio`, moving the target toward `point` so it stays put on screen. */
+    private zoomBy(ratio: number, point: Vector3Tuple | null) {
+        const before = this.spherical.radius;
+        const after = clampRadius(before * ratio);
+        if (point)
+            this.target = zoomTargetTowards(this.target, point, before, after);
+        this.setRadius(after);
     }
 
     private setRadius(radius: number) {

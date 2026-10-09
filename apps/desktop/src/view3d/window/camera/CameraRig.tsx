@@ -7,9 +7,12 @@
  *   params or quality) keeps the view;
  * - flies to a kit camera on `useCameraStore().selectCamera(id)` and on keys
  *   1–9, over 1.1 s with an upward arc, or jumps under reduced motion;
- * - orbits on drag, pans on right-drag or Shift+drag, and zooms on the wheel
- *   or a pinch, never below the ground; any of these clears the active
- *   camera;
+ * - orbits on drag (a flung drag coasts to a stop), grab-pans on
+ *   right-drag or Shift+drag (the ground point under the pointer stays
+ *   under it), and zooms toward the cursor on the wheel (eased) or a pinch;
+ *   on a trackpad a two-finger scroll orbits, Shift or Option + scroll pans,
+ *   and a pinch zooms; double-click moves the orbit center to the clicked spot;
+ *   never below the ground; any of these clears the active camera;
  * - in pick-a-seat mode, raycasts the kit's `pickTargets`, snaps to the
  *   nearest seat row and flies to a seated eye looking at the focus; Esc
  *   cancels;
@@ -32,6 +35,7 @@ import type { CameraSeat, KitResult } from "@/view3d/core/types";
 import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "../sceneStore";
 import { createReadoutThrottle, useCameraStore } from "./cameraStore";
 import { RigController } from "./rigController";
+import { classifyWheel, groundHit, wheelPixels } from "./inputMath";
 import {
     cameraIndexForKey,
     defaultCameraId,
@@ -45,6 +49,8 @@ import { snapToSeatRows } from "./seatSnap";
 
 /** Pointer travel (px) under which a press counts as a click, for picking. */
 const CLICK_SLOP_PX = 6;
+/** Zoom per pinch delta unit (a trackpad pinch reports small deltas). */
+const PINCH_ZOOM = 0.01;
 
 function prefersReducedMotion(): boolean {
     return (
@@ -204,13 +210,40 @@ export default function CameraRig() {
         };
         const focus = () => useView3dSceneStore.getState().focus;
 
+        /** The ground point under a client position, from the camera's current pose. */
+        const groundAt = (
+            clientX: number,
+            clientY: number,
+        ): Vector3Tuple | null => {
+            const rect = el.getBoundingClientRect();
+            const ndc = new Vector2(
+                ((clientX - rect.left) / rect.width) * 2 - 1,
+                -((clientY - rect.top) / rect.height) * 2 + 1,
+            );
+            rig.sync();
+            raycaster.setFromCamera(ndc, camera);
+            const o = raycaster.ray.origin;
+            const d = raycaster.ray.direction;
+            return groundHit([o.x, o.y, o.z], [d.x, d.y, d.z]);
+        };
+        /** The ground point grabbed by a pan drag, or null when the drag started above the horizon. */
+        let grab: Vector3Tuple | null = null;
+        let orbiting = false;
+
         const onPointerDown = (e: PointerEvent) => {
             el.setPointerCapture?.(e.pointerId);
             pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
             moved = 0;
+            rig.stopMotion();
+            orbiting = false;
+            grab =
+                e.shiftKey || (e.buttons & 2) !== 0
+                    ? groundAt(e.clientX, e.clientY)
+                    : null;
             if (pointers.size === 2) {
                 const [a, b] = [...pointers.values()];
                 pinch = Math.hypot(a.x - b.x, a.y - b.y);
+                grab = null;
             }
         };
         const onPointerMove = (e: PointerEvent) => {
@@ -230,15 +263,23 @@ export default function CameraRig() {
                 pinch = d;
                 changed = rig.pan(dx * 0.5, dy * 0.5, focus()) || changed;
             } else if (e.shiftKey || (e.buttons & 2) !== 0) {
-                changed = rig.pan(dx, dy, focus());
+                const now = grab ? groundAt(e.clientX, e.clientY) : null;
+                changed =
+                    grab && now
+                        ? rig.grabPan(grab, now, focus())
+                        : rig.pan(dx, dy, focus());
             } else {
-                changed = rig.orbit(dx, dy);
+                changed = rig.orbitDrag(dx, dy, performance.now());
+                orbiting = orbiting || changed;
             }
             if (changed) manualMove();
         };
         const onPointerUp = (e: PointerEvent) => {
             const had = pointers.delete(e.pointerId);
             if (pointers.size < 2) pinch = 0;
+            if (orbiting && pointers.size === 0) rig.release(performance.now());
+            orbiting = false;
+            grab = null;
             if (!had || e.button !== 0) return;
             const store = useCameraStore.getState();
             const current = useView3dSceneStore.getState().kit;
@@ -261,16 +302,53 @@ export default function CameraRig() {
         const onPointerCancel = (e: PointerEvent) => {
             pointers.delete(e.pointerId);
             if (pointers.size < 2) pinch = 0;
+            orbiting = false;
+            grab = null;
         };
         const onWheel = (e: WheelEvent) => {
             e.preventDefault();
-            const pixels =
-                e.deltaMode === 1
-                    ? e.deltaY * 16
-                    : e.deltaMode === 2
-                      ? e.deltaY * 400
-                      : e.deltaY;
-            if (rig.zoomWheel(pixels)) manualMove();
+            const kind = classifyWheel(
+                e as WheelEvent & { wheelDeltaY?: number },
+            );
+            let changed: boolean;
+            if (kind === "pinch") {
+                changed = rig.zoomRatioAt(
+                    Math.exp(e.deltaY * PINCH_ZOOM),
+                    groundAt(e.clientX, e.clientY),
+                );
+            } else if (kind === "trackpad") {
+                // natural scrolling: moving the fingers right gives a negative
+                // deltaX; orbit and pan as if the fingers dragged the scene
+                const dx = -wheelPixels(e.deltaX, e.deltaMode);
+                const dy = -wheelPixels(e.deltaY, e.deltaMode);
+                changed =
+                    e.shiftKey || e.altKey
+                        ? rig.pan(dx, dy, focus())
+                        : rig.orbit(dx, dy);
+            } else {
+                changed = rig.zoomWheelAt(
+                    wheelPixels(e.deltaY, e.deltaMode),
+                    groundAt(e.clientX, e.clientY),
+                    performance.now(),
+                );
+            }
+            if (changed) manualMove();
+        };
+        const onDoubleClick = (e: MouseEvent) => {
+            const hit = groundAt(e.clientX, e.clientY);
+            if (!hit || rig.flying) return;
+            const p = camera.position;
+            const t = rig.target;
+            const target: Vector3Tuple = [hit[0], t[1], hit[2]];
+            rig.flyTo(
+                [p.x + target[0] - t[0], p.y, p.z + target[2] - t[2]],
+                target,
+                {
+                    nowMs: performance.now(),
+                    instant: prefersReducedMotion(),
+                },
+            );
+            manualMove();
         };
         const onContextMenu = (e: Event) => e.preventDefault();
         const onKeyDown = (e: KeyboardEvent) => {
@@ -298,6 +376,7 @@ export default function CameraRig() {
         el.addEventListener("pointercancel", onPointerCancel);
         el.addEventListener("wheel", onWheel, { passive: false });
         el.addEventListener("contextmenu", onContextMenu);
+        el.addEventListener("dblclick", onDoubleClick);
         window.addEventListener("keydown", onKeyDown);
         return () => {
             el.removeEventListener("pointerdown", onPointerDown);
@@ -306,6 +385,7 @@ export default function CameraRig() {
             el.removeEventListener("pointercancel", onPointerCancel);
             el.removeEventListener("wheel", onWheel);
             el.removeEventListener("contextmenu", onContextMenu);
+            el.removeEventListener("dblclick", onDoubleClick);
             window.removeEventListener("keydown", onKeyDown);
         };
     }, [gl, camera, rig]);
