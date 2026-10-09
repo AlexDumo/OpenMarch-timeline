@@ -108,7 +108,7 @@ describe("rows per hold", () => {
 });
 
 describe("horns as their own meshes", () => {
-    async function trumpetAndFlute(quality: "high" | "low") {
+    async function trumpetAndDrumMajor(quality: "high" | "low") {
         const bodies = await loadedBodies();
         const clip = await clip8to5();
         const bake = bakeForBodies(bodies, { "8to5": clip }, [
@@ -128,14 +128,14 @@ describe("horns as their own meshes", () => {
                     ...defaultPerformerBody(2),
                     bodyType: "neutral-average" as const,
                 },
-                uniform: sectionUniform("Flute", null),
+                uniform: sectionUniform("Drum Major", null),
             },
         ];
         return { bake, set: new MarcherBodies(bodies, bake, looks, quality) };
     }
 
     it("draws a brass group as a body mesh plus a metallic horn mesh", async () => {
-        const { set } = await trumpetAndFlute("high");
+        const { set } = await trumpetAndDrumMajor("high");
         const bodiesMeshes = set.group.children.filter((o) =>
             o.name.startsWith("view3d-marchers-"),
         );
@@ -156,7 +156,7 @@ describe("horns as their own meshes", () => {
     });
 
     it("keeps the body mesh free of horn triangles", async () => {
-        const { set } = await trumpetAndFlute("high");
+        const { set } = await trumpetAndDrumMajor("high");
         const bodiesMeshes = set.group.children.filter((o) =>
             o.name.startsWith("view3d-marchers-"),
         ) as THREE.InstancedMesh[];
@@ -166,7 +166,7 @@ describe("horns as their own meshes", () => {
     });
 
     it("gives the low tier a horn too, at low detail", async () => {
-        const { set } = await trumpetAndFlute("low");
+        const { set } = await trumpetAndDrumMajor("low");
         const horns = set.group.children.filter((o) =>
             o.name.startsWith("view3d-horn-"),
         ) as THREE.InstancedMesh[];
@@ -177,7 +177,7 @@ describe("horns as their own meshes", () => {
     });
 
     it("writes the same clip into the body and the horn", async () => {
-        const { set, bake } = await trumpetAndFlute("high");
+        const { set, bake } = await trumpetAndDrumMajor("high");
         const row = bake.rows["8to5@brass:up"];
         set.setClip(0, { row, phase: -3, rate: 1, legYaw: 0.1 });
         const bodyMesh = set.group.children.find(
@@ -198,7 +198,7 @@ describe("horns as their own meshes", () => {
     });
 
     it("drives the horn's clip clock with the bodies' each frame", async () => {
-        const { set } = await trumpetAndFlute("high");
+        const { set } = await trumpetAndDrumMajor("high");
         const horn = set.group.children.find((o) =>
             o.name.startsWith("view3d-horn-"),
         ) as THREE.InstancedMesh;
@@ -216,7 +216,7 @@ describe("horns as their own meshes", () => {
     });
 
     it("disposes the horn geometry and material with the set", async () => {
-        const { set } = await trumpetAndFlute("high");
+        const { set } = await trumpetAndDrumMajor("high");
         const horn = set.group.children.find((o) =>
             o.name.startsWith("view3d-horn-"),
         ) as THREE.InstancedMesh;
@@ -230,7 +230,7 @@ describe("horns as their own meshes", () => {
         expect(materialDispose).toHaveBeenCalledTimes(1);
     });
 
-    it("gives a flute-only set no horn and one draw call", async () => {
+    it("gives a drum-major-only set no horn and one draw call", async () => {
         const bodies = await loadedBodies();
         const clip = await clip8to5();
         const bake = bakeForBodies(bodies, { "8to5": clip }, [NO_HOLD]);
@@ -243,7 +243,7 @@ describe("horns as their own meshes", () => {
                         ...defaultPerformerBody(2),
                         bodyType: "neutral-average" as const,
                     },
-                    uniform: sectionUniform("Flute", null),
+                    uniform: sectionUniform("Drum Major", null),
                 },
             ],
             "high",
