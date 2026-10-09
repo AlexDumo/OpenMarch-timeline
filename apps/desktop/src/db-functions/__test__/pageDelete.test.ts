@@ -143,7 +143,12 @@ const S4 = async (db: DbConnection) => {
 };
 
 describe("pageRunsLabel and the toast", () => {
-    const page = (name: string, order: number) => ({ id: order, name, order });
+    const page = (name: string, order: number, renamed = false) => ({
+        id: order,
+        name,
+        order,
+        renamed,
+    });
 
     test("runs of pages next to each other", () => {
         expect(pageRunsLabel([page("3", 3), page("4", 4), page("5", 5)])).toBe(
@@ -160,25 +165,49 @@ describe("pageRunsLabel and the toast", () => {
         expect(pageRunsLabel([page("1", 1)])).toBe("1");
     });
 
-    test("names the deleted page and the pages that changed", () => {
+    test("says where the counts went and which pages changed, by their old numbers", () => {
         expect(
             pageDeleteWithMovesMessage({
-                deletedNames: ["3"],
-                changedPages: [page("3", 3), page("4", 4), page("5", 5)],
+                deletedNames: ["2"],
+                grownPages: [{ ...page("1", 1), counts: 32 }],
+                changedPages: [page("3", 3, true), page("4", 4, true)],
             }),
-        ).toBe("Deleted Page 3 and its moves · Pages 3–5 changed");
+        ).toBe(
+            "Deleted Page 2 · Page 1 is now 32 counts · old Pages 3–4 changed",
+        );
         expect(
             pageDeleteWithMovesMessage({
                 deletedNames: ["3"],
-                changedPages: [page("2", 2)],
+                grownPages: [],
+                changedPages: [page("2", 2), page("4", 4, true)],
             }),
-        ).toBe("Deleted Page 3 and its moves · Page 2 changed");
+        ).toBe("Deleted Page 3 · Page 2 and old Page 4 changed");
         expect(
             pageDeleteWithMovesMessage({
                 deletedNames: ["3"],
+                grownPages: [{ ...page("2", 2), counts: 16 }],
                 changedPages: [],
             }),
-        ).toBe("Deleted Page 3 and its moves · No other page changed");
+        ).toBe(
+            "Deleted Page 3 · Page 2 is now 16 counts · No other page changed",
+        );
+        // After home, the next page takes the box and is renumbered
+        expect(
+            pageDeleteWithMovesMessage({
+                deletedNames: ["1"],
+                grownPages: [{ ...page("2", 2, true), counts: 16 }],
+                changedPages: [],
+            }),
+        ).toBe(
+            "Deleted Page 1 · old Page 2 is now 16 counts · No other page changed",
+        );
+        expect(
+            pageDeleteWithMovesMessage({
+                deletedNames: ["2", "4"],
+                grownPages: [],
+                changedPages: [],
+            }),
+        ).toBe("Deleted Pages 2, 4 · No other page changed");
     });
 });
 
@@ -237,15 +266,21 @@ describeDbTests("deleting a page in timeline mode", (it) => {
             expect(result.deleted.map((p) => p.id)).toEqual([2]);
             expect(result.deletedNames).toEqual(["2"]);
             // Page 1 now ends at page 2's old flag but still shows its own set; pages 3 to 6 (now 2
-            // to 5) held page 2's set
-            expect(result.changedPages.map((p) => [p.id, p.name])).toEqual([
-                [3, "2"],
-                [4, "3"],
-                [5, "4"],
-                [6, "5"],
+            // to 5) held page 2's set. Named as before the delete.
+            expect(
+                result.changedPages.map((p) => [p.id, p.name, p.renamed]),
+            ).toEqual([
+                [3, "3", true],
+                [4, "4", true],
+                [5, "5", true],
+                [6, "6", true],
+            ]);
+            // Page 1 took page 2's 8 counts
+            expect(result.grownPages).toEqual([
+                { id: 1, name: "1", order: 1, renamed: false, counts: 16 },
             ]);
             expect(pageDeleteWithMovesMessage(result)).toBe(
-                "Deleted Page 2 and its moves · Pages 2–5 changed",
+                "Deleted Page 2 · Page 1 is now 16 counts · old Pages 3–6 changed",
             );
             const after = await resolverOf(db);
             expect(after.positionAt(a, 25)).toEqual(homeA);
@@ -263,7 +298,7 @@ describeDbTests("deleting a page in timeline mode", (it) => {
             });
             expect(result.changedPages).toEqual([]);
             expect(pageDeleteWithMovesMessage(result)).toBe(
-                "Deleted Page 4 and its moves · No other page changed",
+                "Deleted Page 4 · Page 3 is now 16 counts · No other page changed",
             );
         });
 
@@ -311,9 +346,48 @@ describeDbTests("deleting a page in timeline mode", (it) => {
             // Page 3 held page 2's set; pages 4 to 6 still do, a page earlier
             expect(result.deletedNames).toEqual(["3"]);
             expect(result.changedPages).toEqual([]);
+            // Nobody took its box: later pages moved back instead
+            expect(result.grownPages).toEqual([]);
+            expect(pageDeleteWithMovesMessage(result)).toBe(
+                "Deleted Page 3 · No other page changed",
+            );
             expect((await resolverOf(db)).positionAt(a, 25)).toEqual([
                 300, 200,
             ]);
+        });
+
+        it("page 1, right after home: the next page takes its box, named by its old number", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await S4(db);
+            const result = await deletePagesWithMoves({
+                db,
+                pageIds: new Set([1]),
+            });
+            expect(result.deletedNames).toEqual(["1"]);
+            expect(result.grownPages).toEqual([
+                { id: 2, name: "2", order: 2, renamed: true, counts: 16 },
+            ]);
+            expect(pageDeleteWithMovesMessage(result)).toMatch(
+                /^Deleted Page 1 · old Page 2 is now 16 counts · /,
+            );
+        });
+
+        it("Undo puts the page, its move and every later page's look back in one step", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await S4(db);
+            const before = await snapshot(db);
+            const look = positionsAt(await resolverOf(db), await flags(db));
+            await deletePagesWithMoves({ db, pageIds: new Set([2]) });
+            const undo = await performUndo(db);
+            expect(undo.success, undo.error?.message).toBe(true);
+            expect(await snapshot(db)).toEqual(before);
+            expect(positionsAt(await resolverOf(db), await flags(db))).toEqual(
+                look,
+            );
         });
 
         it("page mode: deletes as Delete page does, and reports no look", async ({
@@ -326,6 +400,10 @@ describeDbTests("deleting a page in timeline mode", (it) => {
             });
             expect(result.deleted.map((p) => p.id)).toEqual([2]);
             expect(result.changedPages).toEqual([]);
+            // The counts still went somewhere
+            expect(result.grownPages.map((p) => [p.name, p.counts])).toEqual([
+                ["1", 16],
+            ]);
             expect((await grid(db)).pages.map((p) => p.id)).toEqual([
                 0, 1, 3, 4, 5, 6,
             ]);

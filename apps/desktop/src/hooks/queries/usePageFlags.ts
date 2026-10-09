@@ -7,6 +7,7 @@ import {
     useQueryClient,
 } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
+import tolgee from "@/global/singletons/Tolgee";
 import {
     addPageFlag,
     deletePageFlags,
@@ -65,35 +66,56 @@ export const deletePageFlagsMutationOptions = (qc: QueryClient) =>
         onError: (e) => toastTimelineError(e),
     });
 
-const toastDeleteWithMoves = (result: PageDeleteWithMovesResult) => {
-    if (result.deleted.length > 0)
-        toast.success(pageDeleteWithMovesMessage(result));
+/** Runs the app's normal undo (Ctrl+Z): `usePerformHistoryAction`'s `"undo"`. */
+export type UndoAction = () => void;
+
+const toastDeleteWithMoves = (
+    result: PageDeleteWithMovesResult,
+    undo?: UndoAction,
+) => {
+    if (result.deleted.length === 0) return;
+    toast.success(pageDeleteWithMovesMessage(result), {
+        duration: 10000,
+        action: undo
+            ? {
+                  label: tolgee.t("fileTab.undo", "Undo"),
+                  onClick: undo,
+              }
+            : undefined,
+    });
 };
 
 /**
  * **Delete page and its moves** (timeline mode): the page goes with its page moves, through the
- * timeline ripple. The toast names the pages that now look different.
+ * timeline ripple. The toast says what happened in set and count terms, with **Undo** (`undo`)
+ * when given.
  */
-export const deletePagesWithMovesMutationOptions = (qc: QueryClient) =>
+export const deletePagesWithMovesMutationOptions = (
+    qc: QueryClient,
+    undo?: UndoAction,
+) =>
     mutationOptions({
         mutationFn: (pageIds: ReadonlySet<number>) =>
             deletePagesWithMoves({ db, pageIds }),
         onSuccess: (result) => {
             void invalidatePageQueries(qc);
             invalidateTagQueries(qc);
-            toastDeleteWithMoves(result);
+            toastDeleteWithMoves(result, undo);
         },
         onError: (e) => toastTimelineError(e),
     });
 
 /** **Yank** in timeline mode, with the same toast as `deletePagesWithMovesMutationOptions`. */
-export const deletePageYankWithMovesMutationOptions = (qc: QueryClient) =>
+export const deletePageYankWithMovesMutationOptions = (
+    qc: QueryClient,
+    undo?: UndoAction,
+) =>
     mutationOptions({
         mutationFn: (pageId: number) => deletePageYankWithMoves({ db, pageId }),
         onSuccess: (result) => {
             void invalidatePageQueries(qc);
             invalidateTagQueries(qc);
-            toastDeleteWithMoves(result);
+            toastDeleteWithMoves(result, undo);
         },
         onError: (e) => toastTimelineError(e),
     });
