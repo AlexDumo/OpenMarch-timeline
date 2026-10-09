@@ -904,30 +904,43 @@ from it. The spec still wins on the model; this file decides presentation.
     is written and pages 3–4 follow it, the designer can keep some marchers where they are on page 3,
     so that editing page 2 no longer moves them there. A kept spot is stored (ADR 0001 amendment
     2026-10-09): the marcher's own move over the page that goes nowhere, marked kept. Pages after
-    it follow the kept spot. Marchers that have never moved have nothing to follow, so nothing
-    below offers to keep them (_lead default_).
+    it follow the kept spot. Marchers that have never moved follow the start, so they can be kept
+    too, ahead of any move (wp19, after the final study): a later first move then doesn't reach the
+    kept page.
     - **Chains on the page boxes.** With marchers selected, each page box they follow into shows a
-      chain. A box where they were kept shows a broken chain, filled in the accent color. A box with
-      some of each shows a chain with the kept count. Nothing shows without a selection (owner). The
+      chain as a quiet outline. A box where they were kept shows a broken chain on a filled accent
+      chip. A box with some of each shows a chain outlined in the accent with a filled kept count.
+      Linked and kept are meant to differ at a glance (wp19). Nothing shows without a selection
+      (owner). The
       chain is a 20 px target, 22 px in from the flag before its box, so the selected page's flag, the
-      start flag and the playhead never cover it. Its tooltip names how many a click changes: "Keep 2
-      marchers on Page 3 · They won't follow Page 2 any more", "2 marchers kept on Page 3 · Click to
-      follow Page 2 again", or "2 of 8 kept on Page 3 · Click to keep the other 6 too". A click keeps
+      start flag and the playhead never cover it. Its tooltip names the marchers a click changes, up
+      to three ("OT1, OT2 and 4 others" past that): "Keep OT1 and OT8 on Page 3 · They won't follow
+      Page 2 any more", "OT1 and OT8 kept on Page 3 · Click to follow Page 2 again", or "2 of the 8
+      selected are kept on Page 3 (OT1, OT8) · Click to keep the other 6 too". It counts the
+      selection only. The chain that **K** would toggle adds "(K)" to its tooltip. A click keeps
       or lets follow again exactly those marchers, as one undo step. On a mixed chain a click keeps
       the rest (_lead default_). A press never selects, scrubs or drags the box, and a right-click
       opens the box's menu.
-    - **The inspector line** on a page they follow into: "Hold from Page 2 → · **Keep here**". Where
+    - **The inspector line** on a page they follow into: "Hold from Page 2 → · **Keep here**" (or
+      "Hold from the start → · **Keep here**"). The link's tooltip says "Go to Page 2, where these
+      marchers last moved". Where
       they were kept: "Kept on this page · **Follow again**". Mixed selections say "Some of these
       marchers are kept on this page" or "Some of these marchers hold here", with the buttons on
-      their own row. Each button has a tooltip: "Keep these marchers on Page 3, so editing Page 2
-      won't move them here", or with a count ("Keep 6 of these marchers…") when not all apply. A
+      their own row. Each button has a tooltip that names the marchers: "Keep OT1 and OT8 on Page 3,
+      so editing Page 2 won't move them here", with the count of the selection when not all apply
+      ("Keep OT1 (1 of the 2 selected)…"), and "(K)" on the button K would run. A
       quiet line under it names the later pages that follow from this page: "Pages 3–4 follow these
-      marchers" ("…some of these marchers" when not all follow into all of them).
+      marchers" ("…some of these marchers" when not all follow into all of them). Marchers that
+      haven't moved yet don't count there: every later page follows them.
     - **The page box menu** has **Keep selected marchers here** and **Let selected marchers follow
       again** above the deletes, each enabled by the selection's state on that page. Neither shows
-      without a selection.
-    - **K** keeps the selected marchers on the page after the current one, or, when none of them
-      follows there, lets the kept ones follow again. With some of each, it keeps the rest. It shows
+      without a selection. The entry **K** would run from the current page shows a quiet "K" on its
+      right.
+    - **K** works from the current page (the page box the playhead is in). Where some selected
+      marchers hold on it (they follow, or were kept there), K toggles keep there, for those. Where
+      they all move on it, K toggles keep on the next page. Toggling keeps the ones that follow, or,
+      when none does, lets the kept ones follow again (wp19, after the final study, where K on a
+      held page 3 kept page 4). It shows
       no toast; the chain and the inspector line show the result. It doesn't fire while typing in a
       field. The Alt-drag shortcut from the study was dropped (owner).
     - **After an edit: "Pages 3–4 followed" · Only Page 2.** When an edit changes an existing move on
