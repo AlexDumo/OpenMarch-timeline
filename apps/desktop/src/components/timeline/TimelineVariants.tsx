@@ -621,6 +621,9 @@ const TimelineSurface = memo(function TimelineSurface({
             ].sort((a, b) => a - b),
         [model.measures, snapBeats],
     );
+    // A dragged page flag also lands on the playhead when near; read when a drag starts, so the
+    // ruler doesn't re-render as the playhead moves
+    const playheadAt = useLatestCallback(() => positionBeat)!;
     const pointer = useTimelinePointer({
         seekSnapBeats,
         onSeek: props.onSeek,
@@ -777,6 +780,11 @@ const TimelineSurface = memo(function TimelineSurface({
                         showMeasures={expanded}
                         seekSnapBeats={seekSnapBeats}
                         scrubLine={pointer.scrubLine}
+                        pageFlagMove={
+                            props.isPlaying ? undefined : props.pageFlagMove
+                        }
+                        height={timelineHeight}
+                        flagSnapPlayhead={playheadAt}
                         // Only a show without measures numbers the playhead page's counts
                         positionBeat={
                             expanded && model.measures.length === 0
@@ -805,6 +813,9 @@ const TimelineSurface = memo(function TimelineSurface({
                                 )}
                                 onSelect={selectTrack}
                                 onRangeCommit={props.onTimelineRangeCommit}
+                                resize={props.clipResize}
+                                downbeats={seekSnapBeats}
+                                snapPlayhead={playheadAt}
                                 beatCount={model.beatCount}
                                 snapBeats={snapBeats}
                                 micro={!expanded}

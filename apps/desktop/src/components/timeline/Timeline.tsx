@@ -1,3 +1,7 @@
+import type {
+    ClipResizeBound,
+    TimelineClipResizeCommands,
+} from "./TimelineClipResize";
 import type Beat from "@/global/classes/Beat";
 import type Measure from "@/global/classes/Measure";
 import type Page from "@/global/classes/Page";
@@ -27,6 +31,7 @@ import type {
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineNavigation,
+    TimelinePageFlagMove,
     TimelineRangeChange,
     TimelineSeekOptions,
     TimelineSelection,
@@ -144,6 +149,8 @@ export interface TimelineProps {
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
+    /** Resizing a clip by its edges (resize-move), in spec beats */
+    readonly clipResize?: TimelineClipResizeCommands;
     /** Turns **From start** off (UI-11), from the range bar */
     readonly onPlayFromStartOff?: () => void;
     /** Unpins the start flag (UI-12), from its pin */
@@ -166,6 +173,11 @@ export interface TimelineProps {
      * the stored timeline's id (the clip's `linkId`).
      */
     readonly moveCommands?: TimelineMoveCommands;
+    /**
+     * Moving page flags by their grips (docs/timeline/research/move-page-flag), in spec beats:
+     * where page `pageId`'s flag can go, and the move. Omit both where flags can't move.
+     */
+    readonly pageFlagMove?: TimelinePageFlagMove;
     /**
      * Double-clicking a page box or a clip: isolate that range's stored timeline. It gets the
      * range in spec beats (a clip's stored range).
@@ -405,6 +417,57 @@ export function Timeline(props: TimelineProps) {
               }
             : undefined,
     );
+    // A resize sends each edge's own change: an edge that didn't move keeps its stored spec beat;
+    // the limits come back mapped onto the view axis
+    const { clipResize } = props;
+    const viewClipResize = useMemo(():
+        | TimelineClipResizeCommands
+        | undefined => {
+        if (!clipResize) return undefined;
+        const toView = (bound: ClipResizeBound): ClipResizeBound => ({
+            ...bound,
+            beat: axis.toView(bound.beat),
+        });
+        return {
+            limits: async (trackId) => {
+                const limits = await clipResize.limits(trackId);
+                if (!limits) return null;
+                return {
+                    startEdge: {
+                        min: toView(limits.startEdge.min),
+                        max: toView(limits.startEdge.max),
+                    },
+                    endEdge: {
+                        min: toView(limits.endEdge.min),
+                        max: toView(limits.endEdge.max),
+                    },
+                    taken: limits.taken.map((t) => ({
+                        ...t,
+                        startBeatIndex: axis.toView(t.startBeatIndex),
+                        endBeatIndex: axis.toView(t.endBeatIndex),
+                    })),
+                };
+            },
+            commit: (change) => {
+                const input = timelines.find(
+                    (timeline) => timeline.id === change.timelineId,
+                );
+                if (!input) return;
+                // An edge that moved lands where it was drawn (`toSpec`), also for a move stored
+                // from spec beat 0, which the view folds onto beat 1
+                const edge = (spec: number, view: number) =>
+                    view === axis.toView(spec) ? spec : axis.toSpec(view);
+                clipResize.commit({
+                    timelineId: change.timelineId,
+                    startBeatIndex: edge(
+                        input.startBeatIndex,
+                        change.startBeatIndex,
+                    ),
+                    endBeatIndex: edge(input.endBeatIndex, change.endBeatIndex),
+                });
+            },
+        };
+    }, [clipResize, axis, timelines]);
     const createTrack = useLatestCallback(
         onCreateTrack
             ? (request: TimelineCreateTrackRequest) =>
@@ -517,6 +580,35 @@ export function Timeline(props: TimelineProps) {
                 : undefined,
         [deleteMove, editMove, moveDisabledReason, renameMove],
     );
+    // Page flags move in spec beats; the grips work in view beats
+    const flagMove = props.pageFlagMove;
+    const flagLimits = useLatestCallback(flagMove?.limits);
+    const flagCommit = useLatestCallback(flagMove?.commit);
+    const pageFlagMove = useMemo<TimelinePageFlagMove | undefined>(
+        () =>
+            flagLimits && flagCommit
+                ? {
+                      limits: async (pageId) => {
+                          const limits = await flagLimits(pageId);
+                          return limits
+                              ? {
+                                    ...limits,
+                                    flag: axis.toView(limits.flag),
+                                    min: axis.toView(limits.min),
+                                    max: axis.toView(limits.max),
+                                    holes: limits.holes?.map((h) => ({
+                                        ...h,
+                                        beat: axis.toView(h.beat),
+                                    })),
+                                }
+                              : null;
+                      },
+                      commit: (pageId, beat) =>
+                          flagCommit(pageId, axis.toSpec(beat)),
+                  }
+                : undefined,
+        [axis, flagCommit, flagLimits],
+    );
     const commonProps = {
         model,
         positionBeat,
@@ -538,8 +630,10 @@ export function Timeline(props: TimelineProps) {
         addSelectedMarchers: addMarchersMenu,
         moveCommands: trackMoveCommands,
         onAddPageFlag: useLatestCallback(props.onAddPageFlag),
+        pageFlagMove,
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
+        clipResize: viewClipResize,
         onPlayFromStartOff: useLatestCallback(props.onPlayFromStartOff),
         onUnpinStart: useLatestCallback(props.onUnpinStart),
         transportSecondary: props.transportSecondary,
