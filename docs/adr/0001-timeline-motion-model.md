@@ -158,7 +158,8 @@ moved.** No path writes timeline rows on a page's behalf:
 
 A stored zero-motion move is designer intent, not filler. A marcher with no move over a page holds
 (spec R-6), so an edit carries forward to that marcher's next move. Deleting a page in timeline mode
-deletes its flag only.
+deletes its flag only by default; "Delete page and its moves" and Yank still remove the page's own
+moves, as an explicit command.
 
 Page mode applies the same meaning to its dense `marcher_pages` rows until the flip, with no schema
 change. A page-mode edit also rewrites the following run of rows that equal the old position, within

@@ -81,6 +81,10 @@ so it needs an ADR 0001 amendment before anything is built.
 
 ## Recommendation (lead)
 
+_Historical: this is the recommendation the owner decided on. Its feedback items (toasts after
+every edit, a grey "Holding since" line) were replaced after the persona studies (08, 09); the current
+behavior is listed in [CHANGES.md](CHANGES.md)._
+
 **Meaning:** a marcher has a coordinate on a page only where the designer moved them there.
 Everywhere else they stay where they last were. An edit carries forward to that marcher's next page
 that has its own move, and stops there.
@@ -110,7 +114,7 @@ that has its own move, and stops there.
 old value. This is per marcher. It stops at a shape, at its own pathway, or at a different value, and
 compares with a tolerance.
 
-- A toast offers "Only Page N", which redoes the edit without carrying it forward.
+- A toast offers "Only Page N", which puts the followed pages back as a second undo step.
 - Ship it with the pathway-sharing fix, `pathways` in history, cache invalidation of the followed
   pages, and the undo focus fix.
 - No schema change.
@@ -181,4 +185,11 @@ Owner, 2026-10-08, after the build (PR #112):
 | `dc/wp5-feedback`      | Carry-forward toast in timeline mode; inspector "Holding since Page X" / "Moves here"                                                                      |
 | `dc/wp6-followups`     | Delete with moves after a flag delete (E-A3 fix); English toast strings                                                                                    |
 
-Lead defaults are logged as V-140..V-149 in [VALIDATION.md](../ownership/VALIDATION.md).
+| `dc/wp7-hold-marks` | Hold marks on the page boxes for the selected marchers, both modes |
+| `dc/wp8-text-and-bugs` | Carry-forward toast removed; shorter pass-through, page-mode and delete toasts; delete Undo; inspector link; selection refit; page selection after undo |
+| `dc/wp9-selectall` | Ctrl+A and Ctrl+S no longer nudge (same fix as upstream #1044) |
+| `dc/wp10-tooltips` | Hold-mark tooltips (HintTooltip, stand-in for transport-keys' ShortcutTooltip); stronger marks; "Hold from the start" |
+| `dc/wp11-move-them-too` | Move them too, both modes; Delete move names the pages that changed |
+
+The full, code-grounded list of behavior changes, tests and the QA script is [CHANGES.md](CHANGES.md).
+Lead defaults are logged as V-140..V-149 and V-150.. in [VALIDATION.md](../ownership/VALIDATION.md).
