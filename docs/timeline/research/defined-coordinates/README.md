@@ -2,16 +2,29 @@
 
 # Defined coordinates: what it means for a page to "have coordinates"
 
-Status: owner decided 2026-10-08 (see Decisions); building. Started 2026-10-08 (session 4 of 4), on branch
-`timeline/defined-coordinates` off `timeline-try-2` (a4d42cd1). This changes what stored data means,
-so it needs an ADR 0001 amendment before anything is built.
+Status: built (wp1–wp20); fork PR #112 open, rebased onto `timeline-try-2` with #115 on 2026-10-09.
+Started 2026-10-08 (session 4 of 4), on branch `timeline/defined-coordinates` off `timeline-try-2`
+(a4d42cd1). This changes what stored data means, so it needed an ADR 0001 amendment before anything
+was built.
+
+## Start here
+
+- **[HISTORY.md](HISTORY.md):** what happened in this PR (fork PR #112), from the report to the
+  rebase onto #115, with screenshots: the research, the decisions, the 20 work packages, the user
+  studies, the bugs fixed along the way and the open items.
+- **[GLOSSARY.md](GLOSSARY.md):** every on-screen element the PR adds (hold marks, inspector lines,
+  keep chains, the chain icon on a kept marcher's dot, the K key, the toasts), with a screenshot
+  each and exactly when it appears.
+- **[CHANGES.md](CHANGES.md):** the code-grounded catalog (B-01 … B-45) with strings, files, tests,
+  a QA script and coverage gaps.
+- Screenshots are in [images/](images/); see the image index at the end of HISTORY.md for which
+  build each one shows.
 
 ## The report
 
-> If I make multiple pages after page 1, say 2 3 4, all of those pages have the same coords as page
->
-> 1. Then I edit page 2 to be a new move. Then when I go to page 3, rather than being page 2 (which
->    is where they are now) they are still the page 1 coordinates.
+> If I make multiple pages after page 1, say 2 3 4, all of those pages have the same coords as
+> page 1. Then I edit page 2 to be a new move. Then when I go to page 3, rather than being page 2
+> (which is where they are now) they are still the page 1 coordinates.
 
 ## Notes in this folder
 
@@ -25,7 +38,12 @@ so it needs an ADR 0001 amendment before anything is built.
 | [07a-validation-timeline-core.md](07a-validation-timeline-core.md) | Validator: the sparse timeline core prototyped and run against the focused tests and the conversion corpus            |
 | [07b-validation-page-mode.md](07b-validation-page-mode.md)         | Validator: page-mode options prototyped (equality tracking), including precision, pathways and undo cost at 200 × 100 |
 | [07c-validation-extras-ux.md](07c-validation-extras-ux.md)         | Validator: pins, keep-later-pages and cue-only delete broken with scenarios; personas; how it fits PR #106            |
-| [CHANGES.md](CHANGES.md)                                           | Change catalog of the built branch: every behavior change (B-01…B-44), files, tests, QA script, coverage gaps         |
+| [08-ux-study-feedback-text.md](08-ux-study-feedback-text.md)       | Persona study of the first feedback text; led to hold marks and toasts only for surprises                             |
+| [09-first-time-users.md](09-first-time-users.md)                   | Four simulated first-time users try move, hold and a mix; led to Move them too                                        |
+| [10-keep-later-pages-study.md](10-keep-later-pages-study.md)       | Three prototypes for editing an earlier page without later pages following, four users; led to keep later pages       |
+| [CHANGES.md](CHANGES.md)                                           | Change catalog of the built branch: every behavior change (B-01…B-45), files, tests, QA script, coverage gaps         |
+| [HISTORY.md](HISTORY.md)                                           | What happened in this PR, in order, with screenshots                                                                  |
+| [GLOSSARY.md](GLOSSARY.md)                                         | The UI glossary: every on-screen element, with a screenshot and when it appears                                       |
 
 ## What we found
 
@@ -174,24 +192,35 @@ Owner, 2026-10-08, after the build (PR #112):
    them). V-149.
 6. **Page-mode shape edits carry forward** to later copies that aren't in a shape ("I think so"). V-148.
 
+Owner, 2026-10-09: hold-mark tooltips and Move them too; keep later pages (chains, Keep here / Follow
+again, the after-edit Only Page N toast, K, no Alt-drag) with **stored** kept spots, which reverses
+decision 4 (ADR 0001 amendment 2026-10-09); and the chain icon on kept marchers' dots (mock-up D, no
+opacity). See [CHANGES.md](CHANGES.md) §1 decisions 8–11 and [HISTORY.md](HISTORY.md) §4.8–4.9.
+
 ## Built (branch `timeline/defined-coordinates`)
 
-| Branch (merged)         | What                                                                                                                                                                          |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dc/wp1-no-auto-stays`  | No holding moves on page add, split or append; new marchers get a home only; the converter skips unchanged positions; undoing a marcher add keeps the page                    |
-| `dc/wp2-writers`        | Writes that move nobody write nothing; a drag back clears an own page move; set to previous/next page on held pages; **Start from Page N**                                    |
-| `dc/wp3-delete`         | Timeline Delete page = flag delete; **Delete page and its moves** with a changed-pages toast; tag appearances move to the next page                                           |
-| `dc/wp4-page-mode`      | Page-mode carry-forward with **Only Page N**; no copied pathways; pathways in undo; undo focus fix; cache invalidation                                                        |
-| `dc/wp5-feedback`       | Carry-forward toast in timeline mode; inspector "Holding since Page X" / "Moves here"                                                                                         |
-| `dc/wp6-followups`      | Delete with moves after a flag delete (E-A3 fix); English toast strings                                                                                                       |
-| `dc/wp7-hold-marks`     | Hold marks on the page boxes for the selected marchers, both modes                                                                                                            |
-| `dc/wp8-text-and-bugs`  | Carry-forward toast removed; shorter pass-through, page-mode and delete toasts; delete Undo; inspector link; selection refit; page selection after undo                       |
-| `dc/wp9-selectall`      | Ctrl+A and Ctrl+S no longer nudge (same fix as upstream #1044)                                                                                                                |
-| `dc/wp10-tooltips`      | Hold-mark tooltips (HintTooltip, stand-in for transport-keys' ShortcutTooltip); stronger marks; "Hold from the start"                                                         |
-| `dc/wp11-move-them-too` | Move them too, both modes; Delete move names the pages that changed                                                                                                           |
-| `dc/wp12-mtt-trigger`   | Move them too only when an edit splits a group at a later page; a window's pass-through toast wins in timeline mode; page mode's one toast with Move them too and Only Page N |
-| `dc/wp13-gap-tests`     | Coverage-gap tests (7 files); window moves survive Delete page and its moves; the delete toast closes on the next history change                                              |
-| `dc/wp14-mtt-polish`    | Two-button toast layout; runs of edits add up for Move them too and Only Page N; a fresh id per surprise toast                                                                |
+| Branch (merged)             | What                                                                                                                                                                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dc/wp1-no-auto-stays`      | No holding moves on page add, split or append; new marchers get a home only; the converter skips unchanged positions; undoing a marcher add keeps the page                         |
+| `dc/wp2-writers`            | Writes that move nobody write nothing; a drag back clears an own page move; set to previous/next page on held pages; **Start from Page N**                                         |
+| `dc/wp3-delete`             | Timeline Delete page = flag delete; **Delete page and its moves** with a changed-pages toast; tag appearances move to the next page                                                |
+| `dc/wp4-page-mode`          | Page-mode carry-forward with **Only Page N**; no copied pathways; pathways in undo; undo focus fix; cache invalidation                                                             |
+| `dc/wp5-feedback`           | Carry-forward toast in timeline mode; inspector "Holding since Page X" / "Moves here"                                                                                              |
+| `dc/wp6-followups`          | Delete with moves after a flag delete (E-A3 fix); English toast strings                                                                                                            |
+| `dc/wp7-hold-marks`         | Hold marks on the page boxes for the selected marchers, both modes                                                                                                                 |
+| `dc/wp8-text-and-bugs`      | Carry-forward toast removed; shorter pass-through, page-mode and delete toasts; delete Undo; inspector link; selection refit; page selection after undo                            |
+| `dc/wp9-selectall`          | Ctrl+A and Ctrl+S no longer nudge (same fix as upstream #1044)                                                                                                                     |
+| `dc/wp10-tooltips`          | Hold-mark tooltips (on a stand-in until the rebase onto #115; now #115's ShortcutTooltip); stronger marks; "Hold from the start"                                                   |
+| `dc/wp11-move-them-too`     | Move them too, both modes; Delete move names the pages that changed                                                                                                                |
+| `dc/wp12-mtt-trigger`       | Move them too only when an edit splits a group at a later page; a window's pass-through toast wins in timeline mode; page mode's one toast with Move them too and Only Page N      |
+| `dc/wp13-gap-tests`         | Coverage-gap tests (7 files); window moves survive Delete page and its moves; the delete toast closes on the next history change                                                   |
+| `dc/wp14-mtt-polish`        | Two-button toast layout; runs of edits add up for Move them too and Only Page N; a fresh id per surprise toast                                                                     |
+| `dc/wp15-kept-storage`      | Kept spots stored in `timeline_kept_assignments` (migration 0018); keep / follow again API; ADR 0001 amendment 2026-10-09                                                          |
+| `dc/wp16-keep-ui`           | Keep chains on the page boxes; inspector Keep here / Follow again and "Pages 3–4 follow these marchers"; page box menu entries; **K**; timeline "Pages 3–4 followed · Only Page 2" |
+| `dc/wp17-passthrough-words` | The pass-through toast names pages and counts, not beats                                                                                                                           |
+| `dc/wp18-refusal-words`     | Timeline refusal messages name pages and counts (`timelineRangeWords.ts`)                                                                                                          |
+| `dc/wp19-keep-fixes`        | K acts where the marchers hold; keep words name the marchers; K shown in menu and tooltips; kept chip stands out; keep before a first move                                         |
+| `dc/wp20-kept-on-field`     | A chain icon beside each kept marcher's dot on the current page, whatever is selected (owner chose mock-up D, no opacity)                                                          |
 
 The full, code-grounded list of behavior changes, tests and the QA script is [CHANGES.md](CHANGES.md).
 Lead defaults are logged as V-140..V-149 and V-181..V-191 (V-150..V-160 before #115 took those) in [VALIDATION.md](../ownership/VALIDATION.md).

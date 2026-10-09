@@ -27,6 +27,8 @@ How to use this file:
 - **Docs writers:** section 2 has the exact strings and i18n keys; section 8 lists where the
   existing docs are stale.
 - **Reviewers:** section 3 maps every changed file to the behaviors it carries.
+- **Screenshots** sit under the matching B-entries (from `images/`). The story is in
+  [HISTORY.md](HISTORY.md) and every on-screen element is explained in [GLOSSARY.md](GLOSSARY.md).
 
 Line numbers are at `2470207c`. "TL" = timeline mode (the file's timeline flag on), "PM" = page
 mode (what every released user runs).
@@ -66,7 +68,8 @@ with its own move, and stops there.
   `electron/database/migrations/schema.ts` was a comment on `tag_appearances.start_page_id` (the
   cascade stays; code now moves rows before it fires). Since wp15, migration 0018 adds the
   `timeline_kept_assignments` table (B-38, ADR 0001 amendment 2026-10-09).
-- **No file/user version change** and no migration. Existing files are read as they are.
+- **No file/user version change.** No migration before wp15 (0018, B-38). Existing files are read as
+  they are.
 - **The resolver (`@openmarch/core`) is untouched.** Positions at every flag of an unedited show are
   identical (real-app T7: max difference 0.0 across 8 files).
 - **History format:** unchanged, except that `pathways` now has undo triggers (B-19).
@@ -87,6 +90,7 @@ with its own move, and stops there.
 | 9   | 2026-10-09 (lead defaults after review): Move them too only when an edit splits a group (V-181); runs of edits add up behind one toast, two-button toasts put the buttons on their own row (V-184)                                              | ui.md UI-18; VALIDATION               |
 | 10  | 2026-10-09: keep later pages (study 10): chains on the page boxes (none without a selection), the inspector's Keep here / Follow again, the page box menu entries, the after-edit Only Page N toast (the C rule); Alt-drag dropped, **K** added | 10; ui.md UI-18; V-185 … V-189        |
 | 11  | 2026-10-09: store kept spots: a schema addition while user version 8 is unreleased, with an ADR 0001 amendment (supersedes decision 4's "no stored kind")                                                                                       | ADR 0001 amendment; B-38              |
+| 12  | 2026-10-09: mark kept marchers on the field with the kept chip's broken chain, whatever is selected (mock-up D); no opacity, since dimming already means "outside isolation, not editable"                                                      | ui.md UI-18; B-45; V-191              |
 
 ---
 
@@ -376,6 +380,10 @@ Index:
 
 #### B-10 The delete-with-moves toast, with Undo
 
+![Delete page and its moves toast with Undo](images/08-delete-with-moves-toast-undo.png)
+
+_TL, before the rebase onto #115._
+
 - **Mode:** TL.
 - **After:** `toast.success`, 10 s: "Deleted Page 2 · Page 1 is now 32 counts · old Pages 3–4
   changed", with **Undo** (runs the app's normal undo, `usePerformHistoryAction("undo")`). Since
@@ -520,6 +528,10 @@ Index:
 
 #### B-16 Page-mode toast: "Pages 3–4 followed (they were copies)" with Only Page N
 
+![Page-mode toast with the followed text, Only Page 2 and Move them too](images/09-page-mode-followed-and-move-them-too-toast.png)
+
+_PM, the combined form (B-22), as of wp14. The plain form has only the first sentence and Only Page 2._
+
 - **Mode:** PM.
 - **After:** after a write that carried, one edit surprise toast (fresh id, B-37), 10 s:
   - "Pages {first}–{last} followed (they were copies)" (`marcherPages.carryForward.pages`) or "Page
@@ -640,6 +652,14 @@ Index:
 
 #### B-22 Move them too, page mode
 
+![Page 3 after shortening the page 2 move: OT1 and OT8 left at their old spots](images/01-split-group-ends-left-behind.png)
+
+_The surprise from study 09 (annotated, before Move them too)._
+
+![Mock-up of the Move them too toast](images/02-move-them-too-mockup.png)
+
+_The proposal shown to the owner (mock-up). Page mode's built form is under B-16._
+
 - **Mode:** PM.
 - **Before:** not present (proposed by study 09, G4).
 - **After (wp12 trigger):** only when the write **splits the marchers it moved at a later page**: at
@@ -676,6 +696,10 @@ Index:
 
 #### B-23 Move them too, timeline mode
 
+![Timeline toast: OT1 and OT8 have their own move on Page 3, so they kept their spot · Move them too](images/03-move-them-too-toast.png)
+
+_TL, as of wp11._
+
 - **Mode:** TL.
 - **After:** every canvas/coordinate edit and set to previous/next goes through
   `moveMarchersAndOfferFollowUp`: positions at the edit's end beat are read just before the write
@@ -709,6 +733,10 @@ Index:
 ### Toasts
 
 #### B-24 Pass-through toast: "Page 3 is no longer a stop" · Keep Page 3 as a stop
+
+![Pass-through toast: Page 3 is no longer a stop · Keep Page 3 as a stop](images/07-pass-through-toast.png)
+
+_TL, before the rebase onto #115 (the field line above the canvas predates it)._
 
 - **Mode:** TL.
 - **Before:** shown only when the drag overrode or ran into stored moves, naming marchers ("OT1, OT2,
@@ -830,6 +858,10 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
 
 #### B-27 Hold marks on the timeline's page boxes
 
+![Hold marks: diamonds under pages 1 and 2, bars along pages 3 and 4](images/04-hold-marks-page-boxes.png)
+
+_TL, all eight selected, as of wp10._
+
 - **Mode:** TL.
 - **After:** with marchers selected, each page box after home shows, for the selection:
   - **moves** (every selected marcher with a state has its own move ending in the box,
@@ -867,6 +899,10 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
 
 #### B-29 Hold-mark tooltips and accessible descriptions
 
+![Hold-mark tooltip: Selected marchers hold from Page 2 · They stand where Page 2 left them](images/05-hold-mark-tooltip.png)
+
+_As of wp10, on the stand-in tooltip; now #115's ShortcutTooltip._
+
 - **Mode:** both.
 - **Before:** native `title` only (wp7), invisible to headless capture.
 - **After:** a Radix tooltip above the box (#115's `ShortcutTooltip` with `closeOnPress`: 500 ms hover
@@ -895,6 +931,10 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
   marks use #115's shared `ShortcutTooltip` (section 8).
 
 #### B-30 Inspector line: "Hold from Page 2 →" / "Moves on this page"
+
+![Inspector: Hold from the start](images/06-inspector-hold-from-start.png)
+
+_As of wp10. "Hold from Page 1 →" is visible in the B-10 frame._
 
 - **Mode:** TL only (renders nothing in PM).
 - **After:** in the marcher inspector, under Step Size (single selection) and in the multi-select
@@ -1032,6 +1072,18 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 
 #### B-40 Chains on the page boxes
 
+![Linked chain on page 3 with its tooltip](images/10-keep-chain-linked-tooltip.png)
+
+_Linked, as of wp19 (the inspector shows B-41's "Pages 3–4 follow these marchers")._
+
+![Kept chip on page 3 with its tooltip](images/11-kept-chip-and-inspector.png)
+
+_Kept, as of wp19 (the inspector shows B-41's "Kept on this page · Follow again")._
+
+![Mixed chain with a 2 badge and its tooltip](images/12-keep-chain-mixed-badge.png)
+
+_Mixed, as of wp19._
+
 - **Mode:** TL.
 - **After:** with marchers selected, each page box they follow into shows a chain as a quiet
   outline; a box where they were kept a broken chain on a filled accent chip; a box with some of
@@ -1069,6 +1121,10 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 
 #### B-41 Inspector: Keep here, Follow again, and the pages that follow
 
+![Inspector: Hold from the start → · Keep here](images/14-keep-here-from-start.png)
+
+_A never-moved marcher on page 3, as of wp19. Kept and following lines are in the B-40 frames._
+
 - **Mode:** TL.
 - **After:** the hold line (B-30) gains buttons, each a real button styled as the line's link, with
   a tooltip (`ShortcutTooltip` with `closeOnPress`):
@@ -1102,6 +1158,10 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **V-row:** V-186.
 
 #### B-42 Page box menu: Keep selected marchers here / Let selected marchers follow again
+
+![Page box menu with Keep selected marchers here (K) and Let selected marchers follow again](images/13-page-box-menu-keep-K.png)
+
+_As of wp19, with a mixed selection._
 
 - **Mode:** TL.
 - **After:** above the deletes, both entries show with a selection, each enabled by the selection's
@@ -1145,6 +1205,10 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 
 #### B-44 Timeline Only Page N after an edit
 
+![Timeline toast: Pages 3–4 followed · Only Page 2](images/15-timeline-followed-toast-only-page.png)
+
+_As of wp19._
+
 - **Mode:** TL.
 - **Before:** silent (B-25).
 - **After:** after a range edit ending on a page flag that changed an **existing** own move of some
@@ -1173,6 +1237,14 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Limits:** windows that don't end on a flag, isolated moves and home edits never offer it.
 
 #### B-45 Kept marchers on the field
+
+![Chain icons beside OT1 and OT8 on page 3, nothing selected](images/16-kept-icon-on-field.png)
+
+_wp20, current build._
+
+![Tooltip: Kept on Page 3 · won't follow Page 2](images/17-kept-icon-tooltip.png)
+
+_wp20, current build. Mock-ups D (chosen) and E (opacity, rejected) are in GLOSSARY.md §5._
 
 - **Mode:** TL (nothing in PM).
 - **Before:** a kept marcher looked like any other on the field; only the page box chain, the
@@ -1620,7 +1692,8 @@ This list should drive the next testing pass.
 7. **Runs that add up (B-36)** across mode switches or after a file reload: not tested (the run is
    module state and should reset; not checked).
 8. **Partial-follow wording:** no "6 of 8 followed" count (09 rec. 2, not built).
-9. **Keep later pages (B-38 … B-45):** no persona run on the built UI yet (V-185 … V-189); chains
+9. **Keep later pages (B-38 … B-45):** one two-user check ran on the wp16 build (Marcus, Priya;
+   it led to wp19 and wp20), none on the wp19/wp20 build (V-185 … V-191); chains
    at 100+ pages and large selections not measured (one span pass per marcher per resolver
    version); the new strings exist only in `en.json`; chains in compact mode and on very narrow
    boxes checked by unit test only.
