@@ -109,12 +109,11 @@ describe("woodwind and battery holds", () => {
         expect(h.right.wrist[0]).toBeLessThan(h.left.wrist[0] - 0.15);
     });
 
-    it("piccolo: the flute's hold with the right hand on the short body", () => {
+    it("piccolo: the flute's hold with the hands close together on the short body", () => {
         for (const state of HOLD_STATES) {
             const p = hold("piccolo", state);
             const f = hold("flute", state);
             expect(p.instrument).toEqual(f.instrument);
-            expect(p.left).toEqual(f.left);
             // the right wrist sits along the tube no further than the piccolo's 0.29 m reach
             const o = p.instrument.origin;
             const along = p.instrument.bellAxis.reduce(
@@ -124,6 +123,65 @@ describe("woodwind and battery holds", () => {
             expect(along).toBeGreaterThan(0.15);
             expect(along).toBeLessThan(0.29);
         }
+    });
+
+    /** A point `s` meters along the instrument from its origin. */
+    const along = (family: HoldFamily, state: "up" | "carry", s: number) => {
+        const { origin, bellAxis } = hold(family, state).instrument;
+        const l = Math.hypot(...bellAxis);
+        return origin.map((o, i) => o + (bellAxis[i] / l) * s);
+    };
+
+    it.each(["up", "carry"] as const)(
+        "flute %s: both hands under the tube, fingers wrapping up and over it",
+        (state) => {
+            const h = hold("flute", state);
+            const left = along("flute", state, 0.2);
+            const right = along("flute", state, 0.42);
+            expect(dist(h.left.wrist, left)).toBeLessThan(0.1);
+            expect(dist(h.right.wrist, right)).toBeLessThan(0.1);
+            expect(h.left.wrist[1]).toBeLessThan(left[1] - 0.04);
+            expect(h.right.wrist[1]).toBeLessThan(right[1] - 0.04);
+            for (const arm of [h.left, h.right])
+                expect(arm.fingers[1]).toBeGreaterThan(0.6);
+        },
+    );
+
+    it.each(["up", "carry"] as const)(
+        "piccolo %s: both hands under the short tube, fingers up and over",
+        (state) => {
+            const h = hold("piccolo", state);
+            expect(
+                dist(h.left.wrist, along("piccolo", state, 0.12)),
+            ).toBeLessThan(0.1);
+            expect(
+                dist(h.right.wrist, along("piccolo", state, 0.24)),
+            ).toBeLessThan(0.1);
+            for (const arm of [h.left, h.right])
+                expect(arm.fingers[1]).toBeGreaterThan(0.6);
+        },
+    );
+
+    it.each(["up", "carry"] as const)(
+        "clarinet %s: hands wrap the joints from the sides, fingers across the front",
+        (state) => {
+            const h = hold("clarinet", state);
+            expect(
+                dist(h.left.wrist, along("clarinet", state, 0.2)),
+            ).toBeLessThan(0.1);
+            expect(
+                dist(h.right.wrist, along("clarinet", state, 0.4)),
+            ).toBeLessThan(0.1);
+            expect(h.left.wrist[0]).toBeGreaterThan(0.04);
+            expect(h.right.wrist[0]).toBeLessThan(-0.04);
+            expect(h.left.fingers[0]).toBeLessThan(-0.5);
+            expect(h.right.fingers[0]).toBeGreaterThan(0.5);
+        },
+    );
+
+    it("clarinet carry: tipped out so the bell clears the chest", () => {
+        const end = along("clarinet", "carry", 0.66);
+        expect(end[2]).toBeGreaterThan(0.25);
     });
 
     it("flute: the lip plate (−Y) faces back at the lips, level", () => {
@@ -159,15 +217,29 @@ describe("woodwind and battery holds", () => {
         expect(hold("bass", "up").instrument.bellAxis[0]).not.toBe(0); // the heads face sideways
     });
 
-    it("bass drummers play with bent arms, wrists well inside full reach", () => {
+    it("bass drummers hold the mallets at the hips beside the heads, forearms forward", () => {
         const h = hold("bass", "up");
-        // full reach is the upper arm plus the forearm, 0.469
-        expect(dist(SHOULDER_R, h.right.wrist)).toBeLessThan(
-            (UPPER + FOREARM) * 0.7,
-        );
-        // the hands sit outside the heads (±0.178), above and behind the drum's middle
-        expect(Math.abs(h.right.wrist[0])).toBeGreaterThan(0.2);
-        expect(h.right.wrist[1]).toBeGreaterThan(1.2);
+        for (const arm of [h.right, h.left]) {
+            expect(arm.wrist[1]).toBeLessThan(1.15);
+            expect(Math.abs(arm.wrist[0])).toBeGreaterThan(0.2);
+            expect(arm.wrist[2]).toBeGreaterThan(0.18);
+            expect(arm.fingers[2]).toBeGreaterThan(0.8);
+        }
+    });
+
+    it("snare and tenor hands keep a matched grip: palms down, forearms forward", () => {
+        for (const family of ["snare", "tenors"] as const) {
+            const h = hold(family, "up");
+            for (const arm of [h.right, h.left]) {
+                expect(Math.abs(arm.fingers[1])).toBeLessThan(0.2); // level, not pointing down
+                expect(arm.fingers[2]).toBeGreaterThan(0.75); // forward
+                expect(arm.wrist[1]).toBeGreaterThan(1.04);
+                expect(arm.wrist[1]).toBeLessThan(1.12);
+            }
+            // the sticks angle in from each side
+            expect(h.right.fingers[0]).toBeGreaterThan(0.4);
+            expect(h.left.fingers[0]).toBeLessThan(-0.4);
+        }
     });
 
     it("woodwinds carry with the ligature at eye level; drums have one hold", () => {

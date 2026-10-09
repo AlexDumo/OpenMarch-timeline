@@ -91,7 +91,7 @@ rotors).
 | Section   | Model                                     | Working dimensions                             | Hold    |
 | --------- | ----------------------------------------- | ---------------------------------------------- | ------- |
 | Snare     | marching snare on a carrier               | 14 in × 12 in shell                            | snare   |
-| Tenors    | quints on a carrier                       | 10, 12, 13, 14 in drums, a 6 in shot           | tenors  |
+| Tenors    | sixes on a carrier                        | 10, 12, 13, 14 in drums, 6 and 8 in shots      | tenors  |
 | Bass Drum | marching bass on a carrier, sized per dot | 18 to 32 in diameter in 2 in steps, 14 in deep | bass    |
 | Cymbals   | pair of 18 in crash cymbals               | 18 in                                          | cymbals |
 | Flub Drum | the bass model, sized with the bass line  |                                                | bass    |
@@ -100,13 +100,15 @@ Bass drum size: the show stores no size, so each marcher gets one. The
 marchers whose section carries the bass model (Bass Drum and Flub Drum), in
 id order, spread evenly over 18, 20, … 32 in, smallest first; a lone drum
 gets 26 in (`bassSizesFor`, `bassOptions` in `looks.ts`). A stored
-per-marcher size is a later schema change. Every size keeps its back at
-the carrier, just in front of the belly plate, so bigger drums reach
-further forward. Each hangs at the height where its head's center is one
-mallet length from the hold's grips: small drums ride lower and big ones
-higher, and the 32 in drum's top stays below the shoulders. The arms are
-one pose for every size, so the smallest drums sit a little lower than on a
-real line; a hold per size would fix that.
+per-marcher size is a later schema change. The drums ride high, as in the
+owner's reference photo: every size keeps its back at the carrier, just in
+front of the belly plate, so bigger drums reach further forward, and each
+hangs where its head's center is one mallet length up and forward from the
+hands at the hips, its top no higher than 1.6 m. Centers land between 1.2
+and 1.4 m. Where that cap brings a center closer than a mallet's length,
+the mallet runs back through the hand with its butt behind the fist. The
+arms are one pose for every size; a hold per size would refine the small
+drums.
 
 **Carriers.** Snare, tenors and bass hang from one shoulder-hoop carrier:
 chrome hoops from a black belly plate up over the shoulders (padded where
@@ -114,13 +116,13 @@ they sit) and down the back, with chrome J-bars from the plate to the drum.
 Its clearances come from the seven body meshes: shoulder tops at 1.46 m,
 chests reaching z 0.17, upper backs z −0.19.
 
-**Tenor layout.** Quints, by drum number, left to right from the player:
-3 (13 in) and 4 (14 in) outside at the hips, 1 (10 in) and 2 (12 in) in
-front, and the 6 in shot ahead between them, so 3, 1, shot, 2, 4. The left
-hand covers drum 1 and the right drum 2. Each head leans 4 degrees toward
-the player, and the set stays under 0.95 m wide. The outer and front drum
-placement follows published tenor technique notes on stroke paths around
-the set; confirm against the owner's line before treating it as settled.
+**Tenor layout.** Sixes, after the owner's reference photo of a Dynasty
+six-drum set. The two shots (6 and 8 in) sit in the middle nearest the
+player, just in front of the carrier bracket. Drums 1 (10 in) and 2 (12 in)
+sit in front of them, and drums 3 (13 in) and 4 (14 in) wrap round at the
+player's left and right. The shells nearly touch, every head is level, and
+the set stays under 1.1 m wide. The left hand covers drum 1 and the right
+drum 2.
 
 ### Guard, Other, Pit
 
@@ -223,36 +225,39 @@ points and where the elbows go.
   left supports the bottom tube at the front. (Placed by reasoning from the
   instrument's layout, 2026-10-08; the owner checks it against a photo of a
   player.)
-- **flute.** Horizontal to the player's right, lips at the head joint, left
-  hand near, right hand far. The lip plate faces straight back at the lips
-  and the keys face forward. Carry: the same hands with the head joint
-  raised so the embouchure hole sits at eye level.
-- **piccolo.** The flute's hold with the right hand brought in to the
-  short body (0.24 m from the lips against the flute's 0.43), so it holds
-  the tube rather than the air past its end.
-- **clarinet.** Down the center line, angled 30 degrees out, left hand upper
-  joint, right hand lower. Carry: vertical, ligature at eye level.
-- **sax.** On the strap at the player's right, the body running from the
-  mouth down across the front to the bow at the right hip (the tenor's and
-  the bari's longer bodies put the bow lower and further right; the bari's
-  bow sits below the hip). The models match a real horn: facing the keys
-  with the neck toward you, the bell is on your right. The keys face the
-  player's left-front, which puts the bell tube front-right of the body with
-  its opening forward and up; every lacquered part stays in front of the
-  chest. Left hand on the upper stack; right hand round the lower stack from
-  behind, thumb on the hook. Carry: the hands rise with the neck so the
-  ligature sits at eye level.
+- **flute.** Horizontal to the player's right, lips at the head joint,
+  angled a little forward and down. Both hands sit under the tube, wrists
+  below it, fingers wrapping up and over onto the keys: the left hand 0.2 m
+  along by the face, its forearm across the chest and the elbow in front;
+  the right hand 0.42 m along with the elbow down and out. The lip plate
+  faces back at the lips and the keys face forward. Carry: the same hands
+  with the head joint raised so the embouchure hole sits at eye level.
+- **piccolo.** The flute's line with both hands brought in to the short
+  body: the left 0.12 m along, the right 0.24 m.
+- **clarinet.** Down the center line, angled 28 degrees out. The hands wrap
+  the joints from the sides, fingers across the front onto the holes: left
+  hand on the upper joint, right hand on the lower, elbows a little out.
+  Carry: nearly vertical with the ligature at eye level, tipped out 15
+  degrees so the bell clears the chest.
+- **sax.** On the strap in front of the body, as front-on photos of marching
+  saxes show: the neck brings the body out in front of the mouth and the
+  body runs straight down to the bow at the stomach (lower for the tenor and
+  bari). The keys face forward and the bell sits on the player's left of the
+  body tube, its flare leaning toward the keys so it opens forward and up.
+  The hands wrap the body from the sides, fingers across the front: left
+  hand on the upper stack, right hand on the lower, elbows out. Carry: the
+  hands rise with the neck so the ligature sits at eye level.
 - **snare, tenors.** Drum at waist height on the carrier, its shell clear
-  of the belly plate, hands over the back of the heads, elbows a little out
-  and back. Each stick runs through
-  the hand a third of the way up (the butt behind the fist) and angles in
-  and down: on the snare the tips meet short of the front rim without
-  crossing; on the tenors each hand sits over the back of one of the two front
-  drums and reaches in to that drum's head.
-- **bass.** Drum sideways on the carrier, arms bent with the wrists within
-  70 percent of full reach, the hands beside the heads above and behind the
-  drum's middle, the mallets angled forward and down to each head's center
-  for every size from 18 to 32 in.
+  of the belly plate. Matched grip: the hands just behind the back rim
+  (wider on the tenors), palms down, forearms forward and level, elbows
+  relaxed at the sides. Each stick runs through the hand a third of the way
+  up (the butt behind the fist) and angles in from each side: on the snare
+  the tips meet near the center a little above the head without crossing;
+  on the tenors each hand reaches over the shots to drum 1 or drum 2.
+- **bass.** Drum sideways on the carrier, carried high. Upper arms down,
+  forearms forward at the hips, the hands beside the heads below the
+  center, the mallets angled up and forward to each head's center for
+  every size from 18 to 32 in.
 - **cymbals.** Pair held at chest height, plates vertical.
 - **flag.** Up (present): the pole vertical in front of the body, right
   hand at the chest, left hand low on the pole, the silk overhead toward

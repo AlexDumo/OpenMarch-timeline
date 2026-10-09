@@ -22,6 +22,7 @@
 import {
     arc,
     colorPieces,
+    cylinder,
     smoothLathe,
     smoothTube,
     transformPiece,
@@ -483,79 +484,90 @@ function snare(detail: Detail, options: ModelOptions): InstrumentModel {
 }
 
 /**
- * Quints, by drum number: instrument +X is the performer's right and +Y
- * forward, with the belly 0.23 behind the origin. Drums 3 (13 inch) and 4
- * (14) sit outside at the hips, 1 (10) and 2 (12) in front, the 6 inch
- * shot ahead in the gap between them: left to right 3, 1, shot, 2, 4.
+ * Sixes, after a Dynasty six-drum set seen from above: instrument +X is the
+ * performer's right and +Y forward, with the belly 0.23 behind the origin.
+ * The two shots (6 and 8 inch) sit in the middle nearest the player, just
+ * in front of the carrier bracket; drums 1 (10) and 2 (12) sit in front of
+ * them, and drums 3 (13) and 4 (14) wrap round at the player's sides. The
+ * shells nearly touch and every head is level.
  */
 const TENOR_DRUMS: { inches: number; x: number; y: number; depth: number }[] = [
-    { inches: 13, x: -0.275, y: -0.04, depth: 0.28 },
-    { inches: 10, x: -0.15, y: 0.24, depth: 0.25 },
-    { inches: 6, x: -0.01, y: 0.48, depth: 0.16 },
-    { inches: 12, x: 0.14, y: 0.28, depth: 0.27 },
-    { inches: 14, x: 0.285, y: -0.03, depth: 0.29 },
+    { inches: 13, x: -0.36, y: -0.03, depth: 0.28 },
+    { inches: 10, x: -0.14, y: 0.17, depth: 0.25 },
+    { inches: 6, x: -0.085, y: -0.04, depth: 0.16 },
+    { inches: 8, x: 0.1, y: -0.04, depth: 0.18 },
+    { inches: 12, x: 0.16, y: 0.22, depth: 0.27 },
+    { inches: 14, x: 0.39, y: -0.04, depth: 0.29 },
 ];
-/** Where the player stands in the tenor frame: the belly's front. */
-const TENOR_PLAYER: [number, number] = [0, -0.23];
-/** Each head leans this far toward the player. */
-const TENOR_TILT = (4 * Math.PI) / 180;
-
-/** Unit vector in the head plane from a drum toward the player. */
-const towardPlayer = (x: number, y: number): [number, number] => {
-    const t: [number, number] = [TENOR_PLAYER[0] - x, TENOR_PLAYER[1] - y];
-    const l = Math.hypot(t[0], t[1]) || 1;
-    return [t[0] / l, t[1] / l];
-};
 
 function tenors(detail: Detail, options: ModelOptions): InstrumentModel {
     const s = TENOR_SEGMENTS[detail];
     const pieces: Piece[] = [];
-    for (const t of TENOR_DRUMS) {
-        const [tx, ty] = towardPlayer(t.x, t.y);
-        const n = unit([
-            tx * Math.sin(TENOR_TILT),
-            ty * Math.sin(TENOR_TILT),
-            Math.cos(TENOR_TILT),
-        ]);
-        const ax = unit(cross([0, 1, 0], n));
-        const ay = cross(n, ax);
-        const place: Mat4 = [...ax, 0, ...ay, 0, ...n, 0, t.x, t.y, 0, 1];
+    for (const t of TENOR_DRUMS)
         pieces.push(
-            ...drum(
-                {
-                    diameter: t.inches * IN,
-                    depth: t.depth,
-                    lugs: t.inches < 10 ? 4 : 6,
-                    bottom: false,
-                },
-                s,
-            ).map((p) => transformPiece(p, place)),
+            ...moved(
+                drum(
+                    {
+                        diameter: t.inches * IN,
+                        depth: t.depth,
+                        lugs: t.inches < 10 ? 4 : 6,
+                        bottom: false,
+                    },
+                    s,
+                ),
+                [t.x, t.y, 0],
+            ),
         );
-    }
-    // the rack: a chrome bar along the drums' player side, a strut out to the shot
-    const z = -0.06;
-    const backOf = (i: number): Vec3 => {
-        const t = TENOR_DRUMS[i];
-        const [tx, ty] = towardPlayer(t.x, t.y);
-        const r = (t.inches * IN) / 2 + 0.015;
-        return [t.x + tx * r, t.y + ty * r, z];
-    };
-    const shot = TENOR_DRUMS[2];
-    const shotBack: Vec3 = [
-        shot.x,
-        shot.y - (shot.inches * IN) / 2 - 0.012,
-        z + 0.02,
+    // the rack under the heads: a bracket post at the back center, a bar
+    // across behind the shots to the outer drums, and a bar out to the
+    // front pair
+    const z = -0.07;
+    const at = (i: number, dx: number, dy: number): Vec3 => [
+        TENOR_DRUMS[i].x + dx,
+        TENOR_DRUMS[i].y + dy,
+        z,
     ];
-    const between: Vec3 = [0, 0.13, z];
+    const post: Vec3 = [0, -0.155, z];
     pieces.push(
+        cylinder(
+            0.022,
+            [0, -0.155, z - 0.1],
+            [0, -0.155, 0.01],
+            s.small,
+            PART_BLACK,
+        ),
         smoothTube(
-            [backOf(0), backOf(1), between, backOf(3), backOf(4)],
+            [
+                at(0, 0.17, -0.06),
+                at(2, 0, -0.085),
+                post,
+                at(3, 0, -0.105),
+                at(5, -0.18, -0.06),
+            ],
             0.009,
             s.small,
             PART_CHROME,
         ),
-        smoothTube([between, shotBack], 0.007, s.small, PART_CHROME),
-        ...vestCarrier("tenors", [backOf(3), backOf(1)], s),
+        smoothTube(
+            [post, [0.0, 0.05, z], at(1, 0.13, 0), at(1, 0.13, 0.04)],
+            0.008,
+            s.small,
+            PART_CHROME,
+        ),
+        smoothTube(
+            [[0.0, 0.05, z], at(4, -0.155, 0), at(4, -0.155, 0.04)],
+            0.008,
+            s.small,
+            PART_CHROME,
+        ),
+        ...vestCarrier(
+            "tenors",
+            [
+                [0.03, -0.15, z],
+                [-0.03, -0.15, z],
+            ],
+            s,
+        ),
         ...sticks("tenors", s),
     );
     return finish("tenors", pieces, { bone: "spine002", options });
@@ -579,12 +591,17 @@ const MALLET_HEAD = 0.045;
 /** The mallet head's center sits this far outside the drum head's plane. */
 const MALLET_OFF_HEAD = 0.025;
 
+/** No bass drum's top rises above this, over the hold's origin (1.6 m on the body). */
+const BASS_TOP = 0.6;
+
 /**
- * A marching bass on its side: heads along ±Z, the carrier at +X (the
- * player). Every size keeps its back at the carrier, so bigger drums reach
- * further forward; each hangs at the height where its center is one mallet
- * length from the hold's grips, so small drums ride lower and big ones
- * higher, as on a real line.
+ * A marching bass on its side, carried high: heads along ±Z, the carrier
+ * at +X (the player). Every size keeps its back at the carrier, so bigger
+ * drums reach further forward. The hands sit at the hips below the drum's
+ * center; each drum hangs where its center is one mallet length up and
+ * forward from the grips, its top no higher than 1.6 m. Where that cap
+ * brings the center closer than a mallet's length, the mallet runs back
+ * through the hand, its butt behind the fist.
  */
 function bass(detail: Detail, options: ModelOptions): InstrumentModel {
     const inches = options.bassInches ?? 26;
@@ -596,7 +613,10 @@ function bass(detail: Detail, options: ModelOptions): InstrumentModel {
     const g = h.right.grip;
     const off = Math.abs(g[2]) - (d / 2 + MALLET_OFF_HEAD);
     const rho = Math.sqrt(Math.max(MALLET_REACH ** 2 - off * off, 0));
-    const ay = g[1] - Math.sqrt(Math.max(rho * rho - (ax - g[0]) ** 2, 0));
+    const ay = Math.min(
+        g[1] + Math.sqrt(Math.max(rho * rho - (ax - g[0]) ** 2, 0)),
+        BASS_TOP - diameter / 2,
+    );
     const pieces: Piece[] = [
         ...moved(drum({ diameter, depth: d, lugs: 10, bottom: true }, s), [
             ax,
@@ -612,28 +632,22 @@ function bass(detail: Detail, options: ModelOptions): InstrumentModel {
             s,
         ),
     ];
-    // mallets: the head on the drum head's center, just outside its plane
+    // mallets: the head on the drum head's center, just outside its plane,
+    // the shaft back through the grip to its full length
     for (const [side, bone, sign] of [
         [h.right, "handR", -1],
         [h.left, "handL", 1],
     ] as const) {
         const g = side.grip;
-        const headZ = sign * (d / 2 + MALLET_OFF_HEAD);
-        const dz = headZ - g[2];
-        const rho = Math.sqrt(Math.max(MALLET_REACH ** 2 - dz * dz, 0));
-        // the grip dropped onto the head's plane, then out toward the axis
-        const toAxis = [ax - g[0], ay - g[1]];
-        const len = Math.hypot(toAxis[0], toAxis[1]) || 1;
-        const head: Vec3 = [
-            g[0] + (toAxis[0] / len) * rho,
-            g[1] + (toAxis[1] / len) * rho,
-            headZ,
-        ];
+        const head: Vec3 = [ax, ay, sign * (d / 2 + MALLET_OFF_HEAD)];
         const dir = unit(sub(head, g));
         pieces.push(
             {
                 ...smoothTube(
-                    [g, add(g, scale(dir, MALLET_REACH - 0.04))],
+                    [
+                        sub(head, scale(dir, MALLET_REACH)),
+                        sub(head, scale(dir, 0.04)),
+                    ],
                     0.012,
                     s.stick,
                     PART_WOOD,

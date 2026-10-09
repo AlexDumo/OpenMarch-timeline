@@ -92,7 +92,7 @@ describe("sax placement under the sax hold", () => {
     for (const id of SAXES)
         for (const state of STATES)
             describe(`${id} ${state}`, () => {
-                const { point, z } = placement(state);
+                const { point } = placement(state);
 
                 it("keeps every lacquered vertex in front of the chest", () => {
                     const inside: Vec3[] = [];

@@ -112,17 +112,37 @@ describe("battery placement", () => {
         }
     });
 
-    it("hangs small bass drums lower and big ones higher so the mallets reach every center", () => {
-        const y = [18, 26, 32].map((i) => shellCenter(i)[1]);
-        expect(y[0]).toBeLessThan(y[1]);
-        expect(y[1]).toBeLessThan(y[2]);
-        // the 32's top stays below the shoulders (1.46 on every body; the origin is at 1.0)
-        const top32 = bounds(
-            batteryModel("bass", "high", { bassInches: 32 }).pieces.filter(
-                (p) => p.part === PART_SHELL,
-            ),
-        ).max[1];
-        expect(1.0 + top32).toBeLessThan(1.5);
+    it("carries every bass drum high: centers at the chest, tops no higher than 1.6 m", () => {
+        for (const inches of [18, 22, 26, 32]) {
+            const b = bounds(
+                batteryModel("bass", "high", {
+                    bassInches: inches,
+                }).pieces.filter((p) => p.part === PART_SHELL),
+            );
+            // the origin sits at 1.0 m
+            const center = 1.0 + (b.max[1] + b.min[1]) / 2;
+            expect(center).toBeGreaterThan(1.15);
+            expect(center).toBeLessThan(1.45);
+            expect(1.0 + b.max[1]).toBeLessThanOrEqual(1.6001);
+        }
+    });
+
+    it("angles each bass mallet up and forward from the hand", () => {
+        for (const inches of [18, 32]) {
+            const m = batteryModel("bass", "high", { bassInches: inches });
+            for (const bone of ["handR", "handL"] as const) {
+                const shaft = m.pieces.find(
+                    (p) => p.part === PART_WOOD && p.bone === bone,
+                )!;
+                const head = m.pieces.find(
+                    (p) => p.part === PART_BLACK && p.bone === bone,
+                )!;
+                const sb = center([shaft]);
+                const hb = center([head]);
+                expect(hb[1]).toBeGreaterThan(sb[1]); // up
+                expect(hb[0]).toBeLessThan(sb[0]); // forward is instrument −X
+            }
+        }
     });
 
     it("lands each bass mallet on its head's center for every size", () => {
@@ -182,8 +202,8 @@ describe("battery placement", () => {
         const [right, left] = tips("tenors");
         // drum 1 (10 inch) front left, drum 2 (12 inch) front right
         const front = [
-            { x: -0.15, y: 0.24, r: (10 * 0.0254) / 2 },
-            { x: 0.14, y: 0.28, r: (12 * 0.0254) / 2 },
+            { x: -0.14, y: 0.17, r: (10 * 0.0254) / 2 },
+            { x: 0.16, y: 0.22, r: (12 * 0.0254) / 2 },
         ];
         const over = (t: number[], d: (typeof front)[number]) =>
             Math.hypot(t[0] - d.x, t[1] - d.y) < d.r - 0.03 &&
@@ -294,29 +314,34 @@ describe("tenor layout", () => {
             })
             .sort((a, b) => a.x - b.x);
 
-    it("sets quints: 13 and 14 outside, 10 and 12 in front, a 6 inch shot ahead of them", () => {
+    it("sets sixes: shots in the middle by the player, 10 and 12 in front, 13 and 14 at the sides", () => {
         const d = drums();
-        expect(d.length).toBe(5);
-        const near = (w: number, inches: number) =>
-            Math.abs(w - inches * 0.0254) < 0.03;
-        // left to right from the player: 13, 10, shot, 12, 14 (drums 3, 1, shot, 2, 4)
-        expect(near(d[0].w, 13)).toBe(true);
-        expect(near(d[1].w, 10)).toBe(true);
-        expect(near(d[2].w, 6)).toBe(true);
-        expect(near(d[3].w, 12)).toBe(true);
-        expect(near(d[4].w, 14)).toBe(true);
-        // the front pair ahead of the outer drums, the shot ahead of both
-        expect(d[1].y).toBeGreaterThan(d[0].y + 0.15);
-        expect(d[3].y).toBeGreaterThan(d[4].y + 0.15);
-        expect(d[2].y).toBeGreaterThan(Math.max(d[1].y, d[3].y) + 0.1);
+        expect(d.length).toBe(6);
+        const by = (inches: number) =>
+            d.find((x) => Math.abs(x.w - inches * 0.0254) < 0.02)!;
+        const [s6, s8, d1, d2, d3, d4] = [6, 8, 10, 12, 13, 14].map(by);
+        // left to right from the player: 13 at the far left, 14 at the far right
+        expect(d[0]).toBe(d3);
+        expect(d[5]).toBe(d4);
+        // drum 1 left of drum 2, the 6 inch shot left of the 8
+        expect(d1.x).toBeLessThan(d2.x);
+        expect(s6.x).toBeLessThan(s8.x);
+        // the shots nearest the player, the front pair ahead of them
+        for (const shot of [s6, s8]) {
+            expect(shot.y).toBeLessThan(d1.y - 0.15);
+            expect(shot.y).toBeLessThan(d2.y - 0.15);
+        }
+        // the outer drums behind the front pair, at the player's sides
+        expect(d3.y).toBeLessThan(d1.y);
+        expect(d4.y).toBeLessThan(d2.y);
     });
 
-    it("keeps the set under 0.95 m wide with no two drums overlapping", () => {
+    it("keeps the set under 1.1 m wide with no two drums overlapping", () => {
         const all = batteryModel("tenors").pieces.filter(
             (p) => p.part === PART_SHELL,
         );
         const b = bounds(all);
-        expect(b.max[0] - b.min[0]).toBeLessThan(0.95);
+        expect(b.max[0] - b.min[0]).toBeLessThan(1.1);
         const d = drums();
         for (let i = 0; i < d.length; i++)
             for (let j = i + 1; j < d.length; j++)
@@ -325,22 +350,12 @@ describe("tenor layout", () => {
                 ).toBeGreaterThan((d[i].w + d[j].w) / 2);
     });
 
-    it("tilts each main drum's head toward the player", () => {
-        const heads = batteryModel("tenors")
-            .pieces.filter((p) => p.part === PART_HEAD)
-            .filter((p) => bounds([p]).max[0] - bounds([p]).min[0] > 0.2);
-        expect(heads.length).toBe(4);
-        for (const h of heads) {
+    it("keeps every head level", () => {
+        for (const h of batteryModel("tenors").pieces.filter(
+            (p) => p.part === PART_HEAD,
+        )) {
             const b = bounds([h]);
-            const c = [(b.max[0] + b.min[0]) / 2, (b.max[1] + b.min[1]) / 2];
-            // the head's normal: the mean normal of its vertices
-            const n = [0, 0, 0];
-            for (let i = 0; i < h.normals.length; i += 3)
-                for (let k = 0; k < 3; k++) n[k] += h.normals[i + k];
-            // toward the player (instrument origin side, y −0.23 at x 0)
-            const toward = [-c[0], -0.23 - c[1]];
-            expect(n[0] * toward[0] + n[1] * toward[1]).toBeGreaterThan(0);
-            expect(n[2]).toBeGreaterThan(0);
+            expect(b.max[2] - b.min[2]).toBeLessThan(0.01);
         }
     });
 });
