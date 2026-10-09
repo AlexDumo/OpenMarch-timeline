@@ -508,7 +508,9 @@ function contra(detail: Detail): InstrumentModel {
     const bottom = -0.12; // the bottom tube
     const bellLen = 0.42;
     const bellStart = -0.12;
-    const mouthpieceAt: Vec3 = [0.03, bottom - 0.02, 0.12];
+    // the mouthpiece reaches across from the loop plane to the player's
+    // lips (the head is beside the loop, toward -X), level with the valves
+    const mouthpieceAt: Vec3 = [-0.1, -0.03, 0.1];
     const pieces: Piece[] = [
         // bottom tube from the valves back to the bow, the bow up, the top tube forward to the bell
         t.run(
@@ -538,11 +540,12 @@ function contra(detail: Detail): InstrumentModel {
             ],
         ),
         t.bell(bore * 3.3, d.bell / 2, bellStart, bellLen, 0, top + 0.02),
-        // leadpipe from the mouthpiece up to the valves
+        // leadpipe: across from the mouthpiece to the loop plane, then down to the valves
         t.run(
             [
-                [0.03, bottom - 0.02, 0.12],
-                [0.03, bottom - 0.02, 0.0],
+                [-0.1, -0.03, 0.1],
+                [-0.02, -0.03, 0.08],
+                [0.0, -0.04, 0.04],
                 [0.004, -0.045, -0.02],
             ],
             bore,

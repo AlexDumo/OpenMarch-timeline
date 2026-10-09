@@ -151,7 +151,7 @@ const CONTRA_UP: Hold = {
         fingers: unit([-0.2, 0.3, 0.3]),
     },
     instrument: {
-        origin: [0.17, 1.62, 0.14],
+        origin: [0.15, 1.6, 0.12],
         bellAxis: [0, 0, 1],
         capsAxis: [0, 1, 0],
     },
