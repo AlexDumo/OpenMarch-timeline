@@ -9,7 +9,7 @@
  * keys. Flute and piccolo: +Z along the tube toward the foot joint.
  * Clarinets and the soprano sax: +Z down the body toward the bell. Alto,
  * tenor and bari sax: +Z down the neck and body toward the bow; the bell
- * then turns back up along −Z, offset toward +X. The hold places the right
+ * then turns back up along −Z, offset toward −X, as on a real horn. The hold places the right
  * hand; `leftGrip` is the left hand's point on the body.
  */
 import {
@@ -689,6 +689,25 @@ function saxKeys(
     return pieces;
 }
 
+/**
+ * A piece mirrored across the YZ plane, its triangles rewound so they
+ * still face out. The curved saxes are built with the bell on +X and
+ * mirrored at the end: facing a real sax's keys with its neck toward you,
+ * the bell is on your right, which is the instrument's −X.
+ */
+function mirrorX(p: Piece): Piece {
+    const positions = p.positions.slice();
+    const normals = p.normals.slice();
+    for (let i = 0; i < positions.length; i += 3) {
+        positions[i] = -positions[i];
+        normals[i] = -normals[i];
+    }
+    const indices = p.indices.slice();
+    for (let i = 0; i < indices.length; i += 3)
+        [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
+    return { ...p, positions, normals, indices };
+}
+
 /** Alto, tenor and bari: neck, conical body, the bow in pieces, and the bell back up. */
 function curvedSax(
     id: "altoSax" | "tenorSax" | "bariSax",
@@ -763,7 +782,7 @@ function curvedSax(
         pieces.push(t.run(part, taper(part, r0, r1)));
     }
     pieces.push(...saxKeys(t, sh, d.bell, yb, top[2], bowZ));
-    return colored(id, options, pieces, [0, yb, top[2] + 0.12]);
+    return colored(id, options, pieces.map(mirrorX), [0, yb, top[2] + 0.12]);
 }
 
 export function woodwindModel(
