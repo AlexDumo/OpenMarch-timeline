@@ -5,9 +5,11 @@ import {
     bounds,
     colorPieces,
     cylinder,
+    frameAt,
     lathe,
     smoothLathe,
     smoothTube,
+    transformPiece,
     triangleCount,
     tube,
     uPath,
@@ -306,5 +308,61 @@ describe("smooth primitives", () => {
             ((0xd9 / 255 + 0.055) / 1.055) ** 2.4,
             9,
         );
+    });
+});
+
+describe("frameAt", () => {
+    it("turns +Y to the given normal and +Z toward the given heading, then moves to the origin", () => {
+        const m = frameAt([1, 2, 3], [0, 0, 2], [0, -1, 0.5]);
+        const p = transformPiece(
+            {
+                part: PART_METAL,
+                positions: [0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0],
+                normals: [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+                indices: [],
+            },
+            m,
+        );
+        const v = (i: number) => p.positions.slice(i * 3, i * 3 + 3);
+        const close = (a: number[], b: number[]) =>
+            a.forEach((x, k) => expect(x).toBeCloseTo(b[k], 6));
+        close(v(0), [1, 2, 3]);
+        close(v(1), [1, 2, 4]); // +Y onto the unit normal
+        close(v(2), [1, 1, 3]); // +Z toward the heading, made perpendicular
+        close(v(3), [2, 2, 3]); // +X = Y × Z, right-handed
+        close(p.normals.slice(0, 3), [0, 0, 1]);
+    });
+
+    it("picks a heading when the one given is parallel to the normal", () => {
+        const m = frameAt([0, 0, 0], [0, 0, 1], [0, 0, 1]);
+        const z = [m[8], m[9], m[10]];
+        expect(Math.hypot(z[0], z[1], z[2])).toBeCloseTo(1, 6);
+        expect(z[2]).toBeCloseTo(0, 6);
+    });
+});
+
+describe("smoothTube end tangents", () => {
+    it("squares its end rings to the tangents it is given", () => {
+        // a quarter arc split in two: both halves end on the same ring plane
+        const path = arc([0, 0, 0], 1, 0, 90, 4, "y");
+        const tangentAt = (deg: number): [number, number, number] => {
+            const a = (deg * Math.PI) / 180;
+            return [Math.cos(a), 0, -Math.sin(a)];
+        };
+        const half = smoothTube(path.slice(0, 3), 0.1, 8, PART_METAL, {
+            capStart: false,
+            capEnd: false,
+            startTangent: tangentAt(0),
+            endTangent: tangentAt(45),
+        });
+        // the last ring lies in the plane through path[2] normal to the arc's tangent there
+        const t = tangentAt(45);
+        const c = path[2];
+        for (let k = 0; k < 8; k++) {
+            const i = (2 * 8 + k) * 3;
+            const d = [0, 1, 2].map((j) => half.positions[i + j] - c[j]);
+            expect(d[0] * t[0] + d[1] * t[1] + d[2] * t[2]).toBeCloseTo(0, 6);
+            expect(Math.hypot(d[0], d[1], d[2])).toBeCloseTo(0.1, 6);
+        }
     });
 });

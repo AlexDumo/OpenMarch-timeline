@@ -270,7 +270,15 @@ export function smoothTube(
     {
         capStart = true,
         capEnd = true,
-    }: { capStart?: boolean; capEnd?: boolean } = {},
+        startTangent,
+        endTangent,
+    }: {
+        capStart?: boolean;
+        capEnd?: boolean;
+        /** Square the first or last ring to these directions (pieces of one curve then meet without gaps). */
+        startTangent?: Vec3;
+        endTangent?: Vec3;
+    } = {},
 ): Piece {
     const p: Piece = { part, positions: [], normals: [], indices: [] };
     const n = path.length;
@@ -282,6 +290,8 @@ export function smoothTube(
         const next = i + 1 < n ? norm(sub(path[i + 1], path[i])) : null;
         return norm(prev && next ? add(prev, next) : (prev ?? next)!);
     });
+    if (startTangent) tangents[0] = norm(startTangent);
+    if (endTangent) tangents[n - 1] = norm(endTangent);
     let u: Vec3 | null = null;
     for (let i = 0; i < n; i++) {
         const [ui, vi] = frame(tangents[i], u);
@@ -368,6 +378,39 @@ export function smoothLathe(
             p.indices.push(a, b, c, a, c, d);
         }
     return p;
+}
+
+/**
+ * The transform that turns +Y to the direction `up` and +Z toward
+ * `forward` (made perpendicular to `up`; any perpendicular when the two are
+ * parallel), +X completing a right-handed frame, then moves to `origin`.
+ * For placing a piece built about +Y (a lathe) on a surface.
+ */
+export function frameAt(origin: Vec3, up: Vec3, forward: Vec3): Mat4 {
+    const y = norm(up);
+    let z = sub(forward, scale(y, dot(forward, y)));
+    if (len(z) < 1e-9 * Math.max(len(forward), 1))
+        z = cross(Math.abs(y[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0], y);
+    z = norm(z);
+    const x = cross(y, z);
+    return [
+        x[0],
+        x[1],
+        x[2],
+        0,
+        y[0],
+        y[1],
+        y[2],
+        0,
+        z[0],
+        z[1],
+        z[2],
+        0,
+        origin[0],
+        origin[1],
+        origin[2],
+        1,
+    ];
 }
 
 /**
