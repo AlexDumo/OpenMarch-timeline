@@ -795,7 +795,9 @@ from it. The spec still wins on the model; this file decides presentation.
     Space loops the region wherever the playhead is, and stopping returns to the playhead (Logic's
     cycle; owner). A scrub, a click on a count or the arrow keys never change it. Going to a page (E,
     Q, a page box) moves it to that page, as the round 2 test chose ("the loop follows your page").
-    Shift+click on page boxes, with looping on, sets it to those pages.
+    Shift+click on page boxes, with looping on, sets it to those pages. The field line names the loop
+    only while it is elsewhere than the window being edited ("Space loops Page 3's move"); on its
+    own page the lit Loop button, the bar and Play's icon say it (owner, 2026-10-09).
   - **Turning looping on and off**: C, or the **Loop** button on the transport (lit while on), loops
     the window being edited (the page, or the pages Shift+click selected); again turns it off.
     **Ctrl+drag** (Cmd on macOS) on the timeline draws the loop and turns looping on, as dragging

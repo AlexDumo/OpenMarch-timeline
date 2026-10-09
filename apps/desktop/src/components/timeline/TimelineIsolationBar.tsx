@@ -128,7 +128,7 @@ export const passedSets = (names: readonly string[]) =>
  * ordinary page: a whole page box, start flag not pinned. Prominent, and flashed
  * once, when anything is unusual: a partial window, a pinned start flag (with **Unpin**), a window
  * passing page flags (that part never truncates), or past the last flag. With looping on it
- * also says what Space loops ("Space loops it", UI-17). Only the buttons take the pointer, so the field under it stays
+ * names it while it is elsewhere ("Space loops Page 3's move", UI-17). Only the buttons take the pointer, so the field under it stays
  * usable. Screen readers hear the sentence once it settles, not on every scrubbed beat. Hidden
  * while isolated: the isolation bar says it instead.
  */
@@ -142,14 +142,15 @@ export function TimelineFromStartBadge() {
     const range = selection.kind === "range" ? selection : null;
     // The pin only matters while it bounds the window (not when P is on or before it)
     const pinShown = pinned && range !== null && range.start === startBeat;
-    // UI-17: with looping on, what Space loops: "it" when the loop is the window being edited,
-    // else the loop's name
+    // UI-17: with looping on, the loop's name when it isn't the window being edited
     const loop = useTimelineSelectionStore((s) => s.loop);
-    const loopShown = loop !== null && !isolated;
     const loopName =
         loop && !(range && range.start === loop.start && range.end === loop.end)
             ? isolatedTimelineName(loop, pages)
             : null;
+    // Only when the loop is elsewhere: on the page being edited, the lit Loop button, the bar and
+    // Play's icon say it (owner, 2026-10-09)
+    const loopShown = !isolated && loopName !== null;
     const through = range ? flagsInside(range, pages) : [];
     const name =
         selection.kind === "home"
@@ -181,7 +182,7 @@ export function TimelineFromStartBadge() {
     const sentence =
         selection.kind === "none"
             ? ""
-            : `${movedOn ? "Stopped on a new page. " : ""}Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${loopShown ? `. Space loops ${loopName ?? "it"}` : ""}`;
+            : `${movedOn ? "Stopped on a new page. " : ""}Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${loopShown ? `. Space loops ${loopName}` : ""}`;
     // Flash when it turns prominent for a new reason: a pin, or crossing flags
     const flashKey = `${loopShown}|${pinShown}|${through.join(",")}`;
     const [fresh, setFresh] = useState(false);
@@ -284,7 +285,7 @@ export function TimelineFromStartBadge() {
                         className="flex items-center gap-4"
                     >
                         <Keycaps shortcut="Space" />
-                        {loopName ? `loops ${loopName}` : "loops it"}
+                        loops {loopName}
                     </span>
                 </span>
             )}
