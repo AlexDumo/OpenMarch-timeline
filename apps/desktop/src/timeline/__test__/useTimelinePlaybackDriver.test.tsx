@@ -166,6 +166,10 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             store().selectRange(1, 9);
         });
         expect(store().startPinned).toBe(false);
+        // The page just played (UI-17), so this Space plays on
+        act(() => {
+            store().setContinueArmed(true);
+        });
         audio.seconds = 6.1; // beat 13.2
         space(result);
         frame();
@@ -178,6 +182,65 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         // An unpinned start flag follows P onto the page box that holds it
         expect(store().startBeat).toBe(9);
         expect(store().playback).toBeNull();
+    });
+
+    it("Space on a selected page plays its move once and stops on its set; the next Space plays on, and anything between replays the page (UI-17)", async ({
+        db,
+        wrapper,
+    }) => {
+        const { result } = await setUp(db, wrapper);
+        act(() => {
+            store().setPageBoxes([
+                { start: 1, end: 9 },
+                { start: 9, end: 17 },
+            ]);
+            store().selectRange(1, 9);
+        });
+        space(result);
+        expect(store().playback).toEqual({
+            kind: "preview",
+            from: 1,
+            to: 9,
+            once: true,
+        });
+        // Page 1's start, beat 1, is show time 0: the cursor writes it as beat 0
+        expect(store().cursorBeat).toBe(0);
+        // The move reaches the page's flag: playback stops on the page's set, P unchanged
+        audio.seconds = 4.05;
+        frame();
+        expect(result.current.playing.isPlaying).toBe(false);
+        expect(store().cursorBeat).toBeNull();
+        expect(store().playheadBeat).toBe(9);
+        expect(store().continueArmed).toBe(true);
+        // Space straight after plays on from there
+        space(result);
+        expect(store().playback).toEqual({ kind: "on" });
+        expect(store().continueArmed).toBe(false);
+        space(result);
+
+        // Played to its end again, then a key before Space: Space replays the page
+        act(() => {
+            store().selectRange(1, 9);
+        });
+        space(result);
+        audio.seconds = 4.05;
+        frame();
+        expect(store().continueArmed).toBe(true);
+        act(() => {
+            window.dispatchEvent(new KeyboardEvent("keydown", { key: "w" }));
+        });
+        expect(store().continueArmed).toBe(false);
+        space(result);
+        expect(store().playback).toEqual({
+            kind: "preview",
+            from: 1,
+            to: 9,
+            once: true,
+        });
+        // Stopping part-way also goes back to the page's set
+        space(result);
+        expect(store().cursorBeat).toBeNull();
+        expect(store().playheadBeat).toBe(9);
     });
 
     it("plays on and stops at the end of the show, leaving the playhead there", async ({
@@ -427,6 +490,38 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             };
             return { playChanges, send };
         };
+
+        it("a paused click selects the page under it; a drag still scrubs to a count (UI-17 follow-up)", async ({
+            db,
+            wrapper,
+        }) => {
+            const { result } = await setUp(db, wrapper);
+            act(() => {
+                store().setPageBoxes([
+                    { start: 1, end: 9 },
+                    { start: 9, end: 17 },
+                ]);
+                store().selectRange(1, 9);
+            });
+            const { send } = scrubber(result);
+            send(12, "press");
+            send(12, "end");
+            expect(store().playheadBeat).toBe(17);
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 9,
+                end: 17,
+            });
+            send(11, "press");
+            send(12, "drag");
+            send(12, "end");
+            expect(store().playheadBeat).toBe(12);
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: 9,
+                end: 12,
+            });
+        });
 
         it("suspends playback for a drag, follows it, and resumes once from the release", async ({
             db,

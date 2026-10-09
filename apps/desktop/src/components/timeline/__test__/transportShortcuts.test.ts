@@ -18,15 +18,16 @@ import { shortcutGroups } from "@/components/ShortcutsDialog";
 describe("transport shortcuts (UI-17)", () => {
     it("matches the registered playback and page shortcuts", () => {
         expect(TRANSPORT_SHORTCUTS).toEqual({
-            previousPage: "Q",
+            firstPage: "Shift + Q",
             nextPage: "E",
             play: "Space",
         });
         expect(TRANSPORT_SHORTCUTS.play).toBe(
             RegisteredActionsObjects.playPause.keyboardShortcut!.toString(),
         );
-        expect(TRANSPORT_SHORTCUTS.previousPage).toBe(
-            RegisteredActionsObjects.previousPage.keyboardShortcut!.toString(),
+        // ⏮ goes to the start (UI-17 follow-up)
+        expect(TRANSPORT_SHORTCUTS.firstPage).toBe(
+            RegisteredActionsObjects.firstPage.keyboardShortcut!.toString(),
         );
         expect(TRANSPORT_SHORTCUTS.nextPage).toBe(
             RegisteredActionsObjects.nextPage.keyboardShortcut!.toString(),

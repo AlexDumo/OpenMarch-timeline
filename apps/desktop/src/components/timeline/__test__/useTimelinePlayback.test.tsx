@@ -462,7 +462,13 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(store().startPinned).toBe(false);
         expect(result.current.playback.playLoops).toBe(false);
-        // Space: plays on from P. The driver, not this hook, moves P when it stops
+        expect(result.current.playback.playNext).toBe("page");
+        // After the page has played (UI-17), Space plays on from P. The driver, not this hook,
+        // moves P when it stops
+        act(() => {
+            store().setContinueArmed(true);
+        });
+        expect(result.current.playback.playNext).toBe("continue");
         act(() => {
             result.current.playback.onPlayingChange!(true);
         });

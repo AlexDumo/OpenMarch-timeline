@@ -52,6 +52,7 @@ import {
 } from "./useTimelineCommands";
 import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
+import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
@@ -258,6 +259,12 @@ export default function TimelineModePanel() {
     );
     // UI-9: selecting home seeks to beat 0 and a range to its end; not while playing
     const changeSelection = (next: TimelineSelection) => {
+        // UI-17 follow-up: home while playing jumps playback to the start (a page box jumps by
+        // its own scrub; home has nowhere else to go)
+        if (isPlaying && next?.kind === "home") {
+            jumpTimelinePlayback(beats, 0);
+            return;
+        }
         if (isPlaying) return;
         const store = useTimelineSelectionStore.getState();
         if (next?.kind === "home") store.selectHome();

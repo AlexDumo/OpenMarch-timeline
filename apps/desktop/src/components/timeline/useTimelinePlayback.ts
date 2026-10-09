@@ -11,6 +11,7 @@ import {
     jumpTimelinePages,
     navigateTimelinePages,
     pinnedLoopBounds,
+    selectedPageBox,
     seekTimeline,
     toggleTimelinePlayback,
 } from "@/timeline/timelineTransport";
@@ -98,6 +99,15 @@ export function useTimelinePlayback({
     const playLoops = useTimelineSelectionStore(
         (s) => pinnedLoopBounds(s) !== null,
     );
+    // UI-17: what an unpinned Play does next, for the Play button's words
+    const playNext = useTimelineSelectionStore((s) =>
+        (s.playback?.kind === "preview" && s.playback.once) ||
+        (!s.continueArmed && selectedPageBox(s))
+            ? ("page" as const)
+            : s.continueArmed
+              ? ("continue" as const)
+              : undefined,
+    );
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -146,8 +156,17 @@ export function useTimelinePlayback({
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
             isPlaying,
             playLoops,
+            playNext,
             ...commands,
         }),
-        [commands, isPlaying, liveBeat, liveIndex, playheadBeat, playLoops],
+        [
+            commands,
+            isPlaying,
+            liveBeat,
+            liveIndex,
+            playheadBeat,
+            playLoops,
+            playNext,
+        ],
     );
 }

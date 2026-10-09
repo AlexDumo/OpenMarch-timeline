@@ -140,7 +140,11 @@ export function playbackStep(
     isolated: { readonly start: number; readonly end: number } | null,
 ): { readonly loopTo: number } | "stop" | null {
     if (run.kind === "preview")
-        return liveBeat < run.to ? null : { loopTo: run.from };
+        return liveBeat < run.to
+            ? null
+            : run.once
+              ? "stop"
+              : { loopTo: run.from };
     if (isolated && liveBeat >= isolated.end) return { loopTo: isolated.start };
     if (liveBeat >= showEndBeat) return "stop";
     return null;

@@ -55,7 +55,8 @@ export function ShortcutTooltip({
             <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
             <Tooltip.Portal>
                 <Tooltip.Content
-                    side="bottom"
+                    // Above the transport, so it never covers the page boxes under it
+                    side="top"
                     sideOffset={4}
                     className={TooltipClassName}
                 >

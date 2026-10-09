@@ -33,14 +33,15 @@ let scrub: {
     beat: number | null;
     playing: boolean;
     suspended: TimelinePlaybackRun | null;
+    /** The pointer moved off the beat it pressed: a scrub, not a click */
+    moved: boolean;
 } | null = null;
 
 /**
  * Page navigation (UI-9 Page-relative tools): moves the playhead to the target flag and selects
- * that page's timeline, or home for the first page. A pinned start flag stays (UI-17: it is a
- * locator, set with C, and only the pin, a page box or home unpin it, UI-12), so the window runs
- * from it to the flag. Returns false when there is nowhere to go. Callers don't navigate while
- * playing.
+ * that page's timeline, or home for the first page. With the start flag pinned it seeks instead:
+ * a pin set with C follows the page (UI-17, the store's `seek`), and one drawn by hand stays
+ * (UI-12). Returns false when there is nowhere to go. Callers don't navigate while playing.
  */
 export function navigateTimelinePages(
     pages: readonly FlagPage[],
@@ -176,6 +177,8 @@ export function seekTimeline(
         if (ended?.suspended)
             resumeTimelinePlayback(beats, beat, ended.suspended, setIsPlaying);
         else if (ended?.playing ?? isPlaying) jumpTimelinePlayback(beats, beat);
+        else if (ended && !ended.moved && clickSelectsPage(beat))
+            state.endScrub();
         else {
             state.seek(beat);
             state.endScrub();
@@ -183,8 +186,9 @@ export function seekTimeline(
         return null;
     }
     const whole = Math.round(beat);
-    scrub ??= { beat: null, playing: isPlaying, suspended: null };
+    scrub ??= { beat: null, playing: isPlaying, suspended: null, moved: false };
     if (scrub.beat !== whole) {
+        if (scrub.beat !== null) scrub.moved = true;
         scrub.beat = whole;
         if (!scrub.playing) {
             state.beginScrub();
@@ -199,6 +203,28 @@ export function seekTimeline(
     return !scrub.playing || scrub.suspended
         ? displayedBeat(useTimelineSelectionStore.getState())
         : null;
+}
+
+/**
+ * A paused click on the timeline (UI-17 follow-up): selects the page box under it, as a click on
+ * its box does, rather than seeking to that count (simulated users clicked low in a page and got a
+ * partial window). A drag still scrubs to any count. A start flag pinned by hand keeps UI-12's
+ * click-to-seek; a following pin follows the page. Returns false when it didn't handle the click.
+ */
+function clickSelectsPage(beat: number): boolean {
+    const state = useTimelineSelectionStore.getState();
+    if (state.isolation || (state.startPinned && !state.pinFollows))
+        return false;
+    const whole = Math.round(beat);
+    const box = state.pageBoxes.find((b) => whole > b.start && whole <= b.end);
+    if (!box) {
+        if (whole > (state.pageBoxes[0]?.start ?? 0)) return false;
+        state.selectHome();
+        return true;
+    }
+    if (state.startPinned) state.seek(box.end);
+    else state.selectRange(box.start, box.end);
+    return true;
 }
 
 /**
@@ -260,11 +286,81 @@ export function startTimelinePlayOn(
 }
 
 /**
+ * The page box a selected page fills (UI-17): the playhead on its end flag, the window exactly
+ * its box, nothing pinned and no held frame. `null` for home, a partial window or a pin.
+ */
+export const selectedPageBox = (
+    state: Pick<
+        ReturnType<typeof useTimelineSelectionStore.getState>,
+        | "selection"
+        | "playheadBeat"
+        | "cursorBeat"
+        | "pageBoxes"
+        | "startPinned"
+        | "isolation"
+    >,
+): { readonly from: number; readonly to: number } | null => {
+    const { selection } = state;
+    if (
+        state.startPinned ||
+        state.isolation ||
+        state.cursorBeat !== null ||
+        selection.kind !== "range" ||
+        selection.end !== state.playheadBeat
+    )
+        return null;
+    const box = state.pageBoxes.find(
+        (b) => b.end === selection.end && b.start === selection.start,
+    );
+    return box ? { from: box.start, to: box.end } : null;
+};
+
+/** Cleared by the next pointer press or key other than Space (`armContinue`) */
+let disarmListeners: (() => void) | null = null;
+
+/**
+ * A selected page's move played to its end (UI-17): the next Space plays on from there. The very
+ * next thing only: a pointer press or any other key clears it first, so Space after an edit
+ * replays the page (two simulated users were caught re-checking a fix).
+ */
+export function armContinue(): void {
+    disarmContinue();
+    useTimelineSelectionStore.getState().setContinueArmed(true);
+    // The Play button is the mouse's Space
+    const onPointer = (event: PointerEvent) => {
+        if (
+            !(event.target instanceof Element) ||
+            !event.target.closest('[data-testid="timeline-play"]')
+        )
+            disarmContinue();
+    };
+    const onKey = (event: KeyboardEvent) => {
+        if (event.key !== " ") disarmContinue();
+    };
+    window.addEventListener("pointerdown", onPointer, true);
+    window.addEventListener("keydown", onKey, true);
+    disarmListeners = () => {
+        window.removeEventListener("pointerdown", onPointer, true);
+        window.removeEventListener("keydown", onKey, true);
+    };
+}
+
+/** Ends `armContinue`'s state and its listeners */
+export function disarmContinue(): void {
+    disarmListeners?.();
+    disarmListeners = null;
+    useTimelineSelectionStore.getState().setContinueArmed(false);
+}
+
+/**
  * **Play / Stop** (UI-17, Space), the one play action. With the start flag pinned (or a move
  * isolated) it loops the window from the flag to the playhead, and stopping puts the canvas back
- * on the playhead, the arrival being edited, which looping never moved. With no pin it plays on
- * from the playhead, and stopping stays where it stopped, moving the playhead there. The playback
- * driver does both once the pause lands.
+ * on the playhead, the arrival being edited, which looping never moved. With no pin and a page
+ * selected (`selectedPageBox`) it plays that page's move once and stops on its set, so an edit
+ * right after lands on the page that was checked; Space straight after that plays on (simulated-user
+ * A/B test round 3, 2026-10-09: playing from the page's start and on left all four testers editing
+ * the next page's set). Otherwise it plays on from the playhead, and stopping stays where it
+ * stopped, moving the playhead there. The playback driver does both once the pause lands.
  */
 export function toggleTimelinePlayback({
     isPlaying,
@@ -280,8 +376,19 @@ export function toggleTimelinePlayback({
         return;
     }
     const state = useTimelineSelectionStore.getState();
+    const continuing = state.continueArmed;
+    disarmContinue();
     const bounds = pinnedLoopBounds(state);
     if (!bounds) {
+        // UI-17: a selected page plays its own move once and stops on its set, unless the last
+        // thing done was playing it, when Space plays on from there
+        const page = continuing ? undefined : selectedPageBox(state);
+        if (page) {
+            state.cue(page.from);
+            state.setPlayback({ kind: "preview", ...page, once: true });
+            setIsPlaying(true);
+            return;
+        }
         startTimelinePlayOn(showEndBeat, setIsPlaying);
         return;
     }

@@ -158,12 +158,37 @@ export function TimelineFromStartBadge() {
               ? isolatedTimelineName(range, pages)
               : "";
     const wholePage = isWholePageWindow(selection, pages);
+    // UI-17: after a selected page's move plays, the next Space plays on
+    const continueArmed = useTimelineSelectionStore((s) => s.continueArmed);
+    // UI-17: playing on that stops on another page says so loudly (round 3: all four testers
+    // missed the quiet line and edited the next page's set)
+    const [movedOn, setMovedOn] = useState(false);
+    const nameAtPlay = useRef<string | null>(null);
+    useEffect(() => {
+        if (playing) {
+            nameAtPlay.current ??= name;
+            setMovedOn(false);
+            return;
+        }
+        const from = nameAtPlay.current;
+        nameAtPlay.current = null;
+        if (from === null || from === name) return;
+        setMovedOn(true);
+        const timeout = setTimeout(() => setMovedOn(false), 4000);
+        return () => clearTimeout(timeout);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playing]);
     const unusual =
-        fromStartShown || pinShown || through.length > 0 || !wholePage;
+        fromStartShown ||
+        pinShown ||
+        through.length > 0 ||
+        !wholePage ||
+        movedOn ||
+        continueArmed;
     const sentence =
         selection.kind === "none"
             ? ""
-            : `Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${fromStartShown ? `. Space loops ${loopName ?? "it"}` : ""}`;
+            : `${movedOn ? "Stopped on a new page. " : ""}Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${fromStartShown ? `. Space loops ${loopName ?? "it"}` : ""}${continueArmed && !fromStartShown ? ". Space plays on" : ""}`;
     // Flash when it turns prominent for a new reason: a pin, or crossing flags
     const flashKey = `${fromStartShown}|${pinShown}|${through.join(",")}`;
     const [fresh, setFresh] = useState(false);
@@ -205,7 +230,7 @@ export function TimelineFromStartBadge() {
                               : "border-stroke",
                       )
                     : "bg-bg-1/70 text-text-subtitle",
-                fresh && `ring-4 ${START_INK.ring}`,
+                (fresh || movedOn) && `ring-4 ${START_INK.ring}`,
                 playing && "opacity-60",
             )}
         >
@@ -219,6 +244,11 @@ export function TimelineFromStartBadge() {
                 className={clsx("shrink-0", START_INK.text)}
             />
             <span className="truncate" aria-hidden="true">
+                {movedOn && (
+                    <strong className={START_INK.strongText}>
+                        Stopped on a new page ·{" "}
+                    </strong>
+                )}
                 Editing {name}
             </span>
             {through.length > 0 && (
@@ -263,6 +293,16 @@ export function TimelineFromStartBadge() {
                         <Keycaps shortcut="Space" />
                         {loopName ? `loops ${loopName}` : "loops it"}
                     </span>
+                </span>
+            )}
+            {continueArmed && !fromStartShown && (
+                <span
+                    data-testid="timeline-plays-on-badge"
+                    className="border-stroke flex shrink-0 items-center gap-4 border-l pl-8"
+                    aria-hidden="true"
+                >
+                    <Keycaps shortcut="Space" />
+                    plays on
                 </span>
             )}
         </div>

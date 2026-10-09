@@ -9,7 +9,7 @@ import {
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { beatAtTime, timeAtBeat } from "./timeMap";
 import { playbackStep } from "./timelinePlayhead";
-import { consumeSuspendRequest } from "./timelineTransport";
+import { armContinue, consumeSuspendRequest } from "./timelineTransport";
 
 /**
  * Timeline mode's playback rules while playing (docs/timeline/ui.md UI-9 Play, UI-11; P8.11), once
@@ -84,6 +84,8 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
                     store.isolation,
                 );
                 if (step === "stop") {
+                    // UI-17: a selected page's move played to its end; Space next plays on
+                    if (store.playback.kind === "preview") armContinue();
                     lastLiveBeat.current = beats.length;
                     setIsPlaying(false);
                     return;

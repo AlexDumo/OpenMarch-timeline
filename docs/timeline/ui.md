@@ -815,6 +815,25 @@ from it. The spec still wins on the model; this file decides presentation.
   - **A range drawn by hand stays pinned where it was drawn** (UI-12): Ctrl+drag, or dragging the
     start flag, pins S for editing part of a move, and that pin doesn't follow; the pin icon or
     the field line's Unpin unpins it. Only pins set with C or Shift+click follow.
+  - **Play with a page selected and nothing pinned plays that page's move once** and stops on its
+    set (the playhead never moved), so an edit right after lands on the page just checked. Space
+    straight after that plays on from there; anything else first (an edit, a click, another key)
+    makes Space replay the page again, and the field line ("Space plays on") and Play's name ("Play
+    this page", "Play on") say which is next (project owner, 2026-10-09). Simulated-user round 3
+    compared playing from the page's start and on (as Logic's Play from Selection; all four testers
+    then edited the next page's set by mistake), playing the page once every time (Pyware with All
+    Counts off; safe, but "a jail" for watching on), and this hybrid (first for three of four).
+    Before it, Play on a selected page played on from its end and skipped its move (every tester in
+    every round hit that). Home, a part of a page, or a loop: Play works as above.
+  - **Playing on stops where it is**, and when that is a new page the field line says so with a ring
+    ("Stopped on a new page · Editing Page 4…") for a few seconds (owner; the quiet line was missed
+    by every tester who then edited the wrong set).
+  - **⏮ goes to the start of the show**; Shift+click (or Q) is the previous page (owner: testers
+    read ⏮ as "start" five times). ⏭ is unchanged (next page; Shift+click the last).
+  - **A click on the timeline selects the page under it**, as clicking its box does; a drag still
+    scrubs to any count (owner). A start flag pinned by hand keeps UI-12's click-to-seek.
+  - **Home while playing jumps playback to the start**; transport buttons don't take keyboard focus
+    on a click, so Space after clicking one is still Play; the transport's tooltips open above it.
   - **Shift+click on page boxes** extends the window over every page from the selected one to the
     clicked one, and pins the flag at the first, so Space loops them (UI-17 follow-up; every
     simulated user tried it first). Round 2 found that it pinning by itself surprises people who
