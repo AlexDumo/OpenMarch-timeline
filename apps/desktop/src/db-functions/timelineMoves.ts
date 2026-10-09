@@ -26,6 +26,10 @@ import { deleteTimelinesInTransaction, timelinesWithRange } from "./timelines";
 import { readPageGrid, type PageGrid } from "./timelineRipple";
 import { FIRST_PAGE_ID } from "./rowMappers";
 import type { DatabaseTimelineAssignment } from "./timelineAssignments";
+import {
+    clearKeptMarkersInTransaction,
+    keptAmong,
+} from "./timelineKeptMarkers";
 
 /**
  * "Move a marcher on page N" in timeline mode (docs/timeline/phases/07-page-parity.md P7.2, spec
@@ -125,7 +129,7 @@ const distinctRanges = (moves: readonly BeatRange[]): BeatRange[] =>
  */
 export const SAME_POSITION_TOLERANCE = 1e-6;
 
-const samePosition = (a: XY, b: XY): boolean =>
+export const samePosition = (a: XY, b: XY): boolean =>
     Math.abs(a[0] - b[0]) <= SAME_POSITION_TOLERANCE &&
     Math.abs(a[1] - b[1]) <= SAME_POSITION_TOLERANCE;
 
@@ -307,7 +311,8 @@ interface SlotMovePlan {
 /**
  * Sets each planned slot's destination. Refuses follow-the-leader into a shape (`E-T5`), and
  * switches a shape-backed transition to individual points first (Q-14), reading and sampling
- * every shape before the first write, so a refusal writes nothing.
+ * every shape before the first write, so a refusal writes nothing. A kept spot whose ending moves
+ * loses its kept marker (`keptAssignmentsMovedBy`).
  */
 const writeSlotMoves = async ({
     tx,
@@ -342,6 +347,8 @@ const writeSlotMoves = async ({
         toConvert.set(row.transitionId, sampleShape(shape, row.slotCount));
     }
 
+    const unkept = await keptAssignmentsMovedBy(tx, plans);
+
     // Writes
     for (const [transitionId, points] of toConvert) {
         await setTimelineTransitionDestinationInTransaction({
@@ -365,6 +372,62 @@ const writeSlotMoves = async ({
             slotIndex: row.slotIndex,
         });
     }
+    // An edited kept spot is the marcher's own move from now on (keep later pages, 2026-10-09)
+    await clearKeptMarkersInTransaction(tx, unkept);
+};
+
+/**
+ * The kept assignments (`timeline_kept_assignments`) whose slot `plans` move somewhere else: a
+ * kept move whose ending is edited becomes an ordinary own move. A plan that leaves a kept spot
+ * where it is (within `SAME_POSITION_TOLERANCE`) keeps it.
+ */
+const keptAssignmentsMovedBy = async (
+    tx: DbTransaction,
+    plans: readonly SlotMovePlan[],
+): Promise<number[]> => {
+    if (plans.length === 0) return [];
+    const a = schema.timeline_assignments;
+    const k = schema.timeline_kept_assignments;
+    const d = schema.timeline_slot_destinations;
+    const transitionIds = [...new Set(plans.map((p) => p.row.transitionId))];
+    const kept = await tx
+        .select({
+            id: a.id,
+            transitionId: a.transition_id,
+            slotIndex: a.slot_index,
+        })
+        .from(a)
+        .innerJoin(k, eq(k.assignment_id, a.id))
+        .where(inArray(a.transition_id, transitionIds))
+        .all();
+    if (kept.length === 0) return [];
+    const key = (transitionId: number, slotIndex: number) =>
+        `${transitionId}:${slotIndex}`;
+    const points = new Map(
+        (
+            await tx
+                .select()
+                .from(d)
+                .where(
+                    inArray(
+                        d.transition_id,
+                        kept.map((r) => r.transitionId),
+                    ),
+                )
+                .all()
+        ).map((r) => [key(r.transition_id, r.slot_index), [r.x, r.y] as XY]),
+    );
+    const planned = new Map(
+        plans.map((p) => [key(p.row.transitionId, p.row.slotIndex), p.move]),
+    );
+    return kept
+        .filter((r) => {
+            const move = planned.get(key(r.transitionId, r.slotIndex));
+            if (!move) return false;
+            const stored = points.get(key(r.transitionId, r.slotIndex));
+            return !stored || !samePosition(stored, [move.x, move.y]);
+        })
+        .map((r) => r.id);
 };
 
 /** `moveMarchersOnPageInTransaction` as one undoable edit. */
@@ -603,7 +666,7 @@ const timelineOfMarchers = async (
 };
 
 /** Whether `range` is exactly the box of a page after home in `grid`. */
-const isPageBox = (grid: PageGrid, range: BeatRange): boolean =>
+export const isPageBox = (grid: PageGrid, range: BeatRange): boolean =>
     grid.pages.some(
         (p) =>
             p.id !== FIRST_PAGE_ID &&
@@ -618,7 +681,7 @@ const isPageBox = (grid: PageGrid, range: BeatRange): boolean =>
  * box, and leaves the marcher holding through the box where the box starts. Empty when `range`
  * isn't a page's box.
  */
-const ownPageMoves = async (
+export const ownPageMoves = async (
     tx: DbTransaction,
     grid: PageGrid,
     range: BeatRange,
@@ -674,14 +737,19 @@ const ownPageMoves = async (
 };
 
 /**
- * Deletes `rows` (marchers' own page moves, `ownPageMoves`) with their one-slot transitions, and
- * then each of their timelines that has no transition left, children first.
+ * Deletes `rows` (marchers' own page moves, `ownPageMoves`) with their kept markers and one-slot
+ * transitions, and then each of their timelines that has no transition left, children first.
  */
-const clearOwnPageMoves = async (
+export const clearOwnPageMoves = async (
     tx: DbTransaction,
     rows: readonly DatabaseTimelineAssignment[],
 ): Promise<void> => {
     if (rows.length === 0) return;
+    // A kept spot's marker goes first (children first, as C-1)
+    await clearKeptMarkersInTransaction(
+        tx,
+        rows.map((r) => r.id),
+    );
     const t = schema.timeline_transitions;
     const timelineIds = (
         await tx
@@ -732,7 +800,9 @@ const clearOwnPageMoves = async (
  * - **Drag back:** on a page's box, a marcher whose own move there (`ownPageMoves`) is moved back to
  *   where the box starts loses that move instead of keeping one that goes nowhere, so the page
  *   follows earlier pages again. Its timeline goes when that leaves it empty. A zero-motion ending
- *   in a shared transition, or in a window that isn't a page's box, is kept.
+ *   in a shared transition, or in a window that isn't a page's box, is kept. So is a **kept** spot
+ *   (`timeline_kept_assignments`): the drag writes its new ending instead, and like any edit that
+ *   moves a kept spot's ending, makes it an ordinary own move (`writeSlotMoves`).
  * - **`clearOwn`** (set to previous page): every moved marcher's own move over the box is deleted
  *   the same way, whatever the move says; the others are moved as usual.
  *
@@ -776,6 +846,11 @@ export const moveMarchersInRangeInTransaction = async ({
         resolver ??= createResolver((await readTimelineTables(tx)).snapshot);
         return resolver.positionAt(marcherId, beat);
     };
+    // A kept spot is the designer's: dragging it back never clears it (only `clearOwn` does)
+    const keptOwn = await keptAmong(
+        tx,
+        [...own.values()].map((r) => r.id),
+    );
     const toClear: DatabaseTimelineAssignment[] = [];
     const kept: TimelineMarcherMove[] = [];
     for (const move of moves) {
@@ -789,7 +864,8 @@ export const moveMarchersInRangeInTransaction = async ({
                     point,
                     await positionAt(move.marcherId, range.start),
                 );
-            if (clearOwn || back) toClear.push(ownMove);
+            if (clearOwn || (back && !keptOwn.has(ownMove.id)))
+                toClear.push(ownMove);
             else kept.push(move);
             continue;
         }
