@@ -586,7 +586,9 @@
             "swapMarchers": "Swap marchers",
             "timeline": {
                 "goToPage": "Go to Page {page}",
+                "goToStart": "Go to the start",
                 "holdFrom": "Hold from Page {page}",
+                "holdFromStart": "Hold from the start",
                 "movesOnThisPage": "Moves on this page"
             },
             "title": "{count} Marchers",
@@ -1400,10 +1402,17 @@
         },
         "holdMarks": {
             "holds": "Selected marchers hold from Page {page}",
+            "holdsFromStart": "Selected marchers hold from the start",
+            "holdsFromStartHint": "They stand where they started",
             "holdsHere": "Selected marchers hold on this page",
+            "holdsHereHint": "They stand where their last move left them",
+            "holdsHint": "They stand where Page {page} left them",
             "mixed": "Some selected marchers hold from Page {page}",
+            "mixedFromStart": "Some selected marchers hold from the start",
             "mixedHere": "Some selected marchers hold on this page",
-            "moves": "Selected marchers move on this page"
+            "mixedHint": "Some have their own move here",
+            "moves": "Selected marchers move on this page",
+            "movesHint": "They have their own move here"
         },
         "label": "Timeline",
         "masterVolume": "Master Volume",

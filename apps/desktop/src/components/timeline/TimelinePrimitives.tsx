@@ -80,10 +80,12 @@ import {
     useLiveValue,
 } from "./timelineLiveValue";
 import {
+    HoldMarkTooltip,
     PageHoldMarkView,
     type LabeledHoldMark,
     type LabeledHoldMarks,
 } from "./PageHoldMark";
+import { HintTooltipProvider } from "./HintTooltip";
 import type {
     BeatPosition,
     TimelineBeatRange,
@@ -954,52 +956,54 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
 }) {
     const selectedIds = new Set(selectedBoxIds.split("\n"));
     return (
-        <div
-            data-testid="timeline-page-ruler"
-            // Clipped without being a scroll container, so labels can stick to the viewport
-            className="border-stroke bg-fg-2 rounded-6 absolute top-0 h-28 overflow-clip border font-mono"
-            style={{
-                left: -initialPageWidth,
-                width: beatCount * pixelsPerBeat + initialPageWidth,
-            }}
-        >
-            {initialPage && (
-                <button
-                    type="button"
-                    data-timeline-interactive="true"
-                    data-testid="timeline-initial-page"
-                    aria-label={`Page ${initialPage.label}`}
-                    title={`Home: page ${initialPage.label}'s set`}
-                    aria-pressed={homeSelected}
-                    {...scrub.handlers}
-                    onClick={(event) => {
-                        if (!scrub.consumeClick(event))
-                            onSelectPage(initialPage);
-                    }}
-                    className="border-stroke text-text focus-visible:ring-accent absolute top-0 left-0 flex h-full items-center justify-center border-r text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
-                    style={{ width: initialPageWidth }}
-                >
-                    {/* UI-13: a house, so home's "0" isn't read as a count or a measure */}
-                    {HOUSE_ICON}
-                </button>
-            )}
-            {pageBoxes.map(({ page, range }) =>
-                range ? (
-                    <TimelinePageBox
-                        key={page.id}
-                        page={page}
-                        range={range}
-                        selected={selectedIds.has(String(page.id))}
-                        pixelsPerBeat={pixelsPerBeat}
-                        initialPageWidth={initialPageWidth}
-                        scrub={scrub}
-                        onSelectPage={onSelectPage}
-                        hold={holdMarks?.get(page.id)}
-                        holdDescriptionId={`${holdMarkId}-${page.id}`}
-                    />
-                ) : null,
-            )}
-        </div>
+        <HintTooltipProvider>
+            <div
+                data-testid="timeline-page-ruler"
+                // Clipped without being a scroll container, so labels can stick to the viewport
+                className="border-stroke bg-fg-2 rounded-6 absolute top-0 h-28 overflow-clip border font-mono"
+                style={{
+                    left: -initialPageWidth,
+                    width: beatCount * pixelsPerBeat + initialPageWidth,
+                }}
+            >
+                {initialPage && (
+                    <button
+                        type="button"
+                        data-timeline-interactive="true"
+                        data-testid="timeline-initial-page"
+                        aria-label={`Page ${initialPage.label}`}
+                        title={`Home: page ${initialPage.label}'s set`}
+                        aria-pressed={homeSelected}
+                        {...scrub.handlers}
+                        onClick={(event) => {
+                            if (!scrub.consumeClick(event))
+                                onSelectPage(initialPage);
+                        }}
+                        className="border-stroke text-text focus-visible:ring-accent absolute top-0 left-0 flex h-full items-center justify-center border-r text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
+                        style={{ width: initialPageWidth }}
+                    >
+                        {/* UI-13: a house, so home's "0" isn't read as a count or a measure */}
+                        {HOUSE_ICON}
+                    </button>
+                )}
+                {pageBoxes.map(({ page, range }) =>
+                    range ? (
+                        <TimelinePageBox
+                            key={page.id}
+                            page={page}
+                            range={range}
+                            selected={selectedIds.has(String(page.id))}
+                            pixelsPerBeat={pixelsPerBeat}
+                            initialPageWidth={initialPageWidth}
+                            scrub={scrub}
+                            onSelectPage={onSelectPage}
+                            hold={holdMarks?.get(page.id)}
+                            holdDescriptionId={`${holdMarkId}-${page.id}`}
+                        />
+                    ) : null,
+                )}
+            </div>
+        </HintTooltipProvider>
     );
 });
 
@@ -1029,34 +1033,38 @@ const TimelinePageBox = memo(function TimelinePageBox({
     const boxWidth =
         (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
     return (
-        <button
-            type="button"
-            data-timeline-interactive="true"
-            {...timelineRangeTargetProps(range, undefined, page.id)}
-            aria-label={`Page ${page.label}`}
-            aria-describedby={hold ? holdDescriptionId : undefined}
-            title={hold?.label}
-            aria-pressed={selected}
-            {...scrub.handlers}
-            onClick={(event) => {
-                if (scrub.consumeClick(event)) return;
-                // macOS ctrl+click opens the context menu (UI-9: no selection change)
-                if (!event.ctrlKey) onSelectPage(page);
-            }}
-            className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
-            style={{
-                left:
-                    initialPageWidth +
-                    beatToX(range.startBeatIndex, pixelsPerBeat),
-                width: boxWidth,
-            }}
-        >
-            <PageBoxLabel
-                label={page.label}
-                shown={pageLabelFits(page.label, boxWidth)}
-            />
-            <PageHoldMarkView hold={hold} descriptionId={holdDescriptionId} />
-        </button>
+        <HoldMarkTooltip hold={hold}>
+            <button
+                type="button"
+                data-timeline-interactive="true"
+                {...timelineRangeTargetProps(range, undefined, page.id)}
+                aria-label={`Page ${page.label}`}
+                aria-describedby={hold ? holdDescriptionId : undefined}
+                aria-pressed={selected}
+                {...scrub.handlers}
+                onClick={(event) => {
+                    if (scrub.consumeClick(event)) return;
+                    // macOS ctrl+click opens the context menu (UI-9: no selection change)
+                    if (!event.ctrlKey) onSelectPage(page);
+                }}
+                className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
+                style={{
+                    left:
+                        initialPageWidth +
+                        beatToX(range.startBeatIndex, pixelsPerBeat),
+                    width: boxWidth,
+                }}
+            >
+                <PageBoxLabel
+                    label={page.label}
+                    shown={pageLabelFits(page.label, boxWidth)}
+                />
+                <PageHoldMarkView
+                    hold={hold}
+                    descriptionId={holdDescriptionId}
+                />
+            </button>
+        </HoldMarkTooltip>
     );
 });
 
