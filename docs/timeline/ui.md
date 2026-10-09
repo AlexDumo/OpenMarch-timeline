@@ -857,7 +857,7 @@ from it. The spec still wins on the model; this file decides presentation.
     whose first click carried it).
 - **UI-18: a page has a position only where a marcher was moved (project owner, 2026-10-08).**
   The owner made pages 2–4 after page 1, edited page 2, and found page 3 still showing page 1's
-  set. Research and validation are in `research/defined-coordinates/`. Numbered after UI-17 (transport keys, still on its branch).
+  set. Research and validation are in `research/defined-coordinates/`. Numbered after UI-17 (transport keys, #115).
   - **The rule.** A marcher has a coordinate on a page only where the designer moved them there.
     Everywhere else they hold where they last were (spec R-6). An edit carries forward, per marcher,
     to that marcher's next page with its own move, and stops there.
@@ -943,7 +943,8 @@ from it. The spec still wins on the model; this file decides presentation.
       when none does, lets the kept ones follow again (wp19, after the final study, where K on a
       held page 3 kept page 4). It shows
       no toast; the chain and the inspector line show the result. It doesn't fire while typing in a
-      field. The Alt-drag shortcut from the study was dropped (owner).
+      field. The `?` shortcuts list (UI-17) shows it under Timeline. The Alt-drag shortcut from the
+      study was dropped (owner).
     - **After an edit: "Pages 3–4 followed" · Only Page 2.** When an edit changes an existing move on
       page 2 and carries into later pages for some of the marchers it moved, one surprise toast says
       so. **Only Page 2**, as its own undo step, keeps those marchers on page 3 at their spots from

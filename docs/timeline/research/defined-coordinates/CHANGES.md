@@ -1140,8 +1140,8 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Real-app:** `~/ux-study/wp19/a` steps 11–14 (K on held page 3 keeps page 3; Kept on this
   page), `~/ux-study/wp19/c` steps 7–13 (K keeps a never-moved OT1 on page 3; its later page 2 move
   walks back there).
-- **V-row:** V-188. The app has no shortcuts list to add it to; the action's description is its
-  only listing.
+- **V-row:** V-188. #115's `?` shortcuts list shows it under Timeline, with the action's
+  description as its label (`transportShortcuts.test.ts`).
 
 #### B-44 Timeline Only Page N after an edit
 
