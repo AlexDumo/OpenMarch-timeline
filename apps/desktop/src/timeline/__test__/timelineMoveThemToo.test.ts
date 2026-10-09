@@ -1,0 +1,413 @@
+import { afterEach, describe, expect, vi } from "vitest";
+import { asc } from "drizzle-orm";
+import { toast } from "sonner";
+import { DbConnection, describeDbTests, schema } from "@/test/base";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+import { createLastPage } from "@/db-functions/page";
+import { createMarchers } from "@/db-functions/marcher";
+import { updateMarcherPages } from "@/db-functions/marcherPage";
+import {
+    performRedo,
+    performUndo,
+    transactionWithHistory,
+} from "@/db-functions/history";
+import {
+    moveMarchersInTarget,
+    shiftSlotDestinations,
+    type TimelineMarcherMove,
+} from "@/db-functions/timelineMoves";
+import { createTimelineShapesInTransaction } from "@/db-functions/timelineShapes";
+import { setTimelineTransitionDestinationInTransaction } from "@/db-functions/timelineTransitions";
+import type Page from "@/global/classes/Page";
+import { deleteTimelineAndCompare } from "@/db-functions/timelineCommands";
+import { moveDeletedMessage } from "@/components/timeline/useTimelineCommands";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    convertPagesToTimeline,
+    readShowTiming,
+} from "../convert/writePageConversion";
+import { neighborPageTarget } from "../timelineCoordinateWrites";
+import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
+import { pageFlags } from "../timelinePlayhead";
+import {
+    resolverSpans,
+    startTimelineResolver,
+    stopTimelineResolver,
+    timelineResolverSettled,
+    useTimelineResolverStore,
+} from "../timelineStore";
+
+/**
+ * **Move them too** in timeline mode (defined-coordinates 09, G4): an edit that moves marchers
+ * whose next own move ends on a later page offers to shift those destinations by the same offset,
+ * as one separate undoable edit. The message and page mode are in
+ * `utilities/__test__/moveThemToo.test.ts`.
+ */
+
+// The show is built in page mode, then converted, so the fixtures stay in page mode
+keepFixturesInPageMode("its tests build the show and convert it themselves");
+
+afterEach(() => {
+    stopTimelineResolver();
+    useTimelineSelectionStore.getState().reset();
+    vi.restoreAllMocks();
+});
+
+const box = (page: Page) => {
+    const target = neighborPageTarget(page);
+    if (target.kind !== "range") throw new Error("not a page box");
+    return target;
+};
+
+/**
+ * The study's starter show (09): OT1–OT8 in a line at home (x = 100, 150, … 450; y = 300),
+ * pages 1–3 after it, nobody moving; then the study's steps, as timeline edits: everyone marches
+ * forward 100 on page 1 (later pages hold there), and OT1 and OT8 step out sideways by 50 on page
+ * 2. Pages are numbered from 0 here (no page number offset), so page 2 is the study's set 3.
+ */
+const studyShow = async (db: DbConnection) => {
+    await createMarchers({
+        db,
+        newMarchers: Array.from({ length: 8 }, (_, i) => ({
+            section: "Trumpet",
+            drill_prefix: "OT",
+            drill_order: i + 1,
+        })),
+    });
+    for (let i = 0; i < 3; i++)
+        await createLastPage({ db, newPageCounts: 8, createNewBeats: true });
+    const marchers = (
+        await db
+            .select()
+            .from(schema.marchers)
+            .orderBy(asc(schema.marchers.drill_order))
+            .all()
+    ).map((m) => m.id);
+    const { pages: unsorted } = await readShowTiming(db);
+    const pages = [...unsorted].sort((a, b) => a.order - b.order);
+    await updateMarcherPages({
+        db,
+        modifiedMarcherPages: marchers.map((id, i) => ({
+            marcher_id: id,
+            page_id: pages[0]!.id,
+            x: 100 + 50 * i,
+            y: 300,
+        })),
+    });
+    await convertPagesToTimeline(db);
+    // Nobody moves in the starter show, so the conversion writes no moves
+    expect(await db.select().from(schema.timelines).all()).toEqual([]);
+    await startTimelineResolver(db);
+    const boxes = pageFlags(pages).flatMap((f) =>
+        f.range ? [{ ...f.range, name: f.page.name }] : [],
+    );
+    useTimelineSelectionStore.getState().setPageBoxes(boxes);
+
+    // Page 1 (G1): forward 100
+    await moveMarchersInTarget({
+        db,
+        target: box(pages[1]!),
+        moves: marchers.map((id, i) => ({
+            marcherId: id,
+            x: 100 + 50 * i,
+            y: 200,
+        })),
+    });
+    // Page 2 (G3): OT1 and OT8 step out
+    await moveMarchersInTarget({
+        db,
+        target: box(pages[2]!),
+        moves: [
+            { marcherId: marchers[0]!, x: 50, y: 200 },
+            { marcherId: marchers[7]!, x: 500, y: 200 },
+        ],
+    });
+    await timelineResolverSettled();
+    return { pages, marchers, boxes };
+};
+
+/** G4: shorten the page-1 move to 50 forward */
+const shortenMoves = (marchers: readonly number[]): TimelineMarcherMove[] =>
+    marchers.map((id, i) => ({ marcherId: id, x: 100 + 50 * i, y: 250 }));
+
+const at = (marcherId: number, page: Page) =>
+    useTimelineResolverStore
+        .getState()
+        .resolver!.positionAt(marcherId, box(page).end);
+
+type Info = ReturnType<typeof vi.spyOn<typeof toast, "info">>;
+
+/** The **Move them too** toast's call, once it has shown */
+const moveThemTooCall = async (info: Info) => {
+    await vi.waitFor(() =>
+        expect(
+            info.mock.calls.some(
+                (c) =>
+                    String(c[0]).includes("so they kept their spot") ||
+                    String(c[0]).includes("so it kept its spot") ||
+                    String(c[0]).includes("so they kept their spots"),
+            ),
+        ).toBe(true),
+    );
+    return info.mock.calls.at(-1)!;
+};
+
+describeDbTests("timeline mode: Move them too", (it) => {
+    it("study scenario: shortening page 1 names OT1 and OT8 at Page 2; the action shifts them, page 3 follows, one undo reverts it", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await studyShow(db);
+        const [ot1, ot8] = [marchers[0]!, marchers[7]!];
+        expect(at(ot1, pages[2]!)).toEqual([50, 200]);
+        expect(at(ot1, pages[3]!)).toEqual([50, 200]);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[1]!),
+            moves: shortenMoves(marchers),
+        });
+
+        const [message, options] = await moveThemTooCall(info);
+        expect(message).toBe(
+            "OT1 and OT8 have their own move on Page 2, so they kept their spot",
+        );
+        expect(options).toMatchObject({
+            id: "timeline-edit",
+            action: { label: "Move them too" },
+        });
+        // Before the action: the others followed, OT1 and OT8 kept their spot
+        expect(at(marchers[1]!, pages[2]!)).toEqual([150, 250]);
+        expect(at(ot1, pages[2]!)).toEqual([50, 200]);
+
+        (options as { action: { onClick: () => void } }).action.onClick();
+        await vi.waitFor(() => expect(at(ot1, pages[2]!)).toEqual([50, 250]));
+        expect(at(ot8, pages[2]!)).toEqual([500, 250]);
+        // Page 3 holds from page 2, so it follows
+        expect(at(ot1, pages[3]!)).toEqual([50, 250]);
+        expect(at(ot8, pages[3]!)).toEqual([500, 250]);
+        expect(at(marchers[1]!, pages[3]!)).toEqual([150, 250]);
+        // The action says nothing more
+        const calls = info.mock.calls.length;
+
+        // One undo takes back only the action
+        await performUndo(db);
+        await timelineResolverSettled();
+        expect(at(ot1, pages[2]!)).toEqual([50, 200]);
+        expect(at(ot1, pages[3]!)).toEqual([50, 200]);
+        expect(at(ot1, pages[1]!)).toEqual([100, 250]);
+        expect(at(marchers[1]!, pages[2]!)).toEqual([150, 250]);
+        await performRedo(db);
+        await timelineResolverSettled();
+        expect(at(ot1, pages[2]!)).toEqual([50, 250]);
+        // Undo and redo offer nothing
+        expect(info.mock.calls.length).toBe(calls);
+    });
+
+    it("own moves on several pages: says their later moves", async ({ db }) => {
+        const { pages, marchers } = await studyShow(db);
+        // OT2 steps out on page 3
+        await moveMarchersInTarget({
+            db,
+            target: box(pages[3]!),
+            moves: [{ marcherId: marchers[1]!, x: 150, y: 100 }],
+        });
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[1]!),
+            moves: shortenMoves(marchers),
+        });
+        const [message] = await moveThemTooCall(info);
+        expect(message).toBe(
+            "OT1, OT2 and OT8 have their own later moves, so they kept their spots",
+        );
+    });
+
+    it("a shape-backed later move is skipped and not listed", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await studyShow(db);
+        const resolver = useTimelineResolverStore.getState().resolver!;
+        const ot1Move = resolverSpans(resolver, marchers[0]!).find(
+            (s) => s.kind !== "hold" && s.end === box(pages[2]!).end,
+        )!;
+        await transactionWithHistory(db, "shape", async (tx) => {
+            const [shape] = await createTimelineShapesInTransaction({
+                tx,
+                newShapes: [
+                    {
+                        kind: "circle",
+                        geometry: {
+                            center: [60, 210],
+                            radius: 10,
+                            start_angle: 0,
+                            clockwise: true,
+                        },
+                    },
+                ],
+            });
+            await setTimelineTransitionDestinationInTransaction({
+                tx,
+                transitionId: ot1Move.transitionId!,
+                destination: { kind: "shape", shapeId: shape!.id },
+            });
+        });
+        await timelineResolverSettled();
+        const shaped = at(marchers[0]!, pages[2]!);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[1]!),
+            moves: shortenMoves(marchers),
+        });
+        const [message, options] = await moveThemTooCall(info);
+        expect(message).toBe(
+            "OT8 has its own move on Page 2, so it kept its spot",
+        );
+        (options as { action: { onClick: () => void } }).action.onClick();
+        await vi.waitFor(() =>
+            expect(at(marchers[7]!, pages[2]!)).toEqual([500, 250]),
+        );
+        expect(at(marchers[0]!, pages[2]!)).toEqual(shaped);
+        // Shifting a shape-backed slot directly writes nothing
+        expect(
+            await shiftSlotDestinations({
+                db,
+                shifts: [
+                    {
+                        marcherId: marchers[0]!,
+                        transitionId: ot1Move.transitionId!,
+                        slotIndex: ot1Move.slot!,
+                        dx: 1,
+                        dy: 1,
+                    },
+                ],
+            }),
+        ).toEqual([]);
+    });
+
+    it("an edit that moves them only within the tolerance offers nothing", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await studyShow(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[1]!),
+            moves: [{ marcherId: marchers[0]!, x: 100 + 1e-9, y: 200 }],
+        });
+        // Give the follow-up its chance to run
+        await timelineResolverSettled();
+        await new Promise((r) => setTimeout(r, 200));
+        expect(info).not.toHaveBeenCalled();
+    });
+
+    it("an edit of marchers whose next page holds offers nothing", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await studyShow(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[1]!),
+            moves: [{ marcherId: marchers[3]!, x: 260, y: 240 }],
+        });
+        await timelineResolverSettled();
+        await new Promise((r) => setTimeout(r, 200));
+        expect(info).not.toHaveBeenCalled();
+    });
+
+    it("with a window passing a flag, the one toast becomes Move them too (same id), not a second toast", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await studyShow(db);
+        const ot4 = marchers[3]!;
+        // OT4 has its own move on page 3
+        await moveMarchersInTarget({
+            db,
+            target: box(pages[3]!),
+            moves: [{ marcherId: ot4, x: 250, y: 100 }],
+        });
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        // A window over pages 1–2 moves OT4: it passes page 1's flag
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: {
+                kind: "range",
+                start: box(pages[1]!).start,
+                end: box(pages[2]!).end,
+            },
+            moves: [{ marcherId: ot4, x: 270, y: 180 }],
+        });
+        const [message] = await moveThemTooCall(info);
+        expect(info.mock.calls[0]![0]).toBe(
+            `Page ${pages[1]!.name} is no longer a stop`,
+        );
+        expect(message).toBe(
+            `OT4 has its own move on Page ${pages[3]!.name}, so it kept its spot`,
+        );
+        expect(info.mock.calls.map((c) => (c[1] as { id: string }).id)).toEqual(
+            ["timeline-edit", "timeline-edit"],
+        );
+    });
+});
+
+describe("the delete-move toast", () => {
+    it("appends the pages that changed, as runs", () => {
+        const page = (name: string, order: number) => ({
+            id: order,
+            name,
+            order,
+        });
+        expect(moveDeletedMessage("Move 2")).toBe("Deleted Move 2");
+        expect(moveDeletedMessage("Move 2", [page("3", 3)])).toBe(
+            "Deleted Move 2 · Page 3 changed",
+        );
+        expect(
+            moveDeletedMessage("Page 2's move", [
+                page("2", 2),
+                page("3", 3),
+                page("5", 5),
+            ]),
+        ).toBe("Deleted Page 2's move · Pages 2–3, 5 changed");
+    });
+});
+
+describeDbTests("deleting a move names the pages that changed", (it) => {
+    it("later pages that held from it fall back, and are named; pages after an own move aren't", async ({
+        db,
+    }) => {
+        const { pages } = await studyShow(db);
+        const timelineEndingAt = async (page: Page) =>
+            (await db.select().from(schema.timelines).all()).find(
+                (t) => t.end_beat === box(page).end,
+            )!;
+
+        // Page 2's move (OT1 and OT8 step out): pages 2–3 go back to the line
+        const page2 = await timelineEndingAt(pages[2]!);
+        const step = await deleteTimelineAndCompare({
+            db,
+            timelineId: page2.id,
+        });
+        expect(step.deleted.id).toBe(page2.id);
+        expect(step.changedPages.map((p) => p.name)).toEqual([
+            pages[2]!.name,
+            pages[3]!.name,
+        ]);
+        await performUndo(db);
+
+        // Page 1's move (everyone forward): page 1 and every page holding after it change;
+        // page 2 too, though OT1 and OT8 own it, since the others held there
+        const page1 = await timelineEndingAt(pages[1]!);
+        const forward = await deleteTimelineAndCompare({
+            db,
+            timelineId: page1.id,
+        });
+        expect(forward.changedPages.map((p) => p.name)).toEqual([
+            pages[1]!.name,
+            pages[2]!.name,
+            pages[3]!.name,
+        ]);
+    });
+});

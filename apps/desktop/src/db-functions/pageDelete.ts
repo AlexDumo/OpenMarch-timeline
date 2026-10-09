@@ -211,6 +211,30 @@ async function deleteAndCompare(
 }
 
 /**
+ * Runs `change` (an edit that leaves every page flag where it is, such as **Delete move**) and
+ * reports the pages whose own flag shows any marcher somewhere else after it, named as the app
+ * shows them, in show order, from the timeline rows.
+ */
+export async function changedPagesAround<T>(
+    tx: DbTransaction,
+    change: () => Promise<T>,
+): Promise<{ value: T; changedPages: NamedPage[] }> {
+    const before = await readFlagLook(tx);
+    const value = await change();
+    const after = await readFlagLook(tx);
+    const names = await readPageNames(tx);
+    const changedPages = changedFlagPageIds(
+        before,
+        after,
+        flagOfSamePage(before.grid),
+    )
+        .map((id) => names.get(id))
+        .filter((p) => p !== undefined)
+        .sort((a, b) => a.order - b.order);
+    return { value, changedPages };
+}
+
+/**
  * **Delete page and its moves**: the page-mode delete (`deletePages`) as one undoable edit. Pages
  * that stay keep their beats; the page before a deleted page takes its box, and so ends at its flag.
  */

@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-    deleteTimeline,
+    deleteTimelineAndCompare,
     renameTimeline,
     shiftTimeline,
 } from "@/db-functions/timelineCommands";
@@ -15,6 +15,7 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { moveLabel, moveLabels } from "@/timeline/timelineViewModel";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { timelineExists } from "@/db-functions/timelines";
+import { pageRunsLabel, type NamedPage } from "@/db-functions/pageDelete";
 import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { useMoveMemberSelectionStore } from "@/stores/MoveMemberSelectionStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -163,12 +164,31 @@ const deletingMoves = new Set<number>();
 const DELETE_TOAST_MS = 8000;
 
 /**
- * Shows "Deleted <label>" with **Undo** (UI-14). Its Undo runs the app's undo, so the toast closes
- * on the next history change (an edit, an undo, a redo): then Undo could only undo something else.
+ * "Deleted Move 2", and when pages look different after it (marchers that held after the move
+ * fall back), "Deleted Move 2 · Pages 4–5 changed", as the delete-page toast says it.
  */
-export function toastMoveDeleted(label: string, undo: () => void): void {
+export function moveDeletedMessage(
+    label: string,
+    changedPages: readonly NamedPage[] = [],
+): string {
+    const deleted = `Deleted ${label}`;
+    if (changedPages.length === 0) return deleted;
+    const pages = `${changedPages.length === 1 ? "Page" : "Pages"} ${pageRunsLabel(changedPages)}`;
+    return `${deleted} · ${pages} changed`;
+}
+
+/**
+ * Shows "Deleted <label>" with **Undo** (UI-14), and the pages that changed
+ * (`moveDeletedMessage`). Its Undo runs the app's undo, so the toast closes on the next history
+ * change (an edit, an undo, a redo): then Undo could only undo something else.
+ */
+export function toastMoveDeleted(
+    label: string,
+    undo: () => void,
+    changedPages: readonly NamedPage[] = [],
+): void {
     let unsubscribe = () => {};
-    const id = toast.success(`Deleted ${label}`, {
+    const id = toast.success(moveDeletedMessage(label, changedPages), {
         duration: DELETE_TOAST_MS,
         action: { label: "Undo", onClick: undo },
         onDismiss: () => unsubscribe(),
@@ -269,8 +289,11 @@ export function createMoveCommands({
             const label = labelOf(timelineId);
             focusAfterMoveDelete(timelineId);
             try {
-                await deleteTimeline({ db: database, timelineId });
-                toastMoveDeleted(label, undo);
+                const { changedPages } = await deleteTimelineAndCompare({
+                    db: database,
+                    timelineId,
+                });
+                toastMoveDeleted(label, undo, changedPages);
             } catch (error: unknown) {
                 await report(timelineId, error);
             } finally {
