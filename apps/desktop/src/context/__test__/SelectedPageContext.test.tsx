@@ -103,4 +103,27 @@ describe("SelectedPageContext", () => {
         expect(result.current?.selectedPage?.id).toBe(mockPages[1].id);
         timing.mockImplementation(base);
     });
+
+    it("a waiting choice lapses if its page doesn't appear soon", async () => {
+        const timing = vi.mocked(useTimingObjects);
+        const base = timing.getMockImplementation()!;
+        const withPages = (pages: typeof mockPages) => () => ({
+            ...(base as () => ReturnType<typeof useTimingObjects>)(),
+            pages,
+        });
+        const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+        timing.mockImplementation(withPages(mockPages.slice(0, 2)) as never);
+        const { result, rerender } = renderHook(() => useSelectedPage(), {
+            wrapper: SelectedPageProvider,
+        });
+        void act(() => result.current?.setSelectedPage(mockPages[0]));
+        void act(() => result.current?.setSelectedPage(mockPages[2]));
+        // Much later, an undo restores the page: it must not be selected then
+        now.mockReturnValue(60_000);
+        timing.mockImplementation(withPages(mockPages) as never);
+        rerender();
+        expect(result.current?.selectedPage?.id).toBe(mockPages[0].id);
+        now.mockRestore();
+        timing.mockImplementation(base);
+    });
 });

@@ -3,11 +3,14 @@ import { useTranslate } from "@tolgee/react";
 import { pageHoldMarkLabel, type PageHoldMark } from "@/timeline/pageHoldMarks";
 import type { PageHoldMarks } from "@/timeline/usePageHoldMarks";
 
+/** A page box's mark with its words. */
+export type LabeledHoldMark = {
+    readonly mark: PageHoldMark;
+    readonly label: string;
+};
+
 /** A page box's mark with its words, by page id. */
-export type LabeledHoldMarks = ReadonlyMap<
-    string | number,
-    { readonly mark: PageHoldMark; readonly label: string }
->;
+export type LabeledHoldMarks = ReadonlyMap<string | number, LabeledHoldMark>;
 
 /**
  * Where the selected marchers hold, drawn inside a page box (docs/timeline/ui.md UI-15; Eos's
