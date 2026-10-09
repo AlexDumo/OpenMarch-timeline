@@ -1208,6 +1208,7 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             moved.push(canvasMarcher);
         });
         this.bringObjectsToFront(moved);
+        this.fitActiveSelectionToMarchers();
 
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
@@ -1261,11 +1262,29 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             },
         );
         this.bringObjectsToFront(moved);
+        this.fitActiveSelectionToMarchers();
 
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
         this.bringAllControlPointsTooFront();
         this.requestRenderAll();
+    };
+
+    /**
+     * Fits a multi-marcher selection's box to where its marchers are now. Moving a selected
+     * marcher (`setMarcherCoords`) moves it inside the selection but leaves the box where it was,
+     * so after a render that moved selected marchers (an undo, **Only Page 2**, another page) an
+     * empty box would stay behind. Not during a drag or transform, which owns the box.
+     */
+    fitActiveSelectionToMarchers = () => {
+        const active = this.getActiveObject();
+        if (!(active instanceof fabric.ActiveSelection)) return;
+        if (
+            (this as unknown as { _currentTransform: unknown })
+                ._currentTransform
+        )
+            return;
+        (active as fabric.Group).addWithUpdate();
     };
 
     /**
@@ -1297,6 +1316,7 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             );
         });
         this.bringObjectsToFront(canvasMarchers);
+        this.fitActiveSelectionToMarchers();
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
         this.requestRenderAll();
