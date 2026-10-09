@@ -16,6 +16,7 @@ import {
 import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { clamp } from "./TimelineGeometry";
 import { CollapsedTimeline, ExpandedTimeline } from "./TimelineVariants";
+import type { LabeledHoldMarks } from "./PageHoldMark";
 import type {
     TimelineAddMarchersMenu,
     TimelineMenuTarget,
@@ -151,6 +152,8 @@ export interface TimelineProps {
      * range in spec beats (a clip's stored range).
      */
     readonly onOpenRange?: (range: TimelineBeatRange) => void;
+    /** Where the selected marchers hold, by page id (UI-15); none without a selection */
+    readonly holdMarks?: LabeledHoldMarks;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -457,6 +460,7 @@ export function Timeline(props: TimelineProps) {
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,
+        holdMarks: props.holdMarks,
     };
 
     return props.mode === "expanded" ? (
