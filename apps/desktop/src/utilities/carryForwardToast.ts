@@ -8,19 +8,21 @@ import {
     moveLaterMovesToo,
     restoreCarriedRuns,
     type MarcherPagesWriteResult,
+    type OwnMoveStop,
 } from "@/db-functions/marcherPage";
 import { invalidateAfterMarcherPagesWrite } from "@/hooks/queries/sharedInvalidators";
 import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
 import { conToastError } from "./utils";
 import {
-    EDIT_SURPRISE_TOAST_ID,
-    EDIT_SURPRISE_TOAST_RESET,
     MOVE_THEM_TOO_TOAST_MS,
-    accumulateShifts,
+    addShifts,
+    continueEditRun,
     editHistoryMark,
+    editSurpriseToastId,
     inDrillOrder,
     marcherLabelsById,
     moveThemTooMessage,
+    type ShiftTotals,
 } from "./moveThemToo";
 
 /**
@@ -104,7 +106,7 @@ async function pageNamesById(qc: QueryClient): Promise<Map<number, string>> {
  * **Only Page N**. When it also split the marchers it moved (`ownMoveStops`, only pages where
  * others followed), the same toast names those that kept their spot and offers **Move them too**
  * first. Says nothing when nothing was carried. Called right after the write: edits in a row that
- * keep the same marchers add up (`accumulateShifts`).
+ * keep the same marchers add up (`continueEditRun`).
  */
 export async function toastCarryForward(
     qc: QueryClient,
@@ -146,8 +148,7 @@ export async function toastCarryForward(
     }));
     if (kept.length === 0) {
         toast.message(followed.message, {
-            ...EDIT_SURPRISE_TOAST_RESET,
-            id: EDIT_SURPRISE_TOAST_ID,
+            id: editSurpriseToastId(),
             duration: 10000,
             action: onlyEdited,
         });
@@ -156,14 +157,21 @@ export async function toastCarryForward(
 
     // Split: one toast, Move them too first, Only Page N beside it (sonner's second button)
     const moveThemToo = moveThemTooMessage(kept);
-    const { shifts: stops, forget } = accumulateShifts(
+    const stopKey = (s: OwnMoveStop) =>
+        `${s.marcherId}:${s.pageId}:${s.stopPageId}`;
+    const run = continueEditRun<ShiftTotals>(
         "page",
         mark,
-        result.ownMoveStops,
-        (s) => `${s.marcherId}:${s.pageId}:${s.stopPageId}`,
+        (previous) => addShifts(previous, result.ownMoveStops, stopKey).totals,
     );
+    const stops = result.ownMoveStops.map((s) => ({
+        ...s,
+        ...run.value.get(stopKey(s)),
+    }));
+    const forget = run.forget;
+    const id = editSurpriseToastId();
     toast.info(withFollowedMessage(followed.message, moveThemToo.message), {
-        id: EDIT_SURPRISE_TOAST_ID,
+        id,
         duration: MOVE_THEM_TOO_TOAST_MS,
         action: {
             label: moveThemToo.actionLabel,
@@ -186,6 +194,7 @@ export async function toastCarryForward(
         onDismiss: forget,
         onAutoClose: forget,
     });
+    run.shown(id);
 }
 
 /**

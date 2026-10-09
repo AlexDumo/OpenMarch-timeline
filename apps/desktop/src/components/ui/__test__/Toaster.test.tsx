@@ -1,10 +1,7 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { toast } from "sonner";
-import {
-    EDIT_SURPRISE_TOAST_ID,
-    EDIT_SURPRISE_TOAST_RESET,
-} from "@/utilities/moveThemToo";
+import { editSurpriseToastId } from "@/utilities/moveThemToo";
 import Toaster from "../Toaster";
 
 /**
@@ -96,23 +93,22 @@ describe("Toaster", () => {
         }
     });
 
-    it("an edit toast with one button doesn't keep an earlier one's second button", async () => {
+    it("an edit toast replaces the one before, and keeps none of its buttons or icon", async () => {
         render(<Toaster />);
+        const first = editSurpriseToastId();
         act(() => {
             toast.info("OT1 and OT8 kept their spot", {
-                id: EDIT_SURPRISE_TOAST_ID,
+                id: first,
                 action: { label: "Move them too", onClick: () => {} },
                 cancel: { label: "Only Page 2", onClick: () => {} },
             });
         });
         await screen.findByRole("button", { name: "Move them too" });
-        act(() => {
-            toast.dismiss(EDIT_SURPRISE_TOAST_ID);
-        });
+        const second = editSurpriseToastId();
+        expect(second).not.toBe(first);
         act(() => {
             toast.message("Pages 3–4 followed (they were copies)", {
-                ...EDIT_SURPRISE_TOAST_RESET,
-                id: EDIT_SURPRISE_TOAST_ID,
+                id: second,
                 action: { label: "Only Page 3", onClick: () => {} },
             });
         });
@@ -122,5 +118,14 @@ describe("Toaster", () => {
         const { li } = toastOf(action);
         expect(li.querySelectorAll("button[data-button]")).toHaveLength(1);
         expect(li.querySelector("[data-cancel]")).toBeNull();
+        // A plain message has no icon, though the toast before was an info
+        expect(li.querySelector("[data-icon]")).toBeNull();
+        expect(li.getAttribute("data-type")).not.toBe("info");
+        // The earlier toast goes rather than stacking
+        await waitFor(() =>
+            expect(
+                screen.queryByRole("button", { name: "Move them too" }),
+            ).toBeNull(),
+        );
     });
 });

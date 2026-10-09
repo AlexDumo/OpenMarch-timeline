@@ -371,7 +371,7 @@ describeDbTests("carry-forward, from the resolver", (it) => {
         // No marcher names, and nothing about the pages it carried into
         expect(message).toBe(`Page ${pages[2]!.name} is no longer a stop`);
         expect(options).toMatchObject({
-            id: "timeline-edit",
+            id: expect.stringMatching(/^timeline-edit-\d+$/),
             action: { label: `Keep Page ${pages[2]!.name} as a stop` },
         });
     });
