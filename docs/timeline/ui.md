@@ -952,6 +952,15 @@ from it. The spec still wins on the model; this file decides presentation.
       following is what the designer meant. Kept marchers don't follow, so they don't count.
       Consecutive nudges share one toast, and Only Page 2 goes back to before the first (V-153).
       The pass-through and **Move them too** toasts win.
+    - **Kept marchers on the field** (owner chose mock-up D over opacity, 2026-10-09; wp20). On the
+      current page, each marcher kept there gets a small broken chain beside its dot, whatever is
+      selected: the kept chip's symbol in the accent on a small white rounded square, so it reads
+      over yard lines. It sits just right of the dot, clear of the drill number, and stays small at
+      any zoom (10–16 px on screen, _lead default_). Hovering the mark or the dot shows "Kept on
+      Page 3 · won't follow Page 2" ("… won't follow earlier pages" when kept ahead of any move).
+      It follows keep, follow again, undo and page changes, and goes when the kept move is edited
+      into an ordinary move. Hidden while playing or scrubbing and while a move is isolated
+      (_lead default_). Page mode shows nothing (V-160).
   - **The hold marks' words are a tooltip** (a label and a hint, after a short hover or on keyboard
     focus; a press closes it), like the transport's tooltips (UI-17).
   - **Page mode** (until the flip) gets the same rule on its dense rows. An edit on page N also
