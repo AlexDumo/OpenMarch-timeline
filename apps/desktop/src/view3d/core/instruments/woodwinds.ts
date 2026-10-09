@@ -1790,12 +1790,19 @@ function curvedSax(
             true,
         ),
         t.run(body, taper(body, sh.rTop, sh.rBow)),
+        // the bell tube runs on up inside the leaning flare, so the joint
+        // stays closed on the side the lean lifts
         t.run(
             [
                 [w, yb, bowZ],
                 [w, yb, bellBase],
+                [
+                    w,
+                    yb,
+                    bellBase - rBell * 1.1 * Math.sin(SAX_BELL_TILT) - 0.004,
+                ],
             ],
-            [rBell, rBell * 1.1],
+            [rBell, rBell * 1.1, rBell * 1.04],
         ),
         // the flare leans toward the keys, so the bell opens forward and up
         tiltTowardY(

@@ -138,10 +138,12 @@ describe("woodwind and battery holds", () => {
             const h = hold("flute", state);
             const left = along("flute", state, 0.2);
             const right = along("flute", state, 0.42);
-            expect(dist(h.left.wrist, left)).toBeLessThan(0.1);
-            expect(dist(h.right.wrist, right)).toBeLessThan(0.1);
-            expect(h.left.wrist[1]).toBeLessThan(left[1] - 0.04);
-            expect(h.right.wrist[1]).toBeLessThan(right[1] - 0.04);
+            // the hands can't curl, so the wrists sit a hand's length below
+            // and the fingertips just reach over the top of the tube
+            expect(dist(h.left.wrist, left)).toBeLessThan(0.14);
+            expect(dist(h.right.wrist, right)).toBeLessThan(0.14);
+            expect(h.left.wrist[1]).toBeLessThan(left[1] - 0.09);
+            expect(h.right.wrist[1]).toBeLessThan(right[1] - 0.09);
             for (const arm of [h.left, h.right])
                 expect(arm.fingers[1]).toBeGreaterThan(0.6);
         },
@@ -153,10 +155,10 @@ describe("woodwind and battery holds", () => {
             const h = hold("piccolo", state);
             expect(
                 dist(h.left.wrist, along("piccolo", state, 0.12)),
-            ).toBeLessThan(0.1);
+            ).toBeLessThan(0.14);
             expect(
                 dist(h.right.wrist, along("piccolo", state, 0.24)),
-            ).toBeLessThan(0.1);
+            ).toBeLessThan(0.14);
             for (const arm of [h.left, h.right])
                 expect(arm.fingers[1]).toBeGreaterThan(0.6);
         },

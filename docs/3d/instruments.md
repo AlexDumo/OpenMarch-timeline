@@ -227,7 +227,8 @@ points and where the elbows go.
   player.)
 - **flute.** Horizontal to the player's right, lips at the head joint,
   angled a little forward and down. Both hands sit under the tube, wrists
-  below it, fingers wrapping up and over onto the keys: the left hand 0.2 m
+  0.12 m below it so the stiff hands' fingertips just reach over the top
+  onto the keys: the left hand 0.2 m
   along by the face, its forearm across the chest and the elbow in front;
   the right hand 0.42 m along with the elbow down and out. The lip plate
   faces back at the lips and the keys face forward. Carry: the same hands
@@ -238,7 +239,9 @@ points and where the elbows go.
   the joints from the sides, fingers across the front onto the holes: left
   hand on the upper joint, right hand on the lower, elbows a little out.
   Carry: nearly vertical with the ligature at eye level, tipped out 15
-  degrees so the bell clears the chest.
+  degrees so the bell clears the chest. The bass clarinet and the soprano
+  sax share this hold; the bass clarinet's longer body leaves its right
+  hand short of the body, so it needs a hold of its own.
 - **sax.** On the strap in front of the body, as front-on photos of marching
   saxes show: the neck brings the body out in front of the mouth and the
   body runs straight down to the bow at the stomach (lower for the tenor and

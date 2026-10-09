@@ -189,14 +189,14 @@ const FLUTE: Record<HoldState, Hold> = {
         state: "up",
         // horizontal to the right, lips at the head joint, keys toward the front
         right: {
-            elbow: [-0.316, 1.241, 0.021],
-            wrist: [-0.407, 1.427, 0.185],
-            fingers: unit([0.1, 0.85, 0.5]),
+            elbow: [-0.297, 1.225, 0.003],
+            wrist: [-0.4, 1.38, 0.19],
+            fingers: unit([0.05, 0.9, 0.42]),
         },
         left: {
-            elbow: [0.071, 1.367, 0.163],
-            wrist: [-0.174, 1.46, 0.13],
-            fingers: unit([-0.15, 0.85, 0.5]),
+            elbow: [0.067, 1.352, 0.157],
+            wrist: [-0.19, 1.41, 0.15],
+            fingers: unit([-0.1, 0.9, 0.42]),
         },
         instrument: {
             origin: [0, 1.56, 0.12],
@@ -209,14 +209,14 @@ const FLUTE: Record<HoldState, Hold> = {
         state: "carry",
         // the head joint raised: the embouchure hole at eye level
         right: {
-            elbow: [-0.341, 1.279, 0.056],
-            wrist: [-0.407, 1.487, 0.205],
-            fingers: unit([0.1, 0.85, 0.5]),
+            elbow: [-0.324, 1.253, 0.04],
+            wrist: [-0.4, 1.44, 0.21],
+            fingers: unit([0.05, 0.9, 0.42]),
         },
         left: {
-            elbow: [0.061, 1.401, 0.158],
-            wrist: [-0.174, 1.52, 0.15],
-            fingers: unit([-0.15, 0.85, 0.5]),
+            elbow: [0.059, 1.382, 0.156],
+            wrist: [-0.19, 1.47, 0.17],
+            fingers: unit([-0.1, 0.9, 0.42]),
         },
         instrument: {
             origin: [0, 1.62, 0.14],
@@ -229,14 +229,14 @@ const FLUTE: Record<HoldState, Hold> = {
         state: "trail",
         // the head joint raised: the embouchure hole at eye level
         right: {
-            elbow: [-0.341, 1.279, 0.056],
-            wrist: [-0.407, 1.487, 0.205],
-            fingers: unit([0.1, 0.85, 0.5]),
+            elbow: [-0.324, 1.253, 0.04],
+            wrist: [-0.4, 1.44, 0.21],
+            fingers: unit([0.05, 0.9, 0.42]),
         },
         left: {
-            elbow: [0.061, 1.401, 0.158],
-            wrist: [-0.174, 1.52, 0.15],
-            fingers: unit([-0.15, 0.85, 0.5]),
+            elbow: [0.059, 1.382, 0.156],
+            wrist: [-0.19, 1.47, 0.17],
+            fingers: unit([-0.1, 0.9, 0.42]),
         },
         instrument: {
             origin: [0, 1.62, 0.14],
@@ -257,14 +257,14 @@ const PICCOLO: Record<HoldState, Hold> = {
         state: "up",
         // the flute's line, hands close together
         right: {
-            elbow: [-0.295, 1.227, 0.028],
-            wrist: [-0.232, 1.454, 0.148],
-            fingers: unit([0.1, 0.85, 0.5]),
+            elbow: [-0.275, 1.214, -0.027],
+            wrist: [-0.23, 1.4, 0.155],
+            fingers: unit([0.05, 0.9, 0.42]),
         },
         left: {
-            elbow: [0.127, 1.351, 0.186],
-            wrist: [-0.1, 1.472, 0.125],
-            fingers: unit([-0.15, 0.85, 0.5]),
+            elbow: [0.133, 1.332, 0.183],
+            wrist: [-0.11, 1.42, 0.13],
+            fingers: unit([-0.1, 0.9, 0.42]),
         },
         instrument: {
             origin: [0, 1.56, 0.12],
@@ -277,14 +277,14 @@ const PICCOLO: Record<HoldState, Hold> = {
         state: "carry",
         // the head joint raised: the embouchure hole at eye level
         right: {
-            elbow: [-0.318, 1.276, 0.093],
-            wrist: [-0.232, 1.514, 0.168],
-            fingers: unit([0.1, 0.85, 0.5]),
+            elbow: [-0.298, 1.236, 0.053],
+            wrist: [-0.23, 1.46, 0.175],
+            fingers: unit([0.05, 0.9, 0.42]),
         },
         left: {
-            elbow: [0.114, 1.383, 0.187],
-            wrist: [-0.1, 1.532, 0.145],
-            fingers: unit([-0.15, 0.85, 0.5]),
+            elbow: [0.121, 1.358, 0.186],
+            wrist: [-0.11, 1.48, 0.15],
+            fingers: unit([-0.1, 0.9, 0.42]),
         },
         instrument: {
             origin: [0, 1.62, 0.14],
@@ -297,14 +297,14 @@ const PICCOLO: Record<HoldState, Hold> = {
         state: "trail",
         // the head joint raised: the embouchure hole at eye level
         right: {
-            elbow: [-0.318, 1.276, 0.093],
-            wrist: [-0.232, 1.514, 0.168],
-            fingers: unit([0.1, 0.85, 0.5]),
+            elbow: [-0.298, 1.236, 0.053],
+            wrist: [-0.23, 1.46, 0.175],
+            fingers: unit([0.05, 0.9, 0.42]),
         },
         left: {
-            elbow: [0.114, 1.383, 0.187],
-            wrist: [-0.1, 1.532, 0.145],
-            fingers: unit([-0.15, 0.85, 0.5]),
+            elbow: [0.121, 1.358, 0.186],
+            wrist: [-0.11, 1.48, 0.15],
+            fingers: unit([-0.1, 0.9, 0.42]),
         },
         instrument: {
             origin: [0, 1.62, 0.14],
