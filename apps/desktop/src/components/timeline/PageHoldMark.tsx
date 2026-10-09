@@ -40,13 +40,13 @@ export function PageHoldMarkView({
                 className="pointer-events-none absolute inset-0"
             >
                 {mark.kind === "moves" ? (
-                    <span className="bg-text-subtitle absolute right-[3px] bottom-px size-[5px] rotate-45" />
+                    <span className="bg-text-subtitle absolute right-[3px] bottom-[1.5px] size-[5px] rotate-45" />
                 ) : (
                     <span
                         className={
                             mark.kind === "holds"
-                                ? "bg-text-disabled absolute inset-x-0 bottom-[2px] h-[2px]"
-                                : "absolute inset-x-0 bottom-[2px] h-[2px]"
+                                ? "bg-text-disabled absolute inset-x-0 bottom-[3px] h-[2px]"
+                                : "absolute inset-x-0 bottom-[3px] h-[2px]"
                         }
                         style={
                             mark.kind === "mixed"
