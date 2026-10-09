@@ -25,7 +25,7 @@ so it needs an ADR 0001 amendment before anything is built.
 | [07a-validation-timeline-core.md](07a-validation-timeline-core.md) | Validator: the sparse timeline core prototyped and run against the focused tests and the conversion corpus            |
 | [07b-validation-page-mode.md](07b-validation-page-mode.md)         | Validator: page-mode options prototyped (equality tracking), including precision, pathways and undo cost at 200 × 100 |
 | [07c-validation-extras-ux.md](07c-validation-extras-ux.md)         | Validator: pins, keep-later-pages and cue-only delete broken with scenarios; personas; how it fits PR #106            |
-| [CHANGES.md](CHANGES.md)                                           | Change catalog of the built branch: every behavior change (B-01…B-35), files, tests, QA script, coverage gaps         |
+| [CHANGES.md](CHANGES.md)                                           | Change catalog of the built branch: every behavior change (B-01…B-44), files, tests, QA script, coverage gaps         |
 
 ## What we found
 
@@ -194,4 +194,4 @@ Owner, 2026-10-08, after the build (PR #112):
 | `dc/wp14-mtt-polish`    | Two-button toast layout; runs of edits add up for Move them too and Only Page N; a fresh id per surprise toast                                                                |
 
 The full, code-grounded list of behavior changes, tests and the QA script is [CHANGES.md](CHANGES.md).
-Lead defaults are logged as V-140..V-149 and V-150..V-153 in [VALIDATION.md](../ownership/VALIDATION.md).
+Lead defaults are logged as V-140..V-149 and V-150..V-158 in [VALIDATION.md](../ownership/VALIDATION.md).
