@@ -24,6 +24,7 @@ export type HoldFamily =
     | "flute"
     | "piccolo"
     | "clarinet"
+    | "bassClarinet"
     | "sax"
     | "snare"
     | "tenors"
@@ -177,11 +178,30 @@ const CONTRA: Record<HoldState, Hold> = {
 };
 
 /**
+ * Woodwinds at trail (owner, 2026-10-09): the brass trail's arms. The right
+ * arm hangs straight down the side with the instrument in its fist, 0.07 m
+ * down the fingers from the wrist at (−0.27, 0.88, 0.03); the left arm hangs
+ * straight down the leg, a closed fist with the thumb on top.
+ */
+const TRAIL_RIGHT: ArmTargets = BRASS.trail.right;
+const TRAIL_LEFT: ArmTargets = BRASS.trail.left;
+
+/**
+ * Flutes and clarinets at carry (owner, 2026-10-09): the tube vertical in
+ * front of the body, head joint up, keys forward, the first key at eye
+ * level. The hands make a triangle: each wrist a hand's length out and
+ * below its point on the tube, the elbows out, the forearms angled in and
+ * up to it, the left hand above the right.
+ */
+
+/**
  * Flute: horizontal to the player's right at the lips, angled a little
  * forward and down. Both hands sit under the tube, wrists below it, the
  * fingers wrapping up and over onto the keys: the left hand by the face (its
  * forearm across the chest, the elbow in front), the right hand further out
- * with the elbow down and out.
+ * with the elbow down and out. Carry: vertical, the first key (0.2 m along)
+ * at eye level, the hands at 0.25 and 0.43 m. Trail: the head joint to the
+ * ground, the fist round the body 0.5 m along.
  */
 const FLUTE: Record<HoldState, Hold> = {
     up: {
@@ -207,41 +227,33 @@ const FLUTE: Record<HoldState, Hold> = {
     carry: {
         family: "flute",
         state: "carry",
-        // the head joint raised: the embouchure hole at eye level
+        // vertical in front, head joint up, the first key at eye level; the hands a triangle
         right: {
-            elbow: [-0.324, 1.253, 0.04],
-            wrist: [-0.4, 1.44, 0.21],
-            fingers: unit([0.05, 0.9, 0.42]),
+            elbow: [-0.326, 1.282, 0.089],
+            wrist: [-0.085, 1.315, 0.19],
+            fingers: unit([0.725, 0.64, 0.256]),
         },
         left: {
-            elbow: [0.059, 1.382, 0.156],
-            wrist: [-0.19, 1.47, 0.17],
-            fingers: unit([-0.1, 0.9, 0.42]),
+            elbow: [0.322, 1.387, 0.147],
+            wrist: [0.085, 1.495, 0.19],
+            fingers: unit([-0.725, 0.64, 0.256]),
         },
         instrument: {
-            origin: [0, 1.62, 0.14],
-            bellAxis: [-0.968, -0.151, 0.202],
-            capsAxis: [0.2, 0.031, 0.979],
+            origin: [0, 1.82, 0.22],
+            bellAxis: [0, -1, 0],
+            capsAxis: [0, 0, 1],
         },
     },
     trail: {
         family: "flute",
         state: "trail",
-        // the head joint raised: the embouchure hole at eye level
-        right: {
-            elbow: [-0.324, 1.253, 0.04],
-            wrist: [-0.4, 1.44, 0.21],
-            fingers: unit([0.05, 0.9, 0.42]),
-        },
-        left: {
-            elbow: [0.059, 1.382, 0.156],
-            wrist: [-0.19, 1.47, 0.17],
-            fingers: unit([-0.1, 0.9, 0.42]),
-        },
+        // in the right fist at the side, head joint to the ground
+        right: TRAIL_RIGHT,
+        left: TRAIL_LEFT,
         instrument: {
-            origin: [0, 1.62, 0.14],
-            bellAxis: [-0.968, -0.151, 0.202],
-            capsAxis: [0.2, 0.031, 0.979],
+            origin: [-0.26, 0.38, 0.075],
+            bellAxis: [0, 1, 0],
+            capsAxis: [0, 0, 1],
         },
     },
 };
@@ -249,7 +261,8 @@ const FLUTE: Record<HoldState, Hold> = {
 /**
  * Piccolo: the flute's hold with both hands brought in to the short body
  * (0.32 m against the flute's 0.67): the left hand 0.12 m along it, the
- * right 0.24 m.
+ * right 0.24 m. Carry: the first key 0.101 m along at eye level, the hands
+ * at 0.14 and 0.24 m. Trail: the fist round the body 0.18 m along.
  */
 const PICCOLO: Record<HoldState, Hold> = {
     up: {
@@ -275,49 +288,46 @@ const PICCOLO: Record<HoldState, Hold> = {
     carry: {
         family: "piccolo",
         state: "carry",
-        // the head joint raised: the embouchure hole at eye level
+        // vertical in front, head joint up, the first key at eye level; the hands a triangle
         right: {
-            elbow: [-0.298, 1.236, 0.053],
-            wrist: [-0.23, 1.46, 0.175],
-            fingers: unit([0.05, 0.9, 0.42]),
+            elbow: [-0.326, 1.32, 0.123],
+            wrist: [-0.085, 1.406, 0.19],
+            fingers: unit([0.725, 0.64, 0.256]),
         },
         left: {
-            elbow: [0.121, 1.358, 0.186],
-            wrist: [-0.11, 1.48, 0.15],
-            fingers: unit([-0.1, 0.9, 0.42]),
+            elbow: [0.322, 1.397, 0.148],
+            wrist: [0.085, 1.506, 0.19],
+            fingers: unit([-0.725, 0.64, 0.256]),
         },
         instrument: {
-            origin: [0, 1.62, 0.14],
-            bellAxis: [-0.968, -0.151, 0.202],
-            capsAxis: [0.2, 0.031, 0.979],
+            origin: [0, 1.721, 0.22],
+            bellAxis: [0, -1, 0],
+            capsAxis: [0, 0, 1],
         },
     },
     trail: {
         family: "piccolo",
         state: "trail",
-        // the head joint raised: the embouchure hole at eye level
-        right: {
-            elbow: [-0.298, 1.236, 0.053],
-            wrist: [-0.23, 1.46, 0.175],
-            fingers: unit([0.05, 0.9, 0.42]),
-        },
-        left: {
-            elbow: [0.121, 1.358, 0.186],
-            wrist: [-0.11, 1.48, 0.15],
-            fingers: unit([-0.1, 0.9, 0.42]),
-        },
+        // in the right fist at the side, head joint to the ground
+        right: TRAIL_RIGHT,
+        left: TRAIL_LEFT,
         instrument: {
-            origin: [0, 1.62, 0.14],
-            bellAxis: [-0.968, -0.151, 0.202],
-            capsAxis: [0.2, 0.031, 0.979],
+            origin: [-0.26, 0.7, 0.075],
+            bellAxis: [0, 1, 0],
+            capsAxis: [0, 0, 1],
         },
     },
 };
 
 /**
- * Clarinet: down the center line from the mouth. The hands wrap the joints
- * from the sides, fingers across the front onto the holes, thumbs behind:
- * left hand on the upper joint, right on the lower, elbows a little out.
+ * Clarinet (and the soprano sax): down the center line from the mouth. The
+ * hands wrap the joints from the sides, fingers across the front onto the
+ * holes, thumbs behind: left hand on the upper joint, right on the lower,
+ * elbows a little out. Carry: vertical, mouthpiece up, the first key at eye
+ * level (0.16 m along: the clarinet's throat Ab at 0.168, the soprano's C at
+ * 0.145), the hands at 0.25 and 0.42 m. Trail: the mouthpiece to the ground,
+ * the fist round the lower joint 0.5 m along, a little further forward than
+ * the flute's to clear the forearm with the bell.
  */
 const CLARINET: Record<HoldState, Hold> = {
     up: {
@@ -343,41 +353,33 @@ const CLARINET: Record<HoldState, Hold> = {
     carry: {
         family: "clarinet",
         state: "carry",
-        // nearly vertical, ligature at eye level, tipped out to clear the chest
+        // vertical in front, mouthpiece up, the first key at eye level; the hands a triangle
         right: {
-            elbow: [-0.295, 1.244, 0.076],
-            wrist: [-0.075, 1.22, 0.22],
-            fingers: unit([0.8, -0.2, 0.55]),
+            elbow: [-0.325, 1.274, 0.081],
+            wrist: [-0.085, 1.285, 0.19],
+            fingers: unit([0.725, 0.64, 0.256]),
         },
         left: {
-            elbow: [0.304, 1.288, 0.121],
-            wrist: [0.075, 1.41, 0.17],
-            fingers: unit([-0.8, -0.2, 0.55]),
+            elbow: [0.324, 1.355, 0.14],
+            wrist: [0.085, 1.455, 0.19],
+            fingers: unit([-0.725, 0.64, 0.256]),
         },
         instrument: {
-            origin: [0, 1.62, 0.14],
-            bellAxis: [0.0, -0.97, 0.25],
-            capsAxis: [0.0, 0.25, 0.97],
+            origin: [0, 1.78, 0.22],
+            bellAxis: [0, -1, 0],
+            capsAxis: [0, 0, 1],
         },
     },
     trail: {
         family: "clarinet",
         state: "trail",
-        // nearly vertical, ligature at eye level, tipped out to clear the chest
-        right: {
-            elbow: [-0.295, 1.244, 0.076],
-            wrist: [-0.075, 1.22, 0.22],
-            fingers: unit([0.8, -0.2, 0.55]),
-        },
-        left: {
-            elbow: [0.304, 1.288, 0.121],
-            wrist: [0.075, 1.41, 0.17],
-            fingers: unit([-0.8, -0.2, 0.55]),
-        },
+        // in the right fist at the side, mouthpiece to the ground
+        right: TRAIL_RIGHT,
+        left: TRAIL_LEFT,
         instrument: {
-            origin: [0, 1.62, 0.14],
-            bellAxis: [0.0, -0.97, 0.25],
-            capsAxis: [0.0, 0.25, 0.97],
+            origin: [-0.26, 0.38, 0.09],
+            bellAxis: [0, 1, 0],
+            capsAxis: [0, 0, 1],
         },
     },
 };
@@ -389,6 +391,23 @@ const CLARINET: Record<HoldState, Hold> = {
  * left of the body tube, its flare opening forward and up. The hands wrap
  * the body from the sides, fingers across the front: left hand on the
  * upper stack, right hand on the lower, elbows out.
+ *
+ * Carry (owner, 2026-10-09): vertical just in front of the body, turned a
+ * quarter about the vertical from the playing hold. The model keeps its
+ * bell on its +X = +Y × +Z, so with +Z down the keys (+Y) face the
+ * performer's right and the bell comes out in front of the body tube; the
+ * other quarter turn would push it into the chest. The mouthpiece sits at
+ * eye level, 0.11 m left of center so the body tube (that far toward the
+ * keys from it) hangs on the center line, 0.21 m out. The hands stay where
+ * they play, left on the upper stack from the left side, right on the lower
+ * stack from the right, fingers in across the tube.
+ *
+ * Trail: level at the right side, front to back like the brass trail, the
+ * fist round the body tube 0.37 m along with the mouthpiece in front. The
+ * mouthpiece sits 0.11 m in from the fist, so the alto's and bari's body
+ * tubes run through it; the tenor's longer neck puts its tube 0.07 m out. The
+ * keys face out, so the bow and bell hang below the tube (+X down), the
+ * flare leaning out, away from the leg.
  */
 const SAX: Record<HoldState, Hold> = {
     up: {
@@ -414,41 +433,104 @@ const SAX: Record<HoldState, Hold> = {
     carry: {
         family: "sax",
         state: "carry",
-        // the neck lifts so the ligature sits at eye level; the hands rise with it
+        // vertical, keys to the right, bell in front; mouthpiece at eye level
         right: {
-            elbow: [-0.268, 1.238, 0.095],
-            wrist: [-0.07, 1.18, 0.26],
-            fingers: unit([0.8, -0.1, 0.6]),
+            elbow: [-0.309, 1.243, 0.049],
+            wrist: [-0.15, 1.12, 0.22],
+            fingers: unit([0.982, 0.085, 0.171]),
         },
         left: {
-            elbow: [0.289, 1.257, 0.103],
-            wrist: [0.085, 1.25, 0.27],
-            fingers: unit([-0.8, -0.1, 0.6]),
+            elbow: [0.342, 1.277, 0.05],
+            wrist: [0.14, 1.27, 0.22],
+            fingers: unit([-0.963, 0.168, 0.209]),
         },
         instrument: {
-            origin: [0, 1.62, 0.14],
-            bellAxis: [0.03, -0.99, 0.0],
-            capsAxis: [0.0, 0.0, 1.0],
+            origin: [0.11, 1.62, 0.21],
+            bellAxis: [0, -1, 0],
+            capsAxis: [-1, 0, 0],
         },
     },
     trail: {
         family: "sax",
         state: "trail",
-        // the neck lifts so the ligature sits at eye level; the hands rise with it
+        // level at the right side, mouthpiece forward, bell hanging below
+        right: TRAIL_RIGHT,
+        left: TRAIL_LEFT,
+        instrument: {
+            origin: [-0.16, 0.88, 0.4],
+            bellAxis: [0, 0, -1],
+            capsAxis: [-1, 0, 0],
+        },
+    },
+};
+
+/**
+ * Bass clarinet: its body hangs 0.124 m toward the keys from the mouthpiece
+ * and runs a meter long, so it plays nearly vertical, tipped 10 degrees
+ * out, the neck bringing the mouthpiece up into the lips. Left hand on the
+ * upper cups (0.33 m along); the right arm hangs almost straight to reach
+ * the lower ones (0.6 m along), its fingers angled down to them.
+ *
+ * Carry (owner, 2026-10-09): as the saxes, vertical and turned a quarter
+ * with the keys to the performer's right, the mouthpiece at eye level and
+ * the body tube on the center line. The crook and bell, which turn toward
+ * the keys, sit low at the right side.
+ *
+ * Trail: level at the right side like the saxes, the fist round the body
+ * 0.5 m along with the mouthpiece in front. The keys face the ground so the
+ * crook and bell hang below the tube behind the leg.
+ */
+const BASS_CLARINET: Record<HoldState, Hold> = {
+    up: {
+        family: "bassClarinet",
+        state: "up",
+        // nearly vertical, 10 degrees out; the right arm almost straight to the lower cups
         right: {
-            elbow: [-0.268, 1.238, 0.095],
-            wrist: [-0.07, 1.18, 0.26],
-            fingers: unit([0.8, -0.1, 0.6]),
+            elbow: [-0.218, 1.218, 0.09],
+            wrist: [-0.11, 1.03, 0.24],
+            fingers: unit([0.496, -0.437, 0.751]),
         },
         left: {
-            elbow: [0.289, 1.257, 0.103],
-            wrist: [0.085, 1.25, 0.27],
-            fingers: unit([-0.8, -0.1, 0.6]),
+            elbow: [0.302, 1.284, 0.12],
+            wrist: [0.085, 1.227, 0.259],
+            fingers: unit([-0.625, -0.101, 0.774]),
         },
         instrument: {
-            origin: [0, 1.62, 0.14],
-            bellAxis: [0.03, -0.99, 0.0],
-            capsAxis: [0.0, 0.0, 1.0],
+            origin: [0, 1.52, 0.13],
+            bellAxis: [0, -0.985, 0.174],
+            capsAxis: [0, 0.174, 0.985],
+        },
+    },
+    carry: {
+        family: "bassClarinet",
+        state: "carry",
+        // vertical, keys to the right; mouthpiece at eye level
+        right: {
+            elbow: [-0.268, 1.224, 0.067],
+            wrist: [-0.14, 1.06, 0.23],
+            fingers: unit([0.857, -0.489, 0.163]),
+        },
+        left: {
+            elbow: [0.341, 1.281, 0.06],
+            wrist: [0.14, 1.29, 0.23],
+            fingers: unit([-0.98, 0.089, 0.178]),
+        },
+        instrument: {
+            origin: [0.124, 1.62, 0.22],
+            bellAxis: [0, -1, 0],
+            capsAxis: [-1, 0, 0],
+        },
+    },
+    trail: {
+        family: "bassClarinet",
+        state: "trail",
+        // level at the right side, mouthpiece forward, crook and bell hanging below
+        right: TRAIL_RIGHT,
+        left: TRAIL_LEFT,
+        instrument: {
+            origin: [-0.27, 1.004, 0.53],
+            bellAxis: [0, 0, -1],
+            capsAxis: [0, -1, 0],
         },
     },
 };
@@ -901,6 +983,7 @@ const TABLE: Record<HoldFamily, Record<HoldState, Hold>> = {
     flute: FLUTE,
     piccolo: PICCOLO,
     clarinet: CLARINET,
+    bassClarinet: BASS_CLARINET,
     sax: SAX,
     snare: SNARE,
     tenors: TENORS,
