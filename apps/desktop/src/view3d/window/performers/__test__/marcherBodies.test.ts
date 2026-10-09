@@ -5,7 +5,11 @@ import path from "node:path";
 import type { BufferGeometry, SkinnedMesh } from "three";
 import type * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { sectionUniform, type BodyType } from "@/view3d/core/marchers/looks";
+import {
+    bassOptions,
+    sectionUniform,
+    type BodyType,
+} from "@/view3d/core/marchers/looks";
 import type { LoadedBody } from "../marchers/marcherAssets";
 import { defaultPerformerBody } from "@/view3d/core/marchers/looks";
 import {
@@ -252,6 +256,48 @@ describe("horns as their own meshes", () => {
         expect(
             set.group.children.some((o) => o.name.startsWith("view3d-horn-")),
         ).toBe(false);
+        set.dispose();
+    });
+});
+
+describe("bass drum sizes", () => {
+    it("draws each bass drum at its marcher's size", async () => {
+        const bodies = await loadedBodies();
+        const clip = await clip8to5();
+        const bake = bakeForBodies(bodies, { "8to5": clip }, ["bass:up"]);
+        const sizes = bassOptions([1, 2], ["Bass Drum", "Bass Drum"]);
+        const looks = [0, 1].map((i) => ({
+            body: {
+                ...defaultPerformerBody(i + 1),
+                bodyType: "neutral-average" as const,
+            },
+            uniform: sectionUniform("Bass Drum", null, "up", sizes[i]),
+        }));
+        const set = new MarcherBodies(bodies, bake, looks, "high");
+        const horns = set.group.children.filter((o) =>
+            o.name.startsWith("view3d-horn-"),
+        ) as THREE.InstancedMesh[];
+        expect(horns.length).toBe(2);
+        // the drum shell alone: in the bind pose the mallets hang at the
+        // sides and would dominate a whole-mesh bounding box
+        const extent = (m: THREE.InstancedMesh) => {
+            const pos = m.geometry.getAttribute("position");
+            const part = m.geometry.getAttribute("_part");
+            const lo = [Infinity, Infinity, Infinity];
+            const hi = [-Infinity, -Infinity, -Infinity];
+            for (let i = 0; i < pos.count; i++) {
+                if (Math.round(part.getX(i)) !== 19) continue;
+                const v = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+                for (let k = 0; k < 3; k++) {
+                    lo[k] = Math.min(lo[k], v[k]);
+                    hi[k] = Math.max(hi[k], v[k]);
+                }
+            }
+            return Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
+        };
+        const [a, b] = horns.map(extent).sort((p, q) => p - q);
+        // 18 in against 32 in: the larger drum is about 0.36 m bigger across
+        expect(b - a).toBeGreaterThan(0.25);
         set.dispose();
     });
 });

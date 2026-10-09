@@ -374,6 +374,7 @@ export class MarcherBodies {
         const model = instrumentModel(
             carry.model,
             this.blockSource ? "low" : "high",
+            carry.options ?? {},
         );
         if (model.pieces.length === 0) return null; // mapped, not modeled yet
         const source = instrumentGeometry(
