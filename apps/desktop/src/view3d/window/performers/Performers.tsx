@@ -356,8 +356,16 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         selection: null as View3dSelection | null,
         selected: new Set<number>(),
     });
-    useFrame(() => {
+    // The camera for instrument detail, and where it was when last applied.
+    const cameraRef = useRef<[number, number, number]>([0, 0, 0]);
+    const lodCameraRef = useRef<[number, number, number]>([NaN, NaN, NaN]);
+    useFrame((state) => {
         if (!meshes) return;
+        const p = state.camera.position;
+        const cam = cameraRef.current;
+        cam[0] = p.x;
+        cam[1] = p.y;
+        cam[2] = p.z;
         const sync = useView3dSyncStore.getState();
         const ms = sync.showMs();
         const frame = frameRef.current;
@@ -367,7 +375,26 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             frame.selected = new Set(sync.selection.selectedMarcherIds);
         }
         const moved = dirtyRef.current || ms !== frame.lastMs;
-        if (!moved && !selectionChanged) return;
+        const lod = lodCameraRef.current;
+        const cameraMoved = !(
+            Math.hypot(cam[0] - lod[0], cam[1] - lod[1], cam[2] - lod[2]) < 0.5
+        );
+        if (!moved && !selectionChanged) {
+            // a still show: only the instruments' detail follows the camera
+            if (cameraMoved && marcherBodies) {
+                marcherBodies.writeFrame(
+                    meshes.xz,
+                    headings,
+                    meshes.placed,
+                    countRef.current,
+                    cam,
+                );
+                lod[0] = cam[0];
+                lod[1] = cam[1];
+                lod[2] = cam[2];
+            }
+            return;
+        }
 
         const { bodies, rings, visible, xz, placed } = meshes;
         if (moved) {
@@ -383,7 +410,10 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 const c = countAt(clock, ms, countRef.current);
                 countRef.current = c;
                 motion?.update(c, xz, placed);
-                marcherBodies.writeFrame(xz, headings, placed, c);
+                marcherBodies.writeFrame(xz, headings, placed, c, cam);
+                lod[0] = cam[0];
+                lod[1] = cam[1];
+                lod[2] = cam[2];
             } else {
                 writePerformerMatrices(
                     count,

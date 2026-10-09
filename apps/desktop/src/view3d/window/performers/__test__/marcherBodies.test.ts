@@ -147,9 +147,10 @@ describe("horns as their own meshes", () => {
             o.name.startsWith("view3d-horn-"),
         ) as THREE.InstancedMesh[];
         expect(bodiesMeshes.length).toBe(2);
-        expect(horns.length).toBe(1);
-        expect(set.drawCalls).toBe(3);
-        const horn = horns[0];
+        // one instrument group for the trumpet look: full and low detail
+        expect(horns.length).toBe(2);
+        expect(set.drawCalls).toBe(4);
+        const horn = horns.find((h) => h.name.endsWith("-high"))!;
         expect(horn.geometry.getAttribute("color")).toBeDefined();
         expect(horn.geometry.index!.count / 3).toBeGreaterThan(8000);
         const m = horn.material as THREE.MeshStandardMaterial;
@@ -184,11 +185,20 @@ describe("horns as their own meshes", () => {
         const { set, bake } = await trumpetAndDrumMajor("high");
         const row = bake.rows["8to5@brass:up"];
         set.setClip(0, { row, phase: -3, rate: 1, legYaw: 0.1 });
+        // the instruments pack their instances when a frame is written: the
+        // trumpet at 5 m from the camera lands first in the full-detail mesh
+        set.writeFrame(
+            Float32Array.from([5, 0, 8, 0]),
+            new Float32Array(2),
+            Uint8Array.from([1, 1]),
+            0,
+            [0, 2, 0],
+        );
         const bodyMesh = set.group.children.find(
             (o) => o.name === "view3d-marchers-neutral-average",
         ) as THREE.InstancedMesh;
         const horn = set.group.children.find((o) =>
-            o.name.startsWith("view3d-horn-"),
+            o.name.endsWith("-high"),
         ) as THREE.InstancedMesh;
         const clipOf = (m: THREE.InstancedMesh) =>
             Array.from(
@@ -221,16 +231,20 @@ describe("horns as their own meshes", () => {
 
     it("disposes the horn geometry and material with the set", async () => {
         const { set } = await trumpetAndDrumMajor("high");
-        const horn = set.group.children.find((o) =>
+        const horns = set.group.children.filter((o) =>
             o.name.startsWith("view3d-horn-"),
-        ) as THREE.InstancedMesh;
-        const geometryDispose = vi.spyOn(horn.geometry, "dispose");
+        ) as THREE.InstancedMesh[];
+        expect(horns.length).toBe(2);
+        const geometryDisposes = horns.map((h) =>
+            vi.spyOn(h.geometry, "dispose"),
+        );
+        // one material shared by every instrument mesh
         const materialDispose = vi.spyOn(
-            horn.material as THREE.Material,
+            horns[0].material as THREE.Material,
             "dispose",
         );
         set.dispose();
-        expect(geometryDispose).toHaveBeenCalledTimes(1);
+        for (const d of geometryDisposes) expect(d).toHaveBeenCalledTimes(1);
         expect(materialDispose).toHaveBeenCalledTimes(1);
     });
 
@@ -274,8 +288,9 @@ describe("bass drum sizes", () => {
             uniform: sectionUniform("Bass Drum", null, "up", sizes[i]),
         }));
         const set = new MarcherBodies(bodies, bake, looks, "high");
-        const horns = set.group.children.filter((o) =>
-            o.name.startsWith("view3d-horn-"),
+        const horns = set.group.children.filter(
+            (o) =>
+                o.name.startsWith("view3d-horn-") && o.name.endsWith("-high"),
         ) as THREE.InstancedMesh[];
         expect(horns.length).toBe(2);
         // the drum shell alone: in the bind pose the mallets hang at the

@@ -35,7 +35,6 @@ import {
     type UniformLook,
 } from "@/view3d/core/marchers/looks";
 import { FIELD_SURFACE_Y } from "@/view3d/core/field";
-import { instrumentModel } from "@/view3d/core/instruments";
 import {
     hold as holdFor,
     holdId,
@@ -44,7 +43,8 @@ import {
 } from "@/view3d/core/instruments/holds";
 import type { LoadedBody } from "./marcherAssets";
 import { holdClip, poseArms } from "./armPose";
-import { instrumentGeometry, instrumentMaterial } from "./instrumentGeometry";
+import { instrumentMaterial } from "./instrumentGeometry";
+import { HornSet } from "./hornSet";
 import { mirrorClip, mirrorName } from "./mirrorClip";
 
 /**
@@ -156,8 +156,6 @@ export type MarcherQuality = "low" | "high";
 
 interface MeshEntry {
     mesh: THREE.InstancedMesh;
-    /** The group's instrument, riding the same instances, or null. */
-    horn: THREE.InstancedMesh | null;
     /** Slot index per instance. */
     slots: number[];
     /** What the body geometry owns: nothing (shared buffers) or its own part-filtered index. */
@@ -243,8 +241,8 @@ export class MarcherBodies {
     readonly bake: Bake;
     private readonly entries: MeshEntry[] = [];
     private readonly materials: THREE.Material[] = [];
-    /** The instruments' shared metallic material, made on first use. */
-    private hornMaterial: THREE.MeshStandardMaterial | null = null;
+    /** The instruments, one group per look, near and far detail (`hornSet.ts`). */
+    private readonly horns: HornSet | null = null;
     private readonly blockSource: THREE.BufferGeometry | null = null;
     private readonly contact: THREE.InstancedMesh;
     /** Mesh entry and instance index per slot. */
@@ -308,21 +306,24 @@ export class MarcherBodies {
                 this.materials.push(material);
             }
             const { mesh, own } = this.buildMesh(bodies, material, g);
-            const horn = this.buildHorn(bodies, g);
             const entry = this.entries.length;
             g.slots.forEach((slot, k) => {
                 this.meshOf[slot] = entry;
                 this.instanceOf[slot] = k;
-                const first = {
+                writeMarcher(mesh, k, {
                     row: this.firstRow(),
                     skin: looks[slot].body.skinTone,
-                };
-                writeMarcher(mesh, k, first);
-                if (horn) writeMarcher(horn, k, first);
+                });
             });
-            this.entries.push({ mesh, horn, slots: g.slots, own });
+            this.entries.push({ mesh, slots: g.slots, own });
             this.group.add(mesh);
-            if (horn) this.group.add(horn);
+        }
+        if (looks.some((l) => l.uniform.options.carry)) {
+            // in `materials` so writeFrame drives its clip clock and dispose frees it
+            const material = instrumentMaterial(bake);
+            this.materials.push(material);
+            this.horns = new HornSet(bodies, bake, looks, quality, material);
+            for (const m of this.horns.meshes) this.group.add(m);
         }
     }
 
@@ -353,56 +354,6 @@ export class MarcherBodies {
         return { mesh, own };
     }
 
-    /**
-     * The group's instrument, when its look carries one: the horn posed by
-     * the look's hold on the right hand, as a second InstancedMesh over the
-     * same instances (docs/3d/instruments.md §4). Low detail on the block tier.
-     */
-    private buildHorn(
-        bodies: ReadonlyMap<BodyType, LoadedBody>,
-        g: { type: BodyType; look: UniformLook; slots: number[] },
-    ): THREE.InstancedMesh | null {
-        const carry = g.look.options.carry;
-        if (!carry) return null;
-        const h = holdFor(carry.family, g.look.options.hold);
-        // every v4u body shares one skeleton; at low quality a group mixes body types
-        const skeleton = (
-            this.blockSource
-                ? bodies.values().next().value!
-                : bodies.get(g.type)!
-        ).mesh.skeleton;
-        const model = instrumentModel(
-            carry.model,
-            this.blockSource ? "low" : "high",
-            carry.options ?? {},
-        );
-        if (model.pieces.length === 0) return null; // mapped, not modeled yet
-        const source = instrumentGeometry(
-            skeleton,
-            poseArms(skeleton, h),
-            h,
-            model,
-            g.look.options.finish,
-            g.look.colors.primary,
-        );
-        if (!this.hornMaterial) {
-            // in `materials` so writeFrame drives its clip clock and dispose frees it
-            this.hornMaterial = instrumentMaterial(this.bake);
-            this.materials.push(this.hornMaterial);
-        }
-        const horn = new THREE.InstancedMesh(
-            instancedGeometry(THREE, source, g.slots.length),
-            this.hornMaterial,
-            g.slots.length,
-        );
-        horn.name = `view3d-horn-${g.type}`;
-        horn.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        horn.frustumCulled = false;
-        horn.castShadow = false;
-        horn.receiveShadow = false;
-        return horn;
-    }
-
     /** The hold id slot `slot` plays, for `rowKey`. */
     holdOf(slot: number): string {
         return this.holdIds[slot] ?? NO_HOLD;
@@ -414,31 +365,32 @@ export class MarcherBodies {
         return row;
     }
 
-    /** Draw calls this set issues per frame: a body mesh per group, plus its horn. */
+    /** Draw calls this set issues per frame: a body mesh per group, plus the instruments. */
     get drawCalls(): number {
-        return this.entries.reduce((n, e) => n + (e.horn ? 2 : 1), 0);
+        return this.entries.length + (this.horns?.drawCalls ?? 0);
     }
 
     /** Sets what slot `slot` plays; call when its clip changes. */
     setClip(slot: number, clip: MarcherClip): void {
         const e = this.meshOf[slot];
         if (e < 0) return;
-        const entry = this.entries[e];
-        writeMarcher(entry.mesh, this.instanceOf[slot], clip);
-        if (entry.horn) writeMarcher(entry.horn, this.instanceOf[slot], clip);
+        writeMarcher(this.entries[e].mesh, this.instanceOf[slot], clip);
+        this.horns?.setClip(slot, clip);
     }
 
     /**
      * Places every slot: at (x, z) facing `heading` when placed, collapsed
-     * (not drawn) otherwise. `count` is the show's count clock.
+     * (not drawn) otherwise. `count` is the show's count clock. `camera`
+     * picks each instrument's detail; null draws them all at full detail.
      */
     writeFrame(
         xz: Float32Array,
         heading: Float32Array,
         placed: Uint8Array,
         count: number,
+        camera: [number, number, number] | null = null,
     ): void {
-        for (const { mesh, horn, slots } of this.entries) {
+        for (const { mesh, slots } of this.entries) {
             const array = mesh.instanceMatrix.array as Float32Array;
             for (let k = 0; k < slots.length; k++) {
                 const i = slots[k];
@@ -452,11 +404,8 @@ export class MarcherBodies {
                 );
             }
             mesh.instanceMatrix.needsUpdate = true;
-            if (horn) {
-                (horn.instanceMatrix.array as Float32Array).set(array);
-                horn.instanceMatrix.needsUpdate = true;
-            }
         }
+        this.horns?.writeFrame(xz, heading, placed, this.scaleOf, camera);
         const discs = this.contact.instanceMatrix.array as Float32Array;
         for (let i = 0; i < placed.length; i++) {
             const o = i * 16;
@@ -479,15 +428,11 @@ export class MarcherBodies {
     }
 
     dispose(): void {
-        for (const { mesh, horn, own } of this.entries) {
+        for (const { mesh, own } of this.entries) {
             disposeMarcherGeometry(mesh.geometry, own);
             mesh.dispose();
-            if (horn) {
-                // the horn's buffers are its own: nothing else shares them
-                horn.geometry.dispose();
-                horn.dispose();
-            }
         }
+        this.horns?.dispose();
         for (const m of this.materials) m.dispose();
         this.blockSource?.dispose();
         this.contact.geometry.dispose();
