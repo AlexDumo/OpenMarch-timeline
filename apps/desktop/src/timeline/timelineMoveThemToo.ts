@@ -16,11 +16,16 @@ import {
     type PageBox,
 } from "@/stores/TimelineSelectionStore";
 import {
-    EDIT_SURPRISE_TOAST_ID,
     MOVE_THEM_TOO_TOAST_MS,
+    addShifts,
+    continueEditRun,
+    editHistoryMark,
+    editScope,
+    editSurpriseToastId,
     inDrillOrder,
     marcherLabelsById,
     moveThemTooMessage,
+    type ShiftTotals,
 } from "@/utilities/moveThemToo";
 import { editedMarcherEnds, type CarrySpan } from "./timelineCarryForward";
 import { toastTimelineError } from "./timelineErrorMessages";
@@ -195,43 +200,77 @@ export async function findLaterOwnMoves({
     return found.filter((m) => !shaped.has(m.transitionId));
 }
 
+/** A kept marcher's later move: the marcher, its slot and the flag it ends on */
+const laterMoveKey = (m: LaterOwnMove) =>
+    `${m.marcherId}:${m.transitionId}:${m.slotIndex}:${m.flag}`;
+
 /**
- * Shows the **Move them too** toast for `moves` (the edit surprise toast's id). Does nothing for
- * none.
+ * Shows the **Move them too** toast for `found` (an edit surprise toast). Does nothing for none.
+ * With the edit's `mark` and `scope` (its window and marchers), edits in a row that keep the same
+ * marchers' same later moves add up, so the action shifts by all of them (`continueEditRun`).
  */
 export async function toastLaterOwnMoves(
-    moves: readonly LaterOwnMove[],
+    found: readonly LaterOwnMove[],
     boxes: readonly PageBox[] = useTimelineSelectionStore.getState().pageBoxes,
+    mark: number | null = null,
+    scope = "",
 ): Promise<void> {
-    if (moves.length === 0) return;
-    const labels = await marcherLabelsById(moves.map((m) => m.marcherId));
-    const byMarcher = new Map(moves.map((m) => [m.marcherId, m]));
+    if (found.length === 0) return;
+    const labels = await marcherLabelsById(found.map((m) => m.marcherId));
+    const byMarcher = new Map(found.map((m) => [m.marcherId, m]));
     const kept = inDrillOrder([...byMarcher.keys()], labels).map((id) => ({
         label: labels.get(id)!.label,
         page: boxes.find((b) => b.end === byMarcher.get(id)!.flag)?.name ?? "?",
     }));
     if (kept.length === 0) return;
+    const run =
+        mark === null
+            ? null
+            : continueEditRun<ShiftTotals>(
+                  "timeline",
+                  mark,
+                  scope,
+                  (previous) => addShifts(previous, found, laterMoveKey).totals,
+              );
+    const moves = found.map((m) => ({
+        ...m,
+        ...run?.value.get(laterMoveKey(m)),
+    }));
+    const forget = () => run?.forget();
     const { message, actionLabel } = moveThemTooMessage(kept);
+    const id = editSurpriseToastId();
     toast.info(message, {
-        id: EDIT_SURPRISE_TOAST_ID,
+        id,
         duration: MOVE_THEM_TOO_TOAST_MS,
         action: {
             label: actionLabel,
             onClick: () => {
+                forget();
                 shiftSlotDestinations({ db, shifts: moves }).catch(
                     (e: unknown) =>
                         toastTimelineError(e, "Error moving marchers"),
                 );
             },
         },
+        onDismiss: forget,
+        onAutoClose: forget,
     });
+    run?.shown(id);
 }
+
+/** The window an edit was on, for `editScope` */
+const windowKey = (target: TimelineEditTarget) =>
+    target.kind === "range"
+        ? `range:${target.start}-${target.end}`
+        : target.kind === "home"
+          ? "home"
+          : `timeline:${target.timelineId}`;
 
 /**
  * A timeline coordinate edit (`moveMarchersInTarget`) with what it says after: the pass-through
  * toast as before; when there's none, once the resolver has the edit, **Move them too** when the
- * edit split its marchers at a later page (`laterOwnMoves`). Errors finding them are logged, never thrown: the edit itself
- * has committed.
+ * edit split its marchers at a later page (`laterOwnMoves`), adding up edits in a row that keep the
+ * same marchers. Errors finding them are logged, never thrown: the edit itself has committed.
  */
 export async function moveMarchersAndOfferFollowUp({
     database = db,
@@ -257,11 +296,22 @@ export async function moveMarchersAndOfferFollowUp({
             );
         },
     });
+    const mark = editHistoryMark();
     toastPassThrough(result);
     // The pass-through toast and its Keep as a stop win: Move them too would replace it (same id)
     if (result.passThrough) return result;
     void findLaterOwnMoves({ database, target, result, start })
-        .then((found) => toastLaterOwnMoves(found))
+        .then((found) =>
+            toastLaterOwnMoves(
+                found,
+                undefined,
+                mark,
+                editScope(
+                    [windowKey(target)],
+                    moves.map((m) => m.marcherId),
+                ),
+            ),
+        )
         .catch((e: unknown) =>
             console.error("Couldn't check the edit's later moves", e),
         );

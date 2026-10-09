@@ -27,6 +27,7 @@ import {
     readShowTiming,
 } from "../convert/writePageConversion";
 import { neighborPageTarget } from "../timelineCoordinateWrites";
+import { forgetEditRun } from "@/utilities/moveThemToo";
 import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
 import { pageFlags } from "../timelinePlayhead";
 import {
@@ -48,6 +49,7 @@ import {
 keepFixturesInPageMode("its tests build the show and convert it themselves");
 
 afterEach(() => {
+    forgetEditRun();
     stopTimelineResolver();
     useTimelineSelectionStore.getState().reset();
     vi.restoreAllMocks();
@@ -186,7 +188,7 @@ describeDbTests("timeline mode: Move them too", (it) => {
             "OT1 and OT8 have their own move on Page 2, so they kept their spot",
         );
         expect(options).toMatchObject({
-            id: "timeline-edit",
+            id: expect.stringMatching(/^timeline-edit-\d+$/),
             action: { label: "Move them too" },
         });
         // Before the action: the others followed, OT1 and OT8 kept their spot
@@ -365,7 +367,7 @@ describeDbTests("timeline mode: Move them too", (it) => {
             `Page ${pages[1]!.name} is no longer a stop`,
         ]);
         expect(info.mock.calls[0]![1]).toMatchObject({
-            id: "timeline-edit",
+            id: expect.stringMatching(/^timeline-edit-\d+$/),
             action: { label: `Keep Page ${pages[1]!.name} as a stop` },
         });
     });
@@ -417,6 +419,130 @@ describeDbTests("timeline mode: Move them too", (it) => {
         // Page 3 kept its own spot for everyone
         expect(at(marchers[3]!, pages[3]!)).toEqual([250, 0]);
         expect(info).not.toHaveBeenCalled();
+    });
+});
+
+/** The Move them too toasts shown so far */
+const moveThemTooCalls = (info: Info) =>
+    info.mock.calls.filter((c) =>
+        /so (it|they) kept (its|their) spots?$/.test(String(c[0])),
+    );
+
+/** Everyone's page-1 y set to `y` (a nudge of the shortened move), and its Move them too toast */
+const nudgePage1 = async (
+    db: DbConnection,
+    pages: readonly Page[],
+    marchers: readonly number[],
+    y: number,
+    info: Info,
+    skip: readonly number[] = [],
+) => {
+    const shown = moveThemTooCalls(info).length;
+    await moveMarchersAndOfferFollowUp({
+        database: db,
+        target: box(pages[1]!),
+        moves: marchers.flatMap((id, i) =>
+            skip.includes(id) ? [] : [{ marcherId: id, x: 100 + 50 * i, y }],
+        ),
+    });
+    await vi.waitFor(() =>
+        expect(moveThemTooCalls(info).length).toBe(shown + 1),
+    );
+    return moveThemTooCalls(info).at(-1)![1] as {
+        action: { onClick: () => void };
+        onAutoClose: () => void;
+    };
+};
+
+describeDbTests("timeline mode: Move them too after several edits", (it) => {
+    it("two nudges in a row: the action shifts by both", async ({ db }) => {
+        const { pages, marchers } = await studyShow(db);
+        const [ot1, ot8] = [marchers[0]!, marchers[7]!];
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await nudgePage1(db, pages, marchers, 225, info);
+        const last = await nudgePage1(db, pages, marchers, 250, info);
+        last.action.onClick();
+        await vi.waitFor(() => expect(at(ot1, pages[2]!)).toEqual([50, 250]));
+        expect(at(ot8, pages[2]!)).toEqual([500, 250]);
+        expect(at(ot1, pages[3]!)).toEqual([50, 250]);
+        // One undo takes back the whole shift
+        await performUndo(db);
+        await timelineResolverSettled();
+        expect(at(ot1, pages[2]!)).toEqual([50, 200]);
+    });
+
+    it("the same window, other marchers (all but OT4): only the last", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await studyShow(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await nudgePage1(db, pages, marchers, 225, info);
+        const last = await nudgePage1(db, pages, marchers, 250, info, [
+            marchers[3]!,
+        ]);
+        last.action.onClick();
+        await vi.waitFor(() =>
+            expect(at(marchers[0]!, pages[2]!)).toEqual([50, 225]),
+        );
+        expect(at(marchers[7]!, pages[2]!)).toEqual([500, 225]);
+    });
+
+    it("a nudge, an undo, a nudge: only the last", async ({ db }) => {
+        const { pages, marchers } = await studyShow(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await nudgePage1(db, pages, marchers, 225, info);
+        await performUndo(db);
+        await timelineResolverSettled();
+        const last = await nudgePage1(db, pages, marchers, 225, info);
+        last.action.onClick();
+        await vi.waitFor(() =>
+            expect(at(marchers[0]!, pages[2]!)).toEqual([50, 225]),
+        );
+    });
+
+    it("a nudge, another edit, a nudge: only the last", async ({ db }) => {
+        const { pages, marchers } = await studyShow(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await nudgePage1(db, pages, marchers, 225, info);
+        // OT4 steps forward on page 3
+        await moveMarchersInTarget({
+            db,
+            target: box(pages[3]!),
+            moves: [{ marcherId: marchers[3]!, x: 250, y: 100 }],
+        });
+        await timelineResolverSettled();
+        const last = await nudgePage1(db, pages, marchers, 250, info);
+        last.action.onClick();
+        await vi.waitFor(() =>
+            expect(at(marchers[0]!, pages[2]!)).toEqual([50, 225]),
+        );
+    });
+
+    it("after the toast closes, the next nudge starts over", async ({ db }) => {
+        const { pages, marchers } = await studyShow(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        const first = await nudgePage1(db, pages, marchers, 225, info);
+        first.onAutoClose();
+        const last = await nudgePage1(db, pages, marchers, 250, info);
+        last.action.onClick();
+        await vi.waitFor(() =>
+            expect(at(marchers[0]!, pages[2]!)).toEqual([50, 225]),
+        );
+    });
+
+    it("after Move them too, the next nudge starts over", async ({ db }) => {
+        const { pages, marchers } = await studyShow(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        const first = await nudgePage1(db, pages, marchers, 225, info);
+        first.action.onClick();
+        await vi.waitFor(() =>
+            expect(at(marchers[0]!, pages[2]!)).toEqual([50, 225]),
+        );
+        const last = await nudgePage1(db, pages, marchers, 250, info);
+        last.action.onClick();
+        await vi.waitFor(() =>
+            expect(at(marchers[0]!, pages[2]!)).toEqual([50, 250]),
+        );
     });
 });
 

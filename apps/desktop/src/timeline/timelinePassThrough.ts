@@ -12,6 +12,7 @@ import {
     useTimelineSelectionStore,
     type PageBox,
 } from "@/stores/TimelineSelectionStore";
+import { editSurpriseToastId } from "@/utilities/moveThemToo";
 import { toastTimelineError } from "./timelineErrorMessages";
 
 /**
@@ -161,9 +162,6 @@ export function keepStopsLabel(
           );
 }
 
-/** The one pass-through toast, so a later one replaces it. */
-const PASS_THROUGH_TOAST_ID = "timeline-edit";
-
 /**
  * **Keep as a stop**: moves the passed marchers from the last flag inside the drag instead
  * (`moveMarchersFromFlagInstead`, which keeps where they are now). Their move is then the one
@@ -203,7 +201,7 @@ export function toastPassThrough(
     const boxes = useTimelineSelectionStore.getState().pageBoxes;
     const flag = narrowingFlag(pass.range, boxes);
     toast.info(passThroughMessage(pass, boxes), {
-        id: PASS_THROUGH_TOAST_ID,
+        id: editSurpriseToastId(),
         duration: flag !== null ? 10000 : 6000,
         action:
             flag !== null
