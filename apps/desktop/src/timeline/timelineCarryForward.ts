@@ -11,7 +11,8 @@ import { resolverSpans } from "./timelineStore";
  * §6–7): a marcher holds where it last was until its own next move, so an edit carries forward
  * over every later page flag the marcher holds through, and stops at the page where that next
  * move ends. Read from the resolver after the edit, per moved marcher, from its spans alone: no
- * positions, and nothing else in the show is compared.
+ * positions, and nothing else in the show is compared. No toast says this any more
+ * (defined-coordinates 08).
  */
 
 /** The parts of a resolver span this reads. */
@@ -54,7 +55,7 @@ export function marcherCarry(
     };
 }
 
-/** What a carry-forward toast names. */
+/** The pages an edit carried into, across marchers. */
 export interface CarryForwardSummary {
     /** The first and last page whose set also changed, by name; equal for one page */
     first: string;
@@ -90,39 +91,6 @@ export function summarizeCarryForward(
     return stopName === undefined
         ? { first, last }
         : { first, last, stop: stopName };
-}
-
-/** Translates with ICU parameters (`PassThroughTranslate`'s shape). */
-export type CarryForwardTranslate = (
-    key: string,
-    defaultMessage: string,
-    params?: Record<string, string>,
-) => string;
-
-/** "Also moves Page 3", "Also moves Pages 3–7", with " · stops at Page 8" when they all stop there. */
-export function carryForwardMessage(
-    summary: CarryForwardSummary,
-    translate: CarryForwardTranslate,
-): string {
-    const pages =
-        summary.first === summary.last
-            ? translate("timeline.edit.carryForward.page", "Page {page}", {
-                  page: summary.first,
-              })
-            : translate(
-                  "timeline.edit.carryForward.pages",
-                  "Pages {first}–{last}",
-                  { first: summary.first, last: summary.last },
-              );
-    return summary.stop === undefined
-        ? translate("timeline.edit.carryForward.moves", "Also moves {pages}", {
-              pages,
-          })
-        : translate(
-              "timeline.edit.carryForward.movesUntil",
-              "Also moves {pages} · stops at Page {stop}",
-              { pages, stop: summary.stop },
-          );
 }
 
 /**

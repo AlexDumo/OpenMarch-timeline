@@ -869,9 +869,9 @@ export const moveMarchersInRangeInTransaction = async ({
 };
 
 /**
- * **Start from Page N** (research/ownership/10-cross-page-windows.md §4.1, named "Only change Page
- * N" there; renamed by defined-coordinates 07c §2, since later pages that hold still follow the
- * edit): the toast's way back from a drag that passed through pages. Takes `marcherIds` out of the timeline over `range` (the
+ * **Keep Page N as a stop** (research/ownership/10-cross-page-windows.md §4.1, named "Only change
+ * Page N" there, then "Start from Page N" by defined-coordinates 07c §2, and named for what it
+ * restores by 08): the toast's way back from a drag that passed through pages. Takes `marcherIds` out of the timeline over `range` (the
  * drag's), deletes that timeline when the drag created it (`deleteIfEmpty`) and nobody is left in
  * it, then moves them over `[from, range.end)` instead, `from` being the last flag inside the
  * range. Each marcher keeps where it is at the range's end now, so later nudges in the window are

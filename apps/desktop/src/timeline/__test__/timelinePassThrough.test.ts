@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-    marcherList,
+    keepStopsLabel,
     moveName,
     narrowingFlag,
-    narrowingLabel,
     passThroughMessage,
     type PassThroughTranslate,
 } from "../timelinePassThrough";
@@ -19,19 +18,17 @@ const boxes = [
     { start: 32, end: 48, name: "4" },
 ];
 
-describe("timeline pass-through messages (research/ownership/10)", () => {
-    it("lists marchers, counting past four", () => {
-        expect(marcherList(["T1"])).toBe("T1");
-        expect(marcherList(["T1", "T2"])).toBe("T1 and T2");
-        expect(marcherList(["T1", "T2", "T3", "T4"])).toBe("T1, T2, T3 and T4");
-        expect(marcherList(["T1", "T2", "T3", "T4", "T5"])).toBe(
-            "T1, T2, T3, T4 and 1 other",
-        );
-        expect(marcherList(["T1", "T2", "T3", "T4", "T5", "T6"])).toBe(
-            "T1, T2, T3, T4 and 2 others",
-        );
-    });
+const pass = (flags: number[], extra = {}) => ({
+    range: { start: 4, end: 48 },
+    marcherIds: [3, 4],
+    labels: ["T3", "T4"],
+    overridden: [],
+    caughtUp: [],
+    flags,
+    ...extra,
+});
 
+describe("timeline pass-through messages (research/ownership/10, defined-coordinates 08)", () => {
     it("names a page's box by its page, and any other move by its beats", () => {
         expect(moveName({ start: 16, end: 32 }, boxes)).toBe("Page 3");
         expect(moveName({ start: 20, end: 32 }, boxes)).toBe(
@@ -39,93 +36,61 @@ describe("timeline pass-through messages (research/ownership/10)", () => {
         );
     });
 
-    it("narrows to the last flag strictly inside the range, named for the page it ends or starts", () => {
-        // Ends on Page 4's flag: the narrowed move is exactly Page 4
-        const onFlag = narrowingFlag({ start: 0, end: 48 }, boxes)!;
-        expect(onFlag).toEqual({
-            beat: 32,
-            flagPage: "3",
-            nextPage: "4",
-            endsOnFlag: true,
-        });
-        expect(narrowingLabel(onFlag, english)).toBe("Start from Page 4");
-        // Ends partway into Page 4: from Page 3's set, and Page 4 still catches up after it
-        const midPage = narrowingFlag({ start: 4, end: 40 }, boxes)!;
-        expect(midPage.endsOnFlag).toBe(false);
-        expect(narrowingLabel(midPage, english)).toBe(
-            "Start from Page 3's set",
-        );
+    it("narrows to the last flag strictly inside the range", () => {
+        expect(narrowingFlag({ start: 0, end: 48 }, boxes)).toBe(32);
+        expect(narrowingFlag({ start: 4, end: 40 }, boxes)).toBe(32);
         expect(narrowingFlag({ start: 16, end: 32 }, boxes)).toBeNull();
-        expect(narrowingLabel({ beat: 32, endsOnFlag: false }, english)).toBe(
-            "Start from beat 32",
+    });
+
+    it("says which pages are no longer stops, without marcher names", () => {
+        expect(passThroughMessage(pass([16]), boxes, english)).toBe(
+            "Page 2 is no longer a stop",
+        );
+        expect(passThroughMessage(pass([16, 32]), boxes, english)).toBe(
+            "Pages 2–3 are no longer stops",
+        );
+        // What catches up after the window is ordinary carry-forward, not a lost stop
+        expect(
+            passThroughMessage(
+                pass([16, 32], { caughtUp: [{ start: 32, end: 48 }] }),
+                boxes,
+                english,
+            ),
+        ).toBe("Pages 2–3 are no longer stops");
+        // A flag with no named page
+        expect(passThroughMessage(pass([20]), boxes, english)).toBe(
+            "The sets inside this move are no longer stops",
         );
     });
 
-    it("says what was passed through and what catches up", () => {
-        const pass = {
-            range: { start: 0, end: 40 },
-            marcherIds: [3, 4],
-            labels: ["T3", "T4"],
+    it("labels the action by what it restores: every flag inside the drag", () => {
+        expect(keepStopsLabel(pass([16]), boxes, english)).toBe(
+            "Keep Page 2 as a stop",
+        );
+        expect(keepStopsLabel(pass([16, 32]), boxes, english)).toBe(
+            "Keep Pages 2–3 as stops",
+        );
+        expect(keepStopsLabel(pass([20]), boxes, english)).toBe(
+            "Keep them as stops",
+        );
+    });
+
+    it("without a page flag, says what it moves through and what catches up", () => {
+        const clips = pass([], {
             overridden: [
                 { start: 0, end: 16 },
                 { start: 16, end: 32 },
             ],
             caughtUp: [{ start: 32, end: 48 }],
-            flags: [],
-        };
-        expect(passThroughMessage(pass, boxes, english)).toBe(
-            "T3 and T4 now move straight through Page 2 and Page 3, then catch up to Page 4's set by its end.",
+        });
+        expect(passThroughMessage(clips, boxes, english)).toBe(
+            "Moves straight through Page 2 and Page 3, then catches up to Page 4's set",
         );
         expect(
-            passThroughMessage({ ...pass, caughtUp: [] }, boxes, english),
-        ).toBe("T3 and T4 now move straight through Page 2 and Page 3.");
+            passThroughMessage({ ...clips, caughtUp: [] }, boxes, english),
+        ).toBe("Moves straight through Page 2 and Page 3");
         expect(
-            passThroughMessage({ ...pass, overridden: [] }, boxes, english),
-        ).toBe("T3 and T4 now catch up to Page 4's set by its end.");
-        const one = { ...pass, marcherIds: [3], labels: ["T3"] };
-        expect(passThroughMessage(one, boxes, english)).toBe(
-            "T3 now moves straight through Page 2 and Page 3, then catches up to Page 4's set by its end.",
-        );
-        expect(
-            passThroughMessage({ ...one, caughtUp: [] }, boxes, english),
-        ).toBe("T3 now moves straight through Page 2 and Page 3.");
-        expect(
-            passThroughMessage({ ...one, overridden: [] }, boxes, english),
-        ).toBe("T3 now catches up to Page 4's set by its end.");
-    });
-
-    it("names the pages whose flags it passes, where no stored move was overridden (sparse rows)", () => {
-        const pass = {
-            range: { start: 4, end: 48 },
-            marcherIds: [3],
-            labels: ["T3"],
-            overridden: [],
-            caughtUp: [],
-            flags: [16, 32],
-        };
-        expect(passThroughMessage(pass, boxes, english)).toBe(
-            "T3 now moves straight through Page 2 and Page 3.",
-        );
-        // A flag an overridden move already ends on isn't named twice
-        expect(
-            passThroughMessage(
-                { ...pass, overridden: [{ start: 16, end: 32 }] },
-                boxes,
-                english,
-            ),
-        ).toBe("T3 now moves straight through Page 2 and Page 3.");
-        expect(
-            passThroughMessage(
-                {
-                    ...pass,
-                    range: { start: 4, end: 40 },
-                    caughtUp: [{ start: 32, end: 48 }],
-                },
-                boxes,
-                english,
-            ),
-        ).toBe(
-            "T3 now moves straight through Page 2 and Page 3, then catches up to Page 4's set by its end.",
-        );
+            passThroughMessage({ ...clips, overridden: [] }, boxes, english),
+        ).toBe("Catches up to Page 4's set by its end");
     });
 });

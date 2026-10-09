@@ -588,8 +588,8 @@
             "swapMarchers": "Swap marchers",
             "timeline": {
                 "goToPage": "Go to Page {page}",
-                "holdingSince": "Holding since Page {page}",
-                "movesHere": "Moves here"
+                "holdFrom": "Hold from Page {page}",
+                "movesOnThisPage": "Moves on this page"
             },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}"
@@ -1055,6 +1055,14 @@
         "updateButton": "Update Marcher",
         "year": "Year"
     },
+    "marcherPages": {
+        "carryForward": {
+            "only": "Only Page {page}",
+            "onlyEdited": "Only the edited pages",
+            "onePage": "Page {page} followed (it was a copy)",
+            "pages": "Pages {first}–{last} followed (they were copies)"
+        }
+    },
     "measures": {
         "createFailed": "Failed to create measures - {error}",
         "deleteFailed": "Failed to delete measures - {error}",
@@ -1356,28 +1364,20 @@
             "label": "Playback Controls"
         },
         "edit": {
-            "carryForward": {
-                "moves": "Also moves {pages}",
-                "movesUntil": "Also moves {pages} · stops at Page {stop}",
-                "page": "Page {page}",
-                "pages": "Pages {first}–{last}"
-            },
             "passThrough": {
-                "catchUp": {
-                    "many": "{marchers} now catch up to {caughtUp}'s set by its end.",
-                    "one": "{marchers} now catches up to {caughtUp}'s set by its end."
+                "catchUp": "Catches up to {caughtUp}'s set by its end",
+                "keepStops": {
+                    "many": "Keep Pages {first}–{last} as stops",
+                    "one": "Keep Page {page} as a stop",
+                    "unnamed": "Keep them as stops"
                 },
-                "startFromBeat": "Start from beat {beat}",
-                "startFromPage": "Start from Page {page}",
-                "startFromPageSet": "Start from Page {page}'s set",
-                "through": {
-                    "many": "{marchers} now move straight through {through}.",
-                    "one": "{marchers} now moves straight through {through}."
+                "noLongerStop": {
+                    "many": "Pages {first}–{last} are no longer stops",
+                    "one": "Page {page} is no longer a stop",
+                    "unnamed": "The sets inside this move are no longer stops"
                 },
-                "throughAndCatchUp": {
-                    "many": "{marchers} now move straight through {through}, then catch up to {caughtUp}'s set by its end.",
-                    "one": "{marchers} now moves straight through {through}, then catches up to {caughtUp}'s set by its end."
-                }
+                "through": "Moves straight through {through}",
+                "throughAndCatchUp": "Moves straight through {through}, then catches up to {caughtUp}'s set"
             }
         },
         "errors": {
