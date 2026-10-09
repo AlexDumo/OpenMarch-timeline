@@ -20,9 +20,8 @@ import type {
  * Page flag grips (docs/timeline/research/move-page-flag): dragging one moves that page's flag, a
  * roll edit where the page gains what the next one loses. Beats here are view beats.
  *
- * - **Where it's grabbed** (case 13): the lower half of the ruler at the flag, 12px wide (less
- *   on a narrow box, `gripWidth`). The upper
- *   half stays the playhead's head and the start flag's pennant, which usually sit on flags.
+ * - **Where it's grabbed** (case 13): the page line through the whole page-box row, 12px wide
+ *   (less on a narrow box, `gripWidth`). Below the row the line isn't a grip.
  * - **Click or drag:** a press that moves less than `FLAG_DRAG_PX` is a click and selects the page
  *   box on that side of the flag, as a click on the box does. A drag shows the flag, the two boxes
  *   and their counts where it would land, and writes once, on release.
@@ -75,9 +74,13 @@ export function flagSnapBeat({
 export const FLAG_DRAG_PX = 4;
 /** The grip's widest, in pixels; narrow boxes get a narrower one (`gripWidth`) */
 const GRIP_WIDTH = 12;
-/** The grip's top, in the 28px ruler: the lower half */
-const GRIP_TOP = 14;
-const GRIP_HEIGHT = 14;
+/**
+ * The grip is the page line through the whole 28px page-box row (owner, 2026-10-08: "just the line
+ * at the top in the page boxes"), above the playhead's head and the start pennant there; those are
+ * grabbed in the measure row, and a page box's click puts the playhead on its flag
+ */
+const GRIP_TOP = 0;
+const GRIP_HEIGHT = 28;
 
 /** A flag being dragged: where it would land, and why it stopped there, if it did */
 export interface TimelinePageFlagPreview {
@@ -219,7 +222,6 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
     preview,
     onPreviewChange,
     onSelectPage,
-    rowsTop,
 }: {
     /** The page boxes as they are, without the preview */
     boxes: readonly TimelineFlagBox[];
@@ -237,13 +239,6 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
     preview: TimelinePageFlagPreview | null;
     onPreviewChange: (preview: TimelinePageFlagPreview | null) => void;
     onSelectPage: (page: TimelinePageMarker) => void;
-    /**
-     * Where the waveform and move rows start. Down to there the whole page line is the flag's grip,
-     * above the start flag's and the playhead's lines; below, it still is, but under the clips, so a
-     * move's own edge or body wins where they overlap (owner, 2026-10-08). Without it, the grip is
-     * only the ruler's lower half.
-     */
-    rowsTop?: number;
 }) {
     const drag = useRef<{
         pointerId: number;
@@ -496,16 +491,13 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                             ),
                             left: Math.round(beatToX(beat, pixelsPerBeat)),
                             top: GRIP_TOP,
-                            height:
-                                rowsTop === undefined
-                                    ? GRIP_HEIGHT
-                                    : Math.max(GRIP_HEIGHT, rowsTop - GRIP_TOP),
+                            height: GRIP_HEIGHT,
                         }}
                     >
                         <span
                             aria-hidden="true"
                             className={clsx(
-                                "bg-text absolute top-2 left-1/2 h-10 w-[3px] -translate-x-1/2 rounded-full transition-opacity",
+                                "bg-text absolute inset-y-[3px] left-1/2 w-[3px] -translate-x-1/2 rounded-full transition-opacity",
                                 dragging
                                     ? "opacity-90"
                                     : "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70",
@@ -514,48 +506,6 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                     </button>
                 );
             })}
-            {rowsTop !== undefined &&
-                height > rowsTop &&
-                boxes.map(({ page, range }, index) => {
-                    if (!range) return null;
-                    const dragging = preview?.pageId === page.id;
-                    const beat = dragging ? preview.beat : range.endBeatIndex;
-                    // The same grip down the waveform and move rows, for the pointer only (the
-                    // button above is the one that takes focus and keys). z-0 and before the clips
-                    // in the DOM, so a clip over it wins
-                    return (
-                        <span
-                            key={`${page.id}-rows`}
-                            aria-hidden="true"
-                            data-testid="timeline-page-flag-grip-rows"
-                            data-page-id={page.id}
-                            data-timeline-interactive="true"
-                            title={`Page ${page.label}'s flag: drag to move it`}
-                            onPointerDown={(event) =>
-                                onPointerDown(event, index)
-                            }
-                            onPointerMove={onPointerMove}
-                            onPointerUp={onPointerUp}
-                            onPointerCancel={(event) =>
-                                cancel(event.currentTarget)
-                            }
-                            onLostPointerCapture={() => {
-                                if (drag.current) cancel();
-                            }}
-                            className="pointer-events-auto absolute z-0 -translate-x-1/2 cursor-col-resize touch-none"
-                            style={{
-                                width: gripWidth(
-                                    range,
-                                    boxes[index + 1]?.range ?? null,
-                                    pixelsPerBeat,
-                                ),
-                                left: Math.round(beatToX(beat, pixelsPerBeat)),
-                                top: rowsTop,
-                                height: height - rowsTop,
-                            }}
-                        />
-                    );
-                })}
             {shownPreview && (
                 <span
                     aria-hidden="true"

@@ -785,7 +785,6 @@ const TimelineSurface = memo(function TimelineSurface({
                         }
                         height={timelineHeight}
                         flagSnapPlayhead={playheadAt}
-                        flagRowsTop={audioTop}
                         // Only a show without measures numbers the playhead page's counts
                         positionBeat={
                             expanded && model.measures.length === 0

@@ -721,9 +721,8 @@ from it. The spec still wins on the model; this file decides presentation.
   - **One edit, Esc cancels.** A drag commits once, on release, as one undoable edit. Esc, a lost
     pointer, or a drag brought back writes nothing. Esc during a clip drag never also leaves
     isolation.
-  - **Where they're grabbed.** A flag anywhere along its page line, from the ruler's lower half to
-    the bottom of the timeline (owner, 2026-10-08: the ruler-only grip was hard to find; UI-16). A
-    move by the handles inside its clip's two ends: up to 6px, at most a quarter of the clip, none on a clip
+  - **Where they're grabbed.** A flag by its page line through the page-box row (owner,
+    2026-10-08; UI-16). A move by the handles inside its clip's two ends: up to 6px, at most a quarter of the clip, none on a clip
     under 8px (V-120). The ⋯ button keeps clear of the end handle. Over the clip rows the start flag
     and the playhead are drawn but not grabbed (UI-14), so a selected clip's edges can be reached.
   - **Afterwards.** A selected move's start flag and playhead follow its new start and end; an
@@ -740,14 +739,14 @@ from it. The spec still wins on the model; this file decides presentation.
     the beats, measures, tempo and music stay put. Timelines track the moving flag (U-Q5): a
     row edge on the flag follows it, and every other edge keeps its beat. So the sets keep their
     coordinates and the two pages' moves take the new counts. One undoable edit.
-  - **The grip** is the whole page line (owner, 2026-10-08: "make the whole page line the grab
-    flag"), 12px wide (narrower on a narrow box), with a `col-resize` cursor: from the ruler's lower
-    half down through the measure row, above the start flag's and the playhead's lines, and on down
-    the waveform and move rows under the clips, so a move's own edge or body wins where it overlaps.
-    The ruler's upper half stays the playhead's head and the start flag's pennant; to put the
-    playhead on a flag, click the page box. A press that doesn't move selects the box on that side;
-    a plain drag elsewhere still scrubs (UI-12). Home's flag has no grip. While playing or isolated,
-    there are no grips.
+  - **The grip** is the page line through the whole page-box row (owner, 2026-10-08: the
+    lower-half grip was hard to find, and "just the line at the top in the page boxes"; below the
+    row the line isn't a grip), 12px wide (narrower on a narrow box), with a bar on hover and a
+    `col-resize` cursor. On a flag it takes the place of the playhead's head and the start
+    pennant; those are dragged from the measure row, and clicking a page box puts the playhead on
+    its flag. A press that doesn't move selects the box on that side; a plain drag elsewhere on a
+    box still scrubs (UI-12). Home's flag has no grip. While playing or isolated, there are no
+    grips.
   - **Limits.** Every page keeps one count, so flags never pass or push each other, and the last
     flag stops at the show's end. A move with an edge on the flag can't be left behind: the flag
     stops before its far end. A beat the timeline rows can't take (two moves would share a range,
