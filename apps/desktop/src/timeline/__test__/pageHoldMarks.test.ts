@@ -18,6 +18,7 @@ import { neighborPageTarget } from "../timelineCoordinateWrites";
 import { marcherHoldState, type NamedFlag } from "../timelineHoldState";
 import {
     classifyPage,
+    pageHoldMarkHint,
     pageHoldMarkLabel,
     pageHoldMarks,
     pageModeMarcherPageStates,
@@ -213,7 +214,7 @@ describe("a page's mark for the selection", () => {
         ]);
         expect(pageHoldMarks([edited, untouched], names)).toEqual([
             null,
-            { kind: "mixed", from: "1" },
+            { kind: "mixed", from: "1", fromStart: true },
             { kind: "holds", from: null },
             { kind: "holds", from: null },
         ]);
@@ -239,6 +240,33 @@ describe("a page's mark for the selection", () => {
         );
         expect(label({ kind: "mixed", from: null })).toBe(
             "Some selected marchers hold on this page",
+        );
+        // Held since the first page: since their starting set, not "Page 0"
+        expect(label({ kind: "holds", from: "0", fromStart: true })).toBe(
+            "Selected marchers hold from the start",
+        );
+        expect(label({ kind: "mixed", from: "0", fromStart: true })).toBe(
+            "Some selected marchers hold from the start",
+        );
+    });
+
+    it("gives each mark a hint line for its tooltip", () => {
+        const hint = (mark: PageHoldMark) => pageHoldMarkHint(mark);
+        expect(hint({ kind: "moves" })).toBe("They have their own move here");
+        expect(hint({ kind: "holds", from: "2" })).toBe(
+            "They stand where Page 2 left them",
+        );
+        expect(hint({ kind: "holds", from: "0", fromStart: true })).toBe(
+            "They stand where they started",
+        );
+        expect(hint({ kind: "holds", from: null })).toBe(
+            "They stand where their last move left them",
+        );
+        expect(hint({ kind: "mixed", from: "2" })).toBe(
+            "Some have their own move here",
+        );
+        expect(hint({ kind: "mixed", from: "0", fromStart: true })).toBe(
+            "Some have their own move here",
         );
     });
 });
@@ -302,6 +330,7 @@ describeDbTests("the marks from the resolver", (it) => {
         expect(result.current.get(pages[2]!.id)).toEqual({
             kind: "holds",
             from: pages[0]!.name,
+            fromStart: true,
         });
 
         await act(() =>
@@ -323,6 +352,7 @@ describeDbTests("the marks from the resolver", (it) => {
         expect(result.current.get(pages[1]!.id)).toEqual({
             kind: "mixed",
             from: pages[0]!.name,
+            fromStart: true,
         });
         expect(result.current.get(pages[2]!.id)).toEqual({
             kind: "holds",
@@ -343,6 +373,7 @@ describeDbTests("the marks from the resolver", (it) => {
             expect(result.current.get(pages[1]!.id)).toEqual({
                 kind: "holds",
                 from: pages[0]!.name,
+                fromStart: true,
             }),
         );
     });
