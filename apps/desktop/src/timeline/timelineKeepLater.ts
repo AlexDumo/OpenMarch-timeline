@@ -101,12 +101,7 @@ export function pageKeepStates({
                 kept,
             );
             if (state !== "follows" && state !== "kept") continue;
-            const before = rows
-                .filter((r) => r.end <= box.start)
-                .reduce<Row | null>(
-                    (last, r) => (last && last.end >= r.end ? last : r),
-                    null,
-                );
+            const before = lastMoveBefore(rows, box);
             (state === "follows" ? follows : keptHere).push(id);
             if (state === "follows" && !before) fromStart.push(id);
             const source = before ? pageAt(pages, before.end) : -1;
@@ -126,6 +121,84 @@ export function pageKeepStates({
         });
     }
     return out;
+}
+
+/** A marcher's last move that ends by the start of `box`, or null before its first move. */
+const lastMoveBefore = (rows: readonly Row[], box: KeptPageBox): Row | null =>
+    rows
+        .filter((r) => r.end <= box.start)
+        .reduce<Row | null>(
+            (last, r) => (last && last.end >= r.end ? last : r),
+            null,
+        );
+
+/** A marcher kept on a page box, as the field marks it (`keptMarchersOnPage`). */
+export interface KeptOnPage {
+    readonly marcherId: number;
+    /** The page it would follow again (where it last moved before the box); null for the start */
+    readonly from: string | null;
+}
+
+/**
+ * The marchers kept on the page `pageId` (a stored kept spot is their only move over its box),
+ * whatever is selected, ascending by id, for the marks beside their dots on the field (UI-18 kept
+ * marchers on the field, wp20). Empty for home, an unknown page, or no kept spots at all, which
+ * skips reading anyone's spans.
+ *
+ * @param spansOf a marcher's resolver spans (`resolverSpans`)
+ * @param kept the kept assignments' ids
+ */
+export function keptMarchersOnPage({
+    pages,
+    pageId,
+    marcherIds,
+    spansOf,
+    kept,
+}: {
+    pages: readonly KeepPage[];
+    pageId: number | null | undefined;
+    marcherIds: readonly number[];
+    spansOf: (marcherId: number) => readonly SpanInfo[];
+    kept: ReadonlySet<number>;
+}): KeptOnPage[] {
+    if (kept.size === 0 || pageId == null) return [];
+    const box = pages.find((p) => p.id === pageId)?.range;
+    if (!box) return [];
+    const out: KeptOnPage[] = [];
+    for (const id of [...new Set(marcherIds)].sort((a, b) => a - b)) {
+        const rows = movesFromSpans(spansOf(id));
+        const over = rows.filter((r) => r.start < box.end && r.end > box.start);
+        if (keptStateOf(over, box, kept) !== "kept") continue;
+        const before = lastMoveBefore(rows, box);
+        const source = before ? pageAt(pages, before.end) : -1;
+        out.push({
+            marcherId: id,
+            from: source >= 0 ? pages[source]!.name : null,
+        });
+    }
+    return out;
+}
+
+/**
+ * A kept mark's tooltip on the field: "Kept on Page 3 · won't follow Page 2", or "won't follow
+ * earlier pages" when it would hold from the start.
+ */
+export function keptMarkText(
+    page: string,
+    from: string | null,
+    t: KeepTranslate = english,
+): string {
+    return from
+        ? t(
+              "timeline.keep.field.kept",
+              "Kept on Page {page} · won't follow Page {from}",
+              { page, from },
+          )
+        : t(
+              "timeline.keep.field.keptEarlier",
+              "Kept on Page {page} · won't follow earlier pages",
+              { page },
+          );
 }
 
 /** The index into `states` of the box after the page `pageId` (home's is the first box). */

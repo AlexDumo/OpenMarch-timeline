@@ -17,6 +17,8 @@ amending B-25).
 wp19 (branch `dc/wp19-keep-fixes`, after the final two-user study) reworked B-39 … B-43: K acts
 where the marchers hold, the words name the marchers, the menu and tooltips show K, kept and linked
 chains differ at a glance, and never-moved marchers can be kept ahead of any move; B-44 is unchanged.
+wp20 (branch `dc/wp20-kept-on-field`) adds B-45: the kept marchers are marked on the field with
+the same broken chain, whatever is selected (owner, mock-up D, 2026-10-09).
 
 How to use this file:
 
@@ -32,7 +34,7 @@ mode (what every released user runs).
 ## Contents
 
 1. [Summary](#1-summary)
-2. [Behavior catalog](#2-behavior-catalog) (B-01 … B-44)
+2. [Behavior catalog](#2-behavior-catalog) (B-01 … B-45)
 3. [File map](#3-file-map)
 4. [Test map](#4-test-map)
 5. [QA checklist](#5-qa-checklist)
@@ -106,7 +108,7 @@ Index:
 | Toasts                       | B-24 … B-26, B-36, B-37 |
 | Hold marks and inspector     | B-27 … B-30             |
 | Focus, selection, keys       | B-31 … B-35             |
-| Keep later pages             | B-38 … B-44             |
+| Keep later pages             | B-38 … B-45             |
 
 ### Timeline writes
 
@@ -1167,6 +1169,53 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **V-row:** V-158.
 - **Limits:** windows that don't end on a flag, isolated moves and home edits never offer it.
 
+#### B-45 Kept marchers on the field
+
+- **Mode:** TL (nothing in PM).
+- **Before:** a kept marcher looked like any other on the field; only the page box chain, the
+  inspector and the menu said so, and only with it selected.
+- **After (wp20; owner chose mock-up D over opacity, 2026-10-09):** on the selected page (the page
+  box the playhead is in, as the inspector uses), each marcher **kept** there (a stored kept spot is
+  its only move over the box, `keptMarchersOnPage`) gets a small broken chain beside its dot,
+  whatever is selected: Phosphor `LinkSimpleBreak` bold in the light accent (the kept chip's
+  symbol) on a small white rounded square with a faint edge, so it reads over yard lines. It sits
+  just right of the dot, a little below its center, clear of the drill number; 12 field units on
+  screen, held between 10 and 16 screen pixels (_lead default_). One canvas object
+  (`TimelineKeptLayer`) for all marks, above the marchers, not selectable, taking no events; it
+  reads the dots where they are each frame, so drags and redraws carry the marks without a
+  rebuild, and hidden marchers get none (dimmed ones dim with them). Updates on keep, follow
+  again, undo/redo and page change (the kept-marker store and the resolver version); disappears
+  when the kept move is edited into an ordinary move (marker cleared). Hidden while playing, while
+  a scrub is down, and while a move is isolated (its members are drawn at the move's plan;
+  _lead default_). Hover on the mark or on its dot: after 500 ms a tooltip "Kept on Page 3 · won't
+  follow Page 2" ("… won't follow earlier pages" for a keep ahead of any move); a press or leaving
+  the canvas hides it. The canvas has no hover of its own, so the hook hit-tests the marks on the
+  canvas's mouse moves, only while marks show.
+- **Strings:** `timeline.keep.field.kept` "Kept on Page {page} · won't follow Page {from}",
+  `timeline.keep.field.keptEarlier` "Kept on Page {page} · won't follow earlier pages".
+- **Code:** `timeline/timelineKeepLater.ts` (`keptMarchersOnPage` :151, `keptMarkText` :186);
+  `global/classes/canvasObjects/TimelineKeptLayer.ts` (`keptMarkBox` :50, layer :75, `markAt`
+  :152); `OpenMarchCanvas.ts` (`renderTimelineKeptMarks` :2611, `clearTimelineKeptMarks` :2632,
+  kept above raised marchers :1128); `timeline/useTimelineKeptMarks.ts` (`useKeptMarks` :32,
+  `useTimelineKeptMarks` :69); `components/canvas/TimelineKeptMarks.tsx` (own component, so a
+  hover or scrub doesn't re-render the canvas; tooltip in a portal, as the canvas container sets a
+  perspective); `Canvas.tsx` (mounted once the resolver draws).
+- **Tests:** `timelineKeepLater.test.ts` › "keptMarchersOnPage" (7: only the kept marchers on that
+  page whatever is selected; none on pages 2, 4 or home; none without a page, an unknown page or
+  kept spots; an edited move whose marker was cleared; a keep ahead of any move has no page;
+  several in id order; the tooltip words); `TimelineKeptLayer.test.ts` (11: placement, size per
+  zoom, one layer above the marchers and none without marks, stays above raised marchers, follows
+  a moved dot, hit test on mark and dot, hidden and missing marchers, a backing per mark);
+  `useTimelineKeptMarks.test.tsx` (5: marks with nothing selected; pages around; keep, follow again
+  and undo through the store; hidden while playing, scrubbing, isolating and in page mode; cleared
+  on unmount).
+- **Real-app:** `~/ux-study/wp20/b` (named copies in `~/ux-study/wp20/`): step 12 icons on OT1 and
+  OT8 only, page 3, nothing selected; step 14 tooltip; step 17 page 2 and step 19 page 4 no icons;
+  steps 23/25 zoomed out to 218% and 182%, still 16 px; step 27 undo the keep, icons gone.
+- **V-row:** V-160.
+- **Limits:** very low zooms not looked at in the app (at 10 px minimum the mark outgrows the dot
+  below about 100%); tooltips use the light accent on a white square in dark field themes too.
+
 ---
 
 ## 3. File map
@@ -1248,6 +1297,11 @@ Keep later pages (wp15 storage, wp16 UI), under `apps/desktop/`:
 | `src/components/inspector/TimelineHoldLine.tsx`                                                                 | Keep here / Follow again, mixed wordings, following-pages line                        | B-41       |
 | `src/utilities/RegisteredActionsHandler.tsx`                                                                    | K                                                                                     | B-43       |
 | `i18n/en.json`                                                                                                  | `inspector.marcher.timeline.*` (18), `timeline.keep.*` (15), `actions.timeline.*` (1) | B-40–B-44  |
+| `src/global/classes/canvasObjects/TimelineKeptLayer.ts` (new, wp20)                                             | One layer of kept marks beside the dots; placement, hit test                          | B-45       |
+| `src/global/classes/canvasObjects/OpenMarchCanvas.ts` (wp20)                                                    | `renderTimelineKeptMarks`, `clearTimelineKeptMarks`, kept above marchers              | B-45       |
+| `src/timeline/useTimelineKeptMarks.ts` (new, wp20)                                                              | Marks for the selected page, hide rules, hover tooltip                                | B-45       |
+| `src/components/canvas/TimelineKeptMarks.tsx` (new, wp20), `Canvas.tsx`                                         | Mounts the marks; tooltip                                                             | B-45       |
+| `src/timeline/timelineKeepLater.ts`, `i18n/en.json` (wp20)                                                      | `keptMarchersOnPage`, `keptMarkText`; `timeline.keep.field.*` (2)                     | B-45       |
 
 ---
 
@@ -1374,15 +1428,18 @@ RegisteredActionsHandlerModes. New history tests since: `pageDeleteGaps`, `march
 
 Keep later pages (wp16):
 
-| Test file (under `apps/desktop/src/`)                     | New/changed  | Covers           | Notes                                             |
-| --------------------------------------------------------- | ------------ | ---------------- | ------------------------------------------------- |
-| `timeline/__test__/timelineKeepLater.test.ts`             | new          | B-39–B-43 (pure) | 14                                                |
-| `components/timeline/__test__/PageKeepChain.test.tsx`     | new          | B-40, B-42       | 10, jsdom                                         |
-| `components/inspector/__test__/TimelineHoldLine.test.tsx` | changed (+6) | B-41             | multi-selection case updated by design            |
-| `timeline/__test__/timelineKeepCommands.test.ts`          | new          | B-42–B-44        | 8, real database                                  |
-| `utilities/__test__/KeepOnNextPageKey.test.tsx`           | new          | B-43             | run in both modes                                 |
-| `db-functions/__test__/timelineKeepHere.test.ts`          | changed (+3) | B-38, B-44       | `at` spots; one history round trip                |
-| `timeline/__test__/timelineMoveThemToo.test.ts`           | changed      | B-44             | two "offers nothing" cases now expect Only Page N |
+| Test file (under `apps/desktop/src/`)                             | New/changed  | Covers           | Notes                                             |
+| ----------------------------------------------------------------- | ------------ | ---------------- | ------------------------------------------------- |
+| `timeline/__test__/timelineKeepLater.test.ts`                     | new          | B-39–B-43 (pure) | 14                                                |
+| `components/timeline/__test__/PageKeepChain.test.tsx`             | new          | B-40, B-42       | 10, jsdom                                         |
+| `components/inspector/__test__/TimelineHoldLine.test.tsx`         | changed (+6) | B-41             | multi-selection case updated by design            |
+| `timeline/__test__/timelineKeepCommands.test.ts`                  | new          | B-42–B-44        | 8, real database                                  |
+| `utilities/__test__/KeepOnNextPageKey.test.tsx`                   | new          | B-43             | run in both modes                                 |
+| `db-functions/__test__/timelineKeepHere.test.ts`                  | changed (+3) | B-38, B-44       | `at` spots; one history round trip                |
+| `timeline/__test__/timelineMoveThemToo.test.ts`                   | changed      | B-44             | two "offers nothing" cases now expect Only Page N |
+| `timeline/__test__/timelineKeepLater.test.ts`                     | changed (+7) | B-45 (pure)      | wp20                                              |
+| `global/classes/canvasObjects/__test__/TimelineKeptLayer.test.ts` | new          | B-45             | 11, real fabric canvas (wp20)                     |
+| `timeline/__test__/useTimelineKeptMarks.test.tsx`                 | new          | B-45             | 5, jsdom (wp20)                                   |
 
 ## 5. QA checklist
 
@@ -1477,14 +1534,15 @@ Keep later pages (wp16):
 Start from `ux-starter-timeline.dots`: press E (page 2), Ctrl+A, drag the band forward; Esc; select
 OT1 and OT8.
 
-| ID   | Steps                                                                                       | Expected                                                                                                                                                        |
-| ---- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B-40 | Hover the chain on page 3; click it; select the whole band; hover page 3's chain; deselect. | "Keep 2 marchers on Page 3 · They won't follow Page 2 any more"; after the click a filled broken chain; whole band: "2 of 8 kept" with a 2 badge; none. U/R.    |
-| B-40 | Select page 3 (Q/E or the box), check the chain; press on the chain and drag sideways.      | The chain stays visible beside the start flag; the box isn't selected, scrubbed or dragged.                                                                     |
-| B-41 | Page 3 with OT1/OT8 following: Keep here; then Follow again; page 2: read the quiet line.   | Tooltips as in B-41; "Kept on this page · Follow again" after keeping; "Pages 3–4 follow these marchers" on page 2 while they follow. U/R.                      |
-| B-42 | Right-click page 3 and page 4 before and after keeping; with nothing selected.              | Entries enabled by state; none without a selection.                                                                                                             |
-| B-43 | Page 2 selected: K; look at page 3; K again; type K in a text field.                        | Kept, then following again, no toast; typing does nothing to the show.                                                                                          |
-| B-44 | Keep nothing; drag OT1 (with OT8) on page 2; press Only Page 2; go to page 3; Ctrl+Z.       | "Pages 3–4 followed · Only Page 2"; pages 3–4 back at the old spots, page 3 shows kept; one undo takes back only Only Page 2. A first move on a page: no toast. |
+| ID   | Steps                                                                                                                            | Expected                                                                                                                                                                                            |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B-40 | Hover the chain on page 3; click it; select the whole band; hover page 3's chain; deselect.                                      | "Keep 2 marchers on Page 3 · They won't follow Page 2 any more"; after the click a filled broken chain; whole band: "2 of 8 kept" with a 2 badge; none. U/R.                                        |
+| B-40 | Select page 3 (Q/E or the box), check the chain; press on the chain and drag sideways.                                           | The chain stays visible beside the start flag; the box isn't selected, scrubbed or dragged.                                                                                                         |
+| B-41 | Page 3 with OT1/OT8 following: Keep here; then Follow again; page 2: read the quiet line.                                        | Tooltips as in B-41; "Kept on this page · Follow again" after keeping; "Pages 3–4 follow these marchers" on page 2 while they follow. U/R.                                                          |
+| B-42 | Right-click page 3 and page 4 before and after keeping; with nothing selected.                                                   | Entries enabled by state; none without a selection.                                                                                                                                                 |
+| B-43 | Page 2 selected: K; look at page 3; K again; type K in a text field.                                                             | Kept, then following again, no toast; typing does nothing to the show.                                                                                                                              |
+| B-44 | Keep nothing; drag OT1 (with OT8) on page 2; press Only Page 2; go to page 3; Ctrl+Z.                                            | "Pages 3–4 followed · Only Page 2"; pages 3–4 back at the old spots, page 3 shows kept; one undo takes back only Only Page 2. A first move on a page: no toast.                                     |
+| B-45 | Move all on page 2; keep OT1/OT8 on page 3 (K); click empty field; view pages 3, 2, 4; hover OT1's mark; zoom out; play; Ctrl+Z. | Page 3: small broken chains right of OT1 and OT8 only; pages 2 and 4: none; tooltip "Kept on Page 3 · won't follow Page 2"; still small zoomed out; gone while playing; gone after undo. PM: never. |
 
 ---
 
@@ -1559,7 +1617,7 @@ This list should drive the next testing pass.
 7. **Runs that add up (B-36)** across mode switches or after a file reload: not tested (the run is
    module state and should reset; not checked).
 8. **Partial-follow wording:** no "6 of 8 followed" count (09 rec. 2, not built).
-9. **Keep later pages (B-38 … B-44):** no persona run on the built UI yet (V-154 … V-158); chains
+9. **Keep later pages (B-38 … B-45):** no persona run on the built UI yet (V-154 … V-158); chains
    at 100+ pages and large selections not measured (one span pass per marcher per resolver
    version); the new strings exist only in `en.json`; chains in compact mode and on very narrow
    boxes checked by unit test only.
