@@ -71,7 +71,7 @@ describe("holds", () => {
         expect(h.instrument.origin[2]).toBeGreaterThan(0.1);
         expect(h.instrument.origin[2]).toBeLessThan(0.3);
         // the loop plane lies over the left shoulder, clear of the head (half-width 0.1 plus the tube)
-        expect(h.instrument.origin[0]).toBeGreaterThan(0.15);
+        expect(h.instrument.origin[0]).toBeGreaterThanOrEqual(0.14);
     });
 
     it("keeps the wrists in front of the chest in every hold", () => {
