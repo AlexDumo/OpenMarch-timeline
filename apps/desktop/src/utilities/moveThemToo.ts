@@ -3,9 +3,11 @@ import { db, schema } from "@/global/database/db";
 import tolgee from "@/global/singletons/Tolgee";
 
 /**
- * **Move them too** (defined-coordinates 09, G4): after an edit moves marchers whose next own
- * move is on a later page, those marchers keep that move's absolute spot, so they no longer
- * travel with the rest. The surprise toast names them, "OT1 and OT8 have their own move on Page
+ * **Move them too** (defined-coordinates 09, G4): after an edit splits the marchers it moved at a
+ * later page, some following into it and some keeping their own move's absolute spot there, the
+ * ones that kept it no longer travel with the rest. Only a split says anything: where every moved
+ * marcher has its own later move (a written show), or every one follows, ordinary edits stay
+ * silent (V-146). The surprise toast names them, "OT1 and OT8 have their own move on Page
  * 3, so they kept their spot", with **Move them too**, which shifts those later destinations by
  * the offset the edit moved each marcher, as its own undoable edit. Destinations stay absolute
  * (D-5); this only offers to repeat the edit there. The same in both modes: page mode's write
