@@ -1585,7 +1585,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     // Focus is an offset outline, so it reads apart from the selected clip's
                     // flush ring (UI-14 review)
                     "focus-visible:outline-accent absolute overflow-visible outline-hidden transition-[filter,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 enabled:hover:brightness-110",
-                    canMove && "cursor-grab touch-none active:cursor-grabbing",
+                    canMove &&
+                        "cursor-grab! touch-none active:cursor-grabbing!",
                     micro ? "rounded-full" : "rounded-4",
                 )}
                 style={{
@@ -2092,7 +2093,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     aria-label={`Selection ${kind}`}
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
-                    className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize disabled:cursor-default"
+                    className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
                     style={{ left: x, height: hitHeight }}
                 >
                     <span
@@ -2112,7 +2113,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     aria-label={`Start flag, beat ${beatIndex}`}
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
-                    className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize disabled:cursor-default"
+                    className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
                     style={{ left: x, height: hitHeight }}
                 >
                     <span
@@ -2162,7 +2163,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     onKeyDown={undefined}
-                    className="pointer-events-auto absolute top-0 z-[55] h-14 w-14 touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize disabled:cursor-default"
+                    className="pointer-events-auto absolute top-0 z-[55] h-14 w-14 touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize! disabled:cursor-default!"
                     style={{ left: x }}
                 >
                     <svg
@@ -2561,7 +2562,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                     keySteps.release();
             }}
             onBlur={keySteps.end}
-            className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
+            className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize! touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
             style={{
                 left,
                 height: Math.min(hitHeight, height),

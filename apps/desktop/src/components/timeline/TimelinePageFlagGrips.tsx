@@ -482,7 +482,9 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                         onClick={(event) => {
                             if (event.detail === 0) onSelectPage(page);
                         }}
-                        className="group focus-visible:ring-accent pointer-events-auto absolute z-[56] -translate-x-1/2 cursor-ew-resize touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
+                        // `!`: the shared `button { cursor: pointer }` sits outside any CSS layer, so it beats any
+                        // cursor utility on a button without it
+                        className="group focus-visible:ring-accent pointer-events-auto absolute z-[56] -translate-x-1/2 cursor-ew-resize! touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
                         style={{
                             width: gripWidth(
                                 range,
