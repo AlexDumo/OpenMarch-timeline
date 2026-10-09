@@ -86,6 +86,12 @@ import {
     type LabeledHoldMarks,
 } from "./PageHoldMark";
 import { HintTooltipProvider } from "./HintTooltip";
+import {
+    chainOffset,
+    PageKeepChainButton,
+    type PageKeepChain,
+    type PageKeepChains,
+} from "./PageKeepChain";
 import type {
     BeatPosition,
     TimelineBeatRange,
@@ -839,6 +845,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     seekSnapBeats = [],
     positionBeat,
     holdMarks,
+    keepChains,
     scrubLine,
     pageFlagMove,
     height = 28,
@@ -869,6 +876,8 @@ export const TimelineRuler = memo(function TimelineRuler({
     flagSnapPlayhead?: () => BeatPosition;
     /** Where the selected marchers hold, by page id (UI-18); none without a selection */
     holdMarks?: LabeledHoldMarks;
+    /** The chains on the page boxes (UI-18 keep later pages), by page id */
+    keepChains?: PageKeepChains;
 }) {
     // A dragged flag snaps to downbeats, never to page lines (`flagSnapBeat`)
     const flagDownbeats = useMemo(
@@ -984,6 +993,7 @@ export const TimelineRuler = memo(function TimelineRuler({
                 onSelectPage={selectPage}
                 holdMarks={holdMarks}
                 holdMarkId={holdMarkId}
+                keepChains={keepChains}
             />
             {pageFlagMove && (
                 <TimelinePageFlagGrips
@@ -1025,6 +1035,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     onSelectPage,
     holdMarks,
     holdMarkId,
+    keepChains,
 }: {
     initialPage: TimelinePageMarker | undefined;
     pageBoxes: readonly {
@@ -1043,6 +1054,8 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     holdMarks?: LabeledHoldMarks;
     /** The prefix of each box's hold description id */
     holdMarkId: string;
+    /** The chains on the page boxes (UI-18 keep later pages), by page id */
+    keepChains?: PageKeepChains;
 }) {
     const selectedIds = new Set(selectedBoxIds.split("\n"));
     return (
@@ -1089,6 +1102,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
                             onSelectPage={onSelectPage}
                             hold={holdMarks?.get(page.id)}
                             holdDescriptionId={`${holdMarkId}-${page.id}`}
+                            chain={keepChains?.get(page.id)}
                         />
                     ) : null,
                 )}
@@ -1108,6 +1122,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
     onSelectPage,
     hold,
     holdDescriptionId,
+    chain,
 }: {
     page: TimelinePageMarker;
     range: TimelineBeatRange;
@@ -1119,10 +1134,14 @@ const TimelinePageBox = memo(function TimelinePageBox({
     /** Where the selected marchers hold on this page (UI-18), with its words */
     hold?: LabeledHoldMark;
     holdDescriptionId: string;
+    /** The box's chain for the selected marchers (UI-18 keep later pages) */
+    chain?: PageKeepChain;
 }) {
     const boxWidth =
         (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
-    return (
+    const boxLeft =
+        initialPageWidth + beatToX(range.startBeatIndex, pixelsPerBeat);
+    const box = (
         <HoldMarkTooltip hold={hold}>
             <button
                 type="button"
@@ -1138,12 +1157,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
                     if (!event.ctrlKey) onSelectPage(page, event.shiftKey);
                 }}
                 className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
-                style={{
-                    left:
-                        initialPageWidth +
-                        beatToX(range.startBeatIndex, pixelsPerBeat),
-                    width: boxWidth,
-                }}
+                style={{ left: boxLeft, width: boxWidth }}
             >
                 <PageBoxLabel
                     label={page.label}
@@ -1155,6 +1169,20 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 />
             </button>
         </HoldMarkTooltip>
+    );
+    if (!chain) return box;
+    // A sibling, not inside the box: a button can't hold a button
+    return (
+        <>
+            {box}
+            <PageKeepChainButton
+                chain={chain}
+                pageId={page.id}
+                pageLabel={page.label}
+                range={range}
+                left={boxLeft + chainOffset(boxWidth)}
+            />
+        </>
     );
 });
 
