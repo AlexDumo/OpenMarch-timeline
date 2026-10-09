@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
     BODY_TYPES,
+    bassOptions,
     HEIGHT_CLASSES,
     SKIN_TONES,
     classSuffix,
@@ -157,5 +158,36 @@ describe("section uniforms", () => {
         expect(visible("Baritone")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         expect(visible("Flute")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         expect(visible("Color Guard")).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    });
+});
+
+describe("bass drum sizes", () => {
+    it("spreads the Bass Drum section over the sizes in marcher order", () => {
+        const ids = [5, 9, 2, 7, 11];
+        const sections = [
+            "Bass Drum",
+            "Trumpet",
+            "Bass Drum",
+            "Flub Drum",
+            "Bass Drum",
+        ];
+        const o = bassOptions(ids, sections);
+        expect(o[1]).toBeUndefined();
+        // four bass players: 18, 22, 28, 32 in id order 2, 5, 7, 11
+        expect(o[2]?.bassInches).toBe(18);
+        expect(o[0]?.bassInches).toBe(22);
+        expect(o[3]?.bassInches).toBe(28);
+        expect(o[4]?.bassInches).toBe(32);
+    });
+
+    it("gives a lone bass drum the middle size", () => {
+        expect(bassOptions([1], ["Bass Drum"])[0]?.bassInches).toBe(26);
+    });
+
+    it("carries the size into the look so sizes get their own meshes", () => {
+        const a = sectionUniform("Bass Drum", null, "up", { bassInches: 18 });
+        const b = sectionUniform("Bass Drum", null, "up", { bassInches: 32 });
+        expect(a.options.carry?.options?.bassInches).toBe(18);
+        expect(uniformKey(a)).not.toBe(uniformKey(b));
     });
 });

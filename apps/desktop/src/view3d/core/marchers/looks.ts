@@ -20,6 +20,7 @@ import {
     type Carry,
     type Finish,
 } from "../instruments/catalog";
+import { bassSizesFor } from "../instruments/battery";
 import type { ModelOptions } from "../instruments/model";
 import type { HoldState } from "../instruments/holds";
 
@@ -30,6 +31,27 @@ const withOptions = (
     carry && options && Object.keys(options).length > 0
         ? { ...carry, options }
         : carry;
+
+/**
+ * Per-marcher model options for the bass drum line: the marchers whose
+ * section carries the bass drum, taken in id order, spread over the
+ * drum sizes (a lone drum gets the middle one). Everyone else is undefined.
+ */
+export function bassOptions(
+    ids: readonly number[],
+    sections: readonly string[],
+): (ModelOptions | undefined)[] {
+    const bass = ids
+        .map((id, i) => ({ id, i }))
+        .filter(({ i }) => carryForSection(sections[i])?.model === "bass")
+        .sort((a, b) => a.id - b.id);
+    const sizes = bassSizesFor(bass.length);
+    const out: (ModelOptions | undefined)[] = ids.map(() => undefined);
+    bass.forEach(({ i }, k) => {
+        out[i] = { bassInches: sizes[k] };
+    });
+    return out;
+}
 
 /** om-pose's seven body types (`assets/body-v4u/<type>.glb`). */
 export const BODY_TYPES = [

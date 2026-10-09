@@ -42,6 +42,7 @@ import { buildCountClock, countAt } from "@/view3d/core/marchers/countClock";
 import { plannedClips } from "@/view3d/core/marchers/planner";
 import {
     defaultPerformerBody,
+    bassOptions,
     sectionUniform,
 } from "@/view3d/core/marchers/looks";
 import { usePerformerTimelines } from "@/view3d/positions";
@@ -139,10 +140,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             string,
             Parameters<typeof sectionUniform>[1],
         ][];
-        return rows.map(([id, section, fill]) => ({
+        const options = bassOptions(
+            rows.map((r) => r[0]),
+            rows.map((r) => r[1]),
+        );
+        return rows.map(([id, section, fill], i) => ({
             // varied heights at high quality; one height (one bake class) at low
             body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
-            uniform: sectionUniform(section, fill, hornState),
+            uniform: sectionUniform(section, fill, hornState, options[i]),
         }));
     }, [looksKey, quality, hornState]);
     const heightClasses = useMemo(
