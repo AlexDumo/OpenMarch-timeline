@@ -14,6 +14,9 @@ wp15 at `c56996f0`, with migration 0018) and their UI (wp16, branch `dc/wp16-kee
 numbers are at the wp16 branch tip, not `2470207c`. They change two statements below: there is now a
 schema addition (B-38), and a changed move that carried into later pages now shows a toast (B-44,
 amending B-25).
+wp19 (branch `dc/wp19-keep-fixes`, after the final two-user study) reworked B-39 … B-43: K acts
+where the marchers hold, the words name the marchers, the menu and tooltips show K, kept and linked
+chains differ at a glance, and never-moved marchers can be kept ahead of any move; B-44 is unchanged.
 
 How to use this file:
 
@@ -993,13 +996,15 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
   their own move there, or partway through a longer move are skipped and reported. Moving a kept
   spot's ending (a canvas drag on its page, the inspector's destination) makes it an ordinary own
   move in the same edit; a drag back never clears it; Move them too never offers it; the page deletes
-  that take a page's moves take it with its marker.
+  that take a page's moves take it with its marker. A marcher that never moved (no rows) follows
+  the start and can be kept the same way (wp19: no change needed, a regression test added); its
+  later first move then walks back to the kept spot.
 - **States:** `KeptState` per marcher per box: `follows`, `kept`, `own`, `midMove`
   (`keptStatesForSelection`).
 - **Code:** migration `0018_clean_sentinels.sql`, `schema.ts`, `repair.ts`; `db-functions/timelineKeepHere.ts`,
   `timelineKeptMarkers.ts`, `timelineMoves.ts` (`keptAssignmentsMovedBy`); `timeline/timelineKept.ts`.
 - **Tests:** `timelineKeepHere.test.ts` (owner flow, skips, edits of a kept spot, page edits, history
-  round trips), `timelineKept.test.ts`, `0018_clean_sentinels.test.ts`.
+  round trips; wp19: keep a never-moved marcher, and its history round trip), `timelineKept.test.ts`, `0018_clean_sentinels.test.ts`.
 - **V-row:** V-154 … V-158 (the UI on top). ADR 0001 amendment 2026-10-09.
 
 #### B-39 Keep states for the selection (renderer)
@@ -1007,40 +1012,54 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Mode:** TL.
 - **After (wp16):** the UI reads, per page box, which selected marchers **follow** into it and which
   were **kept** there, from the resolver's spans and the stored markers (`useKeptAssignmentsStore`,
-  read again after every resolver or display version). A marcher counts as following only after an
-  earlier move (_lead default_): before its first move it holds from the start, and nothing offers
-  to keep it, so a fresh show shows no chains. Each box also names the page(s) they follow
-  (`from`), for the words.
-- **Code:** `timeline/timelineKeepLater.ts` (`pageKeepStates` :74, `followingPages` :144,
-  `pageChainWords` :312, `nextPageToggle` :349); `timeline/useKeepLaterPages.ts`
-  (`useKeptAssignmentsHost` :39, mounted in `TimelineResolverHost.tsx` :80; `usePageKeepStates` :72);
-  `timeline/timelineKeepCommands.ts` (`keepOnPage`, `followAgainOn`, `toggleKeepOnNextPage`: refusals
-  are toasts).
-- **Tests:** `timelineKeepLater.test.ts` (14).
+  read again after every resolver or display version). Before its first move a marcher follows the
+  start, and counts as following too (`fromStart`), so it can be kept ahead of any move (wp19, lead
+  decision after the final study; wp16 left it out). The quiet "Pages 3–4 follow" line and the chains
+  leave those marchers out (lead: every later page follows them); the inspector, the menu and K
+  offer to keep them. Each box also names the page(s)
+  they follow (`from`), for the words. **K**'s target is `keepToggle` (B-43).
+- **Code:** `timeline/timelineKeepLater.ts` (`pageKeepStates`, `followingPages`,
+  `marcherNamesText`, `pageChainWords`, `keepToggle`); `timeline/useKeepLaterPages.ts`
+  (`useKeptAssignmentsHost`, mounted in `TimelineResolverHost.tsx`; `usePageKeepStates`,
+  `useKeepToggle`, `useMarcherNameOf`); `timeline/timelineKeepCommands.ts` (`keepOnPage`,
+  `followAgainOn`, `toggleKeepOnPage`: refusals are toasts).
+- **Tests:** `timelineKeepLater.test.ts` (23).
 
 #### B-40 Chains on the page boxes
 
 - **Mode:** TL.
-- **After:** with marchers selected, each page box they follow into shows a chain; a box where they
-  were kept a broken chain filled in the accent; a box with some of each a chain with a small kept
-  count. Nothing without a selection (owner). A 20 px button, 22 px in from the flag before its box
+- **After:** with marchers selected, each page box they follow into shows a chain as a quiet
+  outline; a box where they were kept a broken chain on a filled accent chip; a box with some of
+  each a chain outlined in the accent with a filled kept count (wp19: the final study found the
+  wp16 purple-vs-grey look too close). Marchers that haven't moved yet get no chain (lead, wp19: on every box it was noise), but a kept
+  one still shows the kept chip; a mixed chain counts only the marchers that follow a move plus the
+  kept ones. Nothing without
+  a selection (owner). A 20 px button, 22 px in from the flag before its box
   (centered in a box narrower than 70 px), so the selected page's flag, the start flag and the
   playhead never cover it (the study's complaint); it stays on the selected box. A sibling of the
   box: a press never selects, scrubs or drags it; a right-click opens the box's menu (B-42).
 - **Strings** (`timeline.keep.chain.*`), label · hint:
 
-  | State   | Words                                                                                                                                                   | Click                           |
-  | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-  | follows | "Keep 2 marchers on Page 3" · "They won't follow Page 2 any more" (one: "It won't …"; several source pages: "They won't follow earlier pages any more") | keeps those marchers            |
-  | kept    | "2 marchers kept on Page 3" · "Click to follow Page 2 again" ("…earlier pages again")                                                                   | lets them follow again          |
-  | mixed   | "2 of 8 kept on Page 3" · "Click to keep the other 6 too" ("…the other one too")                                                                        | keeps the rest (_lead default_) |
+  | State   | Words                                                                                                                                                                 | Click                           |
+  | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+  | follows | "Keep OT1 and OT8 on Page 3" · "They won't follow Page 2 any more" (one: "It won't …"; several source pages or the start: "They won't follow earlier pages any more") | keeps those marchers            |
+  | kept    | "OT1 and OT8 kept on Page 3" · "Click to follow Page 2 again" ("…earlier pages again")                                                                                | lets them follow again          |
+  | mixed   | "2 of the 8 selected are kept on Page 3 (OT1, OT8)" · "Click to keep the other 6 too" ("…the other one too")                                                          | keeps the rest (_lead default_) |
+
+  Names (wp19): up to three ("OT1, OT2 and OT3"), then "OT1, OT2 and 4 others"
+  (`timeline.keep.names.*`); counts as before where a name isn't known. The chain K would toggle
+  adds " (K)" to its tooltip label and `aria-keyshortcuts="K"`, only where K changes exactly the
+  chain's marchers.
 
 - **Code:** `components/timeline/PageKeepChain.tsx` (`usePageKeepChains` :71, `chainOffset` :106,
   `PageKeepChainButton` :130); `TimelinePrimitives.tsx` (`TimelinePageBox` :1093);
   `TimelineModePanel.tsx` (:168); `Timeline.tsx`, `TimelineVariants.tsx`, `TimelineViewModel.ts`
   (`keepChains` prop).
-- **Tests:** `PageKeepChain.test.tsx` › "the chains on the page boxes" (6).
-- **Real-app:** `~/ux-study/wp16/run` (study flow, 37 steps), `~/ux-study/wp16/mixed` (mixed chain).
+- **Tests:** `PageKeepChain.test.tsx` › "the chains on the page boxes" (8);
+  `timelineKeepLater.test.ts` › "pageChainWords", "marcherNamesText".
+- **Real-app:** `~/ux-study/wp16/run` (study flow, 37 steps), `~/ux-study/wp16/mixed` (mixed chain);
+  wp19: `~/ux-study/wp19/a` (linked outline vs kept chip, step 14 crop), `~/ux-study/wp19/b`
+  (mixed chip and named tooltip, step 13 crop).
 - **V-row:** V-154.
 
 #### B-41 Inspector: Keep here, Follow again, and the pages that follow
@@ -1048,22 +1067,33 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Mode:** TL.
 - **After:** the hold line (B-30) gains buttons, each a real button styled as the line's link, with
   a tooltip (`HintTooltip`):
-  - a page they follow into: "Hold from Page 2 → · **Keep here**" (tooltip "Keep these marchers on
-    Page 3, so editing Page 2 won't move them here");
-  - kept: "Kept on this page · **Follow again**" ("Let these marchers follow Page 2 again, so editing
+  - a page they follow into: "Hold from Page 2 → · **Keep here**" (tooltip "Keep OT1 and OT8 on
+    Page 3, so editing Page 2 won't move them here"); "Hold from the start → · **Keep here**" for
+    marchers that never moved (wp19);
+  - the "Hold from Page 2 →" link's tooltip (wp19, was a plain title "Go to Page 2"): "Go to Page 2,
+    where these marchers last moved";
+  - kept: "Kept on this page · **Follow again**" ("Let OT1 and OT8 follow Page 2 again, so editing
     Page 2 moves them here too");
   - mixed: "Some of these marchers are kept on this page" or "Some of these marchers hold here", with
-    the buttons on a row of their own; tooltips name the count ("Keep 6 of these marchers …");
+    the buttons on a row of their own; tooltips name the marchers and count the selection ("Keep OT1
+    (1 of the 2 selected) on Page 3, …"; without names "1 of the 2 selected");
+  - names as on the chains (B-40); "these marchers" where a name isn't known; the button **K** would
+    run adds " (K)" to its tooltip;
   - "These marchers hold here · Keep here" where they all follow but from different pages (B-30
     showed nothing there).
   - A quiet line under it on any page later pages follow from: "Pages 3–4 follow these marchers",
     "Page 4 follows these marchers", "… some of these marchers".
   - A move that goes nowhere without the marker still reads "Moves on this page".
-- **Strings:** `inspector.marcher.timeline.*` (18 new keys).
+- **Strings:** `inspector.marcher.timeline.*` (wp19: the keep and follow hints take `{who}`;
+  `theseMarchers`, `namesOfSelected`, `countOfSelected` added; the four `*SomeHint*` keys gone;
+  `goToPage` reworded).
 - **Code:** `components/inspector/TimelineHoldLine.tsx` (`KeepButton`, `useSelectionKeepState`,
-  `FollowingPagesLine`, `TimelineHoldLineContent`).
-- **Tests:** `TimelineHoldLine.test.tsx` › "keep later pages (UI-18)" (6) and the updated
-  multi-selection case.
+  `FollowingPagesLine`, `TimelineHoldLineContent`, `nameOf` prop); `MarcherEditor.tsx` passes the
+  selection's names.
+- **Tests:** `TimelineHoldLine.test.tsx` › "keep later pages (UI-18)" (8) and the updated
+  multi-selection and hold-link cases.
+- **Real-app:** `~/ux-study/wp19/d` step 22 (link tooltip), `~/ux-study/wp19/c` step 6 (Keep here
+  for a never-moved marcher).
 - **V-row:** V-155.
 
 #### B-42 Page box menu: Keep selected marchers here / Let selected marchers follow again
@@ -1071,27 +1101,40 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Mode:** TL.
 - **After:** above the deletes, both entries show with a selection, each enabled by the selection's
   state on that box (some follow / some kept); neither without a selection. They act on the
-  marchers in that state, one undo step each.
+  marchers in that state, one undo step each. The entry **K** would run from the current page shows
+  a quiet "K" on its right (the transport popover's Ctrl+M style) and `aria-keyshortcuts` (wp19,
+  _lead default_: only that entry, so the key never promises another page).
 - **Code:** `TimelineRangeMenu.tsx` (`TimelineKeepHereMenu` :152, entries); `PageKeepChain.tsx`
   (`keepHereMenu` :34); `Timeline.tsx` (`keepHere` prop).
-- **Tests:** `PageKeepChain.test.tsx` › "the page box menu's keep entries" (4);
+- **Real-app:** `~/ux-study/wp19/b` step 15.
+- **Tests:** `PageKeepChain.test.tsx` › "the page box menu's keep entries" (6);
   `timelineKeepCommands.test.ts` › "the menu keeps the selected marchers that follow, and lets them
   follow again".
 - **V-row:** V-156.
 
-#### B-43 K: keep on the next page, or follow again
+#### B-43 K: keep where the marchers hold, or on the next page
 
 - **Mode:** TL (does nothing in PM).
-- **After:** a registered action on **K** (free in both modes): on the page after the selected page,
-  keeps the selected marchers that follow there, or, when none does, lets the kept ones follow
-  again; with some of each it keeps the rest. Reads the markers from the file, so two quick presses
-  toggle. No toast. Not while playing; never from a text field (the handler's input check).
-- **Strings:** `actions.timeline.toggleKeepOnNextPage`.
-- **Code:** `RegisteredActionsHandler.tsx` (enum :135, object :572, case :1429);
-  `timelineKeepCommands.ts:toggleKeepOnNextPage`.
-- **Tests:** `KeepOnNextPageKey.test.tsx` (both modes: K calls the toggle only in TL, never from a
-  field; K has no other action); `timelineKeepCommands.test.ts` › "K keeps the selection…", "K does
-  nothing…".
+- **After (wp19; wp16 always used the next page, and the final study's Priya pressed K on a held
+  page 3 and got page 4):** a registered action on **K** (free in both modes), from the selected
+  page (the page box the playhead is in): where some selected marchers hold on it (follow, or kept
+  there) it toggles keep there, for those; where they all move on it (or are mid-move) it toggles
+  keep on the next page box (home: the first box). Toggling keeps the ones that follow, or, when
+  none does, lets the kept ones follow again; with some of each it keeps the rest. Never-moved
+  marchers count as holding (B-39), so K before any move keeps the current page. Reads the markers
+  from the file, so two quick presses toggle. No toast. Not while playing; never from a text field.
+  The chain, menu entry and inspector button K would run say so (B-40..B-42).
+- **Strings:** `actions.timeline.toggleKeepOnPage` "Keep the selected marchers where they hold on
+  this page (on the next page if they move here), or let them follow again".
+- **Code:** `RegisteredActionsHandler.tsx` (enum, object, case `toggleKeepOnPage`);
+  `timelineKeepCommands.ts:toggleKeepOnPage`; `timelineKeepLater.ts:keepToggle`.
+- **Tests:** `KeepOnPageKey.test.tsx` (renamed; both modes: K calls the toggle only in TL, never
+  from a field; K has no other action; the description); `timelineKeepCommands.test.ts` › K on the
+  page they move, K on a held page (the study's T2), K with a mix, K before any move, "K does
+  nothing…"; `timelineKeepLater.test.ts` › "keepToggle (K)" (5).
+- **Real-app:** `~/ux-study/wp19/a` steps 11–14 (K on held page 3 keeps page 3; Kept on this
+  page), `~/ux-study/wp19/c` steps 7–13 (K keeps a never-moved OT1 on page 3; its later page 2 move
+  walks back there).
 - **V-row:** V-157. The app has no shortcuts list to add it to; the action's description is its
   only listing.
 

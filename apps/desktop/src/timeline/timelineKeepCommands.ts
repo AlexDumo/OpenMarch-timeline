@@ -7,7 +7,7 @@ import {
 } from "@/db-functions/timelineKeepHere";
 import { readKeptAssignmentIds } from "@/db-functions/timelineKeptMarkers";
 import type { KeptPageBox } from "./timelineKept";
-import { nextPageToggle, pageKeepStates } from "./timelineKeepLater";
+import { keepToggle, pageKeepStates } from "./timelineKeepLater";
 import { toastTimelineError } from "./timelineErrorMessages";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
 import { keepPagesOf } from "./useKeepLaterPages";
@@ -56,14 +56,14 @@ export async function followAgainOn(
 }
 
 /**
- * **K**: on the page after `currentPageId`, keeps the selected marchers that follow there, or,
- * when none does, lets the kept ones follow again (`nextPageToggle`). Reads the kept markers from
- * the file, not the renderer's copy, so a quick second press sees the first. No toast: the chain
- * and the inspector line show what changed.
+ * **K**: where the selected marchers hold on the page `currentPageId`, toggles keep there; where
+ * they move on it, toggles keep on the next page (`keepToggle`). Reads the kept markers from the
+ * file, not the renderer's copy, so a quick second press sees the first. No toast: the chain and
+ * the inspector line show what changed.
  *
  * @returns what it did, or null when nothing applied
  */
-export async function toggleKeepOnNextPage({
+export async function toggleKeepOnPage({
     database = db,
     pages,
     currentPageId,
@@ -84,7 +84,7 @@ export async function toggleKeepOnNextPage({
         toastTimelineError(error, "Error reading the kept spots");
         return null;
     }
-    const toggle = nextPageToggle(
+    const toggle = keepToggle(
         pageKeepStates({
             pages: keepPages,
             marcherIds,

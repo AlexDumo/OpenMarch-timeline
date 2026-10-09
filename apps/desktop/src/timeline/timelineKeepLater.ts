@@ -8,11 +8,10 @@ import { keptStateOf, type KeptPageBox } from "./timelineKept";
  * works over each marcher's resolver spans and the stored kept markers
  * (`readKeptAssignmentIds`); the commands are `keepMarchersOnPage` and `followAgainOnPage`.
  *
- * A marcher **follows** on a box where it has no move of its own (`KeptState` "follows") after
- * an earlier move: an edit of the page it last moved on carries into the box. Before its first
- * move it holds from the start, which nothing here offers to keep (lead default: there's no page
- * to stop following, and every box would show a chain). It is **kept** where its only move over
- * the box is a stored kept spot.
+ * A marcher **follows** on a box where it has no move of its own (`KeptState` "follows"): an
+ * edit of the page it last moved on carries into the box. Before its first move it holds from the
+ * start, and follows that too, so it can be kept ahead of any move (wp19, after the final study:
+ * a pre-emptive keep). It is **kept** where its only move over the box is a stored kept spot.
  */
 
 /** A page with its flag and box (`pageFlags`), and its name as the app shows it. */
@@ -30,8 +29,10 @@ export interface PageKeepState {
     readonly pageId: number;
     readonly pageName: string;
     readonly box: KeptPageBox;
-    /** The selected marchers that follow into the box after an earlier move, ascending */
+    /** The selected marchers that follow into the box (no move of their own there), ascending */
     readonly follows: number[];
+    /** Those of `follows` that haven't moved yet: they hold from the start, ascending */
+    readonly fromStart: number[];
     /** The selected marchers with a kept spot over the box, ascending */
     readonly kept: number[];
     /**
@@ -89,6 +90,7 @@ export function pageKeepStates({
         const box = page.range;
         if (!box) continue;
         const follows: number[] = [];
+        const fromStart: number[] = [];
         const keptHere: number[] = [];
         const fromPages = new Set<number>();
         for (const id of ids) {
@@ -105,8 +107,8 @@ export function pageKeepStates({
                     (last, r) => (last && last.end >= r.end ? last : r),
                     null,
                 );
-            if (state === "follows" && !before) continue;
             (state === "follows" ? follows : keptHere).push(id);
+            if (state === "follows" && !before) fromStart.push(id);
             const source = before ? pageAt(pages, before.end) : -1;
             if (source >= 0) fromPages.add(source);
         }
@@ -115,6 +117,7 @@ export function pageKeepStates({
             pageName: page.name,
             box: { start: box.start, end: box.end },
             follows,
+            fromStart,
             kept: keptHere,
             from: [...fromPages]
                 .sort((a, b) => a - b)
@@ -140,6 +143,8 @@ const nextBoxIndex = (
  * The later pages that follow the selection from the page `currentPageId` (an edit there carries
  * into them): for each marcher, the boxes right after it, in a row, that it follows into, in page
  * order. `all` says whether every selected marcher follows into every one of them. Null for none.
+ * Marchers that haven't moved yet don't count (lead default, wp19): every later page follows
+ * them, which says nothing on a fresh show.
  */
 export function followingPages(
     states: readonly PageKeepState[],
@@ -151,9 +156,13 @@ export function followingPages(
     const selected = states[first]!.selected;
     const names: string[] = [];
     let all = true;
-    let still = new Set(states[first]!.follows);
+    const moved = (s: PageKeepState) => {
+        const start = new Set(s.fromStart);
+        return s.follows.filter((id) => !start.has(id));
+    };
+    let still = new Set(moved(states[first]!));
     for (let i = first; i < states.length && still.size > 0; i++) {
-        const here = new Set(states[i]!.follows);
+        const here = new Set(moved(states[i]!));
         still = new Set([...still].filter((id) => here.has(id)));
         if (still.size === 0) break;
         names.push(states[i]!.pageName);
@@ -182,6 +191,74 @@ const english: KeepTranslate = (_key, defaultValue, params) =>
         (_, name: string) => params?.[name] ?? "",
     );
 
+/** A marcher's name as the app shows it (its drill number), or undefined when unknown. */
+export type MarcherNameOf = (marcherId: number) => string | undefined;
+
+/** How many names the words list before they count the rest ("OT1, OT2 and 4 others"). */
+export const NAMES_SHOWN = 3;
+
+/** The marchers' names in drill order, or null when some aren't known. */
+const namesOf = (
+    ids: readonly number[],
+    nameOf: MarcherNameOf | undefined,
+): string[] | null => {
+    if (!nameOf || ids.length === 0) return null;
+    const names = ids.map(nameOf);
+    if (names.some((n) => !n)) return null;
+    return (names as string[]).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true }),
+    );
+};
+
+/**
+ * The marchers by name for the keep words (wp19, after the final study): "OT1", "OT1 and OT8",
+ * "OT1, OT2 and OT3", then "OT1, OT2 and 4 others". Null when a name isn't known, so the words
+ * fall back to a count.
+ */
+export function marcherNamesText(
+    ids: readonly number[],
+    nameOf: MarcherNameOf | undefined,
+    t: KeepTranslate = english,
+): string | null {
+    const names = namesOf(ids, nameOf);
+    if (!names) return null;
+    const [first, second, third] = names;
+    if (names.length === 1) return first!;
+    if (names.length === 2)
+        return t("timeline.keep.names.two", "{first} and {second}", {
+            first: first!,
+            second: second!,
+        });
+    if (names.length === NAMES_SHOWN)
+        return t("timeline.keep.names.three", "{first}, {second} and {third}", {
+            first: first!,
+            second: second!,
+            third: third!,
+        });
+    return t(
+        "timeline.keep.names.many",
+        "{first}, {second} and {count} others",
+        {
+            first: first!,
+            second: second!,
+            count: String(names.length - 2),
+        },
+    );
+}
+
+/** The names as a list for after a count ("OT1, OT8"); past three, as `marcherNamesText`. */
+const namesList = (
+    ids: readonly number[],
+    nameOf: MarcherNameOf | undefined,
+    t: KeepTranslate,
+): string | null => {
+    const names = namesOf(ids, nameOf);
+    if (!names) return null;
+    return names.length <= NAMES_SHOWN
+        ? names.join(", ")
+        : marcherNamesText(ids, nameOf, t);
+};
+
 /** What a chain on a page box shows. */
 export type PageChainKind = "follows" | "kept" | "mixed";
 
@@ -203,20 +280,27 @@ const followsWords = (
     page: string,
     fromPage: string | null,
     t: KeepTranslate,
+    nameOf: MarcherNameOf | undefined,
 ): Pick<PageChainWords, "label" | "hint"> => {
     const one = follows.length === 1;
-    const label = one
-        ? t("timeline.keep.chain.keepOne", "Keep 1 marcher on Page {page}", {
+    const names = marcherNamesText(follows, nameOf, t);
+    const label = names
+        ? t("timeline.keep.chain.keepNamed", "Keep {names} on Page {page}", {
+              names,
               page,
           })
-        : t(
-              "timeline.keep.chain.keep",
-              "Keep {count} marchers on Page {page}",
-              {
-                  page,
-                  count: String(follows.length),
-              },
-          );
+        : one
+          ? t("timeline.keep.chain.keepOne", "Keep 1 marcher on Page {page}", {
+                page,
+            })
+          : t(
+                "timeline.keep.chain.keep",
+                "Keep {count} marchers on Page {page}",
+                {
+                    page,
+                    count: String(follows.length),
+                },
+            );
     if (!fromPage)
         return {
             label,
@@ -241,85 +325,130 @@ const followsWords = (
     };
 };
 
-/** A kept chain's words: how many were kept, and the page a click follows again. */
+/** A kept chain's words: who was kept, and the page a click follows again. */
 const keptWords = (
     kept: readonly number[],
     page: string,
     fromPage: string | null,
     t: KeepTranslate,
-): Pick<PageChainWords, "label" | "hint"> => ({
-    label:
-        kept.length === 1
+    nameOf: MarcherNameOf | undefined,
+): Pick<PageChainWords, "label" | "hint"> => {
+    const names = marcherNamesText(kept, nameOf, t);
+    return {
+        label: names
             ? t(
-                  "timeline.keep.chain.keptOne",
-                  "1 marcher kept on Page {page}",
+                  "timeline.keep.chain.keptNamed",
+                  "{names} kept on Page {page}",
                   {
+                      names,
                       page,
                   },
               )
+            : kept.length === 1
+              ? t(
+                    "timeline.keep.chain.keptOne",
+                    "1 marcher kept on Page {page}",
+                    { page },
+                )
+              : t(
+                    "timeline.keep.chain.kept",
+                    "{count} marchers kept on Page {page}",
+                    { page, count: String(kept.length) },
+                ),
+        hint: fromPage
+            ? t(
+                  "timeline.keep.chain.followHint",
+                  "Click to follow Page {from} again",
+                  { from: fromPage },
+              )
             : t(
-                  "timeline.keep.chain.kept",
-                  "{count} marchers kept on Page {page}",
-                  { page, count: String(kept.length) },
+                  "timeline.keep.chain.followHintEarlier",
+                  "Click to follow earlier pages again",
               ),
-    hint: fromPage
-        ? t(
-              "timeline.keep.chain.followHint",
-              "Click to follow Page {from} again",
-              { from: fromPage },
-          )
-        : t(
-              "timeline.keep.chain.followHintEarlier",
-              "Click to follow earlier pages again",
-          ),
-});
+    };
+};
 
-/** A mixed chain's words: the count kept, and the rest a click keeps. */
+/**
+ * A mixed chain's words: how many of the selection were kept, by name, and the rest a click
+ * keeps. Counts the selected marchers only (the chain shows nothing for the others).
+ */
 const mixedWords = (
     follows: readonly number[],
     kept: readonly number[],
     page: string,
     t: KeepTranslate,
-): Pick<PageChainWords, "label" | "hint"> => ({
-    label: t(
-        "timeline.keep.chain.mixed",
-        "{kept} of {total} kept on Page {page}",
-        {
-            page,
-            kept: String(kept.length),
-            total: String(kept.length + follows.length),
-        },
-    ),
-    hint:
-        follows.length === 1
+    nameOf: MarcherNameOf | undefined,
+): Pick<PageChainWords, "label" | "hint"> => {
+    const counts = {
+        page,
+        kept: String(kept.length),
+        total: String(kept.length + follows.length),
+    };
+    const one = kept.length === 1;
+    const names = namesList(kept, nameOf, t);
+    const label = names
+        ? one
             ? t(
-                  "timeline.keep.chain.mixedHintOne",
-                  "Click to keep the other one too",
+                  "timeline.keep.chain.mixedNamedOne",
+                  "1 of the {total} selected is kept on Page {page} ({names})",
+                  { ...counts, names },
               )
             : t(
-                  "timeline.keep.chain.mixedHint",
-                  "Click to keep the other {count} too",
-                  { count: String(follows.length) },
-              ),
-});
+                  "timeline.keep.chain.mixedNamed",
+                  "{kept} of the {total} selected are kept on Page {page} ({names})",
+                  { ...counts, names },
+              )
+        : one
+          ? t(
+                "timeline.keep.chain.mixedOne",
+                "1 of the {total} selected is kept on Page {page}",
+                counts,
+            )
+          : t(
+                "timeline.keep.chain.mixed",
+                "{kept} of the {total} selected are kept on Page {page}",
+                counts,
+            );
+    return {
+        label,
+        hint:
+            follows.length === 1
+                ? t(
+                      "timeline.keep.chain.mixedHintOne",
+                      "Click to keep the other one too",
+                  )
+                : t(
+                      "timeline.keep.chain.mixedHint",
+                      "Click to keep the other {count} too",
+                      { count: String(follows.length) },
+                  ),
+    };
+};
 
 /**
- * A page box's chain for the selection, or null where none follows into it or was kept there:
+ * A page box's chain for the selection, or null where none follows into it after a move or was
+ * kept there:
  * linked where they follow (a click keeps them), broken where they were kept (a click lets them
- * follow again), and for a mix the count kept (a click keeps the rest). The words name the count
- * a click changes, so a click on a group's chain never surprises (the study's selection trap).
+ * follow again), and for a mix the count kept (a click keeps the rest). The words name whom a
+ * click changes (by name up to three, `marcherNamesText`), so a click on a group's chain never
+ * surprises (the study's selection trap).
  */
 export function pageChainWords(
     state: PageKeepState,
     t: KeepTranslate = english,
+    nameOf?: MarcherNameOf,
 ): PageChainWords | null {
-    const { follows, kept, pageName: page, from } = state;
+    const { kept, pageName: page, from } = state;
+    // Marchers that haven't moved yet get no chain (lead, wp19): every box would show one. They
+    // keep the other ways in (the inspector, the menu, K), and a kept one still shows kept
+    const start = new Set(state.fromStart);
+    const follows = state.follows.filter((id) => !start.has(id));
     if (follows.length === 0 && kept.length === 0) return null;
     const fromPage = from.length === 1 ? from[0]! : null;
     if (kept.length === 0)
         return {
             kind: "follows",
-            ...followsWords(follows, page, fromPage, t),
+            ...followsWords(follows, page, fromPage, t, nameOf),
             action: "keep",
             marcherIds: follows,
             keptCount: 0,
@@ -327,39 +456,52 @@ export function pageChainWords(
     if (follows.length === 0)
         return {
             kind: "kept",
-            ...keptWords(kept, page, fromPage, t),
+            ...keptWords(kept, page, fromPage, t, nameOf),
             action: "follow",
             marcherIds: kept,
             keptCount: kept.length,
         };
     return {
         kind: "mixed",
-        ...mixedWords(follows, kept, page, t),
+        ...mixedWords(follows, kept, page, t, nameOf),
         action: "keep",
         marcherIds: follows,
         keptCount: kept.length,
     };
 }
 
+/** What **K** does: keep or let follow again these marchers on this page box. */
+export interface KeepToggle {
+    readonly action: "keep" | "follow";
+    readonly pageId: number;
+    readonly box: KeptPageBox;
+    readonly marcherIds: number[];
+}
+
+/** On one box: keep the ones that follow, or, when none does, let the kept ones follow again. */
+const toggleOn = (state: PageKeepState | undefined): KeepToggle | null => {
+    if (!state) return null;
+    const { pageId, box } = state;
+    if (state.follows.length > 0)
+        return { action: "keep", pageId, box, marcherIds: state.follows };
+    if (state.kept.length > 0)
+        return { action: "follow", pageId, box, marcherIds: state.kept };
+    return null;
+};
+
 /**
- * What **K** does on the page after `currentPageId`: keep the selected marchers that follow
- * there, or, when none does, let the kept ones follow again. Null when neither applies or
- * there's no next page.
+ * What **K** does from the page `currentPageId` (wp19, after the final study: K on page 3 kept
+ * page 4). Where some selected marchers hold on the current page (they follow, or were kept
+ * there), it toggles keep there, for those; where they all move on it (an own move ending there)
+ * it toggles keep on the next page. Toggling keeps the ones that follow, or, when none does, lets
+ * the kept ones follow again. Null when neither page has anything to toggle.
  */
-export function nextPageToggle(
+export function keepToggle(
     states: readonly PageKeepState[],
     currentPageId: number,
     homePageId: number | null,
-): {
-    action: "keep" | "follow";
-    box: KeptPageBox;
-    marcherIds: number[];
-} | null {
-    const next = states[nextBoxIndex(states, currentPageId, homePageId)];
-    if (!next) return null;
-    if (next.follows.length > 0)
-        return { action: "keep", box: next.box, marcherIds: next.follows };
-    if (next.kept.length > 0)
-        return { action: "follow", box: next.box, marcherIds: next.kept };
-    return null;
+): KeepToggle | null {
+    const here = toggleOn(states.find((s) => s.pageId === currentPageId));
+    if (here) return here;
+    return toggleOn(states[nextBoxIndex(states, currentPageId, homePageId)]);
 }

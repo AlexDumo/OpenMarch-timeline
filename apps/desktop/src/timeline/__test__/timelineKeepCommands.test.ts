@@ -23,7 +23,7 @@ import { neighborPageTarget } from "../timelineCoordinateWrites";
 import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
 import { pageFlags } from "../timelinePlayhead";
 import { pageKeepStates } from "../timelineKeepLater";
-import { toggleKeepOnNextPage } from "../timelineKeepCommands";
+import { toggleKeepOnPage } from "../timelineKeepCommands";
 import { keepPagesOf } from "../useKeepLaterPages";
 import {
     resolverSpans,
@@ -336,7 +336,7 @@ describeDbTests("keep later pages: the menu and K", (it) => {
         expect(keepHereMenu([]).stateFor(pages[2]!.id)).toBeNull();
     });
 
-    it("K keeps the selection on the next page, a second K lets it follow again; one undo step each", async ({
+    it("K on the page they move keeps the next page, a second K lets it follow again; one undo step each", async ({
         db,
     }) => {
         const { pages, marchers } = await starterShow(db);
@@ -344,7 +344,7 @@ describeDbTests("keep later pages: the menu and K", (it) => {
         await forward(db, pages, marchers);
         await timelineResolverSettled();
         const k = () =>
-            toggleKeepOnNextPage({
+            toggleKeepOnPage({
                 database: db,
                 pages,
                 currentPageId: pages[1]!.id,
@@ -363,35 +363,107 @@ describeDbTests("keep later pages: the menu and K", (it) => {
         expect(await stateOn(db, pages[2]!, ot1)).toBe("kept");
     });
 
-    it("K does nothing on the last page, with nothing selected, or before the first move", async ({
+    it("K on a page they hold on keeps that page, not the next (the final study); again lets it follow", async ({
         db,
     }) => {
         const { pages, marchers } = await starterShow(db);
-        // Nobody has moved: nothing follows a page yet
-        expect(
-            await toggleKeepOnNextPage({
-                database: db,
-                pages,
-                currentPageId: pages[1]!.id,
-                marcherIds: marchers,
-            }),
-        ).toBeNull();
+        const [ot1, ot8] = [marchers[0]!, marchers[7]!];
         await forward(db, pages, marchers);
         await timelineResolverSettled();
-        expect(
-            await toggleKeepOnNextPage({
+        const k = () =>
+            toggleKeepOnPage({
                 database: db,
                 pages,
-                currentPageId: pages[3]!.id,
-                marcherIds: marchers,
-            }),
-        ).toBeNull();
+                currentPageId: pages[2]!.id,
+                marcherIds: [ot1, ot8],
+            });
+        expect(await k()).toBe("keep");
+        expect(await stateOn(db, pages[2]!, ot1)).toBe("kept");
+        expect(await stateOn(db, pages[2]!, ot8)).toBe("kept");
+        expect(await stateOn(db, pages[3]!, ot1)).toBe("follows");
+        // The study's T2: a later step out on page 1 leaves page 2 (and 3) in the line
+        await stepOut(db, pages, marchers);
+        await timelineResolverSettled();
+        expect(at(ot1, pages[1]!)).toEqual([50, 200]);
+        expect(at(ot1, pages[2]!)).toEqual([100, 200]);
+        expect(at(ot8, pages[3]!)).toEqual([450, 200]);
+        expect(await k()).toBe("follow");
+        expect(await stateOn(db, pages[2]!, ot1)).toBe("follows");
+    });
+
+    it("K with some moving and some holding on the page keeps those that hold, there", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await starterShow(db);
+        const [ot1, ot2] = [marchers[0]!, marchers[1]!];
+        await forward(db, pages, marchers);
+        // OT2 also moves on page 2
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[2]!),
+            moves: [{ marcherId: ot2, x: 150, y: 100 }],
+        });
+        await timelineResolverSettled();
         expect(
-            await toggleKeepOnNextPage({
+            await toggleKeepOnPage({
+                database: db,
+                pages,
+                currentPageId: pages[2]!.id,
+                marcherIds: [ot1, ot2],
+            }),
+        ).toBe("keep");
+        expect(await stateOn(db, pages[2]!, ot1)).toBe("kept");
+        expect(await stateOn(db, pages[2]!, ot2)).toBe("own");
+        expect(await stateOn(db, pages[3]!, ot2)).toBe("follows");
+    });
+
+    it("K before any move keeps a marcher on the current page, so the first move doesn't reach it", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await starterShow(db);
+        const ot1 = marchers[0]!;
+        expect(
+            await toggleKeepOnPage({
+                database: db,
+                pages,
+                currentPageId: pages[2]!.id,
+                marcherIds: [ot1],
+            }),
+        ).toBe("keep");
+        expect(await stateOn(db, pages[2]!, ot1)).toBe("kept");
+        await forward(db, pages, marchers);
+        await timelineResolverSettled();
+        expect(at(ot1, pages[1]!)).toEqual([100, 200]);
+        // Kept at its starting spot: page 2 walks back there, page 3 holds it
+        expect(at(ot1, pages[2]!)).toEqual([100, 300]);
+        expect(at(ot1, pages[3]!)).toEqual([100, 300]);
+    });
+
+    it("K does nothing with nothing selected, or on the last page they move on", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await starterShow(db);
+        await timelineResolverSettled();
+        expect(
+            await toggleKeepOnPage({
                 database: db,
                 pages,
                 currentPageId: pages[1]!.id,
                 marcherIds: [],
+            }),
+        ).toBeNull();
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[3]!),
+            moves: [{ marcherId: marchers[0]!, x: 100, y: 100 }],
+        });
+        await timelineResolverSettled();
+        expect(
+            await toggleKeepOnPage({
+                database: db,
+                pages,
+                currentPageId: pages[3]!.id,
+                marcherIds: [marchers[0]!],
             }),
         ).toBeNull();
         expect(await readKeptAssignmentIds(db)).toEqual(new Set());

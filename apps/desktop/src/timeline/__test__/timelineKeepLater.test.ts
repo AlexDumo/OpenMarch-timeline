@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { SpanInfo } from "@openmarch/core";
 import {
     followingPages,
-    nextPageToggle,
+    keepToggle,
+    marcherNamesText,
     pageChainWords,
     pageKeepStates,
     pagesText,
@@ -11,7 +12,8 @@ import {
 
 /**
  * UI-18 keep later pages: the selection's keep state on each page box (follows after an earlier
- * move, kept), the pages that follow the current one, the chains' words, and what K does.
+ * move or from the start, kept), the pages that follow the current one, the chains' words (by
+ * name up to three), and what K does (on the current page where they hold, else the next).
  *
  * Pages: home (1), page 2 [1, 9), page 3 [9, 17), page 4 [17, 25), page 5 [25, 33).
  */
@@ -80,31 +82,57 @@ const states = (marcherIds: number[], kept: ReadonlySet<number> = KEPT) =>
 describe("pageKeepStates", () => {
     it("says who follows and who was kept on each box, and the page they follow", () => {
         const [p2, p3, p4, p5] = states([1, 2, 3, 4]);
-        // Everyone moves on page 2 or never moved: nobody follows into it
-        expect(p2).toMatchObject({ pageId: 2, follows: [], kept: [] });
+        // 1–3 move on page 2; 4 never moved, so it follows the start
+        expect(p2).toMatchObject({
+            pageId: 2,
+            follows: [4],
+            fromStart: [4],
+            kept: [],
+            from: [],
+        });
         expect(p3).toMatchObject({
             pageId: 3,
             pageName: "3",
             box: { start: 9, end: 17 },
-            follows: [1, 3],
+            follows: [1, 3, 4],
+            fromStart: [4],
             kept: [2],
             from: ["2"],
             selected: 4,
         });
         // 3 moves on page 4; 1 and 2 follow page 2 and the kept spot (page 3)
         expect(p4).toMatchObject({
-            follows: [1, 2],
+            follows: [1, 2, 4],
             kept: [],
             from: ["2", "3"],
         });
-        expect(p5).toMatchObject({ follows: [1, 2, 3], from: ["2", "3", "4"] });
+        expect(p5).toMatchObject({
+            follows: [1, 2, 3, 4],
+            from: ["2", "3", "4"],
+        });
     });
 
-    it("leaves out marchers that never moved: they hold from the start", () => {
+    it("marchers that never moved follow the start on every box, so they can be kept ahead of a move", () => {
         for (const s of states([4])) {
-            expect(s.follows).toEqual([]);
+            expect(s.follows).toEqual([4]);
+            expect(s.fromStart).toEqual([4]);
             expect(s.kept).toEqual([]);
+            expect(s.from).toEqual([]);
         }
+        // Kept there before any move: kept, not following
+        const spans: SpanInfo[] = [
+            hold(5, -Infinity, 9),
+            move(5, 9, 17, 500),
+            hold(5, 17, Infinity),
+        ];
+        const [p2, p3] = pageKeepStates({
+            pages: PAGES,
+            marcherIds: [5],
+            spansOf: () => spans,
+            kept: new Set([500]),
+        });
+        expect(p2).toMatchObject({ follows: [5], fromStart: [5] });
+        expect(p3).toMatchObject({ follows: [], kept: [5] });
     });
 
     it("an unmarked move that goes nowhere is the marcher's own, not kept", () => {
@@ -136,8 +164,17 @@ describe("followingPages", () => {
 
     it("is null on the last page or with nothing following", () => {
         expect(followingPages(states([1]), 5)).toBeNull();
-        expect(followingPages(states([4]), 2)).toBeNull();
         expect(followingPages([], 2)).toBeNull();
+    });
+
+    it("leaves out marchers that haven't moved yet: every page follows them", () => {
+        expect(followingPages(states([4]), 2)).toBeNull();
+        expect(followingPages(states([4]), 1, 1)).toBeNull();
+        // With one that moved, it says some
+        expect(followingPages(states([1, 4]), 2)).toEqual({
+            names: ["3", "4", "5"],
+            all: false,
+        });
     });
 
     it("from home, starts at the first box", () => {
@@ -180,11 +217,11 @@ describe("pageChainWords", () => {
         });
     });
 
-    it("a mixed chain counts the kept ones and a click keeps the rest", () => {
+    it("a mixed chain counts the kept ones of the selection and a click keeps the rest", () => {
         const [, p3] = states([1, 2, 3]);
         expect(pageChainWords(p3!)).toMatchObject({
             kind: "mixed",
-            label: "1 of 3 kept on Page 3",
+            label: "1 of the 3 selected is kept on Page 3",
             hint: "Click to keep the other 2 too",
             action: "keep",
             marcherIds: [1, 3],
@@ -197,29 +234,180 @@ describe("pageChainWords", () => {
     });
 
     it("no chain where nobody follows or was kept", () => {
-        const [p2] = states([1, 2, 3, 4]);
+        const [p2] = states([1, 2, 3]);
         expect(pageChainWords(p2!)).toBeNull();
+    });
+
+    it("names up to three marchers, then two and a count", () => {
+        const name = (id: number) => `OT${id}`;
+        const [, , p4] = states([1, 2, 3]);
+        expect(pageChainWords(p4!, undefined, name)?.label).toBe(
+            "Keep OT1 and OT2 on Page 4",
+        );
+        const [, kept] = states([2]);
+        expect(pageChainWords(kept!, undefined, name)?.label).toBe(
+            "OT2 kept on Page 3",
+        );
+        const [, mixed] = states([1, 2, 3]);
+        expect(pageChainWords(mixed!, undefined, name)?.label).toBe(
+            "1 of the 3 selected is kept on Page 3 (OT2)",
+        );
+    });
+
+    it("no chain for marchers that haven't moved yet; a kept one still shows kept", () => {
+        for (const box of states([4])) expect(pageChainWords(box)).toBeNull();
+        // With one that follows a move, the chain counts only that one
+        const [, , p4] = states([1, 4]);
+        expect(pageChainWords(p4!, undefined, (id) => `OT${id}`)).toMatchObject(
+            {
+                kind: "follows",
+                label: "Keep OT1 on Page 4",
+                marcherIds: [1],
+            },
+        );
+        // Kept before any move: a kept chip; mixed with a never-moved one, still only kept
+        const spans: Record<number, SpanInfo[]> = {
+            5: [
+                hold(5, -Infinity, 9),
+                move(5, 9, 17, 500),
+                hold(5, 17, Infinity),
+            ],
+            4: SPANS[4]!,
+        };
+        const [, p3] = pageKeepStates({
+            pages: PAGES,
+            marcherIds: [4, 5],
+            spansOf: (id) => spans[id]!,
+            kept: new Set([500]),
+        });
+        expect(p3).toMatchObject({ follows: [4], kept: [5] });
+        expect(pageChainWords(p3!, undefined, (id) => `OT${id}`)).toMatchObject(
+            {
+                kind: "kept",
+                label: "OT5 kept on Page 3",
+                action: "follow",
+                marcherIds: [5],
+            },
+        );
+    });
+
+    it("lists two kept marchers in a mixed chain", () => {
+        const spans = (id: number, keptId?: number): SpanInfo[] => [
+            hold(id, -Infinity, 1),
+            move(id, 1, 9),
+            ...(keptId ? [move(id, 9, 17, keptId)] : []),
+            hold(id, keptId ? 17 : 9, Infinity),
+        ];
+        const all: Record<number, SpanInfo[]> = {
+            1: spans(1, 201),
+            8: spans(8, 208),
+            ...Object.fromEntries(
+                [2, 3, 4, 5, 6, 7].map((id) => [id, spans(id)]),
+            ),
+        };
+        const [, p3] = pageKeepStates({
+            pages: PAGES,
+            marcherIds: [1, 2, 3, 4, 5, 6, 7, 8],
+            spansOf: (id) => all[id]!,
+            kept: new Set([201, 208]),
+        });
+        expect(pageChainWords(p3!, undefined, (id) => `OT${id}`)).toMatchObject(
+            {
+                label: "2 of the 8 selected are kept on Page 3 (OT1, OT8)",
+                hint: "Click to keep the other 6 too",
+            },
+        );
     });
 });
 
-describe("nextPageToggle (K)", () => {
-    it("keeps the followers on the next page, else lets the kept ones follow again", () => {
-        expect(nextPageToggle(states([1, 2, 3]), 2, 1)).toEqual({
+describe("marcherNamesText", () => {
+    const name = (id: number) => `OT${id}`;
+    it("names one, two or three marchers in drill order", () => {
+        expect(marcherNamesText([8], name)).toBe("OT8");
+        expect(marcherNamesText([8, 1], name)).toBe("OT1 and OT8");
+        expect(marcherNamesText([10, 2, 1], name)).toBe("OT1, OT2 and OT10");
+    });
+
+    it("past three, names two and counts the others", () => {
+        expect(marcherNamesText([1, 2, 3, 4, 5, 6], name)).toBe(
+            "OT1, OT2 and 4 others",
+        );
+    });
+
+    it("is null without names, or with one unknown", () => {
+        expect(marcherNamesText([1], undefined)).toBeNull();
+        expect(
+            marcherNamesText([1, 2], (id) => (id === 1 ? "OT1" : undefined)),
+        ).toBeNull();
+        expect(marcherNamesText([], name)).toBeNull();
+    });
+});
+
+describe("keepToggle (K)", () => {
+    it("where they hold on the current page, toggles keep there", () => {
+        // On page 3, 1 and 3 follow page 2, 2 was kept: keep the ones that follow
+        expect(keepToggle(states([1, 2, 3]), 3, 1)).toEqual({
             action: "keep",
+            pageId: 3,
             box: { start: 9, end: 17 },
             marcherIds: [1, 3],
         });
-        expect(nextPageToggle(states([2]), 2, 1)).toEqual({
+        // All kept there: let them follow again
+        expect(keepToggle(states([2]), 3, 1)).toEqual({
             action: "follow",
+            pageId: 3,
             box: { start: 9, end: 17 },
             marcherIds: [2],
         });
     });
 
-    it("does nothing on the last page, or where nobody follows or was kept", () => {
-        expect(nextPageToggle(states([1]), 5, 1)).toBeNull();
-        expect(nextPageToggle(states([3]), 3, 1)).toBeNull();
-        expect(nextPageToggle(states([1]), 99, 1)).toBeNull();
+    it("where they move on the current page, toggles keep on the next page", () => {
+        expect(keepToggle(states([1, 3]), 2, 1)).toEqual({
+            action: "keep",
+            pageId: 3,
+            box: { start: 9, end: 17 },
+            marcherIds: [1, 3],
+        });
+        expect(keepToggle(states([2]), 2, 1)).toEqual({
+            action: "follow",
+            pageId: 3,
+            box: { start: 9, end: 17 },
+            marcherIds: [2],
+        });
+        // From home, the first box
+        expect(keepToggle(states([1]), 1, 1)).toBeNull();
+        expect(keepToggle(states([4]), 1, 1)?.pageId).toBe(2);
+    });
+
+    it("a mix: acts on the current page, for those that hold there", () => {
+        // On page 4, 3 moves and 1 follows: keep 1 on page 4, not page 5
+        expect(keepToggle(states([1, 3]), 4, 1)).toEqual({
+            action: "keep",
+            pageId: 4,
+            box: { start: 17, end: 25 },
+            marcherIds: [1],
+        });
+    });
+
+    it("keeps a marcher that never moved on the current page", () => {
+        expect(keepToggle(states([4]), 3, 1)).toEqual({
+            action: "keep",
+            pageId: 3,
+            box: { start: 9, end: 17 },
+            marcherIds: [4],
+        });
+    });
+
+    it("does nothing on the last page they move on, or an unknown page", () => {
+        const last: SpanInfo[] = [hold(9, -Infinity, 25), move(9, 25, 33)];
+        const onlyLast = pageKeepStates({
+            pages: PAGES,
+            marcherIds: [9],
+            spansOf: () => last,
+            kept: new Set(),
+        });
+        expect(keepToggle(onlyLast, 5, 1)).toBeNull();
+        expect(keepToggle(states([3]), 99, 1)).toBeNull();
     });
 });
 
