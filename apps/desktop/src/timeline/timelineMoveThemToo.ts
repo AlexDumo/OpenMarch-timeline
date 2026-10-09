@@ -11,6 +11,7 @@ import {
     type TimelineMoveResult,
 } from "@/db-functions/timelineMoves";
 import type { DbConnection } from "@/db-functions/types";
+import { keptTransitionIds } from "@/db-functions/timelineKeptMarkers";
 import {
     useTimelineSelectionStore,
     type PageBox,
@@ -164,7 +165,8 @@ const flagsOf = (boxes: readonly PageBox[]) =>
 /**
  * After a timeline edit has committed: the later own moves it left behind (`laterOwnMoves`), read
  * from the resolver once the edit has reached it, without shape-backed ones (their slots have no
- * point of their own to shift).
+ * point of their own to shift) and without kept spots (`timeline_kept_assignments`: the designer
+ * kept that spot, so it is never offered, and a kept marcher alone doesn't make a split).
  */
 export async function findLaterOwnMoves({
     database = db,
@@ -193,11 +195,15 @@ export async function findLaterOwnMoves({
         flags: flagsOf(boxes),
     });
     if (found.length === 0) return [];
+    const transitionIds = found.map((m) => m.transitionId);
     const shaped = await shapeBackedTransitionIds({
         db: database,
-        transitionIds: found.map((m) => m.transitionId),
+        transitionIds,
     });
-    return found.filter((m) => !shaped.has(m.transitionId));
+    const kept = await keptTransitionIds({ db: database, transitionIds });
+    return found.filter(
+        (m) => !shaped.has(m.transitionId) && !kept.has(m.transitionId),
+    );
 }
 
 /** A kept marcher's later move: the marcher, its slot and the flag it ends on */
