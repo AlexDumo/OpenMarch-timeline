@@ -52,17 +52,24 @@ export function SelectedPageProvider({ children }: { children: ReactNode }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pages]);
 
-    const setSelectedPageFromId = useCallback(
-        (newPage: { id: number }) => {
-            const page = pages.find((p) => p.id === newPage.id);
-            if (page) setSelectedPage(page);
-            else
-                console.warn(
-                    `Page with id ${newPage.id} not found. Not setting selected page.`,
-                );
-        },
-        [pages],
-    );
+    // The latest page list, for a setter called through an older render's closure
+    const pagesRef = useRef(pages);
+    pagesRef.current = pages;
+    const setSelectedPageFromId = useCallback((newPage: { id: number }) => {
+        const page = pagesRef.current.find((p) => p.id === newPage.id);
+        if (page) {
+            setSelectedPage(page);
+            // A later choice wins over one still waiting for its page
+            pageToSelectRef.current = null;
+        } else {
+            // Not in the page list yet (an undo that just restored it, seen first by the
+            // caller): select it once it is
+            console.warn(
+                `Page with id ${newPage.id} not found yet. Selecting it once it is.`,
+            );
+            pageToSelectRef.current = newPage;
+        }
+    }, []);
 
     // Create the context value object
     const contextValue: SelectedPageContextProps = {
