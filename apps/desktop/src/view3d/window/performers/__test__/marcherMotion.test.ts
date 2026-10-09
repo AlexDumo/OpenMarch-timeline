@@ -5,7 +5,10 @@ import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
 import type { MarcherTimeline } from "@/utilities/Keyframes";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { buildCountClock } from "@/view3d/core/marchers/countClock";
-import { planShow } from "../marchers/marcherMotion";
+import { MarcherMotion, planShow } from "../marchers/marcherMotion";
+import { planMarcher } from "@/view3d/core/marchers/planner";
+import type { MarcherBodies } from "../marchers/marcherBodies";
+import type { MarcherClip } from "@/view3d/vendor/om-pose/instanced-marchers.js";
 
 const manifest = JSON.parse(
     fs.readFileSync(
@@ -108,5 +111,75 @@ describe("planning the show", () => {
             first,
         );
         expect(next.replanned).toBe(3);
+    });
+});
+
+describe("playing a crossfade", () => {
+    // 4 counts of 12-to-5 forward, then 4 counts sliding toward the 50 (no change clip)
+    const step = 4.572 / 12;
+    const positions = new Float64Array(2 * 10);
+    let x = 10;
+    let z = -20;
+    for (let k = 0; k < 10; k++) {
+        positions[k * 2] = x;
+        positions[k * 2 + 1] = z;
+        if (k < 4) z += step;
+        else if (k < 8) x -= step;
+    }
+    const plan = planMarcher({
+        manifest,
+        heightClass: 1,
+        heading: 0,
+        positions,
+        bpm: new Float64Array(9).fill(120),
+        bandMoving: Uint8Array.from([1, 1, 1, 1, 1, 1, 1, 1, 0]),
+    });
+    const fade = plan.events.find((e) => e.kind === "crossfade")!;
+
+    function motion() {
+        const writes: { slot: number; clip: MarcherClip }[] = [];
+        const rows: Record<
+            string,
+            { row: number; frames: number; counts: number }
+        > = {};
+        for (const e of plan.events) {
+            rows[e.clip] = { row: 0, frames: 60, counts: 2 };
+            if (e.clip2) rows[e.clip2] = { row: 1, frames: 60, counts: 2 };
+        }
+        const bodies = {
+            bake: { rows },
+            setClip(slot: number, clip: MarcherClip) {
+                writes.push({ slot, clip });
+            },
+        } as unknown as MarcherBodies;
+        const m = new MarcherMotion([plan], manifest, bodies, 0);
+        const xz = new Float32Array(2);
+        const placed = Uint8Array.from([1]);
+        return { m, writes, xz, placed };
+    }
+
+    it("ramps the blend weight and the leg turn over the fade window", () => {
+        const { m, writes, xz, placed } = motion();
+        const [y0, y1] = fade.legYaw as [number, number, number, number];
+        m.update(fade.fadeStart - 0.25, xz, placed); // before the window: the old loop as is
+        m.update(fade.fadeStart + 0.25, xz, placed);
+        m.update(fade.fadeStart + 0.5, xz, placed);
+        m.update(fade.fadeEnd + 0.6, xz, placed); // the next event: the new loop alone
+        const ws = writes.map((w) => w.clip.weight);
+        expect(ws[0]).toBe(0);
+        expect(writes[0].clip.legYaw).toBeCloseTo(y0, 9);
+        expect(ws[1]).toBeCloseTo(0.103515625, 9); // smootherstep(0.25)
+        expect(ws[2]).toBeCloseTo(0.5, 9);
+        expect(writes[2].clip.legYaw).toBeCloseTo((y0 + y1) / 2, 9);
+        expect(writes[3].clip.weight).toBe(0);
+        expect(writes.length).toBe(4);
+    });
+
+    it("writes a loop once, not every frame", () => {
+        const { m, writes, xz, placed } = motion();
+        m.update(1.25, xz, placed);
+        m.update(1.5, xz, placed);
+        m.update(1.75, xz, placed);
+        expect(writes.length).toBe(1);
     });
 });
