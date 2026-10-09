@@ -3,6 +3,8 @@ import type { SpanInfo } from "@openmarch/core";
 import {
     followingPages,
     keepToggle,
+    keptMarchersOnPage,
+    keptMarkText,
     marcherNamesText,
     pageChainWords,
     pageKeepStates,
@@ -416,5 +418,85 @@ describe("pagesText", () => {
         expect(pagesText(["3"])).toBe("Page 3");
         expect(pagesText(["3", "4"])).toBe("Pages 3–4");
         expect(pagesText([])).toBe("");
+    });
+});
+
+describe("keptMarchersOnPage (UI-18 kept marchers on the field)", () => {
+    const kept = (pageId: number | null, ids = [1, 2, 3, 4], set = KEPT) =>
+        keptMarchersOnPage({
+            pages: PAGES,
+            pageId,
+            marcherIds: ids,
+            spansOf: (id) => SPANS[id] ?? [],
+            kept: set,
+        });
+
+    it("marks only the marchers kept on that page, whatever is selected", () => {
+        expect(kept(3)).toEqual([{ marcherId: 2, from: "2" }]);
+    });
+
+    it("marks nobody on the pages around it, or home", () => {
+        expect(kept(2)).toEqual([]);
+        expect(kept(4)).toEqual([]);
+        expect(kept(1)).toEqual([]);
+    });
+
+    it("marks nobody without a page, an unknown page, or no kept spots", () => {
+        expect(kept(null)).toEqual([]);
+        expect(kept(42)).toEqual([]);
+        expect(kept(3, [1, 2, 3, 4], new Set())).toEqual([]);
+    });
+
+    it("leaves out an edited move whose marker was cleared", () => {
+        // assignment 100 is still a move over page 3, but no longer kept: an ordinary move
+        expect(kept(3, [2], new Set([7]))).toEqual([]);
+    });
+
+    it("says no page for a marcher kept ahead of its first move", () => {
+        const spans: Record<number, SpanInfo[]> = {
+            5: [
+                hold(5, -Infinity, 9),
+                move(5, 9, 17, 200),
+                hold(5, 17, Infinity),
+            ],
+        };
+        expect(
+            keptMarchersOnPage({
+                pages: PAGES,
+                pageId: 3,
+                marcherIds: [5, 5],
+                spansOf: (id) => spans[id] ?? [],
+                kept: new Set([200]),
+            }),
+        ).toEqual([{ marcherId: 5, from: null }]);
+    });
+
+    it("lists several kept marchers in id order", () => {
+        const spans: Record<number, SpanInfo[]> = {
+            8: [move(8, 1, 9), move(8, 9, 17, 301), hold(8, 17, Infinity)],
+            1: [move(1, 1, 9), move(1, 9, 17, 300), hold(1, 17, Infinity)],
+            4: [move(4, 1, 9), hold(4, 9, Infinity)],
+        };
+        expect(
+            keptMarchersOnPage({
+                pages: PAGES,
+                pageId: 3,
+                marcherIds: [8, 4, 1],
+                spansOf: (id) => spans[id] ?? [],
+                kept: new Set([300, 301]),
+            }),
+        ).toEqual([
+            { marcherId: 1, from: "2" },
+            { marcherId: 8, from: "2" },
+        ]);
+    });
+
+    it("words the tooltip", () => {
+        expect(keptMarkText("3", "2")).toBe(
+            "Kept on Page 3 · won't follow Page 2",
+        );
+        expect(keptMarkText("3", null)).toBe(
+            "Kept on Page 3 · won't follow earlier pages",
+        );
     });
 });
