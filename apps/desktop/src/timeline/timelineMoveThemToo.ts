@@ -32,8 +32,9 @@ import {
 } from "./timelineStore";
 
 /**
- * **Move them too** in timeline mode (`utilities/moveThemToo.ts`): after a coordinate edit, the
- * moved marchers whose next own move ends on a later page flag kept that move's destination. Read
+ * **Move them too** in timeline mode (`utilities/moveThemToo.ts`): after a coordinate edit that
+ * split its marchers at a later page flag, some following into it and some keeping their own
+ * move's destination there, the ones that kept it. Read
  * from the resolver: where each moved marcher was at the edit's end before and after (its
  * offset), and its spans after. The action moves each such slot's destination by the offset, as
  * one undoable edit (`shiftSlotDestinations`); later pages that hold from it follow.
@@ -86,11 +87,14 @@ export function readEditStart(
 }
 
 /**
- * The moved marchers whose next own move (the first span after the edit's end that isn't a hold)
- * starts at or after that end and ends on a page flag, each with that move's slot and the offset
- * the edit moved the marcher at its end. Only the next move per marcher. Marchers the edit didn't
- * move (an offset within `NO_OFFSET`), with no later move, or whose next move ends between flags
- * are left out.
+ * The moved marchers whose next own move kept its destination at a page flag where the edit split
+ * them from others: at that flag, at least one moved marcher followed (it holds from the edit's
+ * end through the flag) and at least one kept its own spot (its next own move, the first span
+ * after the edit's end that isn't a hold, starts at or after that end and ends on the flag). Each
+ * kept marcher comes with that move's slot and the offset the edit moved it at its end. Where
+ * every moved marcher kept a later move (a written show) or every one followed, there's nothing
+ * to say. Marchers the edit didn't move (an offset within `NO_OFFSET`) count for neither side;
+ * next moves ending between flags, or starting before the edit's end, keep nothing.
  *
  * @param moved the marchers the edit wrote (`editedMarcherEnds`)
  * @param flags every page flag, ascending
@@ -111,7 +115,10 @@ export function laterOwnMoves({
     positionAt: (marcherId: number, beat: number) => XY;
     flags: readonly number[];
 }): LaterOwnMove[] {
-    const out: LaterOwnMove[] = [];
+    const kept: LaterOwnMove[] = [];
+    /** The flags some moved marcher followed into */
+    const followed = new Set<number>();
+    const later = flags.filter((f) => f > start.beat);
     for (const marcherId of moved) {
         const before = start.positions.get(marcherId);
         if (!before) continue;
@@ -122,6 +129,9 @@ export function laterOwnMoves({
         const next = spansOf(marcherId)
             .filter((s) => s.kind !== "hold" && s.end > start.beat)
             .sort((a, b) => a.end - b.end)[0];
+        // It holds where the edit put it until its next move starts (or for good)
+        for (const flag of later)
+            if (!next || flag <= next.start) followed.add(flag);
         if (
             !next ||
             next.start < start.beat ||
@@ -130,7 +140,7 @@ export function laterOwnMoves({
             !flags.includes(next.end)
         )
             continue;
-        out.push({
+        kept.push({
             marcherId,
             transitionId: next.transitionId,
             slotIndex: next.slot,
@@ -139,7 +149,7 @@ export function laterOwnMoves({
             dy,
         });
     }
-    return out;
+    return kept.filter((m) => followed.has(m.flag));
 }
 
 /** The page flags the timeline shows, ascending. */
@@ -186,8 +196,8 @@ export async function findLaterOwnMoves({
 }
 
 /**
- * Shows the **Move them too** toast for `moves`, replacing the edit's pass-through toast (the same
- * id). Does nothing for none.
+ * Shows the **Move them too** toast for `moves` (the edit surprise toast's id). Does nothing for
+ * none.
  */
 export async function toastLaterOwnMoves(
     moves: readonly LaterOwnMove[],
@@ -219,8 +229,8 @@ export async function toastLaterOwnMoves(
 
 /**
  * A timeline coordinate edit (`moveMarchersInTarget`) with what it says after: the pass-through
- * toast as before, then, once the resolver has the edit, **Move them too** in its place when the
- * edit left later own moves behind. Errors finding them are logged, never thrown: the edit itself
+ * toast as before; when there's none, once the resolver has the edit, **Move them too** when the
+ * edit split its marchers at a later page (`laterOwnMoves`). Errors finding them are logged, never thrown: the edit itself
  * has committed.
  */
 export async function moveMarchersAndOfferFollowUp({
@@ -248,6 +258,8 @@ export async function moveMarchersAndOfferFollowUp({
         },
     });
     toastPassThrough(result);
+    // The pass-through toast and its Keep as a stop win: Move them too would replace it (same id)
+    if (result.passThrough) return result;
     void findLaterOwnMoves({ database, target, result, start })
         .then((found) => toastLaterOwnMoves(found))
         .catch((e: unknown) =>

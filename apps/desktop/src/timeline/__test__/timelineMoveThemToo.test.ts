@@ -38,9 +38,9 @@ import {
 } from "../timelineStore";
 
 /**
- * **Move them too** in timeline mode (defined-coordinates 09, G4): an edit that moves marchers
- * whose next own move ends on a later page offers to shift those destinations by the same offset,
- * as one separate undoable edit. The message and page mode are in
+ * **Move them too** in timeline mode (defined-coordinates 09, G4): an edit that splits the
+ * marchers it moved at a later page (some follow into it, some keep their own move there) offers
+ * to shift the kept destinations by the same offset, as one separate undoable edit. The message and page mode are in
  * `utilities/__test__/moveThemToo.test.ts`.
  */
 
@@ -60,12 +60,11 @@ const box = (page: Page) => {
 };
 
 /**
- * The study's starter show (09): OT1–OT8 in a line at home (x = 100, 150, … 450; y = 300),
- * pages 1–3 after it, nobody moving; then the study's steps, as timeline edits: everyone marches
- * forward 100 on page 1 (later pages hold there), and OT1 and OT8 step out sideways by 50 on page
- * 2. Pages are numbered from 0 here (no page number offset), so page 2 is the study's set 3.
+ * OT1–OT8 in a line (x = 100, 150, … 450), and pages 1–3 after home, built in page mode with
+ * `ys[i]` as everyone's y on page i (home is page 0; pages past `ys` copy the last), then
+ * converted, with the resolver running and the page boxes set.
  */
-const studyShow = async (db: DbConnection) => {
+const convertedShow = async (db: DbConnection, ys: readonly number[]) => {
     await createMarchers({
         db,
         newMarchers: Array.from({ length: 8 }, (_, i) => ({
@@ -85,23 +84,36 @@ const studyShow = async (db: DbConnection) => {
     ).map((m) => m.id);
     const { pages: unsorted } = await readShowTiming(db);
     const pages = [...unsorted].sort((a, b) => a.order - b.order);
-    await updateMarcherPages({
-        db,
-        modifiedMarcherPages: marchers.map((id, i) => ({
-            marcher_id: id,
-            page_id: pages[0]!.id,
-            x: 100 + 50 * i,
-            y: 300,
-        })),
-    });
+    for (const [p, y] of ys.entries())
+        await updateMarcherPages({
+            db,
+            modifiedMarcherPages: marchers.map((id, i) => ({
+                marcher_id: id,
+                page_id: pages[p]!.id,
+                x: 100 + 50 * i,
+                y,
+            })),
+        });
     await convertPagesToTimeline(db);
-    // Nobody moves in the starter show, so the conversion writes no moves
-    expect(await db.select().from(schema.timelines).all()).toEqual([]);
     await startTimelineResolver(db);
     const boxes = pageFlags(pages).flatMap((f) =>
         f.range ? [{ ...f.range, name: f.page.name }] : [],
     );
     useTimelineSelectionStore.getState().setPageBoxes(boxes);
+    return { pages, marchers, boxes };
+};
+
+/**
+ * The study's starter show (09): OT1–OT8 in a line at home (x = 100, 150, … 450; y = 300),
+ * pages 1–3 after it, nobody moving; then the study's steps, as timeline edits: everyone marches
+ * forward 100 on page 1 (later pages hold there), and OT1 and OT8 step out sideways by 50 on page
+ * 2 (unless `stepOut` is false: a fully held show). Pages are numbered from 0 here (no page
+ * number offset), so page 2 is the study's set 3.
+ */
+const studyShow = async (db: DbConnection, { stepOut = true } = {}) => {
+    const { pages, marchers, boxes } = await convertedShow(db, [300]);
+    // Nobody moves in the starter show, so the conversion writes no moves
+    expect(await db.select().from(schema.timelines).all()).toEqual([]);
 
     // Page 1 (G1): forward 100
     await moveMarchersInTarget({
@@ -114,14 +126,15 @@ const studyShow = async (db: DbConnection) => {
         })),
     });
     // Page 2 (G3): OT1 and OT8 step out
-    await moveMarchersInTarget({
-        db,
-        target: box(pages[2]!),
-        moves: [
-            { marcherId: marchers[0]!, x: 50, y: 200 },
-            { marcherId: marchers[7]!, x: 500, y: 200 },
-        ],
-    });
+    if (stepOut)
+        await moveMarchersInTarget({
+            db,
+            target: box(pages[2]!),
+            moves: [
+                { marcherId: marchers[0]!, x: 50, y: 200 },
+                { marcherId: marchers[7]!, x: 500, y: 200 },
+            ],
+        });
     await timelineResolverSettled();
     return { pages, marchers, boxes };
 };
@@ -318,19 +331,20 @@ describeDbTests("timeline mode: Move them too", (it) => {
         expect(info).not.toHaveBeenCalled();
     });
 
-    it("with a window passing a flag, the one toast becomes Move them too (same id), not a second toast", async ({
+    it("with a window passing a flag that also splits them, only the pass-through toast shows (Keep as a stop stays reachable)", async ({
         db,
     }) => {
         const { pages, marchers } = await studyShow(db);
-        const ot4 = marchers[3]!;
-        // OT4 has its own move on page 3
+        const [ot4, ot5] = [marchers[3]!, marchers[4]!];
+        // OT4 has its own move on page 3; OT5 holds there
         await moveMarchersInTarget({
             db,
             target: box(pages[3]!),
             moves: [{ marcherId: ot4, x: 250, y: 100 }],
         });
         const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
-        // A window over pages 1–2 moves OT4: it passes page 1's flag
+        // A window over pages 1–2 moves OT4 and OT5: it passes page 1's flag, and splits them at
+        // page 3 (OT5 follows, OT4 keeps its move)
         await moveMarchersAndOfferFollowUp({
             database: db,
             target: {
@@ -338,18 +352,71 @@ describeDbTests("timeline mode: Move them too", (it) => {
                 start: box(pages[1]!).start,
                 end: box(pages[2]!).end,
             },
-            moves: [{ marcherId: ot4, x: 270, y: 180 }],
+            moves: [
+                { marcherId: ot4, x: 270, y: 180 },
+                { marcherId: ot5, x: 320, y: 180 },
+            ],
         });
-        const [message] = await moveThemTooCall(info);
-        expect(info.mock.calls[0]![0]).toBe(
+        await timelineResolverSettled();
+        await new Promise((r) => setTimeout(r, 200));
+        expect(at(ot5, pages[3]!)).toEqual([320, 180]);
+        expect(at(ot4, pages[3]!)).toEqual([250, 100]);
+        expect(info.mock.calls.map((c) => c[0])).toEqual([
             `Page ${pages[1]!.name} is no longer a stop`,
-        );
-        expect(message).toBe(
-            `OT4 has its own move on Page ${pages[3]!.name}, so it kept its spot`,
-        );
-        expect(info.mock.calls.map((c) => (c[1] as { id: string }).id)).toEqual(
-            ["timeline-edit", "timeline-edit"],
-        );
+        ]);
+        expect(info.mock.calls[0]![1]).toMatchObject({
+            id: "timeline-edit",
+            action: { label: `Keep Page ${pages[1]!.name} as a stop` },
+        });
+    });
+
+    it("a fully held show: shortening page 1 for everyone offers nothing", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await studyShow(db, { stepOut: false });
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[1]!),
+            moves: shortenMoves(marchers),
+        });
+        await timelineResolverSettled();
+        await new Promise((r) => setTimeout(r, 200));
+        // Everyone followed
+        expect(at(marchers[0]!, pages[3]!)).toEqual([100, 250]);
+        expect(info).not.toHaveBeenCalled();
+    });
+
+    it("a fully written show (every marcher moves on every page): an ordinary drag and a nudge on page 2 offer nothing", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await convertedShow(db, [300, 200, 100, 0]);
+        expect(at(marchers[0]!, pages[2]!)).toEqual([100, 100]);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        // Drag everyone on page 2
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[2]!),
+            moves: marchers.map((id, i) => ({
+                marcherId: id,
+                x: 110 + 50 * i,
+                y: 120,
+            })),
+        });
+        await timelineResolverSettled();
+        await new Promise((r) => setTimeout(r, 200));
+        // Nudge one
+        await moveMarchersAndOfferFollowUp({
+            database: db,
+            target: box(pages[2]!),
+            moves: [{ marcherId: marchers[3]!, x: 261, y: 120 }],
+        });
+        await timelineResolverSettled();
+        await new Promise((r) => setTimeout(r, 200));
+        expect(at(marchers[3]!, pages[2]!)).toEqual([261, 120]);
+        // Page 3 kept its own spot for everyone
+        expect(at(marchers[3]!, pages[3]!)).toEqual([250, 0]);
+        expect(info).not.toHaveBeenCalled();
     });
 });
 

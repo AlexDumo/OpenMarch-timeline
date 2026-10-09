@@ -1069,7 +1069,8 @@
             "laterMoves": "{names} have their own later moves, so they kept their spots",
             "namesAndOthers": "{first}, {second} and {count} others",
             "oneMarcher": "{names} has its own move on Page {page}, so it kept its spot",
-            "onePage": "{names} have their own move on Page {page}, so they kept their spot"
+            "onePage": "{names} have their own move on Page {page}, so they kept their spot",
+            "withFollowed": "{followed}. {kept}"
         }
     },
     "measures": {

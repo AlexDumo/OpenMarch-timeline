@@ -22,6 +22,9 @@ export default function Toaster() {
                     // its label into a column
                     actionButton:
                         "shrink-0 self-center whitespace-nowrap rounded-6 px-8 py-4 text-body text-accent hover:underline focus-visible:outline-none focus-visible:ring focus-visible:ring-accent",
+                    // A second, quieter button beside the action (sonner's `cancel`), on the same line
+                    cancelButton:
+                        "shrink-0 self-center whitespace-nowrap rounded-6 px-8 py-4 text-body text-text hover:underline focus-visible:outline-none focus-visible:ring focus-visible:ring-accent",
                 },
             }}
             icons={{

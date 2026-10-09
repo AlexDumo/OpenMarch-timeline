@@ -26,9 +26,10 @@ import {
  * edited one, with **Only Page 2**, which puts those pages back as a second undoable edit
  * (`restoreCarriedRuns`).
  *
- * When the edit also moved marchers whose next page is their own move (they kept its spot), the
- * toast says that instead, with **Move them too** (`moveThemToo.ts`), and no **Only Page 2**:
- * one toast, and the one that explains why some marchers didn't follow.
+ * When the edit split the marchers it moved at a later page, some following into it and some
+ * keeping their own move there, the one toast says both, "Pages 3–4 followed (they were copies).
+ * OT1 and OT8 have their own move on Page 3, so they kept their spot", with **Move them too**
+ * (`moveThemToo.ts`) and **Only Page 2** beside it.
  */
 
 /** Translates with ICU parameters; the Tolgee singleton by default, anything in tests. */
@@ -97,72 +98,64 @@ async function pageNamesById(qc: QueryClient): Promise<Map<number, string>> {
 
 /**
  * After a page-mode write: when it carried forward to later pages, says which, and offers
- * **Only Page N**. Says nothing when nothing was carried.
+ * **Only Page N**. When it also split the marchers it moved (`ownMoveStops`, only pages where
+ * others followed), the same toast names those that kept their spot and offers **Move them too**
+ * first. Says nothing when nothing was carried.
  */
 export async function toastCarryForward(
     qc: QueryClient,
     result: MarcherPagesWriteResult | undefined,
 ): Promise<void> {
     if (!result) return;
-    if (result.ownMoveStops.length > 0) {
-        await toastMoveThemToo(qc, result);
-        return;
-    }
     if (result.followedPageIds.length === 0) return;
-    const names = await pageNamesById(qc);
-    const order = [...names.keys()];
-    const editedPageIds = [
-        ...new Set(result.carried.map((r) => r.pageId)),
-    ].sort((a, b) => order.indexOf(a) - order.indexOf(b));
-    const name = (id: number) => names.get(id) ?? "?";
-    const { message, actionLabel } = carryForwardMessage(
-        result.followedPageIds.map(name),
-        editedPageIds.map(name),
-    );
-    toast.message(message, {
-        id: EDIT_SURPRISE_TOAST_ID,
-        duration: 10000,
-        action: {
-            label: actionLabel,
-            onClick: () => {
-                restoreCarriedRuns({ db, carried: result.carried })
-                    .then((pageIds) =>
-                        invalidateAfterMarcherPagesWrite(qc, pageIds),
-                    )
-                    .catch((e: unknown) =>
-                        conToastError("Error moving marchers back", e),
-                    );
-            },
-        },
-    });
-}
-
-/**
- * Page mode's **Move them too** toast: names the marchers whose edit stopped at their own later
- * move (`OwnMoveStop`) and that move's page, and shifts those rows by the same offset on click
- * (`moveLaterMovesToo`, its own undoable edit, which carries forward to copies of those pages).
- */
-async function toastMoveThemToo(
-    qc: QueryClient,
-    result: MarcherPagesWriteResult,
-): Promise<void> {
     const stops = result.ownMoveStops;
     const [names, labels] = await Promise.all([
         pageNamesById(qc),
         marcherLabelsById(stops.map((s) => s.marcherId)),
     ]);
+    const order = [...names.keys()];
+    const editedPageIds = [
+        ...new Set(result.carried.map((r) => r.pageId)),
+    ].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    const name = (id: number) => names.get(id) ?? "?";
+    const followed = carryForwardMessage(
+        result.followedPageIds.map(name),
+        editedPageIds.map(name),
+    );
+    const onlyEdited = {
+        label: followed.actionLabel,
+        onClick: () => {
+            restoreCarriedRuns({ db, carried: result.carried })
+                .then((pageIds) =>
+                    invalidateAfterMarcherPagesWrite(qc, pageIds),
+                )
+                .catch((e: unknown) =>
+                    conToastError("Error moving marchers back", e),
+                );
+        },
+    };
+
     const stopOf = new Map(stops.map((s) => [s.marcherId, s]));
     const kept = inDrillOrder([...stopOf.keys()], labels).map((id) => ({
         label: labels.get(id)!.label,
-        page: names.get(stopOf.get(id)!.stopPageId) ?? "?",
+        page: name(stopOf.get(id)!.stopPageId),
     }));
-    if (kept.length === 0) return;
-    const { message, actionLabel } = moveThemTooMessage(kept);
-    toast.info(message, {
+    if (kept.length === 0) {
+        toast.message(followed.message, {
+            id: EDIT_SURPRISE_TOAST_ID,
+            duration: 10000,
+            action: onlyEdited,
+        });
+        return;
+    }
+
+    // Split: one toast, Move them too first, Only Page N beside it (sonner's second button)
+    const moveThemToo = moveThemTooMessage(kept);
+    toast.info(withFollowedMessage(followed.message, moveThemToo.message), {
         id: EDIT_SURPRISE_TOAST_ID,
         duration: MOVE_THEM_TOO_TOAST_MS,
         action: {
-            label: actionLabel,
+            label: moveThemToo.actionLabel,
             onClick: () => {
                 moveLaterMovesToo({ db, stops })
                     .then((write) =>
@@ -177,5 +170,22 @@ async function toastMoveThemToo(
                     );
             },
         },
+        cancel: onlyEdited,
     });
+}
+
+/**
+ * "Pages 3–4 followed (they were copies). OT1 and OT8 have their own move on Page 3, so they
+ * kept their spot": the carry-forward and Move them too messages as one.
+ */
+export function withFollowedMessage(
+    followed: string,
+    kept: string,
+    translate: CarryForwardTranslate = defaultTranslate,
+): string {
+    return translate(
+        "marcherPages.moveThemToo.withFollowed",
+        "{followed}. {kept}",
+        { followed, kept },
+    );
 }
