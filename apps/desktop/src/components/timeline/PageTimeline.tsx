@@ -3,6 +3,8 @@ import { useSelectedPage } from "@/context/SelectedPageContext";
 import {
     useCallback,
     useEffect,
+    useId,
+    useMemo,
     useRef,
     useState,
     type ReactNode,
@@ -39,6 +41,9 @@ import {
     deletePageYankWithMovesMutationOptions,
     deletePagesWithMovesMutationOptions,
 } from "@/hooks/queries/usePageFlags";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { usePageModeHoldMarks } from "@/timeline/usePageHoldMarks";
+import { PageHoldMarkView, useLabeledHoldMarks } from "./PageHoldMark";
 
 // eslint-disable-next-line max-lines-per-function
 export default function PageTimeline() {
@@ -72,6 +77,19 @@ export default function PageTimeline() {
     );
     const { mutate: deletePageYankWithMoves } = useMutation(
         deletePageYankWithMovesMutationOptions(queryClient),
+    );
+
+    // UI-15: where the selected marchers hold, on the page boxes (page mode's own rows)
+    const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
+    const selectedIdsKey = (selectedMarchers ?? []).map((m) => m.id).join(",");
+    const selectedIds = useMemo(
+        () =>
+            selectedIdsKey === "" ? [] : selectedIdsKey.split(",").map(Number),
+        [selectedIdsKey],
+    );
+    const holdMarkId = useId();
+    const holdMarks = useLabeledHoldMarks(
+        usePageModeHoldMarks(pages, selectedIds, !timelineMode),
     );
 
     // Page clicking and dragging
@@ -362,6 +380,7 @@ export default function PageTimeline() {
                 {pages.map((page, index) => {
                     if (index === 0) return null;
                     const width = getWidth(page);
+                    const hold = holdMarks.get(page.id);
                     const selectedIndex = pages.findIndex(
                         (p) => p.id === selectedPage?.id,
                     );
@@ -426,6 +445,12 @@ export default function PageTimeline() {
                                     style={{ width: `${width}px` }}
                                 >
                                     <div
+                                        title={hold?.label}
+                                        aria-describedby={
+                                            hold
+                                                ? `${holdMarkId}-${page.id}`
+                                                : undefined
+                                        }
                                         className={clsx(
                                             "bg-fg-2 text-body text-text group-last:rounded-r-6 relative flex h-full items-center justify-end overflow-clip border px-8 py-4 font-mono",
                                             !isPlaying && "cursor-pointer",
@@ -450,6 +475,10 @@ export default function PageTimeline() {
                                         <div className="rig static z-10">
                                             {page.name}
                                         </div>
+                                        <PageHoldMarkView
+                                            hold={hold}
+                                            descriptionId={`${holdMarkId}-${page.id}`}
+                                        />
                                         {/* ------ progress bar (fullscreen) ------ */}
                                         {(selectedIndex === index - 1 ||
                                             (selectedIndex === 0 &&

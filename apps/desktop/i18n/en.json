@@ -1400,6 +1400,13 @@
             "transitionSpansTimeline": "A transition must span its whole timeline, starting and ending with it. Change the timeline's range instead, and its transitions move with it.",
             "unknown": "The timeline couldn't make that change."
         },
+        "holdMarks": {
+            "holds": "Selected marchers hold from Page {page}",
+            "holdsHere": "Selected marchers hold on this page",
+            "mixed": "Some selected marchers hold from Page {page}",
+            "mixedHere": "Some selected marchers hold on this page",
+            "moves": "Selected marchers move on this page"
+        },
         "label": "Timeline",
         "masterVolume": "Master Volume",
         "music": {

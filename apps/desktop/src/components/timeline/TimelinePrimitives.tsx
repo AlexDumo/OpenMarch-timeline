@@ -79,6 +79,11 @@ import {
     type TimelineLiveValue,
     useLiveValue,
 } from "./timelineLiveValue";
+import {
+    PageHoldMarkView,
+    type LabeledHoldMark,
+    type LabeledHoldMarks,
+} from "./PageHoldMark";
 import type {
     BeatPosition,
     TimelineBeatRange,
@@ -831,6 +836,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     showMeasures = true,
     seekSnapBeats = [],
     positionBeat,
+    holdMarks,
     scrubLine,
     pageFlagMove,
     height = 28,
@@ -859,6 +865,8 @@ export const TimelineRuler = memo(function TimelineRuler({
     height?: number;
     /** The playhead, which a dragged flag lands on when near, as on downbeats and page lines */
     flagSnapPlayhead?: () => BeatPosition;
+    /** Where the selected marchers hold, by page id (UI-15); none without a selection */
+    holdMarks?: LabeledHoldMarks;
 }) {
     // A dragged flag snaps to downbeats, never to page lines (`flagSnapBeat`)
     const flagDownbeats = useMemo(
@@ -889,6 +897,7 @@ export const TimelineRuler = memo(function TimelineRuler({
             pixelsPerBeat,
         );
     }, [measures, pixelsPerBeat]);
+    const holdMarkId = useId();
     const scrub = useRulerScrub(
         onSeek,
         beatCount,
@@ -971,6 +980,8 @@ export const TimelineRuler = memo(function TimelineRuler({
                 initialPageWidth={initialPageWidth}
                 scrub={scrub}
                 onSelectPage={selectPage}
+                holdMarks={holdMarks}
+                holdMarkId={holdMarkId}
             />
             {pageFlagMove && (
                 <TimelinePageFlagGrips
@@ -1010,6 +1021,8 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     initialPageWidth,
     scrub,
     onSelectPage,
+    holdMarks,
+    holdMarkId,
 }: {
     initialPage: TimelinePageMarker | undefined;
     pageBoxes: readonly {
@@ -1024,6 +1037,10 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     initialPageWidth: number;
     scrub: RulerScrub;
     onSelectPage: (page: TimelinePageMarker, extend?: boolean) => void;
+    /** Where the selected marchers hold, by page id (UI-15) */
+    holdMarks?: LabeledHoldMarks;
+    /** The prefix of each box's hold description id */
+    holdMarkId: string;
 }) {
     const selectedIds = new Set(selectedBoxIds.split("\n"));
     return (
@@ -1067,6 +1084,8 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
                         initialPageWidth={initialPageWidth}
                         scrub={scrub}
                         onSelectPage={onSelectPage}
+                        hold={holdMarks?.get(page.id)}
+                        holdDescriptionId={`${holdMarkId}-${page.id}`}
                     />
                 ) : null,
             )}
@@ -1083,6 +1102,8 @@ const TimelinePageBox = memo(function TimelinePageBox({
     initialPageWidth,
     scrub,
     onSelectPage,
+    hold,
+    holdDescriptionId,
 }: {
     page: TimelinePageMarker;
     range: TimelineBeatRange;
@@ -1091,6 +1112,9 @@ const TimelinePageBox = memo(function TimelinePageBox({
     initialPageWidth: number;
     scrub: RulerScrub;
     onSelectPage: (page: TimelinePageMarker, extend?: boolean) => void;
+    /** Where the selected marchers hold on this page (UI-15), with its words */
+    hold?: LabeledHoldMark;
+    holdDescriptionId: string;
 }) {
     const boxWidth =
         (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
@@ -1100,6 +1124,8 @@ const TimelinePageBox = memo(function TimelinePageBox({
             data-timeline-interactive="true"
             {...timelineRangeTargetProps(range, undefined, page.id)}
             aria-label={`Page ${page.label}`}
+            aria-describedby={hold ? holdDescriptionId : undefined}
+            title={hold?.label}
             aria-pressed={selected}
             {...scrub.handlers}
             onClick={(event) => {
@@ -1119,6 +1145,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 label={page.label}
                 shown={pageLabelFits(page.label, boxWidth)}
             />
+            <PageHoldMarkView hold={hold} descriptionId={holdDescriptionId} />
         </button>
     );
 });

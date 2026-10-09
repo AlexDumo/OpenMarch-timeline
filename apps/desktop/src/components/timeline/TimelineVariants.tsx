@@ -794,6 +794,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                 ? positionBeat
                                 : undefined
                         }
+                        holdMarks={props.holdMarks}
                     />
                     {rows.flatMap((row, rowIndex) =>
                         row.map((track) => (

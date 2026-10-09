@@ -58,6 +58,8 @@ import {
 import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
+import { useLabeledHoldMarks } from "./PageHoldMark";
+import { useTimelineHoldMarks } from "@/timeline/usePageHoldMarks";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
@@ -148,6 +150,14 @@ export default function TimelineModePanel() {
                     : selectedIdsKey.split(",").map(Number),
             ),
         [selectedIdsKey],
+    );
+    // UI-15: where the selected marchers hold, on the page boxes
+    const selectedIdList = useMemo(
+        () => [...selectedMarcherIds],
+        [selectedMarcherIds],
+    );
+    const holdMarks = useLabeledHoldMarks(
+        useTimelineHoldMarks(pages, selectedIdList),
     );
     const timelines = useTimelineTracks({
         database: db,
@@ -325,6 +335,7 @@ export default function TimelineModePanel() {
                     transportAccessories={LOOP_BUTTON}
                     transportSecondary={SOUND_BUTTON}
                     transportViewControls={COMPACT_BUTTON}
+                    holdMarks={holdMarks}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
                     clipResize={clipResize}
