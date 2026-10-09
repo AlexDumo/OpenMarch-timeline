@@ -309,20 +309,21 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(store().startPinned).toBe(false);
         expect(store().loop).toBeNull();
-        // Page 1's window is the loop; C does not move the start flag
+        // Page 1's window is the loop; the start flag is its start, pinned there
         act(() => {
             toggleTimelineLoop();
         });
         expect(store().loop).toEqual({ start: 1, end: 9 });
         expect(store().startBeat).toBe(1);
-        expect(store().startPinned).toBe(false);
+        expect(store().startPinned).toBe(true);
         expect(result.current.playback.playLoops).toBe(true);
         // E takes the loop to the next page
         act(() => {
             result.current.playback.onNavigate!("next-page");
         });
         expect(store().loop).toEqual({ start: 9, end: 17 });
-        expect(store().startPinned).toBe(false);
+        // The start flag came with it, still the loop's start
+        expect(store().startPinned).toBe(true);
         expect(store().startBeat).toBe(9);
         expect(result.current.selection).toEqual({
             kind: "range",
@@ -453,9 +454,10 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(store().loop).toEqual({ start: 9, end: 17 });
         expect(store().startBeat).toBe(9);
-        expect(store().startPinned).toBe(false);
+        expect(store().startPinned).toBe(true);
         expect(store().playheadBeat).toBe(17);
-        expect(store().cursorBeat).toBe(12);
+        // Setting the loop writes the window, which puts the canvas back on P (UI-11)
+        expect(store().cursorBeat).toBeNull();
         expect(store().selection).toEqual({
             kind: "range",
             start: 9,
@@ -552,7 +554,8 @@ describeDbTests("useTimelinePlayback", (it) => {
             // P sits on the loop's end; Space still loops the loop and leaves P
             store().setLoop({ start: 5, end: 9 });
         });
-        expect(store().startPinned).toBe(false);
+        // The start flag is the loop's start
+        expect(store().startPinned).toBe(true);
         expect(result.current.playback.playLoops).toBe(true);
         act(() => {
             result.current.playback.onPlayingChange!(true);

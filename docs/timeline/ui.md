@@ -790,8 +790,11 @@ from it. The spec still wins on the model; this file decides presentation.
     outside it, playback plays on from there and the stop stays (UI-11, UI-12).
   - **The loop is its own region** (project owner, 2026-10-09, after trying the follow model by
     hand: moving the playhead to look at another count shouldn't change what loops), drawn as a
-    yellow bar along the ruler's top edge, as Logic draws its cycle region. It is apart from the
-    start flag and the edit window, which go back to UI-12's editing roles. While looping is on,
+    yellow bar along the ruler's top edge, as Logic draws its cycle region. Its start is the start
+    flag, pinned there while looping, so dragging either moves both (owner, 2026-10-09: two markers
+    on the same spot that moved separately read as one confusing thing); its end is its own, apart
+    from the playhead. Turning looping off, or unpinning the flag, lets the flag follow the page
+    again, and the pin icon isn't drawn while looping. While looping is on,
     Space loops the region wherever the playhead is, and stopping returns to the playhead (Logic's
     cycle; owner). A scrub, a click on a count or the arrow keys never change it. Going to a page (E,
     Q, a page box) moves it to that page, as the round 2 test chose ("the loop follows your page").
