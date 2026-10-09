@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useTranslate } from "@tolgee/react";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useTimingObjects } from "@/hooks";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
@@ -18,7 +19,7 @@ import {
 
 /**
  * The selection's state on the current page, in timeline mode (docs/timeline/ui.md UI-15):
- * "Moves here" or "Holding since Page X", where the selected marchers agree; nothing when they
+ * "Moves on this page" or "Hold from Page X", where the selected marchers agree; nothing when they
  * don't. The current page is the selected page, which follows the paused playhead
  * (`useTimelinePageBridge`).
  */
@@ -62,20 +63,20 @@ function TimelineHoldLineContent({
     if (state.kind === "movesHere")
         return (
             <p
-                className="text-sub text-text/60 px-6"
+                className="text-body text-text px-6 leading-none"
                 data-testid="timeline-hold-line"
             >
-                {t("inspector.marcher.timeline.movesHere", {
-                    defaultValue: "Moves here",
+                {t("inspector.marcher.timeline.movesOnThisPage", {
+                    defaultValue: "Moves on this page",
                 })}
             </p>
         );
     const { page } = state;
     return (
-        <p className="text-sub text-text/60 px-6">
+        <p className="px-6 leading-none">
             <button
                 type="button"
-                className="hover:underline"
+                className="text-body text-text decoration-text/40 hover:decoration-text focus-visible:ring-accent rounded-6 inline-flex items-center gap-4 leading-none underline underline-offset-4 focus-visible:ring focus-visible:outline-none"
                 data-testid="timeline-hold-line"
                 title={t("inspector.marcher.timeline.goToPage", {
                     defaultValue: "Go to Page {page}",
@@ -86,18 +87,20 @@ function TimelineHoldLineContent({
                     useTimelineSelectionStore.getState().seek(page.beat)
                 }
             >
-                {t("inspector.marcher.timeline.holdingSince", {
-                    defaultValue: "Holding since Page {page}",
+                {t("inspector.marcher.timeline.holdFrom", {
+                    defaultValue: "Hold from Page {page}",
                     page: page.name,
                 })}
+                <ArrowRightIcon size={14} aria-hidden />
             </button>
         </p>
     );
 }
 
 /**
- * The marcher inspector's quiet line for the selected marchers (UI-15): whether they move on the
- * current page or hold there, with a jump to the page they hold from. Only in timeline mode.
+ * The marcher inspector's line for the selected marchers (UI-15), under Step Size: whether they
+ * move on the current page or hold there, with a link to the page they hold from
+ * (defined-coordinates 08: readable, and visibly a link). Only in timeline mode.
  */
 export default function TimelineHoldLine({
     marcherIds,

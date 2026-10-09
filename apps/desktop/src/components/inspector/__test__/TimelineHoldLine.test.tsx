@@ -16,9 +16,9 @@ import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import TimelineHoldLine from "../TimelineHoldLine";
 
 /**
- * UI-15: the marcher inspector's line for the selected marchers on the current page, "Moves here"
- * or "Holding since Page X" with a jump to that page's flag, only where they agree, and only in
- * timeline mode.
+ * UI-15: the marcher inspector's line for the selected marchers on the current page, "Moves on
+ * this page" or "Hold from Page X →", a link to that page's flag, only where they agree, and only
+ * in timeline mode (worded by defined-coordinates 08).
  */
 
 /** A page whose beats run from `first` to `last` (`pageEndBeat` is `last + 1`). */
@@ -114,14 +114,32 @@ describe("TimelineHoldLine", () => {
     it("says a marcher holding on the page has held since its last move, and jumps there", () => {
         mocks.selectedPage = PAGES[3];
         show([1]);
-        expect(line()?.textContent).toBe("Holding since Page 2");
+        expect(line()?.textContent).toBe("Hold from Page 2");
         fireEvent.click(line()!);
         expect(useTimelineSelectionStore.getState().playheadBeat).toBe(9);
     });
 
-    it("says a marcher whose own move ends on the page moves here", () => {
+    it("is a real button styled as a link, in the normal text color, with a focus ring", () => {
+        mocks.selectedPage = PAGES[3];
+        show([1]);
+        const link = line()!;
+        expect(link.tagName).toBe("BUTTON");
+        expect(link.getAttribute("type")).toBe("button");
+        expect(link.className).toMatch(/\bunderline\b/);
+        expect(link.className).toMatch(/focus-visible:ring/);
+        expect(link.className).toMatch(/\btext-text\b/);
+        expect(link.className).not.toMatch(/text-text\/60/);
+        // The arrow is drawn, not read
+        expect(link.querySelector("svg")?.getAttribute("aria-hidden")).toBe(
+            "true",
+        );
+    });
+
+    it("says a marcher whose own move ends on the page moves on this page, as plain text", () => {
         show([2]);
-        expect(line()?.textContent).toBe("Moves here");
+        expect(line()?.textContent).toBe("Moves on this page");
+        expect(line()?.tagName).toBe("P");
+        expect(line()?.className).not.toMatch(/text-text\/60/);
     });
 
     it("shows a multi-selection's state only where every marcher agrees", () => {
@@ -135,7 +153,7 @@ describe("TimelineHoldLine", () => {
         expect(line()).toBeNull();
         cleanup();
         show([1]);
-        expect(line()?.textContent).toBe("Holding since Page 2");
+        expect(line()?.textContent).toBe("Hold from Page 2");
     });
 
     it("renders nothing on the first page, with nothing selected, or out of timeline mode", () => {
