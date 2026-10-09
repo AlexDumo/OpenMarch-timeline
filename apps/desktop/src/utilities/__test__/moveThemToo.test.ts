@@ -197,16 +197,17 @@ describeDbTests("page mode: Move them too", (it) => {
         const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
         const message = vi.spyOn(toast, "message").mockImplementation(() => 0);
         await toastCarryForward(new QueryClient(), result);
-        // One toast: this one's text and button, not "Pages 3–4 followed" with Only Page 2
+        // One toast that says both, with Move them too and Only Page 1 side by side
         expect(message).not.toHaveBeenCalled();
         expect(info).toHaveBeenCalledTimes(1);
         // Pages are numbered from 0 here (no page number offset): Page 2 is the study's set 3
         expect(info.mock.calls[0]![0]).toBe(
-            "OT1 and OT8 have their own move on Page 2, so they kept their spot",
+            "Pages 2–3 followed (they were copies). OT1 and OT8 have their own move on Page 2, so they kept their spot",
         );
         expect(info.mock.calls[0]![1]).toMatchObject({
             id: "timeline-edit",
             action: { label: "Move them too" },
+            cancel: { label: "Only Page 1" },
         });
         expect(await spot(db, ot1, pages[2]!)).toEqual([50, 200]);
 
@@ -231,6 +232,24 @@ describeDbTests("page mode: Move them too", (it) => {
         expect(await spot(db, marchers[1]!, pages[3]!)).toEqual([150, 250]);
         await performRedo(db);
         expect(await spot(db, ot1, pages[3]!)).toEqual([50, 250]);
+    });
+
+    it("the toast's Only Page N puts the followed pages back, and leaves the kept marchers alone", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await studyShow(db);
+        const result = await shorten(db, pages, marchers);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await toastCarryForward(new QueryClient(), result);
+        const options = info.mock.calls[0]![1] as {
+            cancel: { onClick: () => void };
+        };
+        options.cancel.onClick();
+        await vi.waitFor(async () =>
+            expect(await spot(db, marchers[1]!, pages[2]!)).toEqual([150, 200]),
+        );
+        expect(await spot(db, marchers[1]!, pages[1]!)).toEqual([150, 250]);
+        expect(await spot(db, marchers[0]!, pages[2]!)).toEqual([50, 200]);
     });
 
     it("stops on different pages: says their later moves", async ({ db }) => {
@@ -258,7 +277,7 @@ describeDbTests("page mode: Move them too", (it) => {
         const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
         await toastCarryForward(new QueryClient(), result);
         expect(info.mock.calls[0]![0]).toBe(
-            "OT1, OT2 and OT8 have their own later moves, so they kept their spots",
+            "Pages 2–3 followed (they were copies). OT1, OT2 and OT8 have their own later moves, so they kept their spots",
         );
     });
 
@@ -339,3 +358,109 @@ describeDbTests("page mode: Move them too", (it) => {
         expect(await spot(db, marchers[0]!, pages[2]!)).toEqual([0, 50]);
     });
 });
+
+/** OT1–OT8 in a line on pages 1–4, with everyone's y on page i `ys[i]` (pages past `ys` copy) */
+const lineShow = async (db: DbConnection, ys: readonly number[]) => {
+    await createMarchers({
+        db,
+        newMarchers: Array.from({ length: 8 }, (_, i) => ({
+            section: "Trumpet",
+            drill_prefix: "OT",
+            drill_order: i + 1,
+        })),
+    });
+    for (let i = 0; i < 3; i++)
+        await createLastPage({ db, newPageCounts: 8, createNewBeats: true });
+    const pages = await orderedPageIds(db);
+    const marchers = (
+        await db
+            .select()
+            .from(schema.marchers)
+            .orderBy(asc(schema.marchers.drill_order))
+            .all()
+    ).map((m) => m.id);
+    for (const [p, y] of ys.entries())
+        await updateMarcherPages({
+            db,
+            modifiedMarcherPages: marchers.map((id, i) => ({
+                marcher_id: id,
+                page_id: pages[p]!,
+                x: 100 + 50 * i,
+                y,
+            })),
+        });
+    return { pages, marchers };
+};
+
+describeDbTests(
+    "page mode: ordinary edits stay silent unless they split",
+    (it) => {
+        it("a fully written show (every page differs): an ordinary drag and a nudge on page 2 say nothing", async ({
+            db,
+        }) => {
+            const { pages, marchers } = await lineShow(db, [300, 200, 100, 0]);
+            const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+            const message = vi
+                .spyOn(toast, "message")
+                .mockImplementation(() => 0);
+            const drag = await updateMarcherPages({
+                db,
+                modifiedMarcherPages: marchers.map((id, i) => ({
+                    marcher_id: id,
+                    page_id: pages[1]!,
+                    x: 110 + 50 * i,
+                    y: 220,
+                })),
+            });
+            expect(drag.ownMoveStops).toEqual([]);
+            expect(drag.followedPageIds).toEqual([]);
+            await toastCarryForward(new QueryClient(), drag);
+            const nudge = await updateMarcherPages({
+                db,
+                modifiedMarcherPages: [
+                    {
+                        marcher_id: marchers[3]!,
+                        page_id: pages[1]!,
+                        x: 261,
+                        y: 220,
+                    },
+                ],
+            });
+            expect(nudge.ownMoveStops).toEqual([]);
+            await toastCarryForward(new QueryClient(), nudge);
+            expect(info).not.toHaveBeenCalled();
+            expect(message).not.toHaveBeenCalled();
+            expect(await spot(db, marchers[3]!, pages[2]!)).toEqual([250, 100]);
+        });
+
+        it("a fully held show: editing page 2 says only that later pages followed", async ({
+            db,
+        }) => {
+            const { pages, marchers } = await lineShow(db, [300]);
+            const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+            const message = vi
+                .spyOn(toast, "message")
+                .mockImplementation(() => 0);
+            const result = await updateMarcherPages({
+                db,
+                modifiedMarcherPages: marchers.map((id, i) => ({
+                    marcher_id: id,
+                    page_id: pages[1]!,
+                    x: 100 + 50 * i,
+                    y: 200,
+                })),
+            });
+            expect(result.ownMoveStops).toEqual([]);
+            await toastCarryForward(new QueryClient(), result);
+            expect(info).not.toHaveBeenCalled();
+            expect(message).toHaveBeenCalledTimes(1);
+            expect(message.mock.calls[0]![0]).toBe(
+                "Pages 2–3 followed (they were copies)",
+            );
+            expect(message.mock.calls[0]![1]).toMatchObject({
+                id: "timeline-edit",
+                action: { label: "Only Page 1" },
+            });
+        });
+    },
+);

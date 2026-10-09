@@ -186,7 +186,11 @@ export interface MarcherPagesWriteResult {
     updatedIds: number[];
     /** One entry per write that carried forward */
     carried: CarriedRun[];
-    /** The moved marchers whose edit stopped at a later page with their own move */
+    /**
+     * The moved marchers whose edit stopped at a later page with their own move, on pages where
+     * the write split them from others that followed there; none where every moved marcher
+     * stopped (a written show) or every one followed
+     */
     ownMoveStops: OwnMoveStop[];
     /** The pages any edit carried to, in page order */
     followedPageIds: number[];
@@ -494,6 +498,11 @@ export async function updateMarcherPagesInTransaction({
                     page_id: s.stopPageId,
                 }),
             ),
+    );
+    // Only a split is a surprise: a stop counts where another marcher this write moved followed
+    // into the same page. Where everyone stopped (a written show) or followed, it says nothing
+    result.ownMoveStops = result.ownMoveStops.filter((s) =>
+        followedPositions.has(s.stopPageId),
     );
     result.followedPageIds = [...followedPositions.entries()]
         .sort((a, b) => a[1] - b[1])
