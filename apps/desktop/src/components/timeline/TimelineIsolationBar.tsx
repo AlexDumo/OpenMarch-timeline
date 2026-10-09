@@ -141,10 +141,7 @@ export function TimelineFromStartBadge() {
     const { pages } = useTimingObjects()!;
     const range = selection.kind === "range" ? selection : null;
     // The pin only matters while it bounds the window (not when P is on or before it)
-    // (not while looping: the pinned flag is then the loop's start, UI-17)
-    const looping = useTimelineSelectionStore((s) => s.loop !== null);
-    const pinShown =
-        pinned && !looping && range !== null && range.start === startBeat;
+    const pinShown = pinned && range !== null && range.start === startBeat;
     // UI-17: with looping on, the loop's name when it isn't the window being edited
     const loop = useTimelineSelectionStore((s) => s.loop);
     const loopName =

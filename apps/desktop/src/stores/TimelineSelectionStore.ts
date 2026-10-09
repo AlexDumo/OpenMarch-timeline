@@ -145,11 +145,10 @@ export interface TimelineSelectionState {
     /** What is playing, or `null` while paused (UI-11) */
     readonly playback: TimelinePlaybackRun | null;
     /**
-     * The loop (UI-17), as Logic's cycle region: its start is the start flag, pinned there while
-     * looping (`setLoop`), and its end is its own, so moving the playhead (a scrub, a click on a
-     * count, arrow keys) never changes it; going to a page (E, Q, a page box) moves it to that page.
-     * While set, Play loops it wherever the playhead is and stopping returns to the playhead. `null`
-     * when looping is off.
+     * The loop (UI-17): its own region, apart from the edit window, as Logic's cycle region. While
+     * set, Play loops it wherever the playhead is and stopping returns to the playhead. Moving the
+     * playhead (a scrub, a click on a count, arrow keys) leaves it; going to a page (E, Q, a page
+     * box) moves it to that page. `null` when looping is off.
      */
     readonly loop: TimelineLoop | null;
     /** A gesture is moving the playhead: an unpinned S waits for it to end (UI-12 review) */
@@ -240,10 +239,7 @@ export interface TimelineSelectionState {
     readonly clearCursor: () => void;
     /** Records what is playing (`null` once it stops). Used by the transport and the driver. */
     readonly setPlayback: (playback: TimelinePlaybackRun | null) => void;
-    /**
-     * Sets the loop, or turns looping off with `null` (UI-17). The start flag is the loop's start:
-     * setting it pins S there; turning looping off unpins S, so it follows the page again.
-     */
+    /** Sets the loop, or turns looping off with `null` (UI-17) */
     readonly setLoop: (loop: TimelineLoop | null) => void;
     /** Used by `useTimelinePlaybackDriver` only. */
     readonly setShowEndBeat: (showEndBeat: number | null) => void;
@@ -577,16 +573,12 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                 set((s) =>
                     s.isolation !== null || !s.startPinned
                         ? {}
-                        : {
-                              ...windowFields(
-                                  followingStart(s.playheadBeat, s.pageBoxes),
-                                  false,
-                                  s.playheadBeat,
-                                  s.pageBoxes,
-                              ),
-                              // UI-17: the pinned flag is the loop's start, so unpinning ends it
-                              loop: null,
-                          },
+                        : windowFields(
+                              followingStart(s.playheadBeat, s.pageBoxes),
+                              false,
+                              s.playheadBeat,
+                              s.pageBoxes,
+                          ),
                 ),
             seek: (beat) =>
                 set((s) => {
@@ -889,43 +881,19 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                 set((s) => (s.cursorBeat === null ? {} : { cursorBeat: null })),
             setPlayback: (playback) => set({ playback }),
             setLoop: (loop) =>
-                set(
-                    keepCursorWhilePlaying((s) => {
-                        const next =
-                            loop === null || loop.end - loop.start < 1
-                                ? null
-                                : loop;
-                        if (
-                            next === s.loop ||
-                            (next !== null &&
-                                s.loop !== null &&
-                                next.start === s.loop.start &&
-                                next.end === s.loop.end)
-                        )
-                            return {};
-                        if (s.isolation) return { loop: next };
-                        // UI-17: the start flag is the loop's start, pinned there while looping;
-                        // turning looping off lets it follow the page again
-                        if (next)
-                            return {
-                                loop: next,
-                                ...windowFields(
-                                    next.start,
-                                    true,
-                                    s.playheadBeat,
-                                    s.pageBoxes,
-                                ),
-                            };
-                        return {
-                            loop: null,
-                            ...windowFields(
-                                followingStart(s.playheadBeat, s.pageBoxes),
-                                false,
-                                s.playheadBeat,
-                                s.pageBoxes,
-                            ),
-                        };
-                    }),
+                set((s) =>
+                    loop === s.loop ||
+                    (loop !== null &&
+                        s.loop !== null &&
+                        loop.start === s.loop.start &&
+                        loop.end === s.loop.end)
+                        ? {}
+                        : {
+                              loop:
+                                  loop === null || loop.end - loop.start < 1
+                                      ? null
+                                      : loop,
+                          },
                 ),
             setShowEndBeat: (showEndBeat) => set({ showEndBeat }),
             reset: () =>

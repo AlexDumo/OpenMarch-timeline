@@ -281,13 +281,6 @@ export default function TimelineModePanel() {
                     (store.loop && (next.via === "pages" || pageBox)))
             )
                 store.setLoop({ start, end });
-            // A dragged start flag is the loop's start while looping: the loop's end stays
-            else if (
-                store.isolation === null &&
-                store.loop &&
-                start < store.loop.end
-            )
-                store.setLoop({ start, end: store.loop.end });
         } else store.selectNothing();
     };
 
@@ -408,10 +401,9 @@ function PlayingTimeline(
             }),
         [],
     );
-    // UI-12: the pin shows outside isolation, whose start flag is the isolated move's own, and
-    // not while looping, when the pinned flag is just the loop's start (UI-17)
+    // UI-12: the pin shows outside isolation, whose start flag is the isolated move's own
     const startPinned = useTimelineSelectionStore(
-        (s) => s.startPinned && s.isolation === null && s.loop === null,
+        (s) => s.startPinned && s.isolation === null,
     );
     const selection = useMemo(
         () => toTimelineSelection(editSelection, startBeat, startPinned),
