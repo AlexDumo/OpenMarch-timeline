@@ -24,6 +24,7 @@ import {
     slotHoldId,
     type MarcherQuality,
     type MarcherSlotLook,
+    type StepOffFoot,
 } from "./marcherBodies";
 
 export interface MarcherAssets {
@@ -88,6 +89,7 @@ export function useMarcherBodies(
     names: readonly string[],
     looks: readonly MarcherSlotLook[] | null,
     quality: MarcherQuality,
+    foot: StepOffFoot = "left",
 ): MarcherBodies | null {
     const namesKey = [...new Set(names)].sort().join(",");
     const holdsKey = [
@@ -105,7 +107,7 @@ export function useMarcherBodies(
         }
         const holds = holdsKey.split(",");
         const t0 = performance.now();
-        const baked = bakeForBodies(assets.bodies, clips, holds);
+        const baked = bakeForBodies(assets.bodies, clips, holds, foot);
         // eslint-disable-next-line no-console -- the bake size and time are the main cost to watch
         console.info(
             `3D View: baked ${Object.keys(clips).length} clips × ${holds.length} holds, ` +
@@ -113,7 +115,7 @@ export function useMarcherBodies(
                 `${(performance.now() - t0).toFixed(0)} ms`,
         );
         return baked;
-    }, [assets, namesKey, holdsKey]);
+    }, [assets, namesKey, holdsKey, foot]);
     useEffect(() => () => bake?.texture.dispose(), [bake]);
 
     const bodies = useMemo(() => {

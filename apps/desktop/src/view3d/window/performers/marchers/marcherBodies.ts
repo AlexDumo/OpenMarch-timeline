@@ -45,6 +45,7 @@ import {
 import type { LoadedBody } from "./marcherAssets";
 import { holdClip, poseArms } from "./armPose";
 import { instrumentGeometry, instrumentMaterial } from "./instrumentGeometry";
+import { mirrorClip, mirrorName } from "./mirrorClip";
 
 /**
  * Contact shadow under each marcher: a soft dark disc on the turf, in place
@@ -182,28 +183,57 @@ const parseHoldId = (id: string) => {
     return holdFor(family, state);
 };
 
+/** Which foot the band steps off on. "right" plays every clip mirrored. */
+export type StepOffFoot = "left" | "right";
+
+/** The clips to load for `names`: on the right foot, each row's mirrored partner too. */
+export function clipsToLoad(
+    names: readonly string[],
+    foot: StepOffFoot,
+): string[] {
+    const out = new Set(names);
+    if (foot === "right") for (const n of names) out.add(mirrorName(n));
+    return [...out];
+}
+
 /**
  * Every v4u body shares one skeleton, so any of them bakes for all. Each
  * clip is baked once per hold in `holds` (docs/3d/instruments.md §5): the
- * arm tracks replaced by the hold's pose, under `rowKey` names.
+ * arm tracks replaced by the hold's pose, under `rowKey` names. On the
+ * right foot every row comes from the mirror of its partner clip
+ * (`mirrorName`), so slides and built turns keep their travel direction
+ * while the feet swap.
  */
 export function bakeForBodies(
     bodies: ReadonlyMap<BodyType, LoadedBody>,
     clips: Record<string, THREE.AnimationClip>,
     holds: readonly string[] = [NO_HOLD],
+    foot: StepOffFoot = "left",
 ): Bake {
     const first = bodies.values().next().value;
     if (!first) throw new Error("3D View: no bodies to bake on");
+    const source = (name: string): THREE.AnimationClip => {
+        if (foot === "left") return clips[name];
+        const partner = mirrorName(name);
+        const clip = clips[partner];
+        if (!clip)
+            throw new Error(
+                `3D View: clip ${partner} isn't loaded to mirror as ${name}`,
+            );
+        return mirrorClip(clip, name);
+    };
     const all: Record<string, THREE.AnimationClip> = {};
     for (const h of holds) {
         const pose =
             h === NO_HOLD
                 ? null
                 : poseArms(first.mesh.skeleton, parseHoldId(h));
-        for (const [name, clip] of Object.entries(clips))
+        for (const name of Object.keys(clips)) {
+            const clip = source(name);
             all[rowKey(name, h)] = pose
                 ? holdClip(clip, pose, rowKey(name, h))
                 : clip;
+        }
     }
     return bakeClips(THREE, first.scene, all);
 }

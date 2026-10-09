@@ -147,6 +147,27 @@ describe("a move from dot to dot", () => {
     });
 });
 
+describe("the close", () => {
+    it("keeps a turned leg on its line and turns it out only at the end of the halt", () => {
+        // a diagonal, then a halt: the halt clip is built at 45 and the
+        // residual turn must wait until the foot has closed
+        const s = STEP / Math.SQRT2;
+        const plan = planMarcher(
+            input([...repeat<Count>(4, [s * 1.2, s * 0.8]), "hold", "hold"]),
+        );
+        const halt = plan.events.find(
+            (e) => e.kind === "transition" && e.clip.startsWith("halt"),
+        )!;
+        const yaw = halt.legYaw as [number, number, number, number];
+        expect(Math.abs(yaw[0])).toBeGreaterThan(0.01); // there is a residual to undo
+        expect(yaw[1]).toBe(0);
+        expect(yaw[2]).toBeGreaterThanOrEqual(0.8);
+        expect(yaw[3]).toBe(1);
+        // the body placement uses the same window
+        expect((halt.root as { legYaw: number[] }).legYaw[2]).toBe(yaw[2]);
+    });
+});
+
 describe("halt parity", () => {
     it("uses halt_ after an odd number of counts (loop back at time 0)", () => {
         const plan = planMarcher(

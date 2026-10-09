@@ -17,6 +17,8 @@
  *   shadows and halves the crowd.
  * - `hornState`: which hold the brass plays. Always `up` for shows; the
  *   settings panel can switch it to check the other holds (`hornState.ts`).
+ * - `stepOffFoot`: which foot the band steps off on; `right` plays every
+ *   clip mirrored. A window setting until the show stores it.
  * - `qualityMode`: the viewer's choice in the settings panel (`auto`, `low`
  *   or `high`), saved per computer. Set it with `setQualityMode`. In `auto`
  *   the scene lowers `quality` once with `_autoLower()` when frames are slow
@@ -43,6 +45,7 @@ import {
     type QualityMode,
 } from "./qualityPreference";
 import type { HoldState } from "./hornState";
+import type { StepOffFoot } from "./performers/marchers/marcherBodies";
 
 /** People within this many meters of a seat camera are hidden (ui.md UI-3). */
 export const CROWD_CLEAR_RADIUS = 4.9;
@@ -59,6 +62,8 @@ export interface View3dSceneState {
     setQuality: (quality: View3dQuality) => void;
     hornState: HoldState;
     setHornState: (state: HoldState) => void;
+    stepOffFoot: StepOffFoot;
+    setStepOffFoot: (foot: StepOffFoot) => void;
     qualityMode: QualityMode;
     /** Saves the choice and applies it. Choosing `auto` starts on `high` again. */
     setQualityMode: (mode: QualityMode) => void;
@@ -88,6 +93,8 @@ export const useView3dSceneStore = create<View3dSceneState>()((set) => ({
     setQuality: (quality) => set({ quality }),
     hornState: "up",
     setHornState: (hornState) => set({ hornState }),
+    stepOffFoot: "left",
+    setStepOffFoot: (stepOffFoot) => set({ stepOffFoot }),
     qualityMode: startMode,
     setQualityMode: (mode) => {
         saveQualityMode(mode);

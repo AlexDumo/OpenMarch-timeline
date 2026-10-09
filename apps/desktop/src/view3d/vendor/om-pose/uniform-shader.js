@@ -22,38 +22,163 @@
 // Rest-pose landmarks are the v4 skeleton's (identical for all seven body types), glTF axes:
 // +X performer's left, +Y up, +Z forward.
 
-export const PALETTE_SLOTS = ["primary", "secondary", "accent", "trim", "pants", "shoes", "gloves", "hat", "plume", "visor"];
+export const PALETTE_SLOTS = [
+    "primary",
+    "secondary",
+    "accent",
+    "trim",
+    "pants",
+    "shoes",
+    "gloves",
+    "hat",
+    "plume",
+    "visor",
+];
 
 export const STYLES = {
-  classic:   { id: 0, label: "Classic",   about: "Solid jacket, high collar and cuffs in trim, a stripe down the outer seam." },
-  sash:      { id: 1, label: "Sash",      about: "A wide diagonal sash from the left shoulder to the right hip, edged in trim." },
-  plastron:  { id: 2, label: "Plastron",  about: "A contrasting front panel (bib) that widens to the chest, edged in trim." },
-  military:  { id: 3, label: "Military",  about: "Crossed belts over the chest, two rows of buttons, a banded jacket hem." },
-  split:     { id: 4, label: "Split",     about: "Asymmetric: the jacket and sleeves split on a diagonal into two colours." },
-  fade:      { id: 5, label: "Fade",      about: "A modern look: jacket fades from the secondary colour at the waist to the primary at the chest.", defaults: { stripe: false } },
+    classic: {
+        id: 0,
+        label: "Classic",
+        about: "Solid jacket, high collar and cuffs in trim, a stripe down the outer seam.",
+    },
+    sash: {
+        id: 1,
+        label: "Sash",
+        about: "A wide diagonal sash from the left shoulder to the right hip, edged in trim.",
+    },
+    plastron: {
+        id: 2,
+        label: "Plastron",
+        about: "A contrasting front panel (bib) that widens to the chest, edged in trim.",
+    },
+    military: {
+        id: 3,
+        label: "Military",
+        about: "Crossed belts over the chest, two rows of buttons, a banded jacket hem.",
+    },
+    split: {
+        id: 4,
+        label: "Split",
+        about: "Asymmetric: the jacket and sleeves split on a diagonal into two colours.",
+    },
+    fade: {
+        id: 5,
+        label: "Fade",
+        about: "A modern look: jacket fades from the secondary colour at the waist to the primary at the chest.",
+        defaults: { stripe: false },
+    },
 };
 
 export const PRESETS = {
-  "Royal":        { style: "classic",  colors: { primary: 0x2d4f9e, secondary: 0xf2f2ee, accent: 0xf2f2ee, trim: 0xd8b04a, pants: 0x1c1f2b, shoes: 0x111114, gloves: 0xf2f2ee, hat: 0x2d4f9e, plume: 0xf2f2ee, visor: 0x111114 } },
-  "Maroon":       { style: "sash",     colors: { primary: 0x6e1f2a, secondary: 0xd9cfb4, accent: 0xd8b04a, trim: 0xd9cfb4, pants: 0xd9cfb4, shoes: 0x111114, gloves: 0xf2f2ee, hat: 0x6e1f2a, plume: 0xd8b04a, visor: 0x111114 } },
-  "Black & gold": { style: "military", colors: { primary: 0x1b1b1d, secondary: 0x2a2a2e, accent: 0xd8b04a, trim: 0xd8b04a, pants: 0x1b1b1d, shoes: 0x111114, gloves: 0xd8b04a, hat: 0x1b1b1d, plume: 0xd8b04a, visor: 0xd8b04a } },
-  "Kelly":        { style: "plastron", colors: { primary: 0x1f7a45, secondary: 0xf0f0ea, accent: 0x1f7a45, trim: 0xf0f0ea, pants: 0xf0f0ea, shoes: 0xf0f0ea, gloves: 0xf2f2ee, hat: 0xf0f0ea, plume: 0x1f7a45, visor: 0x111114 } },
-  "Midnight":     { style: "split",    colors: { primary: 0x23264a, secondary: 0x6c7fd8, accent: 0xf2f2ee, trim: 0xf2f2ee, pants: 0x23264a, shoes: 0x111114, gloves: 0xf2f2ee, hat: 0x23264a, plume: 0x6c7fd8, visor: 0x111114 } },
-  "Sunset":       { style: "fade",     colors: { primary: 0xe8743b, secondary: 0x7a1f5c, accent: 0xffd36e, trim: 0xffd36e, pants: 0x2b1830, shoes: 0x111114, gloves: 0xf2f2ee, hat: 0x2b1830, plume: 0xffd36e, visor: 0x111114 } },
+    Royal: {
+        style: "classic",
+        colors: {
+            primary: 0x2d4f9e,
+            secondary: 0xf2f2ee,
+            accent: 0xf2f2ee,
+            trim: 0xd8b04a,
+            pants: 0x1c1f2b,
+            shoes: 0x111114,
+            gloves: 0xf2f2ee,
+            hat: 0x2d4f9e,
+            plume: 0xf2f2ee,
+            visor: 0x111114,
+        },
+    },
+    Maroon: {
+        style: "sash",
+        colors: {
+            primary: 0x6e1f2a,
+            secondary: 0xd9cfb4,
+            accent: 0xd8b04a,
+            trim: 0xd9cfb4,
+            pants: 0xd9cfb4,
+            shoes: 0x111114,
+            gloves: 0xf2f2ee,
+            hat: 0x6e1f2a,
+            plume: 0xd8b04a,
+            visor: 0x111114,
+        },
+    },
+    "Black & gold": {
+        style: "military",
+        colors: {
+            primary: 0x1b1b1d,
+            secondary: 0x2a2a2e,
+            accent: 0xd8b04a,
+            trim: 0xd8b04a,
+            pants: 0x1b1b1d,
+            shoes: 0x111114,
+            gloves: 0xd8b04a,
+            hat: 0x1b1b1d,
+            plume: 0xd8b04a,
+            visor: 0xd8b04a,
+        },
+    },
+    Kelly: {
+        style: "plastron",
+        colors: {
+            primary: 0x1f7a45,
+            secondary: 0xf0f0ea,
+            accent: 0x1f7a45,
+            trim: 0xf0f0ea,
+            pants: 0xf0f0ea,
+            shoes: 0xf0f0ea,
+            gloves: 0xf2f2ee,
+            hat: 0xf0f0ea,
+            plume: 0x1f7a45,
+            visor: 0x111114,
+        },
+    },
+    Midnight: {
+        style: "split",
+        colors: {
+            primary: 0x23264a,
+            secondary: 0x6c7fd8,
+            accent: 0xf2f2ee,
+            trim: 0xf2f2ee,
+            pants: 0x23264a,
+            shoes: 0x111114,
+            gloves: 0xf2f2ee,
+            hat: 0x23264a,
+            plume: 0x6c7fd8,
+            visor: 0x111114,
+        },
+    },
+    Sunset: {
+        style: "fade",
+        colors: {
+            primary: 0xe8743b,
+            secondary: 0x7a1f5c,
+            accent: 0xffd36e,
+            trim: 0xffd36e,
+            pants: 0x2b1830,
+            shoes: 0x111114,
+            gloves: 0xf2f2ee,
+            hat: 0x2b1830,
+            plume: 0xffd36e,
+            visor: 0x111114,
+        },
+    },
 };
 
-const L = {  // v4 rest landmarks (metres)
-  collar: 1.42, belt: 0.97, hatBase: 1.721,
-  wrist: [0.331, 0.964, 0.081], hip: [0.094, 0.938, -0.012], ankle: [0.162, 0.096, -0.011],
+const L = {
+    // v4 rest landmarks (metres)
+    collar: 1.42,
+    belt: 0.97,
+    hatBase: 1.721,
+    wrist: [0.331, 0.964, 0.081],
+    hip: [0.094, 0.938, -0.012],
+    ankle: [0.162, 0.096, -0.011],
 };
 const f = (x) => x.toFixed(4);
 
-const VERT_HEAD = /* glsl */`
+const VERT_HEAD = /* glsl */ `
 attribute float _part;
 varying float vPart;
 varying vec3 vRest;
 `;
-const FRAG_HEAD = /* glsl */`
+const FRAG_HEAD = /* glsl */ `
 varying float vPart;
 varying vec3 vRest;
 uniform vec3 uPrimary, uSecondary, uAccent, uTrim, uPants, uShoes, uGloves, uHat, uPlume, uVisor, uSkin;
@@ -130,59 +255,107 @@ vec3 uniformColor() {
 `;
 
 function colorsOf(THREE, colors = {}) {
-  const out = {};
-  for (const k of PALETTE_SLOTS) out[k] = new THREE.Color(colors[k] ?? 0x888888);
-  return out;
+    const out = {};
+    for (const k of PALETTE_SLOTS)
+        out[k] = new THREE.Color(colors[k] ?? 0x888888);
+    return out;
 }
 
-export const DEFAULT_OPTIONS = { stripe: true, collar: true, cuffs: true, mirror: false, hat: true, hatType: "shako", cape: false,
-  instrument: "none", finish: "brass" };
+export const DEFAULT_OPTIONS = {
+    stripe: true,
+    collar: true,
+    cuffs: true,
+    mirror: false,
+    hat: true,
+    hatType: "shako",
+    cape: false,
+    instrument: "none",
+    finish: "brass",
+};
 export const INSTRUMENTS = ["none", "trumpet", "mellophone", "baritone"];
 export const FINISHES = { brass: 0xd9ad4f, silver: 0xd4d8de, black: 0x1c1c20 };
 export const HAT_TYPES = ["shako", "aussie", "none"];
 
-export function createUniformMaterial(THREE, { style = "classic", colors = {}, skin = 0xc68863, options = {}, flatShading = true } = {}) {
-  const mat = new THREE.MeshStandardMaterial({ roughness: 0.78, metalness: 0.0, flatShading });
-  const c = colorsOf(THREE, colors);
-  const u = {
-    uStyle: { value: (STYLES[style] ?? STYLES.classic).id },
-    uSkin: { value: new THREE.Color(skin) },
-    uStripe: { value: 1 }, uCollar: { value: 1 }, uCuffs: { value: 1 }, uMirror: { value: 0 }, uShowHat: { value: 1 },
-    uHatType: { value: 0 }, uCape: { value: 0 }, uInstrument: { value: 0 }, uMetal: { value: new THREE.Color(FINISHES.brass) },
-  };
-  for (const k of PALETTE_SLOTS) u["u" + k[0].toUpperCase() + k.slice(1)] = { value: c[k] };
-  mat.userData.uniforms = u;
-  setOptions(u, { ...DEFAULT_OPTIONS, ...(STYLES[style]?.defaults ?? {}), ...options });
-  mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, u);
-    shader.vertexShader = VERT_HEAD + shader.vertexShader.replace(
-      "#include <begin_vertex>", "#include <begin_vertex>\n  vRest = position;\n  vPart = _part;");
-    shader.fragmentShader = FRAG_HEAD + shader.fragmentShader.replace(
-      "vec4 diffuseColor = vec4( diffuse, opacity );", "vec4 diffuseColor = vec4( uniformColor(), opacity );");
-  };
-  mat.customProgramCacheKey = () => "om-uniform-v1";
-  return mat;
+export function createUniformMaterial(
+    THREE,
+    {
+        style = "classic",
+        colors = {},
+        skin = 0xc68863,
+        options = {},
+        flatShading = true,
+    } = {},
+) {
+    const mat = new THREE.MeshStandardMaterial({
+        roughness: 0.78,
+        metalness: 0.0,
+        flatShading,
+    });
+    const c = colorsOf(THREE, colors);
+    const u = {
+        uStyle: { value: (STYLES[style] ?? STYLES.classic).id },
+        uSkin: { value: new THREE.Color(skin) },
+        uStripe: { value: 1 },
+        uCollar: { value: 1 },
+        uCuffs: { value: 1 },
+        uMirror: { value: 0 },
+        uShowHat: { value: 1 },
+        uHatType: { value: 0 },
+        uCape: { value: 0 },
+        uInstrument: { value: 0 },
+        uMetal: { value: new THREE.Color(FINISHES.brass) },
+    };
+    for (const k of PALETTE_SLOTS)
+        u["u" + k[0].toUpperCase() + k.slice(1)] = { value: c[k] };
+    mat.userData.uniforms = u;
+    setOptions(u, {
+        ...DEFAULT_OPTIONS,
+        ...(STYLES[style]?.defaults ?? {}),
+        ...options,
+    });
+    mat.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, u);
+        shader.vertexShader =
+            VERT_HEAD +
+            shader.vertexShader.replace(
+                "#include <begin_vertex>",
+                "#include <begin_vertex>\n  vRest = position;\n  vPart = _part;",
+            );
+        shader.fragmentShader =
+            FRAG_HEAD +
+            shader.fragmentShader.replace(
+                "vec4 diffuseColor = vec4( diffuse, opacity );",
+                "vec4 diffuseColor = vec4( uniformColor(), opacity );",
+            );
+    };
+    mat.customProgramCacheKey = () => "om-uniform-v1";
+    return mat;
 }
 
 function setOptions(u, o) {
-  if (o.stripe !== undefined) u.uStripe.value = o.stripe ? 1 : 0;
-  if (o.collar !== undefined) u.uCollar.value = o.collar ? 1 : 0;
-  if (o.cuffs !== undefined) u.uCuffs.value = o.cuffs ? 1 : 0;
-  if (o.mirror !== undefined) u.uMirror.value = o.mirror ? 1 : 0;
-  if (o.hat !== undefined) u.uShowHat.value = o.hat ? 1 : 0;
-  if (o.hatType !== undefined) u.uHatType.value = Math.max(0, HAT_TYPES.indexOf(o.hatType));
-  if (o.cape !== undefined) u.uCape.value = o.cape ? 1 : 0;
-  if (o.instrument !== undefined) u.uInstrument.value = Math.max(0, INSTRUMENTS.indexOf(o.instrument));
-  if (o.finish !== undefined) u.uMetal.value.set(FINISHES[o.finish] ?? FINISHES.brass);
+    if (o.stripe !== undefined) u.uStripe.value = o.stripe ? 1 : 0;
+    if (o.collar !== undefined) u.uCollar.value = o.collar ? 1 : 0;
+    if (o.cuffs !== undefined) u.uCuffs.value = o.cuffs ? 1 : 0;
+    if (o.mirror !== undefined) u.uMirror.value = o.mirror ? 1 : 0;
+    if (o.hat !== undefined) u.uShowHat.value = o.hat ? 1 : 0;
+    if (o.hatType !== undefined)
+        u.uHatType.value = Math.max(0, HAT_TYPES.indexOf(o.hatType));
+    if (o.cape !== undefined) u.uCape.value = o.cape ? 1 : 0;
+    if (o.instrument !== undefined)
+        u.uInstrument.value = Math.max(0, INSTRUMENTS.indexOf(o.instrument));
+    if (o.finish !== undefined)
+        u.uMetal.value.set(FINISHES[o.finish] ?? FINISHES.brass);
 }
 
 export function setUniform(mat, { style, colors, skin, options } = {}) {
-  const u = mat.userData.uniforms;
-  if (options) setOptions(u, options);
-  if (style !== undefined) u.uStyle.value = (STYLES[style] ?? STYLES.classic).id;
-  if (skin !== undefined) u.uSkin.value.set(skin);
-  if (colors) for (const [k, v] of Object.entries(colors)) {
-    const key = "u" + k[0].toUpperCase() + k.slice(1);
-    if (u[key]) u[key].value.set(v);
-  }
+    const u = mat.userData.uniforms;
+    if (options) setOptions(u, options);
+    if (style !== undefined)
+        u.uStyle.value = (STYLES[style] ?? STYLES.classic).id;
+    if (skin !== undefined) u.uSkin.value.set(skin);
+    if (colors)
+        for (const [k, v] of Object.entries(colors)) {
+            const key = "u" + k[0].toUpperCase() + k.slice(1);
+            if (u[key]) u[key].value.set(v);
+        }
 }

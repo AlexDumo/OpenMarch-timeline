@@ -12,6 +12,7 @@ import {
     MarcherBodies,
     NO_HOLD,
     bakeForBodies,
+    clipsToLoad,
     rowKey,
     slotHoldId,
     visibleIndex,
@@ -53,6 +54,17 @@ async function loadedBodies() {
     return new Map([
         ["neutral-average", { scene: gltf.scene, mesh: mesh! }],
     ]) as Map<BodyType, LoadedBody>;
+}
+
+async function allClips() {
+    const b = fs.readFileSync(
+        path.resolve(__dirname, "../../../assets/om-pose/clips/clips-h100.glb"),
+    );
+    const gltf = await new GLTFLoader().parseAsync(
+        b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength),
+        "",
+    );
+    return new Map(gltf.animations.map((c) => [c.name, c]));
 }
 
 async function clip8to5() {
@@ -241,6 +253,57 @@ describe("horns as their own meshes", () => {
             set.group.children.some((o) => o.name.startsWith("view3d-horn-")),
         ).toBe(false);
         set.dispose();
+    });
+});
+
+describe("stepping off on the right foot", () => {
+    it("loads the mirrored partner of every clip the show plays", () => {
+        expect(clipsToLoad(["8to5", "slideL8to5"], "left")).toEqual([
+            "8to5",
+            "slideL8to5",
+        ]);
+        expect(clipsToLoad(["8to5", "slideL8to5"], "right").sort()).toEqual([
+            "8to5",
+            "slideL8to5",
+            "slideR8to5",
+        ]);
+    });
+
+    it("bakes each row from its mirrored partner", async () => {
+        const bodies = await loadedBodies();
+        const all = await allClips();
+        const clips = {
+            "8to5": all.get("8to5")!,
+            slideL8to5: all.get("slideL8to5")!,
+            slideR8to5: all.get("slideR8to5")!,
+        };
+        const left = bakeForBodies(bodies, clips, [NO_HOLD], "left");
+        const right = bakeForBodies(bodies, clips, [NO_HOLD], "right");
+        expect(Object.keys(right.rows).sort()).toEqual(
+            Object.keys(left.rows).sort(),
+        );
+        // a mirrored forward march is not the same bake as the original (the feet swap)
+        const row = right.rows["8to5"];
+        const a = left.texture.image.data as Float32Array;
+        const b = right.texture.image.data as Float32Array;
+        let differs = 0;
+        const width = left.texture.image.width * 4;
+        for (let i = row.row * width; i < (row.row + 1) * width; i++)
+            if (Math.abs(a[i] - b[i]) > 1e-6) differs++;
+        expect(differs).toBeGreaterThan(0);
+    });
+
+    it("refuses a right-foot bake when a mirrored partner is missing", async () => {
+        const bodies = await loadedBodies();
+        const all = await allClips();
+        expect(() =>
+            bakeForBodies(
+                bodies,
+                { slideL8to5: all.get("slideL8to5")! },
+                [NO_HOLD],
+                "right",
+            ),
+        ).toThrow(/slideR8to5/);
     });
 });
 

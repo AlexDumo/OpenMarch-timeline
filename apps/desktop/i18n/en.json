@@ -1289,6 +1289,11 @@
                 "trail": "Trail"
             },
             "hornStateHint": "Shows always play horns up. The other positions are here to check the poses.",
+            "stepOffFoot": "Step off",
+            "stepOffFootMode": {
+                "left": "Left foot",
+                "right": "Right foot"
+            },
             "keysSection": "Keyboard and mouse"
         },
         "keys": {

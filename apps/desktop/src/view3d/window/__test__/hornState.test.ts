@@ -16,3 +16,12 @@ describe("horn state", () => {
         useView3dSceneStore.getState().setHornState("up");
     });
 });
+
+describe("step-off foot", () => {
+    it("starts on the left foot and changes on request", () => {
+        expect(useView3dSceneStore.getState().stepOffFoot).toBe("left");
+        useView3dSceneStore.getState().setStepOffFoot("right");
+        expect(useView3dSceneStore.getState().stepOffFoot).toBe("right");
+        useView3dSceneStore.getState().setStepOffFoot("left");
+    });
+});

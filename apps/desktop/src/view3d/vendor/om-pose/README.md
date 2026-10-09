@@ -3,11 +3,11 @@
 Plain ES modules from [om-pose](https://github.com/OpenMarch/om-pose) that draw and drive the 3D View's
 marchers. Its `docs/openmarch-3d.md` is the specification they implement.
 
-| File | om-pose path | Commit | Local changes |
-|---|---|---|---|
+| File                    | om-pose path                   | Commit                                     | Local changes       |
+| ----------------------- | ------------------------------ | ------------------------------------------ | ------------------- |
 | `instanced-marchers.js` | `render/instanced-marchers.js` | `87cc16e816f0d4a074098b9cb27fdb9431c95dac` | header comment only |
-| `step-blend.js` | `render/step-blend.js` | `87cc16e816f0d4a074098b9cb27fdb9431c95dac` | header comment only |
-| `uniform-shader.js` | `uniforms/uniform-shader.js` | `87cc16e816f0d4a074098b9cb27fdb9431c95dac` | header comment only |
+| `step-blend.js`         | `render/step-blend.js`         | `87cc16e816f0d4a074098b9cb27fdb9431c95dac` | header comment only |
+| `uniform-shader.js`     | `uniforms/uniform-shader.js`   | `87cc16e816f0d4a074098b9cb27fdb9431c95dac` | header comment only |
 
 The `.d.ts` files are hand-written for this app. Don't edit the `.js` files here: change them in om-pose
 and copy them again, then update this table and list any change made here.

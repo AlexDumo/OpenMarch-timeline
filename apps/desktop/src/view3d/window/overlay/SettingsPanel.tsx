@@ -80,6 +80,7 @@ export function SettingsPanel({
                 >
                     <QualityRow />
                     <HornStateRow />
+                    <StepOffFootRow />
                 </Section>
                 <Section title={t("view3d.settings.keysSection")}>
                     <ShortcutList />
@@ -350,6 +351,27 @@ function HornStateRow() {
             <p className="text-sub text-text/60">
                 {t("view3d.settings.hornStateHint")}
             </p>
+        </Row>
+    );
+}
+
+/** Which foot the band steps off on: a window setting until the show stores it. */
+function StepOffFootRow() {
+    const { t } = useTranslate();
+    const foot = useView3dSceneStore((s) => s.stepOffFoot);
+    const setFoot = useView3dSceneStore((s) => s.setStepOffFoot);
+    return (
+        <Row label={t("view3d.settings.stepOffFoot")} stacked>
+            <Segmented
+                value={foot}
+                options={(["left", "right"] as const).map((value) => ({
+                    value,
+                    label: t(`view3d.settings.stepOffFootMode.${value}`),
+                }))}
+                onChange={setFoot}
+                label={t("view3d.settings.stepOffFoot")}
+                testId="view3d-step-off-foot-picker"
+            />
         </Row>
     );
 }

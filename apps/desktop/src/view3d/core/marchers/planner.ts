@@ -67,6 +67,8 @@ export const WEIGHT_SNAP = 1e-3;
 export const TURN_EPS = (1 * Math.PI) / 180;
 /** A leg turn this big within one move is a change of direction, faded like a change of move (radians). */
 export const SHARP_TURN = (20 * Math.PI) / 180;
+/** A halt's residual leg turn starts this far into its count: after the foot has closed. */
+export const HALT_TURN_START = 0.8;
 /** Between rests, a landing correction anchor at least this often (counts). */
 export const MAX_ANCHOR_SPAN = 16;
 
@@ -339,15 +341,37 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                       phaseStart: st.type === "attention" ? 0 : k - p,
                       root: null,
                   };
-        const transition = (pair: TurnedPair | ClipPair): Draft => ({
-            kind: "transition",
-            clip: pair.a,
-            clip2: pair.b && pair.weight > 0 ? pair.b : null,
-            weight: pair.b ? pair.weight : 0,
-            legYaw: "legYaw" in pair ? pair.legYaw : 0,
-            phaseStart: k,
-            root: pair,
-        });
+        /**
+         * A halt keeps the closing leg on its line: the residual turn that
+         * squares the legs waits until the foot has closed, the last fifth
+         * of the count, instead of easing through the clip's swing window.
+         */
+        const lateTurn = (pair: TurnedPair): TurnedPair =>
+            pair.kind === "stepoff"
+                ? pair
+                : {
+                      ...pair,
+                      window: [HALT_TURN_START, 1],
+                      legYaw: [
+                          pair.legYaw[0],
+                          pair.legYaw[1],
+                          HALT_TURN_START,
+                          1,
+                      ],
+                  };
+        const transition = (pair: TurnedPair | ClipPair): Draft => {
+            const turned: TurnedPair | ClipPair =
+                "legYaw" in pair ? lateTurn(pair) : pair;
+            return {
+                kind: "transition",
+                clip: turned.a,
+                clip2: turned.b && turned.weight > 0 ? turned.b : null,
+                weight: turned.b ? turned.weight : 0,
+                legYaw: "legYaw" in turned ? (turned as TurnedPair).legYaw : 0,
+                phaseStart: k,
+                root: turned,
+            };
+        };
         const change = (from: string, to: string): Draft | null => {
             const base = `${p === 0 ? "change" : "change2"}_${from}__${to}`;
             return has(base)

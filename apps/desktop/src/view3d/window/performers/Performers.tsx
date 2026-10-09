@@ -71,6 +71,7 @@ import {
     useMarcherAssets,
     useMarcherBodies,
 } from "./marchers/useMarcherBodies";
+import { clipsToLoad } from "./marchers/marcherBodies";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -85,6 +86,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const queryClient = useQueryClient();
     const quality = useView3dSceneStore((s) => s.quality);
     const hornState = useView3dSceneStore((s) => s.hornState);
+    const stepOffFoot = useView3dSceneStore((s) => s.stepOffFoot);
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
     );
@@ -177,13 +179,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             (showPlans?.plans ?? []).filter((p) => p !== null),
         );
         for (const h of heightClasses) names.add(clipName("attention", h));
-        return [...names];
-    }, [showPlans, heightClasses]);
+        // on the right foot every row is baked from its mirrored partner
+        return clipsToLoad([...names], stepOffFoot);
+    }, [showPlans, heightClasses, stepOffFoot]);
     const marcherBodies = useMarcherBodies(
         marcherAssets,
         clipNames,
         marcherLooks,
         quality,
+        stepOffFoot,
     );
     const motion = useMemo(
         () =>
