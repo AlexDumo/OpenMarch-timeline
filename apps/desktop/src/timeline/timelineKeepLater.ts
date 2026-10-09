@@ -426,7 +426,8 @@ const mixedWords = (
 };
 
 /**
- * A page box's chain for the selection, or null where none follows into it or was kept there:
+ * A page box's chain for the selection, or null where none follows into it after a move or was
+ * kept there:
  * linked where they follow (a click keeps them), broken where they were kept (a click lets them
  * follow again), and for a mix the count kept (a click keeps the rest). The words name whom a
  * click changes (by name up to three, `marcherNamesText`), so a click on a group's chain never
@@ -437,7 +438,11 @@ export function pageChainWords(
     t: KeepTranslate = english,
     nameOf?: MarcherNameOf,
 ): PageChainWords | null {
-    const { follows, kept, pageName: page, from } = state;
+    const { kept, pageName: page, from } = state;
+    // Marchers that haven't moved yet get no chain (lead, wp19): every box would show one. They
+    // keep the other ways in (the inspector, the menu, K), and a kept one still shows kept
+    const start = new Set(state.fromStart);
+    const follows = state.follows.filter((id) => !start.has(id));
     if (follows.length === 0 && kept.length === 0) return null;
     const fromPage = from.length === 1 ? from[0]! : null;
     if (kept.length === 0)

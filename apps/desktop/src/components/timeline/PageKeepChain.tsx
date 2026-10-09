@@ -110,7 +110,10 @@ export function usePageKeepChains(
             if (!words) continue;
             chains.set(state.pageId, {
                 ...words,
-                withK: kDoes(k, state.pageId, words.action),
+                // Only where K changes exactly the chain's marchers
+                withK:
+                    kDoes(k, state.pageId, words.action) &&
+                    k!.marcherIds.join() === words.marcherIds.join(),
                 onToggle: () =>
                     void (words.action === "keep" ? keepOnPage : followAgainOn)(
                         state.box,
