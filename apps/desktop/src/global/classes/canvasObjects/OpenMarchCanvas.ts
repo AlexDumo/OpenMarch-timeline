@@ -5,6 +5,7 @@ import Pathway, { DEFAULT_PATHWAY_STROKE_WIDTH } from "./Pathway";
 import Midpoint from "./Midpoint";
 import TimelinePathway from "./TimelinePathway";
 import TimelineFocusLayer from "./TimelineFocusLayer";
+import TimelineKeptLayer, { type TimelineKeptMark } from "./TimelineKeptLayer";
 import {
     cacheAtViewportResolution,
     cacheFitsAtFullResolution,
@@ -140,6 +141,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     marcherShapes: MarcherShape[] = [];
     /** Timeline mode's picked spec shape, while one is drawn (P7.11, `useTimelineShapeCanvas`) */
     timelineShapeOverlay: TimelineShapeOverlay | null = null;
+    /** The kept marks beside the dots in timeline mode (`renderTimelineKeptMarks`), if drawn */
+    timelineKeptLayer: TimelineKeptLayer | null = null;
     /**
      * The reference to the grid (the lines on the field) object to use for caching
      * This is needed to disable object caching while zooming, which greatly improves responsiveness.
@@ -1122,6 +1125,7 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                 controlPoint.bringToFront();
             });
         }
+        this.timelineKeptLayer?.bringToFront();
         this.timelineShapeOverlay?.bringToFront();
     }
 
@@ -2596,6 +2600,40 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         const layers = this.getObjectsByType(TimelineFocusLayer);
         if (layers.length === 0) return;
         for (const layer of layers) this.remove(layer);
+        this.requestRenderAll();
+    }
+
+    /**
+     * Draws the broken chains beside the dots of the marchers kept on the current page
+     * (docs/timeline/ui.md UI-18, kept marchers on the field) above the marchers, replacing any
+     * drawn before. No marks removes the layer.
+     */
+    renderTimelineKeptMarks(marks: readonly TimelineKeptMark[]): void {
+        if (marks.length === 0) {
+            this.clearTimelineKeptMarks();
+            return;
+        }
+        if (this.timelineKeptLayer?.canvas === this)
+            this.timelineKeptLayer.update(marks);
+        else {
+            this.timelineKeptLayer = new TimelineKeptLayer({
+                marks,
+                width: this._fieldProperties.width,
+                height: this._fieldProperties.height,
+            });
+            this.add(this.timelineKeptLayer);
+        }
+        this.timelineKeptLayer.bringToFront();
+        this.timelineShapeOverlay?.bringToFront();
+        this.requestRenderAll();
+    }
+
+    /** Removes the kept marks, if drawn. */
+    clearTimelineKeptMarks(): void {
+        const layer = this.timelineKeptLayer;
+        this.timelineKeptLayer = null;
+        if (!layer || layer.canvas !== this) return;
+        this.remove(layer);
         this.requestRenderAll();
     }
 

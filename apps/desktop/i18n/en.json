@@ -1464,6 +1464,10 @@
                 "mixedNamedOne": "1 of the {total} selected is kept on Page {page} ({names})",
                 "mixedOne": "1 of the {total} selected is kept on Page {page}"
             },
+            "field": {
+                "kept": "Kept on Page {page} · won't follow Page {from}",
+                "keptEarlier": "Kept on Page {page} · won't follow earlier pages"
+            },
             "followed": {
                 "onePage": "Page {page} followed",
                 "only": "Only Page {page}",
