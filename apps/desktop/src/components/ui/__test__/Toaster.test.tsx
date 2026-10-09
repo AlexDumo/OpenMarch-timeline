@@ -1,6 +1,10 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { toast } from "sonner";
+import {
+    EDIT_SURPRISE_TOAST_ID,
+    EDIT_SURPRISE_TOAST_RESET,
+} from "@/utilities/moveThemToo";
 import Toaster from "../Toaster";
 
 /**
@@ -90,5 +94,33 @@ describe("Toaster", () => {
             expect(button.className).toMatch(/\bwhitespace-nowrap\b/);
             expect(button.className).toMatch(/\bshrink-0\b/);
         }
+    });
+
+    it("an edit toast with one button doesn't keep an earlier one's second button", async () => {
+        render(<Toaster />);
+        act(() => {
+            toast.info("OT1 and OT8 kept their spot", {
+                id: EDIT_SURPRISE_TOAST_ID,
+                action: { label: "Move them too", onClick: () => {} },
+                cancel: { label: "Only Page 2", onClick: () => {} },
+            });
+        });
+        await screen.findByRole("button", { name: "Move them too" });
+        act(() => {
+            toast.dismiss(EDIT_SURPRISE_TOAST_ID);
+        });
+        act(() => {
+            toast.message("Pages 3–4 followed (they were copies)", {
+                ...EDIT_SURPRISE_TOAST_RESET,
+                id: EDIT_SURPRISE_TOAST_ID,
+                action: { label: "Only Page 3", onClick: () => {} },
+            });
+        });
+        const action = await screen.findByRole("button", {
+            name: "Only Page 3",
+        });
+        const { li } = toastOf(action);
+        expect(li.querySelectorAll("button[data-button]")).toHaveLength(1);
+        expect(li.querySelector("[data-cancel]")).toBeNull();
     });
 });
