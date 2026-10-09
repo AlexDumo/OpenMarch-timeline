@@ -29,7 +29,7 @@ const DIAMOND = "polygon(50% 0, 100% 50%, 50% 100%, 0 50%)";
  * timeline's page boxes and page mode's page strip; the box itself carries the words
  * (`useLabeledHoldMarks`) as its tooltip (`HoldMarkTooltip`) and accessible description. Kept to
  * the bottom few pixels, clear of the label, the flag line and the playhead's handle, and it never
- * takes the pointer. A 3px bar in the subtitle color and a 10px key (first-time users found them
+ * takes the pointer. A 3px bar in the subtitle color and a 10px-wide key (first-time users found them
  * too faint and small, defined-coordinates 09).
  */
 export function PageHoldMarkView({
@@ -56,7 +56,7 @@ export function PageHoldMarkView({
                 {mark.kind === "moves" ? (
                     // A diamond wider than tall, so it stays under the box's label
                     <span
-                        className="bg-text-subtitle absolute right-[2px] bottom-[1px] h-[8px] w-[10px]"
+                        className="bg-text-subtitle absolute right-[2px] bottom-[1px] h-[7px] w-[10px]"
                         style={{ clipPath: DIAMOND }}
                     />
                 ) : (
