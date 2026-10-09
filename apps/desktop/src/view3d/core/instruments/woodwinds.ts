@@ -226,18 +226,34 @@ function tools(s: SegmentCounts) {
             s.keys,
             PART_CHROME,
         );
-    /** A key rod along +Z from `z0` to `z1` at (x, y), on a post at each end down to `bodyY`. */
+    /**
+     * A key rod along the body from `z0` to `z1`, `gap` off the surface of
+     * a body of radius `rAt(z)` around the axis through (0, `axisY`), `deg`
+     * around it from +X toward +Y; a post at each end runs radially from
+     * the surface out to the rod.
+     */
     const rod = (
-        x: number,
-        y: number,
+        deg: number,
         z0: number,
         z1: number,
-        bodyY: number,
-    ) => [
-        thin([x, y, z0], [x, y, z1], 0.0014),
-        thin([x, bodyY, z0 + 0.004], [x, y, z0 + 0.004], 0.0018),
-        thin([x, bodyY, z1 - 0.004], [x, y, z1 - 0.004], 0.0018),
-    ];
+        rAt: (z: number) => number,
+        axisY = 0,
+        gap = 0.005,
+    ) => {
+        const a = (deg * Math.PI) / 180;
+        const out = (z: number, d: number): Vec3 => [
+            Math.cos(a) * d,
+            axisY + Math.sin(a) * d,
+            z,
+        ];
+        const post = (z: number) =>
+            thin(out(z, rAt(z) + 0.0005), out(z, rAt(z) + gap), 0.0018);
+        return [
+            thin(out(z0, rAt(z0) + gap), out(z1, rAt(z1) + gap), 0.0014),
+            post(z0 + 0.004),
+            post(z1 - 0.004),
+        ];
+    };
     /** A flaring bell along +Z from `base` (or along −Z when `up`). */
     const bell = (
         throat: number,
@@ -308,6 +324,8 @@ function flute(
     const last = end - 0.025;
     const rodX = r + 0.005;
     const rodY = r * 0.55;
+    const rodDeg = (Math.atan2(rodY, rodX) * 180) / Math.PI;
+    const rodGap = Math.hypot(rodX, rodY) - r;
     const plate = pic ? 0.009 : 0.011;
     const pieces: Piece[] = [
         t.run(
@@ -348,13 +366,14 @@ function flute(
             s.keys,
             PART_BLACK,
         ),
-        ...t.rod(rodX, rodY, first - 0.01, last + 0.01, r * 0.5),
+        ...t.rod(rodDeg, first - 0.01, last + 0.01, () => r, 0, rodGap),
         ...t.rod(
-            -rodX,
-            rodY,
+            180 - rodDeg,
             first + 0.06,
             first + (pic ? 0.12 : 0.2),
-            r * 0.5,
+            () => r,
+            0,
+            rodGap,
         ),
     ];
     if (!pic)
@@ -390,6 +409,11 @@ function clarinet(detail: Detail, options: ModelOptions): InstrumentModel {
     const t = tools(s);
     const r = d.bore;
     const bellStart = d.length - 0.08;
+    // the joints' radii: the upper narrowing from the barrel, the lower widening to the bell
+    const bodyR = (z: number) =>
+        z < 0.38
+            ? lerp(r * 1.02, r, (z - 0.15) / 0.23)
+            : lerp(r, r * 1.06, (z - 0.38) / (bellStart - 0.38));
     const pieces: Piece[] = [
         ...t.mouthpiece([0, 0, 0.09], 0.0135),
         // barrel, upper joint, lower joint, bell and its chrome rim
@@ -420,9 +444,9 @@ function clarinet(detail: Detail, options: ModelOptions): InstrumentModel {
         // register key and thumb rest on the player's side
         t.thin([0, -r - 0.002, 0.19], [0, -r - 0.002, 0.25], 0.0016),
         t.thin([0, -r, 0.42], [0, -r - 0.012, 0.42], 0.004),
-        ...t.rod(r + 0.004, r * 0.5, 0.17, 0.36, r * 0.4),
-        ...t.rod(r + 0.004, r * 0.5, 0.4, 0.57, r * 0.4),
-        ...t.rod(-r - 0.004, r * 0.5, 0.44, 0.57, r * 0.4),
+        ...t.rod(22, 0.17, 0.36, bodyR),
+        ...t.rod(22, 0.4, 0.57, bodyR),
+        ...t.rod(158, 0.44, 0.57, bodyR),
     ];
     for (const z of [0.21, 0.25, 0.29, 0.44, 0.48, 0.52])
         pieces.push(t.ringKey([0, r + 0.0005, z], 0.0068));
@@ -457,6 +481,8 @@ function bassClarinet(detail: Detail, options: ModelOptions): InstrumentModel {
     const neck = turtle(mpEnd, 55).line(0.04).turn(-55, 0.05, s.crook).toZ(0.2);
     const yb = neck.end()[1];
     const bodyEnd = 0.87;
+    const bodyR = (z: number) =>
+        z < 0.52 ? r : lerp(r, r * 1.08, (z - 0.52) / (bodyEnd - 0.52));
     // the bell's crook: a U toward the front (+Y), opening upward
     const bow = turtle([0, yb, bodyEnd], 0)
         .turn(180, 0.06, s.crook * 2)
@@ -479,9 +505,9 @@ function bassClarinet(detail: Detail, options: ModelOptions): InstrumentModel {
             [0, yb + 0.06, d.length - 0.002],
             0.004,
         ),
-        ...t.rod(r + 0.005, yb + r * 0.5, 0.24, 0.5, yb + r * 0.4),
-        ...t.rod(r + 0.005, yb + r * 0.5, 0.55, 0.84, yb + r * 0.4),
-        ...t.rod(-r - 0.005, yb + r * 0.5, 0.6, 0.84, yb + r * 0.4),
+        ...t.rod(22, 0.24, 0.5, bodyR, yb),
+        ...t.rod(22, 0.55, 0.84, bodyR, yb),
+        ...t.rod(158, 0.6, 0.84, bodyR, yb),
     ];
     for (let i = 0; i < 16; i++) {
         const z = lerp(0.25, 0.83, i / 15);
@@ -512,8 +538,8 @@ function sopranoSax(detail: Detail, options: ModelOptions): InstrumentModel {
         ...t.mouthpiece([0, 0, 0.06], 0.012),
         t.run(body, taper(body, 0.012, 0.03), PART_METAL),
         t.bell(0.03, d.bell / 2, 0.1, [0, 0, flareAt], PART_METAL),
-        ...t.rod(0.02, 0.008, 0.1, 0.52, 0.004),
-        ...t.rod(-0.022, 0.01, 0.3, 0.53, 0.006),
+        ...t.rod(22, 0.1, 0.52, rAt),
+        ...t.rod(155, 0.3, 0.53, rAt),
         // thumb rest
         t.thin([0, -0.016, 0.33], [0, -0.03, 0.33], 0.004),
     ];
@@ -552,52 +578,55 @@ interface SaxShape {
     keys: number;
 }
 
-const SAX_SHAPES: Record<"altoSax" | "tenorSax" | "bariSax", SaxShape> = {
-    altoSax: {
-        mpHeading: 55,
-        mpLength: 0.07,
-        neckLine: 0.02,
-        neck: [[-55, 0.08]],
-        bodyTop: 0.2,
-        rTop: 0.02,
-        rBow: 0.045,
-        bowWidth: 0.11,
-        bellRise: 0.16,
-        flare: 0.14,
-        keys: 18,
-    },
-    tenorSax: {
-        mpHeading: 50,
-        mpLength: 0.085,
-        neckLine: 0.02,
-        // the tenor's neck rises a little before it bends down: an S
-        neck: [
-            [25, 0.07],
-            [-75, 0.1],
-        ],
-        bodyTop: 0.25,
-        rTop: 0.024,
-        rBow: 0.052,
-        bowWidth: 0.13,
-        bellRise: 0.2,
-        flare: 0.16,
-        keys: 19,
-    },
-    bariSax: {
-        mpHeading: 90,
-        mpLength: 0.1,
-        neckLine: 0.08,
-        neck: [[-90, 0.07]],
-        loop: { drop: 0.2, radii: [0.05, 0.07], rise: 0.07 },
-        bodyTop: 0.2,
-        rTop: 0.032,
-        rBow: 0.068,
-        bowWidth: 0.17,
-        bellRise: 0.22,
-        flare: 0.2,
-        keys: 20,
-    },
-};
+export const SAX_SHAPES: Record<"altoSax" | "tenorSax" | "bariSax", SaxShape> =
+    {
+        altoSax: {
+            mpHeading: 55,
+            mpLength: 0.07,
+            neckLine: 0.02,
+            neck: [[-55, 0.08]],
+            bodyTop: 0.2,
+            rTop: 0.02,
+            rBow: 0.045,
+            bowWidth: 0.11,
+            bellRise: 0.16,
+            flare: 0.14,
+            keys: 18,
+        },
+        tenorSax: {
+            mpHeading: 50,
+            mpLength: 0.085,
+            neckLine: 0.02,
+            // the tenor's neck rises a little before it bends down: an S
+            neck: [
+                [25, 0.07],
+                [-75, 0.1],
+            ],
+            bodyTop: 0.25,
+            rTop: 0.024,
+            rBow: 0.052,
+            bowWidth: 0.13,
+            bellRise: 0.2,
+            flare: 0.16,
+            keys: 19,
+        },
+        bariSax: {
+            mpHeading: 90,
+            mpLength: 0.1,
+            // a long straight neck out from the lips, so the body hangs as far
+            // in front of the player as the alto's does
+            neckLine: 0.18,
+            neck: [[-90, 0.07]],
+            loop: { drop: 0.2, radii: [0.05, 0.07], rise: 0.07 },
+            bodyTop: 0.2,
+            rTop: 0.032,
+            rBow: 0.068,
+            bowWidth: 0.17,
+            bellRise: 0.22,
+            flare: 0.2,
+            keys: 20,
+        },
+    };
 
 /** The neck (and the bari's loop, folding back toward the player) down to the top of the body. */
 function saxTop(shape: SaxShape, s: SegmentCounts) {
@@ -678,6 +707,8 @@ function curvedSax(
     const rBell = sh.rBow * 1.08;
     const bellBase = bowZ - sh.bellRise;
     const neckTop = sh.rTop * 0.55;
+    const rAt = (z: number) =>
+        lerp(sh.rTop, sh.rBow, (z - top[2]) / (bowZ - top[2]));
     const pieces: Piece[] = [
         ...t.mouthpiece(mpEnd, sh.rTop * 0.75),
         t.run(neck, taper(neck, neckTop, sh.rTop * (loop.length ? 0.8 : 1))),
@@ -717,20 +748,8 @@ function curvedSax(
             0.004,
             PART_METAL,
         ),
-        ...t.rod(
-            sh.rTop + 0.008,
-            yb + sh.rTop * 0.6,
-            top[2] + 0.05,
-            bowZ - 0.03,
-            yb,
-        ),
-        ...t.rod(
-            -sh.rTop - 0.008,
-            yb + sh.rTop * 0.6,
-            top[2] + 0.2,
-            bowZ - 0.03,
-            yb,
-        ),
+        ...t.rod(25, top[2] + 0.05, bowZ - 0.03, rAt, yb),
+        ...t.rod(155, top[2] + 0.2, bowZ - 0.03, rAt, yb),
     ];
     if (loop.length)
         pieces.push(t.run(loop, taper(loop, sh.rTop * 0.8, sh.rTop)));

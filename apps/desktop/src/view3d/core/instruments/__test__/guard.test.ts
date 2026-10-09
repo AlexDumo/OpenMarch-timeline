@@ -7,6 +7,7 @@ import {
     PART_BLACK,
     PART_SILK,
     PART_CHROME,
+    PART_WOOD,
 } from "../mesh";
 import { guardModel } from "../guard";
 import type { GuardModelId } from "../model";
@@ -84,9 +85,37 @@ describe("guard equipment", () => {
             expect(ys.length).toBeGreaterThan(0);
             return ys.reduce((a, b) => a + b, 0) / ys.length;
         };
-        // front swivel tip at (y -0.035, z 0.45), back at (y -0.075, z -0.22)
+        // front swivel tip at (y -0.035, z 0.45), back at (y -0.095, z -0.22)
         expect(Math.abs(ringY(0.45) - -0.035)).toBeLessThan(0.004);
-        expect(Math.abs(ringY(-0.22) - -0.075)).toBeLessThan(0.004);
+        expect(Math.abs(ringY(-0.22) - -0.095)).toBeLessThan(0.004);
+    });
+
+    it("hangs the back swivel from the stock's underside, not inside it", () => {
+        const m = guardModel("rifle");
+        // the stock: the white body behind the grip
+        const stock = m.pieces.filter(
+            (p) => p.part === PART_WOOD && bounds([p]).min[2] < -0.25,
+        );
+        expect(stock.length).toBe(1);
+        // the stock's lowest point on its ring at z -0.2, just ahead of the
+        // swivel at -0.22 (the underside drops toward the butt from there)
+        let underside = 0;
+        const sp = stock[0].positions;
+        for (let i = 0; i < sp.length; i += 3)
+            if (Math.abs(sp[i + 2] - -0.2) < 0.005)
+                underside = Math.min(underside, sp[i + 1]);
+        expect(underside).toBeLessThan(-0.07);
+        const swivel = m.pieces.filter((p) => {
+            const b = bounds([p]);
+            return (
+                p.part === PART_CHROME && b.min[2] > -0.24 && b.max[2] < -0.2
+            );
+        });
+        expect(swivel.length).toBe(1);
+        const b = bounds(swivel);
+        // it starts just inside the wood and hangs below it
+        expect(b.max[1]).toBeLessThan(underside + 0.008);
+        expect(b.min[1]).toBeLessThan(underside - 0.01);
     });
 
     it("colors every vertex", () => {

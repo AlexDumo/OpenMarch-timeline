@@ -349,6 +349,9 @@ function doubleSwingFlag(s: SegmentCounts): Omit<InstrumentModel, "id"> {
     };
 }
 
+/** The stock's underside at the back swivel (z -0.22). */
+export const STOCK_UNDERSIDE = -0.082;
+
 /**
  * A drill rifle, 0.91 m: a white stock from the butt 0.3 m behind the hand,
  * the wrist at the grip, a forestock and barrel ahead to the muzzle, a
@@ -470,9 +473,12 @@ function rifle(s: SegmentCounts): Omit<InstrumentModel, "id"> {
             PART_CHROME,
         ),
     ];
-    // the sling: swivel to swivel under the body, sagging a little in between
+    // the sling: swivel to swivel under the body, sagging a little in between.
+    // The back swivel hangs from the stock's underside, which at z -0.22 is
+    // y -0.082 (the stock's 0.03 radius stretched by 2 and dropped by the
+    // 0.1 shear); the front one from the forestock's, at y -0.023.
     const front: Vec3 = [0, -0.035, 0.45];
-    const back: Vec3 = [0, -0.075, -0.22];
+    const back: Vec3 = [0, -0.095, -0.22];
     const steps = 24;
     // a flat strap: a round tube squashed wide across X and thin in Y. The
     // squash scales about the origin, so the path's y is pre-divided by it
@@ -514,7 +520,7 @@ function rifle(s: SegmentCounts): Omit<InstrumentModel, "id"> {
         ),
         smoothTube(
             [
-                [0, -0.05, back[2]],
+                [0, STOCK_UNDERSIDE + 0.004, back[2]],
                 [0, back[1], back[2]],
             ],
             0.003,
