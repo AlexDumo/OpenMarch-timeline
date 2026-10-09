@@ -891,6 +891,9 @@ from it. The spec still wins on the model; this file decides presentation.
     with **Move them too**, which shifts their move on that page by the same amount, as its own undo
     step. Edits that split nobody stay silent. A window passing a flag shows its own toast instead;
     in page mode it shares one toast with the "followed" message and **Only Page 2**.
+    Consecutive edits of the same page or window that move the same marchers add up behind one
+    toast, so **Move them too** and **Only Page 2** act on the whole run (V-153). A toast with two
+    buttons puts them on their own row under the text.
   - **Delete move** (UI-14) names the pages that change, because later held pages fall back:
     "Deleted Move 2 · Pages 2–3 changed".
   - **The inspector line** sits under Step Size in normal text: "Hold from Page 2 →" (or "Hold from
