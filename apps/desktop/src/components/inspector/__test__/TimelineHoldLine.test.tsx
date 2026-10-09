@@ -16,7 +16,7 @@ import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import TimelineHoldLine from "../TimelineHoldLine";
 
 /**
- * UI-15: the marcher inspector's line for the selected marchers on the current page, "Moves on
+ * UI-18: the marcher inspector's line for the selected marchers on the current page, "Moves on
  * this page" or "Hold from Page X →", a link to that page's flag, only where they agree, and only
  * in timeline mode (worded by defined-coordinates 08).
  */

@@ -40,7 +40,7 @@ describeDbTests("marcher mutations take the file's mode", (it) => {
             .where(eq(schema.timeline_assignments.marcher_id, created!.id))
             .all();
         if (timelineFixtureMode()) {
-            // A home and no moves (UI-15, ADR 0001 C-12: no row is written on a page's behalf):
+            // A home and no moves (UI-18, ADR 0001 C-12: no row is written on a page's behalf):
             // the converted show's transitions are untouched, and the marcher stands at home
             expect(transitions.length).toBeGreaterThan(0);
             expect(assignments).toEqual([]);

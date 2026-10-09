@@ -7,7 +7,7 @@ import {
 } from "../timelineHoldState";
 
 /**
- * The inspector line's state (docs/timeline/ui.md UI-15): "Moves here" where a marcher's own move
+ * The inspector line's state (docs/timeline/ui.md UI-18): "Moves here" where a marcher's own move
  * ends on the current page, "Holding since Page X" where it holds, shown for a selection only
  * when every marcher agrees.
  */

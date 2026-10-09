@@ -130,7 +130,7 @@ compares with a tolerance.
 - a stored zero-motion move is designer intent;
 - page-mode edits carry forward through equal copies.
 
-Also add a ui.md decision (UI-15) and amend the P7.4 hold rule in phases/07.
+Also add a ui.md decision (UI-18) and amend the P7.4 hold rule in phases/07.
 
 **Cost:**
 

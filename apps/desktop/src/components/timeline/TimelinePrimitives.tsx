@@ -865,7 +865,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     height?: number;
     /** The playhead, which a dragged flag lands on when near, as on downbeats and page lines */
     flagSnapPlayhead?: () => BeatPosition;
-    /** Where the selected marchers hold, by page id (UI-15); none without a selection */
+    /** Where the selected marchers hold, by page id (UI-18); none without a selection */
     holdMarks?: LabeledHoldMarks;
 }) {
     // A dragged flag snaps to downbeats, never to page lines (`flagSnapBeat`)
@@ -1037,7 +1037,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     initialPageWidth: number;
     scrub: RulerScrub;
     onSelectPage: (page: TimelinePageMarker, extend?: boolean) => void;
-    /** Where the selected marchers hold, by page id (UI-15) */
+    /** Where the selected marchers hold, by page id (UI-18) */
     holdMarks?: LabeledHoldMarks;
     /** The prefix of each box's hold description id */
     holdMarkId: string;
@@ -1112,7 +1112,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
     initialPageWidth: number;
     scrub: RulerScrub;
     onSelectPage: (page: TimelinePageMarker, extend?: boolean) => void;
-    /** Where the selected marchers hold on this page (UI-15), with its words */
+    /** Where the selected marchers hold on this page (UI-18), with its words */
     hold?: LabeledHoldMark;
     holdDescriptionId: string;
 }) {

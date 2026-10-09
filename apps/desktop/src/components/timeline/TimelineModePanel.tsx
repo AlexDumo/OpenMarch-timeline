@@ -152,7 +152,7 @@ export default function TimelineModePanel() {
             ),
         [selectedIdsKey],
     );
-    // UI-15: where the selected marchers hold, on the page boxes
+    // UI-18: where the selected marchers hold, on the page boxes
     const selectedIdList = useMemo(
         () => [...selectedMarcherIds],
         [selectedMarcherIds],

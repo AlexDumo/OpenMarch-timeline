@@ -18,7 +18,7 @@ import {
 } from "@/timeline/timelineStore";
 
 /**
- * The selection's state on the current page, in timeline mode (docs/timeline/ui.md UI-15):
+ * The selection's state on the current page, in timeline mode (docs/timeline/ui.md UI-18):
  * "Moves on this page" or "Hold from Page X", where the selected marchers agree; nothing when they
  * don't. The current page is the selected page, which follows the paused playhead
  * (`useTimelinePageBridge`).
@@ -98,7 +98,7 @@ function TimelineHoldLineContent({
 }
 
 /**
- * The marcher inspector's line for the selected marchers (UI-15), under Step Size: whether they
+ * The marcher inspector's line for the selected marchers (UI-18), under Step Size: whether they
  * move on the current page or hold there, with a link to the page they hold from
  * (defined-coordinates 08: readable, and visibly a link). Only in timeline mode.
  */

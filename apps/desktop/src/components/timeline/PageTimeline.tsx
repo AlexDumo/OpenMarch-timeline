@@ -83,7 +83,7 @@ export default function PageTimeline() {
         deletePageYankWithMovesMutationOptions(queryClient, undo),
     );
 
-    // UI-15: where the selected marchers hold, on the page boxes (page mode's own rows)
+    // UI-18: where the selected marchers hold, on the page boxes (page mode's own rows)
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
     const selectedIdsKey = (selectedMarchers ?? []).map((m) => m.id).join(",");
     const selectedIds = useMemo(

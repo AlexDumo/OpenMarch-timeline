@@ -780,7 +780,7 @@ function MarcherEditor() {
                                         </div>
                                     </div>
                                 )}
-                            {/* Under the step sizes: hold or move on this page (UI-15) */}
+                            {/* Under the step sizes: hold or move on this page (UI-18) */}
                             <TimelineHoldLine
                                 marcherIds={selectedMarcherIdList}
                             />
@@ -1035,7 +1035,7 @@ function MarcherEditor() {
                                                 </p>
                                             </div>
                                         )}
-                                        {/* Under Step Size: hold or move on this page (UI-15) */}
+                                        {/* Under Step Size: hold or move on this page (UI-18) */}
                                         <TimelineHoldLine
                                             marcherIds={selectedMarcherIdList}
                                         />

@@ -37,7 +37,7 @@ import {
 } from "../timelineStore";
 
 /**
- * Carry-forward (docs/timeline/ui.md UI-15, defined-coordinates 07c §6–7): an edit that moves
+ * Carry-forward (docs/timeline/ui.md UI-18, defined-coordinates 07c §6–7): an edit that moves
  * marchers who hold through later pages also moves those pages, up to where every carried marcher
  * stops. No toast says so (defined-coordinates 08): an ordinary edit shows none.
  */

@@ -13,7 +13,7 @@ export type LabeledHoldMark = {
 export type LabeledHoldMarks = ReadonlyMap<string | number, LabeledHoldMark>;
 
 /**
- * Where the selected marchers hold, drawn inside a page box (docs/timeline/ui.md UI-15; Eos's
+ * Where the selected marchers hold, drawn inside a page box (docs/timeline/ui.md UI-18; Eos's
  * "moved" and "tracked"): a page they move on gets a small key at its flag, and a page they hold
  * on a thin muted bar along its bottom, level with the key, so a run of held pages reads as one
  * line drawn back to the page they last moved on. Mixed is the same bar, dashed. Shared by the
