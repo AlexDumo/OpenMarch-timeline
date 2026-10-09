@@ -229,8 +229,10 @@ points and where the elbows go.
 - **cymbals.** Pair held at chest height, plates vertical.
 - **flag.** Up (present): the pole vertical in front of the body, right
   hand at the chest, left hand low on the pole, the silk overhead toward
-  the performer's left. Carry and trail: the pole vertical at the right
-  side, left arm down.
+  the performer's right (instrument +X under this hold; seen from the
+  audience it flies to the camera's left). Carry and trail: the pole
+  vertical at the right side, left arm down. Which side a guard presents
+  the silk to is unconfirmed; flipping it is one sign in `guard.ts`.
 - **rifle.** Up (port arms): diagonal across the chest, muzzle up to the
   performer's left, right hand at the wrist of the stock by the right hip,
   left hand on the fore-end by the left shoulder. Carry and trail (right

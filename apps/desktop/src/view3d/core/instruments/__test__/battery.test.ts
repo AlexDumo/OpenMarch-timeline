@@ -67,7 +67,7 @@ describe("battery models", () => {
         expect(bassSizesFor(0)).toEqual([]);
     });
 
-    it("puts the tenors in an arc, biggest to the player's left", () => {
+    it("puts the tenors in an arc, smallest on the player's left and biggest on the right", () => {
         const m = batteryModel("tenors");
         const shells = m.pieces.filter((p) => p.part === PART_SHELL);
         expect(shells.length).toBe(6);
@@ -77,7 +77,9 @@ describe("battery models", () => {
         });
         const big = centers.filter((c) => c.w > 0.22).sort((a, b) => a.x - b.x);
         expect(big.length).toBe(4);
-        expect(big[0].w).toBeLessThan(big[3].w); // smallest at −X (the performer's right), biggest at +X
+        // under the tenor hold instrument +X is the performer's right: the
+        // smallest drum sits at −X (the player's left), the biggest at +X
+        expect(big[0].w).toBeLessThan(big[3].w);
     });
 
     it("hangs a cymbal from each hand, facing each other", () => {
