@@ -795,15 +795,30 @@ from it. The spec still wins on the model; this file decides presentation.
     Logic's C turns Cycle on and off and editors' Mark Clip (X) marks the clip under the playhead.
     It was first built to pin at the playhead, the page's end; a blind A/B test with four
     simulated users (2026-10-09, ~/ux-sim/pin-ab) found all four expected the page's start, and
-    a pin on the page's end read as "this loops the next page" (owner adopted page start). To
-    move a pin, drag the flag or press C twice. Ctrl+drag a range and dragging the flag also pin
-    it; the pin icon and the field line's Unpin unpin it. Page navigation (E, Q, the page buttons)
-    keeps a pinned flag and only moves the playhead, so the loop grows to there (the owner checked
-    this). Home unpins; a page box unpins unless it starts on the pinned flag (UI-12). C does
+    a pin on the page's end read as "this loops the next page" (owner adopted page start). C does
     nothing in isolation.
+  - **The loop follows your page** (project owner, 2026-10-09, after two rounds of simulated-user
+    A/B tests). With a pin set by C, moving the playhead (E, Q, a page box, the ruler, a scrub
+    once it ends) takes the pinned flag to the start of the page you land on, so Space always
+    loops the page you're on. Home unpins. Round 1 compared "range wins" (Play loops the pinned
+    page from anywhere), "release" and a one-way follow; range wins ranked first 3/3, and one-way
+    follow failed going forward, stretching the loop. Round 2 compared an improved locator (the pin
+    stays; its range drawn and named while you're elsewhere; page clicks don't unpin) with
+    two-way follow: follow won 4/4 (predictability 4.0 vs 2.25 of 5). The locator lost because its
+    loop's end is the playhead, so navigating stretched and shrank the loop. Superseded: E/Q
+    keeping a pinned flag as a locator (V-153).
+  - **A loop over several pages** (Shift+click, or the loop end's grip) is kept while the playhead
+    steps inside it (owner): stepping from page 3 to page 2 edits page 2 and Space still loops
+    pages 2–3, the bar and the field line ("Space loops Pages 2–3") saying so. Moving outside it
+    takes the loop to the page you land on. (Round 2's only consistent complaint about follow was
+    losing a multi-page loop on any move.)
+  - **A range drawn by hand stays pinned where it was drawn** (UI-12): Ctrl+drag, or dragging the
+    start flag, pins S for editing part of a move, and that pin doesn't follow; the pin icon or
+    the field line's Unpin unpins it. Only pins set with C or Shift+click follow.
   - **Shift+click on page boxes** extends the window over every page from the selected one to the
     clicked one, and pins the flag at the first, so Space loops them (UI-17 follow-up; every
-    simulated user tried it first).
+    simulated user tried it first). Round 2 found that it pinning by itself surprises people who
+    press C afterwards (which unpins it); left open.
   - **The loop's end has its own grip**: a tab at the yellow bar's right end, in the ruler's top
     strip and above the page flag's grip. Dragging it moves the window's end (snapping to page
     lines) and keeps the pin. Before it, the only place to grab the loop's end was the page flag,

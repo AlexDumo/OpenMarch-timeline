@@ -217,14 +217,30 @@ export function jumpTimelinePages(
 
 /**
  * What **Play** loops (UI-17): with the start flag pinned, or a move isolated, the window from the
- * flag to the playhead (`previewBounds`); otherwise `null`, and Play plays on.
+ * flag to the playhead (`previewBounds`), or a loop over several pages the playhead is inside
+ * (`loopEnd`); otherwise `null`, and Play plays on.
  */
 export const pinnedLoopBounds = (
     state: Pick<
         ReturnType<typeof useTimelineSelectionStore.getState>,
-        "startPinned" | "isolation" | "selection"
+        | "startPinned"
+        | "isolation"
+        | "selection"
+        | "startBeat"
+        | "playheadBeat"
+        | "loopEnd"
     >,
-) => (state.startPinned || state.isolation ? previewBounds(state) : null);
+) => {
+    if (!state.startPinned && !state.isolation) return null;
+    if (
+        !state.isolation &&
+        state.loopEnd !== null &&
+        state.startBeat < state.playheadBeat &&
+        state.playheadBeat <= state.loopEnd
+    )
+        return { from: state.startBeat, to: state.loopEnd };
+    return previewBounds(state);
+};
 
 /**
  * Playing on (UI-17, Play with no pin): plays from the playhead to the end of the show, as UI-10's
@@ -277,7 +293,8 @@ export function toggleTimelinePlayback({
 /**
  * **C** (UI-17): pins the start flag where it stands, the start of the page being edited, or
  * unpins it, as Logic's C turns Cycle on and off and editors' Mark Clip marks the clip under the
- * playhead. A pinned flag is what Play loops from. Does nothing in isolation, whose flag is the
+ * playhead. A pinned flag is what Play loops from, and it follows the page you move to (the
+ * store's `seek`). Does nothing in isolation, whose flag is the
  * isolated move's start. (A simulated-user A/B test, 2026-10-09: all four expected the page's
  * start; on the playhead, the page's end, read as "this loops the next page".)
  */

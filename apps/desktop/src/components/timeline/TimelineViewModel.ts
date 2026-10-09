@@ -159,6 +159,13 @@ export type TimelineSelection =
            * is drawn with a bar in the start flag's color
            */
           readonly fromStart?: boolean;
+          /**
+           * How the user set this window (UI-17): `pages` for Shift+click on page boxes, `loopEnd`
+           * for the loop end's grip
+           */
+          readonly via?: "pages" | "loopEnd";
+          /** The end of a loop over several pages, when it is past the window's end (UI-17) */
+          readonly loopEndBeatIndex?: number;
           /** The range was drawn by dragging on empty timeline space (Ctrl+drag) */
           readonly drawn?: boolean;
           /**

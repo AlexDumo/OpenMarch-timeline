@@ -655,8 +655,12 @@ const TimelineSurface = memo(function TimelineSurface({
     );
     const commitSelection = useLatestCallback(
         onSelectionChange
-            ? (range: TimelineBeatRange) =>
-                  onSelectionChange({ kind: "range", range })
+            ? (range: TimelineBeatRange, handle?: "start" | "end") =>
+                  onSelectionChange({
+                      kind: "range",
+                      range,
+                      ...(handle === "end" ? { via: "loopEnd" as const } : {}),
+                  })
             : undefined,
     );
     // The right-click menu's target: a page box or clip under the pointer, else a dragged range
@@ -902,6 +906,11 @@ const TimelineSurface = memo(function TimelineSurface({
                             fromStart={
                                 selection?.kind === "range" &&
                                 selection.fromStart === true
+                            }
+                            loopEndBeatIndex={
+                                selection?.kind === "range"
+                                    ? selection.loopEndBeatIndex
+                                    : undefined
                             }
                             startPinned={
                                 selection?.kind === "range" &&

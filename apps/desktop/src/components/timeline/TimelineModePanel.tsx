@@ -69,6 +69,7 @@ export const toTimelineSelection = (
     startBeat?: number,
     fromStart = false,
     startPinned = false,
+    loopEnd: number | null = null,
 ): TimelineSelection =>
     selection.kind === "range"
         ? {
@@ -83,6 +84,10 @@ export const toTimelineSelection = (
                   : {}),
               ...(fromStart ? { fromStart: true } : {}),
               ...(startPinned ? { startPinned: true } : {}),
+              // UI-17: a loop over several pages runs past the window's end
+              ...(loopEnd !== null && loopEnd > selection.end
+                  ? { loopEndBeatIndex: loopEnd }
+                  : {}),
           }
         : selection.kind === "home"
           ? { kind: "home" }
@@ -257,19 +262,24 @@ export default function TimelineModePanel() {
         const store = useTimelineSelectionStore.getState();
         if (next?.kind === "home") store.selectHome();
         else if (next?.kind === "range") {
-            // UI-17 follow-up: a new window that keeps a pinned flag's beat only moves the
-            // playhead (the loop end's grip), so the pin stays
-            if (
-                store.startPinned &&
-                store.isolation === null &&
-                next.range.startBeatIndex === store.startBeat &&
-                !next.drawn
+            const pinned = store.startPinned && store.isolation === null;
+            // UI-17: the loop end's grip stretches the pinned loop; a page box click moves the
+            // playhead, and the pinned flag follows it (or stays, inside a loop over several
+            // pages). Shift+click and drawn ranges set the window, pinned as UI-12 has it
+            if (pinned && next.via === "loopEnd")
+                store.stretchLoop(next.range.endBeatIndex);
+            else if (
+                pinned &&
+                store.pinFollows &&
+                !next.drawn &&
+                next.via !== "pages"
             )
                 store.seek(next.range.endBeatIndex);
             else
                 store.selectRange(
                     next.range.startBeatIndex,
                     next.range.endBeatIndex,
+                    next.via === "pages",
                 );
         } else store.selectNothing();
     };
@@ -370,6 +380,9 @@ function PlayingTimeline(
     const playback = useTimelinePlayback({ beats, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
+    const loopEnd = useTimelineSelectionStore((s) =>
+        s.isolation === null ? s.loopEnd : null,
+    );
     // UI-17: the bar marks what Play loops, once the flag is pinned or
     // while it plays
     const flagWindowLit = useTimelineSelectionStore(
@@ -388,8 +401,9 @@ function PlayingTimeline(
                 startBeat,
                 flagWindowLit,
                 startPinned,
+                loopEnd,
             ),
-        [editSelection, startBeat, flagWindowLit, startPinned],
+        [editSelection, startBeat, flagWindowLit, startPinned, loopEnd],
     );
     // UI-12: the paused clock reads the beat the timeline shows, not the selected page's end
     const shownBeat = useTimelineSelectionStore(displayedBeat);

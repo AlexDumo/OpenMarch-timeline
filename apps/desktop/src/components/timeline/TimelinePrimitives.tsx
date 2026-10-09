@@ -940,6 +940,7 @@ export const TimelineRuler = memo(function TimelineRuler({
                             range.endBeatIndex,
                         ),
                     },
+                    via: "pages",
                 });
                 return;
             }
@@ -1879,6 +1880,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     range,
     startFlagBeatIndex,
     fromStart = false,
+    loopEndBeatIndex,
     startPinned = false,
     onUnpin,
     pinTop = 30,
@@ -1903,6 +1905,11 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
      */
     fromStart?: boolean;
     /**
+     * The end of a loop over several pages, past the window's end while the playhead steps inside
+     * it (UI-17): the bar and the loop end's grip run to it
+     */
+    loopEndBeatIndex?: number;
+    /**
      * The start flag is pinned (UI-10): it stays through navigation. UI-12 draws a pin beside its
      * stem, under the ruler, so a forgotten pin can be seen; clicking the pin unpins (`onUnpin`).
      */
@@ -1921,7 +1928,8 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     hitHeight?: number;
     /** Page lines the dragged flag snaps to (ui.md UI-2); Alt turns snapping off */
     snapBeats?: readonly number[];
-    onCommit?: (range: TimelineBeatRange) => void;
+    /** A dragged handle's new range; `handle` says which ("end" is the loop end's grip, UI-17) */
+    onCommit?: (range: TimelineBeatRange, handle: "start" | "end") => void;
     onInteractionChange?: (
         interaction: TimelineSelectionInteraction | null,
     ) => void;
@@ -2035,7 +2043,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             next.startBeatIndex !== range.startBeatIndex ||
             next.endBeatIndex !== range.endBeatIndex
         ) {
-            onCommit?.(next);
+            onCommit?.(next, drag.kind);
         }
     };
 
@@ -2153,6 +2161,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                               beatCount,
                           ),
                       },
+                kind,
             );
         },
     });
@@ -2274,6 +2283,11 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     // Rounded like the flag, so the window and its bar start on the stem's pixel
     const startX = Math.round(beatToX(preview.startBeatIndex, pixelsPerBeat));
     const endX = Math.round(beatToX(preview.endBeatIndex, pixelsPerBeat));
+    // A loop over several pages runs past the window while the playhead steps inside it (UI-17)
+    const loopEndX =
+        loopEndBeatIndex !== undefined && !dragRef.current
+            ? Math.round(beatToX(loopEndBeatIndex, pixelsPerBeat))
+            : endX;
     const endsOnPlayhead =
         positionBeat !== undefined && preview.endBeatIndex === positionBeat;
     useScrubStretch(
@@ -2316,7 +2330,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                         "pointer-events-none absolute top-px z-40 h-3 origin-left",
                         START_INK.bg,
                     )}
-                    style={{ left: startX, width: endX - startX }}
+                    style={{ left: startX, width: loopEndX - startX }}
                 />
             )}
             {fromStart && onCommit && (
@@ -2332,7 +2346,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title="Drag to change where the loop ends"
                     {...flagHandlers("end", preview.endBeatIndex)}
                     className="pointer-events-auto absolute top-0 z-[58] h-10 w-12 -translate-x-full touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize!"
-                    style={{ left: endX + 1 }}
+                    style={{ left: loopEndX + 1 }}
                 >
                     <span
                         className={clsx(

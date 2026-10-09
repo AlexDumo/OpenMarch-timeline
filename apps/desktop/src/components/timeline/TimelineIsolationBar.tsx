@@ -142,8 +142,14 @@ export function TimelineFromStartBadge() {
     const range = selection.kind === "range" ? selection : null;
     // The pin only matters while it bounds the window (not after C, when P is on or before it)
     const pinShown = pinned && range !== null && range.start === startBeat;
-    // UI-17: a pinned flag is what Play loops from
+    // UI-17: a pinned flag is what Play loops from; a loop over several pages, named when the
+    // playhead steps inside it
     const fromStartShown = pinShown && !isolated;
+    const loopEnd = useTimelineSelectionStore((s) => s.loopEnd);
+    const loopName =
+        range && loopEnd !== null && loopEnd > range.end
+            ? isolatedTimelineName({ start: range.start, end: loopEnd }, pages)
+            : null;
     const through = range ? flagsInside(range, pages) : [];
     const name =
         selection.kind === "home"
@@ -157,7 +163,7 @@ export function TimelineFromStartBadge() {
     const sentence =
         selection.kind === "none"
             ? ""
-            : `Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${fromStartShown ? ". Space loops it" : ""}`;
+            : `Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${fromStartShown ? `. Space loops ${loopName ?? "it"}` : ""}`;
     // Flash when it turns prominent for a new reason: a pin, or crossing flags
     const flashKey = `${fromStartShown}|${pinShown}|${through.join(",")}`;
     const [fresh, setFresh] = useState(false);
@@ -255,7 +261,7 @@ export function TimelineFromStartBadge() {
                         className="flex items-center gap-4"
                     >
                         <Keycaps shortcut="Space" />
-                        loops it
+                        {loopName ? `loops ${loopName}` : "loops it"}
                     </span>
                 </span>
             )}

@@ -19,6 +19,7 @@ import {
     previewBounds,
 } from "@/timeline/timelinePlayhead";
 import {
+    pinnedLoopBounds,
     startTimelinePlayOn,
     toggleTimelineStartPin,
 } from "@/timeline/timelineTransport";
@@ -275,7 +276,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(store().playheadBeat).toBe(0);
     });
 
-    it("C pins the start flag at the page's start, and page navigation keeps it (UI-17)", async ({
+    it("C pins the start flag at the page's start, and the pin follows the page you move to (UI-17)", async ({
         db,
         wrapper,
     }) => {
@@ -289,7 +290,6 @@ describeDbTests("useTimelinePlayback", (it) => {
             result.current.playback.onNavigate!("next-page");
         });
         expect(store().startPinned).toBe(false);
-        expect(displayedBeat(store())).toBe(9);
         // Page 1 is selected: the flag stands at its start (beat 1, show time 0, written as beat
         // 0) and C pins it there
         act(() => {
@@ -297,23 +297,80 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(store().startBeat).toBe(0);
         expect(store().startPinned).toBe(true);
-        // A pinned flag stays: navigation seeks to the next flag, and the window grows (UI-17)
+        expect(result.current.playback.playLoops).toBe(true);
+        // Moving on takes the pin to the start of the next page: the loop is the page you're on
         act(() => {
             result.current.playback.onNavigate!("next-page");
         });
         expect(store().startPinned).toBe(true);
-        expect(store().startBeat).toBe(0);
+        expect(store().startBeat).toBe(9);
         expect(result.current.selection).toEqual({
             kind: "range",
-            start: 0,
+            start: 9,
             end: 17,
         });
+        // And back: page 1's start again (beat 1 here; beat 0 above is the same moment)
+        act(() => {
+            result.current.playback.onNavigate!("previous-page");
+        });
+        expect(store().startPinned).toBe(true);
+        expect(store().startBeat).toBe(1);
+        expect(store().playheadBeat).toBe(9);
         // Home unpins, as it always has (UI-12)
         act(() => {
             result.current.playback.onNavigate!("first-page");
         });
         expect(store().startPinned).toBe(false);
         expect(result.current.selection).toEqual({ kind: "home" });
+    });
+
+    it("keeps a loop over several pages while the playhead steps inside it, and drops it outside (UI-17)", async ({
+        db,
+        wrapper,
+    }) => {
+        await seedShow(db);
+        const { result } = renderPlayback(wrapper);
+        await waitFor(() => expect(result.current.pages).toHaveLength(3));
+        act(() => {
+            store().setPageBoxes(PAGE_BOXES);
+            // Shift+click page 1 then page 2: one loop over both, following
+            store().selectRange(0, 17, true);
+        });
+        expect(store().startPinned).toBe(true);
+        expect(store().loopEnd).toBe(17);
+        // Back to page 1's end: still inside, so the loop stays and Space loops pages 1–2
+        act(() => {
+            result.current.playback.onNavigate!("previous-page");
+        });
+        expect(store().playheadBeat).toBe(9);
+        expect(store().startBeat).toBe(0);
+        expect(store().loopEnd).toBe(17);
+        expect(pinnedLoopBounds(store())).toEqual({ from: 0, to: 17 });
+        // Home is outside: it unpins
+        act(() => {
+            result.current.playback.onNavigate!("first-page");
+        });
+        expect(store().startPinned).toBe(false);
+        expect(store().loopEnd).toBeNull();
+    });
+
+    it("leaves a hand-drawn range's pin where it was drawn (UI-12)", async ({
+        db,
+        wrapper,
+    }) => {
+        await seedShow(db);
+        const { result } = renderPlayback(wrapper);
+        await waitFor(() => expect(result.current.pages).toHaveLength(3));
+        act(() => {
+            store().setPageBoxes(PAGE_BOXES);
+            store().selectRange(12, 15);
+        });
+        expect(store().startPinned).toBe(true);
+        act(() => {
+            result.current.playback.onNavigate!("next-page");
+        });
+        expect(store().startBeat).toBe(12);
+        expect(store().startPinned).toBe(true);
     });
 
     it("C pins at the page's start, not the displayed beat; C again unpins; C in isolation does nothing (UI-17)", async ({

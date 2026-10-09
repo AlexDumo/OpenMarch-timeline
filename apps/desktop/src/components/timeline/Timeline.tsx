@@ -296,6 +296,13 @@ export const selectionToView = (
                   : {}),
               ...(selection.fromStart ? { fromStart: true } : {}),
               ...(selection.startPinned ? { startPinned: true } : {}),
+              ...(selection.loopEndBeatIndex !== undefined
+                  ? {
+                        loopEndBeatIndex: axis.toView(
+                            selection.loopEndBeatIndex,
+                        ),
+                    }
+                  : {}),
           }
         : selection;
 
@@ -312,6 +319,7 @@ export const selectionToSpec = (
                   endBeatIndex: axis.toSpec(selection.range.endBeatIndex),
               },
               ...(selection.drawn ? { drawn: true } : {}),
+              ...(selection.via ? { via: selection.via } : {}),
           }
         : selection;
 

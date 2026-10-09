@@ -111,6 +111,7 @@ describe("timeline views", () => {
         expect(onSelectionChange).toHaveBeenLastCalledWith({
             kind: "range",
             range: { startBeatIndex: 8, endBeatIndex: page2a.endBeatIndex },
+            via: "pages",
         });
     });
 
