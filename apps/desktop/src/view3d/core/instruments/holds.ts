@@ -48,17 +48,17 @@ const BRASS: Record<HoldState, Hold> = {
         family: "brass",
         state: "up",
         right: {
-            elbow: [-0.295, 1.367, 0.165],
-            wrist: [-0.06, 1.44, 0.26],
+            elbow: [-0.278, 1.438, 0.173],
+            wrist: [-0.06, 1.56, 0.26],
             fingers: unit([0.3, 0.2, 0.1]),
         },
         left: {
-            elbow: [0.303, 1.34, 0.153],
-            wrist: [0.05, 1.4, 0.2],
+            elbow: [0.292, 1.419, 0.169],
+            wrist: [0.05, 1.52, 0.2],
             fingers: unit([-0.3, 0.3, 0.15]),
         },
         instrument: {
-            origin: [-0.02, 1.44, 0.3],
+            origin: [-0.02, 1.56, 0.3],
             bellAxis: [0, 0, 1],
             capsAxis: [0, 1, 0],
         },
@@ -68,17 +68,17 @@ const BRASS: Record<HoldState, Hold> = {
         state: "carry",
         // vertical in front of the torso, bell to the ground, mouthpiece at eye level
         right: {
-            elbow: [-0.258, 1.223, 0.076],
-            wrist: [-0.05, 1.3, 0.22],
+            elbow: [-0.216, 1.305, 0.176],
+            wrist: [-0.05, 1.5, 0.24],
             fingers: unit([0.3, 0.1, 0.0]),
         },
         left: {
-            elbow: [0.268, 1.22, 0.057],
-            wrist: [0.05, 1.26, 0.2],
+            elbow: [0.224, 1.273, 0.154],
+            wrist: [0.05, 1.46, 0.22],
             fingers: unit([-0.3, 0.2, 0.0]),
         },
         instrument: {
-            origin: [0, 1.3, 0.26],
+            origin: [0, 1.5, 0.26],
             bellAxis: [0, -1, 0],
             capsAxis: [0, 0, 1],
         },
@@ -111,17 +111,17 @@ const TROMBONE: Record<HoldState, Hold> = {
         family: "trombone",
         state: "up",
         right: {
-            elbow: [-0.234, 1.392, 0.194],
-            wrist: [-0.04, 1.46, 0.36],
+            elbow: [-0.21, 1.448, 0.192],
+            wrist: [-0.04, 1.56, 0.36],
             fingers: unit([0.3, 0.1, 0.2]),
         },
         left: {
-            elbow: [0.303, 1.376, 0.161],
-            wrist: [0.06, 1.46, 0.22],
+            elbow: [0.289, 1.441, 0.166],
+            wrist: [0.06, 1.56, 0.22],
             fingers: unit([-0.3, 0.2, 0.1]),
         },
         instrument: {
-            origin: [-0.02, 1.46, 0.38],
+            origin: [-0.02, 1.56, 0.38],
             bellAxis: [0, 0, 1],
             capsAxis: [0, 1, 0],
         },

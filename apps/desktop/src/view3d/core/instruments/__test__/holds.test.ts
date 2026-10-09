@@ -43,8 +43,9 @@ describe("holds", () => {
     it("brass up: bell forward at face height, mouthpiece at the mouth", () => {
         const h = hold("brass", "up");
         expect(h.instrument.bellAxis).toEqual([0, 0, 1]);
-        expect(h.instrument.origin[1]).toBeGreaterThan(1.35);
-        expect(h.instrument.origin[1]).toBeLessThan(1.55);
+        // the mouthpiece (behind the grip, level with it) reaches the lips
+        expect(h.instrument.origin[1]).toBeGreaterThan(1.5);
+        expect(h.instrument.origin[1]).toBeLessThan(1.62);
         // elbows out: wider than the shoulders
         expect(h.right.elbow[0]).toBeLessThan(SHOULDER_R[0] - 0.08);
     });
@@ -52,7 +53,8 @@ describe("holds", () => {
     it("brass carry: mouthpiece at eye level, bell to the ground", () => {
         const h = hold("brass", "carry");
         expect(h.instrument.bellAxis).toEqual([0, -1, 0]);
-        expect(h.instrument.origin[1]).toBeGreaterThan(1.2);
+        // the mouthpiece sits about 0.17 above the grip: eye level
+        expect(h.instrument.origin[1]).toBeGreaterThan(1.45);
     });
 
     it("brass trail: right arm down the side, bell backward, left arm straight", () => {
