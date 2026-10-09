@@ -1079,6 +1079,17 @@ At `2470207c` (this update):
 | Timeline mode, history, timeline + history, `tsc` | not completed by the author: the worktree was busy with that concurrent full-suite run for the whole session; rerun when it is idle                                                                                          |
 | eslint, full `test:history`, e2e                  | not run by the author                                                                                                                                                                                                        |
 
+Final runs by the lead at `2470207c` (worktree idle; root `node_modules/vitest` pointed at the
+desktop's 4.1.2 for the runs and restored after):
+
+| Run                                                                                     | Result                                                                                                                                                          |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npx tsc --noEmit -p .` (apps/desktop)                                                  | 0 errors                                                                                                                                                        |
+| Full desktop suite, normal                                                              | 244 files passed, 2 failed (21 tests in `p910Adversarial`, `timelinePageCopy`): temp-database collisions with the concurrent run; both files pass alone (29/29) |
+| Full desktop suite, `VITEST_TIMELINE_MODE=true`                                         | 3225 passed, 4 failed (`timelineE2eFuzz` seeds 1–3, `newShowCompletion` retry): load timeouts; both files pass alone (25 passed, 10 skipped)                    |
+| All 29 changed DB / timeline / utility / query test files, `VITEST_ENABLE_HISTORY=true` | 412 / 412 passed                                                                                                                                                |
+| Same 29, history + timeline mode                                                        | 412 / 412 passed                                                                                                                                                |
+
 The wp12–wp14 work packages report their own runs (in their merge commits and the lead's notes); this
 file does not repeat them as its own evidence.
 
