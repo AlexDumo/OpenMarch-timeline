@@ -8,7 +8,11 @@ import { useTimingObjects } from "@/hooks";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelinePlaybackDriver } from "../useTimelinePlaybackDriver";
 import type { TimelineSeekGesture } from "@/components/timeline/TimelineViewModel";
-import { seekTimeline, toggleTimelinePlayback } from "../timelineTransport";
+import {
+    playTimelinePage,
+    seekTimeline,
+    toggleTimelinePlayback,
+} from "../timelineTransport";
 
 /**
  * Timeline mode's playback rules while playing (ui.md UI-9, UI-10, UI-17; P8.11), frame by frame
@@ -166,10 +170,6 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             store().selectRange(1, 9);
         });
         expect(store().startPinned).toBe(false);
-        // The page just played (UI-17), so this Space plays on
-        act(() => {
-            store().setContinueArmed(true);
-        });
         audio.seconds = 6.1; // beat 13.2
         space(result);
         frame();
@@ -184,7 +184,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().playback).toBeNull();
     });
 
-    it("Space on a selected page plays its move once and stops on its set; the next Space plays on, and anything between replays the page (UI-17)", async ({
+    it("Shift+Space plays the selected page's move once and stops back on its set (UI-17)", async ({
         db,
         wrapper,
     }) => {
@@ -194,53 +194,49 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
                 { start: 1, end: 9 },
                 { start: 9, end: 17 },
             ]);
-            store().selectRange(1, 9);
+            store().selectRange(9, 17);
         });
-        space(result);
+        const once = () =>
+            act(() => {
+                playTimelinePage({
+                    isPlaying: result.current.playing.isPlaying,
+                    showEndBeat: result.current.beats.length,
+                    setIsPlaying: result.current.playing.setIsPlaying,
+                });
+            });
+        once();
+        audio.startInfo.current = {};
         expect(store().playback).toEqual({
             kind: "preview",
-            from: 1,
-            to: 9,
+            from: 9,
+            to: 17,
             once: true,
         });
-        // Page 1's start, beat 1, is show time 0: the cursor writes it as beat 0
-        expect(store().cursorBeat).toBe(0);
+        expect(store().cursorBeat).toBe(9);
         // The move reaches the page's flag: playback stops on the page's set, P unchanged
-        audio.seconds = 4.05;
+        audio.seconds = 8.05;
         frame();
         expect(result.current.playing.isPlaying).toBe(false);
         expect(store().cursorBeat).toBeNull();
-        expect(store().playheadBeat).toBe(9);
-        expect(store().continueArmed).toBe(true);
-        // Space straight after plays on from there
-        space(result);
-        expect(store().playback).toEqual({ kind: "on" });
-        expect(store().continueArmed).toBe(false);
-        space(result);
-
-        // Played to its end again, then a key before Space: Space replays the page
+        expect(store().playheadBeat).toBe(17);
+        // Space plays on from the playhead as ever
         act(() => {
             store().selectRange(1, 9);
         });
         space(result);
-        audio.seconds = 4.05;
-        frame();
-        expect(store().continueArmed).toBe(true);
+        expect(store().playback).toEqual({ kind: "on" });
+        space(result);
+        // Stopping the once-through part-way also goes back to the page's set
         act(() => {
-            window.dispatchEvent(new KeyboardEvent("keydown", { key: "w" }));
+            store().selectRange(9, 17);
         });
-        expect(store().continueArmed).toBe(false);
-        space(result);
-        expect(store().playback).toEqual({
-            kind: "preview",
-            from: 1,
-            to: 9,
-            once: true,
-        });
-        // Stopping part-way also goes back to the page's set
-        space(result);
+        once();
+        audio.startInfo.current = {};
+        audio.seconds = 5.6;
+        frame();
+        once();
         expect(store().cursorBeat).toBeNull();
-        expect(store().playheadBeat).toBe(9);
+        expect(store().playheadBeat).toBe(17);
     });
 
     it("plays on and stops at the end of the show, leaving the playhead there", async ({
@@ -490,38 +486,6 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             };
             return { playChanges, send };
         };
-
-        it("a paused click selects the page under it; a drag still scrubs to a count (UI-17 follow-up)", async ({
-            db,
-            wrapper,
-        }) => {
-            const { result } = await setUp(db, wrapper);
-            act(() => {
-                store().setPageBoxes([
-                    { start: 1, end: 9 },
-                    { start: 9, end: 17 },
-                ]);
-                store().selectRange(1, 9);
-            });
-            const { send } = scrubber(result);
-            send(12, "press");
-            send(12, "end");
-            expect(store().playheadBeat).toBe(17);
-            expect(store().selection).toEqual({
-                kind: "range",
-                start: 9,
-                end: 17,
-            });
-            send(11, "press");
-            send(12, "drag");
-            send(12, "end");
-            expect(store().playheadBeat).toBe(12);
-            expect(store().selection).toEqual({
-                kind: "range",
-                start: 9,
-                end: 12,
-            });
-        });
 
         it("suspends playback for a drag, follows it, and resumes once from the release", async ({
             db,

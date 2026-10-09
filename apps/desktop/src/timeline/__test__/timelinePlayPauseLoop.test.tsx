@@ -134,10 +134,6 @@ describeDbTests("timeline play, pause, play", (it) => {
             store().selectRange(5, 9);
         });
         expect(store().startPinned).toBe(false);
-        // A selected page plays its own move first (UI-17); playing on is the press after that
-        act(() => {
-            store().setContinueArmed(true);
-        });
         writes = 0;
         playPause(3.1); // beat 7.2: Space stops in place, P moves to 7
         expect(store().cursorBeat).toBeNull();

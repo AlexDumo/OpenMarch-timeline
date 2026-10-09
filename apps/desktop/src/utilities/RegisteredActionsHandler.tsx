@@ -44,6 +44,7 @@ import { toast } from "sonner";
 import { useTimingObjects } from "@/hooks";
 import {
     navigateTimelinePages,
+    playTimelinePage,
     toggleTimelinePlayback,
     toggleTimelineStartPin,
 } from "@/timeline/timelineTransport";
@@ -87,6 +88,7 @@ export enum RegisteredActionsEnum {
     firstPage = "firstPage",
     playPause = "playPause",
     showShortcuts = "showShortcuts",
+    playPage = "playPage",
     toggleStartPin = "toggleStartPin",
     toggleMetronome = "toggleMetronome",
 
@@ -295,6 +297,7 @@ class KeyboardShortcut {
 const TRANSPORT_ACTIONS: ReadonlySet<RegisteredActionsEnum> = new Set([
     RegisteredActionsEnum.playPause,
     RegisteredActionsEnum.toggleStartPin,
+    RegisteredActionsEnum.playPage,
     RegisteredActionsEnum.toggleMetronome,
 ]);
 
@@ -370,6 +373,11 @@ export const RegisteredActionsObjects: {
         descKey: "actions.ui.showShortcuts",
         keyboardShortcut: new KeyboardShortcut({ key: "?", shift: true }),
         enumString: "showShortcuts",
+    }),
+    playPage: new RegisteredAction({
+        descKey: "actions.playback.playPage",
+        keyboardShortcut: new KeyboardShortcut({ key: " ", shift: true }),
+        enumString: "playPage",
     }),
     toggleStartPin: new RegisteredAction({
         descKey: "actions.playback.toggleStartPin",
@@ -1038,6 +1046,16 @@ function RegisteredActionsHandler() {
                     }
                     const firstPage = pages[0];
                     if (firstPage && !isPlaying) setSelectedPage(firstPage);
+                    break;
+                }
+                case RegisteredActionsEnum.playPage: {
+                    // UI-17: Shift+Space plays the page's move once, back to its set
+                    if (!databaseReady || !timelineMode) break;
+                    playTimelinePage({
+                        isPlaying,
+                        showEndBeat: beats.length,
+                        setIsPlaying,
+                    });
                     break;
                 }
                 case RegisteredActionsEnum.toggleStartPin: {

@@ -1545,7 +1545,7 @@ describe("a calmer timeline (UI-12)", () => {
         );
     });
 
-    it("⏮ goes to the start and Shift+click to the previous page; Shift+click on Next goes to the last page (UI-17 follow-up)", () => {
+    it("Shift+click on Previous and Next goes to the first and last page", () => {
         const onNavigate = vi.fn();
         render(
             <ExpandedTimeline
@@ -1558,15 +1558,14 @@ describe("a calmer timeline (UI-12)", () => {
         fireEvent.click(screen.getByRole("button", { name: /^Next page/ }), {
             shiftKey: true,
         });
-        fireEvent.click(screen.getByRole("button", { name: /^Go to start/ }));
-        fireEvent.click(screen.getByRole("button", { name: /^Go to start/ }), {
-            shiftKey: true,
-        });
+        fireEvent.click(
+            screen.getByRole("button", { name: /^Previous page/ }),
+            { shiftKey: true },
+        );
         expect(onNavigate.mock.calls).toEqual([
             ["next-page"],
             ["last-page"],
             ["first-page"],
-            ["previous-page"],
         ]);
     });
 

@@ -18,16 +18,19 @@ import { shortcutGroups } from "@/components/ShortcutsDialog";
 describe("transport shortcuts (UI-17)", () => {
     it("matches the registered playback and page shortcuts", () => {
         expect(TRANSPORT_SHORTCUTS).toEqual({
-            firstPage: "Shift + Q",
+            previousPage: "Q",
             nextPage: "E",
             play: "Space",
+            playPage: "Shift + Space",
         });
+        expect(TRANSPORT_SHORTCUTS.playPage).toBe(
+            RegisteredActionsObjects.playPage.keyboardShortcut!.toString(),
+        );
         expect(TRANSPORT_SHORTCUTS.play).toBe(
             RegisteredActionsObjects.playPause.keyboardShortcut!.toString(),
         );
-        // ⏮ goes to the start (UI-17 follow-up)
-        expect(TRANSPORT_SHORTCUTS.firstPage).toBe(
-            RegisteredActionsObjects.firstPage.keyboardShortcut!.toString(),
+        expect(TRANSPORT_SHORTCUTS.previousPage).toBe(
+            RegisteredActionsObjects.previousPage.keyboardShortcut!.toString(),
         );
         expect(TRANSPORT_SHORTCUTS.nextPage).toBe(
             RegisteredActionsObjects.nextPage.keyboardShortcut!.toString(),
@@ -41,6 +44,11 @@ describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
     it("lists Play and the start-flag pin, plus the shortcuts list (UI-17)", () => {
         expect(PLAYBACK_MENU_ACTIONS).toEqual([
             { action: "playPause", label: "Play / Stop", accelerator: "Space" },
+            {
+                action: "playPage",
+                label: "Play Page Once",
+                accelerator: "Shift+Space",
+            },
             {
                 action: "toggleStartPin",
                 label: "Pin or Unpin Start Flag",
@@ -87,7 +95,7 @@ describe("the shortcuts list (UI-17 follow-up)", () => {
         const groups = shortcutGroups((key) => key);
         expect(groups[0]?.title).toBe("Playback");
         const playback = groups[0]!.rows.map((row) => row.keys);
-        expect(playback).toEqual(["Space", "C", "Ctrl + M"]);
+        expect(playback).toEqual(["Space", "Shift + Space", "C", "Ctrl + M"]);
         const timeline = groups.find((g) => g.title === "Timeline");
         expect(timeline?.rows.map((row) => row.keys)).toContain("G");
         const view = groups.find((g) => g.title === "View");

@@ -462,13 +462,9 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(store().startPinned).toBe(false);
         expect(result.current.playback.playLoops).toBe(false);
+        // A page is selected: Play's tooltip names Shift+Space and C (UI-17)
         expect(result.current.playback.playNext).toBe("page");
-        // After the page has played (UI-17), Space plays on from P. The driver, not this hook,
-        // moves P when it stops
-        act(() => {
-            store().setContinueArmed(true);
-        });
-        expect(result.current.playback.playNext).toBe("continue");
+        // Space: plays on from P. The driver, not this hook, moves P when it stops
         act(() => {
             result.current.playback.onPlayingChange!(true);
         });

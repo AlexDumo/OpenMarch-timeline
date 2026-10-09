@@ -134,9 +134,10 @@ const PLAY_FROM_FLAG_ICON = (
  * app's action registry.
  */
 export const TRANSPORT_SHORTCUTS = {
-    firstPage: "Shift + Q",
+    previousPage: "Q",
     nextPage: "E",
     play: "Space",
+    playPage: "Shift + Space",
 } as const;
 
 const TransportButton = memo(function TransportButton({
@@ -207,6 +208,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayingChange,
     playLoops = false,
     playNext,
+    playingOnce = false,
     onNavigate,
     onFit,
     fitted = false,
@@ -224,8 +226,10 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayingChange?: (isPlaying: boolean) => void;
     /** The start flag is pinned, so Play loops from it and shows the flag's bar (UI-17) */
     playLoops?: boolean;
-    /** With no pin: Play plays the selected page once, or plays on after it (UI-17) */
-    playNext?: "page" | "continue";
+    /** With no pin, a page is selected (UI-17): Play's tooltip names Shift+Space and C */
+    playNext?: "page";
+    /** Shift+Space's once-through is playing (UI-17) */
+    playingOnce?: boolean;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -307,11 +311,9 @@ export const TimelineTransport = memo(function TimelineTransport({
         }
         setGoTo(null);
     };
-    // UI-17 follow-up: ⏮ goes to the start, as in every editor; Shift+click (or Q) is the
-    // previous page (simulated users read ⏮ as "start" 5 times across three rounds)
     const previousPage = useCallback(
         (event: ReactMouseEvent) =>
-            onNavigate?.(event.shiftKey ? "previous-page" : "first-page"),
+            onNavigate?.(event.shiftKey ? "first-page" : "previous-page"),
         [onNavigate],
     );
     const nextPage = useCallback(
@@ -393,9 +395,9 @@ export const TimelineTransport = memo(function TimelineTransport({
             >
                 <div className="flex shrink-0 items-center gap-2">
                     <TransportButton
-                        label="Go to start"
-                        shortcut={TRANSPORT_SHORTCUTS.firstPage}
-                        hint="Shift+click or Q: previous page"
+                        label="Previous page"
+                        shortcut={TRANSPORT_SHORTCUTS.previousPage}
+                        hint="Shift+click or Shift+Q: the start of the show"
                         onClick={onNavigate ? previousPage : undefined}
                     >
                         {SKIP_BACK_ICON}
@@ -406,25 +408,19 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 ? "Stop"
                                 : playLoops
                                   ? "Play, looping from the start flag"
-                                  : playNext === "continue"
-                                    ? "Play on"
-                                    : playNext === "page"
-                                      ? "Play this page"
-                                      : "Play"
+                                  : "Play"
                         }
                         shortcut={TRANSPORT_SHORTCUTS.play}
                         hint={
                             isPlaying
-                                ? playLoops || playNext === "page"
+                                ? playLoops || playingOnce
                                     ? "Goes back to where you were editing"
                                     : "Stops where it is"
                                 : playLoops
                                   ? "Loops from the pinned start flag to the playhead. Unpin it (C) to play on from here"
                                   : playNext === "page"
-                                    ? "Plays this page's move, then stops on its set. Press again to play on. Pin it (C) to loop it"
-                                    : playNext === "continue"
-                                      ? "Plays on from here, into the next page"
-                                      : "Plays on from here. Pin the start flag (C) to loop a move"
+                                    ? "Plays on from here. Shift+Space plays this page's move once; C loops it"
+                                    : "Plays on from here. Pin the start flag (C) to loop a move"
                         }
                         testId="timeline-play"
                         pressed={isPlaying}

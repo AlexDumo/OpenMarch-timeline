@@ -101,12 +101,11 @@ export function useTimelinePlayback({
     );
     // UI-17: what an unpinned Play does next, for the Play button's words
     const playNext = useTimelineSelectionStore((s) =>
-        (s.playback?.kind === "preview" && s.playback.once) ||
-        (!s.continueArmed && selectedPageBox(s))
-            ? ("page" as const)
-            : s.continueArmed
-              ? ("continue" as const)
-              : undefined,
+        selectedPageBox(s) ? ("page" as const) : undefined,
+    );
+    // Shift+Space's once-through, which stops back on the page's set
+    const playingOnce = useTimelineSelectionStore(
+        (s) => s.playback?.kind === "preview" && s.playback.once === true,
     );
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
@@ -157,6 +156,7 @@ export function useTimelinePlayback({
             isPlaying,
             playLoops,
             playNext,
+            playingOnce,
             ...commands,
         }),
         [
@@ -167,6 +167,7 @@ export function useTimelinePlayback({
             playheadBeat,
             playLoops,
             playNext,
+            playingOnce,
         ],
     );
 }

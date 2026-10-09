@@ -93,7 +93,7 @@ export type TimelinePlaybackRun =
           readonly kind: "preview";
           readonly from: number;
           readonly to: number;
-          /** Plays once and stops instead of looping (UI-17: a selected page's move) */
+          /** Plays once and stops instead of looping (UI-17: Shift+Space plays the page once) */
           readonly once?: boolean;
       }
     | { readonly kind: "on" };
@@ -148,12 +148,6 @@ export interface TimelineSelectionState {
      * drawn by hand, or a dragged start flag, pins S where it is until unpinned (UI-12).
      */
     readonly pinFollows: boolean;
-    /**
-     * A selected page's move just played to its end (UI-17): the next Space plays on from there.
-     * Anything else first (an edit, a click, another key) clears it.
-     */
-    readonly continueArmed: boolean;
-    readonly setContinueArmed: (armed: boolean) => void;
     /** A gesture is moving the playhead: an unpinned S waits for it to end (UI-12 review) */
     readonly scrubbing: boolean;
 
@@ -579,11 +573,6 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             cursorBeat: null,
             loopEnd: null,
             pinFollows: false,
-            continueArmed: false,
-            setContinueArmed: (continueArmed) =>
-                set((s) =>
-                    s.continueArmed === continueArmed ? {} : { continueArmed },
-                ),
             playback: null,
             scrubbing: false,
             isolate: (timelineId, restore) =>

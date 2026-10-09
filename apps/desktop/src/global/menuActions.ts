@@ -21,6 +21,11 @@ export interface MenuAction {
 export const PLAYBACK_MENU_ACTIONS: readonly MenuAction[] = [
     { action: "playPause", label: "Play / Stop", accelerator: "Space" },
     {
+        action: "playPage",
+        label: "Play Page Once",
+        accelerator: "Shift+Space",
+    },
+    {
         action: "toggleStartPin",
         label: "Pin or Unpin Start Flag",
         accelerator: "C",

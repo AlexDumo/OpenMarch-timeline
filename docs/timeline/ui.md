@@ -815,23 +815,22 @@ from it. The spec still wins on the model; this file decides presentation.
   - **A range drawn by hand stays pinned where it was drawn** (UI-12): Ctrl+drag, or dragging the
     start flag, pins S for editing part of a move, and that pin doesn't follow; the pin icon or
     the field line's Unpin unpins it. Only pins set with C or Shift+click follow.
-  - **Play with a page selected and nothing pinned plays that page's move once** and stops on its
-    set (the playhead never moved), so an edit right after lands on the page just checked. Space
-    straight after that plays on from there; anything else first (an edit, a click, another key)
-    makes Space replay the page again, and the field line ("Space plays on") and Play's name ("Play
-    this page", "Play on") say which is next (project owner, 2026-10-09). Simulated-user round 3
-    compared playing from the page's start and on (as Logic's Play from Selection; all four testers
-    then edited the next page's set by mistake), playing the page once every time (Pyware with All
-    Counts off; safe, but "a jail" for watching on), and this hybrid (first for three of four).
-    Before it, Play on a selected page played on from its end and skipped its move (every tester in
-    every round hit that). Home, a part of a page, or a loop: Play works as above.
+  - **Space plays on from the playhead; Shift+Space plays the page's move once** and goes back to
+    its set when it ends or is stopped (project owner, 2026-10-09, after trying round 3's choice by
+    hand). Looping a page is loop mode's job (C); Shift+Space is the one-shot check. With a page
+    selected and nothing pinned, Play's tooltip names both. Round 3 of the simulated-user tests
+    had picked a hybrid (Space on a selected page plays its move once, Space straight after plays
+    on); the owner found it asked two presses to play on from the playhead, and that page-from-start
+    playing belongs to loop mode. Testers had expected Space to play a page they'd just selected;
+    the tooltip and the menu's "Play Page Once" are the answer to that, to watch (V-176).
   - **Playing on stops where it is**, and when that is a new page the field line says so with a ring
     ("Stopped on a new page · Editing Page 4…") for a few seconds (owner; the quiet line was missed
     by every tester who then edited the wrong set).
-  - **⏮ goes to the start of the show**; Shift+click (or Q) is the previous page (owner: testers
-    read ⏮ as "start" five times). ⏭ is unchanged (next page; Shift+click the last).
-  - **A click on the timeline selects the page under it**, as clicking its box does; a drag still
-    scrubs to any count (owner). A start flag pinned by hand keeps UI-12's click-to-seek.
+  - **⏮ is the previous page; Shift+click (or Shift+Q) goes to the start of the show**, as before
+    (owner, 2026-10-09: briefly swapped after testers read ⏮ as "start"; the owner wants the
+    common step on the plain click). The tooltip says Shift+click goes to the start.
+  - **A click on a beat seeks to that count** (UI-12); the page box row selects the page (owner,
+    2026-10-09, after briefly making any click select the page).
   - **Home while playing jumps playback to the start**; transport buttons don't take keyboard focus
     on a click, so Space after clicking one is still Play; the transport's tooltips open above it.
   - **Shift+click on page boxes** extends the window over every page from the selected one to the

@@ -221,8 +221,10 @@ export interface TimelineInteractionProps {
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** The start flag is pinned, so Play loops from it (UI-17) */
     readonly playLoops?: boolean;
-    /** With no pin: Play plays the selected page once, or plays on after it (UI-17) */
-    readonly playNext?: "page" | "continue";
+    /** With no pin, a page is selected (UI-17) */
+    readonly playNext?: "page";
+    /** Shift+Space's once-through is playing (UI-17) */
+    readonly playingOnce?: boolean;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;

@@ -158,8 +158,6 @@ export function TimelineFromStartBadge() {
               ? isolatedTimelineName(range, pages)
               : "";
     const wholePage = isWholePageWindow(selection, pages);
-    // UI-17: after a selected page's move plays, the next Space plays on
-    const continueArmed = useTimelineSelectionStore((s) => s.continueArmed);
     // UI-17: playing on that stops on another page says so loudly (round 3: all four testers
     // missed the quiet line and edited the next page's set)
     const [movedOn, setMovedOn] = useState(false);
@@ -183,12 +181,11 @@ export function TimelineFromStartBadge() {
         pinShown ||
         through.length > 0 ||
         !wholePage ||
-        movedOn ||
-        continueArmed;
+        movedOn;
     const sentence =
         selection.kind === "none"
             ? ""
-            : `${movedOn ? "Stopped on a new page. " : ""}Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${fromStartShown ? `. Space loops ${loopName ?? "it"}` : ""}${continueArmed && !fromStartShown ? ". Space plays on" : ""}`;
+            : `${movedOn ? "Stopped on a new page. " : ""}Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${fromStartShown ? `. Space loops ${loopName ?? "it"}` : ""}`;
     // Flash when it turns prominent for a new reason: a pin, or crossing flags
     const flashKey = `${fromStartShown}|${pinShown}|${through.join(",")}`;
     const [fresh, setFresh] = useState(false);
@@ -293,16 +290,6 @@ export function TimelineFromStartBadge() {
                         <Keycaps shortcut="Space" />
                         {loopName ? `loops ${loopName}` : "loops it"}
                     </span>
-                </span>
-            )}
-            {continueArmed && !fromStartShown && (
-                <span
-                    data-testid="timeline-plays-on-badge"
-                    className="border-stroke flex shrink-0 items-center gap-4 border-l pl-8"
-                    aria-hidden="true"
-                >
-                    <Keycaps shortcut="Space" />
-                    plays on
                 </span>
             )}
         </div>
