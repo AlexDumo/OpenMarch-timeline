@@ -105,7 +105,7 @@ export interface TimelinePlayback {
         options?: TimelineSeekOptions,
     ) => number | null | void;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
-    /** The start flag is pinned, so Play loops from it (UI-17): the button says so */
+    /** Looping is on, so Play loops (UI-17): the button says so */
     readonly playLoops?: boolean;
     /** With no pin, a page is selected (UI-17): Play's tooltip names Shift+Space and C */
     readonly playNext?: "page";
@@ -157,6 +157,10 @@ export interface TimelineProps {
     readonly clipResize?: TimelineClipResizeCommands;
     /** Unpins the start flag (UI-12), from its pin */
     readonly onUnpinStart?: () => void;
+    /** The loop (UI-17), spec beats; `null` or absent when looping is off */
+    readonly loop?: TimelineBeatRange | null;
+    /** A loop end dragged or stepped (UI-17), spec beats */
+    readonly onLoopChange?: (loop: TimelineBeatRange) => void;
     /**
      * The right-click menu's **Add selected marchers** (UI-9, P8.14), for a page box, a clip's
      * timeline or a dragged range. It gets spec beats; the menu doesn't change the selection.
@@ -298,15 +302,7 @@ export const selectionToView = (
                         ),
                     }
                   : {}),
-              ...(selection.fromStart ? { fromStart: true } : {}),
               ...(selection.startPinned ? { startPinned: true } : {}),
-              ...(selection.loopEndBeatIndex !== undefined
-                  ? {
-                        loopEndBeatIndex: axis.toView(
-                            selection.loopEndBeatIndex,
-                        ),
-                    }
-                  : {}),
           }
         : selection;
 
@@ -405,6 +401,27 @@ export function Timeline(props: TimelineProps) {
         onSelectionChange
             ? (next: TimelineSelection) =>
                   onSelectionChange(selectionToSpec(next, axis))
+            : undefined,
+    );
+    // UI-17: the loop, mapped onto the view axis and back
+    const { loop } = props;
+    const viewLoop = useMemo(
+        () =>
+            loop
+                ? {
+                      startBeatIndex: axis.toView(loop.startBeatIndex),
+                      endBeatIndex: axis.toView(loop.endBeatIndex),
+                  }
+                : null,
+        [loop, axis],
+    );
+    const changeLoop = useLatestCallback(
+        props.onLoopChange
+            ? (next: TimelineBeatRange) =>
+                  props.onLoopChange?.({
+                      startBeatIndex: axis.toSpec(next.startBeatIndex),
+                      endBeatIndex: axis.toSpec(next.endBeatIndex),
+                  })
             : undefined,
     );
     const { onTimelineRangeCommit, onCreateTrack, timelines } = props;
@@ -647,6 +664,8 @@ export function Timeline(props: TimelineProps) {
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
         onUnpinStart: useLatestCallback(props.onUnpinStart),
+        loop: viewLoop,
+        onLoopChange: changeLoop,
         transportSecondary: props.transportSecondary,
         transportViewControls: props.transportViewControls,
         showTransport: props.showTransport ?? true,

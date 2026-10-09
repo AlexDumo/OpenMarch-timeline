@@ -25,11 +25,7 @@ export const PLAYBACK_MENU_ACTIONS: readonly MenuAction[] = [
         label: "Play Page Once",
         accelerator: "Shift+Space",
     },
-    {
-        action: "toggleStartPin",
-        label: "Pin or Unpin Start Flag",
-        accelerator: "C",
-    },
+    { action: "toggleLoop", label: "Loop On / Off", accelerator: "C" },
 ];
 
 export const HELP_MENU_ACTIONS: readonly MenuAction[] = [

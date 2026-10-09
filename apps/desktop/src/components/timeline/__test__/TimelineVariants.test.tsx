@@ -115,29 +115,56 @@ describe("timeline views", () => {
         });
     });
 
-    it("gives a pinned loop's end its own grip, only while it loops (UI-17 follow-up)", () => {
-        const range = { startBeatIndex: 8, endBeatIndex: 16 };
+    it("draws the loop bar and steps its ends with the arrow keys (UI-17)", () => {
+        const onLoopChange = vi.fn();
+        const loop = { startBeatIndex: 8, endBeatIndex: 16 };
         const { rerender } = render(
             <ExpandedTimeline
                 {...commonProps}
                 showTransport={false}
-                selection={{ kind: "range", range }}
-                onSelectionChange={vi.fn()}
+                onLoopChange={onLoopChange}
             />,
         );
+        expect(screen.queryByTestId("timeline-loop-bar")).toBeNull();
         expect(screen.queryByTestId("timeline-loop-end")).toBeNull();
         rerender(
             <ExpandedTimeline
                 {...commonProps}
                 showTransport={false}
-                selection={{ kind: "range", range, fromStart: true }}
-                onSelectionChange={vi.fn()}
+                loop={loop}
+                onLoopChange={onLoopChange}
             />,
         );
-        expect(screen.getByTestId("timeline-loop-end")).toHaveAttribute(
+        expect(screen.getByTestId("timeline-loop-bar")).toBeInTheDocument();
+        const start = screen.getByTestId("timeline-loop-start");
+        const end = screen.getByTestId("timeline-loop-end");
+        expect(end).toHaveAttribute(
             "title",
-            "Drag to change where the loop ends",
+            "Drag to move this end of the loop",
         );
+        expect(end).toHaveAttribute("aria-label", "Loop end, beat 16");
+        expect(start).toHaveAttribute("aria-label", "Loop start, beat 8");
+        // jsdom has no layout, so the ends move by key, not by drag
+        fireEvent.keyDown(end, { key: "ArrowRight" });
+        expect(onLoopChange).toHaveBeenCalledWith({
+            startBeatIndex: 8,
+            endBeatIndex: 17,
+        });
+        fireEvent.keyDown(end, { key: "ArrowLeft" });
+        expect(onLoopChange).toHaveBeenLastCalledWith({
+            startBeatIndex: 8,
+            endBeatIndex: 15,
+        });
+        fireEvent.keyDown(start, { key: "ArrowLeft" });
+        expect(onLoopChange).toHaveBeenLastCalledWith({
+            startBeatIndex: 7,
+            endBeatIndex: 16,
+        });
+        fireEvent.keyDown(start, { key: "ArrowRight" });
+        expect(onLoopChange).toHaveBeenLastCalledWith({
+            startBeatIndex: 9,
+            endBeatIndex: 16,
+        });
     });
 
     it("presses the initial box for home", () => {
@@ -268,7 +295,7 @@ describe("timeline views", () => {
         );
         expect(
             screen.getByRole("button", {
-                name: "Play, looping from the start flag",
+                name: "Play the loop",
             }),
         ).toBeInTheDocument();
         expect(

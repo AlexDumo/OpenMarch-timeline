@@ -13,6 +13,7 @@ import {
     SpeakerSimpleLowIcon,
     SpeakerSimpleXIcon,
     RowsIcon,
+    RepeatIcon,
 } from "@phosphor-icons/react";
 import RegisteredActionButton from "@/components/RegisteredActionButton";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -25,6 +26,9 @@ import { T, useTolgee } from "@tolgee/react";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
 import * as Popover from "@radix-ui/react-popover";
 import { Slider } from "@openmarch/ui";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { toggleTimelineLoop } from "@/timeline/timelineTransport";
+import { ShortcutTooltip } from "./ShortcutTooltip";
 
 export default function TimelineControls() {
     const { isFullscreen, toggleFullscreen } = useFullscreenStore();
@@ -151,6 +155,52 @@ export function TimelineMetronomeButton() {
                 <MetronomeIcon size={24} />
             </button>
         </div>
+    );
+}
+
+/**
+ * Loop (UI-17, C): turns looping on over the page being edited, or off. Lit while on; the loop is
+ * then a bar on the ruler whose ends drag.
+ */
+export function TimelineLoopButton() {
+    const looping = useTimelineSelectionStore(
+        (s) => s.loop !== null && s.isolation === null,
+    );
+    const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
+    const shortcut =
+        RegisteredActionsObjects.toggleLoop.keyboardShortcut?.toString();
+    return (
+        <ShortcutTooltip
+            label={looping ? "Loop: on" : "Loop: off"}
+            shortcut={shortcut}
+            hint={
+                isolated
+                    ? "An isolated move always loops"
+                    : looping
+                      ? "Space loops the bar on the ruler; drag its ends to change it"
+                      : "Loops the page you're on"
+            }
+        >
+            <button
+                type="button"
+                data-testid="timeline-loop"
+                aria-label="Loop"
+                aria-pressed={looping}
+                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
+                disabled={isolated}
+                // Keeps keyboard focus off, so Space after a click is still Play
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => toggleTimelineLoop()}
+                className={clsx(
+                    "rounded-4 focus-visible:ring-accent enabled:hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden duration-150 focus-visible:ring-2 disabled:opacity-30",
+                    looping
+                        ? "text-accent"
+                        : "text-text enabled:hover:text-accent",
+                )}
+            >
+                <RepeatIcon size={16} weight={looping ? "bold" : "regular"} />
+            </button>
+        </ShortcutTooltip>
     );
 }
 

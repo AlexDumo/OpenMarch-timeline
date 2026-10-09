@@ -5,8 +5,8 @@
 
 ## Context
 
-UI-17 (docs/timeline/ui.md) made Space the one Play (looping when the start flag is pinned), C
-pin or unpin the start flag, and `?` open a list of shortcuts. The research behind it found that menu items showing their
+UI-17 (docs/timeline/ui.md) made Space the one Play (looping while Loop is on), Shift+Space play
+the page once, C turn looping on and off, and `?` open a list of shortcuts. The research behind it found that menu items showing their
 shortcut are how desktop users find these, and the owner asked for them. The app menu lives in
 the Electron main process, but every one of these actions is a renderer registered action
 (`RegisteredActionsHandler`), which owns playback state.
@@ -27,7 +27,7 @@ it.
 - **Shortcuts are shown, not registered.** On Linux and Windows the item has its accelerator with
   `registerAccelerator: false`. On macOS the label carries the key instead ("Play / Stop (Space)").
   The renderer's keyboard handler stays the only owner of the keys.
-- The items: a **Playback** menu (Play / Stop, Pin or Unpin Start Flag) and **Help → Keyboard
+- The items: a **Playback** menu (Play / Stop, Play Page Once, Loop On / Off) and **Help → Keyboard
   Shortcuts**.
 
 ## Consequences

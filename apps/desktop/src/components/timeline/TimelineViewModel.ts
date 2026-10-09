@@ -154,18 +154,8 @@ export type TimelineSelection =
            * flag sits on the playhead and the window falls back to the page box
            */
           readonly startFlagBeatIndex?: number;
-          /**
-           * The window is what Play loops (UI-17): the flag is pinned, or it is looping. It
-           * is drawn with a bar in the start flag's color
-           */
-          readonly fromStart?: boolean;
-          /**
-           * How the user set this window (UI-17): `pages` for Shift+click on page boxes, `loopEnd`
-           * for the loop end's grip
-           */
-          readonly via?: "pages" | "loopEnd";
-          /** The end of a loop over several pages, when it is past the window's end (UI-17) */
-          readonly loopEndBeatIndex?: number;
+          /** How the user set this window (UI-17): `pages` for Shift+click on page boxes */
+          readonly via?: "pages";
           /** The range was drawn by dragging on empty timeline space (Ctrl+drag) */
           readonly drawn?: boolean;
           /**
@@ -219,7 +209,7 @@ export interface TimelineInteractionProps {
     readonly selectedTarget?: TimelineTarget | null;
     readonly onSeek?: TimelineSeek;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
-    /** The start flag is pinned, so Play loops from it (UI-17) */
+    /** Looping is on, so Play loops (UI-17) */
     readonly playLoops?: boolean;
     /** With no pin, a page is selected (UI-17) */
     readonly playNext?: "page";
@@ -268,6 +258,10 @@ export interface TimelineCommonProps
     readonly clipResize?: TimelineClipResizeCommands;
     /** Unpins the start flag (UI-12), from its pin */
     readonly onUnpinStart?: () => void;
+    /** The loop (UI-17), view beats; `null` or absent when looping is off */
+    readonly loop?: TimelineBeatRange | null;
+    /** A loop end dragged or stepped (UI-17), view beats */
+    readonly onLoopChange?: (loop: TimelineBeatRange) => void;
     /** Transport controls that fold into "⋯" on a narrow panel, such as Sound (UI-12) */
     readonly transportSecondary?: ReactNode;
     /** View controls at the transport's end, such as Compact (UI-12); they fold too */

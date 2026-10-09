@@ -8,6 +8,7 @@ import {
     useState,
     type MouseEvent,
 } from "react";
+import { TimelineLoopBar } from "./TimelineLoopBar";
 import { flushSync } from "react-dom";
 import { PlusIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
@@ -655,12 +656,8 @@ const TimelineSurface = memo(function TimelineSurface({
     );
     const commitSelection = useLatestCallback(
         onSelectionChange
-            ? (range: TimelineBeatRange, handle?: "start" | "end") =>
-                  onSelectionChange({
-                      kind: "range",
-                      range,
-                      ...(handle === "end" ? { via: "loopEnd" as const } : {}),
-                  })
+            ? (range: TimelineBeatRange) =>
+                  onSelectionChange({ kind: "range", range })
             : undefined,
     );
     // The right-click menu's target: a page box or clip under the pointer, else a dragged range
@@ -897,21 +894,21 @@ const TimelineSurface = memo(function TimelineSurface({
                         pixelsPerBeat={pixelsPerBeat}
                         height={timelineHeight}
                     />
+                    {props.loop && (
+                        <TimelineLoopBar
+                            loop={props.loop}
+                            beatCount={model.beatCount}
+                            pixelsPerBeat={pixelsPerBeat}
+                            snapBeats={snapBeats}
+                            onChange={props.onLoopChange}
+                        />
+                    )}
                     {selectionRange && (
                         <TimelineSelectionRange
                             range={selectionRange}
                             startFlagBeatIndex={
                                 selection?.kind === "range"
                                     ? selection.startFlagBeatIndex
-                                    : undefined
-                            }
-                            fromStart={
-                                selection?.kind === "range" &&
-                                selection.fromStart === true
-                            }
-                            loopEndBeatIndex={
-                                selection?.kind === "range"
-                                    ? selection.loopEndBeatIndex
                                     : undefined
                             }
                             startPinned={

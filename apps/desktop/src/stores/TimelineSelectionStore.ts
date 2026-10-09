@@ -36,8 +36,8 @@ import { create } from "zustand";
  * Esc, a page box or home, a dragged range, or the timeline going away ends isolation and puts S
  * and P back where they were.
  *
- * **Playback** (UI-11, UI-17): with S pinned, **Play** loops the window from S (a preview); with
- * no pin it plays on from the playhead. Playing never writes the playhead. Audio plays from, and the
+ * **Playback** (UI-11, UI-17): with a loop set (`loop`), **Play** loops it (a preview); with none it
+ * plays on from the playhead. Playing never writes the playhead. Audio plays from, and the
  * paused canvas shows, the **cursor** (`cursorBeat`) when there is one, and the playhead
  * otherwise. Play sets the cursor where playback starts and `playback` to what is running: a
  * preview of the window, or playing on. A preview that loops moves the cursor back to its start;
@@ -98,6 +98,12 @@ export type TimelinePlaybackRun =
       }
     | { readonly kind: "on" };
 
+/** The loop's region (UI-17), spec beats: `[start, end)` */
+export interface TimelineLoop {
+    readonly start: number;
+    readonly end: number;
+}
+
 /** A page's box: the previous flag to its own flag (`pageFlags`), in spec beats. */
 export interface PageBox {
     readonly start: number;
@@ -109,7 +115,7 @@ export interface PageBox {
 export interface TimelineSelectionState {
     /** The edit window, derived from the start flag, the playhead and the page boxes */
     readonly selection: TimelineEditSelection;
-    /** The start flag S (UI-10): where movers leave from; pinned, where Play loops from */
+    /** The start flag S (UI-10): where movers leave from */
     readonly startBeat: number;
     /** Whether S was placed by hand; an unpinned S follows navigation */
     readonly startPinned: boolean;
@@ -139,15 +145,12 @@ export interface TimelineSelectionState {
     /** What is playing, or `null` while paused (UI-11) */
     readonly playback: TimelinePlaybackRun | null;
     /**
-     * The end of a loop over several pages (UI-17), kept while the playhead moves inside it; `null`
-     * when the loop is the window itself. Play loops `[S, loopEnd)` while it is set.
+     * The loop (UI-17): its own region, apart from the edit window, as Logic's cycle region. While
+     * set, Play loops it wherever the playhead is and stopping returns to the playhead. Moving the
+     * playhead (a scrub, a click on a count, arrow keys) leaves it; going to a page (E, Q, a page
+     * box) moves it to that page. `null` when looping is off.
      */
-    readonly loopEnd: number | null;
-    /**
-     * The pin follows the page you move to (UI-17): set by C and Shift+click on page boxes. A range
-     * drawn by hand, or a dragged start flag, pins S where it is until unpinned (UI-12).
-     */
-    readonly pinFollows: boolean;
+    readonly loop: TimelineLoop | null;
     /** A gesture is moving the playhead: an unpinned S waits for it to end (UI-12 review) */
     readonly scrubbing: boolean;
 
@@ -170,12 +173,7 @@ export interface TimelineSelectionState {
      * `start` is where S would follow to (a page box). Page boxes, page navigation, **+**, a dragged
      * range and the range handles call this.
      */
-    readonly selectRange: (
-        start: number,
-        end: number,
-        /** The pin follows the playhead's page (UI-17, Shift+click on page boxes) */
-        follows?: boolean,
-    ) => void;
+    readonly selectRange: (start: number, end: number) => void;
     /** Clears the selection; the playhead and S stay. */
     readonly selectNothing: () => void;
     /**
@@ -241,16 +239,8 @@ export interface TimelineSelectionState {
     readonly clearCursor: () => void;
     /** Records what is playing (`null` once it stops). Used by the transport and the driver. */
     readonly setPlayback: (playback: TimelinePlaybackRun | null) => void;
-    /**
-     * Puts the start flag on `beat` and pins it (UI-17, C), keeping the playhead. Does nothing in
-     * isolation.
-     */
-    readonly pinStartAt: (beat: number) => void;
-    /**
-     * The loop end's grip (UI-17): the playhead moves to `beat` with S kept pinned, and the loop
-     * covers `[S, beat)`.
-     */
-    readonly stretchLoop: (beat: number) => void;
+    /** Sets the loop, or turns looping off with `null` (UI-17) */
+    readonly setLoop: (loop: TimelineLoop | null) => void;
     /** Used by `useTimelinePlaybackDriver` only. */
     readonly setShowEndBeat: (showEndBeat: number | null) => void;
     /** Opening a show: home, playhead at 0, nothing loaded. */
@@ -395,12 +385,7 @@ const HOME: TimelineEditSelection = { kind: "home" };
 
 type WindowFields = Pick<
     TimelineSelectionState,
-    | "selection"
-    | "startBeat"
-    | "startPinned"
-    | "playheadBeat"
-    | "cursorBeat"
-    | "loopEnd"
+    "selection" | "startBeat" | "startPinned" | "playheadBeat" | "cursorBeat"
 >;
 
 /** The window fields for S, its pin and P, with `selection` derived from them. */
@@ -416,9 +401,6 @@ const windowFields = (
     selection: editWindow(startBeat, playheadBeat, boxes),
     // Writing the window puts the canvas back at P (UI-11)
     cursorBeat: null,
-    // Any other write of the window ends a loop over several pages (UI-17); the writes that keep
-    // one set it again
-    loopEnd: null,
 });
 
 /** Whether two selections are the same window. */
@@ -444,45 +426,6 @@ const keepEqualSelection = (
     sameSelection(next.selection, s.selection)
         ? { ...next, selection: s.selection }
         : next;
-
-/**
- * `end` when a pinned window from `start` to `end` covers more than the page box holding `start`
- * (a loop over several pages, UI-17), else `null`. Page 1's start, beat 0, is in page 1's box.
- */
-const multiPageEnd = (
-    start: number,
-    end: number,
-    boxes: readonly PageBox[],
-): number | null => {
-    const at = Math.max(start, boxes[0]?.start ?? start);
-    const box = boxes.find((b) => b.start <= at && at < b.end);
-    return box && end > box.end ? end : null;
-};
-
-/**
- * The window after the playhead moves to `playhead` with the start flag pinned (UI-17, the loop
- * follows your page; simulated-user A/B test round 2, 2026-10-09): inside a loop over several
- * pages it stays; elsewhere the pinned flag moves to the start of the page holding the playhead.
- * Home unpins, as it always has (UI-12).
- */
-const followWindow = (
-    s: Pick<TimelineSelectionState, "startBeat" | "loopEnd" | "pageBoxes">,
-    playhead: number,
-): WindowFields => {
-    if (s.loopEnd !== null && s.startBeat < playhead && playhead <= s.loopEnd)
-        return {
-            ...windowFields(s.startBeat, true, playhead, s.pageBoxes),
-            loopEnd: s.loopEnd,
-        };
-    return playhead <= 0
-        ? windowFields(0, false, 0, s.pageBoxes)
-        : windowFields(
-              followingStart(playhead, s.pageBoxes),
-              true,
-              playhead,
-              s.pageBoxes,
-          );
-};
 
 /** The timeline-mode edit window and playhead. See the module comment. */
 export const useTimelineSelectionStore = create<TimelineSelectionState>(
@@ -571,8 +514,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             showEndBeat: null,
             isolation: null,
             cursorBeat: null,
-            loopEnd: null,
-            pinFollows: false,
+            loop: null,
             playback: null,
             scrubbing: false,
             isolate: (timelineId, restore) =>
@@ -609,21 +551,18 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     scrubbing: false,
                     playheadRevision: s.playheadRevision + 1,
                 })),
-            selectRange: (start, end, follows = false) =>
-                set((s) => {
-                    const pinned = start !== followingStart(end, s.pageBoxes);
-                    return {
-                        isolation: null,
-                        scrubbing: false,
-                        pinFollows: follows,
-                        ...windowFields(start, pinned, end, s.pageBoxes),
-                        // A pinned window over several pages is a loop over them (UI-17)
-                        loopEnd: pinned
-                            ? multiPageEnd(start, end, s.pageBoxes)
-                            : null,
-                        playheadRevision: s.playheadRevision + 1,
-                    };
-                }),
+            selectRange: (start, end) =>
+                set((s) => ({
+                    isolation: null,
+                    scrubbing: false,
+                    ...windowFields(
+                        start,
+                        start !== followingStart(end, s.pageBoxes),
+                        end,
+                        s.pageBoxes,
+                    ),
+                    playheadRevision: s.playheadRevision + 1,
+                })),
             selectNothing: () =>
                 set({
                     selection: { kind: "none" },
@@ -654,13 +593,6 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     // moving the playhead, since dragging now scrubs. With P on or before a pinned
                     // S the window falls back to the page box holding P, as after Stop. During a
                     // gesture an unpinned S waits for it to end (UI-12 review)
-                    // UI-17: a pinned flag follows the playhead's page, so the loop is the page
-                    // you're on (or stays, inside a loop over several pages)
-                    if (s.startPinned && s.pinFollows && !s.scrubbing)
-                        return {
-                            ...followWindow(s, playhead),
-                            playheadRevision: s.playheadRevision + 1,
-                        };
                     const keep = s.startPinned || s.scrubbing;
                     return {
                         ...windowFields(
@@ -694,15 +626,12 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             endScrub: () =>
                 set((s) => {
                     if (!s.scrubbing) return {};
-                    if (s.isolation || s.selection.kind === "none")
+                    if (
+                        s.isolation ||
+                        s.startPinned ||
+                        s.selection.kind === "none"
+                    )
                         return { scrubbing: false };
-                    // UI-17: a pinned flag follows once the gesture ends
-                    if (s.startPinned && s.pinFollows)
-                        return {
-                            scrubbing: false,
-                            ...followWindow(s, s.playheadBeat),
-                        };
-                    if (s.startPinned) return { scrubbing: false };
                     return {
                         scrubbing: false,
                         ...windowFields(
@@ -951,37 +880,21 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             clearCursor: () =>
                 set((s) => (s.cursorBeat === null ? {} : { cursorBeat: null })),
             setPlayback: (playback) => set({ playback }),
-            pinStartAt: (beat) =>
-                set(
-                    keepCursorWhilePlaying((s) => {
-                        if (s.isolation || !Number.isFinite(beat)) return {};
-                        const start = clamp(s, beat);
-                        return {
-                            pinFollows: true,
-                            ...windowFields(
-                                start,
-                                true,
-                                s.playheadBeat,
-                                s.pageBoxes,
-                            ),
-                            loopEnd: multiPageEnd(
-                                start,
-                                s.playheadBeat,
-                                s.pageBoxes,
-                            ),
-                        };
-                    }),
+            setLoop: (loop) =>
+                set((s) =>
+                    loop === s.loop ||
+                    (loop !== null &&
+                        s.loop !== null &&
+                        loop.start === s.loop.start &&
+                        loop.end === s.loop.end)
+                        ? {}
+                        : {
+                              loop:
+                                  loop === null || loop.end - loop.start < 1
+                                      ? null
+                                      : loop,
+                          },
                 ),
-            stretchLoop: (beat) =>
-                set((s) => {
-                    if (s.isolation || !Number.isFinite(beat)) return {};
-                    const end = Math.max(clamp(s, beat), s.startBeat + 1);
-                    return {
-                        ...windowFields(s.startBeat, true, end, s.pageBoxes),
-                        loopEnd: multiPageEnd(s.startBeat, end, s.pageBoxes),
-                        playheadRevision: s.playheadRevision + 1,
-                    };
-                }),
             setShowEndBeat: (showEndBeat) => set({ showEndBeat }),
             reset: () =>
                 set((s) => ({
@@ -991,6 +904,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     storedTimelines: null,
                     showEndBeat: null,
                     playback: null,
+                    loop: null,
                     scrubbing: false,
                 })),
         };

@@ -37,9 +37,8 @@ let scrub: {
 
 /**
  * Page navigation (UI-9 Page-relative tools): moves the playhead to the target flag and selects
- * that page's timeline, or home for the first page. With the start flag pinned it seeks instead:
- * a pin set with C follows the page (UI-17, the store's `seek`), and one drawn by hand stays
- * (UI-12). Returns false when there is nowhere to go. Callers don't navigate while playing.
+ * that page's timeline, or home for the first page; a loop moves to that page (UI-17). Returns
+ * false when there is nowhere to go. Callers don't navigate while playing.
  */
 export function navigateTimelinePages(
     pages: readonly FlagPage[],
@@ -49,11 +48,12 @@ export function navigateTimelinePages(
     // From the beat the timeline shows: a held preview frame, or the playhead (UI-11)
     const target = navigationTarget(pages, displayedBeat(state), direction);
     if (!target) return false;
-    if (target.range && state.startPinned && !state.isolation)
-        state.seek(target.flag);
-    else if (target.range)
+    if (target.range) {
         state.selectRange(target.range.start, target.range.end);
-    else state.selectHome();
+        // UI-17: going to a page takes the loop there
+        if (state.loop && !state.isolation)
+            state.setLoop({ start: target.range.start, end: target.range.end });
+    } else state.selectHome();
     return true;
 }
 
@@ -215,30 +215,17 @@ export function jumpTimelinePages(
 }
 
 /**
- * What **Play** loops (UI-17): with the start flag pinned, or a move isolated, the window from the
- * flag to the playhead (`previewBounds`), or a loop over several pages the playhead is inside
- * (`loopEnd`); otherwise `null`, and Play plays on.
+ * What **Play** loops (UI-17): an isolated move's range, else the loop (`loop`, its own region,
+ * wherever the playhead is); `null` when neither, and Play plays on.
  */
-export const pinnedLoopBounds = (
+export const loopBounds = (
     state: Pick<
         ReturnType<typeof useTimelineSelectionStore.getState>,
-        | "startPinned"
-        | "isolation"
-        | "selection"
-        | "startBeat"
-        | "playheadBeat"
-        | "loopEnd"
+        "isolation" | "selection" | "loop"
     >,
-) => {
-    if (!state.startPinned && !state.isolation) return null;
-    if (
-        !state.isolation &&
-        state.loopEnd !== null &&
-        state.startBeat < state.playheadBeat &&
-        state.playheadBeat <= state.loopEnd
-    )
-        return { from: state.startBeat, to: state.loopEnd };
-    return previewBounds(state);
+): { readonly from: number; readonly to: number } | null => {
+    if (state.isolation) return previewBounds(state);
+    return state.loop ? { from: state.loop.start, to: state.loop.end } : null;
 };
 
 /**
@@ -290,12 +277,12 @@ export const selectedPageBox = (
 };
 
 /**
- * **Play / Stop** (UI-17, Space), the one play action. With the start flag pinned (or a move
- * isolated) it loops the window from the flag to the playhead, and stopping puts the canvas back
- * on the playhead, the arrival being edited, which looping never moved. With no pin it plays on
- * from the playhead, and stopping stays where it stopped, moving the playhead there (project owner,
- * 2026-10-09: playing a page from its start is loop mode's job, C, or Shift+Space's once,
- * `playTimelinePage`). The playback driver does both once the pause lands.
+ * **Play / Stop** (UI-17, Space), the one play action. With looping on (or a move isolated) it
+ * loops the loop's region wherever the playhead is, as Logic's cycle does, and stopping puts the
+ * canvas back on the playhead, which looping never moved. Otherwise it plays on from the playhead,
+ * and stopping stays where it stopped, moving the playhead there (project owner, 2026-10-09:
+ * playing a page from its start is loop mode's job, C, or Shift+Space's once, `playTimelinePage`).
+ * The playback driver does both once the pause lands.
  */
 export function toggleTimelinePlayback({
     isPlaying,
@@ -311,7 +298,7 @@ export function toggleTimelinePlayback({
         return;
     }
     const state = useTimelineSelectionStore.getState();
-    const bounds = pinnedLoopBounds(state);
+    const bounds = loopBounds(state);
     if (!bounds) {
         startTimelinePlayOn(showEndBeat, setIsPlaying);
         return;
@@ -323,7 +310,7 @@ export function toggleTimelinePlayback({
 
 /**
  * **Play the page once** (UI-17, Shift+Space): plays the window from the start flag to the playhead
- * (the selected page's move, or the loop's range when pinned) once, and goes back to the playhead,
+ * (the selected page's move), or the loop's region with looping on, once, and goes back to the playhead,
  * the page's set, when it ends or is stopped. Playing, it stops. With no window (home) it plays on.
  */
 export function playTimelinePage({
@@ -340,7 +327,7 @@ export function playTimelinePage({
         return;
     }
     const state = useTimelineSelectionStore.getState();
-    const bounds = pinnedLoopBounds(state) ?? previewBounds(state);
+    const bounds = loopBounds(state) ?? previewBounds(state);
     if (!bounds) {
         startTimelinePlayOn(showEndBeat, setIsPlaying);
         return;
@@ -351,16 +338,18 @@ export function playTimelinePage({
 }
 
 /**
- * **C** (UI-17): pins the start flag where it stands, the start of the page being edited, or
- * unpins it, as Logic's C turns Cycle on and off and editors' Mark Clip marks the clip under the
- * playhead. A pinned flag is what Play loops from, and it follows the page you move to (the
- * store's `seek`). Does nothing in isolation, whose flag is the
- * isolated move's start. (A simulated-user A/B test, 2026-10-09: all four expected the page's
- * start; on the playhead, the page's end, read as "this loops the next page".)
+ * **C** and the Loop button (UI-17): turns looping on over the edit window (the page being edited,
+ * or the pages Shift+click selected), or off, as Logic's C turns Cycle on and off. Does nothing in
+ * isolation, which always loops its move.
  */
-export function toggleTimelineStartPin(): void {
+export function toggleTimelineLoop(): void {
     const state = useTimelineSelectionStore.getState();
     if (state.isolation) return;
-    if (state.startPinned) state.unpinStart();
-    else state.pinStartAt(state.startBeat);
+    if (state.loop) {
+        state.setLoop(null);
+        return;
+    }
+    const { selection } = state;
+    if (selection.kind === "range")
+        state.setLoop({ start: selection.start, end: selection.end });
 }

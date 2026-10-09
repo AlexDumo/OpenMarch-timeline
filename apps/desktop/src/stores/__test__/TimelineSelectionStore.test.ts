@@ -186,26 +186,41 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         expect(store().startPinned).toBe(false);
     });
 
-    it("pinStartAt puts S on the beat and pins it, keeping P (UI-17)", () => {
+    it("setLoop stores a drawn range apart from S and P, and ignores one under a beat (UI-17)", () => {
         store().setPageBoxes(BOXES);
         store().selectRange(9, 17);
         expect(store().startPinned).toBe(false);
         expect(store().playheadBeat).toBe(17);
-        store().pinStartAt(12);
-        expect(store().startBeat).toBe(12);
-        expect(store().startPinned).toBe(true);
-        expect(store().playheadBeat).toBe(17);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 12,
-            end: 17,
-        });
-        // Isolation's flag is the isolated move's start: C does nothing
-        store().setStoredTimelines([timeline(2, 9, 17, [1])]);
-        store().isolate(2);
-        store().pinStartAt(3);
+        expect(store().loop).toBeNull();
+        // Ctrl+drag (`drawn`) commits through setLoop: the loop turns on, the window stays
+        store().setLoop({ start: 12, end: 16 });
+        expect(store().loop).toEqual({ start: 12, end: 16 });
         expect(store().startBeat).toBe(9);
+        expect(store().startPinned).toBe(false);
         expect(store().playheadBeat).toBe(17);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 17 });
+        // The same region is not a new write
+        const loop = store().loop;
+        store().setLoop({ start: 12, end: 16 });
+        expect(store().loop).toBe(loop);
+        // Shorter than one beat is off, including a zero-length one
+        store().setLoop({ start: 12, end: 12.5 });
+        expect(store().loop).toBeNull();
+        store().setLoop({ start: 4, end: 4 });
+        expect(store().loop).toBeNull();
+    });
+
+    it("seek and selectRange leave the loop where it is (UI-17)", () => {
+        store().setPageBoxes(BOXES);
+        store().setLoop({ start: 1, end: 9 });
+        const loop = store().loop;
+        store().seek(14);
+        store().selectRange(17, 25);
+        store().beginScrub();
+        store().seek(20);
+        store().endScrub();
+        expect(store().loop).toBe(loop);
+        expect(store().playheadBeat).toBe(20);
     });
 
     it("page 1's box starts at beat 1, and show time 0 is home", () => {
@@ -595,13 +610,14 @@ describe("the playback cursor (UI-11)", () => {
         expect(store().playheadBeat).toBe(17);
     });
 
-    it("reset clears a pinned start flag, which is what Play loops (UI-17)", () => {
-        expect(store().startPinned).toBe(false);
-        store().pinStartAt(9);
-        expect(store().startBeat).toBe(9);
+    it("reset clears the loop (UI-17)", () => {
+        store().setPageBoxes(BOXES);
+        store().selectRange(12, 17);
+        store().setLoop({ start: 9, end: 17 });
         expect(store().startPinned).toBe(true);
-        expect(store().playheadBeat).toBe(17);
+        expect(store().loop).toEqual({ start: 9, end: 17 });
         store().reset();
+        expect(store().loop).toBeNull();
         expect(store().startPinned).toBe(false);
         expect(store().startBeat).toBe(0);
         expect(store().playheadBeat).toBe(0);

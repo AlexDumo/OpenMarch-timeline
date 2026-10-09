@@ -10,7 +10,7 @@ import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
 import {
     jumpTimelinePages,
     navigateTimelinePages,
-    pinnedLoopBounds,
+    loopBounds,
     selectedPageBox,
     seekTimeline,
     toggleTimelinePlayback,
@@ -82,9 +82,9 @@ const playbackCommands = (
  *   flag and selects that page (`navigateTimelinePages`). While playing, both jump playback
  *   instead and leave the playhead alone (UI-12, `jumpTimelinePlayback`); a scrub suspends
  *   playback until it ends, then plays on from there once (`seekTimeline`, UI-12 review).
- * - Play (`toggleTimelinePlayback`, UI-17) loops the window from a pinned start flag to the
- *   playhead and returns to the playhead when it stops; with no pin it plays on from the playhead
- *   and stops in place.
+ * - Play (`toggleTimelinePlayback`, UI-17) loops the loop region while looping is on, wherever the
+ *   playhead is, and returns to the playhead when it stops; otherwise it plays on from the
+ *   playhead and stops in place.
  */
 export function useTimelinePlayback({
     beats,
@@ -95,10 +95,8 @@ export function useTimelinePlayback({
 }): TimelinePlayback {
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
     const playheadBeat = useTimelineSelectionStore(displayedBeat);
-    // UI-17: a pinned start flag makes Play loop from it
-    const playLoops = useTimelineSelectionStore(
-        (s) => pinnedLoopBounds(s) !== null,
-    );
+    // UI-17: with looping on (or a move isolated), Play loops
+    const playLoops = useTimelineSelectionStore((s) => loopBounds(s) !== null);
     // UI-17: what an unpinned Play does next, for the Play button's words
     const playNext = useTimelineSelectionStore((s) =>
         selectedPageBox(s) ? ("page" as const) : undefined,

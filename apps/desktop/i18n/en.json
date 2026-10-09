@@ -62,9 +62,9 @@
             "pause": "Pause",
             "play": "Play",
             "playPage": "Play this page's move once",
-            "playPause": "Play or stop; with the start flag pinned, loop from it",
+            "playPause": "Play or stop (with Loop on, plays the loop)",
             "toggleMetronome": "Turn the metronome on or off",
-            "toggleStartPin": "Pin the start flag here, or unpin it"
+            "toggleLoop": "Loop the page you're on, or stop looping"
         },
         "select": {
             "selectAll": "Select all marchers"

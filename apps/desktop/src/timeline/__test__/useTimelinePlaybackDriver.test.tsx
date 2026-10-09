@@ -101,7 +101,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             result.current.playing.setIsPlaying(true);
         });
     };
-    /** Space: loop a pinned window, play on otherwise, or stop (UI-17). */
+    /** Space: loop the loop region, play on otherwise, or stop (UI-17). */
     const space = (result: {
         current: {
             beats: { readonly length: number };
@@ -343,47 +343,66 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().playheadBeat).toBe(17);
     });
 
-    it("Space with a pinned flag loops S..P and repeats, never moving P (UI-17)", async ({
+    it("Space loops the loop wherever P is, inside or outside, and never moves P (UI-17)", async ({
         db,
         wrapper,
     }) => {
         const { result } = await setUp(db, wrapper);
         act(() => {
-            store().selectRange(9, 13);
+            // P inside the loop: the window ends at 11, the loop runs on to 13
+            store().selectRange(9, 11);
+            store().setLoop({ start: 9, end: 13 });
         });
-        expect(store().startPinned).toBe(true);
+        const loop = store().loop;
+        expect(store().playheadBeat).toBe(11);
         space(result);
-        // From the start flag; the playhead stays on the window's end
         expect(store().playback).toEqual({ kind: "preview", from: 9, to: 13 });
         expect(store().cursorBeat).toBe(9);
-        expect(store().playheadBeat).toBe(13);
-        audio.seconds = 5.9; // beat 12.8, still inside the window
+        expect(store().playheadBeat).toBe(11);
+        expect(store().loop).toBe(loop);
+        audio.seconds = 5.9; // beat 12.8, still inside the loop
         frame();
         expect(result.current.playing.isPlaying).toBe(true);
         expect(audio.restarts).toEqual([]);
-        expect(store().playheadBeat).toBe(13);
-        audio.seconds = 6; // beat 13, the playhead: the loop repeats
+        expect(store().playheadBeat).toBe(11);
+        audio.seconds = 6; // beat 13, the loop's end: it repeats
         frame();
         expect(result.current.playing.isPlaying).toBe(true);
         expect(audio.restarts).toEqual([4]); // beat 9
         expect(store().cursorBeat).toBe(9);
-        expect(store().playheadBeat).toBe(13);
-        expect(store().startBeat).toBe(9);
+        expect(store().playheadBeat).toBe(11);
+        expect(store().loop).toBe(loop);
         audio.seconds = 6;
         frame();
         expect(audio.restarts).toEqual([4, 4]);
-        expect(store().playheadBeat).toBe(13);
+        expect(store().playheadBeat).toBe(11);
         expect(store().playback).toEqual({ kind: "preview", from: 9, to: 13 });
+
+        // P outside the loop still starts at the loop, and P stays
+        space(result);
+        expect(store().playheadBeat).toBe(11);
+        act(() => {
+            store().seek(2);
+        });
+        expect(store().playheadBeat).toBe(2);
+        expect(store().loop).toBe(loop);
+        space(result);
+        expect(store().playback).toEqual({ kind: "preview", from: 9, to: 13 });
+        expect(store().cursorBeat).toBe(9);
+        expect(store().playheadBeat).toBe(2);
+        expect(store().loop).toBe(loop);
     });
 
-    it("stopping a pinned loop clears the cursor and leaves P (UI-17)", async ({
+    it("stopping a loop clears the cursor and leaves P (UI-17)", async ({
         db,
         wrapper,
     }) => {
         const { result } = await setUp(db, wrapper);
         act(() => {
             store().selectRange(9, 13);
+            store().setLoop({ start: 9, end: 13 });
         });
+        const loop = store().loop;
         space(result);
         audio.seconds = 5.6; // beat 12.2
         frame();
@@ -393,6 +412,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().playheadBeat).toBe(13);
         expect(store().startBeat).toBe(9);
         expect(store().playback).toBeNull();
+        expect(store().loop).toBe(loop);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 13 });
     });
 
@@ -494,7 +514,9 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             const { result } = await setUp(db, wrapper);
             act(() => {
                 store().selectRange(9, 13);
+                store().setLoop({ start: 9, end: 13 });
             });
+            const loop = store().loop;
             space(result);
             audio.seconds = 4.6; // beat 10.2
             frame();
@@ -523,7 +545,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             send(10, "end");
             expect(playChanges).toEqual([false, true]);
             expect(result.current.playing.isPlaying).toBe(true);
-            // Released inside the window: the same preview keeps looping (UI-17)
+            // Released inside the loop: the same preview keeps looping, and the loop stays (UI-17)
             expect(store().playback).toEqual({
                 kind: "preview",
                 from: 9,
@@ -531,6 +553,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             });
             expect(store().cursorBeat).toBe(10);
             expect(store().playheadBeat).toBe(13);
+            expect(store().loop).toBe(loop);
             expect(audio.restarts).toEqual([]);
 
             // Stopping the preview clears the cursor and leaves P
@@ -542,16 +565,19 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             expect(store().playheadBeat).toBe(13);
             expect(store().cursorBeat).toBeNull();
             expect(store().startBeat).toBe(9);
+            expect(store().loop).toBe(loop);
         });
 
-        it("a click inside a looping window keeps looping, and outside turns it to play-on (UI-17)", async ({
+        it("a click inside a loop keeps the preview, and outside plays on, without changing the loop (UI-17)", async ({
             db,
             wrapper,
         }) => {
             const { result } = await setUp(db, wrapper);
             act(() => {
                 store().selectRange(9, 13);
+                store().setLoop({ start: 9, end: 13 });
             });
+            const loop = store().loop;
             space(result);
             audio.seconds = 4.6;
             frame();
@@ -569,15 +595,18 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             });
             expect(store().playheadBeat).toBe(13);
             expect(store().cursorBeat).toBe(11);
+            expect(store().loop).toBe(loop);
 
             send(14, "press");
             send(14, "end");
             expect(playChanges).toEqual([]);
             expect(result.current.playing.isPlaying).toBe(true);
             expect(audio.restarts).toEqual([5, 6.5]); // beat 14
+            // Outside the preview the run plays on; the loop region is untouched
             expect(store().playback).toEqual({ kind: "on" });
             expect(store().playheadBeat).toBe(13);
             expect(store().cursorBeat).toBe(14);
+            expect(store().loop).toBe(loop);
         });
 
         it("a jump during an isolated preview keeps the isolated run (UI-17)", async ({
@@ -623,7 +652,9 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             const { result } = await setUp(db, wrapper);
             act(() => {
                 store().selectRange(9, 13);
+                store().setLoop({ start: 9, end: 13 });
             });
+            const loop = store().loop;
             space(result);
             audio.seconds = 4.6;
             frame();
@@ -634,6 +665,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             expect(playChanges).toEqual([false, true]);
             expect(store().playback).toEqual({ kind: "on" });
             expect(store().cursorBeat).toBe(16);
+            expect(store().loop).toBe(loop);
         });
     });
 });

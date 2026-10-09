@@ -105,10 +105,10 @@ export interface PlaybackWindow {
 }
 
 /**
- * What **Play** loops with the start flag pinned (UI-11, UI-17): exactly the window `[S, P)`, with
- * no roll on either side (project owner, V-24). An isolated timeline loops its whole range, as it
- * always has (09-isolation.md). `null` when there is no window at least a beat long (home, nothing
- * selected), and Play plays on instead.
+ * The window Shift+Space plays once (UI-11, UI-17): exactly `[S, P)`, with no roll on either side
+ * (project owner, V-24). An isolated timeline gives its whole range, which Play loops, as it always
+ * has (09-isolation.md). `null` when there is no window at least a beat long (home, nothing
+ * selected).
  */
 export function previewBounds(
     state: PlaybackWindow,

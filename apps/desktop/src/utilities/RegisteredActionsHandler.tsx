@@ -46,7 +46,7 @@ import {
     navigateTimelinePages,
     playTimelinePage,
     toggleTimelinePlayback,
-    toggleTimelineStartPin,
+    toggleTimelineLoop,
 } from "@/timeline/timelineTransport";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import tolgee from "@/global/singletons/Tolgee";
@@ -89,7 +89,7 @@ export enum RegisteredActionsEnum {
     playPause = "playPause",
     showShortcuts = "showShortcuts",
     playPage = "playPage",
-    toggleStartPin = "toggleStartPin",
+    toggleLoop = "toggleLoop",
     toggleMetronome = "toggleMetronome",
 
     // Batch editing
@@ -296,7 +296,7 @@ class KeyboardShortcut {
 /** Playback controls, which leave a held preview frame alone (UI-11) */
 const TRANSPORT_ACTIONS: ReadonlySet<RegisteredActionsEnum> = new Set([
     RegisteredActionsEnum.playPause,
-    RegisteredActionsEnum.toggleStartPin,
+    RegisteredActionsEnum.toggleLoop,
     RegisteredActionsEnum.playPage,
     RegisteredActionsEnum.toggleMetronome,
 ]);
@@ -379,10 +379,10 @@ export const RegisteredActionsObjects: {
         keyboardShortcut: new KeyboardShortcut({ key: " ", shift: true }),
         enumString: "playPage",
     }),
-    toggleStartPin: new RegisteredAction({
-        descKey: "actions.playback.toggleStartPin",
+    toggleLoop: new RegisteredAction({
+        descKey: "actions.playback.toggleLoop",
         keyboardShortcut: new KeyboardShortcut({ key: "c" }),
-        enumString: "toggleStartPin",
+        enumString: "toggleLoop",
     }),
     toggleMetronome: new RegisteredAction({
         descKey: "actions.playback.toggleMetronome",
@@ -1058,10 +1058,10 @@ function RegisteredActionsHandler() {
                     });
                     break;
                 }
-                case RegisteredActionsEnum.toggleStartPin: {
-                    // UI-17: C pins the start flag here, or unpins it; Play loops a pinned flag
+                case RegisteredActionsEnum.toggleLoop: {
+                    // UI-17: C turns looping on over the page being edited, or off
                     if (!timelineMode) break;
-                    toggleTimelineStartPin();
+                    toggleTimelineLoop();
                     break;
                 }
                 case RegisteredActionsEnum.playPause: {

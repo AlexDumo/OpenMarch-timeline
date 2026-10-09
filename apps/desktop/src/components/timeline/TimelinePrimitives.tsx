@@ -198,7 +198,7 @@ const TRANSPORT_TIGHT_PX = 500;
  * or Next goes to the first or last page (as Shift+Q/E do). While playing, page navigation jumps
  * playback to the flag.
  *
- * Play loops from a pinned start flag and shows the flag's bar in its icon (UI-17).
+ * With looping on, Play loops the loop and shows its bar in its icon (UI-17).
  */
 export const TimelineTransport = memo(function TimelineTransport({
     model,
@@ -224,7 +224,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     positionBeat: BeatPosition;
     isPlaying: boolean;
     onPlayingChange?: (isPlaying: boolean) => void;
-    /** The start flag is pinned, so Play loops from it and shows the flag's bar (UI-17) */
+    /** Looping is on, so Play loops and shows the loop's bar (UI-17) */
     playLoops?: boolean;
     /** With no pin, a page is selected (UI-17): Play's tooltip names Shift+Space and C */
     playNext?: "page";
@@ -407,7 +407,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                             isPlaying
                                 ? "Stop"
                                 : playLoops
-                                  ? "Play, looping from the start flag"
+                                  ? "Play the loop"
                                   : "Play"
                         }
                         shortcut={TRANSPORT_SHORTCUTS.play}
@@ -417,10 +417,10 @@ export const TimelineTransport = memo(function TimelineTransport({
                                     ? "Goes back to where you were editing"
                                     : "Stops where it is"
                                 : playLoops
-                                  ? "Loops from the pinned start flag to the playhead. Unpin it (C) to play on from here"
+                                  ? "Loops the yellow bar, wherever the playhead is. C or Loop turns looping off"
                                   : playNext === "page"
                                     ? "Plays on from here. Shift+Space plays this page's move once; C loops it"
-                                    : "Plays on from here. Pin the start flag (C) to loop a move"
+                                    : "Plays on from here. C loops the page you're on"
                         }
                         testId="timeline-play"
                         pressed={isPlaying}
@@ -1891,8 +1891,6 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
 export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     range,
     startFlagBeatIndex,
-    fromStart = false,
-    loopEndBeatIndex,
     startPinned = false,
     onUnpin,
     pinTop = 30,
@@ -1910,17 +1908,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     range: TimelineBeatRange;
     /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
     startFlagBeatIndex?: number;
-    /**
-     * The window is what Play loops (UI-17: the flag is pinned, or the loop
-     * preview is playing): it is drawn in the start flag's color with a bar across its top.
-     * Otherwise the start flag is dimmed.
-     */
-    fromStart?: boolean;
-    /**
-     * The end of a loop over several pages, past the window's end while the playhead steps inside
-     * it (UI-17): the bar and the loop end's grip run to it
-     */
-    loopEndBeatIndex?: number;
     /**
      * The start flag is pinned (UI-10): it stays through navigation. UI-12 draws a pin beside its
      * stem, under the ruler, so a forgotten pin can be seen; clicking the pin unpins (`onUnpin`).
@@ -1940,8 +1927,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     hitHeight?: number;
     /** Page lines the dragged flag snaps to (ui.md UI-2); Alt turns snapping off */
     snapBeats?: readonly number[];
-    /** A dragged handle's new range; `handle` says which ("end" is the loop end's grip, UI-17) */
-    onCommit?: (range: TimelineBeatRange, handle: "start" | "end") => void;
+    onCommit?: (range: TimelineBeatRange) => void;
     onInteractionChange?: (
         interaction: TimelineSelectionInteraction | null,
     ) => void;
@@ -1952,7 +1938,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
 }) {
     const [preview, setPreview] = useState(range);
     const tintRef = useRef<HTMLSpanElement>(null);
-    const barRef = useRef<HTMLSpanElement>(null);
     const previewRef = useRef(range);
     const dragRef = useRef<{
         kind: "start" | "end";
@@ -2055,7 +2040,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             next.startBeatIndex !== range.startBeatIndex ||
             next.endBeatIndex !== range.endBeatIndex
         ) {
-            onCommit?.(next, drag.kind);
+            onCommit?.(next);
         }
     };
 
@@ -2173,7 +2158,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                               beatCount,
                           ),
                       },
-                kind,
             );
         },
     });
@@ -2200,7 +2184,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 </button>
             );
         // UI-10, UI-11: the start flag, where movers leave from. No words: a line and a pennant,
-        // hollow, and filled while its window is what Play loops (UI-17)
+        // hollow (UI-17: the loop is its own bar, `TimelineLoopBar`)
         return (
             <>
                 <button
@@ -2216,7 +2200,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                         className={clsx(
                             "pointer-events-none absolute top-px left-1/2",
                             START_INK.bg,
-                            fromStart ? "w-2" : "w-px",
+                            "w-px",
                         )}
                         style={{ height: Math.max(0, height - 1) }}
                     />
@@ -2272,20 +2256,14 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                             START_INK.text,
                         )}
                     >
-                        {/* A right triangle whose top lines up with the page boxes' (1px down, inside the
-                            ruler's border), so the flag window's bar runs straight out of it. Both are
-                            fills, not strokes, so no edge spills past the stem */}
-                        {fromStart ? (
-                            // Filled: the left edge sits inside the 2px stem
-                            <path d="M0 0 L10 0 L0 10 Z" fill="currentColor" />
-                        ) : (
-                            // Hollow: a 1px outline whose left side is the 1px stem
-                            <path
-                                d="M0 0 L10 0 L0 10 Z M1 1 L1 7.59 L7.59 1 Z"
-                                fill="currentColor"
-                                fillRule="evenodd"
-                            />
-                        )}
+                        {/* A hollow right triangle whose top lines up with the page boxes' (1px down,
+                            inside the ruler's border): a 1px outline whose left side is the 1px stem,
+                            a fill, not a stroke, so no edge spills past it */}
+                        <path
+                            d="M0 0 L10 0 L0 10 Z M1 1 L1 7.59 L7.59 1 Z"
+                            fill="currentColor"
+                            fillRule="evenodd"
+                        />
                     </svg>
                 </button>
             </>
@@ -2295,15 +2273,10 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     // Rounded like the flag, so the window and its bar start on the stem's pixel
     const startX = Math.round(beatToX(preview.startBeatIndex, pixelsPerBeat));
     const endX = Math.round(beatToX(preview.endBeatIndex, pixelsPerBeat));
-    // A loop over several pages runs past the window while the playhead steps inside it (UI-17)
-    const loopEndX =
-        loopEndBeatIndex !== undefined && !dragRef.current
-            ? Math.round(beatToX(loopEndBeatIndex, pixelsPerBeat))
-            : endX;
     const endsOnPlayhead =
         positionBeat !== undefined && preview.endBeatIndex === positionBeat;
     useScrubStretch(
-        [tintRef, barRef],
+        [tintRef],
         endsOnPlayhead ? scrubLine : undefined,
         startX,
         endX,
@@ -2322,7 +2295,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 className={clsx(
                     // 1px down, inside the ruler's border, like the flag and the page boxes
                     "absolute top-px z-30 origin-left",
-                    fromStart ? "bg-yellow/12" : "bg-accent/8",
+                    "bg-accent/8",
                 )}
                 style={{
                     left: startX,
@@ -2330,44 +2303,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     height: height - 1,
                 }}
             />
-            {fromStart && (
-                // UI-11: a thin bar along the ruler's top edge, out of the pennant's top and clear
-                // of the page numbers. UI-17: it only marks what Play loops, so
-                // clicks pass through to the ruler
-                <span
-                    ref={barRef}
-                    data-testid="timeline-from-start-bar"
-                    aria-hidden
-                    className={clsx(
-                        "pointer-events-none absolute top-px z-40 h-3 origin-left",
-                        START_INK.bg,
-                    )}
-                    style={{ left: startX, width: loopEndX - startX }}
-                />
-            )}
-            {fromStart && onCommit && (
-                // UI-17 follow-up: the loop's end gets its own grip, a tab on the bar's right end
-                // in the ruler's top strip, above the page flag's grip (which would resize the
-                // page). Dragging it moves the window's end, snapping to page lines, and keeps the
-                // pin
-                <button
-                    type="button"
-                    data-timeline-interactive="true"
-                    data-testid="timeline-loop-end"
-                    aria-label="Loop end"
-                    title="Drag to change where the loop ends"
-                    {...flagHandlers("end", preview.endBeatIndex)}
-                    className="pointer-events-auto absolute top-0 z-[58] h-10 w-12 -translate-x-full touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize!"
-                    style={{ left: loopEndX + 1 }}
-                >
-                    <span
-                        className={clsx(
-                            "absolute top-px right-0 h-8 w-6 rounded-r-sm",
-                            START_INK.bg,
-                        )}
-                    />
-                </button>
-            )}
             <div className="pointer-events-none absolute inset-0">
                 {flag(
                     "start",
