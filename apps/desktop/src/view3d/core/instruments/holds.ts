@@ -27,7 +27,10 @@ export type HoldFamily =
     | "snare"
     | "tenors"
     | "bass"
-    | "cymbals";
+    | "cymbals"
+    | "flag"
+    | "rifle"
+    | "sabre";
 
 export interface ArmTargets {
     elbow: Vec3;
@@ -613,6 +616,195 @@ const CYMBALS: Record<HoldState, Hold> = {
     },
 };
 
+const FLAG: Record<HoldState, Hold> = {
+    up: {
+        family: "flag",
+        state: "up",
+        // present: the pole vertical in front, right hand high, left hand low
+        right: {
+            elbow: [-0.289, 1.272, 0.12],
+            wrist: [-0.08, 1.25, 0.28],
+            fingers: unit([0, 1, 0]),
+        },
+        left: {
+            elbow: [0.15, 1.225, 0.101],
+            wrist: [0.035, 1.034, 0.242],
+            fingers: unit([0, 1, 0]),
+        },
+        instrument: {
+            origin: [-0.08, 1.25, 0.28],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    carry: {
+        family: "flag",
+        state: "carry",
+        // at the right side, pole vertical, left arm down
+        right: {
+            elbow: [-0.306, 1.233, -0.024],
+            wrist: [-0.3, 1.0, 0.1],
+            fingers: unit([0, 1, 0]),
+        },
+        left: {
+            elbow: [0.231, 1.202, -0.047],
+            wrist: [0.25, 0.95, 0.03],
+            fingers: unit([0, -1, 0]),
+        },
+        instrument: {
+            origin: [-0.3, 1.0, 0.1],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    trail: {
+        family: "flag",
+        state: "trail",
+        // at the right side, pole vertical, left arm down
+        right: {
+            elbow: [-0.306, 1.233, -0.024],
+            wrist: [-0.3, 1.0, 0.1],
+            fingers: unit([0, 1, 0]),
+        },
+        left: {
+            elbow: [0.231, 1.202, -0.047],
+            wrist: [0.25, 0.95, 0.03],
+            fingers: unit([0, -1, 0]),
+        },
+        instrument: {
+            origin: [-0.3, 1.0, 0.1],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+};
+
+const RIFLE: Record<HoldState, Hold> = {
+    up: {
+        family: "rifle",
+        state: "up",
+        // port arms: diagonal across the chest, muzzle up to the left
+        right: {
+            elbow: [-0.293, 1.268, 0.112],
+            wrist: [-0.12, 1.2, 0.3],
+            fingers: unit([0.7, 0.7, 0]),
+        },
+        left: {
+            elbow: [0.331, 1.371, 0.136],
+            wrist: [0.14, 1.45, 0.3],
+            fingers: unit([-0.7, 0.7, 0]),
+        },
+        instrument: {
+            origin: [-0.12, 1.2, 0.3],
+            bellAxis: [0.6, 0.8, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    carry: {
+        family: "rifle",
+        state: "carry",
+        // right shoulder arms: the rifle vertical at the right shoulder, left arm down
+        right: {
+            elbow: [-0.313, 1.299, -0.131],
+            wrist: [-0.25, 1.35, 0.12],
+            fingers: unit([0, 1, 0]),
+        },
+        left: {
+            elbow: [0.231, 1.202, -0.047],
+            wrist: [0.25, 0.95, 0.03],
+            fingers: unit([0, -1, 0]),
+        },
+        instrument: {
+            origin: [-0.25, 1.35, 0.12],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [1.0, 0.0, 0.0],
+        },
+    },
+    trail: {
+        family: "rifle",
+        state: "trail",
+        // right shoulder arms: the rifle vertical at the right shoulder, left arm down
+        right: {
+            elbow: [-0.313, 1.299, -0.131],
+            wrist: [-0.25, 1.35, 0.12],
+            fingers: unit([0, 1, 0]),
+        },
+        left: {
+            elbow: [0.231, 1.202, -0.047],
+            wrist: [0.25, 0.95, 0.03],
+            fingers: unit([0, -1, 0]),
+        },
+        instrument: {
+            origin: [-0.25, 1.35, 0.12],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [1.0, 0.0, 0.0],
+        },
+    },
+};
+
+const SABRE: Record<HoldState, Hold> = {
+    up: {
+        family: "sabre",
+        state: "up",
+        // present: the blade vertical in front of the right shoulder
+        right: {
+            elbow: [-0.301, 1.293, 0.129],
+            wrist: [-0.1, 1.3, 0.3],
+            fingers: unit([0, 1, 0]),
+        },
+        left: {
+            elbow: [0.231, 1.202, -0.047],
+            wrist: [0.25, 0.95, 0.03],
+            fingers: unit([0, -1, 0]),
+        },
+        instrument: {
+            origin: [-0.1, 1.3, 0.3],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    carry: {
+        family: "sabre",
+        state: "carry",
+        // at the right hip, blade up along the shoulder
+        right: {
+            elbow: [-0.306, 1.233, -0.024],
+            wrist: [-0.3, 1.0, 0.1],
+            fingers: unit([0, 1, 0]),
+        },
+        left: {
+            elbow: [0.231, 1.202, -0.047],
+            wrist: [0.25, 0.95, 0.03],
+            fingers: unit([0, -1, 0]),
+        },
+        instrument: {
+            origin: [-0.3, 1.0, 0.1],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    trail: {
+        family: "sabre",
+        state: "trail",
+        // at the right hip, blade up along the shoulder
+        right: {
+            elbow: [-0.306, 1.233, -0.024],
+            wrist: [-0.3, 1.0, 0.1],
+            fingers: unit([0, 1, 0]),
+        },
+        left: {
+            elbow: [0.231, 1.202, -0.047],
+            wrist: [0.25, 0.95, 0.03],
+            fingers: unit([0, -1, 0]),
+        },
+        instrument: {
+            origin: [-0.3, 1.0, 0.1],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+};
+
 const TABLE: Record<HoldFamily, Record<HoldState, Hold>> = {
     brass: BRASS,
     trombone: TROMBONE,
@@ -624,6 +816,9 @@ const TABLE: Record<HoldFamily, Record<HoldState, Hold>> = {
     tenors: TENORS,
     bass: BASS,
     cymbals: CYMBALS,
+    flag: FLAG,
+    rifle: RIFLE,
+    sabre: SABRE,
 };
 
 export function hold(family: HoldFamily, state: HoldState): Hold {

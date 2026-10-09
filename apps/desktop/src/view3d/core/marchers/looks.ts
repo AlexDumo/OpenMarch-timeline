@@ -20,7 +20,16 @@ import {
     type Carry,
     type Finish,
 } from "../instruments/catalog";
+import type { ModelOptions } from "../instruments/model";
 import type { HoldState } from "../instruments/holds";
+
+const withOptions = (
+    carry: Carry | null,
+    options?: ModelOptions,
+): Carry | null =>
+    carry && options && Object.keys(options).length > 0
+        ? { ...carry, options }
+        : carry;
 
 /** om-pose's seven body types (`assets/body-v4u/<type>.glb`). */
 export const BODY_TYPES = [
@@ -176,6 +185,7 @@ export function sectionUniform(
     section: string,
     fill: RgbaColor | null | undefined,
     hold: HoldState = "up",
+    options?: ModelOptions,
 ): UniformLook {
     const primary = fill ? rgbToNumber(fill) : DEFAULT_PRIMARY;
     return {
@@ -197,7 +207,7 @@ export function sectionUniform(
             hat: !isGuard(section),
             hatType: "shako",
             instrument: "none",
-            carry: carryForSection(section),
+            carry: withOptions(carryForSection(section), options),
             finish: "brass",
             hold,
         },

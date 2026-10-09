@@ -23,7 +23,22 @@ export type WoodwindModelId =
     | "tenorSax"
     | "bariSax";
 export type BatteryModelId = "snare" | "tenors" | "bass" | "cymbals";
-export type ModelId = BrassModelId | WoodwindModelId | BatteryModelId;
+export type GuardModelId =
+    | "flag6"
+    | "swingFlag"
+    | "doubleSwingFlag"
+    | "rifle"
+    | "sabre";
+export type ModelId =
+    | BrassModelId
+    | WoodwindModelId
+    | BatteryModelId
+    | GuardModelId;
+
+/** Per-model options: a bass drum's head diameter in inches. */
+export interface ModelOptions {
+    bassInches?: number;
+}
 
 /** The bones instrument pieces ride: the hands, or the chest for a carrier. */
 export type InstrumentBone = "handR" | "handL" | "spine002";
@@ -32,6 +47,8 @@ export type Detail = "high" | "low";
 
 export interface InstrumentModel {
     id: ModelId;
+    /** The options the model was built with, when any. */
+    options?: ModelOptions;
     pieces: Piece[];
     /** The bone pieces ride unless they name their own. Default: the right hand. */
     bone?: InstrumentBone;

@@ -12,7 +12,11 @@ import type {
 } from "@/view3d/core/instruments/model";
 import type { Finish } from "@/view3d/core/instruments/catalog";
 import type { Hold } from "@/view3d/core/instruments/holds";
-import { PART_METAL } from "@/view3d/core/instruments/mesh";
+import {
+    PART_METAL,
+    PART_SHELL,
+    PART_SILK,
+} from "@/view3d/core/instruments/mesh";
 import {
     instancedSkinning,
     type Bake,
@@ -51,6 +55,8 @@ export function instrumentGeometry(
     hold: Hold,
     model: InstrumentModel,
     finish: Finish = "brass",
+    /** sRGB: the section's color, for drum shells and flag silks. */
+    sectionColor = 0xffffff,
 ): THREE.BufferGeometry {
     const place = placement(hold);
     /** Per bone: its index and the matrix taking placed body-frame points to the bind pose. */
@@ -83,6 +89,7 @@ export function instrumentGeometry(
         return f;
     };
     const metal = linear(FINISH_COLORS[finish]);
+    const section = linear(sectionColor);
     const pos: number[] = [];
     const nrm: number[] = [];
     const col: number[] = [];
@@ -112,6 +119,8 @@ export function instrumentGeometry(
                 .normalize();
             nrm.push(v.x, v.y, v.z);
             if (piece.part === PART_METAL) col.push(metal.r, metal.g, metal.b);
+            else if (piece.part === PART_SHELL || piece.part === PART_SILK)
+                col.push(section.r, section.g, section.b);
             else if (piece.colors)
                 col.push(
                     piece.colors[i],

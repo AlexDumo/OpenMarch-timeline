@@ -382,6 +382,7 @@ export class MarcherBodies {
             h,
             model,
             g.look.options.finish,
+            g.look.colors.primary,
         );
         if (!this.hornMaterial) {
             // in `materials` so writeFrame drives its clip clock and dispose frees it

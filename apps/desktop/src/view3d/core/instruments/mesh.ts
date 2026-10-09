@@ -30,6 +30,8 @@ export const PART_SHELL = 19;
 export const PART_HEAD = 20;
 export const PART_BLACK = 22;
 export const PART_WOOD = 23;
+/** A flag's silk, colored like the section. */
+export const PART_SILK = 24;
 
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const cross = (a: Vec3, b: Vec3): Vec3 => [
