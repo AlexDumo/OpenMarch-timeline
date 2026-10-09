@@ -125,12 +125,17 @@ beforeEach(() => {
     vi.mocked(followAgainOn).mockClear();
 });
 
-const show = (marcherIds: number[]) =>
+const show = (
+    marcherIds: number[],
+    nameOf?: (id: number) => string | undefined,
+) =>
     render(
         <TolgeeProvider tolgee={tolgee} fallback="Loading...">
-            <TimelineHoldLine marcherIds={marcherIds} />
+            <TimelineHoldLine marcherIds={marcherIds} nameOf={nameOf} />
         </TolgeeProvider>,
     );
+
+const otName = (id: number) => `OT${id}`;
 
 const line = () => screen.queryByTestId("timeline-hold-line");
 const keepHere = () => screen.queryByTestId("timeline-keep-here");
@@ -138,20 +143,32 @@ const followAgain = () => screen.queryByTestId("timeline-follow-again");
 const following = () => screen.queryByTestId("timeline-following-pages");
 
 describe("TimelineHoldLine", () => {
-    it("says a marcher holding on the page has held since its last move, and jumps there", () => {
+    it("says a marcher holding on the page has held since its last move, and jumps there", async () => {
         mocks.selectedPage = PAGES[3];
         show([1]);
         expect(line()?.textContent).toBe("Hold from Page 2");
+        // Its tooltip says where the link goes, and why
+        fireEvent.focus(line()!);
+        expect(
+            (
+                await screen.findAllByText(
+                    "Go to Page 2, where these marchers last moved",
+                )
+            ).length,
+        ).toBeGreaterThan(0);
         fireEvent.click(line()!);
         expect(useTimelineSelectionStore.getState().playheadBeat).toBe(9);
     });
 
-    it("says a marcher that never moved holds from the start, not from the first page by name, and jumps there", () => {
+    it("says a marcher that never moved holds from the start, not from the first page by name, and jumps there", async () => {
         mocks.selectedPage = PAGES[3];
         useTimelineSelectionStore.getState().seek(17);
         show([3]);
         expect(line()?.textContent).toBe("Hold from the start");
-        expect(line()).toHaveAttribute("title", "Go to the start");
+        fireEvent.focus(line()!);
+        expect(
+            (await screen.findAllByText("Go to the start")).length,
+        ).toBeGreaterThan(0);
         fireEvent.click(line()!);
         expect(useTimelineSelectionStore.getState().playheadBeat).toBe(0);
     });
@@ -188,9 +205,16 @@ describe("TimelineHoldLine", () => {
         cleanup();
         mocks.selectedPage = PAGES[2];
         show([1, 3]);
-        // Marcher 1 holds since page 2, marcher 3 since the start (nothing to keep it from)
-        expect(line()?.textContent).toBe("Some of these marchers hold here");
+        // Marcher 1 holds since page 2, marcher 3 since the start: both can be kept
+        expect(line()?.textContent).toBe("These marchers hold here");
         expect(keepHere()).not.toBeNull();
+        cleanup();
+        show([1, 2]);
+        // Marcher 2 moves on page 3
+        expect(line()?.textContent).toBe("Some of these marchers hold here");
+        expect(keepHere()).toHaveAccessibleDescription(
+            "Keep 1 of the 2 selected on Page 3, so editing Page 2 won't move them here",
+        );
         cleanup();
         show([1]);
         expect(line()?.textContent).toBe("Hold from Page 2");
@@ -248,10 +272,10 @@ describe("TimelineHoldLine", () => {
                 keepHere(),
             );
             expect(keepHere()).toHaveAccessibleDescription(
-                "Keep 1 of these marchers on Page 3, so editing Page 2 won't move them here",
+                "Keep 1 of the 2 selected on Page 3, so editing Page 2 won't move them here",
             );
             expect(followAgain()).toHaveAccessibleDescription(
-                "Let 1 of these marchers follow Page 2 again, so editing Page 2 moves them here too",
+                "Let 1 of the 2 selected follow Page 2 again, so editing Page 2 moves them here too",
             );
             fireEvent.click(keepHere()!);
             expect(keepOnPage).toHaveBeenCalledWith({ start: 9, end: 17 }, [1]);
@@ -289,11 +313,58 @@ describe("TimelineHoldLine", () => {
             );
         });
 
-        it("offers nothing to keep for marchers that never moved", () => {
+        it("offers Keep here for marchers that never moved, ahead of any move", () => {
             show([3]);
             expect(line()?.textContent).toBe("Hold from the start");
-            expect(keepHere()).toBeNull();
+            expect(keepHere()).toHaveAccessibleDescription(
+                "Keep these marchers on Page 3, so editing earlier pages won't move them here",
+            );
+            fireEvent.click(keepHere()!);
+            expect(keepOnPage).toHaveBeenCalledWith({ start: 9, end: 17 }, [3]);
+            // Every later page follows them: the quiet line doesn't say so
             expect(following()).toBeNull();
+        });
+
+        it("names the marchers in the tooltips, up to three", () => {
+            show([1], otName);
+            expect(keepHere()).toHaveAccessibleDescription(
+                "Keep OT1 on Page 3, so editing Page 2 won't move them here",
+            );
+            cleanup();
+            show([1, 4], otName);
+            expect(keepHere()).toHaveAccessibleDescription(
+                "Keep OT1 (1 of the 2 selected) on Page 3, so editing Page 2 won't move them here",
+            );
+            expect(followAgain()).toHaveAccessibleDescription(
+                "Let OT4 (1 of the 2 selected) follow Page 2 again, so editing Page 2 moves them here too",
+            );
+            cleanup();
+            show([4], otName);
+            expect(followAgain()).toHaveAccessibleDescription(
+                "Let OT4 follow Page 2 again, so editing Page 2 moves them here too",
+            );
+        });
+
+        it("says (K) on the button K would run here", async () => {
+            show([1], otName);
+            expect(keepHere()).toHaveAttribute("aria-keyshortcuts", "K");
+            fireEvent.focus(keepHere()!);
+            expect(
+                (
+                    await screen.findAllByText(
+                        "Keep OT1 on Page 3, so editing Page 2 won't move them here (K)",
+                    )
+                ).length,
+            ).toBeGreaterThan(0);
+            cleanup();
+            // Kept here: K lets them follow again
+            show([4]);
+            expect(followAgain()).toHaveAttribute("aria-keyshortcuts", "K");
+            cleanup();
+            // Some follow, some kept: K keeps the rest, so only Keep here says K
+            show([1, 4]);
+            expect(keepHere()).toHaveAttribute("aria-keyshortcuts", "K");
+            expect(followAgain()).not.toHaveAttribute("aria-keyshortcuts");
         });
     });
 

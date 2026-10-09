@@ -26,6 +26,17 @@ import type { TimelineBeatRange } from "./TimelineViewModel";
 const ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
 
+/** A shortcut after an entry's words, as the transport's popover shows Ctrl+M */
+const SHORTCUT_CLASS = "text-text-subtitle ml-auto pl-16 font-mono text-[11px]";
+
+/** The entry's key, right-aligned and quiet; nothing without one. */
+const MenuShortcut = ({ keys }: { keys?: string }) =>
+    keys ? (
+        <span className={SHORTCUT_CLASS} data-testid="timeline-menu-shortcut">
+            {keys}
+        </span>
+    ) : null;
+
 /** The menus' panel style */
 export const TIMELINE_MENU_CONTENT_CLASS =
     "bg-modal text-text rounded-6 border-stroke shadow-modal z-50 flex min-w-[180px] flex-col gap-4 border p-4 backdrop-blur-md";
@@ -157,6 +168,9 @@ export interface TimelineKeepHereMenu {
     readonly stateFor: (pageId: string | number) => {
         readonly canKeep: boolean;
         readonly canFollow: boolean;
+        /** The key that runs the entry from here (**K**), shown after it */
+        readonly keepShortcut?: string;
+        readonly followShortcut?: string;
     } | null;
     readonly onKeep: (pageId: string | number) => void;
     readonly onFollow: (pageId: string | number) => void;
@@ -313,6 +327,7 @@ export function useTimelineRangeMenu({
                             <DropdownMenu.Item
                                 data-testid="timeline-range-menu-keep-here"
                                 disabled={!keepState.canKeep}
+                                aria-keyshortcuts={keepState.keepShortcut}
                                 onSelect={() =>
                                     menu?.keepHere?.onKeep(open.target.pageId!)
                                 }
@@ -320,10 +335,12 @@ export function useTimelineRangeMenu({
                             >
                                 <LinkSimpleHorizontalBreakIcon size={14} />
                                 Keep selected marchers here
+                                <MenuShortcut keys={keepState.keepShortcut} />
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
                                 data-testid="timeline-range-menu-follow-again"
                                 disabled={!keepState.canFollow}
+                                aria-keyshortcuts={keepState.followShortcut}
                                 onSelect={() =>
                                     menu?.keepHere?.onFollow(
                                         open.target.pageId!,
@@ -333,6 +350,7 @@ export function useTimelineRangeMenu({
                             >
                                 <LinkSimpleHorizontalIcon size={14} />
                                 Let selected marchers follow again
+                                <MenuShortcut keys={keepState.followShortcut} />
                             </DropdownMenu.Item>
                             <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
                         </>

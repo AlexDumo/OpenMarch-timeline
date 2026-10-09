@@ -544,6 +544,41 @@ describeDbTests("Keep later pages: page edits", (it) => {
         expect(await snapshot(db)).toEqual(kept);
     });
 
+    it("keeps a marcher that never moved, ahead of any move: a later first move doesn't reach the kept page", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { c } = await show(db);
+        const home = await atFlags(db, c);
+        expect(await stateOn(db, PAGE3, c)).toBe("follows");
+        const result = await keepMarchersOnPage({
+            db,
+            pageBox: PAGE3,
+            marcherIds: [c],
+        });
+        expect(result).toEqual({ changed: [c], skipped: [] });
+        expect(await stateOn(db, PAGE3, c)).toBe("kept");
+        // Nothing moved: it's kept where it stands, its starting spot
+        expect(await atFlags(db, c)).toEqual(home);
+
+        // Its first move, on page 2: page 3 walks back to the kept spot, page 4 holds there
+        await move(db, PAGE2, [{ marcherId: c, xy: ELSEWHERE }]);
+        expect((await atFlags(db, c)).slice(2)).toEqual([
+            ELSEWHERE,
+            home[3]!,
+            home[4]!,
+        ]);
+        expect(await stateOn(db, PAGE3, c)).toBe("kept");
+
+        // Follow again takes it back: page 3 follows page 2
+        await followAgainOnPage({ db, pageBox: PAGE3, marcherIds: [c] });
+        expect((await atFlags(db, c)).slice(2)).toEqual([
+            ELSEWHERE,
+            ELSEWHERE,
+            ELSEWHERE,
+        ]);
+    });
+
     it("the converter writes no kept markers", async ({
         db,
         marchersAndPages: _,
@@ -653,6 +688,18 @@ describeDbTests("Keep later pages: history round trips", (it) => {
                 at: new Map([[a, UP]]),
             });
             await expectNumberOfChanges.test(db, 1, state);
+        },
+    );
+
+    testWithHistory(
+        "keep a marcher that never moved, then its first move: one undo group each",
+        async ({ db, marchersAndPages: _, expectNumberOfChanges }) => {
+            const { c } = await show(db);
+            const state = await expectNumberOfChanges.getDatabaseState(db);
+            await keepMarchersOnPage({ db, pageBox: PAGE3, marcherIds: [c] });
+            await timelineResolverSettled();
+            await move(db, PAGE2, [{ marcherId: c, xy: ELSEWHERE }]);
+            await expectNumberOfChanges.test(db, 2, state);
         },
     );
 });

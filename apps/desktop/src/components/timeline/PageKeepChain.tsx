@@ -6,7 +6,9 @@ import {
 } from "@phosphor-icons/react";
 import {
     pageChainWords,
+    type KeepToggle,
     type KeepTranslate,
+    type MarcherNameOf,
     type PageChainWords,
     type PageKeepState,
 } from "@/timeline/timelineKeepLater";
@@ -21,7 +23,19 @@ import type { TimelineBeatRange } from "./TimelineViewModel";
 /** A page box's chain (`pageChainWords`), with what a click does. */
 export interface PageKeepChain extends PageChainWords {
     readonly onToggle: () => void;
+    /** **K** does what a click does, so the tooltip says so */
+    readonly withK?: boolean;
 }
+
+/** The keyboard shortcut that toggles keep (`toggleKeepOnPage`), as menus and tooltips show it */
+export const KEEP_SHORTCUT = "K";
+
+/** Whether **K** (`keep`) would do `action` on the page `pageId`. */
+const kDoes = (
+    k: KeepToggle | null | undefined,
+    pageId: string | number,
+    action: KeepToggle["action"],
+) => !!k && String(k.pageId) === String(pageId) && k.action === action;
 
 /** Each page box's chain, by page id; boxes without one aren't in it. */
 export type PageKeepChains = ReadonlyMap<string | number, PageKeepChain>;
@@ -29,10 +43,14 @@ export type PageKeepChains = ReadonlyMap<string | number, PageKeepChain>;
 /**
  * The page box menu's keep entries (`TimelineKeepHereMenu`) from the selection's keep states:
  * **Keep selected marchers here** for the ones that follow on the box, **Let selected marchers
- * follow again** for the kept ones. Neither shows without a selection.
+ * follow again** for the kept ones. Neither shows without a selection. The entry **K** would run
+ * shows the key.
+ *
+ * @param k what **K** does from the current page (`keepToggle`)
  */
 export function keepHereMenu(
     states: readonly PageKeepState[],
+    k: KeepToggle | null = null,
 ): TimelineKeepHereMenu {
     const of = (pageId: string | number) =>
         states.find((s) => String(s.pageId) === String(pageId));
@@ -43,6 +61,12 @@ export function keepHereMenu(
                 ? {
                       canKeep: state.follows.length > 0,
                       canFollow: state.kept.length > 0,
+                      keepShortcut: kDoes(k, pageId, "keep")
+                          ? KEEP_SHORTCUT
+                          : undefined,
+                      followShortcut: kDoes(k, pageId, "follow")
+                          ? KEEP_SHORTCUT
+                          : undefined,
                   }
                 : null;
         },
@@ -64,12 +88,16 @@ const NO_CHAINS: PageKeepChains = new Map();
 /**
  * The chains on the page boxes for the selected marchers (UI-18 keep later pages): one per box
  * they follow into, or were kept on. None without a selection (owner, 2026-10-09). A click keeps
- * or lets follow again exactly the marchers its words count, as one undo step.
+ * or lets follow again exactly the marchers its words name, as one undo step.
  *
  * @param states the selection's keep states (`usePageKeepStates`)
+ * @param nameOf the selected marchers' names, for the words
+ * @param k what **K** does from the current page (`keepToggle`): that chain's tooltip says (K)
  */
 export function usePageKeepChains(
     states: readonly PageKeepState[],
+    nameOf?: MarcherNameOf,
+    k: KeepToggle | null = null,
 ): PageKeepChains {
     const { t } = useTranslate();
     return useMemo(() => {
@@ -78,10 +106,11 @@ export function usePageKeepChains(
             t(key, { defaultValue, ...params });
         const chains = new Map<number, PageKeepChain>();
         for (const state of states) {
-            const words = pageChainWords(state, translate);
+            const words = pageChainWords(state, translate, nameOf);
             if (!words) continue;
             chains.set(state.pageId, {
                 ...words,
+                withK: kDoes(k, state.pageId, words.action),
                 onToggle: () =>
                     void (words.action === "keep" ? keepOnPage : followAgainOn)(
                         state.box,
@@ -90,7 +119,7 @@ export function usePageKeepChains(
             });
         }
         return chains;
-    }, [states, t]);
+    }, [states, t, nameOf, k]);
 }
 
 /** The chain's size: a 20px target in the 28px ruler */
@@ -111,19 +140,32 @@ export function chainOffset(boxWidth: number): number {
 const BASE =
     "focus-visible:ring-accent rounded-6 absolute top-[4px] z-30 flex items-center justify-center outline-hidden focus-visible:ring-2";
 
+/**
+ * Kept and linked are told apart at a glance (wp19, after the final study found purple and grey
+ * too close): kept is a filled chip, linked only an outline, and a mix an outline in the accent
+ * with a filled count.
+ */
 const KIND_CLASS: Record<PageKeepChain["kind"], string> = {
-    // Linked: plain ink, the accent on hover
-    follows: "text-text hover:bg-accent/15 hover:text-accent",
-    // Kept: broken, in the accent, filled, so it can't be read as linked
-    kept: "bg-accent text-text-invert hover:opacity-80",
-    // Some kept: linked, with the kept count
-    mixed: "text-text hover:bg-accent/15 hover:text-accent",
+    // Linked: a quiet outline, the accent on hover
+    follows:
+        "border border-text/30 text-text/70 hover:border-accent hover:bg-accent/15 hover:text-accent",
+    // Kept: broken, on a filled accent chip, so it can't be read as linked
+    kept: "bg-accent text-text-invert shadow-sm hover:opacity-85",
+    // Some kept: linked, outlined in the accent, with the kept count filled
+    mixed: "border border-accent text-accent hover:bg-accent/15",
+};
+
+const KIND_WEIGHT: Record<PageKeepChain["kind"], "regular" | "bold"> = {
+    follows: "regular",
+    kept: "bold",
+    mixed: "bold",
 };
 
 /**
- * A page box's chain (UI-18 keep later pages), a sibling drawn over the box's top left: linked
- * where the selected marchers follow into the page, broken in the accent where they were kept,
- * and linked with the kept count for a mix. Its tooltip names whom a click changes. The press
+ * A page box's chain (UI-18 keep later pages), a sibling drawn over the box's top left: an
+ * outlined link where the selected marchers follow into the page, broken on a filled accent chip
+ * where they were kept, and an accent outline with the kept count for a mix. Its tooltip names
+ * whom a click changes, and (K) where **K** does the same. The press
  * never reaches the box, so it doesn't select, scrub or drag it; a right-click opens the box's
  * menu, which has the same commands.
  */
@@ -149,7 +191,13 @@ export function PageKeepChainButton({
     const stop = (event: { stopPropagation: () => void }) =>
         event.stopPropagation();
     return (
-        <HintTooltip label={chain.label} hint={chain.hint} side="top">
+        <HintTooltip
+            label={
+                chain.withK ? `${chain.label} (${KEEP_SHORTCUT})` : chain.label
+            }
+            hint={chain.hint}
+            side="top"
+        >
             <button
                 type="button"
                 data-timeline-interactive="true"
@@ -157,6 +205,7 @@ export function PageKeepChainButton({
                 data-chain={chain.kind}
                 {...timelineRangeTargetProps(range, undefined, pageId)}
                 aria-label={`Page ${pageLabel}: ${chain.label}. ${chain.hint}`}
+                aria-keyshortcuts={chain.withK ? KEEP_SHORTCUT : undefined}
                 className={`${BASE} ${KIND_CLASS[chain.kind]}`}
                 style={{ left, width: CHAIN_SIZE, height: CHAIN_SIZE }}
                 onPointerDown={stop}
@@ -167,7 +216,7 @@ export function PageKeepChainButton({
                     chain.onToggle();
                 }}
             >
-                <Icon size={16} weight="bold" aria-hidden />
+                <Icon size={16} weight={KIND_WEIGHT[chain.kind]} aria-hidden />
                 {chain.kind === "mixed" && (
                     <span
                         aria-hidden

@@ -8,6 +8,7 @@ import type { TimelineKeepHereMenu } from "../TimelineRangeMenu";
 import {
     CHAIN_INSET,
     chainOffset,
+    keepHereMenu,
     type PageKeepChain,
     type PageKeepChains,
 } from "../PageKeepChain";
@@ -71,7 +72,7 @@ const chain = (
             ? "Keep 2 marchers on Page 3"
             : kind === "kept"
               ? "2 marchers kept on Page 3"
-              : "2 of 8 kept on Page 3",
+              : "2 of the 8 selected are kept on Page 3 (OT1, OT8)",
     hint:
         kind === "follows"
             ? "They won't follow Page 2 any more"
@@ -148,6 +149,8 @@ describe("the chains on the page boxes", () => {
         const [button] = chains();
         expect(button).toHaveAttribute("data-chain", "kept");
         expect(button!.className).toMatch(/\bbg-accent\b/);
+        expect(button!.className).toMatch(/\btext-text-invert\b/);
+        expect(button!.className).not.toMatch(/\bborder\b/);
         expect(button).toHaveAccessibleName(
             "Page 3: 2 marchers kept on Page 3. Click to follow Page 2 again",
         );
@@ -155,15 +158,40 @@ describe("the chains on the page boxes", () => {
         expect(kept.onToggle).toHaveBeenCalledTimes(1);
     });
 
+    it("a linked chain is only an outline, never filled", () => {
+        show({ keepChains: new Map([[3, chain("follows")]]) });
+        const [button] = chains();
+        expect(button!.className).toMatch(/\bborder\b/);
+        expect(button!.className).not.toMatch(/(^|\s)bg-accent(\s|$)/);
+    });
+
+    it("says (K) where K does what a click does, and nowhere else", async () => {
+        show({
+            keepChains: new Map([
+                [3, chain("follows", { withK: true })],
+                [4, chain("follows")],
+            ]),
+        });
+        const [here, next] = chains();
+        expect(here).toHaveAttribute("aria-keyshortcuts", "K");
+        expect(next).not.toHaveAttribute("aria-keyshortcuts");
+        fireEvent.focus(here!);
+        expect(
+            (await screen.findAllByText("Keep 2 marchers on Page 3 (K)"))
+                .length,
+        ).toBeGreaterThan(0);
+    });
+
     it("a mixed chain shows the kept count", () => {
         show({ keepChains: new Map([[3, chain("mixed")]]) });
         const [button] = chains();
         expect(button).toHaveAttribute("data-chain", "mixed");
+        expect(button!.className).toMatch(/\bborder-accent\b/);
         expect(screen.getByTestId("page-keep-chain-count").textContent).toBe(
             "2",
         );
         expect(button).toHaveAccessibleName(
-            "Page 3: 2 of 8 kept on Page 3. Click to keep the other 6 too",
+            "Page 3: 2 of the 8 selected are kept on Page 3 (OT1, OT8). Click to keep the other 6 too",
         );
     });
 
@@ -196,7 +224,12 @@ describe("the chains on the page boxes", () => {
 
 describe("the page box menu's keep entries", () => {
     const menu = (
-        state: { canKeep: boolean; canFollow: boolean } | null,
+        state: {
+            canKeep: boolean;
+            canFollow: boolean;
+            keepShortcut?: string;
+            followShortcut?: string;
+        } | null,
     ): TimelineKeepHereMenu => ({
         stateFor: vi.fn(() => state),
         onKeep: vi.fn(),
@@ -230,6 +263,53 @@ describe("the page box menu's keep entries", () => {
         expect(follow.textContent).toBe("Let selected marchers follow again");
         fireEvent.click(follow);
         expect(keepHere.onFollow).toHaveBeenCalledWith("3");
+    });
+
+    it("shows K after the entry K would run, quietly", () => {
+        const keepHere = menu({
+            canKeep: true,
+            canFollow: false,
+            keepShortcut: "K",
+        });
+        show({ keepHere });
+        fireEvent.contextMenu(screen.getByRole("button", { name: "Page 3" }));
+        const keep = item("timeline-range-menu-keep-here")!;
+        expect(keep.textContent).toBe("Keep selected marchers hereK");
+        expect(keep).toHaveAttribute("aria-keyshortcuts", "K");
+        const [shortcut] = screen.getAllByTestId("timeline-menu-shortcut");
+        expect(shortcut!.className).toMatch(/text-text-subtitle/);
+        expect(shortcut!.className).toMatch(/ml-auto/);
+        expect(item("timeline-range-menu-follow-again")!.textContent).toBe(
+            "Let selected marchers follow again",
+        );
+    });
+
+    it("names K only on the entry K would run from the current page", () => {
+        const state = (pageId: number, follows: number[], kept: number[]) => ({
+            pageId,
+            pageName: String(pageId),
+            box: { start: pageId * 8 - 15, end: pageId * 8 - 7 },
+            follows,
+            fromStart: [],
+            kept,
+            from: ["2"],
+            selected: 2,
+        });
+        const states = [state(3, [1], [2]), state(4, [1, 2], [])];
+        const menuFor = keepHereMenu(states, {
+            action: "keep",
+            pageId: 3,
+            box: states[0]!.box,
+            marcherIds: [1],
+        });
+        expect(menuFor.stateFor("3")).toEqual({
+            canKeep: true,
+            canFollow: true,
+            keepShortcut: "K",
+            followShortcut: undefined,
+        });
+        expect(menuFor.stateFor(4)?.keepShortcut).toBeUndefined();
+        expect(keepHereMenu(states).stateFor(3)?.keepShortcut).toBeUndefined();
     });
 
     it("has no keep entries with nothing selected", () => {
