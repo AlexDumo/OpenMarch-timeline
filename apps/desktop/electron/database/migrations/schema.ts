@@ -626,6 +626,31 @@ export const timeline_slot_destinations = sqliteTable(
 );
 
 /**
+ * A **kept** spot (ADR 0001 amendment 2026-10-09): the marcher's own zero-motion move over a page
+ * box that the designer kept there, so edits of earlier pages stop at it. The move itself is an
+ * ordinary one-slot shapeless transition and its assignment; this row only marks that
+ * assignment as kept, so it can be told apart from a move that happens to go nowhere.
+ *
+ * App data, not resolver data: it isn't in `timeline_change_log` and the resolver never reads it.
+ * The assignment id is the rowid, so undo restores the same row (C-2). Deleting the assignment
+ * cascades here; no trigger reads this table, so undo, which replays with foreign keys off, may
+ * re-insert it before its assignment (C-1).
+ */
+export const timeline_kept_assignments = sqliteTable(
+    "timeline_kept_assignments",
+    {
+        assignment_id: integer()
+            .primaryKey()
+            .references(() => timeline_assignments.id, {
+                onDelete: "cascade",
+            }),
+        created_at: text()
+            .notNull()
+            .default(sql`(CURRENT_TIMESTAMP)`),
+    },
+);
+
+/**
  * Bookkeeping, not data: one row per changed timeline row, written by triggers and drained by
  * the write wrapper inside each transaction (spec §10.2). Has no history triggers.
  */
