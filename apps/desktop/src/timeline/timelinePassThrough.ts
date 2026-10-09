@@ -11,7 +11,10 @@ import {
     selectionIsRange,
     useTimelineSelectionStore,
     type PageBox,
+    type StoredTimelineMembership,
 } from "@/stores/TimelineSelectionStore";
+import { getPageCountAt } from "@/components/timeline/TimelineGeometry";
+import { moveLabels } from "./timelineViewModel";
 import { editSurpriseToastId } from "@/utilities/moveThemToo";
 import { toastTimelineError } from "./timelineErrorMessages";
 
@@ -44,14 +47,84 @@ const joinList = (items: readonly string[]): string =>
         ? (items[0] ?? "")
         : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 
-/** "Page 2" for a range that is a page's box, otherwise "the move over beats [16, 40)". */
-export function moveName(range: BeatRange, boxes: readonly PageBox[]): string {
+/** A stored move, for its name (UI-14): its id, range and stored name. */
+export type PassThroughMove = Pick<
+    StoredTimelineMembership,
+    "id" | "start" | "end" | "name"
+>;
+
+/**
+ * Where `range` is, in pages and counts as the field line counts them (UI-12, UI-13), from the
+ * page boxes: "Page 2, counts 1–4" (or "count 3") inside one page, "Page 2 count 5 to Page 3
+ * count 4" across a flag, "after Page 4, counts 1–4" past the last flag. `null` where a count
+ * has no named page. Never beats. `span` says which of the three it is.
+ */
+export function rangeWhere(
+    range: BeatRange,
+    boxes: readonly PageBox[],
+): { readonly where: string; readonly span: "page" | "after" | "flag" } | null {
+    const model = {
+        pages: boxes.map((b) => ({
+            id: b.start,
+            label: b.name ?? "",
+            atBeat: b.start,
+            endBeat: b.end,
+            isInitial: false,
+        })),
+    };
+    // A move's first count is the beat after its start
+    const from = getPageCountAt(model, range.start + 1);
+    const to = getPageCountAt(model, range.end);
+    if (from.home || to.home || !from.pageLabel || !to.pageLabel) return null;
+    const counts =
+        from.count === to.count
+            ? `count ${from.count}`
+            : `counts ${from.count}–${to.count}`;
+    if (from.pageLabel === to.pageLabel && !!from.after === !!to.after)
+        return from.after
+            ? {
+                  where: `after Page ${from.pageLabel}, ${counts}`,
+                  span: "after",
+              }
+            : { where: `Page ${from.pageLabel}, ${counts}`, span: "page" };
+    const at = (c: typeof from) =>
+        c.after
+            ? `count ${c.count} after Page ${c.pageLabel}`
+            : `Page ${c.pageLabel} count ${c.count}`;
+    return { where: `${at(from)} to ${at(to)}`, span: "flag" };
+}
+
+/**
+ * How the toast names the move over `range`: "Page 2" for a page's box; else the move's label
+ * (`moveLabels`: its name, "Move 2") with where it is, "Move 2 (Page 2, counts 1–4)", or "the
+ * move on Page 2, counts 1–4" when no stored move has the range.
+ */
+export function moveName(
+    range: BeatRange,
+    boxes: readonly PageBox[],
+    moves: readonly PassThroughMove[] = [],
+): string {
     const box = boxes.find(
         (b) => b.start === range.start && b.end === range.end,
     );
-    return box?.name !== undefined
-        ? `Page ${box.name}`
-        : `the move over beats [${range.start}, ${range.end})`;
+    if (box?.name !== undefined) return `Page ${box.name}`;
+    const labels = moveLabels(moves, boxes);
+    const names = [
+        ...new Set(
+            moves
+                .filter((m) => m.start === range.start && m.end === range.end)
+                .flatMap((m) => labels.get(m.id) ?? []),
+        ),
+    ];
+    const at = rangeWhere(range, boxes);
+    if (names.length > 0)
+        return at ? `${joinList(names)} (${at.where})` : joinList(names);
+    if (!at) return "another move";
+    return at.span === "after"
+        ? `the move ${at.where}`
+        : at.span === "flag"
+          ? `the move from ${at.where}`
+          : `the move on ${at.where}`;
 }
 
 /**
@@ -87,12 +160,13 @@ export function passedPages(
 /**
  * The toast's text for `pass`: "Page 3 is no longer a stop" or "Pages 3–4 are no longer stops"
  * when it passes page flags; otherwise (it crossed only other moves) what it moves through and
- * what catches up after it.
+ * what catches up after it, named by `moveName` from `moves` (the stored timelines).
  */
 export function passThroughMessage(
     pass: TimelinePassThrough,
     boxes: readonly PageBox[],
     translate: PassThroughTranslate = defaultTranslate,
+    moves: readonly PassThroughMove[] = [],
 ): string {
     const pages = passedPages(pass, boxes);
     if (pages)
@@ -112,24 +186,28 @@ export function passThroughMessage(
             "timeline.edit.passThrough.noLongerStop.unnamed",
             "The sets inside this move are no longer stops",
         );
-    const through = joinList(pass.overridden.map((r) => moveName(r, boxes)));
-    const caughtUp = joinList(pass.caughtUp.map((r) => moveName(r, boxes)));
+    const through = joinList(
+        pass.overridden.map((r) => moveName(r, boxes, moves)),
+    );
+    const caughtUp = joinList(
+        pass.caughtUp.map((r) => moveName(r, boxes, moves)),
+    );
     const params = { through, caughtUp };
     if (through && caughtUp)
         return translate(
             "timeline.edit.passThrough.throughAndCatchUp",
-            "Moves straight through {through}, then catches up to {caughtUp}'s set",
+            "Now moves straight through {through}, then catches up to the set at the end of {caughtUp}",
             params,
         );
     if (through)
         return translate(
             "timeline.edit.passThrough.through",
-            "Moves straight through {through}",
+            "Now moves straight through {through}",
             params,
         );
     return translate(
         "timeline.edit.passThrough.catchUp",
-        "Catches up to {caughtUp}'s set by its end",
+        "Now catches up to the set at the end of {caughtUp}",
         params,
     );
 }
@@ -198,26 +276,30 @@ export function toastPassThrough(
 ): void {
     const pass = result.passThrough;
     if (!pass) return;
-    const boxes = useTimelineSelectionStore.getState().pageBoxes;
+    const { pageBoxes: boxes, storedTimelines } =
+        useTimelineSelectionStore.getState();
     const flag = narrowingFlag(pass.range, boxes);
-    toast.info(passThroughMessage(pass, boxes), {
-        id: editSurpriseToastId(),
-        duration: flag !== null ? 10000 : 6000,
-        action:
-            flag !== null
-                ? {
-                      label: keepStopsLabel(pass, boxes),
-                      onClick: () => {
-                          keepPassedFlagsAsStops(pass, flag)
-                              .then(toastPassThrough)
-                              .catch((e: unknown) =>
-                                  toastTimelineError(
-                                      e,
-                                      "Error moving marchers",
-                                  ),
-                              );
-                      },
-                  }
-                : undefined,
-    });
+    toast.info(
+        passThroughMessage(pass, boxes, undefined, storedTimelines ?? []),
+        {
+            id: editSurpriseToastId(),
+            duration: flag !== null ? 10000 : 6000,
+            action:
+                flag !== null
+                    ? {
+                          label: keepStopsLabel(pass, boxes),
+                          onClick: () => {
+                              keepPassedFlagsAsStops(pass, flag)
+                                  .then(toastPassThrough)
+                                  .catch((e: unknown) =>
+                                      toastTimelineError(
+                                          e,
+                                          "Error moving marchers",
+                                      ),
+                                  );
+                          },
+                      }
+                    : undefined,
+        },
+    );
 }
