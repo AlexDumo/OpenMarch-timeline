@@ -4,6 +4,7 @@ import {
     useCallback,
     useContext,
     useEffect,
+    useMemo,
     useRef,
     useState,
 } from "react";
@@ -79,19 +80,28 @@ export function SelectedPageProvider({ children }: { children: ReactNode }) {
             console.warn(
                 `Page with id ${newPage.id} not found yet. Selecting it once it is.`,
             );
+            // While this provider's page list hasn't loaded yet (each `useTimingObjects` caller
+            // gets the data in its own commit; StateInitializer selects the first page on load),
+            // wait for it without a deadline
             pageToSelectRef.current = {
                 id: newPage.id,
-                expires: Date.now() + PENDING_SELECTION_MS,
+                expires:
+                    pagesRef.current.length === 0
+                        ? undefined
+                        : Date.now() + PENDING_SELECTION_MS,
             };
         }
     }, []);
 
-    // Create the context value object
-    const contextValue: SelectedPageContextProps = {
-        selectedPage,
-        setSelectedPage: setSelectedPageFromId,
-        setPageToSelect,
-    };
+    // Memoised so a provider render that changes none of these doesn't re-render every consumer
+    const contextValue: SelectedPageContextProps = useMemo(
+        () => ({
+            selectedPage,
+            setSelectedPage: setSelectedPageFromId,
+            setPageToSelect,
+        }),
+        [selectedPage, setSelectedPageFromId, setPageToSelect],
+    );
 
     return (
         <SelectedPageContext.Provider value={contextValue}>

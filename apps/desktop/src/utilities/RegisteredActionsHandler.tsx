@@ -60,6 +60,10 @@ import { requestOpenNewShowDialog } from "@/utilities/openNewShowDialog";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
 import { AlertDialogAction, AlertDialogCancel, Button } from "@openmarch/ui";
 import { CircleNotchIcon } from "@phosphor-icons/react";
+import {
+    isTimelineOwnKey,
+    skipsAppNudge,
+} from "@/components/timeline/timelineHotkeys";
 
 /**
  * The interface for the registered actions. This exists so it is easy to see what actions are available.
@@ -625,9 +629,9 @@ function RegisteredActionsHandler() {
     );
     const { data: canUndo } = useQuery(canUndoQueryOptions(databaseReady));
     const { data: canRedo } = useQuery(canRedoQueryOptions(databaseReady));
-    const uiSettingsStore = useUiSettingsStore();
-    const uiSettings = uiSettingsStore?.uiSettings;
-    const setUiSettings = uiSettingsStore?.setUiSettings ?? (() => {});
+    // The settings are only read when an action runs, so read them then rather than re-rendering
+    // (and re-creating every action) on each settings change, such as a timeline zoom save
+    const setUiSettings = useUiSettingsStore((s) => s.setUiSettings);
     const selectionStore = useSelectionStore();
     const setSelectedShapePageIds =
         selectionStore?.setSelectedShapePageIds ?? (() => {});
@@ -791,6 +795,7 @@ function RegisteredActionsHandler() {
     const triggerAction = useCallback(
         // eslint-disable-next-line max-lines-per-function
         (action: RegisteredActionsEnum) => {
+            const { uiSettings } = useUiSettingsStore.getState();
             let isElectronAction = true;
 
             // UI-11: anything but the transport puts a held preview frame back on the playhead, so
@@ -1423,7 +1428,6 @@ function RegisteredActionsHandler() {
             t,
             canRedo,
             setUiSettings,
-            uiSettings,
             performHistoryAction,
             pages,
             beats,
@@ -1482,6 +1486,7 @@ function RegisteredActionsHandler() {
     const handleKeyDown = useCallback(
         // eslint-disable-next-line max-lines-per-function
         (e: KeyboardEvent) => {
+            const { uiSettings } = useUiSettingsStore.getState();
             if (
                 uiSettings.focussedComponent === "canvas" &&
                 !document.activeElement?.matches(
@@ -1490,6 +1495,9 @@ function RegisteredActionsHandler() {
                 document.activeElement?.id !== "sentry-feedback" &&
                 document.activeElement?.id !== "__tolgee_dev_tools"
             ) {
+                // UI-14 round-2 review: Enter and the arrows on the timeline's move controls
+                // are theirs; Space still plays
+                if (isTimelineOwnKey(e, document.activeElement)) return;
                 // Check the key code and convert it to a key string
                 // This must happen rather than using e.key because e.key changes on MacOS with the option key
                 const code = e.code;
@@ -1510,16 +1518,18 @@ function RegisteredActionsHandler() {
                     "ArrowRight",
                 ]);
 
-                // Special handling for WASD/Arrow keys
+                // Special handling for WASD/Arrow keys; never on a timeline move control, where
+                // Ctrl+S and Ctrl+A keep only their own shortcut (code review)
                 if (
-                    code === "KeyW" ||
-                    code === "KeyA" ||
-                    code === "KeyS" ||
-                    code === "KeyD" ||
-                    code === "ArrowUp" ||
-                    code === "ArrowDown" ||
-                    code === "ArrowLeft" ||
-                    code === "ArrowRight"
+                    !skipsAppNudge(e, document.activeElement) &&
+                    (code === "KeyW" ||
+                        code === "KeyA" ||
+                        code === "KeyS" ||
+                        code === "KeyD" ||
+                        code === "ArrowUp" ||
+                        code === "ArrowDown" ||
+                        code === "ArrowLeft" ||
+                        code === "ArrowRight")
                 ) {
                     e.preventDefault();
 
@@ -1616,7 +1626,7 @@ function RegisteredActionsHandler() {
                 });
             }
         },
-        [setUiSettings, triggerAction, uiSettings],
+        [setUiSettings, triggerAction],
     );
 
     /**

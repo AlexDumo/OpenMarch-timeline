@@ -11,6 +11,8 @@ import tolgee from "@/global/singletons/Tolgee";
 import {
     addPageFlag,
     deletePageFlags,
+    movePageFlag,
+    type MovedPageFlag,
     pageFlagGrid,
     planPageFlagInsertion,
     type AddedPageFlag,
@@ -114,6 +116,27 @@ export const deletePageYankWithMovesMutationOptions = (
             void invalidatePageQueries(qc);
             invalidateTagQueries(qc);
             toastDeleteWithMoves(result, undo);
+        },
+        onError: (e) => toastTimelineError(e),
+    });
+
+/**
+ * Moving page `pageId`'s flag to `beat` (docs/timeline/research/move-page-flag). Unlike **+** and
+ * deleting a flag it ripples the timeline rows on the flag, which the resolver picks up from the
+ * database's change events, so only the page queries are invalidated here. `onMoved` gets the
+ * move, for the selection to follow it.
+ */
+export const movePageFlagMutationOptions = (
+    qc: QueryClient,
+    onMoved?: (moved: MovedPageFlag) => void,
+) =>
+    mutationOptions({
+        mutationFn: ({ pageId, beat }: { pageId: number; beat: number }) =>
+            movePageFlag({ db, pageId, beat }),
+        // Settles once the pages are read again, so a dragged flag isn't drawn back meanwhile
+        onSuccess: async (moved) => {
+            if (moved.from !== moved.to) onMoved?.(moved);
+            await invalidatePageQueries(qc);
         },
         onError: (e) => toastTimelineError(e),
     });
