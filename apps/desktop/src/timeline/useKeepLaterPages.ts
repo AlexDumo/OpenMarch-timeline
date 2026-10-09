@@ -3,7 +3,13 @@ import { create } from "zustand";
 import type { DbConnection } from "@/db-functions/types";
 import { useTimelineDisplayStore } from "@/db-functions/timelineDisplay";
 import { readKeptAssignmentIds } from "@/db-functions/timelineKeptMarkers";
-import { pageKeepStates, type PageKeepState } from "./timelineKeepLater";
+import {
+    keepToggle,
+    pageKeepStates,
+    type KeepToggle,
+    type MarcherNameOf,
+    type PageKeepState,
+} from "./timelineKeepLater";
 import { pageFlags, type FlagPage } from "./timelinePlayhead";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
 
@@ -86,4 +92,47 @@ export function usePageKeepStates(
             kept,
         });
     }, [resolver, version, kept, pages, marcherIds]);
+}
+
+/**
+ * What **K** would do from the page `currentPageId` (`keepToggle`), so the chain, the menu entry
+ * and the inspector button it would run can say (K). Null without a current page.
+ */
+export function useKeepToggle(
+    states: readonly PageKeepState[],
+    pages: readonly NamedPage[],
+    currentPageId: number | null | undefined,
+): KeepToggle | null {
+    const homeId = pages[0]?.id ?? null;
+    return useMemo(
+        () =>
+            currentPageId == null
+                ? null
+                : keepToggle(states, currentPageId, homeId),
+        [states, currentPageId, homeId],
+    );
+}
+
+/**
+ * The selected marchers' names (drill numbers) for the keep words, stable while the names are.
+ */
+export function useMarcherNameOf(
+    marchers:
+        | readonly { readonly id: number; readonly drill_number: string }[]
+        | undefined,
+): MarcherNameOf {
+    const key = (marchers ?? [])
+        .map((m) => `${m.id}\u0000${m.drill_number}`)
+        .join("\u0001");
+    return useMemo(() => {
+        const names = new Map<number, string>(
+            key === ""
+                ? []
+                : key.split("\u0001").map((entry) => {
+                      const [id, name] = entry.split("\u0000");
+                      return [Number(id), name!];
+                  }),
+        );
+        return (id: number) => names.get(id);
+    }, [key]);
 }

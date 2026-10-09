@@ -61,7 +61,12 @@ import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
 import { useLabeledHoldMarks } from "./PageHoldMark";
 import { useTimelineHoldMarks } from "@/timeline/usePageHoldMarks";
-import { usePageKeepStates } from "@/timeline/useKeepLaterPages";
+import {
+    useKeepToggle,
+    useMarcherNameOf,
+    usePageKeepStates,
+} from "@/timeline/useKeepLaterPages";
+import { useSelectedPage } from "@/context/SelectedPageContext";
 import { keepHereMenu, usePageKeepChains } from "./PageKeepChain";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
@@ -163,9 +168,19 @@ export default function TimelineModePanel() {
         useTimelineHoldMarks(pages, selectedIdList),
     );
     // UI-18 keep later pages: the chains on the page boxes, and the page box menu's entries
+    // (named up to three; K's target says so, from the current page)
     const keepStates = usePageKeepStates(pages, selectedIdList);
-    const keepChains = usePageKeepChains(keepStates);
-    const keepHere = useMemo(() => keepHereMenu(keepStates), [keepStates]);
+    const keepNameOf = useMarcherNameOf(selectedMarchers);
+    const keepK = useKeepToggle(
+        keepStates,
+        pages,
+        useSelectedPage()?.selectedPage?.id,
+    );
+    const keepChains = usePageKeepChains(keepStates, keepNameOf, keepK);
+    const keepHere = useMemo(
+        () => keepHereMenu(keepStates, keepK),
+        [keepStates, keepK],
+    );
     const timelines = useTimelineTracks({
         database: db,
         enabled: useTimelineMode(),

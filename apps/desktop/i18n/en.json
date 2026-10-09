@@ -83,7 +83,7 @@
             "swap": "Swap marchers"
         },
         "timeline": {
-            "toggleKeepOnNextPage": "Keep the selected marchers on the next page, or let them follow again"
+            "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again"
         },
         "ui": {
             "focusCanvas": "Focus the canvas",
@@ -590,29 +590,28 @@
             "stepSizeWarning": "Step size exceeds threshold",
             "swapMarchers": "Swap marchers",
             "timeline": {
+                "countOfSelected": "{count} of the {total} selected",
                 "followAgain": "Follow again",
-                "followAgainHint": "Let these marchers follow Page {from} again, so editing Page {from} moves them here too",
-                "followAgainHintEarlier": "Let these marchers follow earlier pages again",
-                "followSomeHint": "Let {count} of these marchers follow Page {from} again, so editing Page {from} moves them here too",
-                "followSomeHintEarlier": "Let {count} of these marchers follow earlier pages again",
-                "goToPage": "Go to Page {page}",
+                "followAgainHint": "Let {who} follow Page {from} again, so editing Page {from} moves them here too",
+                "followAgainHintEarlier": "Let {who} follow earlier pages again",
+                "goToPage": "Go to Page {page}, where these marchers last moved",
                 "goToStart": "Go to the start",
                 "holdFrom": "Hold from Page {page}",
                 "holdFromStart": "Hold from the start",
                 "holdHere": "These marchers hold here",
                 "keepHere": "Keep here",
-                "keepHereHint": "Keep these marchers on Page {page}, so editing Page {from} won't move them here",
-                "keepHereHintEarlier": "Keep these marchers on Page {page}, so editing earlier pages won't move them here",
-                "keepSomeHint": "Keep {count} of these marchers on Page {page}, so editing Page {from} won't move them here",
-                "keepSomeHintEarlier": "Keep {count} of these marchers on Page {page}, so editing earlier pages won't move them here",
+                "keepHereHint": "Keep {who} on Page {page}, so editing Page {from} won't move them here",
+                "keepHereHintEarlier": "Keep {who} on Page {page}, so editing earlier pages won't move them here",
                 "keptOnThisPage": "Kept on this page",
                 "movesOnThisPage": "Moves on this page",
+                "namesOfSelected": "{names} ({count} of the {total} selected)",
                 "pageFollows": "Page {page} follows these marchers",
                 "pageFollowsSome": "Page {page} follows some of these marchers",
                 "pagesFollow": "Pages {first}–{last} follow these marchers",
                 "pagesFollowSome": "Pages {first}–{last} follow some of these marchers",
                 "someHoldHere": "Some of these marchers hold here",
-                "someKeptOnThisPage": "Some of these marchers are kept on this page"
+                "someKeptOnThisPage": "Some of these marchers are kept on this page",
+                "theseMarchers": "these marchers"
             },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}"
@@ -1453,17 +1452,27 @@
                 "keepHint": "They won't follow Page {from} any more",
                 "keepHintEarlier": "They won't follow earlier pages any more",
                 "keepHintOne": "It won't follow Page {from} any more",
+                "keepNamed": "Keep {names} on Page {page}",
                 "keepOne": "Keep 1 marcher on Page {page}",
                 "kept": "{count} marchers kept on Page {page}",
+                "keptNamed": "{names} kept on Page {page}",
                 "keptOne": "1 marcher kept on Page {page}",
-                "mixed": "{kept} of {total} kept on Page {page}",
+                "mixed": "{kept} of the {total} selected are kept on Page {page}",
                 "mixedHint": "Click to keep the other {count} too",
-                "mixedHintOne": "Click to keep the other one too"
+                "mixedHintOne": "Click to keep the other one too",
+                "mixedNamed": "{kept} of the {total} selected are kept on Page {page} ({names})",
+                "mixedNamedOne": "1 of the {total} selected is kept on Page {page} ({names})",
+                "mixedOne": "1 of the {total} selected is kept on Page {page}"
             },
             "followed": {
                 "onePage": "Page {page} followed",
                 "only": "Only Page {page}",
                 "pages": "Pages {first}–{last} followed"
+            },
+            "names": {
+                "many": "{first}, {second} and {count} others",
+                "three": "{first}, {second} and {third}",
+                "two": "{first} and {second}"
             }
         },
         "label": "Timeline",
