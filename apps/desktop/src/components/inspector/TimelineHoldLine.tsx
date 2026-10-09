@@ -258,20 +258,41 @@ function TimelineHoldLineContent({
             onClick={() => void followAgainOn(here.box, kept)}
         />
     );
-    const buttons = (...parts: (ReactNode | false | null | undefined)[]) =>
+    /** The buttons, a dot before each (or only between them, `leading` false) */
+    const buttons = (
+        leading: boolean,
+        ...parts: (ReactNode | false | null | undefined)[]
+    ) =>
         parts
             .filter(Boolean)
             .flatMap((part, i) => [
-                <Fragment key={`dot-${i}`}>{DOT}</Fragment>,
+                ...(leading || i > 0
+                    ? [<Fragment key={`dot-${i}`}>{DOT}</Fragment>]
+                    : []),
                 <Fragment key={`part-${i}`}>{part}</Fragment>,
             ]);
-    const textLine = (text: string, ...parts: ReactNode[]) => (
-        <p className="text-body text-text flex flex-wrap items-center gap-6 px-6 leading-none">
-            <span className="leading-none" data-testid="timeline-hold-line">
-                {text}
-            </span>
-            {buttons(...parts)}
-        </p>
+    /**
+     * The line's words, then its buttons: after a dot for short words, on a line of their own
+     * under long ones (the "some of these marchers" wordings), so a wrap never starts with a dot
+     */
+    const textLine = (
+        text: string,
+        long: boolean,
+        ...parts: (ReactNode | false | null | undefined)[]
+    ) => (
+        <div className="text-body text-text flex flex-col gap-6 px-6 leading-none">
+            <p className="flex flex-wrap items-center gap-6 leading-none">
+                <span className="leading-none" data-testid="timeline-hold-line">
+                    {text}
+                </span>
+                {!long && buttons(true, ...parts)}
+            </p>
+            {long && parts.some(Boolean) && (
+                <p className="flex flex-wrap items-center gap-6 leading-none">
+                    {buttons(false, ...parts)}
+                </p>
+            )}
+        </div>
     );
 
     let line: ReactNode = null;
@@ -280,6 +301,7 @@ function TimelineHoldLineContent({
             t("inspector.marcher.timeline.keptOnThisPage", {
                 defaultValue: "Kept on this page",
             }),
+            false,
             followButton,
         );
     else if (kept.length > 0)
@@ -287,6 +309,7 @@ function TimelineHoldLineContent({
             t("inspector.marcher.timeline.someKeptOnThisPage", {
                 defaultValue: "Some of these marchers are kept on this page",
             }),
+            true,
             keepButton,
             followButton,
         );
@@ -334,7 +357,7 @@ function TimelineHoldLineContent({
                           })}
                     <ArrowRightIcon size={14} aria-hidden />
                 </button>
-                {buttons(keepButton)}
+                {buttons(true, keepButton)}
             </p>
         );
     } else if (follows.length > 0)
@@ -346,6 +369,7 @@ function TimelineHoldLineContent({
                 : t("inspector.marcher.timeline.someHoldHere", {
                       defaultValue: "Some of these marchers hold here",
                   }),
+            follows.length !== selected,
             keepButton,
         );
     if (!line && !following) return null;
