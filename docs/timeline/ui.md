@@ -863,8 +863,8 @@ from it. The spec still wins on the model; this file decides presentation.
     to that marcher's next page with its own move, and stops there.
   - **Nothing is written on a page's behalf.** Adding, splitting or appending a page writes only
     page rows (ADR 0001 C-12, now true on every path). New marchers get a home and no moves. The
-    converter writes a slot only where a marcher's position changes. A write that leaves a marcher
-    where it already is writes nothing for that marcher, so aligning or distributing on a held page
+    converter writes a slot only where a marcher's position changes. A range write (a page box or a
+    window) that leaves a marcher where it already is writes nothing for that marcher, so aligning or distributing on a held page
     doesn't freeze the others. Dragging a marcher back onto the start of its own page move clears
     that move.
   - **Set to previous page** clears the marcher's own move on that page, so the page follows
@@ -884,8 +884,19 @@ from it. The spec still wins on the model; this file decides presentation.
     the move from the last flag inside, so every passed flag is a stop again). Page mode's
     carry-forward: "Pages 3–4 followed (they were copies)" with **Only Page 2**. Delete with its
     moves, above. Toast buttons never wrap.
-  - **The inspector line** sits under Step Size in normal text: "Hold from Page 2 →", a link to
-    that page, or "Moves on this page".
+  - **Move them too** (owner asked to see it, 2026-10-09; `research/defined-coordinates/09`). When an
+    edit splits a group at a later page (some of the marchers it moved follow into that page because
+    they hold, others keep their spot because they have their own move there), a toast names the
+    ones who kept their spot: "OT1 and OT8 have their own move on Page 3, so they kept their spot",
+    with **Move them too**, which shifts their move on that page by the same amount, as its own undo
+    step. Edits that split nobody stay silent. A window passing a flag shows its own toast instead;
+    in page mode it shares one toast with the "followed" message and **Only Page 2**.
+  - **Delete move** (UI-14) names the pages that change, because later held pages fall back:
+    "Deleted Move 2 · Pages 2–3 changed".
+  - **The inspector line** sits under Step Size in normal text: "Hold from Page 2 →" (or "Hold from
+    the start"), a link to that page, or "Moves on this page".
+  - **The hold marks' words are a tooltip** (a label and a hint, after a short hover or on keyboard
+    focus; a press closes it), like the transport's tooltips (UI-17).
   - **Page mode** (until the flip) gets the same rule on its dense rows. An edit on page N also
     moves the run of later pages that still equal the old position, per marcher, compared within
     1e-6. The run stops at a different value, a page shape or the marcher's own pathway. Shape edits
