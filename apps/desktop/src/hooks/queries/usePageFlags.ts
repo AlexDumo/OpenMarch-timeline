@@ -24,6 +24,7 @@ import {
     pageDeleteWithMovesMessage,
     type PageDeleteWithMovesResult,
 } from "@/db-functions/pageDelete";
+import { subscribeHistoryChanges } from "@/db-functions/history";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "./usePages";
 import { invalidateTagQueries } from "./tags/queries";
@@ -69,12 +70,18 @@ export const deletePageFlagsMutationOptions = (qc: QueryClient) =>
 /** Runs the app's normal undo (Ctrl+Z): `usePerformHistoryAction`'s `"undo"`. */
 export type UndoAction = () => void;
 
+/**
+ * The delete-with-moves toast. Its Undo runs the app's undo, so the toast closes on the next
+ * history change (an edit, an undo, a redo), as Delete move's does: then Undo could only undo
+ * something else.
+ */
 const toastDeleteWithMoves = (
     result: PageDeleteWithMovesResult,
     undo?: UndoAction,
 ) => {
     if (result.deleted.length === 0) return;
-    toast.success(pageDeleteWithMovesMessage(result), {
+    let unsubscribe = () => {};
+    const id = toast.success(pageDeleteWithMovesMessage(result), {
         duration: 10000,
         action: undo
             ? {
@@ -82,6 +89,12 @@ const toastDeleteWithMoves = (
                   onClick: undo,
               }
             : undefined,
+        onDismiss: () => unsubscribe(),
+        onAutoClose: () => unsubscribe(),
+    });
+    unsubscribe = subscribeHistoryChanges(() => {
+        unsubscribe();
+        toast.dismiss(id);
     });
 };
 

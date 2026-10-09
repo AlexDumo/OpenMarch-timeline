@@ -42,9 +42,8 @@ import { usePerformHistoryAction } from "../useHistory";
  *
  * - gap 9 (B-13): after every page delete, the tag queries the UI reads are fetched again, so a
  *   deleted page's tag appearance shows on the next page without a reload;
- * - gap 8 (B-10): the delete-with-moves toast stays open after a later edit (unlike Delete move's,
- *   which closes on the next history change), and its **Undo**, the app's normal undo, then takes
- *   back that later edit instead of the delete.
+ * - gap 8 (B-10): the delete-with-moves toast closes on the next history change, as Delete move's
+ *   does, since its **Undo** is the app's normal undo and would then take back that later edit.
  *
  * The show is `marchersAndPages`: page 0 plus pages 1 to 6 (ids 1 to 6), 8 counts each.
  */
@@ -251,7 +250,7 @@ describeDbTests("gap 8: the delete toast's Undo after a later edit", (it) => {
     const destinations = async (db: DbConnection) =>
         await db.select().from(schema.timeline_slot_destinations).all();
 
-    it("FINDING: the toast stays open after another edit, and its Undo takes back that edit, not the delete", async ({
+    it("the toast closes on the next edit, so its Undo can't take back that edit instead", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -272,7 +271,7 @@ describeDbTests("gap 8: the delete toast's Undo after a later edit", (it) => {
                         void performHistoryAction("undo");
                     }),
                 );
-                return { remove: mutateAsync, performHistoryAction };
+                return { remove: mutateAsync };
             },
             { wrapper },
         );
@@ -281,30 +280,64 @@ describeDbTests("gap 8: the delete toast's Undo after a later edit", (it) => {
             await result.current.remove(new Set([2]));
         });
         expect(await pageIds(db)).toEqual([0, 1, 3, 4, 5, 6]);
-        const afterDelete = await destinations(db);
         expect(success).toHaveBeenCalledTimes(1);
-        const action = success.mock.calls[0]![1]!.action as {
-            onClick: () => void;
-        };
+        // The delete's own history change came before the toast: it is still open
+        expect(dismiss).not.toHaveBeenCalled();
 
-        // A later edit (a history change): the toast isn't closed
+        // A later edit (a history change) closes it
         await moveMarchersInTarget({
             db,
             target: { kind: "range", start: 25, end: 33 },
             moves: [{ marcherId: b, x: 10, y: 10 }],
         });
-        expect(dismiss).not.toHaveBeenCalled();
-        expect(await destinations(db)).not.toEqual(afterDelete);
-
-        // Its Undo undoes the later edit; page 2 stays deleted
-        act(() => action.onClick());
-        await waitFor(async () =>
-            expect(await destinations(db)).toEqual(afterDelete),
-        );
-        expect(await pageIds(db)).toEqual([0, 1, 3, 4, 5, 6]);
+        expect(dismiss).toHaveBeenCalledWith("delete-toast");
+        // Only once: it stopped listening
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 25, end: 33 },
+            moves: [{ marcherId: b, x: 20, y: 20 }],
+        });
+        expect(dismiss).toHaveBeenCalledTimes(1);
     });
 
-    it("contrast: Delete move's toast closes on the next history change", async ({
+    it("its Undo, clicked before any other edit, takes back the delete", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await S4(db);
+        const before = await destinations(db);
+        const success = vi
+            .spyOn(toast, "success")
+            .mockImplementation(() => "delete-toast");
+        const { wrapper } = newClient();
+        const { result } = renderHook(
+            () => {
+                const qc = useQueryClient();
+                const { mutateAsync: performHistoryAction } =
+                    usePerformHistoryAction();
+                const { mutateAsync } = useMutation(
+                    deletePagesWithMovesMutationOptions(qc, () => {
+                        void performHistoryAction("undo");
+                    }),
+                );
+                return { remove: mutateAsync };
+            },
+            { wrapper },
+        );
+        await act(async () => {
+            await result.current.remove(new Set([2]));
+        });
+        const action = success.mock.calls[0]![1]!.action as {
+            onClick: () => void;
+        };
+        act(() => action.onClick());
+        await waitFor(async () =>
+            expect(await pageIds(db)).toEqual([0, 1, 2, 3, 4, 5, 6]),
+        );
+        expect(await destinations(db)).toEqual(before);
+    });
+
+    it("same as Delete move's toast, which closes on the next history change", async ({
         db,
         marchersAndPages: _,
     }) => {
