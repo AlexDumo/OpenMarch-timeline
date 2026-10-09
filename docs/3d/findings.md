@@ -124,4 +124,28 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   the frames: the bass drum (not in the show) and the bari, clarinet and
   bass clarinet (not in the show).
 
+### 2026-10-09 · trevor (3d/p7-instruments) · sax placement
+
+- The shared sax hold mapped the bell side (instrument +X) to world
+  (0.32, −0.25, −0.90), straight back into the body, with the keys facing
+  the performer's left: the saxes sat center-left inside the torso.
+  Lacquered vertices in the torso box (|x| < 0.17, y 0.85–1.35) behind
+  z 0.11, before → after: alto up 341 → 0, carry 202 → 0; tenor up 148 → 0,
+  carry 57 → 0; bari up 400 → 0, carry 347 → 0. Deepest z after: alto 0.140,
+  tenor 0.227, bari 0.137 (chest front 0.12).
+- The new hold runs the body 15 degrees out to the right hip with the keys
+  forward and right, bell rim center at x −0.06 (alto), −0.12 (tenor),
+  −0.07 (bari), opening tipped forward; mouthpiece at (0, 1.52, 0.13), and
+  at eye level in carry. `saxPlacement.test.ts` pins all of it. One hold
+  still covers alto, tenor and bari.
+- Render check in the built Electron app with the second demo show (bass
+  drums, bari saxes, clarinets, flutes), up and carry, front row and podium.
+  Saxes: every one on the performer's right at the hip, bell in front of
+  the tube, neck to the mouth, nothing through the body; the right hand
+  sits beside the lower stack rather than on it. Bass drums: four visible
+  at clearly different sizes, sideways on the chest and clear of it,
+  mallets at the heads. Clarinets: down the center line from the mouth.
+  Flutes: level at the lips, tube to the performer's right. Nothing passed
+  through a body.
+
 ## Verdicts

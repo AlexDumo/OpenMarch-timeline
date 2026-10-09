@@ -337,65 +337,74 @@ const CLARINET: Record<HoldState, Hold> = {
     },
 };
 
+/**
+ * Saxes hang from the neck strap: the body runs from the mouth down across
+ * the front to the bow at the right hip. The model keeps its bell on the
+ * instrument's +X, so turning the keys forward and to the right is what puts
+ * the bell at the right hip in front of the body tube; turned forward and
+ * left, the bell would land on the left and the body in the chest.
+ */
 const SAX: Record<HoldState, Hold> = {
     up: {
         family: "sax",
         state: "up",
-        // on the strap at the right hip, neck to the mouth; left hand upper stack, right hand lower
+        // on the strap, the body down across the front to the bow at the right
+        // hip (15 degrees out, the bell opening a little forward), keys forward
+        // and right, neck to the mouth; left hand upper stack, right hand lower
         right: {
-            elbow: [-0.258, 1.227, 0.084],
-            wrist: [-0.14, 1.05, 0.24],
-            fingers: unit([-0.2, -0.9, 0.2]),
+            elbow: [-0.339, 1.267, 0.033],
+            wrist: [-0.28, 1.08, 0.21],
+            fingers: unit([0.4, -0.3, 0.85]),
         },
         left: {
-            elbow: [0.207, 1.252, 0.139],
-            wrist: [-0.04, 1.3, 0.22],
-            fingers: unit([-0.2, -0.9, 0.2]),
+            elbow: [0.114, 1.26, 0.13],
+            wrist: [-0.12, 1.24, 0.25],
+            fingers: unit([-0.8, -0.3, -0.3]),
         },
         instrument: {
-            origin: [0, 1.52, 0.12],
-            bellAxis: [-0.202, -0.958, 0.202],
-            capsAxis: [0.909, -0.101, 0.404],
+            origin: [0, 1.52, 0.13],
+            bellAxis: [-0.259, -0.962, -0.087],
+            capsAxis: [-0.683, 0.118, 0.721],
         },
     },
     carry: {
         family: "sax",
         state: "carry",
-        // the neck lifts so the ligature sits at eye level
+        // the neck lifts so the ligature sits at eye level; the hands rise with it
         right: {
-            elbow: [-0.312, 1.253, 0.068],
-            wrist: [-0.14, 1.15, 0.24],
-            fingers: unit([-0.2, -0.9, 0.2]),
+            elbow: [-0.368, 1.306, 0.005],
+            wrist: [-0.28, 1.18, 0.22],
+            fingers: unit([0.4, -0.3, 0.85]),
         },
         left: {
-            elbow: [0.201, 1.301, 0.176],
-            wrist: [-0.04, 1.4, 0.22],
-            fingers: unit([-0.2, -0.9, 0.2]),
+            elbow: [0.118, 1.291, 0.157],
+            wrist: [-0.12, 1.34, 0.26],
+            fingers: unit([-0.8, -0.3, -0.3]),
         },
         instrument: {
             origin: [0, 1.62, 0.14],
-            bellAxis: [-0.202, -0.958, 0.202],
-            capsAxis: [0.909, -0.101, 0.404],
+            bellAxis: [-0.259, -0.962, -0.087],
+            capsAxis: [-0.683, 0.118, 0.721],
         },
     },
     trail: {
         family: "sax",
         state: "trail",
-        // the neck lifts so the ligature sits at eye level
+        // the neck lifts so the ligature sits at eye level; the hands rise with it
         right: {
-            elbow: [-0.312, 1.253, 0.068],
-            wrist: [-0.14, 1.15, 0.24],
-            fingers: unit([-0.2, -0.9, 0.2]),
+            elbow: [-0.368, 1.306, 0.005],
+            wrist: [-0.28, 1.18, 0.22],
+            fingers: unit([0.4, -0.3, 0.85]),
         },
         left: {
-            elbow: [0.201, 1.301, 0.176],
-            wrist: [-0.04, 1.4, 0.22],
-            fingers: unit([-0.2, -0.9, 0.2]),
+            elbow: [0.118, 1.291, 0.157],
+            wrist: [-0.12, 1.34, 0.26],
+            fingers: unit([-0.8, -0.3, -0.3]),
         },
         instrument: {
             origin: [0, 1.62, 0.14],
-            bellAxis: [-0.202, -0.958, 0.202],
-            capsAxis: [0.909, -0.101, 0.404],
+            bellAxis: [-0.259, -0.962, -0.087],
+            capsAxis: [-0.683, 0.118, 0.721],
         },
     },
 };

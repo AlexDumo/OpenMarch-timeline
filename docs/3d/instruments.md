@@ -214,9 +214,16 @@ points and where the elbows go.
   the tube rather than the air past its end.
 - **clarinet.** Down the center line, angled 30 degrees out, left hand upper
   joint, right hand lower. Carry: vertical, ligature at eye level.
-- **sax.** On the strap at the right hip, neck to the mouth, left hand upper
-  stack, right hand lower stack. Carry: hands stay, the neck lifts so the
-  ligature sits at eye level.
+- **sax.** On the strap, the body running from the mouth down across the
+  front, 15 degrees out, to the bow at the right hip (the tenor's and the
+  bari's longer bodies put the bow lower and further right; the bari's bow
+  sits below the hip). The keys turn forward and right, which puts the bell
+  just in front of the body tube on the right with its opening tipped a
+  little forward; every lacquered part stays in front of the chest. Left hand
+  upper stack, right hand lower stack. Carry: the hands rise with the neck so
+  the ligature sits at eye level. The models carry the bell on the side a
+  real sax would mirror, so the keys cannot face forward and left without
+  putting the bell on the left.
 - **snare, tenors.** Drum at waist height on the carrier, hands over the
   back of the heads, elbows a little out and back. Each stick runs through
   the hand a third of the way up (the butt behind the fist) and angles in
