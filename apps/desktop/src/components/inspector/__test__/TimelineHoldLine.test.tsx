@@ -245,6 +245,10 @@ describe("TimelineHoldLine", () => {
             expect(line()?.textContent).toBe(
                 "Some of these marchers are kept on this page",
             );
+            // The long wording puts the buttons on a row of their own, without a leading dot
+            expect(keepHere()!.parentElement!.firstElementChild).toBe(
+                keepHere(),
+            );
             expect(keepHere()).toHaveAttribute(
                 "aria-description",
                 "Keep 1 of these marchers on Page 3, so editing Page 2 won't move them here",
