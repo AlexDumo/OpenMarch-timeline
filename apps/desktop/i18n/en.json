@@ -1282,6 +1282,8 @@
                 "high": "Shadows and a full crowd. Choose Low if playback stutters."
             },
             "qualityAutoLowered": "Switched to Low because the view was stuttering. Choose High to keep full quality.",
+            "pauseWhenIdle": "Pause drawing when nothing moves",
+            "saveOnBattery": "Save power on battery",
             "hornState": "Horn state",
             "hornStateMode": {
                 "up": "Up",

@@ -34,3 +34,25 @@ describe("beat lead", () => {
         useView3dSceneStore.getState().setBeatLead(0.1);
     });
 });
+
+describe("power settings", () => {
+    it("start from the saved choices and change on request", () => {
+        const s = useView3dSceneStore.getState();
+        expect(s.powerPrefs).toEqual({
+            pauseWhenIdle: true,
+            saveOnBattery: true,
+        });
+        s.setPowerPrefs({ pauseWhenIdle: false, saveOnBattery: true });
+        expect(useView3dSceneStore.getState().powerPrefs.pauseWhenIdle).toBe(
+            false,
+        );
+        s.setPowerPrefs({ pauseWhenIdle: true, saveOnBattery: true });
+    });
+
+    it("tracks battery power", () => {
+        expect(useView3dSceneStore.getState().onBattery).toBe(false);
+        useView3dSceneStore.getState()._setOnBattery(true);
+        expect(useView3dSceneStore.getState().onBattery).toBe(true);
+        useView3dSceneStore.getState()._setOnBattery(false);
+    });
+});

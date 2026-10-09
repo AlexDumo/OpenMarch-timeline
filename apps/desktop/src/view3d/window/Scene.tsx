@@ -25,6 +25,8 @@
 // cspell:ignore frameloop
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import DrawWhenNeeded from "./DrawWhenNeeded";
+import { requestDraw } from "./drawWake";
 import { useQuery } from "@tanstack/react-query";
 import { fieldFootprint, type FieldProperties } from "@openmarch/core";
 import {
@@ -116,6 +118,10 @@ export default function Scene() {
     const kitId = useView3dSceneStore((s) => s.kitId);
     const lighting = useView3dSceneStore((s) => s.lighting);
     const quality = useView3dSceneStore((s) => s.quality);
+    const onBattery = useView3dSceneStore((s) => s.onBattery);
+    const saveOnBattery = useView3dSceneStore(
+        (s) => s.powerPrefs.saveOnBattery,
+    );
 
     const ready = venue.data && field.data && fieldImage.loaded;
     return (
@@ -127,8 +133,15 @@ export default function Scene() {
         >
             <Canvas
                 shadows
-                // `low` renders at 1x so HiDPI screens on integrated GPUs keep up.
-                dpr={quality === "low" ? 1 : [1, 2]}
+                // Draw only when something changes (`DrawWhenNeeded`).
+                frameloop="demand"
+                // `low` renders at 1x so HiDPI screens on integrated GPUs keep
+                // up; so does battery power when saving power is on.
+                dpr={
+                    quality === "low" || (onBattery && saveOnBattery)
+                        ? 1
+                        : [1, 2]
+                }
                 camera={{
                     fov: DEFAULT_FOV_DEG,
                     near: CAMERA_NEAR,
@@ -148,6 +161,7 @@ export default function Scene() {
                     />
                 )}
                 {ready && <CameraRig />}
+                <DrawWhenNeeded />
             </Canvas>
         </div>
     );
@@ -168,6 +182,9 @@ function SceneContents({
     const gl = useThree((s) => s.gl);
     const scene = useThree((s) => s.scene);
     const camera = useThree((s) => s.camera);
+    // Effects below rebuild parts of the scene outside React's props: draw
+    // the result after any render.
+    useEffect(() => requestDraw(1000));
     const quality = useView3dSceneStore((s) => s.quality);
     const kit = useView3dSceneStore((s) => s.kit);
     const [env, setEnv] = useState<Environment | null>(null);

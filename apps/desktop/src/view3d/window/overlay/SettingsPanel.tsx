@@ -79,6 +79,7 @@ export function SettingsPanel({
                     hint={t("view3d.settings.graphicsHint")}
                 >
                     <QualityRow />
+                    <PowerRows />
                     <HornStateRow />
                     <StepOffFootRow />
                     <BeatLeadRow />
@@ -329,6 +330,37 @@ function QualityRow() {
                 {hint}
             </p>
         </Row>
+    );
+}
+
+/** Battery savers: stop drawing when nothing moves, and cap the frame rate on battery. */
+function PowerRows() {
+    const { t } = useTranslate();
+    const prefs = useView3dSceneStore((s) => s.powerPrefs);
+    const setPrefs = useView3dSceneStore((s) => s.setPowerPrefs);
+    return (
+        <>
+            <Row label={t("view3d.settings.pauseWhenIdle")}>
+                <Switch
+                    checked={prefs.pauseWhenIdle}
+                    onCheckedChange={(pauseWhenIdle) =>
+                        setPrefs({ ...prefs, pauseWhenIdle })
+                    }
+                    aria-label={t("view3d.settings.pauseWhenIdle")}
+                    data-testid="view3d-pause-when-idle"
+                />
+            </Row>
+            <Row label={t("view3d.settings.saveOnBattery")}>
+                <Switch
+                    checked={prefs.saveOnBattery}
+                    onCheckedChange={(saveOnBattery) =>
+                        setPrefs({ ...prefs, saveOnBattery })
+                    }
+                    aria-label={t("view3d.settings.saveOnBattery")}
+                    data-testid="view3d-save-on-battery"
+                />
+            </Row>
+        </>
     );
 }
 

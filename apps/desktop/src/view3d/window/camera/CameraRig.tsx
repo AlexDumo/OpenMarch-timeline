@@ -36,6 +36,7 @@ import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "../sceneStore";
 import { createReadoutThrottle, useCameraStore } from "./cameraStore";
 import { RigController } from "./rigController";
 import { classifyWheel, groundHit, wheelPixels } from "./inputMath";
+import { requestDraw } from "../drawWake";
 import {
     cameraIndexForKey,
     defaultCameraId,
@@ -49,6 +50,8 @@ import { snapToSeatRows } from "./seatSnap";
 
 /** Pointer travel (px) under which a press counts as a click, for picking. */
 const CLICK_SLOP_PX = 6;
+/** Input keeps the scene drawing this long (ms), covering eases and coasts that start from it. */
+const INPUT_WAKE_MS = 1500;
 /** Zoom per pinch delta unit (a trackpad pinch reports small deltas). */
 const PINCH_ZOOM = 0.01;
 
@@ -205,6 +208,7 @@ export default function CameraRig() {
         const raycaster = new Raycaster();
 
         const manualMove = () => {
+            requestDraw(INPUT_WAKE_MS);
             const store = useCameraStore.getState();
             if (store.activeCameraId !== null) store._setActive(null);
         };
@@ -395,6 +399,7 @@ export default function CameraRig() {
     useFrame(() => {
         const now = performance.now();
         rig.update(now);
+        if (rig.moving) requestDraw(100);
         const p = camera.position;
         const position: Vector3Tuple = [p.x, p.y, p.z];
         throttleRef.current(

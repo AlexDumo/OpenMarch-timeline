@@ -19,6 +19,9 @@
  *   settings panel can switch it to check the other holds (`hornState.ts`).
  * - `stepOffFoot`: which foot the band steps off on; `right` plays every
  *   clip mirrored. A window setting until the show stores it.
+ * - `powerPrefs`: pause drawing when nothing moves, and cap the frame rate
+ *   on battery (`drawPolicy.ts`); saved per computer. Set it with
+ *   `setPowerPrefs`. `onBattery` is the window's own reading of the battery.
  * - `beatLead`: counts the marchers' clips run ahead of the count clock, so
  *   the heel's first touch lands on the beat (`MarcherMotion`). A test
  *   control until a value is settled.
@@ -48,6 +51,7 @@ import {
     type QualityMode,
 } from "./qualityPreference";
 import type { HoldState } from "./hornState";
+import { loadPowerPrefs, savePowerPrefs, type PowerPrefs } from "./drawPolicy";
 import type { StepOffFoot } from "./performers/marchers/marcherBodies";
 
 /** People within this many meters of a seat camera are hidden (ui.md UI-3). */
@@ -69,6 +73,11 @@ export interface View3dSceneState {
     setStepOffFoot: (foot: StepOffFoot) => void;
     beatLead: number;
     setBeatLead: (lead: number) => void;
+    powerPrefs: PowerPrefs;
+    setPowerPrefs: (prefs: PowerPrefs) => void;
+    onBattery: boolean;
+    /** Scene only: the battery reading changed. */
+    _setOnBattery: (onBattery: boolean) => void;
     qualityMode: QualityMode;
     /** Saves the choice and applies it. Choosing `auto` starts on `high` again. */
     setQualityMode: (mode: QualityMode) => void;
@@ -102,6 +111,13 @@ export const useView3dSceneStore = create<View3dSceneState>()((set) => ({
     setStepOffFoot: (stepOffFoot) => set({ stepOffFoot }),
     beatLead: 0.1,
     setBeatLead: (beatLead) => set({ beatLead }),
+    powerPrefs: loadPowerPrefs(),
+    setPowerPrefs: (powerPrefs) => {
+        savePowerPrefs(powerPrefs);
+        set({ powerPrefs });
+    },
+    onBattery: false,
+    _setOnBattery: (onBattery) => set({ onBattery }),
     qualityMode: startMode,
     setQualityMode: (mode) => {
         saveQualityMode(mode);

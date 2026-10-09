@@ -130,3 +130,22 @@ describe("input while flying", () => {
         expect(rig.grabPan([1, 0, 0], [0, 0, 0], [0, 0, 0])).toBe(false);
     });
 });
+
+describe("moving", () => {
+    it("is true while a zoom eases, a fling coasts or a fly-to runs, and false at rest", () => {
+        const { rig } = rigAt([0, 60, 80], [0, 0, 0]);
+        expect(rig.moving).toBe(false);
+        rig.zoomWheelAt(-200, null, 0);
+        expect(rig.moving).toBe(true);
+        for (let t = 16; t <= 2000; t += 16) rig.update(t);
+        expect(rig.moving).toBe(false);
+        let t = 2000;
+        for (let i = 0; i < 5; i++) rig.orbitDrag(20, 0, (t += 16));
+        rig.release(t);
+        expect(rig.moving).toBe(true);
+        for (let i = 0; i < 400; i++) rig.update((t += 16));
+        expect(rig.moving).toBe(false);
+        rig.flyTo([50, 20, 40], [0, 0, 0], { nowMs: t });
+        expect(rig.moving).toBe(true);
+    });
+});

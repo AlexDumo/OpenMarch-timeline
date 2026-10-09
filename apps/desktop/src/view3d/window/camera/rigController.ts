@@ -71,6 +71,16 @@ export class RigController {
         return this.active !== null;
     }
 
+    /** True while the camera moves on its own: a fly-to, an easing zoom, a coasting orbit. */
+    get moving(): boolean {
+        return (
+            this.active !== null ||
+            this.pendingZoom !== 0 ||
+            this.velocity.theta !== 0 ||
+            this.velocity.phi !== 0
+        );
+    }
+
     /** Places the camera at once and makes the pose the orbit state. */
     jumpTo(position: Vector3Tuple, target: Vector3Tuple, fovDeg?: number) {
         this.active = null;

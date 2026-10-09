@@ -49,6 +49,7 @@ import { usePerformerTimelines } from "@/view3d/positions";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import type { View3dSelection } from "@/view3d/sync/protocol";
 import { useView3dSceneStore } from "../sceneStore";
+import { requestDraw } from "../drawWake";
 import {
     PERFORMER_HEIGHT,
     PERFORMER_RADIUS,
@@ -195,6 +196,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         quality,
         stepOffFoot,
     );
+    // Meshes, bakes and plans land outside React's props: draw them.
+    useEffect(() => requestDraw(1000));
     const motion = useMemo(
         () =>
             marcherBodies && showPlans && marcherAssets

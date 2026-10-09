@@ -148,4 +148,31 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   Flutes: level at the lips, tube to the performer's right. Nothing passed
   through a body.
 
+### 2026-10-09 · trevor (3d/p7-instruments) · P7.2 idle drawing, first slice
+
+- Change: the canvas runs `frameloop="demand"`; `DrawWhenNeeded` draws while
+  the show plays or the camera moves, and for a few seconds after input, a
+  store change, a show edit, a resize or a visibility change. On battery
+  (when "Save power on battery" is on) the frame rate caps at 30 and the
+  pixel ratio drops to 1. Both behaviors have switches in View settings.
+- Measured in the built Electron app on the owner's Mac (Apple Silicon),
+  the Fall Show 2026 demo (lhb-daft-punk-pt2), high school venue, 5 s
+  windows; WebGL draw calls counted by wrapping the draw functions, CPU from
+  `app.getAppMetrics()` summed over every process:
+
+  | Build  | Idle (paused, still camera) | Playing                  |
+  | ------ | --------------------------- | ------------------------ |
+  | Before | 15,088 draws/s, 5.6% CPU    | 9,464 draws/s, 18.6% CPU |
+  | After  | 0 draws/s, 4.9% CPU         | 8,831 draws/s, 19.2% CPU |
+
+- Reading: idle GPU work goes to zero, which is where a laptop spends most of
+  a viewing session. The CPU sum barely moves because it is dominated by the
+  editor window and main process, and it doesn't include GPU time; a battery
+  drain figure needs a real-hardware energy reading (Activity Monitor's
+  Energy Impact or `powermetrics`), still open. Playing is unchanged, as
+  expected: the next slices are the frame-time work (instanced draw-call
+  count, shadow cost) the brief lists.
+- Checked for staleness: camera flies and a horn-state change after idle
+  periods all drew (screenshots in the session scratchpad).
+
 ## Verdicts
