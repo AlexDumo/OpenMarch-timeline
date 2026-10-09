@@ -872,18 +872,27 @@ from it. The spec still wins on the model; this file decides presentation.
     earlier pages again. **Set to next page** writes a move, and works on a held page.
   - **Delete page** (timeline mode) deletes the flag only. Motion is unchanged, the deleted page's
     move ends between flags, and later pages keep their look. **Delete page and its moves** is the
-    old ripple delete, an explicit command whose toast names the pages that changed. Tag
-    appearances on a deleted page move to the next page.
-  - **The pass-through toast** shows whenever a window passes a page flag, even when there is no
-    stored move to override. Its action is renamed **Start from Page N** (it was "Only change Page
-    N", which read as "later pages are untouched").
+    old ripple delete, an explicit command. Its toast says where the counts went and which old pages
+    changed ("Deleted Page 2 · Page 1 is now 32 counts · old Pages 3–4 changed") and has **Undo**.
+    The view stays on the merged page. Tag appearances on a deleted page move to the next page.
+  - **Where the selection holds is shown on the page boxes, not in toasts** (owner, 2026-10-08,
+    after a persona study, `research/defined-coordinates/08-ux-study-feedback-text.md`). With
+    marchers selected, in both modes: a page where they all hold gets a thin hold bar along its
+    bottom; a page where they move gets a small diamond by its flag; a page where some hold gets a
+    dashed bar. Nothing shows without a selection. Ordinary edits and nudges show no toast.
+  - **Toasts are kept for surprises only, and short.** A window passing a flag: "Page 3 is no
+    longer a stop", with **Keep Page 3 as a stop** (it was "Only change Page N"; the action starts
+    the move from the last flag inside, so every passed flag is a stop again). Page mode's
+    carry-forward: "Pages 3–4 followed (they were copies)" with **Only Page 2**. Delete with its
+    moves, above. Toast buttons never wrap.
+  - **The inspector line** sits under Step Size in normal text: "Hold from Page 2 →", a link to
+    that page, or "Moves on this page".
   - **Page mode** (until the flip) gets the same rule on its dense rows. An edit on page N also
     moves the run of later pages that still equal the old position, per marcher, compared within
-    1e-6. The run stops at a different value, a page shape or the marcher's own pathway. A toast
-    says "Also moved on Pages 3–7" with **Only Page 2**, which puts those pages back. A new page no
-    longer shares the previous page's curved pathway.
+    1e-6. The run stops at a different value, a page shape or the marcher's own pathway. Shape edits
+    carry forward too (owner). A new page no longer shares the previous page's curved pathway.
   - Deferred: a stored "lock here" (an Eos-style block), "keep later pages" on an edit,
-    look-preserving ripple delete, live return links, defined/held marks beyond the selection, and
+    look-preserving ripple delete, live return links, hold marks without a selection, and
     "Hold" on coordinate sheets. Marchers are never "pinned": the start flag owns that word.
 
 ## Mapping the spec onto the view model
