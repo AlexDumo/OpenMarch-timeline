@@ -25,6 +25,7 @@ so it needs an ADR 0001 amendment before anything is built.
 | [07a-validation-timeline-core.md](07a-validation-timeline-core.md) | Validator: the sparse timeline core prototyped and run against the focused tests and the conversion corpus            |
 | [07b-validation-page-mode.md](07b-validation-page-mode.md)         | Validator: page-mode options prototyped (equality tracking), including precision, pathways and undo cost at 200 × 100 |
 | [07c-validation-extras-ux.md](07c-validation-extras-ux.md)         | Validator: pins, keep-later-pages and cue-only delete broken with scenarios; personas; how it fits PR #106            |
+| [CHANGES.md](CHANGES.md)                                           | Change catalog of the built branch: every behavior change (B-01…B-35), files, tests, QA script, coverage gaps         |
 
 ## What we found
 
