@@ -138,8 +138,33 @@ backward march, and so on).
 
 ## Woodwind holds
 
-- **Carry:** the hands stay where they play; the ligature (the embouchure hole
-  for flutes) rises to eye level (2026-10-09).
+- **Carry** (2026-10-09), in the owner's words: "flutes are perpendicular to
+  the ground so straight up and down in front of the performer body. the
+  first key is eye level. hands make a triangle. clarinets are the same.
+  Saxophones are just in front of them but rotated 90 degrees. bass clarinet
+  same as saxes."
+  - Flute, piccolo, clarinet and soprano sax: the tube vertical in front of
+    the face, head joint or mouthpiece up, keys forward, the first key at eye
+    level. The hands make a triangle: elbows out, forearms in and up to the
+    tube, the left hand above the right (`holds.ts`).
+  - Alto, tenor and bari sax and the bass clarinet: vertical just in front of
+    the body, turned a quarter so the keys face the performer's right. The
+    sax's bell then stands out in front of the body tube; the other quarter
+    turn would push it into the chest. The mouthpiece sits at eye level. The
+    hands stay where they play: the left on the upper stack from the left
+    side, the right on the lower stack from the right.
+- **Trail** (2026-10-09), in the owner's words: "trail is head joint towards
+  the ground for clarinets and flutes, horn in the right hand. saxophones
+  will be horn down by side parallel to the ground (long part of the
+  instrument parallel like the brass)."
+  - Every woodwind trail uses the brass trail's arms: the right arm straight
+    down the side holding the instrument, the left arm straight down the leg,
+    a closed fist with the thumb on top.
+  - Flute, piccolo, clarinet and soprano sax: vertical through the right fist,
+    the head joint or mouthpiece toward the ground.
+  - Saxes and the bass clarinet: the body level along front to back through
+    the right fist, mouthpiece forward. The bow and bell hang below the body
+    tube, the sax's flare leaning outward, so the bell stays clear of the leg.
 - **Flute and piccolo** (photos, 2026-10-09): horizontal to the player's right
   at the lips, angled a little forward and down. Both hands sit under the
   tube, fingers wrapping up and over onto the keys: the left hand by the face

@@ -203,7 +203,8 @@ The holds, from the owner's reference photos (kept outside the repo) and
 notes. Two rules hold across every state: **the hands never leave their
 playing grip** (right hand on the valve caps, left hand behind the valves;
 woodwind hands on their stacks), and at carry **the mouthpiece sits at eye
-level** (the ligature, for woodwinds). The states differ by where the bell
+level** (for the flutes, clarinets and soprano sax, the first key; see the
+woodwind bullets). The states differ by where the bell
 points and where the elbows go.
 
 - **brass, horns up.** The bell is front: forward at face height, horizontal. Upper arms
@@ -231,25 +232,49 @@ points and where the elbows go.
   onto the keys: the left hand 0.2 m
   along by the face, its forearm across the chest and the elbow in front;
   the right hand 0.42 m along with the elbow down and out. The lip plate
-  faces back at the lips and the keys face forward. Carry: the same hands
-  with the head joint raised so the embouchure hole sits at eye level.
+  faces back at the lips and the keys face forward. Carry (owner,
+  2026-10-09): vertical in front of the face, head joint up, keys forward,
+  the first key (0.2 m along) at eye level; the hands make a triangle, the
+  left wrist 0.25 m along and the right 0.43 m, each a hand's length out and
+  below, elbows out. Trail: vertical in the right fist at the side, head
+  joint to the ground, held 0.5 m along; the arms are the brass trail's.
 - **piccolo.** The flute's line with both hands brought in to the short
-  body: the left 0.12 m along, the right 0.24 m.
+  body: the left 0.12 m along, the right 0.24 m. Carry: as the flute, the
+  first key 0.101 m along at eye level, the hands at 0.14 and 0.24 m.
+  Trail: as the flute, held 0.18 m along.
 - **clarinet.** Down the center line, angled 28 degrees out. The hands wrap
   the joints from the sides, fingers across the front onto the holes: left
   hand on the upper joint, right hand on the lower, elbows a little out.
-  Carry: nearly vertical with the ligature at eye level, tipped out 15
-  degrees so the bell clears the chest. The bass clarinet and the soprano
-  sax share this hold; the bass clarinet's longer body leaves its right
-  hand short of the body, so it needs a hold of its own.
+  The soprano sax shares this hold. Carry (owner, 2026-10-09): as the
+  flute, vertical with the mouthpiece up and the first key at eye level
+  (0.16 m along: the clarinet's throat Ab, the soprano's C), the hands at
+  0.25 and 0.42 m. Trail: as the flute, mouthpiece to the ground, held
+  0.5 m along.
+- **bass clarinet.** A hold of its own: the body hangs 0.124 m toward the
+  keys from the mouthpiece and runs a meter long. Up: nearly vertical,
+  tipped 10 degrees out, the neck bringing the mouthpiece up into the lips;
+  left hand on the upper cups, the right arm almost straight with its
+  fingers angled down to the lower cups. Carry and trail: as the saxes; at
+  carry the crook and bell sit low at the right side, at trail the keys
+  face the ground so the crook and bell hang below the tube behind the
+  leg.
 - **sax.** On the strap in front of the body, as front-on photos of marching
   saxes show: the neck brings the body out in front of the mouth and the
   body runs straight down to the bow at the stomach (lower for the tenor and
   bari). The keys face forward and the bell sits on the player's left of the
   body tube, its flare leaning toward the keys so it opens forward and up.
   The hands wrap the body from the sides, fingers across the front: left
-  hand on the upper stack, right hand on the lower, elbows out. Carry: the
-  hands rise with the neck so the ligature sits at eye level.
+  hand on the upper stack, right hand on the lower, elbows out. Carry
+  (owner, 2026-10-09): vertical just in front of the body, turned a quarter
+  so the keys face the performer's right and the bell stands out in front
+  of the body tube (the model's bell is on its +X = +Y × +Z; the other
+  quarter turn would put it in the chest). The mouthpiece sits at eye
+  level, 0.11 m left of center so the body tube hangs on the center line,
+  0.21 m out. The hands stay where they play: left wrist on the upper
+  stack from the left, right wrist on the lower stack from the right.
+  Trail: level along front to back through the right fist, the mouthpiece
+  forward, the keys facing out so the bow and bell hang below the tube with
+  the flare leaning away from the leg; the arms are the brass trail's.
 - **snare, tenors.** Drum at waist height on the carrier, its shell clear
   of the belly plate. Matched grip: the hands just behind the back rim
   (wider on the tenors), palms down, forearms forward and level, elbows
