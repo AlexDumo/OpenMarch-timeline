@@ -26,6 +26,10 @@ export function isolatedTimelineName(
     pages: readonly (FlagPage & { readonly name: string })[],
 ): string {
     const boxes = pageFlags(pages).filter((f) => f.range !== null);
+    // Page 1's box starts at beat 1, show time 0, which the store writes as beat 0 (a flag
+    // pinned on page 1's start): the same moment, so name it as page 1's
+    if (range.start === 0 && boxes[0]?.range?.start === 1)
+        range = { start: 1, end: range.end };
     const exact = boxes.find(
         (f) => f.range!.start === range.start && f.range!.end === range.end,
     );

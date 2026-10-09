@@ -24,6 +24,10 @@ describe("isolatedTimelineName", () => {
         expect(isolatedTimelineName({ start: 9, end: 17 }, PAGES)).toBe(
             "Page 2's move",
         );
+        // Beat 0 is page 1's start too (a flag pinned there)
+        expect(isolatedTimelineName({ start: 0, end: 9 }, PAGES)).toBe(
+            "Page 1's move",
+        );
         // Whole pages read as pages (UI-17 follow-up)
         expect(isolatedTimelineName({ start: 9, end: 25 }, PAGES)).toBe(
             "Pages 2–3",
