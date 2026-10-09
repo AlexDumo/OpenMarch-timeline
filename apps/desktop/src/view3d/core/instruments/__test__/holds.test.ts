@@ -139,10 +139,11 @@ describe("woodwind and battery holds", () => {
         expect(h.right.wrist[1]).toBeLessThan(h.left.wrist[1]);
     });
 
-    it("sax: body down at the right hip, neck at the lips", () => {
+    it("sax: body straight down in front, neck at the lips", () => {
         const h = hold("sax", "up");
         expect(h.instrument.origin[1]).toBeGreaterThan(1.45);
-        expect(h.instrument.bellAxis[1]).toBeLessThan(-0.8);
+        expect(h.instrument.bellAxis[1]).toBeLessThan(-0.95);
+        expect(Math.abs(h.instrument.bellAxis[0])).toBeLessThan(0.1);
     });
 
     it("drums ride the chest with the hands over the heads", () => {

@@ -338,34 +338,32 @@ const CLARINET: Record<HoldState, Hold> = {
 };
 
 /**
- * Saxes hang from the neck strap at the player's right: the body runs from
- * the mouth down across the front to the bow at the right hip. The model
- * is a real horn (facing its keys, neck toward you, the bell is on your
- * right), so turning the keys to the player's left-front puts the bell
- * front-right of the bow, opening forward and up, clear of the leg.
+ * Saxes hang from the neck strap in front of the body: the neck brings the
+ * body out in front of the mouth, the body runs straight down to the bow
+ * at the stomach, the keys face forward and the bell sits on the player's
+ * left of the body tube, its flare opening forward and up. The hands wrap
+ * the body from the sides, fingers across the front: left hand on the
+ * upper stack, right hand on the lower, elbows out.
  */
 const SAX: Record<HoldState, Hold> = {
     up: {
         family: "sax",
         state: "up",
-        // on the strap, the body angled down across the front to the bow at
-        // the right hip, the keys facing the player's left-front, the bell
-        // front-right of the bow; left hand on the upper stack, right hand
-        // round the lower stack from behind, thumb on the hook
+        // in front, straight down to the bow at the stomach; hands wrap from the sides
         right: {
-            elbow: [-0.282, 1.225, 0.051],
-            wrist: [-0.225, 1.05, 0.24],
-            fingers: unit([0.6, -0.2, 0.75]),
+            elbow: [-0.221, 1.223, 0.097],
+            wrist: [-0.07, 1.08, 0.26],
+            fingers: unit([0.8, -0.1, 0.6]),
         },
         left: {
-            elbow: [0.182, 1.254, 0.142],
-            wrist: [-0.02, 1.17, 0.29],
-            fingers: unit([-0.85, -0.35, 0.1]),
+            elbow: [0.263, 1.236, 0.096],
+            wrist: [0.085, 1.15, 0.27],
+            fingers: unit([-0.8, -0.1, 0.6]),
         },
         instrument: {
             origin: [0, 1.52, 0.13],
-            bellAxis: [-0.455, -0.89, 0.0],
-            capsAxis: [0.5, 0.1, 0.85],
+            bellAxis: [0.03, -0.99, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
         },
     },
     carry: {
@@ -373,19 +371,19 @@ const SAX: Record<HoldState, Hold> = {
         state: "carry",
         // the neck lifts so the ligature sits at eye level; the hands rise with it
         right: {
-            elbow: [-0.33, 1.254, 0.021],
-            wrist: [-0.225, 1.15, 0.24],
-            fingers: unit([0.6, -0.2, 0.75]),
+            elbow: [-0.268, 1.238, 0.095],
+            wrist: [-0.07, 1.18, 0.26],
+            fingers: unit([0.8, -0.1, 0.6]),
         },
         left: {
-            elbow: [0.21, 1.279, 0.161],
-            wrist: [-0.02, 1.27, 0.29],
-            fingers: unit([-0.85, -0.35, 0.1]),
+            elbow: [0.289, 1.257, 0.103],
+            wrist: [0.085, 1.25, 0.27],
+            fingers: unit([-0.8, -0.1, 0.6]),
         },
         instrument: {
             origin: [0, 1.62, 0.14],
-            bellAxis: [-0.455, -0.89, 0.0],
-            capsAxis: [0.5, 0.1, 0.85],
+            bellAxis: [0.03, -0.99, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
         },
     },
     trail: {
@@ -393,19 +391,19 @@ const SAX: Record<HoldState, Hold> = {
         state: "trail",
         // the neck lifts so the ligature sits at eye level; the hands rise with it
         right: {
-            elbow: [-0.33, 1.254, 0.021],
-            wrist: [-0.225, 1.15, 0.24],
-            fingers: unit([0.6, -0.2, 0.75]),
+            elbow: [-0.268, 1.238, 0.095],
+            wrist: [-0.07, 1.18, 0.26],
+            fingers: unit([0.8, -0.1, 0.6]),
         },
         left: {
-            elbow: [0.21, 1.279, 0.161],
-            wrist: [-0.02, 1.27, 0.29],
-            fingers: unit([-0.85, -0.35, 0.1]),
+            elbow: [0.289, 1.257, 0.103],
+            wrist: [0.085, 1.25, 0.27],
+            fingers: unit([-0.8, -0.1, 0.6]),
         },
         instrument: {
             origin: [0, 1.62, 0.14],
-            bellAxis: [-0.455, -0.89, 0.0],
-            capsAxis: [0.5, 0.1, 0.85],
+            bellAxis: [0.03, -0.99, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
         },
     },
 };
