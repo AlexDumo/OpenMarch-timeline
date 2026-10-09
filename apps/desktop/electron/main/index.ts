@@ -1020,6 +1020,11 @@ export async function discardNewShowDraft(): Promise<number> {
     return 200;
 }
 
+/** Runs a renderer action chosen in the app menu (docs/adr/0003-menu-actions-ipc.md) */
+export function sendMenuAction(action: string) {
+    win?.webContents.send(MENU_ACTION_CHANNEL, action);
+}
+
 /**
  * Creates a new database file path to connect to.
  *
@@ -1029,11 +1034,6 @@ export async function discardNewShowDraft(): Promise<number> {
  * Opens the new-show dialog in the renderer (LaunchPage modal).
  * If a file is open, closes it and sets a flag so the dialog opens after reload.
  */
-/** Runs a renderer action chosen in the app menu (docs/adr/0003-menu-actions-ipc.md) */
-export function sendMenuAction(action: string) {
-    win?.webContents.send(MENU_ACTION_CHANNEL, action);
-}
-
 export async function requestNewShowFromMenu() {
     if (!win) return -1;
 
