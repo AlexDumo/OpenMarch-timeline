@@ -31,12 +31,19 @@
  *   when it is at 0.5 s (to mark time: `change_<move>__marktime` when it
  *   exists, or a crossfade).
  *
- * Body placement: during loops, crossfades and rests the body follows the
- * drill; during a one-count transition it moves by the clip's own root travel. Where that
- * leaves the body off the drill (the step-off covers about 0.31 m against an
- * 8-to-5 step's 0.57 m; a halt closes onto the last planted foot), the
- * landing correction spreads the difference linearly between anchors: count
- * boundaries next to a rest, where the body is exactly on its dot.
+ * Body placement (docs/3d/technique.md, "Foot on the dot"): during loops,
+ * crossfades and rests the body follows the drill; during a one-count
+ * transition it moves by the clip's own root travel. By default the dot
+ * marks the landing foot's ankle, so after each moving count the body sits
+ * half that count's step behind the dot, with the weight between the feet,
+ * and it reaches the dot only as the feet close. The step-off's root travel
+ * (about 0.31 m against an 8-to-5 step's 0.57 m) leaves the body about
+ * there by itself. The landing correction spreads what remains linearly
+ * between anchors, the boundaries next to a rest and both ends of a count
+ * whose step changes, where the body is exactly at its target: the ankle
+ * is on the dot on count 8 and the body swings to the new direction during
+ * count 1, while the legs' fade stays centered on the boundary. With
+ * `dotMode: "body"` the target is the dot itself at every boundary.
  *
  * Pure: no three.js, React or database.
  */
@@ -71,6 +78,8 @@ export const SHARP_TURN = (20 * Math.PI) / 180;
 export const HALT_TURN_START = 0.8;
 /** Between rests, a landing correction anchor at least this often (counts). */
 export const MAX_ANCHOR_SPAN = 16;
+/** A change in the foot-on-dot target bigger than this (meters) pins the boundaries around it. */
+export const TARGET_EPS = 0.01;
 
 export interface PlanInput {
     manifest: Manifest;
@@ -83,7 +92,17 @@ export interface PlanInput {
     bpm: Float64Array;
     /** 1 when any marcher travels during that count. */
     bandMoving: Uint8Array;
+    /**
+     * What the dot marks (docs/3d/technique.md): `foot` (the default) puts
+     * the landing foot's ankle on the dot at the end of each count of a
+     * move, the body half a step behind it with the weight 50-50; `body`
+     * keeps the body's center over the dot. Not offered in the UI yet.
+     */
+    dotMode?: DotMode;
 }
+
+/** What a marcher's dot marks: the landing foot's ankle, or the body's center. */
+export type DotMode = "foot" | "body";
 
 export type EventKind = "rest" | "loop" | "transition" | "crossfade";
 
@@ -112,7 +131,7 @@ export interface PlanEvent {
      */
     baseX: number;
     baseZ: number;
-    /** The correction span this event lies in: counts a..b and the raw offsets there. */
+    /** The correction span this event lies in: counts a..b and the corrections there (raw offset minus target). */
     a: number;
     b: number;
     oaX: number;
@@ -504,9 +523,27 @@ export function planMarcher(input: PlanInput): MarcherPlan {
         prev = s;
     }
 
-    // 2. Anchors: boundaries next to a rest count (the body is on its dot),
-    // the ends, and at least every MAX_ANCHOR_SPAN counts inside long runs
-    // (between two loop counts, never across a transition).
+    // 2. Targets: where the body should be against the drill at each
+    // boundary. Foot on the dot: half the count's step behind the dot after
+    // a moving count (the ankle on the dot, the weight between the feet), on
+    // the dot after a rest. Body center: on the dot.
+    const dotMode: DotMode = input.dotMode ?? "foot";
+    const tx = new Float64Array(K + 1);
+    const tz = new Float64Array(K + 1);
+    if (dotMode === "foot")
+        for (let k = 1; k <= K; k++) {
+            if (states[k - 1].type !== "move") continue;
+            tx[k] = -0.5 * (positions[k * 2] - positions[(k - 1) * 2]);
+            tz[k] = -0.5 * (positions[k * 2 + 1] - positions[(k - 1) * 2 + 1]);
+        }
+
+    // 3. Anchors, where the correction pins the body to its target: the
+    // boundaries next to a rest count, the ends, and at least every
+    // MAX_ANCHOR_SPAN counts inside long runs (between two loop counts, never
+    // across a transition). Foot on the dot also pins both ends of a count
+    // whose target changes (a step-off, a close, a new direction or size), so
+    // the half step behind swings to the new direction from count 8 to
+    // count 1. Body center pins every boundary.
     const anchor = new Uint8Array(K + 1);
     anchor[0] = 1;
     anchor[K] = 1;
@@ -518,6 +555,22 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             (after.kind === "rest" && isRest(states[b]))
         )
             anchor[b] = 1;
+    }
+    for (let b = 1; b <= K; b++) {
+        if (dotMode === "body") {
+            anchor[b - 1] = anchor[b] = 1;
+            continue;
+        }
+        if (Math.hypot(tx[b] - tx[b - 1], tz[b] - tz[b - 1]) <= TARGET_EPS)
+            continue;
+        anchor[b - 1] = anchor[b] = 1;
+    }
+    // the correction at each boundary: raw offset minus target
+    const cx = new Float64Array(K + 1);
+    const cz = new Float64Array(K + 1);
+    for (let k = 0; k <= K; k++) {
+        cx[k] = ox[k] - tx[k];
+        cz[k] = oz[k] - tz[k];
     }
     let last = 0;
     for (let b = 1; b <= K; b++) {
@@ -535,7 +588,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
         }
     }
 
-    // 3. Events: one per transition count; consecutive loop or rest counts
+    // 4. Events: one per transition count; consecutive loop or rest counts
     // with the same clip state merge, within one anchor span.
     const events: PlanEvent[] = [];
     let a = 0;
@@ -552,7 +605,26 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             b = nextAnchor(b);
         }
         const d = drafts[k];
-        if (d.continued) continue; // the second count of a centered fade
+        if (d.continued) {
+            // the second count of a centered fade: the same fade, but in its
+            // own correction span when an anchor splits the fade (the body
+            // swings to the new direction during count 1)
+            const fade = events[events.length - 1];
+            if (fade && fade.a !== a)
+                events.push({
+                    ...fade,
+                    count: k,
+                    baseX: ox[k],
+                    baseZ: oz[k],
+                    a,
+                    b,
+                    oaX: cx[a],
+                    oaZ: cz[a],
+                    obX: cx[b],
+                    obZ: cz[b],
+                });
+            continue;
+        }
         const isTransition = d.kind === "transition";
         const oneCount = isTransition || d.kind === "crossfade";
         const lastEvent = events[events.length - 1];
@@ -564,10 +636,10 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             (lastEvent.a === a ||
                 (lastEvent.b === a &&
                     flat(lastEvent) &&
-                    ox[a] === lastEvent.obX &&
-                    oz[a] === lastEvent.obZ &&
-                    ox[b] === ox[a] &&
-                    oz[b] === oz[a]));
+                    cx[a] === lastEvent.obX &&
+                    cz[a] === lastEvent.obZ &&
+                    cx[b] === cx[a] &&
+                    cz[b] === cz[a]));
         const mergeable =
             !oneCount &&
             lastEvent &&
@@ -586,8 +658,8 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             if (lastEvent.a !== a) {
                 // extend the event's flat span
                 lastEvent.b = b;
-                lastEvent.obX = ox[b];
-                lastEvent.obZ = oz[b];
+                lastEvent.obX = cx[b];
+                lastEvent.obZ = cz[b];
             }
             continue;
         }
@@ -606,10 +678,10 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             baseZ: isTransition ? positions[k * 2 + 1] + oz[k] : oz[k],
             a,
             b,
-            oaX: ox[a],
-            oaZ: oz[a],
-            obX: ox[b],
-            obZ: oz[b],
+            oaX: cx[a],
+            oaZ: cz[a],
+            obX: cx[b],
+            obZ: cz[b],
         });
     }
     return { events, counts: K + 1 };

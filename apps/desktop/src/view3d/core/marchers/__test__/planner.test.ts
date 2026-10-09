@@ -380,8 +380,13 @@ describe("moves back to back", () => {
         expect(fade.fadeStart).toBe(7.5);
         expect(fade.fadeEnd).toBe(8.5);
         expect([fade.clip, fade.clip2]).toEqual(["8to5", "slideL8to5"]);
-        // one event covers both counts
-        expect(eventIndexAt(plan, 7.1)).toBe(eventIndexAt(plan, 8.9));
+        // the same fade covers both counts (the second may carry its own
+        // body placement span, for the swing to the new direction)
+        const second = plan.events[eventIndexAt(plan, 8.9)];
+        expect(second.kind).toBe("crossfade");
+        expect([second.fadeStart, second.fadeEnd]).toEqual([7.5, 8.5]);
+        expect([second.clip, second.clip2]).toEqual(["8to5", "slideL8to5"]);
+        expect(second.phaseStart).toBe(fade.phaseStart);
         const clips = clipPerCount(plan);
         expect(clips[6]).toBe("8to5");
         expect(clips.slice(9, 16)).toEqual(repeat(7, "slideL8to5"));
@@ -437,9 +442,19 @@ describe("moves back to back", () => {
             ),
         );
         const clips = clipPerCount(plan);
-        const fade = plan.events[eventIndexAt(plan, 4.5)];
+        const fade = plan.events[eventIndexAt(plan, 3.5)];
         expect(fade.kind).toBe("crossfade");
         expect(fade.count).toBe(3);
+        const second = plan.events[eventIndexAt(plan, 4.5)];
+        expect([second.kind, second.clip, second.clip2]).toEqual([
+            "crossfade",
+            "12to5",
+            "slideR12to5",
+        ]);
+        expect([second.fadeStart, second.fadeEnd]).toEqual([
+            fade.fadeStart,
+            fade.fadeEnd,
+        ]);
         expect(fade.clip).toBe("12to5");
         expect(fade.clip2).toBe("slideR12to5");
         expect(clips[5]).toBe("slideR12to5");
@@ -646,5 +661,95 @@ describe("the bake set", () => {
                 "stepoff_8to5",
             ].sort(),
         );
+    });
+});
+
+/** Body minus drill at count boundary k. */
+function offsetAt(plan: MarcherPlan, inp: PlanInput, k: number) {
+    const b = body(plan, inp, k);
+    return { x: b.x - b.drillX, z: b.z - b.drillZ };
+}
+
+describe("foot on the dot (the default)", () => {
+    // 2 holds, 8 counts forward toward the audience, 4 holds
+    const inp = input([
+        ...repeat(2, "hold" as const),
+        ...repeat<Count>(8, [0, STEP]),
+        ...repeat(4, "hold" as const),
+    ]);
+    const plan = planMarcher(inp);
+
+    it("puts the ankle on the dot each count: the body half a step behind it", () => {
+        // boundaries 3..10 end counts 1..8 of the move
+        for (let k = 3; k <= 10; k++) {
+            const o = offsetAt(plan, inp, k);
+            expect(o.z).toBeCloseTo(-STEP / 2, 1);
+            expect(Math.abs(o.z + STEP / 2)).toBeLessThan(0.03);
+            expect(Math.abs(o.x)).toBeLessThan(0.1);
+        }
+    });
+
+    it("resolves onto the dot as the feet close, between count 8 and count 1 of the hold", () => {
+        const o = offsetAt(plan, inp, 11);
+        expect(o.x).toBeCloseTo(0, 9);
+        expect(o.z).toBeCloseTo(0, 9);
+        // still on the dot before the step-off
+        const s = offsetAt(plan, inp, 2);
+        expect(s.z).toBeCloseTo(0, 9);
+    });
+});
+
+describe("foot on the dot through a change of direction", () => {
+    // 2 holds, 8 forward, 8 toward side 1 (−x), 4 holds
+    const inp = input([
+        ...repeat(2, "hold" as const),
+        ...repeat<Count>(8, [0, STEP]),
+        ...repeat<Count>(8, [-STEP, 0]),
+        ...repeat(4, "hold" as const),
+    ]);
+    const plan = planMarcher(inp);
+
+    it("keeps the old direction's half step on count 8 and swings to the new one by count 1", () => {
+        // boundary 10 ends count 8 of the forward move
+        const c8 = offsetAt(plan, inp, 10);
+        expect(Math.abs(c8.z + STEP / 2)).toBeLessThan(0.03);
+        expect(Math.abs(c8.x)).toBeLessThan(0.1);
+        // boundary 11 ends count 1 of the new move: half a step behind toward +x
+        const c1 = offsetAt(plan, inp, 11);
+        expect(Math.abs(c1.x - STEP / 2)).toBeLessThan(0.03);
+        expect(Math.abs(c1.z)).toBeLessThan(0.03);
+        // and holds it to count 8 of the new move
+        const end = offsetAt(plan, inp, 18);
+        expect(Math.abs(end.x - STEP / 2)).toBeLessThan(0.03);
+        expect(Math.abs(end.z)).toBeLessThan(0.1);
+        // never jumps: at most a fast step's travel in a fiftieth of a count
+        let prev = body(plan, inp, 0);
+        for (let c = 0.02; c <= 22; c += 0.02) {
+            const b = body(plan, inp, c);
+            expect(Math.hypot(b.x - prev.x, b.z - prev.z)).toBeLessThan(0.04);
+            prev = b;
+        }
+        // then onto the dot
+        const hold = offsetAt(plan, inp, 19);
+        expect(hold.x).toBeCloseTo(0, 9);
+        expect(hold.z).toBeCloseTo(0, 9);
+    });
+});
+
+describe("body center (an option for later)", () => {
+    const counts: Count[] = [
+        ...repeat(2, "hold" as const),
+        ...repeat<Count>(8, [0, STEP]),
+        ...repeat<Count>(8, [-STEP, 0]),
+        ...repeat(4, "hold" as const),
+    ];
+    const inp = { ...input(counts), dotMode: "body" as const };
+    const plan = planMarcher(inp);
+
+    it("keeps the body's center over the dot on every count", () => {
+        for (let k = 0; k <= counts.length; k++) {
+            const o = offsetAt(plan, inp, k);
+            expect(Math.hypot(o.x, o.z)).toBeLessThan(1e-6);
+        }
     });
 });

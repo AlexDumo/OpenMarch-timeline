@@ -40,6 +40,32 @@ code uses.
   count of a move but still travels a little between count 8 and count 1 of
   the hold, while the trailing foot closes.
 
+## Foot on the dot and body center
+
+What a dot means (2026-10-09). The weight is always 50-50 between the feet,
+so the two readings put the body in different places, and it matters that
+the 3D View shows the difference.
+
+- **Foot on the dot is the default and the most common.** The platform (the
+  ankle bone) of the landing foot is on the dot on the last count of the move.
+  With the weight between the feet, the body is then half a step behind the
+  dot, so a form doesn't actually resolve until between count 8 and count 1:
+  - **coming to a close:** the ankle is on the dot on the last count; as the
+    feet come together the performer is centered on the dot;
+  - **changing direction:** the ankle is on the dot on count 8, and from
+    count 8 to count 1 the leg in motion goes to the new direction.
+- **Body center** is an option for later, chosen on specific sets: the
+  center of the body mass, between the two feet at the same step size the
+  performer was coming from, is over the dot (weight 50-50 over it) rather
+  than one foot. It isn't shown in the UI yet.
+- Code: `dotMode` in `core/marchers/planner.ts`, `"foot"` by default. The
+  body is placed half the count's step behind the dot after every moving
+  count, on the dot after a rest, and swings to the new direction during
+  count 1 of a new move while the legs' fade stays centered on the
+  boundary. `"body"` keeps the body's center on the dot at every count.
+- The half step is along the line of travel only; the side-to-side offset of
+  a foot from the body's center (about half the hip width) isn't modeled.
+
 ## The halt (the close)
 
 - In an 8-count move the right foot lands on count 8 and the left foot comes
