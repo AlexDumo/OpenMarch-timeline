@@ -7,8 +7,15 @@ import {
     PART_SHELL,
     PART_WOOD,
     PART_METAL,
+    PART_BLACK,
+    type Piece,
 } from "../mesh";
-import { BASS_SIZES_IN, bassSizesFor, batteryModel } from "../battery";
+import {
+    BASS_SIZES_IN,
+    bassForward,
+    bassSizesFor,
+    batteryModel,
+} from "../battery";
 import type { BatteryModelId } from "../model";
 
 const IDS: BatteryModelId[] = ["snare", "tenors", "bass", "cymbals"];
@@ -84,5 +91,102 @@ describe("battery models", () => {
         const br = bounds(right);
         expect(bl.max[1] - bl.min[1]).toBeCloseTo(0.457, 1);
         expect(bl.min[0]).toBeGreaterThan(br.max[0] - 0.05);
+    });
+});
+
+describe("battery placement", () => {
+    const center = (pieces: Piece[]) => {
+        const b = bounds(pieces);
+        return b.min.map((v, i) => (v + b.max[i]) / 2);
+    };
+    const shellCenter = (inches: number) =>
+        center(
+            batteryModel("bass", "high", { bassInches: inches }).pieces.filter(
+                (p) => p.part === PART_SHELL,
+            ),
+        );
+
+    it("moves bigger bass drums forward (instrument −X) so every size clears the chest", () => {
+        const small = shellCenter(18);
+        const big = shellCenter(32);
+        // forward is instrument −X: the 32 sits about 0.18 further out
+        expect(small[0] - big[0]).toBeCloseTo(0.178, 2);
+        expect(bassForward(18)).toBeCloseTo(0.0286, 3);
+        // the drum's back (toward the player, +X) stays 0.2 in front of the hold's origin
+        for (const inches of [18, 26, 32]) {
+            const b = bounds(
+                batteryModel("bass", "high", {
+                    bassInches: inches,
+                }).pieces.filter((p) => p.part === PART_SHELL),
+            );
+            expect(b.max[0]).toBeCloseTo(0.2, 2);
+        }
+    });
+
+    it("lands each bass mallet on its head's center for the smallest and biggest drums", () => {
+        for (const inches of [18, 32]) {
+            const m = batteryModel("bass", "high", { bassInches: inches });
+            const axis = shellCenter(inches);
+            for (const bone of ["handR", "handL"] as const) {
+                const head = m.pieces.filter(
+                    (p) => p.part === PART_BLACK && p.bone === bone,
+                );
+                expect(head.length).toBe(1);
+                const c = center(head);
+                // the heads are at z ±0.178; the mallet's center just outside its plane
+                expect(Math.abs(Math.abs(c[2]) - 0.178)).toBeLessThanOrEqual(
+                    0.03,
+                );
+                expect(Math.sign(c[2])).toBe(bone === "handR" ? -1 : 1);
+                expect(
+                    Math.hypot(c[0] - axis[0], c[1] - axis[1]),
+                ).toBeLessThanOrEqual(0.06);
+            }
+        }
+    });
+
+    it("records the options every battery model was built with", () => {
+        for (const id of IDS)
+            expect(
+                batteryModel(id, "low", { bassInches: 30 }).options?.bassInches,
+            ).toBe(30);
+    });
+
+    /** Each hand's stick tip: the center of the last wooden piece on that hand. */
+    const tips = (id: "snare" | "tenors") => {
+        const m = batteryModel(id);
+        return (["handR", "handL"] as const).map((bone) => {
+            const wood = m.pieces.filter(
+                (p) => p.part === PART_WOOD && p.bone === bone,
+            );
+            return center([wood[wood.length - 1]]);
+        });
+    };
+
+    it("angles the snare sticks in over the head without crossing or passing the front rim", () => {
+        // the head is the disc of radius 0.178 at z 0; +X the performer's right, +Y forward
+        const [right, left] = tips("snare");
+        for (const t of [right, left]) {
+            expect(Math.hypot(t[0], t[1])).toBeLessThan(0.178 - 0.04);
+            expect(t[1]).toBeGreaterThan(0); // the front half
+            expect(t[2]).toBeGreaterThan(0);
+            expect(t[2]).toBeLessThan(0.05);
+        }
+        expect(right[0]).toBeGreaterThan(0);
+        expect(left[0]).toBeLessThan(0);
+    });
+
+    it("puts each tenor stick's tip over one of the two front drums", () => {
+        const [right, left] = tips("tenors");
+        const front = [
+            { x: -0.16, y: 0.15, r: (12 * 0.0254) / 2 },
+            { x: 0.17, y: 0.15, r: (13 * 0.0254) / 2 },
+        ];
+        const over = (t: number[], d: (typeof front)[number]) =>
+            Math.hypot(t[0] - d.x, t[1] - d.y) < d.r - 0.03 &&
+            t[2] > 0 &&
+            t[2] < 0.06;
+        expect(over(right, front[1])).toBe(true);
+        expect(over(left, front[0])).toBe(true);
     });
 });

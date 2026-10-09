@@ -11,6 +11,7 @@ const FAMILIES: HoldFamily[] = [
     "trombone",
     "contra",
     "flute",
+    "piccolo",
     "clarinet",
     "sax",
     "snare",
@@ -18,6 +19,8 @@ const FAMILIES: HoldFamily[] = [
     "bass",
     "cymbals",
 ];
+/** The guard carries at the side with an arm down, so only the reach test covers it. */
+const GUARD: HoldFamily[] = ["flag", "rifle", "sabre"];
 
 describe("holds", () => {
     it("lists the four states with up first", () => {
@@ -25,7 +28,7 @@ describe("holds", () => {
         expect(holdId("brass", "up")).toBe("brass:up");
     });
 
-    it.each(FAMILIES)(
+    it.each([...FAMILIES, ...GUARD])(
         "%s: every state's targets are reachable by the arm",
         (family) => {
             for (const state of HOLD_STATES) {
@@ -104,6 +107,29 @@ describe("woodwind and battery holds", () => {
         expect(h.instrument.bellAxis[0]).toBeLessThan(-0.8); // the tube runs to the right
         expect(h.instrument.origin[1]).toBeGreaterThan(1.5);
         expect(h.right.wrist[0]).toBeLessThan(h.left.wrist[0] - 0.15);
+    });
+
+    it("piccolo: the flute's hold with the right hand on the short body", () => {
+        for (const state of HOLD_STATES) {
+            const p = hold("piccolo", state);
+            const f = hold("flute", state);
+            expect(p.instrument).toEqual(f.instrument);
+            expect(p.left).toEqual(f.left);
+            // the right wrist sits along the tube no further than the piccolo's 0.29 m reach
+            const o = p.instrument.origin;
+            const along = p.instrument.bellAxis.reduce(
+                (s, v, i) => s + v * (p.right.wrist[i] - o[i]),
+                0,
+            );
+            expect(along).toBeGreaterThan(0.15);
+            expect(along).toBeLessThan(0.29);
+        }
+    });
+
+    it("flute: the lip plate (−Y) faces back at the lips, level", () => {
+        const c = hold("flute", "up").instrument.capsAxis;
+        expect(c[2]).toBeGreaterThan(0.95);
+        expect(Math.abs(c[1])).toBeLessThan(0.1);
     });
 
     it("clarinet: down the center line, angled out", () => {

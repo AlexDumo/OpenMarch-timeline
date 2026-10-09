@@ -22,7 +22,7 @@ const SECTIONS: Record<string, Carry> = {
     trombone: { model: "trombone", family: "trombone" },
     "bass trombone": { model: "bassTrombone", family: "trombone" },
     tuba: { model: "contra", family: "contra" },
-    piccolo: { model: "piccolo", family: "flute" },
+    piccolo: { model: "piccolo", family: "piccolo" },
     flute: { model: "flute", family: "flute" },
     clarinet: { model: "clarinet", family: "clarinet" },
     "bass clarinet": { model: "bassClarinet", family: "clarinet" },

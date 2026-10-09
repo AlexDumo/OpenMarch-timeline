@@ -40,7 +40,7 @@ describe("section to instrument", () => {
         });
         expect(carryForSection("Piccolo")).toEqual({
             model: "piccolo",
-            family: "flute",
+            family: "piccolo",
         });
         expect(carryForSection("Clarinet")).toEqual({
             model: "clarinet",

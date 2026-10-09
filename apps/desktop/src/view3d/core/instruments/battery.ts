@@ -272,7 +272,11 @@ const moved = (pieces: Piece[], at: Vec3) =>
         transformPiece(p, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ...at, 1]),
     );
 
-/** A wooden stick from the hand's grip along `dir`, 0.41 long, with a bead tip. */
+/**
+ * A wooden stick 0.41 long through the hand's grip along `dir`: the butt
+ * 0.12 behind the grip (the fulcrum sits a third of the way up), the bead
+ * tip 0.29 ahead.
+ */
 function stick(
     grip: Vec3,
     dir: Vec3,
@@ -281,7 +285,8 @@ function stick(
 ) {
     const u = unit(dir);
     const len = 0.41;
-    const at = (t: number) => add(grip, scale(u, t * len));
+    const butt = add(grip, scale(u, -STICK_BUTT));
+    const at = (t: number) => add(butt, scale(u, t * len));
     const shaft = smoothTube(
         [at(0), at(0.6), at(0.92), at(0.985)],
         [0.008, 0.008, 0.0045, 0.0035],
@@ -294,6 +299,8 @@ function stick(
     );
     return [shaft, bead].map((p) => ({ ...p, bone }));
 }
+/** How far a stick's butt runs behind the grip. */
+export const STICK_BUTT = 0.12;
 
 /** (radius, height) pairs of a sphere of `r`, bottom pole to top pole. */
 function sphereProfile(r: number, steps: number): [number, number][] {
@@ -361,7 +368,7 @@ function sticks(family: HoldFamily, s: SegmentCounts): Piece[] {
 }
 
 /** The marching snare: 14 by 12 inches, ten lugs, on a carrier. */
-function snare(detail: Detail): InstrumentModel {
+function snare(detail: Detail, options: ModelOptions): InstrumentModel {
     const s = SEGMENTS[detail];
     const r = 0.356 / 2;
     const d = 0.305;
@@ -386,7 +393,7 @@ function snare(detail: Detail): InstrumentModel {
         ),
         ...sticks("snare", s),
     ];
-    return finish("snare", pieces, { bone: "spine002" });
+    return finish("snare", pieces, { bone: "spine002", options });
 }
 
 /**
@@ -404,7 +411,7 @@ const TENOR_DRUMS: { inches: number; x: number; y: number; depth: number }[] = [
     { inches: 8, x: 0.12, y: 0.42, depth: 0.18 },
 ];
 
-function tenors(detail: Detail): InstrumentModel {
+function tenors(detail: Detail, options: ModelOptions): InstrumentModel {
     const s = TENOR_SEGMENTS[detail];
     const pieces: Piece[] = [];
     for (const t of TENOR_DRUMS) {
@@ -459,20 +466,41 @@ function tenors(detail: Detail): InstrumentModel {
         ),
         ...sticks("tenors", s),
     );
-    return finish("tenors", pieces, { bone: "spine002" });
+    return finish("tenors", pieces, { bone: "spine002", options });
 }
 
-/** A marching bass on its side: heads along ±Z, the carrier plate at +X (the player). */
-function bass(detail: Detail, inches: number): InstrumentModel {
+/**
+ * How far forward of the hold's origin a bass drum's axis sits, along
+ * instrument −X (forward, away from the player): the drum's back stays
+ * 0.2 m in front of the origin, clear of the chest, whatever its size.
+ */
+export const bassForward = (inches: number) =>
+    Math.max(0, (inches * IN) / 2 - 0.2);
+
+/** The mallet's head center from the grip, and the head's radius. */
+const MALLET_REACH = 0.375;
+const MALLET_HEAD = 0.045;
+/** The mallet head's center sits this far outside the drum head's plane. */
+const MALLET_OFF_HEAD = 0.025;
+
+/**
+ * A marching bass on its side: heads along ±Z, the carrier plate at +X
+ * (the player). Bigger drums sit further forward so every size clears the
+ * chest; the mallets reach for each head's center from the hold's grips.
+ */
+function bass(detail: Detail, options: ModelOptions): InstrumentModel {
+    const inches = options.bassInches ?? 26;
     const s = SEGMENTS[detail];
     const diameter = inches * IN;
     const r = diameter / 2;
     const d = 0.356;
-    const pieces: Piece[] = moved(
-        drum({ diameter, depth: d, lugs: 10, bottom: true }, s),
-        [0, 0, d / 2],
-    );
-    pieces.push(
+    const ax = -bassForward(inches);
+    const drumPieces: Piece[] = [
+        ...moved(drum({ diameter, depth: d, lugs: 10, bottom: true }, s), [
+            0,
+            0,
+            d / 2,
+        ]),
         ...carrier(
             [r + 0.04, 0, 0],
             [1, 0, 0],
@@ -488,27 +516,32 @@ function bass(detail: Detail, inches: number): InstrumentModel {
             ],
             s,
         ),
-    );
-    // mallets: shaft from the grip, the head on the drum head's plane, low and forward
+    ];
+    const pieces = moved(drumPieces, [ax, 0, 0]);
+    // mallets: the head as near the head's center as the mallet's length
+    // allows, its center just outside the head's plane
     const h = hands("bass");
-    const L = 0.38;
     for (const [side, bone, sign] of [
         [h.right, "handR", -1],
         [h.left, "handL", 1],
     ] as const) {
         const g = side.grip;
-        const headZ = sign * (d / 2 + 0.05);
-        const headY = g[1] - 0.2;
+        const headZ = sign * (d / 2 + MALLET_OFF_HEAD);
         const dz = headZ - g[2];
-        const dy = headY - g[1];
-        const reach = L - 0.045;
-        const dx = -Math.sqrt(Math.max(reach * reach - dz * dz - dy * dy, 0));
-        const head: Vec3 = [g[0] + dx, headY, headZ];
+        const rho = Math.sqrt(Math.max(MALLET_REACH ** 2 - dz * dz, 0));
+        // the grip dropped onto the head's plane, then out toward the axis
+        const toAxis = [ax - g[0], -g[1]];
+        const len = Math.hypot(toAxis[0], toAxis[1]) || 1;
+        const head: Vec3 = [
+            g[0] + (toAxis[0] / len) * rho,
+            g[1] + (toAxis[1] / len) * rho,
+            headZ,
+        ];
         const dir = unit(sub(head, g));
         pieces.push(
             {
                 ...smoothTube(
-                    [g, add(g, scale(dir, reach))],
+                    [g, add(g, scale(dir, MALLET_REACH - 0.04))],
                     0.012,
                     s.stick,
                     PART_WOOD,
@@ -518,11 +551,11 @@ function bass(detail: Detail, inches: number): InstrumentModel {
             {
                 ...transformPiece(
                     smoothLathe(
-                        sphereProfile(0.045, 10),
+                        sphereProfile(MALLET_HEAD, 10),
                         s.stick * 2,
                         PART_BLACK,
                     ),
-                    alongAxis(dir, add(head, scale(dir, 0.04))),
+                    alongAxis(dir, head),
                 ),
                 bone,
             },
@@ -530,7 +563,7 @@ function bass(detail: Detail, inches: number): InstrumentModel {
     }
     return finish("bass", pieces, {
         bone: "spine002",
-        options: { bassInches: inches },
+        options: { ...options, bassInches: inches },
     });
 }
 
@@ -564,7 +597,7 @@ function cymbalProfile(detail: Detail): [number, number][] {
 }
 
 /** Two 18 inch crash cymbals, one in each hand, inside faces toward each other. */
-function cymbals(detail: Detail): InstrumentModel {
+function cymbals(detail: Detail, options: ModelOptions): InstrumentModel {
     const s = SEGMENTS[detail];
     const h = hands("cymbals");
     const profile = cymbalProfile(detail);
@@ -577,10 +610,14 @@ function cymbals(detail: Detail): InstrumentModel {
         bone,
     });
     // the right hand is at −X, the left at +X (the cymbals' frame keeps +X the performer's left)
-    return finish("cymbals", [
-        plate(h.right.grip, [-1, 0, 0], "handR"),
-        plate(h.left.grip, [1, 0, 0], "handL"),
-    ]);
+    return finish(
+        "cymbals",
+        [
+            plate(h.right.grip, [-1, 0, 0], "handR"),
+            plate(h.left.grip, [1, 0, 0], "handL"),
+        ],
+        { options },
+    );
 }
 
 export function batteryModel(
@@ -590,12 +627,15 @@ export function batteryModel(
 ): InstrumentModel {
     switch (id) {
         case "snare":
-            return snare(detail);
+            return snare(detail, options);
         case "tenors":
-            return tenors(detail);
+            return tenors(detail, options);
         case "bass":
-            return bass(detail, options.bassInches ?? 26);
+            return bass(detail, {
+                ...options,
+                bassInches: options.bassInches ?? 26,
+            });
         case "cymbals":
-            return cymbals(detail);
+            return cymbals(detail, options);
     }
 }
