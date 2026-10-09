@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { TRANSPORT_SHORTCUTS } from "../TimelinePrimitives";
-import { RegisteredActionsObjects } from "@/utilities/RegisteredActionsHandler";
+import {
+    RegisteredActionsEnum,
+    RegisteredActionsObjects,
+} from "@/utilities/RegisteredActionsHandler";
+import {
+    HELP_MENU_ACTIONS,
+    PLAYBACK_MENU_ACTIONS,
+    isMenuAction,
+} from "@/global/menuActions";
+import { shortcutGroups } from "@/components/ShortcutsDialog";
 
 /**
  * The transport tooltips show the same shortcuts as the registered actions (UI-17).
@@ -20,5 +29,58 @@ describe("transport shortcuts (UI-17)", () => {
         expect(TRANSPORT_SHORTCUTS.nextPage).toBe(
             RegisteredActionsObjects.nextPage.keyboardShortcut!.toString(),
         );
+    });
+});
+
+describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
+    const items = [...PLAYBACK_MENU_ACTIONS, ...HELP_MENU_ACTIONS];
+
+    it("names registered actions and shows their registered shortcuts", () => {
+        for (const item of items) {
+            const action =
+                RegisteredActionsObjects[
+                    item.action as keyof typeof RegisteredActionsObjects
+                ];
+            expect(action, item.action).toBeDefined();
+            expect(Object.values(RegisteredActionsEnum)).toContain(item.action);
+            // Electron's "Shift+Space" is the registry's "Shift + Space"; "Shift+/" is "?"
+            const shown =
+                item.accelerator === "Shift+/"
+                    ? "?"
+                    : item.accelerator.replace(/\+/g, " + ");
+            expect(shown, item.action).toBe(
+                action.keyboardShortcut!.toString(),
+            );
+        }
+    });
+
+    it("lets the renderer run only those", () => {
+        for (const item of items) expect(isMenuAction(item.action)).toBe(true);
+        expect(isMenuAction("deleteAllMarchers")).toBe(false);
+        expect(isMenuAction(undefined)).toBe(false);
+    });
+});
+
+describe("the shortcuts list (UI-17 follow-up)", () => {
+    it("groups every shortcut, playback first, with the timeline's own keys", () => {
+        const groups = shortcutGroups((key) => key);
+        expect(groups[0]?.title).toBe("Playback");
+        const playback = groups[0]!.rows.map((row) => row.keys);
+        expect(playback).toEqual(
+            expect.arrayContaining([
+                "Space",
+                "Shift + Space",
+                "K",
+                "C",
+                "Shift + L",
+            ]),
+        );
+        const timeline = groups.find((g) => g.title === "Timeline");
+        expect(timeline?.rows.map((row) => row.keys)).toContain("G");
+        const view = groups.find((g) => g.title === "View");
+        expect(view?.rows.map((row) => row.keys)).toContain("?");
+        // Nothing without a key, such as the nudge's own actions
+        for (const group of groups)
+            for (const row of group.rows) expect(row.keys).not.toBe("");
     });
 });

@@ -11,6 +11,7 @@ import type { TimelineSeekGesture } from "@/components/timeline/TimelineViewMode
 import {
     playTimelineFromFlag,
     playTimelineFromHere,
+    stopTimelinePlaybackHere,
     seekTimeline,
 } from "../timelineTransport";
 
@@ -369,6 +370,31 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().cursorBeat).toBeNull();
         expect(store().playheadBeat).toBe(13);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 13 });
+    });
+
+    it("K stops a preview where it is and stays: P moves there (UI-17 follow-up)", async ({
+        db,
+        wrapper,
+    }) => {
+        const { result } = await setUp(db, wrapper);
+        act(() => {
+            store().selectRange(9, 13);
+        });
+        fromFlag(result);
+        audio.seconds = 5.1; // beat 11.2
+        frame();
+        act(() => {
+            stopTimelinePlaybackHere(result.current.playing);
+        });
+        expect(result.current.playing.isPlaying).toBe(false);
+        expect(store().playback).toBeNull();
+        expect(store().cursorBeat).toBeNull();
+        expect(store().playheadBeat).toBe(11);
+        // Paused, K does nothing
+        act(() => {
+            stopTimelinePlaybackHere(result.current.playing);
+        });
+        expect(store().playheadBeat).toBe(11);
     });
 
     it("Shift+Space while playing on restarts from the flag as a preview (UI-17)", async ({

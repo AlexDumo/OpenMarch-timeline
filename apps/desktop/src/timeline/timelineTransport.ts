@@ -300,6 +300,22 @@ export function continueTimelinePlayback(): void {
 }
 
 /**
+ * **Stop here** (UI-17 follow-up, K, as video editors' K): stops wherever playback is and stays,
+ * a preview included, so the playhead moves to the last whole beat played. Nothing when paused.
+ */
+export function stopTimelinePlaybackHere({
+    isPlaying,
+    setIsPlaying,
+}: {
+    isPlaying: boolean;
+    setIsPlaying: (isPlaying: boolean) => void;
+}): void {
+    if (!isPlaying) return;
+    continueTimelinePlayback();
+    setIsPlaying(false);
+}
+
+/**
  * **C** (UI-17): puts the start flag on the beat the timeline shows and pins it, so Play from start
  * flag plays from there once the playhead moves on. Does nothing in isolation, whose flag is the
  * isolated move's start.

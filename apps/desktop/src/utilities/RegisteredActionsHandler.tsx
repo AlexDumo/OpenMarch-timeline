@@ -38,12 +38,15 @@ import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import { useCreateMarcherShape } from "@/global/classes/canvasObjects/MarcherShape";
 import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import { useSelectionStore } from "@/stores/SelectionStore";
+import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
+import { isMenuAction } from "@/global/menuActions";
 import { toast } from "sonner";
 import { useTimingObjects } from "@/hooks";
 import {
     navigateTimelinePages,
     playTimelineFromFlag,
     setTimelineStartFlagHere,
+    stopTimelinePlaybackHere,
     playTimelineFromHere,
 } from "@/timeline/timelineTransport";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -86,6 +89,8 @@ export enum RegisteredActionsEnum {
     firstPage = "firstPage",
     playPause = "playPause",
     playFromStartFlag = "playFromStartFlag",
+    stopHere = "stopHere",
+    showShortcuts = "showShortcuts",
     setStartFlagHere = "setStartFlagHere",
     toggleLoop = "toggleLoop",
     toggleMetronome = "toggleMetronome",
@@ -261,6 +266,8 @@ class KeyboardShortcut {
      * @returns The string representation of the key and modifiers. E.g. "Ctrl + Shift + Q"
      */
     toString() {
+        // "?" is Shift plus a key that varies by layout, so it is written alone (UI-17 follow-up)
+        if (this.key === "?") return "?";
         const keyStr = this.key === " " ? "Space" : this.key.toUpperCase();
         return `${this.control ? "Ctrl + " : ""}${this.alt ? "Alt + " : ""}${
             this.shift ? "Shift + " : ""
@@ -293,6 +300,7 @@ class KeyboardShortcut {
 const TRANSPORT_ACTIONS: ReadonlySet<RegisteredActionsEnum> = new Set([
     RegisteredActionsEnum.playPause,
     RegisteredActionsEnum.playFromStartFlag,
+    RegisteredActionsEnum.stopHere,
     RegisteredActionsEnum.toggleLoop,
     RegisteredActionsEnum.toggleMetronome,
 ]);
@@ -369,6 +377,16 @@ export const RegisteredActionsObjects: {
         descKey: "actions.playback.playFromStartFlag",
         keyboardShortcut: new KeyboardShortcut({ key: " ", shift: true }),
         enumString: "playFromStartFlag",
+    }),
+    showShortcuts: new RegisteredAction({
+        descKey: "actions.ui.showShortcuts",
+        keyboardShortcut: new KeyboardShortcut({ key: "?", shift: true }),
+        enumString: "showShortcuts",
+    }),
+    stopHere: new RegisteredAction({
+        descKey: "actions.playback.stopHere",
+        keyboardShortcut: new KeyboardShortcut({ key: "k" }),
+        enumString: "stopHere",
     }),
     setStartFlagHere: new RegisteredAction({
         descKey: "actions.playback.setStartFlagHere",
@@ -1071,6 +1089,17 @@ function RegisteredActionsHandler() {
                     if (nextPage) setIsPlaying(!isPlaying);
                     break;
                 }
+                case RegisteredActionsEnum.showShortcuts: {
+                    // UI-17 follow-up: ? lists every shortcut
+                    useShortcutsDialogStore.getState().setOpen(true);
+                    break;
+                }
+                case RegisteredActionsEnum.stopHere: {
+                    // UI-17 follow-up: K stops and stays, a preview included
+                    if (!databaseReady || !timelineMode) break;
+                    stopTimelinePlaybackHere({ isPlaying, setIsPlaying });
+                    break;
+                }
                 case RegisteredActionsEnum.playFromStartFlag: {
                     // UI-17: previews from the start flag; any stop returns to the playhead
                     if (!databaseReady || !timelineMode) break;
@@ -1523,6 +1552,7 @@ function RegisteredActionsHandler() {
                     "Alt",
                     "Meta",
                     " ",
+                    "?",
                     "Enter",
                     "Escape",
                     "ArrowUp",
@@ -1639,6 +1669,19 @@ function RegisteredActionsHandler() {
             }
         },
         [setUiSettings, triggerAction],
+    );
+
+    /**
+     * The app menu's playback and help items run their registered action here, and only those
+     * (docs/adr/0003-menu-actions-ipc.md).
+     */
+    useEffect(
+        () =>
+            window.electron.onMenuAction?.((action) => {
+                if (isMenuAction(action))
+                    triggerAction(action as RegisteredActionsEnum);
+            }),
+        [triggerAction],
     );
 
     /**

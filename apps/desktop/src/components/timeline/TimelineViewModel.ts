@@ -216,6 +216,8 @@ export interface TimelineInteractionProps {
     readonly onPlayFromFlag?: () => void;
     /** A Play from start flag preview is running (UI-17) */
     readonly playingFromFlag?: boolean;
+    /** Loop is on: Play from start flag repeats (UI-17 follow-up) */
+    readonly flagLoops?: boolean;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;

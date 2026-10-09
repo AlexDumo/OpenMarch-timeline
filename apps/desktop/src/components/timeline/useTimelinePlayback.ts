@@ -111,6 +111,7 @@ export function useTimelinePlayback({
     const playingFromFlag = useTimelineSelectionStore(
         (s) => isPlaying && s.playback?.kind === "preview",
     );
+    const flagLoops = useTimelineSelectionStore((s) => s.loopPreview);
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -159,6 +160,7 @@ export function useTimelinePlayback({
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
             isPlaying,
             playingFromFlag,
+            flagLoops,
             ...commands,
         }),
         [
@@ -168,6 +170,7 @@ export function useTimelinePlayback({
             liveIndex,
             playheadBeat,
             playingFromFlag,
+            flagLoops,
         ],
     );
 }

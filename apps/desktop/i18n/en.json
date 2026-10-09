@@ -64,7 +64,9 @@
             "playFromStartFlag": "Play from the start flag",
             "playPause": "Play from here, or stop",
             "setStartFlagHere": "Set the start flag here",
-            "toggleLoop": "Loop playing from the start flag"
+            "stopHere": "Stop here, without going back",
+            "toggleLoop": "Loop playing from the start flag",
+            "toggleMetronome": "Turn the metronome on or off"
         },
         "select": {
             "selectAll": "Select all marchers"
@@ -87,6 +89,7 @@
             "focusTimeline": "Focus the timeline",
             "hideNextPaths": "Hide next page dots/paths",
             "hidePreviousPaths": "Hide previous page dots/paths",
+            "showShortcuts": "Show keyboard shortcuts",
             "showNextPaths": "Show next page dots/paths",
             "showPreviousPaths": "Show previous page dots/paths",
             "toggleNextPaths": "Toggle viewing next page paths",

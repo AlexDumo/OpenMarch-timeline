@@ -807,9 +807,23 @@ from it. The spec still wins on the model; this file decides presentation.
     one-time tip with the shortcut, which never comes back. Keycaps are not drawn inside buttons
     (the survey found that noisy). The Loop key is read from the action registry; the transport's
     own keys are checked against it by a test.
-  - Deferred: a `?` overlay listing shortcuts, a "stop and stay" key during a preview (Cubase's
-    Return to Start Position, as an explicit key rather than a setting), menu items with
-    accelerators, and a loop symbol on the play button while looping (Pro Tools).
+  - **Follow-ups (project owner asked for all four, 2026-10-09; details are _lead defaults_,
+    V-156 to V-159):**
+    - **K stops here**, as video editors' K does: it stops wherever playback is and stays, a
+      preview included, so the playhead moves to the last whole beat played. This is the "stop
+      and stay" key, an explicit key rather than Cubase's setting. Alt+Space was rejected because
+      Windows opens the window menu on it.
+    - **A loop mark on Play from start flag** while Loop is on (a small accent repeat glyph at the
+      icon's corner, as Pro Tools swaps its Play icon). Its name becomes "Play from start flag,
+      looping".
+    - **`?` lists every shortcut**, as GitHub's and Figma's `?` do: a dialog grouped Playback, Pages,
+      Timeline and the rest, read from the action registry so it can't go stale, plus the
+      timeline's own keys and gestures (G, Shift+Z, Esc, Ctrl+drag, Ctrl+scroll, Alt+drag) and the
+      WASD nudge. It is also Help → Keyboard Shortcuts.
+    - **App menu items**: a **Playback** menu (Play from Here / Stop, Play from Start Flag, Stop
+      Here, Set Start Flag Here, Loop) and Help → Keyboard Shortcuts. They show their keys without
+      registering them, so text fields keep Space and letters; macOS puts the key in the label
+      (docs/adr/0003-menu-actions-ipc.md).
 
 ## Mapping the spec onto the view model
 

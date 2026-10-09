@@ -5,6 +5,7 @@ import {
     DotsThreeIcon,
     HouseIcon,
     PushPinIcon,
+    RepeatIcon,
     StopIcon,
     PlayIcon,
     SkipBackIcon,
@@ -132,6 +133,17 @@ const PLAY_FROM_FLAG_ICON = (
     </span>
 );
 
+/** The loop mark on Play from start flag while Loop is on (UI-17 follow-up, as Pro Tools does) */
+const LOOP_MARK = (
+    <RepeatIcon
+        size={10}
+        weight="bold"
+        aria-hidden
+        data-testid="timeline-play-from-flag-loops"
+        className="text-accent bg-bg-1 absolute -right-4 -bottom-3 rounded-full"
+    />
+);
+
 /**
  * The transport's shortcuts as the tooltips show them (UI-17), in `KeyboardShortcut.toString`'s
  * form. They mirror `RegisteredActionsObjects`, which a test checks; this file doesn't import the
@@ -209,6 +221,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayingChange,
     onPlayFromFlag,
     playingFromFlag = false,
+    flagLoops = false,
     onNavigate,
     onFit,
     fitted = false,
@@ -228,6 +241,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayFromFlag?: () => void;
     /** A Play from start flag preview is running, so its button reads Stop */
     playingFromFlag?: boolean;
+    /** Loop is on: Play from start flag's button carries a loop mark (as Pro Tools' Play does) */
+    flagLoops?: boolean;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -428,7 +443,9 @@ export const TimelineTransport = memo(function TimelineTransport({
                             label={
                                 playingFromFlag
                                     ? "Stop"
-                                    : "Play from start flag"
+                                    : flagLoops
+                                      ? "Play from start flag, looping"
+                                      : "Play from start flag"
                             }
                             shortcut={TRANSPORT_SHORTCUTS.playFromFlag}
                             hint={
@@ -440,7 +457,12 @@ export const TimelineTransport = memo(function TimelineTransport({
                             pressed={playingFromFlag}
                             onClick={playFromFlag}
                         >
-                            {playingFromFlag ? STOP_ICON : PLAY_FROM_FLAG_ICON}
+                            <span className="relative flex">
+                                {playingFromFlag
+                                    ? STOP_ICON
+                                    : PLAY_FROM_FLAG_ICON}
+                                {flagLoops && LOOP_MARK}
+                            </span>
                         </TransportButton>
                     )}
                     <TransportButton
