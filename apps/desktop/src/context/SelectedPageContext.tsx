@@ -25,10 +25,16 @@ const SelectedPageContext = createContext<SelectedPageContextProps | undefined>(
     undefined,
 );
 
+/** How long a selection waits for its page to appear in the page list */
+const PENDING_SELECTION_MS = 2000;
+
 export function SelectedPageProvider({ children }: { children: ReactNode }) {
     const { pages } = useTimingObjects();
     const [selectedPage, setSelectedPage] = useState<Page | null>(null);
-    const pageToSelectRef = useRef<{ id: number } | null>(null);
+    // `expires` is set only for a selection waiting on a page that isn't listed yet
+    const pageToSelectRef = useRef<{ id: number; expires?: number } | null>(
+        null,
+    );
     const setPageToSelect = useCallback((page: { id: number }) => {
         pageToSelectRef.current = page;
     }, []);
@@ -37,7 +43,12 @@ export function SelectedPageProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         let pageWasSet = false;
         const pageToSelect = pageToSelectRef.current;
-        if (pageToSelect) {
+        if (
+            pageToSelect?.expires !== undefined &&
+            Date.now() > pageToSelect.expires
+        )
+            pageToSelectRef.current = null;
+        else if (pageToSelect) {
             const page = pages.find((p) => p.id === pageToSelect.id);
             if (page) {
                 setSelectedPage(page);
@@ -52,17 +63,28 @@ export function SelectedPageProvider({ children }: { children: ReactNode }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pages]);
 
-    const setSelectedPageFromId = useCallback(
-        (newPage: { id: number }) => {
-            const page = pages.find((p) => p.id === newPage.id);
-            if (page) setSelectedPage(page);
-            else
-                console.warn(
-                    `Page with id ${newPage.id} not found. Not setting selected page.`,
-                );
-        },
-        [pages],
-    );
+    // The latest page list, for a setter called through an older render's closure
+    const pagesRef = useRef(pages);
+    pagesRef.current = pages;
+    const setSelectedPageFromId = useCallback((newPage: { id: number }) => {
+        const page = pagesRef.current.find((p) => p.id === newPage.id);
+        if (page) {
+            setSelectedPage(page);
+            // A later choice wins over one still waiting for its page
+            pageToSelectRef.current = null;
+        } else {
+            // Not in the page list yet (an undo that just restored it, seen first by the
+            // caller): select it if it appears soon, so a page that never comes back can't be
+            // selected by a much later undo
+            console.warn(
+                `Page with id ${newPage.id} not found yet. Selecting it once it is.`,
+            );
+            pageToSelectRef.current = {
+                id: newPage.id,
+                expires: Date.now() + PENDING_SELECTION_MS,
+            };
+        }
+    }, []);
 
     // Create the context value object
     const contextValue: SelectedPageContextProps = {

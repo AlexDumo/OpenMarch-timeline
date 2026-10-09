@@ -18,7 +18,6 @@ import {
     readShowTiming,
 } from "../convert/writePageConversion";
 import {
-    carryForwardMessage,
     editCarryForward,
     marcherCarry,
     summarizeCarryForward,
@@ -26,9 +25,8 @@ import {
 } from "../timelineCarryForward";
 import { neighborPageTarget } from "../timelineCoordinateWrites";
 import {
-    timelineEditMessage,
-    toastTimelineEdit,
-    type PassThroughTranslate,
+    keepPassedFlagsAsStops,
+    toastPassThrough,
 } from "../timelinePassThrough";
 import { pageFlags } from "../timelinePlayhead";
 import {
@@ -39,14 +37,10 @@ import {
 } from "../timelineStore";
 
 /**
- * The carry-forward toast (docs/timeline/ui.md UI-15, defined-coordinates 07c §6–7): an edit
- * that moves marchers who hold through later pages says which pages it also moved, and where it
- * stops when every carried marcher stops at the same page, in the one post-edit toast.
+ * Carry-forward (docs/timeline/ui.md UI-15, defined-coordinates 07c §6–7): an edit that moves
+ * marchers who hold through later pages also moves those pages, up to where every carried marcher
+ * stops. No toast says so (defined-coordinates 08): an ordinary edit shows none.
  */
-
-/** Fills `{name}` placeholders in the English default, as Tolgee does without a translation. */
-const english: PassThroughTranslate = (_key, defaultMessage, params = {}) =>
-    defaultMessage.replace(/\{(\w+)\}/g, (_, name: string) => params[name]!);
 
 const hold = (start: number, end: number): CarrySpan => ({
     start,
@@ -125,37 +119,32 @@ describe("one marcher's carry-forward", () => {
     });
 });
 
-describe("the carry-forward summary and message", () => {
+describe("the carry-forward summary", () => {
     it("names one page, or a range, and where they all stop", () => {
         expect(
             summarizeCarryForward([{ flags: [16], stop: 24 }], BOXES),
         ).toEqual({ first: "3", last: "3", stop: "4" });
-        const summary = summarizeCarryForward(
-            [
-                { flags: [16, 24], stop: 32 },
-                { flags: [16, 24], stop: 32 },
-            ],
-            BOXES,
-        )!;
-        expect(carryForwardMessage(summary, english)).toBe(
-            "Also moves Pages 3–4 · stops at Page 5",
-        );
-        expect(carryForwardMessage({ first: "3", last: "3" }, english)).toBe(
-            "Also moves Page 3",
-        );
+        expect(
+            summarizeCarryForward(
+                [
+                    { flags: [16, 24], stop: 32 },
+                    { flags: [16, 24], stop: 32 },
+                ],
+                BOXES,
+            ),
+        ).toEqual({ first: "3", last: "4", stop: "5" });
     });
 
     it("leaves out the stop when the marchers stop at different pages, or one runs to the end", () => {
-        const varied = summarizeCarryForward(
-            [
-                { flags: [16], stop: 24 },
-                { flags: [16, 24, 32], stop: 40 },
-            ],
-            BOXES,
-        )!;
-        expect(carryForwardMessage(varied, english)).toBe(
-            "Also moves Pages 3–5",
-        );
+        expect(
+            summarizeCarryForward(
+                [
+                    { flags: [16], stop: 24 },
+                    { flags: [16, 24, 32], stop: 40 },
+                ],
+                BOXES,
+            ),
+        ).toEqual({ first: "3", last: "5" });
         expect(
             summarizeCarryForward(
                 [
@@ -181,26 +170,6 @@ describe("the carry-forward summary and message", () => {
             null,
         );
         expect(summarizeCarryForward([], BOXES)).toBeNull();
-    });
-
-    it("is one message with the pass-through's, and nothing when neither applies", () => {
-        const pass = {
-            range: { start: 0, end: 16 },
-            marcherIds: [1],
-            labels: ["T1"],
-            overridden: [],
-            caughtUp: [],
-            flags: [8],
-        };
-        expect(
-            timelineEditMessage(
-                pass,
-                { first: "4", last: "5" },
-                BOXES,
-                english,
-            ),
-        ).toBe("T1 now moves straight through Page 2. Also moves Pages 4–5");
-        expect(timelineEditMessage(undefined, null, BOXES, english)).toBeNull();
     });
 });
 
@@ -252,7 +221,7 @@ const box = (page: Page) => {
     return target;
 };
 
-/** A range edit, then what it carried forward, as the toast words it. */
+/** A range edit, then what it carried forward. */
 const edit = async (
     db: DbConnection,
     boxes: readonly PageBox[],
@@ -268,26 +237,24 @@ const edit = async (
         result,
         boxes,
     );
-    return {
-        result,
-        target,
-        message: summary && carryForwardMessage(summary, english),
-    };
+    return { result, target, summary };
 };
 
-describeDbTests("the carry-forward toast, from the resolver", (it) => {
+describeDbTests("carry-forward, from the resolver", (it) => {
     it("owner scenario: editing page 2 with pages 3–4 inherited also moves pages 3–4, up to page 5's own move", async ({
         db,
         marchersAndPages: _,
     }) => {
         const { pages, boxes } = await setUp(db);
         await edit(db, boxes, box(pages[5]!), [{ marcherId: 1, x: 50, y: 50 }]);
-        const { message } = await edit(db, boxes, box(pages[2]!), [
+        const { summary } = await edit(db, boxes, box(pages[2]!), [
             { marcherId: 1, x: 300, y: 300 },
         ]);
-        expect(message).toBe(
-            `Also moves Pages ${pages[3]!.name}–${pages[4]!.name} · stops at Page ${pages[5]!.name}`,
-        );
+        expect(summary).toEqual({
+            first: pages[3]!.name,
+            last: pages[4]!.name,
+            stop: pages[5]!.name,
+        });
     });
 
     it("with no later move of its own, runs to the show's end and names no stop", async ({
@@ -296,12 +263,13 @@ describeDbTests("the carry-forward toast, from the resolver", (it) => {
     }) => {
         const { pages, boxes } = await setUp(db);
         expect(boxes.at(-1)!.end).toBe(box(pages.at(-1)!).end);
-        const { message } = await edit(db, boxes, box(pages[2]!), [
+        const { summary } = await edit(db, boxes, box(pages[2]!), [
             { marcherId: 1, x: 300, y: 300 },
         ]);
-        expect(message).toBe(
-            `Also moves Pages ${pages[3]!.name}–${pages.at(-1)!.name}`,
-        );
+        expect(summary).toEqual({
+            first: pages[3]!.name,
+            last: pages.at(-1)!.name,
+        });
     });
 
     it("names where it stops when every carried marcher stops at the same page", async ({
@@ -313,13 +281,15 @@ describeDbTests("the carry-forward toast, from the resolver", (it) => {
             { marcherId: 1, x: 50, y: 50 },
             { marcherId: 2, x: 60, y: 60 },
         ]);
-        const { message } = await edit(db, boxes, box(pages[2]!), [
+        const { summary } = await edit(db, boxes, box(pages[2]!), [
             { marcherId: 1, x: 300, y: 300 },
             { marcherId: 2, x: 310, y: 300 },
         ]);
-        expect(message).toBe(
-            `Also moves Page ${pages[3]!.name} · stops at Page ${pages[4]!.name}`,
-        );
+        expect(summary).toEqual({
+            first: pages[3]!.name,
+            last: pages[3]!.name,
+            stop: pages[4]!.name,
+        });
     });
 
     it("leaves the stop out when the marchers stop at different pages", async ({
@@ -330,13 +300,14 @@ describeDbTests("the carry-forward toast, from the resolver", (it) => {
         // Marcher 1 has its own page 4, marcher 2 its own page 5
         await edit(db, boxes, box(pages[4]!), [{ marcherId: 1, x: 50, y: 50 }]);
         await edit(db, boxes, box(pages[5]!), [{ marcherId: 2, x: 60, y: 60 }]);
-        const { message } = await edit(db, boxes, box(pages[2]!), [
+        const { summary } = await edit(db, boxes, box(pages[2]!), [
             { marcherId: 1, x: 300, y: 300 },
             { marcherId: 2, x: 310, y: 300 },
         ]);
-        expect(message).toBe(
-            `Also moves Pages ${pages[3]!.name}–${pages[4]!.name}`,
-        );
+        expect(summary).toEqual({
+            first: pages[3]!.name,
+            last: pages[4]!.name,
+        });
     });
 
     it("counts only the marchers the edit moved (a partial selection)", async ({
@@ -347,21 +318,23 @@ describeDbTests("the carry-forward toast, from the resolver", (it) => {
         // Marcher 1 owns page 3, so it carries nowhere; marcher 3 isn't moved at all
         await edit(db, boxes, box(pages[3]!), [{ marcherId: 1, x: 50, y: 50 }]);
         await edit(db, boxes, box(pages[4]!), [{ marcherId: 2, x: 70, y: 70 }]);
-        const { message } = await edit(db, boxes, box(pages[2]!), [
+        const { summary } = await edit(db, boxes, box(pages[2]!), [
             { marcherId: 1, x: 300, y: 300 },
             { marcherId: 2, x: 310, y: 300 },
             // Already there: written nowhere, so not counted
             { marcherId: 3, x: 200, y: 100 },
         ]);
         // Only marcher 2 carries: page 3, stopping at its own page 4
-        expect(message).toBe(
-            `Also moves Page ${pages[3]!.name} · stops at Page ${pages[4]!.name}`,
-        );
+        expect(summary).toEqual({
+            first: pages[3]!.name,
+            last: pages[3]!.name,
+            stop: pages[4]!.name,
+        });
         // Every marcher owning the next page: nothing to say
         const none = await edit(db, boxes, box(pages[2]!), [
             { marcherId: 1, x: 320, y: 320 },
         ]);
-        expect(none.message).toBeNull();
+        expect(none.summary).toBeNull();
     });
 
     it("an edit on the last page carries nowhere", async ({
@@ -369,13 +342,13 @@ describeDbTests("the carry-forward toast, from the resolver", (it) => {
         marchersAndPages: _,
     }) => {
         const { pages, boxes } = await setUp(db);
-        const { message } = await edit(db, boxes, box(pages.at(-1)!), [
+        const { summary } = await edit(db, boxes, box(pages.at(-1)!), [
             { marcherId: 1, x: 300, y: 300 },
         ]);
-        expect(message).toBeNull();
+        expect(summary).toBeNull();
     });
 
-    it("a window passing a flag shows one toast: what it passed, what it also moved, and Start from", async ({
+    it("a window passing a flag says only that its page is no longer a stop, with Keep as a stop", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -392,38 +365,86 @@ describeDbTests("the carry-forward toast, from the resolver", (it) => {
             moves: [{ marcherId: 1, x: 300, y: 300 }],
         });
         expect(result.passThrough).toBeDefined();
-        await toastTimelineEdit(target, result);
+        toastPassThrough(result);
         expect(info).toHaveBeenCalledTimes(1);
         const [message, options] = info.mock.calls[0]!;
-        expect(message).toMatch(
-            new RegExp(
-                `now moves straight through Page ${pages[2]!.name}\\. Also moves Page ${pages[4]!.name} · stops at Page ${pages[5]!.name}$`,
-            ),
-        );
+        // No marcher names, and nothing about the pages it carried into
+        expect(message).toBe(`Page ${pages[2]!.name} is no longer a stop`);
         expect(options).toMatchObject({
             id: "timeline-edit",
-            action: { label: `Start from Page ${pages[3]!.name}` },
+            action: { label: `Keep Page ${pages[2]!.name} as a stop` },
         });
     });
 
-    it("a carry-forward alone shows one toast with no action", async ({
+    it("Keep as a stop restores the passed flag, and the window follows the move to its new range", async ({
         db,
         marchersAndPages: _,
     }) => {
         const { pages } = await setUp(db);
         const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
-        const target = { kind: "range" as const, ...box(pages[2]!) };
+        const page2 = box(pages[2]!);
+        const page3 = box(pages[3]!);
+        const window = { start: page2.start, end: page3.end };
+        const resolver = () => useTimelineResolverStore.getState().resolver!;
+        const before = resolver().positionAt(1, page2.end);
+        useTimelineSelectionStore
+            .getState()
+            .selectRange(window.start, window.end);
         const result = await moveMarchersInTarget({
             db,
-            target,
+            target: { kind: "range", ...window },
             moves: [{ marcherId: 1, x: 300, y: 300 }],
         });
-        await toastTimelineEdit(target, result);
-        expect(info).toHaveBeenCalledTimes(1);
-        expect(info.mock.calls[0]![0]).toBe(
-            `Also moves Pages ${pages[3]!.name}–${pages.at(-1)!.name}`,
+        toastPassThrough(result);
+        const action = info.mock.calls[0]![1]!.action as {
+            onClick: () => void;
+        };
+        action.onClick();
+        await vi.waitFor(() =>
+            expect(useTimelineSelectionStore.getState().selection).toEqual({
+                kind: "range",
+                start: page3.start,
+                end: page3.end,
+            }),
         );
-        expect(info.mock.calls[0]![1]).toMatchObject({ action: undefined });
+        await timelineResolverSettled();
+        expect(resolver().positionAt(1, page2.end)).toEqual(before);
+        expect(resolver().positionAt(1, page3.end)).toEqual([300, 300]);
+    });
+
+    it("a window the user has left keeps its selection after Keep as a stop", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { pages } = await setUp(db);
+        const page2 = box(pages[2]!);
+        const page3 = box(pages[3]!);
+        const window = { start: page2.start, end: page3.end };
+        const { passThrough } = await moveMarchersInTarget({
+            db,
+            target: { kind: "range", ...window },
+            moves: [{ marcherId: 1, x: 300, y: 300 }],
+        });
+        useTimelineSelectionStore.getState().selectHome();
+        await keepPassedFlagsAsStops(passThrough!, page2.end);
+        expect(useTimelineSelectionStore.getState().selection).toEqual({
+            kind: "home",
+        });
+    });
+
+    it("an ordinary edit that carries forward shows no toast", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { pages, boxes } = await setUp(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        const { result, summary } = await edit(db, boxes, box(pages[2]!), [
+            { marcherId: 1, x: 300, y: 300 },
+        ]);
+        // It did carry: pages 3 to the end follow
+        expect(summary).not.toBeNull();
+        toastPassThrough(result);
+        expect(info).not.toHaveBeenCalled();
     });
 
     it("an edit of homes carries to the marcher's first own move", async ({
@@ -445,8 +466,10 @@ describeDbTests("the carry-forward toast, from the resolver", (it) => {
             result,
             boxes,
         )!;
-        expect(carryForwardMessage(summary, english)).toBe(
-            `Also moves Pages ${pages[1]!.name}–${pages[2]!.name} · stops at Page ${pages[3]!.name}`,
-        );
+        expect(summary).toEqual({
+            first: pages[1]!.name,
+            last: pages[2]!.name,
+            stop: pages[3]!.name,
+        });
     });
 });

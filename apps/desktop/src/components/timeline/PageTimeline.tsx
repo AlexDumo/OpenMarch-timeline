@@ -44,6 +44,7 @@ import {
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { usePageModeHoldMarks } from "@/timeline/usePageHoldMarks";
 import { PageHoldMarkView, useLabeledHoldMarks } from "./PageHoldMark";
+import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 
 // eslint-disable-next-line max-lines-per-function
 export default function PageTimeline() {
@@ -70,11 +71,14 @@ export default function PageTimeline() {
     const { mutate: deletePageFlag } = useMutation(
         deletePageFlagsMutationOptions(queryClient),
     );
+    // The delete toast's Undo is the app's normal undo (Ctrl+Z)
+    const { mutate: performHistoryAction } = usePerformHistoryAction();
+    const undo = () => performHistoryAction("undo");
     const { mutate: deletePageWithMoves } = useMutation(
-        deletePagesWithMovesMutationOptions(queryClient),
+        deletePagesWithMovesMutationOptions(queryClient, undo),
     );
     const { mutate: deletePageYankWithMoves } = useMutation(
-        deletePageYankWithMovesMutationOptions(queryClient),
+        deletePageYankWithMovesMutationOptions(queryClient, undo),
     );
 
     // UI-15: where the selected marchers hold, on the page boxes (page mode's own rows)

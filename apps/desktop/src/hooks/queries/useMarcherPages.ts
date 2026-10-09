@@ -24,7 +24,7 @@ import { conToastError } from "@/utilities/utils";
 import { DEFAULT_STALE_TIME } from "./constants";
 import tolgee from "@/global/singletons/Tolgee";
 import { toast } from "sonner";
-import { toastTimelineEdit } from "@/timeline/timelinePassThrough";
+import { toastPassThrough } from "@/timeline/timelinePassThrough";
 import { db, schema } from "@/global/database/db";
 import { invalidateAfterMarcherPagesWrite } from "./sharedInvalidators";
 import { toastCarryForward } from "@/utilities/carryForwardToast";
@@ -163,7 +163,7 @@ export const updateMarcherPagesMutationOptions = (queryClient: QueryClient) => {
  * through `moveMarchersInTarget` over the page's box, clearing the marchers' own moves there for
  * set to previous page. The resolver store picks the change up from the change log, so there is
  * nothing to invalidate. A refused move shows its friendly message (P8.6); one that passed through
- * other moves or carried to later pages says so (`toastTimelineEdit`).
+ * page flags or other moves says so (`toastPassThrough`).
  */
 export const moveMarchersToNeighborPageMutationOptions = () => {
     return mutationOptions({
@@ -173,8 +173,8 @@ export const moveMarchersToNeighborPageMutationOptions = () => {
             clearOwn,
         }: TimelineNeighborPageRequest) =>
             moveMarchersInTarget({ db, target, moves, clearOwn }),
-        onSuccess: (result, { target }) => {
-            void toastTimelineEdit(target, result);
+        onSuccess: (result) => {
+            toastPassThrough(result);
         },
         onError: (e, variables) => {
             toastTimelineError(e, `Error moving marchers`, variables);
@@ -185,16 +185,16 @@ export const moveMarchersToNeighborPageMutationOptions = () => {
 /**
  * Timeline mode's write for a canvas move (UI-9 Editing, P8.15): one undoable edit through
  * `moveMarchersInTarget`, setting homes or the endings in the selected timeline. A refused move
- * shows its friendly message; a move that passed through or carried to later pages says so
- * (`toastTimelineEdit`).
+ * shows its friendly message; a move that passed through page flags says so
+ * (`toastPassThrough`).
  */
 export const moveMarchersInTargetMutationOptions = () => {
     return mutationOptions({
         mutationFn: ({ target, moves }: TimelineEditRequest) =>
             moveMarchersInTarget({ db, target, moves }),
         // A drag over a window that crosses pages says what it passed through (UI-10)
-        onSuccess: (result, { target }) => {
-            void toastTimelineEdit(target, result);
+        onSuccess: (result) => {
+            toastPassThrough(result);
         },
         onError: (e, variables) => {
             toastTimelineError(e, `Error moving marchers`, variables);

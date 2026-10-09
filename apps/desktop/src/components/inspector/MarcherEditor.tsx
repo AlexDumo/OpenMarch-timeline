@@ -720,9 +720,6 @@ function MarcherEditor() {
                                     .map((marcher) => marcher.drill_number)
                                     .join(", ")}
                             </p>
-                            <TimelineHoldLine
-                                marcherIds={selectedMarcherIdList}
-                            />
                             {minMaxStepSize &&
                                 minMaxStepSize.min &&
                                 minMaxStepSize.max && (
@@ -783,6 +780,10 @@ function MarcherEditor() {
                                         </div>
                                     </div>
                                 )}
+                            {/* Under the step sizes: hold or move on this page (UI-15) */}
+                            <TimelineHoldLine
+                                marcherIds={selectedMarcherIdList}
+                            />
                             {selectedMarchers.length === 2 && (
                                 <RegisteredActionButton
                                     registeredAction={
@@ -852,9 +853,6 @@ function MarcherEditor() {
                             }}
                             className="mt-12 flex flex-col gap-24"
                         >
-                            <TimelineHoldLine
-                                marcherIds={selectedMarcherIdList}
-                            />
                             {!rCoords ? (
                                 <p className="text-body text-red">
                                     <T keyName="inspector.marcher.errorLoadingCoords" />
@@ -1017,25 +1015,31 @@ function MarcherEditor() {
                                             </Select>
                                         </div>
                                     </div>
-                                    {stepSize !== undefined && (
-                                        <div className="flex justify-between px-6">
-                                            <label className="text-body leading-none opacity-80">
-                                                <T keyName="inspector.marcher.stepSize" />
-                                            </label>
+                                    <div className="flex flex-col gap-12">
+                                        {stepSize !== undefined && (
+                                            <div className="flex justify-between px-6">
+                                                <label className="text-body leading-none opacity-80">
+                                                    <T keyName="inspector.marcher.stepSize" />
+                                                </label>
 
-                                            <p className="text-body flex items-center gap-4 bg-transparent leading-none">
-                                                <StepSizeWarningBadge
-                                                    over={
-                                                        !!fieldProperties &&
-                                                        stepSize.exceedsThreshold(
-                                                            fieldProperties.stepSizeWarningThresholdInches,
-                                                        )
-                                                    }
-                                                />
-                                                {stepSize.displayString()}
-                                            </p>
-                                        </div>
-                                    )}
+                                                <p className="text-body flex items-center gap-4 bg-transparent leading-none">
+                                                    <StepSizeWarningBadge
+                                                        over={
+                                                            !!fieldProperties &&
+                                                            stepSize.exceedsThreshold(
+                                                                fieldProperties.stepSizeWarningThresholdInches,
+                                                            )
+                                                        }
+                                                    />
+                                                    {stepSize.displayString()}
+                                                </p>
+                                            </div>
+                                        )}
+                                        {/* Under Step Size: hold or move on this page (UI-15) */}
+                                        <TimelineHoldLine
+                                            marcherIds={selectedMarcherIdList}
+                                        />
+                                    </div>
                                     {/* This is here so the form submits when enter is pressed, does NOT need to be translated */}
                                     <button
                                         type="submit"

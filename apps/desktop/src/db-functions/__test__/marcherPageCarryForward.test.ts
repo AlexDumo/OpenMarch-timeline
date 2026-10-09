@@ -758,14 +758,14 @@ describe("carryForwardMessage", () => {
 
     it("names the first and last page carried to, and the edited page", () => {
         expect(carryForwardMessage(["3", "4", "7"], ["2"], t)).toEqual({
-            message: "Also moved on Pages 3–7",
+            message: "Pages 3–7 followed (they were copies)",
             actionLabel: "Only Page 2",
         });
     });
 
     it("names one page", () => {
         expect(carryForwardMessage(["3"], ["2"], t)).toEqual({
-            message: "Also moved on Page 3",
+            message: "Page 3 followed (it was a copy)",
             actionLabel: "Only Page 2",
         });
     });

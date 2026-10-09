@@ -42,15 +42,32 @@ export interface NamedPage {
     order: number;
 }
 
+/**
+ * A page left after the delete, named as it was before it (the numbers the user knew), and
+ * whether that name changed.
+ */
+export interface PageAfterDelete extends NamedPage {
+    /** Its name after the delete differs (a later page renumbered) */
+    renamed: boolean;
+}
+
+/** A page left that the delete made longer (it took a deleted page's box). */
+export interface GrownPage extends PageAfterDelete {
+    /** Its length after the delete, in counts */
+    counts: number;
+}
+
 export interface PageDeleteWithMovesResult {
     deleted: DatabasePage[];
     /** The deleted pages' names, as they were before the delete, in show order */
     deletedNames: string[];
+    /** The pages left that are longer now, in show order */
+    grownPages: GrownPage[];
     /**
-     * The pages left whose flag shows any marcher somewhere else than it did, named as they are
-     * after the delete, in show order. Always empty outside timeline mode.
+     * The pages left whose flag shows any marcher somewhere else than it did, in show order.
+     * Always empty outside timeline mode.
      */
-    changedPages: NamedPage[];
+    changedPages: PageAfterDelete[];
 }
 
 /** How far a position may move, in canvas pixels, and still count as unchanged */
@@ -137,9 +154,10 @@ export function changedFlagPageIds(
 }
 
 /**
- * Runs `remove` (a delete inside `withTimelinePageRipple`) and reports what it changed. In
- * timeline mode it samples every remaining flag before and after; `flagBefore` maps a page left
- * after the delete to the beat its flag was at before.
+ * Runs `remove` (a delete inside `withTimelinePageRipple`) and reports what it changed: the pages
+ * left that are longer now, from the page grid before and after, and in timeline mode the pages
+ * whose flag looks different, sampling every remaining flag before and after; `flagBefore` maps a
+ * page left after the delete to the beat its flag was at before. Pages are named as before.
  */
 async function deleteAndCompare(
     tx: DbTransaction,
@@ -148,6 +166,7 @@ async function deleteAndCompare(
 ): Promise<PageDeleteWithMovesResult> {
     const timelineMode = await timelineModeInTransaction(tx);
     const namesBefore = await readPageNames(tx);
+    const gridBefore = await readPageGrid(tx);
     const before = timelineMode ? await readFlagLook(tx) : null;
     const deleted = await withTimelinePageRipple(tx, remove);
     const deletedNames = deleted
@@ -155,19 +174,40 @@ async function deleteAndCompare(
         .filter((p) => p !== undefined)
         .sort((a, b) => a.order - b.order)
         .map((p) => p.name);
-    if (!before) return { deleted, deletedNames, changedPages: [] };
+
+    const namesAfter = await readPageNames(tx);
+    const asBefore = (id: number): PageAfterDelete | undefined => {
+        const old = namesBefore.get(id);
+        if (!old) return undefined;
+        return { ...old, renamed: namesAfter.get(id)?.name !== old.name };
+    };
+    const countsBefore = new Map(
+        gridBefore.pages.map((p) => [p.id, p.end - p.start]),
+    );
+    const gridAfter = await readPageGrid(tx);
+    const grownPages = gridAfter.pages
+        .filter(
+            (p) =>
+                p.id !== FIRST_PAGE_ID &&
+                p.end - p.start > (countsBefore.get(p.id) ?? Infinity),
+        )
+        .flatMap((p) => {
+            const page = asBefore(p.id);
+            return page ? [{ ...page, counts: p.end - p.start }] : [];
+        })
+        .sort((a, b) => a.order - b.order);
+    if (!before) return { deleted, deletedNames, grownPages, changedPages: [] };
 
     const after = await readFlagLook(tx);
-    const namesAfter = await readPageNames(tx);
     const changedPages = changedFlagPageIds(
         before,
         after,
         flagBefore(before.grid),
     )
-        .map((id) => namesAfter.get(id))
+        .map(asBefore)
         .filter((p) => p !== undefined)
         .sort((a, b) => a.order - b.order);
-    return { deleted, deletedNames, changedPages };
+    return { deleted, deletedNames, grownPages, changedPages };
 }
 
 /**
@@ -183,7 +223,12 @@ export async function deletePagesWithMoves({
 }): Promise<PageDeleteWithMovesResult> {
     const ids = new Set([...pageIds].filter((id) => id !== FIRST_PAGE_ID));
     if (ids.size === 0)
-        return { deleted: [], deletedNames: [], changedPages: [] };
+        return {
+            deleted: [],
+            deletedNames: [],
+            grownPages: [],
+            changedPages: [],
+        };
     return await transactionWithHistory(
         db,
         "deletePages",
@@ -225,7 +270,12 @@ export async function deletePageYankWithMoves({
     pageId: number;
 }): Promise<PageDeleteWithMovesResult> {
     if (pageId === FIRST_PAGE_ID)
-        return { deleted: [], deletedNames: [], changedPages: [] };
+        return {
+            deleted: [],
+            deletedNames: [],
+            grownPages: [],
+            changedPages: [],
+        };
     return await transactionWithHistory(
         db,
         "deletePageYank",
@@ -258,19 +308,46 @@ export function pageRunsLabel(pages: readonly NamedPage[]): string {
         .join(", ");
 }
 
+/** "Page 3", or "old Page 3" when the delete renumbered it. */
+const oldPageLabel = (page: PageAfterDelete) =>
+    page.renamed ? `old Page ${page.name}` : `Page ${page.name}`;
+
+/** "Pages 3–5" or "old Page 3", for pages that all were or all weren't renumbered. */
+const pagesLabel = (pages: readonly PageAfterDelete[], renamed: boolean) =>
+    `${renamed ? "old " : ""}${pages.length === 1 ? "Page" : "Pages"} ${pageRunsLabel(pages)}`;
+
 /**
- * The toast after a delete with its moves: "Deleted Page 3 and its moves · Pages 3–5 changed", or
- * "· No other page changed" when every page left looks the same.
+ * The toast after a delete with its moves, in set and count terms with the numbers the user knew
+ * (defined-coordinates 08): "Deleted Page 2 · Page 1 is now 16 counts · old Pages 3–4 changed",
+ * leaving out what doesn't apply, and "· No other page changed" when every page left looks the
+ * same.
  */
 export function pageDeleteWithMovesMessage({
     deletedNames,
+    grownPages,
     changedPages,
-}: Pick<PageDeleteWithMovesResult, "deletedNames" | "changedPages">): string {
-    const what =
+}: Pick<
+    PageDeleteWithMovesResult,
+    "deletedNames" | "grownPages" | "changedPages"
+>): string {
+    const parts = [
         deletedNames.length === 1
-            ? `Deleted Page ${deletedNames[0]} and its moves`
-            : `Deleted Pages ${deletedNames.join(", ")} and their moves`;
-    if (changedPages.length === 0) return `${what} · No other page changed`;
-    const pages = changedPages.length === 1 ? "Page" : "Pages";
-    return `${what} · ${pages} ${pageRunsLabel(changedPages)} changed`;
+            ? `Deleted Page ${deletedNames[0]}`
+            : `Deleted Pages ${deletedNames.join(", ")}`,
+        ...grownPages.map(
+            (p) => `${oldPageLabel(p)} is now ${p.counts} counts`,
+        ),
+    ];
+    const kept = changedPages.filter((p) => !p.renamed);
+    const renamed = changedPages.filter((p) => p.renamed);
+    const changed = [
+        ...(kept.length > 0 ? [pagesLabel(kept, false)] : []),
+        ...(renamed.length > 0 ? [pagesLabel(renamed, true)] : []),
+    ];
+    parts.push(
+        changed.length > 0
+            ? `${changed.join(" and ")} changed`
+            : "No other page changed",
+    );
+    return parts.join(" · ");
 }

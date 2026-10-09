@@ -7,6 +7,7 @@ import {
     deletePagesWithMovesMutationOptions,
     useAddPageFlag,
 } from "@/hooks/queries/usePageFlags";
+import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import { useTimingObjects } from "@/hooks";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -207,8 +208,11 @@ export default function TimelineModePanel() {
     const { mutate: deletePageFlags } = useMutation(
         deletePageFlagsMutationOptions(queryClient),
     );
+    // The delete toast's Undo is the app's normal undo (Ctrl+Z)
+    const { mutate: performHistoryAction } = usePerformHistoryAction();
+    const undo = () => performHistoryAction("undo");
     const { mutate: deletePagesWithMoves } = useMutation(
-        deletePagesWithMovesMutationOptions(queryClient),
+        deletePagesWithMovesMutationOptions(queryClient, undo),
     );
     const selectAfterDelete = (
         after: ReturnType<typeof selectionAfterFlagDelete>,
