@@ -194,4 +194,4 @@ Owner, 2026-10-08, after the build (PR #112):
 | `dc/wp14-mtt-polish`    | Two-button toast layout; runs of edits add up for Move them too and Only Page N; a fresh id per surprise toast                                                                |
 
 The full, code-grounded list of behavior changes, tests and the QA script is [CHANGES.md](CHANGES.md).
-Lead defaults are logged as V-140..V-149 and V-150..V-159 in [VALIDATION.md](../ownership/VALIDATION.md).
+Lead defaults are logged as V-140..V-149 and V-181..V-191 (V-150..V-160 before #115 took those) in [VALIDATION.md](../ownership/VALIDATION.md).

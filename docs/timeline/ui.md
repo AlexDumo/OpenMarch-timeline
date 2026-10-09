@@ -893,7 +893,7 @@ from it. The spec still wins on the model; this file decides presentation.
     step. Edits that split nobody stay silent. A window passing a flag shows its own toast instead;
     in page mode it shares one toast with the "followed" message and **Only Page 2**.
     Consecutive edits of the same page or window that move the same marchers add up behind one
-    toast, so **Move them too** and **Only Page 2** act on the whole run (V-153). A toast with two
+    toast, so **Move them too** and **Only Page 2** act on the whole run (V-184). A toast with two
     buttons puts them on their own row under the text.
   - **Delete move** (UI-14) names the pages that change, because later held pages fall back:
     "Deleted Move 2 · Pages 2–3 changed".
@@ -950,7 +950,7 @@ from it. The spec still wins on the model; this file decides presentation.
       before the edit, so pages 3–4 look as they did. Their kept move walks back from the edited spot,
       and the chain shows it as kept. A page's first move stays silent, because its later pages
       following is what the designer meant. Kept marchers don't follow, so they don't count.
-      Consecutive nudges share one toast, and Only Page 2 goes back to before the first (V-153).
+      Consecutive nudges share one toast, and Only Page 2 goes back to before the first (V-184).
       The pass-through and **Move them too** toasts win.
     - **Kept marchers on the field** (owner chose mock-up D over opacity, 2026-10-09; wp20). On the
       current page, each marcher kept there gets a small broken chain beside its dot, whatever is
@@ -960,7 +960,7 @@ from it. The spec still wins on the model; this file decides presentation.
       Page 3 · won't follow Page 2" ("… won't follow earlier pages" when kept ahead of any move).
       It follows keep, follow again, undo and page changes, and goes when the kept move is edited
       into an ordinary move. Hidden while playing or scrubbing and while a move is isolated
-      (_lead default_). Page mode shows nothing (V-160).
+      (_lead default_). Page mode shows nothing (V-191).
   - **The hold marks' words are a tooltip** (a label and a hint, after a short hover or on keyboard
     focus; a press closes it), like the transport's tooltips (UI-17).
   - **Page mode** (until the flip) gets the same rule on its dense rows. An edit on page N also

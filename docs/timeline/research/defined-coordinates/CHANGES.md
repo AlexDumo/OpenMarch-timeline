@@ -83,9 +83,9 @@ with its own move, and stops there.
 | 5   | Delete page and its moves keeps tracks (layer > 0) inside the box ("I think no" to deleting them)                                                                                                                                               | README; V-149                         |
 | 6   | Page-mode shape edits carry forward ("I think so")                                                                                                                                                                                              | README; V-148                         |
 | 7   | After the persona study (08): carry-forward is shown by hold marks, not toasts; toasts only for surprises, shorter                                                                                                                              | ui.md UI-18; V-146                    |
-| 8   | 2026-10-09: hold-mark tooltips and **Move them too** built at the owner's request (PR #112 comment); renumbered UI-18 (UI-15/16 went to timeline edges, UI-17 to transport keys)                                                                | PR comment; ui.md UI-18; V-150, V-151 |
-| 9   | 2026-10-09 (lead defaults after review): Move them too only when an edit splits a group (V-150); runs of edits add up behind one toast, two-button toasts put the buttons on their own row (V-153)                                              | ui.md UI-18; VALIDATION               |
-| 10  | 2026-10-09: keep later pages (study 10): chains on the page boxes (none without a selection), the inspector's Keep here / Follow again, the page box menu entries, the after-edit Only Page N toast (the C rule); Alt-drag dropped, **K** added | 10; ui.md UI-18; V-154 … V-158        |
+| 8   | 2026-10-09: hold-mark tooltips and **Move them too** built at the owner's request (PR #112 comment); renumbered UI-18 (UI-15/16 went to timeline edges, UI-17 to transport keys)                                                                | PR comment; ui.md UI-18; V-181, V-182 |
+| 9   | 2026-10-09 (lead defaults after review): Move them too only when an edit splits a group (V-181); runs of edits add up behind one toast, two-button toasts put the buttons on their own row (V-184)                                              | ui.md UI-18; VALIDATION               |
+| 10  | 2026-10-09: keep later pages (study 10): chains on the page boxes (none without a selection), the inspector's Keep here / Follow again, the page box menu entries, the after-edit Only Page N toast (the C rule); Alt-drag dropped, **K** added | 10; ui.md UI-18; V-185 … V-189        |
 | 11  | 2026-10-09: store kept spots: a schema addition while user version 8 is unreleased, with an ADR 0001 amendment (supersedes decision 4's "no stored kind")                                                                                       | ADR 0001 amendment; B-38              |
 
 ---
@@ -433,7 +433,7 @@ Index:
 - **Tests:** `timelineMoveThemToo.test.ts` › "the delete-move toast: appends the pages that changed,
   as runs", "deleting a move names the pages that changed: later pages that held from it fall back…".
 - **Real-app:** `dc4-tl-delete.mjs` (5); screenshot `dc-summary3/5-tl-delete-move-toast.png`.
-- **V-row:** V-152.
+- **V-row:** V-183.
 
 #### B-13 Tag appearances move to the next page on any page delete
 
@@ -552,7 +552,7 @@ Index:
   pages followed".
 - **Real-app:** `dc-page.mjs` P2, `wp8-f4.mjs`, `ux-f4.mjs`, `dc4-pm-study-only.mjs`,
   `dc4-pm-silence-held.mjs`, `wp14-pm-only.mjs` (two nudges, Only Page 2 back to before the first).
-- **V-row:** V-141, V-153.
+- **V-row:** V-141, V-184.
 - **Doc vs code:** resolved: README now says Only Page N "puts the followed pages back as a second
   undo step".
 - **Limits:** study 09: users didn't know what Only Page 2 would do; with a partial follow the toast
@@ -670,7 +670,7 @@ Index:
   page, the same marchers…".
 - **Real-app:** `dc4-pm-study-move.mjs` (9/9), `dc4-pm-silence-written.mjs` (written show: no toast),
   `dc4-pm-silence-held.mjs`, `wp14-pm.mjs`; screenshots `dc-summary3/1-pm-*`, `~/ux-study/wp14/pm-*`.
-- **V-row:** V-150, V-153.
+- **V-row:** V-181, V-184.
 - **Limits:** a split edit in a written show that also has some held pages still names everyone who
   stopped on a page others followed into; there is no "6 of 8 followed" count.
 
@@ -702,7 +702,7 @@ Index:
 - **Real-app:** `dc4-tl-study.mjs`, `dc4-tl-window.mjs` (pass-through wins),
   `dc4-tl-silence-held.mjs`, `dc4-tl-silence-written.mjs`, `wp14-tl.mjs`; screenshots
   `dc-summary3/1-tl-*`, `3-tl-window-split-toast.png`, `~/ux-study/wp14/tl-*`.
-- **V-row:** V-150, V-153.
+- **V-row:** V-181, V-184.
 - **Limits:** when a window both passes a flag and splits a group, the user gets Keep as a stop but
   no Move them too for that edit.
 
@@ -778,7 +778,7 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
   under the text, right-aligned".
 - **Real-app:** `wp14-pm.mjs` (layout measured: buttons on one row under the text, single-line, toast
   under 160 px), `wp14-tl.mjs` (one-button toast keeps its row); `~/ux-study/wp14/*.png`.
-- **V-row:** V-153.
+- **V-row:** V-184.
 
 #### B-36 Runs of edits add up behind one surprise toast
 
@@ -805,7 +805,7 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
   `timelineMoveThemToo.test.ts` › "timeline mode: Move them too after several edits" (6).
 - **Real-app:** `wp14-pm.mjs` (two nudges, Move them too shifts by both), `wp14-pm-only.mjs`,
   `wp14-tl.mjs`.
-- **V-row:** V-153.
+- **V-row:** V-184.
 - **Limits:** the run is module state (one per app window); a nudge on a different selection, even
   overlapping, starts over (by design).
 
@@ -823,7 +823,7 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
   buttons or icon".
 - **Real-app:** `wp14-pm-only.mjs` ("a followed toast right after a Move them too toast has no icon
   and one button").
-- **V-row:** V-153 (indirectly).
+- **V-row:** V-184 (indirectly).
 - **Limits:** a toast transition video has not been reviewed (section 7).
 
 ### Hold marks and inspector
@@ -890,7 +890,7 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
   `pageHoldMarks.test.ts` › "words each mark…", "gives each mark a hint line…".
 - **Real-app:** `wp10-tl.mjs`, `wp10-page.mjs`, `dc4-tl-silence-held.mjs` and
   `dc4-pm-silence-held.mjs` (8); screenshots `dc-summary3/8-*`.
-- **V-row:** V-151.
+- **V-row:** V-182.
 - **Limits:** built on a stand-in (`HintTooltip`) before #115 landed; since the rebase onto it, the
   marks use #115's shared `ShortcutTooltip` (section 8).
 
@@ -1010,7 +1010,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
   `timelineKeptMarkers.ts`, `timelineMoves.ts` (`keptAssignmentsMovedBy`); `timeline/timelineKept.ts`.
 - **Tests:** `timelineKeepHere.test.ts` (owner flow, skips, edits of a kept spot, page edits, history
   round trips; wp19: keep a never-moved marcher, and its history round trip), `timelineKept.test.ts`, `0018_clean_sentinels.test.ts`.
-- **V-row:** V-154 … V-158 (the UI on top). ADR 0001 amendment 2026-10-09.
+- **V-row:** V-185 … V-189 (the UI on top). ADR 0001 amendment 2026-10-09.
 
 #### B-39 Keep states for the selection (renderer)
 
@@ -1065,7 +1065,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Real-app:** `~/ux-study/wp16/run` (study flow, 37 steps), `~/ux-study/wp16/mixed` (mixed chain);
   wp19: `~/ux-study/wp19/a` (linked outline vs kept chip, step 14 crop), `~/ux-study/wp19/b`
   (mixed chip and named tooltip, step 13 crop).
-- **V-row:** V-154.
+- **V-row:** V-185.
 
 #### B-41 Inspector: Keep here, Follow again, and the pages that follow
 
@@ -1099,7 +1099,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
   multi-selection and hold-link cases.
 - **Real-app:** `~/ux-study/wp19/d` step 22 (link tooltip), `~/ux-study/wp19/c` step 6 (Keep here
   for a never-moved marcher).
-- **V-row:** V-155.
+- **V-row:** V-186.
 
 #### B-42 Page box menu: Keep selected marchers here / Let selected marchers follow again
 
@@ -1115,7 +1115,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Tests:** `PageKeepChain.test.tsx` › "the page box menu's keep entries" (6);
   `timelineKeepCommands.test.ts` › "the menu keeps the selected marchers that follow, and lets them
   follow again".
-- **V-row:** V-156.
+- **V-row:** V-187.
 
 #### B-43 K: keep where the marchers hold, or on the next page
 
@@ -1140,7 +1140,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Real-app:** `~/ux-study/wp19/a` steps 11–14 (K on held page 3 keeps page 3; Kept on this
   page), `~/ux-study/wp19/c` steps 7–13 (K keeps a never-moved OT1 on page 3; its later page 2 move
   walks back there).
-- **V-row:** V-157. The app has no shortcuts list to add it to; the action's description is its
+- **V-row:** V-188. The app has no shortcuts list to add it to; the action's description is its
   only listing.
 
 #### B-44 Timeline Only Page N after an edit
@@ -1156,7 +1156,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
   - a page's first move stays silent (no owned marchers);
   - kept marchers don't follow, so they don't count;
   - the pass-through toast wins, then **Move them too**; Only Page N shows only when neither does;
-  - nudges in a row share one toast (`continueEditRun`, V-153), and the action goes back to the
+  - nudges in a row share one toast (`continueEditRun`, V-184), and the action goes back to the
     spots before the first nudge.
 - **Strings:** `timeline.keep.followed.onePage` "Page {page} followed", `.pages` "Pages
   {first}–{last} followed", `.only` "Only Page {page}".
@@ -1169,7 +1169,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
   `timelineMoveThemToo.test.ts` (two "offers nothing" cases now expect this toast; pass-through
   precedence unchanged).
 - **Real-app:** `~/ux-study/wp16/run` steps 30–35.
-- **V-row:** V-158.
+- **V-row:** V-189.
 - **Limits:** windows that don't end on a flag, isolated moves and home edits never offer it.
 
 #### B-45 Kept marchers on the field
@@ -1215,7 +1215,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Real-app:** `~/ux-study/wp20/b` (named copies in `~/ux-study/wp20/`): step 12 icons on OT1 and
   OT8 only, page 3, nothing selected; step 14 tooltip; step 17 page 2 and step 19 page 4 no icons;
   steps 23/25 zoomed out to 218% and 182%, still 16 px; step 27 undo the keep, icons gone.
-- **V-row:** V-160.
+- **V-row:** V-191.
 - **Limits:** very low zooms not looked at in the app (at 10 px minimum the mark outgrows the dot
   below about 100%); tooltips use the light accent on a white square in dark field themes too.
 
@@ -1588,9 +1588,9 @@ This list should drive the next testing pass.
 | #   | Gap (first catalog)                                               | Closed by                                                                                                                                                                                    |
 | --- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Move them too on ordinary edits; hiding Keep as a stop            | wp12 code change (split-only trigger; pass-through wins). Tests: "fully written / fully held" and "window … only the pass-through toast" cases. Real app: `dc4-*-silence-*`, `dc4-tl-window` |
-| 2   | Move them too in the real app: screenshots only                   | `dc4-pm-study-move` (9/9), `dc4-pm-study-only` (7/7), `dc4-tl-study`, `wp14-pm`, `wp14-tl`, `wp14-pm-only`; V-150, V-153 rows                                                                |
+| 2   | Move them too in the real app: screenshots only                   | `dc4-pm-study-move` (9/9), `dc4-pm-study-only` (7/7), `dc4-tl-study`, `wp14-pm`, `wp14-tl`, `wp14-pm-only`; V-181, V-184 rows                                                                |
 | 3   | Delete with the deleted page selected; StateInitializer test      | `StateInitializerDelete.test.tsx` (6); `dc4-tl-delete`, `dc4-pm-delete`                                                                                                                      |
-| 4   | Delete move's changed pages, real app                             | `dc4-tl-delete` (5); V-152                                                                                                                                                                   |
+| 4   | Delete move's changed pages, real app                             | `dc4-tl-delete` (5); V-183                                                                                                                                                                   |
 | 5   | Window move ending at a deleted page's flag was deleted           | wp13 code change (`566254e8`, `isPageMove` entirely inside the box) and `pageDeleteGaps.test.ts` (7)                                                                                         |
 | 6   | PM carry from Shift+P/N and the new-show import                   | `setMarchersToNeighborPageCarry.test.tsx` (4), `newShowCompletion.test.ts` (1)                                                                                                               |
 | 7   | Chained follow-ups (Only Page N / Move them too after more steps) | `marcherPageCarryForwardGaps.test.ts` "gap 7"; `timelineSparseGaps.test.ts` "gap 7: Keep as a stop…"; the run tests in `moveThemToo.test.ts` and `timelineMoveThemToo.test.ts`               |
@@ -1620,7 +1620,7 @@ This list should drive the next testing pass.
 7. **Runs that add up (B-36)** across mode switches or after a file reload: not tested (the run is
    module state and should reset; not checked).
 8. **Partial-follow wording:** no "6 of 8 followed" count (09 rec. 2, not built).
-9. **Keep later pages (B-38 … B-45):** no persona run on the built UI yet (V-154 … V-158); chains
+9. **Keep later pages (B-38 … B-45):** no persona run on the built UI yet (V-185 … V-189); chains
    at 100+ pages and large selections not measured (one span pass per marcher per resolver
    version); the new strings exist only in `en.json`; chains in compact mode and on very narrow
    boxes checked by unit test only.
@@ -1641,7 +1641,7 @@ This list should drive the next testing pass.
 ### Interplay with other work
 
 - **#106 (edit moves, UI-14):** already merged into the base. This branch extends its Delete move
-  toast (B-12, V-152) and keeps both page box menu sets. Under the sparse model, deleting a move makes
+  toast (B-12, V-183) and keeps both page box menu sets. Under the sparse model, deleting a move makes
   later held pages fall back, hence the changed-pages text. Both delete toasts now close on the next
   history change.
 - **#111 (timeline edges: drag a page flag, resize a move) and #113:** merged into the base via
@@ -1662,7 +1662,9 @@ This list should drive the next testing pass.
   `joinNewMarchersToTimelinesInTransaction`, `marcherList`, `narrowingLabel` or the removed
   `EDIT_SURPRISE_TOAST_ID` must be updated (`editSurpriseToastId()` replaces the constant).
 - **UI numbering:** this feature is **UI-18**. UI-15 and UI-16 belong to timeline edges (#111),
-  UI-17 to transport keys. VALIDATION rows are V-140..V-149 and V-150..V-159 (V-150..V-158 used).
+  UI-17 to transport keys. VALIDATION rows are V-140..V-149 and V-181..V-191
+  (V-150..V-160 until the 2026-10-09 rebase onto #115, which took V-150..V-180; commit messages
+  from before it use the old numbers).
 
 ### Doc vs code discrepancies
 
@@ -1671,8 +1673,8 @@ Resolved since the first catalog (lead's `5b2c5c6c`, wp12–wp14):
 - README "Built" table now lists wp7–wp14 (wp12–wp14 rows added with this update); Recommendation 5 is marked historical; Only Page N wording
   fixed.
 - ui.md UI-18 now covers Move them too (split-only), Delete move's changed pages, "Hold from the
-  start" and the hold-mark tooltips; V-150 (Move them too), V-151 (tooltips), V-152 (Delete move)
-  added; V-153 (runs add up, two-button layout) added with this update.
+  start" and the hold-mark tooltips; V-181 (Move them too), V-182 (tooltips), V-183 (Delete move)
+  added; V-184 (runs add up, two-button layout) added with this update.
 - ui.md UI-18 says "a range write … writes nothing", matching B-03.
 - ADR 0001: "deletes its flag only by default; 'Delete page and its moves' and Yank still remove the
   page's own moves".
@@ -1683,6 +1685,6 @@ Still open:
 
 | Doc              | Says                                                           | Code at `2470207c`                                                                                       |
 | ---------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| ui.md UI-18      | Silent on runs of edits adding up and on the two-button layout | Built (B-26, B-36); recorded only in V-153 and here                                                      |
+| ui.md UI-18      | Silent on runs of edits adding up and on the two-button layout | Built (B-26, B-36); recorded only in V-184 and here                                                      |
 | VALIDATION V-149 | "removes only layer-0 page moves in the box"                   | Matches; additionally a window move starting before the box is kept even when it ends at the flag (wp13) |
 | PR #112 body     | Rewritten with this update to match the branch                 | —                                                                                                        |
