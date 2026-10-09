@@ -19,6 +19,7 @@ MVP; don't build them yet.
 | [plan.md](plan.md)                       | Shared context: repo facts, decisions (`D-n`), phase order, risks. Read it once.           |
 | [design.md](design.md)                   | Technical design: coordinates, venue settings, kit contracts, sync protocol, budgets.      |
 | [ui.md](ui.md)                           | The window's overlay UI and camera behavior.                                               |
+| [technique.md](technique.md)             | Marching technique and instrument holds the marchers follow, as the owner set them.        |
 | [WORKER.md](WORKER.md)                   | The step-by-step procedure every worker follows: claim, checkpoint, finish.                |
 | [phases/](phases/)                       | One file per phase: status, owners, work packages, exit gate, handoff notes, progress log. |
 | [validation-plan.md](validation-plan.md) | MVP acceptance checks V1–V6 and their log.                                                 |
