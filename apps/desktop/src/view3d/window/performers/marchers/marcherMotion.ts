@@ -159,39 +159,37 @@ export function planShow(
     };
 }
 
+/**
+ * How far the marchers run ahead of the show's count clock, in counts
+ * (docs/3d/technique.md, "Steps and timing"). The planner lands each step at
+ * the end of the drill count it covers, but the editor's "Count C" click is
+ * that count's start: playing the plan one count ahead lands each heel on
+ * its click. The step-off plays during the count before a move, the left
+ * foot lands on count 1, the right on count 8, and the close finishes on
+ * the hold's count 1, as the 2D dot arrives. During a move the body runs
+ * half a step ahead of the 2D dot.
+ */
+export const STEP_AHEAD = 1;
+
 /** Per-frame state: which event each marcher plays. */
 export class MarcherMotion {
     private readonly cursor: Int32Array;
     private readonly out = { x: 0, z: 0 };
 
-    /**
-     * @param lead counts the clips run ahead of the count clock. om-pose's
-     * clips land the foot flat on the beat; a lead of about a tenth of a
-     * count puts the heel's first touch on the beat instead, and the body
-     * still follows the drill in real time.
-     */
     constructor(
         private readonly plans: readonly (MarcherPlan | null)[],
         private readonly manifest: Manifest,
         private readonly bodies: MarcherBodies,
         private readonly heading: number,
-        private lead = 0,
     ) {
         this.cursor = new Int32Array(plans.length).fill(-1);
-    }
-
-    /** Changes the lead; every slot is rewritten on the next update. */
-    setLead(lead: number): void {
-        if (lead === this.lead) return;
-        this.lead = lead;
-        this.cursor.fill(-1);
     }
 
     private apply(
         slot: number,
         plan: MarcherPlan,
         index: number,
-        count: number,
+        planCount: number,
     ): void {
         const e = plan.events[index];
         const rows: Bake["rows"] = this.bodies.bake.rows;
@@ -204,7 +202,10 @@ export class MarcherMotion {
         if (e.kind === "crossfade") {
             // the fade's progress, 0 before its window and 1 after
             const u = Math.min(
-                Math.max((count - e.fadeStart) / (e.fadeEnd - e.fadeStart), 0),
+                Math.max(
+                    (planCount - e.fadeStart) / (e.fadeEnd - e.fadeStart),
+                    0,
+                ),
                 1,
             );
             const t = crossfadeWeight(u);
@@ -216,37 +217,39 @@ export class MarcherMotion {
             row,
             row2,
             weight: row2 ? weight : 0,
-            phase: -e.phaseStart + this.lead,
+            // the shader plays clip time uCount + phase, and uCount is the
+            // show's count clock: plan time minus the event's phase start
+            phase: STEP_AHEAD - e.phaseStart,
             rate: 1,
             legYaw,
         });
     }
 
     /**
-     * At count clock `count`: switches clips where needed and replaces each
-     * placed slot's drill position in `xz` with its body position.
+     * At show count clock `count`: switches clips where needed and replaces
+     * each placed slot's position in `xz`, which the caller fills with the
+     * drill position `STEP_AHEAD` counts later, with its body position.
      */
     update(count: number, xz: Float32Array, placed: Uint8Array): void {
         const out = this.out;
-        // the clips run ahead by the lead; the body stays on the drill's clock
-        const led = count + this.lead;
+        const planCount = count + STEP_AHEAD;
         for (let i = 0; i < this.plans.length; i++) {
             const plan = this.plans[i];
             if (!plan || plan.events.length === 0) continue;
-            const index = eventIndexAt(plan, led, this.cursor[i]);
+            const index = eventIndexAt(plan, planCount, this.cursor[i]);
             if (
                 index !== this.cursor[i] ||
                 plan.events[index].kind === "crossfade"
             ) {
-                this.apply(i, plan, index, led);
+                this.apply(i, plan, index, planCount);
                 this.cursor[i] = index;
             }
             if (!placed[i]) continue;
             bodyAt(
                 this.manifest,
                 plan,
-                eventIndexAt(plan, count, index),
-                count,
+                index,
+                planCount,
                 xz[i * 2],
                 xz[i * 2 + 1],
                 this.heading,

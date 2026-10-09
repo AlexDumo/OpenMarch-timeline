@@ -1297,9 +1297,6 @@
                 "right": "Performer's right"
             },
             "stepOffFootHint": "The performer's own foot, whichever way they face. Facing you, their left foot is on your right.",
-            "beatLead": "Feet lead the beat by",
-            "beatLeadNone": "None",
-            "beatLeadHint": "Counts the feet run ahead of the clock, so the heel lands on the beat. Here to find the right value.",
             "keysSection": "Keyboard and mouse"
         },
         "keys": {

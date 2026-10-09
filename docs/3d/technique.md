@@ -24,13 +24,23 @@ code uses.
 ## Steps and timing
 
 - **Heel on the beat** (2026-10-09). The back edge of the heel touches down
-  exactly on the count; the feet cross between counts. The clips run ahead of
-  the count clock by `beatLead`, 0.1 count by default
-  (`window/sceneStore.ts`), so the heel lands on the beat rather than the foot
-  looking late.
+  exactly on the count's click; the feet cross between counts. The clips
+  already put the heel down on whole counts, so there is no extra lead (an
+  earlier "feet lead the beat" setting ran them 0.1 count early and was
+  removed, 2026-10-09).
 - **Step-off** (2026-10-09). The initiation starts one count before the first
-  step and takes a full count at the current tempo: the step-off clip covers
-  that count and the first foot lands on count 1 (`core/marchers/planner.ts`).
+  step and takes a full count at the current tempo: the step-off clip plays
+  during the last count before the move and the first foot lands on count 1's
+  click.
+- **Counts and clicks** (2026-10-09). The editor's "Count C" starts at that
+  count's click, while the planner lands each step at the end of the drill
+  count it covers. So the marchers run one count ahead of the show's count
+  clock (`STEP_AHEAD` in `window/performers/marchers/marcherMotion.ts`): the
+  left foot lands on counts 1, 3, 5, 7, the right on 2, 4, 6, 8, and the close
+  finishes on the hold's count 1, just as the 2D dot arrives on the set.
+  During a move the 3D body therefore runs half a step ahead of the 2D dot;
+  they meet on every set. Before this fix everything landed a count late,
+  which also made left and right look swapped.
 - **Step-off foot.** The band steps off on the left foot by default; a setting
   steps off on the right, which plays every clip mirrored
   (`window/performers/marchers/mirrorClip.ts`). With the left foot, odd

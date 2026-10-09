@@ -22,9 +22,6 @@
  * - `powerPrefs`: pause drawing when nothing moves, and cap the frame rate
  *   on battery (`drawPolicy.ts`); saved per computer. Set it with
  *   `setPowerPrefs`. `onBattery` is the window's own reading of the battery.
- * - `beatLead`: counts the marchers' clips run ahead of the count clock, so
- *   the heel's first touch lands on the beat (`MarcherMotion`). A test
- *   control until a value is settled.
  * - `qualityMode`: the viewer's choice in the settings panel (`auto`, `low`
  *   or `high`), saved per computer. Set it with `setQualityMode`. In `auto`
  *   the scene lowers `quality` once with `_autoLower()` when frames are slow
@@ -71,8 +68,6 @@ export interface View3dSceneState {
     setHornState: (state: HoldState) => void;
     stepOffFoot: StepOffFoot;
     setStepOffFoot: (foot: StepOffFoot) => void;
-    beatLead: number;
-    setBeatLead: (lead: number) => void;
     powerPrefs: PowerPrefs;
     setPowerPrefs: (prefs: PowerPrefs) => void;
     onBattery: boolean;
@@ -109,8 +104,6 @@ export const useView3dSceneStore = create<View3dSceneState>()((set) => ({
     setHornState: (hornState) => set({ hornState }),
     stepOffFoot: "left",
     setStepOffFoot: (stepOffFoot) => set({ stepOffFoot }),
-    beatLead: 0.1,
-    setBeatLead: (beatLead) => set({ beatLead }),
     powerPrefs: loadPowerPrefs(),
     setPowerPrefs: (powerPrefs) => {
         savePowerPrefs(powerPrefs);

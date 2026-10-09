@@ -40,7 +40,11 @@ import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppear
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
-import { buildCountClock, countAt } from "@/view3d/core/marchers/countClock";
+import {
+    buildCountClock,
+    countAt,
+    msAtCount,
+} from "@/view3d/core/marchers/countClock";
 import { plannedClips } from "@/view3d/core/marchers/planner";
 import {
     defaultPerformerBody,
@@ -68,6 +72,7 @@ import type { MarcherSlotLook } from "./marchers/marcherBodies";
 import {
     MarcherMotion,
     planShow,
+    STEP_AHEAD,
     type ShowPlans,
 } from "./marchers/marcherMotion";
 import {
@@ -91,7 +96,6 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const quality = useView3dSceneStore((s) => s.quality);
     const hornState = useView3dSceneStore((s) => s.hornState);
     const stepOffFoot = useView3dSceneStore((s) => s.stepOffFoot);
-    const beatLead = useView3dSceneStore((s) => s.beatLead);
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
     );
@@ -208,14 +212,10 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                       marcherAssets.manifest,
                       marcherBodies,
                       marcherHeading(),
-                      useView3dSceneStore.getState().beatLead,
                   )
                 : null,
         [marcherBodies, showPlans, marcherAssets],
     );
-    useEffect(() => {
-        motion?.setLead(beatLead);
-    }, [motion, beatLead]);
     const headings = useMemo(
         () => new Float32Array(count).fill(marcherHeading()),
         [count],
@@ -408,16 +408,18 @@ export default function Performers({ fieldProperties }: PerformersProps) {
 
         const { bodies, rings, visible, xz, placed } = meshes;
         if (moved) {
+            // the marchers run a count ahead of the clock (`STEP_AHEAD`), so
+            // they're placed from the drill a count later
+            const c = countAt(clock, ms, countRef.current);
             writePerformerPositions(
                 slots,
-                ms,
+                marcherBodies && motion ? msAtCount(clock, c + STEP_AHEAD) : ms,
                 fieldProperties,
                 visible,
                 xz,
                 placed,
             );
             if (marcherBodies) {
-                const c = countAt(clock, ms, countRef.current);
                 countRef.current = c;
                 motion?.update(c, xz, placed);
                 marcherBodies.writeFrame(xz, headings, placed, c, cam);

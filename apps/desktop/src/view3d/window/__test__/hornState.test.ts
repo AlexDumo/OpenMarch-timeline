@@ -26,15 +26,6 @@ describe("step-off foot", () => {
     });
 });
 
-describe("beat lead", () => {
-    it("starts at a tenth of a count and changes on request", () => {
-        expect(useView3dSceneStore.getState().beatLead).toBe(0.1);
-        useView3dSceneStore.getState().setBeatLead(0.2);
-        expect(useView3dSceneStore.getState().beatLead).toBe(0.2);
-        useView3dSceneStore.getState().setBeatLead(0.1);
-    });
-});
-
 describe("power settings", () => {
     it("start from the saved choices and change on request", () => {
         const s = useView3dSceneStore.getState();
