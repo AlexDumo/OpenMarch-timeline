@@ -55,17 +55,23 @@ describe("one marcher's state on the current page", () => {
         expect(marcherHoldState(spans, 17, FLAGS)).toEqual({
             kind: "holding",
             page: { beat: 9, name: "2" },
+            fromStart: false,
         });
         expect(marcherHoldState(spans, 25, FLAGS)).toEqual({
             kind: "holding",
             page: { beat: 9, name: "2" },
+            fromStart: false,
         });
     });
 
     it("holds since the first page when it has never moved", () => {
         expect(
             marcherHoldState([hold(-Infinity, Infinity)], 25, FLAGS),
-        ).toEqual({ kind: "holding", page: { beat: 0, name: "1" } });
+        ).toEqual({
+            kind: "holding",
+            page: { beat: 0, name: "1" },
+            fromStart: true,
+        });
     });
 
     it("moves here for a move ending partway into the page, and holds since that page after", () => {
@@ -76,6 +82,7 @@ describe("one marcher's state on the current page", () => {
         expect(marcherHoldState(midPage, 25, FLAGS)).toEqual({
             kind: "holding",
             page: { beat: 17, name: "3" },
+            fromStart: false,
         });
     });
 
