@@ -16,6 +16,7 @@ import { performRedo, performUndo } from "@/db-functions/history";
 import { mergeCarriedRuns, toastCarryForward } from "../carryForwardToast";
 import {
     continueEditRun,
+    editScope,
     editSurpriseToastId,
     forgetEditRun,
     marcherNamesList,
@@ -71,6 +72,7 @@ describe("a run of edits behind one toast", () => {
         const run = continueEditRun<number>(
             mode,
             mark,
+            editScope([2], [1, 8]),
             (previous) => (previous ?? 0) + n,
         );
         run.shown(editSurpriseToastId());
@@ -92,10 +94,30 @@ describe("a run of edits behind one toast", () => {
         edit("timeline", 16, 1).forget();
         expect(edit("timeline", 17, 32).value).toBe(32);
         // An older edit finishing late leaves the newer run alone
-        expect(continueEditRun<number>("timeline", 12, () => 99).value).toBe(
-            99,
-        );
+        expect(
+            continueEditRun<number>("timeline", 12, "", () => 99).value,
+        ).toBe(99);
         expect(edit("timeline", 18, 1).value).toBe(33);
+        // Another page, or other marchers
+        expect(
+            continueEditRun<number>(
+                "timeline",
+                19,
+                editScope([3], [1, 8]),
+                (p) => (p ?? 0) + 1,
+            ).value,
+        ).toBe(1);
+        expect(edit("timeline", 20, 1).value).toBe(1);
+        expect(
+            continueEditRun<number>(
+                "timeline",
+                21,
+                editScope([2], [8]),
+                (p) => (p ?? 0) + 1,
+            ).value,
+        ).toBe(1);
+        // The same, in any order
+        expect(editScope([2, 3], [8, 1])).toBe(editScope([3, 2], [1, 8]));
         forgetEditRun();
     });
 });
@@ -451,15 +473,15 @@ const nudgePage2 = async (
     marchers: number[],
     y: number,
     info: ReturnType<typeof vi.spyOn>,
+    skip: readonly number[] = [],
 ) => {
     const result = await updateMarcherPages({
         db,
-        modifiedMarcherPages: marchers.map((id, i) => ({
-            marcher_id: id,
-            page_id: pages[1]!,
-            x: 100 + 50 * i,
-            y,
-        })),
+        modifiedMarcherPages: marchers.flatMap((id, i) =>
+            skip.includes(id)
+                ? []
+                : [{ marcher_id: id, page_id: pages[1]!, x: 100 + 50 * i, y }],
+        ),
     });
     const shown = info.mock.calls.length;
     await toastCarryForward(new QueryClient(), result);
@@ -470,6 +492,73 @@ const nudgePage2 = async (
         onAutoClose: () => void;
     };
 };
+
+describeDbTests(
+    "page mode: a run is one page and one set of marchers",
+    (it) => {
+        it("the same page, other marchers (all but OT4): Move them too and Only Page 2 are the last edit's only", async ({
+            db,
+        }) => {
+            const { pages, marchers } = await studyShow(db);
+            const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+            await nudgePage2(db, pages, marchers, 225, info);
+            // OT1 and OT8 are kept again, but OT4 stays put
+            const last = await nudgePage2(db, pages, marchers, 250, info, [
+                marchers[3]!,
+            ]);
+            last.cancel.onClick();
+            await vi.waitFor(async () =>
+                expect(await spot(db, marchers[1]!, pages[2]!)).toEqual([
+                    150, 225,
+                ]),
+            );
+            expect(await spot(db, marchers[3]!, pages[2]!)).toEqual([250, 225]);
+            await performUndo(db);
+            last.action.onClick();
+            await vi.waitFor(async () =>
+                expect(await spot(db, marchers[0]!, pages[2]!)).toEqual([
+                    50, 225,
+                ]),
+            );
+        });
+
+        it("another page, the same marchers: Only Page N is the last edit's only", async ({
+            db,
+        }) => {
+            const { pages, marchers } = await lineShow(db, [300]);
+            const message = vi
+                .spyOn(toast, "message")
+                .mockImplementation(() => 0);
+            for (const [p, y] of [
+                [1, 290],
+                [2, 280],
+            ] as const) {
+                const result = await updateMarcherPages({
+                    db,
+                    modifiedMarcherPages: marchers.map((id, i) => ({
+                        marcher_id: id,
+                        page_id: pages[p]!,
+                        x: 100 + 50 * i,
+                        y,
+                    })),
+                });
+                await toastCarryForward(new QueryClient(), result);
+            }
+            const options = message.mock.calls[1]![1] as {
+                action: { label: string; onClick: () => void };
+            };
+            expect(options.action.label).toBe("Only Page 2");
+            options.action.onClick();
+            // Page 4 goes back to page 2's edit, not to before it
+            await vi.waitFor(async () =>
+                expect(await spot(db, marchers[0]!, pages[3]!)).toEqual([
+                    100, 290,
+                ]),
+            );
+            expect(await spot(db, marchers[0]!, pages[2]!)).toEqual([100, 280]);
+        });
+    },
+);
 
 describeDbTests("page mode: Only Page N after several edits", (it) => {
     it("two nudges in a row: Only Page 2 puts pages 3–4 back to before the first; one undo follows again", async ({

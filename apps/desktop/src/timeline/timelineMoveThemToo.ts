@@ -20,6 +20,7 @@ import {
     addShifts,
     continueEditRun,
     editHistoryMark,
+    editScope,
     editSurpriseToastId,
     inDrillOrder,
     marcherLabelsById,
@@ -205,13 +206,14 @@ const laterMoveKey = (m: LaterOwnMove) =>
 
 /**
  * Shows the **Move them too** toast for `found` (an edit surprise toast). Does nothing for none.
- * With the edit's `mark`, edits in a row that keep the same marchers' same later moves add up, so
- * the action shifts by all of them (`continueEditRun`).
+ * With the edit's `mark` and `scope` (its window and marchers), edits in a row that keep the same
+ * marchers' same later moves add up, so the action shifts by all of them (`continueEditRun`).
  */
 export async function toastLaterOwnMoves(
     found: readonly LaterOwnMove[],
     boxes: readonly PageBox[] = useTimelineSelectionStore.getState().pageBoxes,
     mark: number | null = null,
+    scope = "",
 ): Promise<void> {
     if (found.length === 0) return;
     const labels = await marcherLabelsById(found.map((m) => m.marcherId));
@@ -227,6 +229,7 @@ export async function toastLaterOwnMoves(
             : continueEditRun<ShiftTotals>(
                   "timeline",
                   mark,
+                  scope,
                   (previous) => addShifts(previous, found, laterMoveKey).totals,
               );
     const moves = found.map((m) => ({
@@ -254,6 +257,14 @@ export async function toastLaterOwnMoves(
     });
     run?.shown(id);
 }
+
+/** The window an edit was on, for `editScope` */
+const windowKey = (target: TimelineEditTarget) =>
+    target.kind === "range"
+        ? `range:${target.start}-${target.end}`
+        : target.kind === "home"
+          ? "home"
+          : `timeline:${target.timelineId}`;
 
 /**
  * A timeline coordinate edit (`moveMarchersInTarget`) with what it says after: the pass-through
@@ -290,7 +301,17 @@ export async function moveMarchersAndOfferFollowUp({
     // The pass-through toast and its Keep as a stop win: Move them too would replace it (same id)
     if (result.passThrough) return result;
     void findLaterOwnMoves({ database, target, result, start })
-        .then((found) => toastLaterOwnMoves(found, undefined, mark))
+        .then((found) =>
+            toastLaterOwnMoves(
+                found,
+                undefined,
+                mark,
+                editScope(
+                    [windowKey(target)],
+                    moves.map((m) => m.marcherId),
+                ),
+            ),
+        )
         .catch((e: unknown) =>
             console.error("Couldn't check the edit's later moves", e),
         );

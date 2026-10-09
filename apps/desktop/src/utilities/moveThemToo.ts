@@ -203,9 +203,23 @@ export type ShiftTotals = ReadonlyMap<string, FollowUpShift>;
 let pending: {
     mode: "page" | "timeline";
     mark: number;
+    scope: string;
     toastId: string | null;
     value: unknown;
 } | null = null;
+
+/**
+ * What an edit was on (its pages, or its window) and the marchers it moved, as `continueEditRun`
+ * compares them: order doesn't matter.
+ */
+export function editScope(
+    on: Iterable<number | string>,
+    marcherIds: Iterable<number>,
+): string {
+    const sorted = <V extends number | string>(values: Iterable<V>) =>
+        [...new Set(values)].map(String).sort().join(",");
+    return `${sorted(on)}|${sorted(marcherIds)}`;
+}
 
 /** One edit in a run of edits behind one toast (`continueEditRun`). */
 export interface EditRun<T> {
@@ -219,17 +233,20 @@ export interface EditRun<T> {
 
 /**
  * Several edits in a row, one toast: while the toast is open, an edit right after the last (the
- * next history change) in the same mode continues its run, so **Move them too** and **Only Page
- * N** repeat or take back every nudge, not only the last. Anything else in between, an undo or
- * redo, another edit, Move them too, Only Page N, another surprise toast, or the toast closing,
- * starts over from this edit.
+ * next history change) in the same mode, on the same page(s) or window and moving exactly the same
+ * marchers (`scope`, from `editScope`), continues its run, so **Move them too** and **Only Page
+ * N** repeat or take back every nudge, not only the last. Anything else, an undo or redo in
+ * between, another edit, Move them too, Only Page N, another surprise toast, the toast closing,
+ * or nudging only some of the marchers, starts over from this edit.
  *
  * @param mark the edit's `editHistoryMark`
+ * @param scope what the edit was on and which marchers it moved (`editScope`)
  * @param combine this edit's value, given the run's so far (null when it starts one)
  */
 export function continueEditRun<T>(
     mode: "page" | "timeline",
     mark: number,
+    scope: string,
     combine: (previous: T | null) => T,
 ): EditRun<T> {
     const previous = pending;
@@ -240,11 +257,13 @@ export function continueEditRun<T>(
         previous !== null &&
         previous.mode === mode &&
         previous.mark + 1 === mark &&
+        previous.scope === scope &&
         previous.toastId !== null &&
         previous.toastId === currentSurpriseToast;
     const next = {
         mode,
         mark,
+        scope,
         toastId: null as string | null,
         value: combine(continues ? (previous.value as T) : null),
     };

@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { db, schema } from "@/global/database/db";
@@ -19,6 +19,7 @@ import {
     addShifts,
     continueEditRun,
     editHistoryMark,
+    editScope,
     editSurpriseToastId,
     inDrillOrder,
     marcherLabelsById,
@@ -146,6 +147,47 @@ export function mergeCarriedRuns(
     return [...left, ...merged];
 }
 
+/**
+ * The pages a write edited and the marchers it moved there (`editScope`): its rows, without the
+ * ones it carried to.
+ */
+async function pageEditScope(result: MarcherPagesWriteResult): Promise<string> {
+    const carriedIds = new Set(
+        result.carried.flatMap((run) => run.rows.map((r) => r.id)),
+    );
+    const edited = result.updatedIds.filter((id) => !carriedIds.has(id));
+    const rows: { marcherId: number; pageId: number }[] = [];
+    for (let i = 0; i < edited.length; i += 500)
+        rows.push(
+            ...(await db
+                .select({
+                    marcherId: schema.marcher_pages.marcher_id,
+                    pageId: schema.marcher_pages.page_id,
+                })
+                .from(schema.marcher_pages)
+                .where(
+                    inArray(schema.marcher_pages.id, edited.slice(i, i + 500)),
+                )
+                .all()),
+        );
+    return editScope(
+        rows.map((r) => r.pageId),
+        rows.map((r) => r.marcherId),
+    );
+}
+
+/** `result` as the next edit in the toast's run (`continueEditRun`), or a new run */
+const continuePageEditRun = (
+    result: MarcherPagesWriteResult,
+    mark: number,
+    scope: string,
+) =>
+    continueEditRun<PageEditRun>("page", mark, scope, (previous) => ({
+        stops: addShifts(previous?.stops ?? null, result.ownMoveStops, stopKey)
+            .totals,
+        carried: mergeCarriedRuns(previous?.carried ?? [], result.carried),
+    }));
+
 const stopKey = (s: OwnMoveStop) =>
     `${s.marcherId}:${s.pageId}:${s.stopPageId}`;
 
@@ -153,9 +195,10 @@ const stopKey = (s: OwnMoveStop) =>
  * After a page-mode write: when it carried forward to later pages, says which, and offers
  * **Only Page N**. When it also split the marchers it moved (`ownMoveStops`, only pages where
  * others followed), the same toast names those that kept their spot and offers **Move them too**
- * first. Says nothing when nothing was carried. Called right after the write: edits in a row add
- * up (`continueEditRun`), so Only Page N puts the followed pages back to before the first, and
- * Move them too shifts by all of them while they keep the same marchers.
+ * first. Says nothing when nothing was carried. Called right after the write: edits in a row on
+ * the same pages that move the same marchers add up (`continueEditRun`), so Only Page N puts the
+ * followed pages back to before the first, and Move them too shifts by all of them while they
+ * keep the same marchers.
  */
 export async function toastCarryForward(
     qc: QueryClient,
@@ -164,15 +207,12 @@ export async function toastCarryForward(
     if (!result) return;
     const mark = editHistoryMark();
     if (result.followedPageIds.length === 0) return;
-    const [names, labels] = await Promise.all([
+    const [names, labels, scope] = await Promise.all([
         pageNamesById(qc),
         marcherLabelsById(result.ownMoveStops.map((s) => s.marcherId)),
+        pageEditScope(result),
     ]);
-    const run = continueEditRun<PageEditRun>("page", mark, (previous) => ({
-        stops: addShifts(previous?.stops ?? null, result.ownMoveStops, stopKey)
-            .totals,
-        carried: mergeCarriedRuns(previous?.carried ?? [], result.carried),
-    }));
+    const run = continuePageEditRun(result, mark, scope);
     const { carried } = run.value;
     const order = [...names.keys()];
     const editedPageIds = [...new Set(carried.map((r) => r.pageId))].sort(

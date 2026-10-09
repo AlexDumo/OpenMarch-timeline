@@ -435,12 +435,15 @@ const nudgePage1 = async (
     marchers: readonly number[],
     y: number,
     info: Info,
+    skip: readonly number[] = [],
 ) => {
     const shown = moveThemTooCalls(info).length;
     await moveMarchersAndOfferFollowUp({
         database: db,
         target: box(pages[1]!),
-        moves: marchers.map((id, i) => ({ marcherId: id, x: 100 + 50 * i, y })),
+        moves: marchers.flatMap((id, i) =>
+            skip.includes(id) ? [] : [{ marcherId: id, x: 100 + 50 * i, y }],
+        ),
     });
     await vi.waitFor(() =>
         expect(moveThemTooCalls(info).length).toBe(shown + 1),
@@ -466,6 +469,22 @@ describeDbTests("timeline mode: Move them too after several edits", (it) => {
         await performUndo(db);
         await timelineResolverSettled();
         expect(at(ot1, pages[2]!)).toEqual([50, 200]);
+    });
+
+    it("the same window, other marchers (all but OT4): only the last", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await studyShow(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await nudgePage1(db, pages, marchers, 225, info);
+        const last = await nudgePage1(db, pages, marchers, 250, info, [
+            marchers[3]!,
+        ]);
+        last.action.onClick();
+        await vi.waitFor(() =>
+            expect(at(marchers[0]!, pages[2]!)).toEqual([50, 225]),
+        );
+        expect(at(marchers[7]!, pages[2]!)).toEqual([500, 225]);
     });
 
     it("a nudge, an undo, a nudge: only the last", async ({ db }) => {
