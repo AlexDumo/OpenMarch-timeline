@@ -10,10 +10,9 @@ import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
 import {
     jumpTimelinePages,
     navigateTimelinePages,
-    continueTimelinePlayback,
-    playTimelineFromFlag,
-    playTimelineFromHere,
+    pinnedLoopBounds,
     seekTimeline,
+    toggleTimelinePlayback,
 } from "@/timeline/timelineTransport";
 import {
     getLivePlaybackPosition,
@@ -34,10 +33,7 @@ interface PlaybackState {
 const playbackCommands = (
     latest: { readonly current: PlaybackState },
     liveBeat: () => number | null,
-): Pick<
-    TimelinePlayback,
-    "onSeek" | "onNavigate" | "onPlayFromFlag" | "onPlayingChange"
-> => ({
+): Pick<TimelinePlayback, "onSeek" | "onNavigate" | "onPlayingChange"> => ({
     // UI-12: while playing, a click or page button jumps playback there, and a scrub suspends it
     // until it ends (`seekTimeline`), which says where a scrub's seek landed
     onSeek: (beatIndex, options) => {
@@ -59,23 +55,14 @@ const playbackCommands = (
                 direction,
             );
     },
-    onPlayFromFlag: () => {
-        const { beats, isPlaying, setIsPlaying } = latest.current;
-        playTimelineFromFlag(beats, { isPlaying, setIsPlaying });
-    },
-    // Play from here: while a preview runs, it plays on from there instead (UI-17)
     onPlayingChange: (next) => {
         const { beats, isPlaying, setIsPlaying } = latest.current;
-        const playingFromFlag =
-            isPlaying &&
-            useTimelineSelectionStore.getState().playback?.kind === "preview";
-        if (playingFromFlag && next) continueTimelinePlayback();
-        else if (next !== isPlaying)
-            playTimelineFromHere({
-                isPlaying,
-                showEndBeat: beats.length,
-                setIsPlaying,
-            });
+        if (next === isPlaying) return;
+        toggleTimelinePlayback({
+            isPlaying,
+            showEndBeat: beats.length,
+            setIsPlaying,
+        });
     },
 });
 
@@ -94,10 +81,9 @@ const playbackCommands = (
  *   flag and selects that page (`navigateTimelinePages`). While playing, both jump playback
  *   instead and leave the playhead alone (UI-12, `jumpTimelinePlayback`); a scrub suspends
  *   playback until it ends, then plays on from there once (`seekTimeline`, UI-12 review).
- * - Play from here plays on from the playhead, and stops in place (`playTimelineFromHere`). Play
- *   from start flag previews the window from the start flag to the playhead, looping when the
- *   loop is on, and returns to the playhead when it stops (`playTimelineFromFlag`, UI-17). While
- *   one runs, the other's button switches to it.
+ * - Play (`toggleTimelinePlayback`, UI-17) loops the window from a pinned start flag to the
+ *   playhead and returns to the playhead when it stops; with no pin it plays on from the playhead
+ *   and stops in place.
  */
 export function useTimelinePlayback({
     beats,
@@ -108,10 +94,10 @@ export function useTimelinePlayback({
 }): TimelinePlayback {
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
     const playheadBeat = useTimelineSelectionStore(displayedBeat);
-    const playingFromFlag = useTimelineSelectionStore(
-        (s) => isPlaying && s.playback?.kind === "preview",
+    // UI-17: a pinned start flag makes Play loop from it
+    const playLoops = useTimelineSelectionStore(
+        (s) => pinnedLoopBounds(s) !== null,
     );
-    const flagLoops = useTimelineSelectionStore((s) => s.loopPreview);
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -159,18 +145,9 @@ export function useTimelinePlayback({
             positionBeat:
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
             isPlaying,
-            playingFromFlag,
-            flagLoops,
+            playLoops,
             ...commands,
         }),
-        [
-            commands,
-            isPlaying,
-            liveBeat,
-            liveIndex,
-            playheadBeat,
-            playingFromFlag,
-            flagLoops,
-        ],
+        [commands, isPlaying, liveBeat, liveIndex, playheadBeat, playLoops],
     );
 }

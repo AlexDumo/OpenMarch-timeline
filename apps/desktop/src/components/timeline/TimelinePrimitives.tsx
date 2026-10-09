@@ -5,7 +5,6 @@ import {
     DotsThreeIcon,
     HouseIcon,
     PushPinIcon,
-    RepeatIcon,
     StopIcon,
     PlayIcon,
     SkipBackIcon,
@@ -14,11 +13,7 @@ import {
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
-import {
-    ShortcutTooltip,
-    showShortcutHintOnce,
-    TransportTooltipProvider,
-} from "./ShortcutTooltip";
+import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
 import {
     isPlainNudgeKey,
     isTyping,
@@ -120,8 +115,8 @@ const SKIP_FORWARD_ICON = <SkipForwardIcon size={16} />;
 const FIT_ICON = <ArrowsOutLineHorizontalIcon size={16} />;
 const HOUSE_ICON = <HouseIcon size={14} aria-hidden="true" />;
 /**
- * Play from start flag's icon (UI-17, project owner): a bar in the start flag's color, echoing the
- * flag's line on the ruler, then Play ("play from the mark")
+ * Play's icon while the start flag is pinned (UI-17, project owner's pick): a bar in the start
+ * flag's color, echoing the flag's line on the ruler, then Play ("loop from the mark")
  */
 const PLAY_FROM_FLAG_ICON = (
     <span className="flex items-center gap-2">
@@ -133,17 +128,6 @@ const PLAY_FROM_FLAG_ICON = (
     </span>
 );
 
-/** The loop mark on Play from start flag while Loop is on (UI-17 follow-up, as Pro Tools does) */
-const LOOP_MARK = (
-    <RepeatIcon
-        size={10}
-        weight="bold"
-        aria-hidden
-        data-testid="timeline-play-from-flag-loops"
-        className="text-accent bg-bg-1 absolute -right-4 -bottom-3 rounded-full"
-    />
-);
-
 /**
  * The transport's shortcuts as the tooltips show them (UI-17), in `KeyboardShortcut.toString`'s
  * form. They mirror `RegisteredActionsObjects`, which a test checks; this file doesn't import the
@@ -152,8 +136,7 @@ const LOOP_MARK = (
 export const TRANSPORT_SHORTCUTS = {
     previousPage: "Q",
     nextPage: "E",
-    playFromHere: "Space",
-    playFromFlag: "Shift + Space",
+    play: "Space",
 } as const;
 
 const TransportButton = memo(function TransportButton({
@@ -203,15 +186,15 @@ const TRANSPORT_TIGHT_PX = 500;
 
 /**
  * The transport (UI-12): the timeline panel's one header row, as animation tools do it (Figma's
- * Motion timeline, Rive, Blender). Previous, Play from here, Play from start flag, Next (UI-17);
- * the caller's pinned accessories (Loop) and secondary ones (Sound); the clock and the readout,
+ * Motion timeline, Rive, Blender). Previous, Play, Next (UI-17); the caller's pinned accessories
+ * and secondary ones (Sound); the clock and the readout,
  * which is also the go-to box (click it or press G, then type a page, "m23" or a rehearsal mark);
  * then Fit and the caller's view controls (Compact). The play and page buttons, the accessories
  * and the readout never leave: on a narrow panel the rest folds into "⋯". Shift+click on Previous
  * or Next goes to the first or last page (as Shift+Q/E do). While playing, page navigation jumps
  * playback to the flag.
  *
- * The play button that started playback reads Stop; the other switches to it (UI-17).
+ * Play loops from a pinned start flag and shows the flag's bar in its icon (UI-17).
  */
 export const TimelineTransport = memo(function TimelineTransport({
     model,
@@ -219,9 +202,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     positionBeat,
     isPlaying,
     onPlayingChange,
-    onPlayFromFlag,
-    playingFromFlag = false,
-    flagLoops = false,
+    playLoops = false,
     onNavigate,
     onFit,
     fitted = false,
@@ -237,18 +218,14 @@ export const TimelineTransport = memo(function TimelineTransport({
     positionBeat: BeatPosition;
     isPlaying: boolean;
     onPlayingChange?: (isPlaying: boolean) => void;
-    /** **Play from start flag** (UI-17); without it, there is no such button */
-    onPlayFromFlag?: () => void;
-    /** A Play from start flag preview is running, so its button reads Stop */
-    playingFromFlag?: boolean;
-    /** Loop is on: Play from start flag's button carries a loop mark (as Pro Tools' Play does) */
-    flagLoops?: boolean;
+    /** The start flag is pinned, so Play loops from it and shows the flag's bar (UI-17) */
+    playLoops?: boolean;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
     /** The show is fitted, so Fit goes back */
     fitted?: boolean;
-    /** Controls after Next that never fold, such as Loop */
+    /** Controls after Next that never fold */
     accessories?: ReactNode;
     /** Controls after those that fold into "⋯" on a narrow panel, such as Sound */
     secondary?: ReactNode;
@@ -328,22 +305,9 @@ export const TimelineTransport = memo(function TimelineTransport({
             onNavigate?.(event.shiftKey ? "last-page" : "next-page"),
         [onNavigate],
     );
-    const playingFromHere = isPlaying && !playingFromFlag;
     const togglePlaying = useCallback(
-        () => onPlayingChange?.(!playingFromHere),
-        [playingFromHere, onPlayingChange],
-    );
-    const playFromFlag = useCallback(
-        (event: ReactMouseEvent) => {
-            onPlayFromFlag?.();
-            // detail is 0 for a keyboard press of the focused button
-            if (event.detail > 0 && !playingFromFlag)
-                showShortcutHintOnce(
-                    "playFromFlag",
-                    `Tip: press ${TRANSPORT_SHORTCUTS.playFromFlag} to play from the start flag`,
-                );
-        },
-        [onPlayFromFlag, playingFromFlag],
+        () => onPlayingChange?.(!isPlaying),
+        [isPlaying, onPlayingChange],
     );
     const readout =
         goTo !== null ? (
@@ -423,48 +387,33 @@ export const TimelineTransport = memo(function TimelineTransport({
                         {SKIP_BACK_ICON}
                     </TransportButton>
                     <TransportButton
-                        label={playingFromHere ? "Stop" : "Play from here"}
-                        shortcut={TRANSPORT_SHORTCUTS.playFromHere}
-                        hint={
-                            playingFromHere
-                                ? "Stops where it is"
-                                : playingFromFlag
-                                  ? "Plays on from here instead of going back"
-                                  : undefined
+                        label={
+                            isPlaying
+                                ? "Stop"
+                                : playLoops
+                                  ? "Play, looping from the start flag"
+                                  : "Play"
                         }
-                        testId="timeline-play-from-here"
-                        pressed={playingFromHere}
+                        shortcut={TRANSPORT_SHORTCUTS.play}
+                        hint={
+                            isPlaying
+                                ? playLoops
+                                    ? "Goes back to where you were editing"
+                                    : "Stops where it is"
+                                : playLoops
+                                  ? "Loops from the pinned start flag to the playhead. Unpin it (C) to play on from here"
+                                  : "Plays on from here. Pin the start flag (C) to loop a move"
+                        }
+                        testId="timeline-play"
+                        pressed={isPlaying}
                         onClick={onPlayingChange ? togglePlaying : undefined}
                     >
-                        {playingFromHere ? STOP_ICON : PLAY_ICON}
+                        {isPlaying
+                            ? STOP_ICON
+                            : playLoops
+                              ? PLAY_FROM_FLAG_ICON
+                              : PLAY_ICON}
                     </TransportButton>
-                    {onPlayFromFlag && (
-                        <TransportButton
-                            label={
-                                playingFromFlag
-                                    ? "Stop"
-                                    : flagLoops
-                                      ? "Play from start flag, looping"
-                                      : "Play from start flag"
-                            }
-                            shortcut={TRANSPORT_SHORTCUTS.playFromFlag}
-                            hint={
-                                playingFromFlag
-                                    ? "Goes back to where you were"
-                                    : "Plays from the start flag to the playhead, then goes back"
-                            }
-                            testId="timeline-play-from-flag"
-                            pressed={playingFromFlag}
-                            onClick={playFromFlag}
-                        >
-                            <span className="relative flex">
-                                {playingFromFlag
-                                    ? STOP_ICON
-                                    : PLAY_FROM_FLAG_ICON}
-                                {flagLoops && LOOP_MARK}
-                            </span>
-                        </TransportButton>
-                    )}
                     <TransportButton
                         label="Next page"
                         shortcut={TRANSPORT_SHORTCUTS.nextPage}
@@ -1921,7 +1870,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
     startFlagBeatIndex?: number;
     /**
-     * The window is what Play from start flag plays (UI-17: the flag was placed by hand, or the
+     * The window is what Play loops (UI-17: the flag is pinned, or the loop
      * preview is playing): it is drawn in the start flag's color with a bar across its top.
      * Otherwise the start flag is dimmed.
      */
@@ -2203,7 +2152,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 </button>
             );
         // UI-10, UI-11: the start flag, where movers leave from. No words: a line and a pennant,
-        // hollow, and filled while its window is what Play from start flag plays (UI-17)
+        // hollow, and filled while its window is what Play loops (UI-17)
         return (
             <>
                 <button
@@ -2330,7 +2279,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             />
             {fromStart && (
                 // UI-11: a thin bar along the ruler's top edge, out of the pennant's top and clear
-                // of the page numbers. UI-17: it only marks what Play from start flag plays, so
+                // of the page numbers. UI-17: it only marks what Play loops, so
                 // clicks pass through to the ruler
                 <span
                     ref={barRef}

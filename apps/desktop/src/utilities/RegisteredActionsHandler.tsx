@@ -44,10 +44,8 @@ import { toast } from "sonner";
 import { useTimingObjects } from "@/hooks";
 import {
     navigateTimelinePages,
-    playTimelineFromFlag,
-    setTimelineStartFlagHere,
-    stopTimelinePlaybackHere,
-    playTimelineFromHere,
+    toggleTimelinePlayback,
+    toggleTimelineStartPin,
 } from "@/timeline/timelineTransport";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import tolgee from "@/global/singletons/Tolgee";
@@ -88,11 +86,8 @@ export enum RegisteredActionsEnum {
     previousPage = "previousPage",
     firstPage = "firstPage",
     playPause = "playPause",
-    playFromStartFlag = "playFromStartFlag",
-    stopHere = "stopHere",
     showShortcuts = "showShortcuts",
-    setStartFlagHere = "setStartFlagHere",
-    toggleLoop = "toggleLoop",
+    toggleStartPin = "toggleStartPin",
     toggleMetronome = "toggleMetronome",
 
     // Batch editing
@@ -299,9 +294,7 @@ class KeyboardShortcut {
 /** Playback controls, which leave a held preview frame alone (UI-11) */
 const TRANSPORT_ACTIONS: ReadonlySet<RegisteredActionsEnum> = new Set([
     RegisteredActionsEnum.playPause,
-    RegisteredActionsEnum.playFromStartFlag,
-    RegisteredActionsEnum.stopHere,
-    RegisteredActionsEnum.toggleLoop,
+    RegisteredActionsEnum.toggleStartPin,
     RegisteredActionsEnum.toggleMetronome,
 ]);
 
@@ -373,30 +366,15 @@ export const RegisteredActionsObjects: {
         keyboardShortcut: new KeyboardShortcut({ key: " " }),
         enumString: "playPause",
     }),
-    playFromStartFlag: new RegisteredAction({
-        descKey: "actions.playback.playFromStartFlag",
-        keyboardShortcut: new KeyboardShortcut({ key: " ", shift: true }),
-        enumString: "playFromStartFlag",
-    }),
     showShortcuts: new RegisteredAction({
         descKey: "actions.ui.showShortcuts",
         keyboardShortcut: new KeyboardShortcut({ key: "?", shift: true }),
         enumString: "showShortcuts",
     }),
-    stopHere: new RegisteredAction({
-        descKey: "actions.playback.stopHere",
-        keyboardShortcut: new KeyboardShortcut({ key: "k" }),
-        enumString: "stopHere",
-    }),
-    setStartFlagHere: new RegisteredAction({
-        descKey: "actions.playback.setStartFlagHere",
+    toggleStartPin: new RegisteredAction({
+        descKey: "actions.playback.toggleStartPin",
         keyboardShortcut: new KeyboardShortcut({ key: "c" }),
-        enumString: "setStartFlagHere",
-    }),
-    toggleLoop: new RegisteredAction({
-        descKey: "actions.playback.toggleLoop",
-        keyboardShortcut: new KeyboardShortcut({ key: "l", shift: true }),
-        enumString: "toggleLoop",
+        enumString: "toggleStartPin",
     }),
     toggleMetronome: new RegisteredAction({
         descKey: "actions.playback.toggleMetronome",
@@ -1062,23 +1040,17 @@ function RegisteredActionsHandler() {
                     if (firstPage && !isPlaying) setSelectedPage(firstPage);
                     break;
                 }
-                case RegisteredActionsEnum.setStartFlagHere: {
-                    // UI-17: C puts the start flag where the timeline is
+                case RegisteredActionsEnum.toggleStartPin: {
+                    // UI-17: C pins the start flag here, or unpins it; Play loops a pinned flag
                     if (!timelineMode) break;
-                    setTimelineStartFlagHere();
-                    break;
-                }
-                case RegisteredActionsEnum.toggleLoop: {
-                    // UI-17: Shift+L loops Play from start flag
-                    if (!timelineMode) break;
-                    useTimelineSelectionStore.getState().toggleLoopPreview();
+                    toggleTimelineStartPin();
                     break;
                 }
                 case RegisteredActionsEnum.playPause: {
                     if (!databaseReady || !pages || pages.length === 0) break;
-                    // UI-17 Play from here: plays on; playing, it stops
+                    // UI-17 Play: loops a pinned window, or plays on; playing, it stops
                     if (timelineMode) {
-                        playTimelineFromHere({
+                        toggleTimelinePlayback({
                             isPlaying,
                             showEndBeat: beats.length,
                             setIsPlaying,
@@ -1092,18 +1064,6 @@ function RegisteredActionsHandler() {
                 case RegisteredActionsEnum.showShortcuts: {
                     // UI-17 follow-up: ? lists every shortcut
                     useShortcutsDialogStore.getState().setOpen(true);
-                    break;
-                }
-                case RegisteredActionsEnum.stopHere: {
-                    // UI-17 follow-up: K stops and stays, a preview included
-                    if (!databaseReady || !timelineMode) break;
-                    stopTimelinePlaybackHere({ isPlaying, setIsPlaying });
-                    break;
-                }
-                case RegisteredActionsEnum.playFromStartFlag: {
-                    // UI-17: previews from the start flag; any stop returns to the playhead
-                    if (!databaseReady || !timelineMode) break;
-                    playTimelineFromFlag(beats, { isPlaying, setIsPlaying });
                     break;
                 }
                 case RegisteredActionsEnum.toggleMetronome: {

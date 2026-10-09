@@ -105,15 +105,8 @@ export interface TimelinePlayback {
         options?: TimelineSeekOptions,
     ) => number | null | void;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
-    /**
-     * **Play from start flag** (UI-17): previews from the start flag, or stops a preview; without
-     * it, there is no such button
-     */
-    readonly onPlayFromFlag?: () => void;
-    /** A Play from start flag preview is running (UI-17), so its button reads Stop */
-    readonly playingFromFlag?: boolean;
-    /** Loop is on, so Play from start flag repeats (UI-17 follow-up): its button says so */
-    readonly flagLoops?: boolean;
+    /** The start flag is pinned, so Play loops from it (UI-17): the button says so */
+    readonly playLoops?: boolean;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -625,9 +618,7 @@ export function Timeline(props: TimelineProps) {
         className: props.className,
         onSeek: seekToBeat,
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
-        onPlayFromFlag: useLatestCallback(playback.onPlayFromFlag),
-        playingFromFlag: playback.playingFromFlag,
-        flagLoops: playback.flagLoops,
+        playLoops: playback.playLoops,
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,

@@ -191,8 +191,34 @@ describe("timeline views", () => {
             />,
         );
 
-        fireEvent.click(screen.getByRole("button", { name: "Play from here" }));
+        fireEvent.click(screen.getByRole("button", { name: "Play" }));
         expect(onPlayingChange).toHaveBeenCalledWith(true);
+        rerender(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                isPlaying
+                onPlayingChange={onPlayingChange}
+                onPixelsPerBeatChange={onPixelsPerBeatChange}
+            />,
+        );
+        expect(
+            screen.getByRole("button", { name: "Stop" }),
+        ).toBeInTheDocument();
+        rerender(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                playLoops
+                onPlayingChange={onPlayingChange}
+                onPixelsPerBeatChange={onPixelsPerBeatChange}
+            />,
+        );
+        expect(
+            screen.getByRole("button", {
+                name: "Play, looping from the start flag",
+            }),
+        ).toBeInTheDocument();
         expect(
             screen.queryByRole("button", { name: "Zoom in" }),
         ).not.toBeInTheDocument();

@@ -17,11 +17,13 @@ import { shortcutGroups } from "@/components/ShortcutsDialog";
  */
 describe("transport shortcuts (UI-17)", () => {
     it("matches the registered playback and page shortcuts", () => {
-        expect(TRANSPORT_SHORTCUTS.playFromHere).toBe(
+        expect(TRANSPORT_SHORTCUTS).toEqual({
+            previousPage: "Q",
+            nextPage: "E",
+            play: "Space",
+        });
+        expect(TRANSPORT_SHORTCUTS.play).toBe(
             RegisteredActionsObjects.playPause.keyboardShortcut!.toString(),
-        );
-        expect(TRANSPORT_SHORTCUTS.playFromFlag).toBe(
-            RegisteredActionsObjects.playFromStartFlag.keyboardShortcut!.toString(),
         );
         expect(TRANSPORT_SHORTCUTS.previousPage).toBe(
             RegisteredActionsObjects.previousPage.keyboardShortcut!.toString(),
@@ -35,6 +37,24 @@ describe("transport shortcuts (UI-17)", () => {
 describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
     const items = [...PLAYBACK_MENU_ACTIONS, ...HELP_MENU_ACTIONS];
 
+    it("lists Play and the start-flag pin, plus the shortcuts list (UI-17)", () => {
+        expect(PLAYBACK_MENU_ACTIONS).toEqual([
+            { action: "playPause", label: "Play / Stop", accelerator: "Space" },
+            {
+                action: "toggleStartPin",
+                label: "Pin or Unpin Start Flag",
+                accelerator: "C",
+            },
+        ]);
+        expect(HELP_MENU_ACTIONS).toEqual([
+            {
+                action: "showShortcuts",
+                label: "Keyboard Shortcuts",
+                accelerator: "Shift+/",
+            },
+        ]);
+    });
+
     it("names registered actions and shows their registered shortcuts", () => {
         for (const item of items) {
             const action =
@@ -43,7 +63,7 @@ describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
                 ];
             expect(action, item.action).toBeDefined();
             expect(Object.values(RegisteredActionsEnum)).toContain(item.action);
-            // Electron's "Shift+Space" is the registry's "Shift + Space"; "Shift+/" is "?"
+            // Electron's "Shift+/" is the registry's "?"
             const shown =
                 item.accelerator === "Shift+/"
                     ? "?"
@@ -66,15 +86,7 @@ describe("the shortcuts list (UI-17 follow-up)", () => {
         const groups = shortcutGroups((key) => key);
         expect(groups[0]?.title).toBe("Playback");
         const playback = groups[0]!.rows.map((row) => row.keys);
-        expect(playback).toEqual(
-            expect.arrayContaining([
-                "Space",
-                "Shift + Space",
-                "K",
-                "C",
-                "Shift + L",
-            ]),
-        );
+        expect(playback).toEqual(["Space", "C", "Ctrl + M"]);
         const timeline = groups.find((g) => g.title === "Timeline");
         expect(timeline?.rows.map((row) => row.keys)).toContain("G");
         const view = groups.find((g) => g.title === "View");

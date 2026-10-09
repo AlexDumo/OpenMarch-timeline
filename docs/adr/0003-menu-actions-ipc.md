@@ -5,8 +5,8 @@
 
 ## Context
 
-UI-17 (docs/timeline/ui.md) added timeline playback shortcuts: Space, Shift+Space, K, C, Shift+L,
-plus `?` for a list of shortcuts. The research behind it found that menu items showing their
+UI-17 (docs/timeline/ui.md) made Space the one Play (looping when the start flag is pinned), C
+pin or unpin the start flag, and `?` open a list of shortcuts. The research behind it found that menu items showing their
 shortcut are how desktop users find these, and the owner asked for them. The app menu lives in
 the Electron main process, but every one of these actions is a renderer registered action
 (`RegisteredActionsHandler`), which owns playback state.
@@ -25,10 +25,10 @@ it.
 - **The preload exposes `onMenuAction(callback)`**, which returns an unsubscribe function, as
   `onNewShowOpen` does.
 - **Shortcuts are shown, not registered.** On Linux and Windows the item has its accelerator with
-  `registerAccelerator: false`. On macOS the label carries the key instead ("Stop Here (K)").
+  `registerAccelerator: false`. On macOS the label carries the key instead ("Play / Stop (Space)").
   The renderer's keyboard handler stays the only owner of the keys.
-- The items: a **Playback** menu (Play from Here / Stop, Play from Start Flag, Stop Here, Set
-  Start Flag Here, Loop) and **Help → Keyboard Shortcuts**.
+- The items: a **Playback** menu (Play / Stop, Pin or Unpin Start Flag) and **Help → Keyboard
+  Shortcuts**.
 
 ## Consequences
 
@@ -42,5 +42,5 @@ it.
 
 - `apps/desktop/src/components/timeline/__test__/transportShortcuts.test.ts`: every menu action
   exists in `RegisteredActionsEnum` and its accelerator matches the registry's shortcut.
-- Manual: in the built app, open the menu (☰), choose Playback → Play from Start Flag and
-  Help → Keyboard Shortcuts, and type a space in a text field to check it still types.
+- Manual: in the built app, open the menu (☰), choose Playback → Play / Stop and Help →
+  Keyboard Shortcuts, and type a space in a text field to check it still types.

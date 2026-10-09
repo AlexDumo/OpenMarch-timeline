@@ -105,10 +105,10 @@ export interface PlaybackWindow {
 }
 
 /**
- * What **Play from start flag** previews (UI-11, UI-17): exactly the window `[S, P)`, with no
- * roll on either side (project owner, V-24). An isolated timeline previews its whole range, as it
- * always has (09-isolation.md). `null` when there is no window at least a beat long to preview
- * (home, nothing selected), and Play from start flag plays the show from its start instead.
+ * What **Play** loops with the start flag pinned (UI-11, UI-17): exactly the window `[S, P)`, with
+ * no roll on either side (project owner, V-24). An isolated timeline loops its whole range, as it
+ * always has (09-isolation.md). `null` when there is no window at least a beat long (home, nothing
+ * selected), and Play plays on instead.
  */
 export function previewBounds(
     state: PlaybackWindow,
@@ -127,10 +127,9 @@ export function canPlayOn(beat: number, showEndBeat: number): boolean {
 }
 
 /**
- * What playback does at a live beat (UI-11):
+ * What playback does at a live beat (UI-11, UI-17):
  *
- * - A preview loops back to its start at its end when `loop` is on or a timeline is isolated, and
- *   otherwise ends there (`"end"`; the cursor goes back to the playhead).
+ * - A preview, the pinned window's loop, goes back to its start at its end.
  * - Playing on stops at the end of the show (`"stop"`; the playhead stays there). An isolated
  *   timeline loops instead.
  */
@@ -139,12 +138,9 @@ export function playbackStep(
     liveBeat: number,
     showEndBeat: number,
     isolated: { readonly start: number; readonly end: number } | null,
-    loop: boolean,
-): { readonly loopTo: number } | "end" | "stop" | null {
-    if (run.kind === "preview") {
-        if (liveBeat < run.to) return null;
-        return loop || isolated ? { loopTo: run.from } : "end";
-    }
+): { readonly loopTo: number } | "stop" | null {
+    if (run.kind === "preview")
+        return liveBeat < run.to ? null : { loopTo: run.from };
     if (isolated && liveBeat >= isolated.end) return { loopTo: isolated.start };
     if (liveBeat >= showEndBeat) return "stop";
     return null;

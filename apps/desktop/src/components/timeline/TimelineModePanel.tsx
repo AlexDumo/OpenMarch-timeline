@@ -30,11 +30,7 @@ import {
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
-import {
-    TimelineCompactButton,
-    TimelinePreviewButtons,
-    TimelineSoundButton,
-} from "./TimelineControls";
+import { TimelineCompactButton, TimelineSoundButton } from "./TimelineControls";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     Timeline,
@@ -64,7 +60,6 @@ const NO_WAVEFORM = { peaksByBeat: [] };
 
 // The transport's controls read their own state: the same elements every render, so the
 // memoized transport doesn't re-render for them
-const PREVIEW_BUTTONS = <TimelinePreviewButtons />;
 const SOUND_BUTTON = <TimelineSoundButton />;
 const COMPACT_BUTTON = <TimelineCompactButton />;
 
@@ -294,7 +289,6 @@ export default function TimelineModePanel() {
                     pages={pages}
                     measures={measures}
                     timelines={offPage}
-                    transportAccessories={PREVIEW_BUTTONS}
                     transportSecondary={SOUND_BUTTON}
                     transportViewControls={COMPACT_BUTTON}
                     onSelectionChange={changeSelection}
@@ -366,7 +360,7 @@ function PlayingTimeline(
     const playback = useTimelinePlayback({ beats, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
-    // UI-17: the bar marks what Play from start flag plays, once the flag is placed by hand or
+    // UI-17: the bar marks what Play loops, once the flag is pinned or
     // while it plays
     const flagWindowLit = useTimelineSelectionStore(
         (s) =>

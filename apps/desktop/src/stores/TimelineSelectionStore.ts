@@ -36,8 +36,8 @@ import { create } from "zustand";
  * Esc, a page box or home, a dragged range, or the timeline going away ends isolation and puts S
  * and P back where they were.
  *
- * **Playback** (UI-11, UI-17): **Play from start flag** previews the window from S; **Play from
- * here** plays on from the playhead. Playing never writes the playhead. Audio plays from, and the
+ * **Playback** (UI-11, UI-17): with S pinned, **Play** loops the window from S (a preview); with
+ * no pin it plays on from the playhead. Playing never writes the playhead. Audio plays from, and the
  * paused canvas shows, the **cursor** (`cursorBeat`) when there is one, and the playhead
  * otherwise. Play sets the cursor where playback starts and `playback` to what is running: a
  * preview of the window, or playing on. A preview that loops moves the cursor back to its start;
@@ -107,7 +107,7 @@ export interface PageBox {
 export interface TimelineSelectionState {
     /** The edit window, derived from the start flag, the playhead and the page boxes */
     readonly selection: TimelineEditSelection;
-    /** The start flag S (UI-10): where movers leave from, and where Play from start flag plays from */
+    /** The start flag S (UI-10): where movers leave from; pinned, where Play loops from */
     readonly startBeat: number;
     /** Whether S was placed by hand; an unpinned S follows navigation */
     readonly startPinned: boolean;
@@ -136,11 +136,6 @@ export interface TimelineSelectionState {
     readonly cursorBeat: number | null;
     /** What is playing, or `null` while paused (UI-11) */
     readonly playback: TimelinePlaybackRun | null;
-    /**
-     * Whether Play from start flag loops until stopped (UI-17, Loop, Shift+L); isolation always
-     * loops
-     */
-    readonly loopPreview: boolean;
     /** A gesture is moving the playhead: an unpinned S waits for it to end (UI-12 review) */
     readonly scrubbing: boolean;
 
@@ -234,11 +229,9 @@ export interface TimelineSelectionState {
      * isolation.
      */
     readonly pinStartAt: (beat: number) => void;
-    /** Turns the preview loop on or off (`!loopPreview` without an argument). */
-    readonly toggleLoopPreview: (loop?: boolean) => void;
     /** Used by `useTimelinePlaybackDriver` only. */
     readonly setShowEndBeat: (showEndBeat: number | null) => void;
-    /** Opening a show: home, playhead at 0, nothing loaded, Loop off. */
+    /** Opening a show: home, playhead at 0, nothing loaded. */
     readonly reset: () => void;
 }
 
@@ -510,7 +503,6 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             isolation: null,
             cursorBeat: null,
             playback: null,
-            loopPreview: false,
             scrubbing: false,
             isolate: (timelineId, restore) =>
                 set((s) => {
@@ -887,8 +879,6 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         );
                     }),
                 ),
-            toggleLoopPreview: (loop) =>
-                set((s) => ({ loopPreview: loop ?? !s.loopPreview })),
             setShowEndBeat: (showEndBeat) => set({ showEndBeat }),
             reset: () =>
                 set((s) => ({
@@ -898,7 +888,6 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     storedTimelines: null,
                     showEndBeat: null,
                     playback: null,
-                    loopPreview: false,
                     scrubbing: false,
                 })),
         };

@@ -12,7 +12,6 @@ import {
     SpeakerSimpleHighIcon,
     SpeakerSimpleLowIcon,
     SpeakerSimpleXIcon,
-    RepeatIcon,
     RowsIcon,
 } from "@phosphor-icons/react";
 import RegisteredActionButton from "@/components/RegisteredActionButton";
@@ -21,13 +20,11 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { clsx } from "clsx";
-import { ShortcutTooltip, showShortcutHintOnce } from "./ShortcutTooltip";
 import { AudioClock } from "./Clock";
 import { T, useTolgee } from "@tolgee/react";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
 import * as Popover from "@radix-ui/react-popover";
 import { Slider } from "@openmarch/ui";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 
 export default function TimelineControls() {
     const { isFullscreen, toggleFullscreen } = useFullscreenStore();
@@ -153,59 +150,6 @@ export function TimelineMetronomeButton() {
             >
                 <MetronomeIcon size={24} />
             </button>
-        </div>
-    );
-}
-
-/**
- * Loop (UI-17, Shift+L): Play from start flag repeats until stopped. Playing from here never loops.
- * A first click with the mouse teaches the shortcut once.
- */
-export function TimelineLoopButton() {
-    const loop = useTimelineSelectionStore((s) => s.loopPreview);
-    const toggle = useTimelineSelectionStore((s) => s.toggleLoopPreview);
-    const shortcut =
-        RegisteredActionsObjects.toggleLoop.keyboardShortcut?.toString();
-    return (
-        <ShortcutTooltip
-            label={loop ? "Loop: on" : "Loop: off"}
-            shortcut={shortcut}
-            hint="Repeats Play from start flag until you stop it"
-        >
-            <button
-                type="button"
-                data-testid="timeline-loop"
-                className={clsx(
-                    "rounded-4 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden duration-150 ease-out focus-visible:ring-2",
-                    loop ? "text-accent" : "text-text hover:text-accent",
-                )}
-                aria-label="Loop"
-                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
-                aria-pressed={loop}
-                onClick={(event) => {
-                    toggle();
-                    // detail is 0 for a keyboard press of the focused button
-                    if (event.detail > 0 && shortcut)
-                        showShortcutHintOnce(
-                            "toggleLoop",
-                            `Tip: press ${shortcut} to turn Loop on or off`,
-                        );
-                }}
-            >
-                <RepeatIcon size={18} weight={loop ? "bold" : "regular"} />
-            </button>
-        </ShortcutTooltip>
-    );
-}
-
-/** Loop, in its own outline (UI-12's pair, now one button since From start is gone, UI-17). */
-export function TimelinePreviewButtons() {
-    return (
-        <div
-            data-testid="timeline-preview-buttons"
-            className="border-stroke rounded-6 flex h-28 items-center gap-2 border px-1"
-        >
-            <TimelineLoopButton />
         </div>
     );
 }

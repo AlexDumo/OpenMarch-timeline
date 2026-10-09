@@ -8,12 +8,7 @@ import { useTimingObjects } from "@/hooks";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelinePlaybackDriver } from "../useTimelinePlaybackDriver";
 import type { TimelineSeekGesture } from "@/components/timeline/TimelineViewModel";
-import {
-    playTimelineFromFlag,
-    playTimelineFromHere,
-    stopTimelinePlaybackHere,
-    seekTimeline,
-} from "../timelineTransport";
+import { seekTimeline, toggleTimelinePlayback } from "../timelineTransport";
 
 /**
  * Timeline mode's playback rules while playing (ui.md UI-9, UI-10, UI-17; P8.11), frame by frame
@@ -40,6 +35,8 @@ const store = () => useTimelineSelectionStore.getState();
 
 beforeEach(() => {
     store().reset();
+    // reset keeps page boxes; a start flag is pinned only when it isn't the box holding P
+    store().setPageBoxes([]);
     audio.seconds = 0;
     audio.restarts = [];
     audio.startInfo.current = null;
@@ -100,8 +97,8 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             result.current.playing.setIsPlaying(true);
         });
     };
-    /** Space: play on from the playhead, or stop (UI-17). */
-    const fromHere = (result: {
+    /** Space: loop a pinned window, play on otherwise, or stop (UI-17). */
+    const space = (result: {
         current: {
             beats: { readonly length: number };
             playing: {
@@ -109,27 +106,11 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
                 setIsPlaying: (p: boolean) => void;
             };
         };
-    }) =>
-        act(() => {
-            playTimelineFromHere({
-                isPlaying: result.current.playing.isPlaying,
-                showEndBeat: result.current.beats.length,
-                setIsPlaying: result.current.playing.setIsPlaying,
-            });
-        });
-    /** Shift+Space: preview from the start flag, or stop a preview (UI-17). */
-    const fromFlag = (result: {
-        current: {
-            beats: Parameters<typeof playTimelineFromFlag>[0];
-            playing: {
-                isPlaying: boolean;
-                setIsPlaying: (p: boolean) => void;
-            };
-        };
     }) => {
         act(() => {
-            playTimelineFromFlag(result.current.beats, {
+            toggleTimelinePlayback({
                 isPlaying: result.current.playing.isPlaying,
+                showEndBeat: result.current.beats.length,
                 setIsPlaying: result.current.playing.setIsPlaying,
             });
         });
@@ -172,25 +153,30 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 13 });
     });
 
-    it("Space stops play-on in place, moving P to the last whole beat (UI-17)", async ({
+    it("Space with no pin plays on, and stopping moves P to the last whole beat (UI-17)", async ({
         db,
         wrapper,
     }) => {
         const { result } = await setUp(db, wrapper);
         act(() => {
+            store().setPageBoxes([
+                { start: 1, end: 9 },
+                { start: 9, end: 17 },
+            ]);
             store().selectRange(1, 9);
         });
+        expect(store().startPinned).toBe(false);
         audio.seconds = 6.1; // beat 13.2
-        fromHere(result);
-        audio.startInfo.current = {};
+        space(result);
         frame();
         expect(store().playback).toEqual({ kind: "on" });
         expect(store().playheadBeat).toBe(9);
-        fromHere(result);
+        space(result);
         expect(result.current.playing.isPlaying).toBe(false);
         expect(store().playheadBeat).toBe(13);
         expect(store().cursorBeat).toBeNull();
-        expect(store().startBeat).toBe(1);
+        // An unpinned start flag follows P onto the page box that holds it
+        expect(store().startBeat).toBe(9);
         expect(store().playback).toBeNull();
     });
 
@@ -298,7 +284,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().playheadBeat).toBe(17);
     });
 
-    it("Shift+Space previews from the start flag to P, and reaching the end returns the cursor to P (UI-17)", async ({
+    it("Space with a pinned flag loops S..P and repeats, never moving P (UI-17)", async ({
         db,
         wrapper,
     }) => {
@@ -306,45 +292,32 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         act(() => {
             store().selectRange(9, 13);
         });
-        fromFlag(result);
+        expect(store().startPinned).toBe(true);
+        space(result);
         // From the start flag; the playhead stays on the window's end
         expect(store().playback).toEqual({ kind: "preview", from: 9, to: 13 });
         expect(store().cursorBeat).toBe(9);
         expect(store().playheadBeat).toBe(13);
-        audio.seconds = 5.9; // beat 12.8
+        audio.seconds = 5.9; // beat 12.8, still inside the window
         frame();
         expect(result.current.playing.isPlaying).toBe(true);
-        audio.seconds = 6; // beat 13, the playhead: the preview ends there
-        frame();
-        expect(result.current.playing.isPlaying).toBe(false);
-        expect(store().cursorBeat).toBeNull();
-        expect(store().playback).toBeNull();
-        expect(store().playheadBeat).toBe(13);
-        expect(store().selection).toEqual({ kind: "range", start: 9, end: 13 });
         expect(audio.restarts).toEqual([]);
-    });
-
-    it("loops the preview while the loop is on, never moving the playhead (UI-17)", async ({
-        db,
-        wrapper,
-    }) => {
-        const { result } = await setUp(db, wrapper);
-        act(() => {
-            store().selectRange(9, 13);
-            store().toggleLoopPreview(true);
-        });
-        fromFlag(result);
-        audio.seconds = 6; // beat 13, the playhead
+        expect(store().playheadBeat).toBe(13);
+        audio.seconds = 6; // beat 13, the playhead: the loop repeats
         frame();
         expect(result.current.playing.isPlaying).toBe(true);
         expect(audio.restarts).toEqual([4]); // beat 9
         expect(store().cursorBeat).toBe(9);
         expect(store().playheadBeat).toBe(13);
         expect(store().startBeat).toBe(9);
+        audio.seconds = 6;
+        frame();
+        expect(audio.restarts).toEqual([4, 4]);
+        expect(store().playheadBeat).toBe(13);
         expect(store().playback).toEqual({ kind: "preview", from: 9, to: 13 });
     });
 
-    it("Space or Shift+Space stops a preview back on P, leaving P (UI-17)", async ({
+    it("stopping a pinned loop clears the cursor and leaves P (UI-17)", async ({
         db,
         wrapper,
     }) => {
@@ -352,84 +325,53 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         act(() => {
             store().selectRange(9, 13);
         });
-        fromFlag(result);
+        space(result);
         audio.seconds = 5.6; // beat 12.2
         frame();
-        fromHere(result);
+        space(result);
         expect(result.current.playing.isPlaying).toBe(false);
         expect(store().cursorBeat).toBeNull();
         expect(store().playheadBeat).toBe(13);
         expect(store().startBeat).toBe(9);
         expect(store().playback).toBeNull();
-
-        fromFlag(result);
-        audio.seconds = 5.6;
-        frame();
-        fromFlag(result);
-        expect(result.current.playing.isPlaying).toBe(false);
-        expect(store().cursorBeat).toBeNull();
-        expect(store().playheadBeat).toBe(13);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 13 });
     });
 
-    it("K stops a preview where it is and stays: P moves there (UI-17 follow-up)", async ({
+    it("Space in isolation loops the isolated range and never moves P (UI-17)", async ({
         db,
         wrapper,
     }) => {
         const { result } = await setUp(db, wrapper);
         act(() => {
-            store().selectRange(9, 13);
+            store().setStoredTimelines([
+                {
+                    id: 1,
+                    start: 9,
+                    end: 17,
+                    marcherIds: new Set([1]),
+                },
+            ]);
+            store().isolate(1);
         });
-        fromFlag(result);
-        audio.seconds = 5.1; // beat 11.2
-        frame();
-        act(() => {
-            stopTimelinePlaybackHere(result.current.playing);
+        expect(store().playheadBeat).toBe(17);
+        space(result);
+        expect(store().playback).toEqual({
+            kind: "preview",
+            from: 9,
+            to: 17,
         });
-        expect(result.current.playing.isPlaying).toBe(false);
-        expect(store().playback).toBeNull();
-        expect(store().cursorBeat).toBeNull();
-        expect(store().playheadBeat).toBe(11);
-        // Paused, K does nothing
-        act(() => {
-            stopTimelinePlaybackHere(result.current.playing);
-        });
-        expect(store().playheadBeat).toBe(11);
-    });
-
-    it("Shift+Space while playing on restarts from the flag as a preview (UI-17)", async ({
-        db,
-        wrapper,
-    }) => {
-        const { result } = await setUp(db, wrapper);
-        act(() => {
-            store().selectRange(9, 13);
-        });
-        audio.seconds = 6.1; // beat 13.2, already at P
-        fromHere(result);
-        audio.startInfo.current = {};
-        frame();
-        expect(store().playback).toEqual({ kind: "on" });
-        expect(result.current.playing.isPlaying).toBe(true);
-        fromFlag(result);
-        expect(result.current.playing.isPlaying).toBe(true);
-        expect(store().playback).toEqual({ kind: "preview", from: 9, to: 13 });
         expect(store().cursorBeat).toBe(9);
-        expect(store().playheadBeat).toBe(13);
-        expect(audio.restarts).toEqual([4]); // beat 9, the flag
-    });
-
-    it("Shift+Space with no window previews the show from 0 (UI-17)", async ({
-        db,
-        wrapper,
-    }) => {
-        const { result } = await setUp(db, wrapper);
-        expect(store().selection).toEqual({ kind: "home" });
-        fromFlag(result);
+        audio.seconds = 8; // beat 17, the end of the isolated range
+        frame();
         expect(result.current.playing.isPlaying).toBe(true);
-        expect(store().playback).toEqual({ kind: "preview", from: 0, to: 17 });
-        expect(store().cursorBeat).toBe(0);
-        expect(store().playheadBeat).toBe(0);
+        expect(audio.restarts).toEqual([4]); // beat 9
+        expect(store().cursorBeat).toBe(9);
+        expect(store().playheadBeat).toBe(17);
+        expect(store().playback).toEqual({
+            kind: "preview",
+            from: 9,
+            to: 17,
+        });
     });
 
     it("a pause before the audio starts clears the cursor and leaves P (UI-17)", async ({
@@ -438,14 +380,19 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
     }) => {
         const { result } = await setUp(db, wrapper);
         act(() => {
+            store().setPageBoxes([
+                { start: 1, end: 9 },
+                { start: 9, end: 17 },
+            ]);
+            // The page box holding 13, so the flag is not pinned and Space plays on
             store().selectRange(9, 13);
         });
-        fromHere(result);
+        expect(store().startPinned).toBe(false);
+        space(result);
         expect(store().playback).toEqual({ kind: "on" });
         expect(store().cursorBeat).toBe(13);
-        act(() => {
-            result.current.playing.setIsPlaying(false);
-        });
+        // No frame: the audio never started, so there is no beat to stop on
+        space(result);
         expect(store().cursorBeat).toBeNull();
         expect(store().playheadBeat).toBe(13);
         expect(store().playback).toBeNull();
@@ -489,7 +436,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             act(() => {
                 store().selectRange(9, 13);
             });
-            fromFlag(result);
+            space(result);
             audio.seconds = 4.6; // beat 10.2
             frame();
             const { playChanges, send } = scrubber(result);
@@ -517,24 +464,28 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             send(10, "end");
             expect(playChanges).toEqual([false, true]);
             expect(result.current.playing.isPlaying).toBe(true);
-            // A scrubbed preview plays on from the release, even inside the window (UI-17)
-            expect(store().playback).toEqual({ kind: "on" });
+            // Released inside the window: the same preview keeps looping (UI-17)
+            expect(store().playback).toEqual({
+                kind: "preview",
+                from: 9,
+                to: 13,
+            });
             expect(store().cursorBeat).toBe(10);
             expect(store().playheadBeat).toBe(13);
             expect(audio.restarts).toEqual([]);
 
-            // The next ordinary pause is a play-on stop: P moves, the cursor clears
+            // Stopping the preview clears the cursor and leaves P
             audio.seconds = 5.1; // beat 11.2
             frame();
             act(() => {
                 result.current.playing.setIsPlaying(false);
             });
-            expect(store().playheadBeat).toBe(11);
+            expect(store().playheadBeat).toBe(13);
             expect(store().cursorBeat).toBeNull();
             expect(store().startBeat).toBe(9);
         });
 
-        it("a click during a preview plays on, inside the window too (UI-17)", async ({
+        it("a click inside a looping window keeps looping, and outside turns it to play-on (UI-17)", async ({
             db,
             wrapper,
         }) => {
@@ -542,7 +493,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             act(() => {
                 store().selectRange(9, 13);
             });
-            fromFlag(result);
+            space(result);
             audio.seconds = 4.6;
             frame();
             const { playChanges, send } = scrubber(result);
@@ -552,9 +503,22 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             expect(playChanges).toEqual([]);
             expect(result.current.playing.isPlaying).toBe(true);
             expect(audio.restarts).toEqual([5]); // beat 11
-            expect(store().playback).toEqual({ kind: "on" });
+            expect(store().playback).toEqual({
+                kind: "preview",
+                from: 9,
+                to: 13,
+            });
             expect(store().playheadBeat).toBe(13);
             expect(store().cursorBeat).toBe(11);
+
+            send(14, "press");
+            send(14, "end");
+            expect(playChanges).toEqual([]);
+            expect(result.current.playing.isPlaying).toBe(true);
+            expect(audio.restarts).toEqual([5, 6.5]); // beat 14
+            expect(store().playback).toEqual({ kind: "on" });
+            expect(store().playheadBeat).toBe(13);
+            expect(store().cursorBeat).toBe(14);
         });
 
         it("a jump during an isolated preview keeps the isolated run (UI-17)", async ({
@@ -573,7 +537,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
                 ]);
                 store().isolate(1);
             });
-            fromFlag(result);
+            space(result);
             expect(store().playback).toEqual({
                 kind: "preview",
                 from: 9,
@@ -601,7 +565,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             act(() => {
                 store().selectRange(9, 13);
             });
-            fromFlag(result);
+            space(result);
             audio.seconds = 4.6;
             frame();
             const { playChanges, send } = scrubber(result);

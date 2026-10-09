@@ -19,23 +19,12 @@ export interface MenuAction {
 }
 
 export const PLAYBACK_MENU_ACTIONS: readonly MenuAction[] = [
+    { action: "playPause", label: "Play / Stop", accelerator: "Space" },
     {
-        action: "playPause",
-        label: "Play from Here / Stop",
-        accelerator: "Space",
-    },
-    {
-        action: "playFromStartFlag",
-        label: "Play from Start Flag",
-        accelerator: "Shift+Space",
-    },
-    { action: "stopHere", label: "Stop Here", accelerator: "K" },
-    {
-        action: "setStartFlagHere",
-        label: "Set Start Flag Here",
+        action: "toggleStartPin",
+        label: "Pin or Unpin Start Flag",
         accelerator: "C",
     },
-    { action: "toggleLoop", label: "Loop", accelerator: "Shift+L" },
 ];
 
 export const HELP_MENU_ACTIONS: readonly MenuAction[] = [

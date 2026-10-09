@@ -60,9 +60,8 @@ export function navigateTimelinePages(
 
 /**
  * A click, scrub or page navigation while playing (UI-12): playback jumps to `beat` and goes on,
- * as in a DAW, and the playhead stays put. A preview plays on from there, so stopping no longer
- * returns to the playhead (UI-17); isolation keeps the jump inside the isolated range. Returns
- * false when not playing.
+ * as in a DAW, and the playhead stays put. A loop jumped outside its window plays on from there;
+ * isolation keeps the jump inside the isolated range. Returns false when not playing.
  */
 export function jumpTimelinePlayback(
     beats: readonly BeatTiming[],
@@ -71,7 +70,7 @@ export function jumpTimelinePlayback(
     const state = useTimelineSelectionStore.getState();
     if (!state.playback || !Number.isFinite(beat)) return false;
     const target = playbackTarget(beats, beat);
-    const run = runAfterJump(state.playback);
+    const run = runAfterJump(state.playback, target);
     if (run !== state.playback) state.setPlayback(run);
     restartLivePlaybackAt(timeAtBeat(beats, target));
     state.cue(target);
@@ -87,11 +86,16 @@ const playbackTarget = (beats: readonly BeatTiming[], beat: number) => {
 };
 
 /**
- * A jump or scrub says "I'm here now" (UI-17): a preview plays on from there, so its stop stays
- * instead of returning to the playhead. Isolation keeps its run, which loops the isolated range.
+ * A loop jumped outside its window plays on from there (UI-11), so its stop stays; inside the
+ * window it keeps looping. Isolation keeps its run.
  */
-const runAfterJump = (run: TimelinePlaybackRun): TimelinePlaybackRun =>
-    run.kind === "preview" && !useTimelineSelectionStore.getState().isolation
+const runAfterJump = (
+    run: TimelinePlaybackRun,
+    target: number,
+): TimelinePlaybackRun =>
+    run.kind === "preview" &&
+    !useTimelineSelectionStore.getState().isolation &&
+    (target < run.from || target >= run.to)
         ? { kind: "on" }
         : run;
 
@@ -111,8 +115,8 @@ export function suspendTimelinePlayback(
 }
 
 /**
- * The scrub that suspended `run` ended at `beat`: playback starts once from there, a preview as
- * playing on (as `jumpTimelinePlayback` does).
+ * The scrub that suspended `run` ended at `beat`: playback starts once from there, as the same
+ * run, or playing on when a loop's window doesn't hold it (as `jumpTimelinePlayback` does).
  */
 export function resumeTimelinePlayback(
     beats: readonly BeatTiming[],
@@ -125,7 +129,7 @@ export function resumeTimelinePlayback(
     // A suspension whose pause never landed mustn't turn the next ordinary pause into one
     suspendRequested = false;
     state.cue(target);
-    state.setPlayback(runAfterJump(run));
+    state.setPlayback(runAfterJump(run, target));
     setIsPlaying(true);
 }
 
@@ -212,51 +216,18 @@ export function jumpTimelinePages(
 }
 
 /**
- * Where **Play from start flag** plays (UI-17): the window from the start flag to the playhead
- * (`previewBounds`). With no window (home, or a flag on the playhead), the show from its start.
- * `null` when the show is empty.
+ * What **Play** loops (UI-17): with the start flag pinned, or a move isolated, the window from the
+ * flag to the playhead (`previewBounds`); otherwise `null`, and Play plays on.
  */
-const flagPreviewBounds = (showEndBeat: number) => {
-    const state = useTimelineSelectionStore.getState();
-    const bounds = previewBounds(state);
-    if (bounds) return bounds;
-    return showEndBeat > 0 ? { from: 0, to: showEndBeat } : null;
-};
+export const pinnedLoopBounds = (
+    state: Pick<
+        ReturnType<typeof useTimelineSelectionStore.getState>,
+        "startPinned" | "isolation" | "selection"
+    >,
+) => (state.startPinned || state.isolation ? previewBounds(state) : null);
 
 /**
- * **Play from start flag** (UI-17, Shift+Space): previews the window from the start flag to the
- * playhead, looping when the loop is on. Any stop puts the cursor back on the playhead, the page
- * you were on. While a preview runs it stops it; while playing from here it restarts from the
- * flag, and the stop still returns to the playhead, which playing never moved.
- *
- * @param beats the show's beats, to restart the audio when it is already playing
- */
-export function playTimelineFromFlag(
-    beats: readonly BeatTiming[],
-    {
-        isPlaying,
-        setIsPlaying,
-    }: {
-        isPlaying: boolean;
-        setIsPlaying: (isPlaying: boolean) => void;
-    },
-): boolean {
-    const state = useTimelineSelectionStore.getState();
-    if (isPlaying && state.playback?.kind === "preview") {
-        setIsPlaying(false);
-        return true;
-    }
-    const bounds = flagPreviewBounds(beats.length);
-    if (!bounds) return false;
-    state.cue(bounds.from);
-    state.setPlayback({ kind: "preview", ...bounds });
-    if (isPlaying) restartLivePlaybackAt(timeAtBeat(beats, bounds.from));
-    else setIsPlaying(true);
-    return true;
-}
-
-/**
- * Playing on (UI-17, Play from here): plays from the playhead to the end of the show, as UI-10's
+ * Playing on (UI-17, Play with no pin): plays from the playhead to the end of the show, as UI-10's
  * Play did. Returns false when there's nothing after it.
  */
 export function startTimelinePlayOn(
@@ -273,11 +244,13 @@ export function startTimelinePlayOn(
 }
 
 /**
- * **Play from here** (UI-17, Space): plays on from the playhead. Playing, it stops: playing on
- * stops in place, moving the playhead there, and a preview returns to the playhead (the playback
- * driver does both once the pause lands).
+ * **Play / Stop** (UI-17, Space), the one play action. With the start flag pinned (or a move
+ * isolated) it loops the window from the flag to the playhead, and stopping puts the canvas back
+ * on the playhead, the arrival being edited, which looping never moved. With no pin it plays on
+ * from the playhead, and stopping stays where it stopped, moving the playhead there. The playback
+ * driver does both once the pause lands.
  */
-export function playTimelineFromHere({
+export function toggleTimelinePlayback({
     isPlaying,
     showEndBeat,
     setIsPlaying,
@@ -286,42 +259,29 @@ export function playTimelineFromHere({
     showEndBeat: number;
     setIsPlaying: (isPlaying: boolean) => void;
 }): void {
-    if (isPlaying) setIsPlaying(false);
-    else startTimelinePlayOn(showEndBeat, setIsPlaying);
-}
-
-/**
- * The Play from here button while a preview runs (UI-17): playback goes on from where it is, as
- * playing on, so stopping stays there instead of returning to the playhead.
- */
-export function continueTimelinePlayback(): void {
+    if (isPlaying) {
+        setIsPlaying(false);
+        return;
+    }
     const state = useTimelineSelectionStore.getState();
-    if (state.playback?.kind === "preview") state.setPlayback({ kind: "on" });
+    const bounds = pinnedLoopBounds(state);
+    if (!bounds) {
+        startTimelinePlayOn(showEndBeat, setIsPlaying);
+        return;
+    }
+    state.cue(bounds.from);
+    state.setPlayback({ kind: "preview", ...bounds });
+    setIsPlaying(true);
 }
 
 /**
- * **Stop here** (UI-17 follow-up, K, as video editors' K): stops wherever playback is and stays,
- * a preview included, so the playhead moves to the last whole beat played. Nothing when paused.
+ * **C** (UI-17): pins the start flag on the beat the timeline shows, or unpins it, as Logic's C
+ * turns Cycle on and off. A pinned flag is what Play loops from. Does nothing in isolation, whose
+ * flag is the isolated move's start.
  */
-export function stopTimelinePlaybackHere({
-    isPlaying,
-    setIsPlaying,
-}: {
-    isPlaying: boolean;
-    setIsPlaying: (isPlaying: boolean) => void;
-}): void {
-    if (!isPlaying) return;
-    continueTimelinePlayback();
-    setIsPlaying(false);
-}
-
-/**
- * **C** (UI-17): puts the start flag on the beat the timeline shows and pins it, so Play from start
- * flag plays from there once the playhead moves on. Does nothing in isolation, whose flag is the
- * isolated move's start.
- */
-export function setTimelineStartFlagHere(): void {
+export function toggleTimelineStartPin(): void {
     const state = useTimelineSelectionStore.getState();
     if (state.isolation) return;
-    state.pinStartAt(displayedBeat(state));
+    if (state.startPinned) state.unpinStart();
+    else state.pinStartAt(displayedBeat(state));
 }

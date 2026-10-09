@@ -1,7 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { TooltipClassName } from "@openmarch/ui";
-import { toast } from "sonner";
 
 /**
  * The transport's tooltips (UI-17): the control's name with its shortcut as muted keycaps, as
@@ -73,24 +72,4 @@ export function ShortcutTooltip({
             </Tooltip.Portal>
         </Tooltip.Root>
     );
-}
-
-const HINT_KEY_PREFIX = "openmarch.shortcutHint.";
-
-/**
- * A one-time tip for someone who clicked a control that has a shortcut (UI-17): shown on the
- * first mouse click only, then never again. Browser storage is a convenience here; without it the
- * tip may come back once per session at most.
- */
-const hintsShown = new Set<string>();
-export function showShortcutHintOnce(id: string, message: string): void {
-    if (hintsShown.has(id)) return;
-    hintsShown.add(id);
-    try {
-        if (window.localStorage.getItem(HINT_KEY_PREFIX + id)) return;
-        window.localStorage.setItem(HINT_KEY_PREFIX + id, "1");
-    } catch {
-        // Storage blocked: the in-memory set still keeps it to once per session
-    }
-    toast(message, { duration: 4000 });
 }

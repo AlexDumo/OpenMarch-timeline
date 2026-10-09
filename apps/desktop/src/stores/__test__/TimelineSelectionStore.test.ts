@@ -595,13 +595,16 @@ describe("the playback cursor (UI-11)", () => {
         expect(store().playheadBeat).toBe(17);
     });
 
-    it("toggles the preview loop, and reset clears it (UI-17)", () => {
-        expect(store().loopPreview).toBe(false);
-        store().toggleLoopPreview();
-        expect(store().loopPreview).toBe(true);
-        store().toggleLoopPreview(true);
-        expect(store().loopPreview).toBe(true);
+    it("reset clears a pinned start flag, which is what Play loops (UI-17)", () => {
+        expect(store().startPinned).toBe(false);
+        store().pinStartAt(9);
+        expect(store().startBeat).toBe(9);
+        expect(store().startPinned).toBe(true);
+        expect(store().playheadBeat).toBe(17);
         store().reset();
-        expect(store().loopPreview).toBe(false);
+        expect(store().startPinned).toBe(false);
+        expect(store().startBeat).toBe(0);
+        expect(store().playheadBeat).toBe(0);
+        expect(store().playback).toBeNull();
     });
 });

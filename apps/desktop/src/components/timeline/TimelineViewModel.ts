@@ -155,7 +155,7 @@ export type TimelineSelection =
            */
           readonly startFlagBeatIndex?: number;
           /**
-           * The window is what Play from start flag plays (UI-17): placed by hand, or playing. It
+           * The window is what Play loops (UI-17): the flag is pinned, or it is looping. It
            * is drawn with a bar in the start flag's color
            */
           readonly fromStart?: boolean;
@@ -212,12 +212,8 @@ export interface TimelineInteractionProps {
     readonly selectedTarget?: TimelineTarget | null;
     readonly onSeek?: TimelineSeek;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
-    /** **Play from start flag** (UI-17); without it, there is no such button */
-    readonly onPlayFromFlag?: () => void;
-    /** A Play from start flag preview is running (UI-17) */
-    readonly playingFromFlag?: boolean;
-    /** Loop is on: Play from start flag repeats (UI-17 follow-up) */
-    readonly flagLoops?: boolean;
+    /** The start flag is pinned, so Play loops from it (UI-17) */
+    readonly playLoops?: boolean;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;

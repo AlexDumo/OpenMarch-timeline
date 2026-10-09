@@ -61,12 +61,9 @@
         "playback": {
             "pause": "Pause",
             "play": "Play",
-            "playFromStartFlag": "Play from the start flag",
-            "playPause": "Play from here, or stop",
-            "setStartFlagHere": "Set the start flag here",
-            "stopHere": "Stop here, without going back",
-            "toggleLoop": "Loop playing from the start flag",
-            "toggleMetronome": "Turn the metronome on or off"
+            "playPause": "Play or stop; with the start flag pinned, loop from it",
+            "toggleMetronome": "Turn the metronome on or off",
+            "toggleStartPin": "Pin the start flag here, or unpin it"
         },
         "select": {
             "selectAll": "Select all marchers"

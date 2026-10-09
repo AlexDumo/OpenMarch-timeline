@@ -6,7 +6,7 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useTimingObjects } from "@/hooks";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { playTimelineFromHere } from "../timelineTransport";
+import { toggleTimelinePlayback } from "../timelineTransport";
 import { useTimelinePageBridge } from "../useTimelinePageBridge";
 import { useTimelinePlaybackDriver } from "../useTimelinePlaybackDriver";
 
@@ -51,6 +51,7 @@ const seedShow = (db: DbConnection) =>
 let consoleError: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
     store().reset();
+    store().setPageBoxes([]);
     audio.seconds = 0;
     audio.startInfo.current = null;
     vi.useFakeTimers({
@@ -103,7 +104,7 @@ describeDbTests("timeline play, pause, play", (it) => {
 
         const playPause = (liveSeconds: number) => {
             act(() => {
-                playTimelineFromHere({
+                toggleTimelinePlayback({
                     isPlaying: false,
                     showEndBeat: result.current.timing.beats.length,
                     setIsPlaying: result.current.playing.setIsPlaying,
@@ -113,7 +114,7 @@ describeDbTests("timeline play, pause, play", (it) => {
             audio.seconds = liveSeconds;
             frame();
             act(() => {
-                playTimelineFromHere({
+                toggleTimelinePlayback({
                     isPlaying: true,
                     showEndBeat: result.current.timing.beats.length,
                     setIsPlaying: result.current.playing.setIsPlaying,
@@ -121,11 +122,18 @@ describeDbTests("timeline play, pause, play", (it) => {
             });
         };
 
-        // The page at [5, 9): Space plays on from P; stopping moves P and must not loop
-        // with the page bridge (UI-17)
+        // The page at [5, 9) is its own box, so the flag is not pinned and Space plays on.
+        // Stopping moves P and must not loop with the page bridge (UI-17)
         act(() => {
+            store().setPageBoxes([
+                { start: 1, end: 5 },
+                { start: 5, end: 9 },
+                { start: 9, end: 13 },
+                { start: 13, end: 17 },
+            ]);
             store().selectRange(5, 9);
         });
+        expect(store().startPinned).toBe(false);
         writes = 0;
         playPause(3.1); // beat 7.2: Space stops in place, P moves to 7
         expect(store().cursorBeat).toBeNull();
