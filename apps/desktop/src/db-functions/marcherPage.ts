@@ -165,11 +165,29 @@ export interface CarriedRun {
     nextPageId: number | null;
 }
 
+/**
+ * A moved marcher whose edit stopped at a later page of its own (page mode): the first later row
+ * that isn't a copy, because it is somewhere else. **Move them too** shifts that row by the same
+ * offset (`moveLaterMovesToo`).
+ */
+export interface OwnMoveStop {
+    marcherId: number;
+    /** The page the write was on */
+    pageId: number;
+    /** The later page with the marcher's own move, where the edit stopped */
+    stopPageId: number;
+    /** How far the write moved the marcher on `pageId` */
+    dx: number;
+    dy: number;
+}
+
 export interface MarcherPagesWriteResult {
     /** Every marcher page row written, including the rows an edit carried to */
     updatedIds: number[];
     /** One entry per write that carried forward */
     carried: CarriedRun[];
+    /** The moved marchers whose edit stopped at a later page with their own move */
+    ownMoveStops: OwnMoveStop[];
     /** The pages any edit carried to, in page order */
     followedPageIds: number[];
     /** The pages whose pathway the write moved an end of */
@@ -179,6 +197,7 @@ export interface MarcherPagesWriteResult {
 export const emptyMarcherPagesWriteResult = (): MarcherPagesWriteResult => ({
     updatedIds: [],
     carried: [],
+    ownMoveStops: [],
     followedPageIds: [],
     pathwayPageIds: [],
 });
@@ -376,14 +395,26 @@ export async function updateMarcherPagesInTransaction({
             const inShape = shapePages.get(marcher_id);
             for (let j = index + 1; j < rows.length; j++) {
                 const later = rows[j];
-                if (
+                const elsewhere =
                     !sameCoordinate(later.x, old.x) ||
-                    !sameCoordinate(later.y, old.y) ||
+                    !sameCoordinate(later.y, old.y);
+                if (
+                    elsewhere ||
                     inShape?.has(later.page_id) ||
                     (later.path_data_id != null &&
                         later.path_data_id !== previousPathway)
-                )
+                ) {
+                    // Somewhere else, and not in a shape: the marcher's own move, where it stops
+                    if (elsewhere && !inShape?.has(later.page_id))
+                        result.ownMoveStops.push({
+                            marcherId: marcher_id,
+                            pageId: page_id,
+                            stopPageId: later.page_id,
+                            dx: row.x - old.x,
+                            dy: row.y - old.y,
+                        });
                     break;
+                }
                 followed.push({
                     id: later.id,
                     pageId: later.page_id,
@@ -451,6 +482,19 @@ export async function updateMarcherPagesInTransaction({
         if (written) result.updatedIds.push(written.id);
     }
 
+    // A stop on a page this write also edits for that marcher isn't left behind
+    const written = new Set(
+        modifiedMarcherPages.map((m) => marcherPageToKeyString(m)),
+    );
+    result.ownMoveStops = result.ownMoveStops.filter(
+        (s) =>
+            !written.has(
+                marcherPageToKeyString({
+                    marcher_id: s.marcherId,
+                    page_id: s.stopPageId,
+                }),
+            ),
+    );
     result.followedPageIds = [...followedPositions.entries()]
         .sort((a, b) => a[1] - b[1])
         .map(([pageId]) => pageId);
@@ -523,6 +567,44 @@ export async function updateMarcherPages({
         },
     );
     return transactionResult;
+}
+
+/**
+ * **Move them too** (page mode, defined-coordinates 09): shifts each stop's row (the marcher's own
+ * later move, `OwnMoveStop`) by the offset the edit moved the marcher, as its own undoable edit.
+ * It carries forward like any edit, so later pages that copied the stop's page follow. Rows that
+ * are gone are skipped.
+ *
+ * @returns the write's result (empty when nothing was left to move)
+ */
+export async function moveLaterMovesToo({
+    db,
+    stops,
+}: {
+    db: DbConnection;
+    stops: readonly OwnMoveStop[];
+}): Promise<MarcherPagesWriteResult> {
+    const modifiedMarcherPages: ModifiedMarcherPageArgs[] = [];
+    for (const stop of stops) {
+        const row = await db
+            .select({ x: marcher_pages.x, y: marcher_pages.y })
+            .from(marcher_pages)
+            .where(
+                and(
+                    eq(marcher_pages.marcher_id, stop.marcherId),
+                    eq(marcher_pages.page_id, stop.stopPageId),
+                ),
+            )
+            .get();
+        if (row)
+            modifiedMarcherPages.push({
+                marcher_id: stop.marcherId,
+                page_id: stop.stopPageId,
+                x: row.x + stop.dx,
+                y: row.y + stop.dy,
+            });
+    }
+    return await updateMarcherPages({ db, modifiedMarcherPages });
 }
 
 /**
