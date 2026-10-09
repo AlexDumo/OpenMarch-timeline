@@ -13,8 +13,7 @@ import {
     type PageBox,
     type StoredTimelineMembership,
 } from "@/stores/TimelineSelectionStore";
-import { getPageCountAt } from "@/components/timeline/TimelineGeometry";
-import { moveLabels } from "./timelineViewModel";
+import { joinList, moveName } from "./timelineRangeWords";
 import { editSurpriseToastId } from "@/utilities/moveThemToo";
 import { toastTimelineError } from "./timelineErrorMessages";
 
@@ -41,91 +40,14 @@ export type PassThroughTranslate = (
 const defaultTranslate: PassThroughTranslate = (key, defaultMessage, params) =>
     tolgee.t(key, defaultMessage, params);
 
-/** "A", "A and B", "A, B and C". */
-const joinList = (items: readonly string[]): string =>
-    items.length <= 1
-        ? (items[0] ?? "")
-        : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-
 /** A stored move, for its name (UI-14): its id, range and stored name. */
 export type PassThroughMove = Pick<
     StoredTimelineMembership,
     "id" | "start" | "end" | "name"
 >;
 
-/**
- * Where `range` is, in pages and counts as the field line counts them (UI-12, UI-13), from the
- * page boxes: "Page 2, counts 1–4" (or "count 3") inside one page, "Page 2 count 5 to Page 3
- * count 4" across a flag, "after Page 4, counts 1–4" past the last flag. `null` where a count
- * has no named page. Never beats. `span` says which of the three it is.
- */
-export function rangeWhere(
-    range: BeatRange,
-    boxes: readonly PageBox[],
-): { readonly where: string; readonly span: "page" | "after" | "flag" } | null {
-    const model = {
-        pages: boxes.map((b) => ({
-            id: b.start,
-            label: b.name ?? "",
-            atBeat: b.start,
-            endBeat: b.end,
-            isInitial: false,
-        })),
-    };
-    // A move's first count is the beat after its start
-    const from = getPageCountAt(model, range.start + 1);
-    const to = getPageCountAt(model, range.end);
-    if (from.home || to.home || !from.pageLabel || !to.pageLabel) return null;
-    const counts =
-        from.count === to.count
-            ? `count ${from.count}`
-            : `counts ${from.count}–${to.count}`;
-    if (from.pageLabel === to.pageLabel && !!from.after === !!to.after)
-        return from.after
-            ? {
-                  where: `after Page ${from.pageLabel}, ${counts}`,
-                  span: "after",
-              }
-            : { where: `Page ${from.pageLabel}, ${counts}`, span: "page" };
-    const at = (c: typeof from) =>
-        c.after
-            ? `count ${c.count} after Page ${c.pageLabel}`
-            : `Page ${c.pageLabel} count ${c.count}`;
-    return { where: `${at(from)} to ${at(to)}`, span: "flag" };
-}
-
-/**
- * How the toast names the move over `range`: "Page 2" for a page's box; else the move's label
- * (`moveLabels`: its name, "Move 2") with where it is, "Move 2 (Page 2, counts 1–4)", or "the
- * move on Page 2, counts 1–4" when no stored move has the range.
- */
-export function moveName(
-    range: BeatRange,
-    boxes: readonly PageBox[],
-    moves: readonly PassThroughMove[] = [],
-): string {
-    const box = boxes.find(
-        (b) => b.start === range.start && b.end === range.end,
-    );
-    if (box?.name !== undefined) return `Page ${box.name}`;
-    const labels = moveLabels(moves, boxes);
-    const names = [
-        ...new Set(
-            moves
-                .filter((m) => m.start === range.start && m.end === range.end)
-                .flatMap((m) => labels.get(m.id) ?? []),
-        ),
-    ];
-    const at = rangeWhere(range, boxes);
-    if (names.length > 0)
-        return at ? `${joinList(names)} (${at.where})` : joinList(names);
-    if (!at) return "another move";
-    return at.span === "after"
-        ? `the move ${at.where}`
-        : at.span === "flag"
-          ? `the move from ${at.where}`
-          : `the move on ${at.where}`;
-}
+// Pages and counts, and move names, shared with the write path's refusals
+export { moveName, rangeWhere } from "./timelineRangeWords";
 
 /**
  * The flag **Keep as a stop** moves from: the last page flag strictly inside the drag's range.

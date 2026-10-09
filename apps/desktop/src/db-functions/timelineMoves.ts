@@ -24,6 +24,12 @@ import {
 } from "./timelineMembership";
 import { deleteTimelinesInTransaction, timelinesWithRange } from "./timelines";
 import { readPageGrid, type PageGrid } from "./timelineRipple";
+import {
+    beatWhere,
+    moveInSentence,
+    moveName,
+} from "@/timeline/timelineRangeWords";
+import { readMoveWords } from "./timelineMoveNames";
 import { FIRST_PAGE_ID } from "./rowMappers";
 import type { DatabaseTimelineAssignment } from "./timelineAssignments";
 import {
@@ -288,7 +294,7 @@ export const moveMarchersOnPageInTransaction = async ({
             refuse(
                 `marcher ${await marcherLabel(tx, move.marcherId)} has no move that ends at the end of ${pageLabel(
                     page,
-                )} (beat ${endBeat}), so there is no destination to change there`,
+                )}, so there is no destination to change there`,
             );
         plans.push({ move, row });
     }
@@ -322,15 +328,15 @@ const writeSlotMoves = async ({
 }: {
     tx: DbTransaction;
     plans: readonly SlotMovePlan[];
-    /** Names the page or timeline in refusals */
-    where: string;
+    /** Names the page or move in refusals; a function when naming it needs a read */
+    where: string | (() => Promise<string>);
     result: TimelineMoveResult;
 }): Promise<void> => {
     for (const { move, row } of plans)
         if (row.shapeId !== null && row.pathStyle === "follow_the_leader")
             throw new TimelineWriteError(
                 "E-T5",
-                `marcher ${await marcherLabel(tx, move.marcherId)} follows the leader into a shape on ${where}; move the shape instead`,
+                `marcher ${await marcherLabel(tx, move.marcherId)} follows the leader into a shape on ${typeof where === "string" ? where : await where()}; move the shape instead`,
             );
 
     // Shape-backed transitions switch to individual points (Q-14), copying the shape's samples.
@@ -572,6 +578,11 @@ export const moveMarchersInTimelineInTransaction = async ({
         if (!best || row.layer > best.layer) top.set(row.marcherId, row);
     }
 
+    // Read only when a refusal needs them
+    let words: Awaited<ReturnType<typeof readMoveWords>> | undefined;
+    const moveWords = async () => (words ??= await readMoveWords(tx));
+    const at = async (beat: number) =>
+        beatWhere(beat, (await moveWords()).boxes) ?? "home";
     const plans: SlotMovePlan[] = [];
     for (const move of moves) {
         const own = byMarcher.get(move.marcherId) ?? [];
@@ -586,19 +597,33 @@ export const moveMarchersInTimelineInTransaction = async ({
         const row = own[0]!;
         if (row.end !== endBeat)
             refuse(
-                `marcher ${await marcherLabel(tx, move.marcherId)}'s move in this timeline ends at beat ${row.end}, before the timeline's end (beat ${endBeat}). Edit it in the inspector.`,
+                `marcher ${await marcherLabel(tx, move.marcherId)} stops at ${await at(row.end)}, before this move ends (${await at(endBeat)}). Edit it in the inspector.`,
             );
         const winner = top.get(move.marcherId);
-        if (!ghosts && winner && winner.layer > row.layer)
-            refuse(
-                `marcher ${await marcherLabel(tx, move.marcherId)} has another move over beats [${winner.start}, ${winner.end}) that decides where it is at beat ${endBeat}. Put the start flag and playhead on that move's edges to edit it.`,
+        if (!ghosts && winner && winner.layer > row.layer) {
+            const { boxes, moves: stored } = await moveWords();
+            const other = moveInSentence(
+                { start: winner.start, end: winner.end },
+                boxes,
+                stored,
             );
+            refuse(
+                `marcher ${await marcherLabel(tx, move.marcherId)}'s position at ${await at(endBeat)} comes from ${other}, not this move. Put the start flag and playhead on that move's edges to edit it.`,
+            );
+        }
         plans.push({ move, row });
     }
     await writeSlotMoves({
         tx,
         plans: skipUnchanged ? await changedPlans(tx, plans) : plans,
-        where: `the timeline ending at beat ${endBeat}`,
+        where: async () => {
+            const { boxes, moves: stored } = await moveWords();
+            return moveName(
+                { start: timeline.start_beat, end: endBeat },
+                boxes,
+                stored,
+            );
+        },
         result,
     });
     return result;
