@@ -561,7 +561,7 @@ from it. The spec still wins on the model; this file decides presentation.
   and focus going astray, move numbers shifting, a leftover selection, and dashed clips that
   didn't say why; the items marked _round 2_ are its fixes.
   - **The clip menu.** Right-clicking a clip opens **Edit move**, **Rename move…** and **Delete
-    move** (red, last, after a separator). Page boxes keep **Delete page flag**; a dragged range
+    move** (red, last, after a separator). Page boxes keep **Delete page** and **Delete page and its moves** (UI-18); a dragged range
     still has no menu in timeline mode. While playing, Edit and Delete are disabled with the reason
     ("Pause to edit or delete a move."); Rename stays, since it changes only a label (_lead
     default_, V-42).
@@ -763,10 +763,9 @@ from it. The spec still wins on the model; this file decides presentation.
   - Not built: clips on the flag only move on release, not during the drag; edge scrolling while
     dragging a flag; a ripple variant (Shift-drag, shifting every later flag).
 
-- **UI-15: a page has a position only where a marcher was moved (project owner, 2026-10-08).**
+- **UI-18: a page has a position only where a marcher was moved (project owner, 2026-10-08).**
   The owner made pages 2–4 after page 1, edited page 2, and found page 3 still showing page 1's
-  set. Research and validation are in `research/defined-coordinates/`. UI-14 is fork PR #106
-  (edit moves), so this is numbered after it.
+  set. Research and validation are in `research/defined-coordinates/`. Numbered after UI-17 (transport keys, still on its branch).
   - **The rule.** A marcher has a coordinate on a page only where the designer moved them there.
     Everywhere else they hold where they last were (spec R-6). An edit carries forward, per marcher,
     to that marcher's next page with its own move, and stops there.

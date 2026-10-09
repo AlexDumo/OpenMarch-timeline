@@ -2,7 +2,7 @@ import { sameCoordinate } from "@/db-functions/marcherPage";
 import type { CarrySpan } from "./timelineCarryForward";
 
 /**
- * Where the selected marchers hold, page by page (docs/timeline/ui.md UI-15, defined-coordinates
+ * Where the selected marchers hold, page by page (docs/timeline/ui.md UI-18, defined-coordinates
  * 08: a standing view on the page boxes instead of a carry-forward toast). For each page after the
  * first, the selection either moves there (every selected marcher has its own move on the page),
  * holds there (every one holds from an earlier page), or is mixed. Marchers partway through a move

@@ -7,7 +7,7 @@ import type { PageBox } from "@/stores/TimelineSelectionStore";
 import { resolverSpans } from "./timelineStore";
 
 /**
- * What an edit also changed after its window (docs/timeline/ui.md UI-15, defined-coordinates 07c
+ * What an edit also changed after its window (docs/timeline/ui.md UI-18, defined-coordinates 07c
  * §6–7): a marcher holds where it last was until its own next move, so an edit carries forward
  * over every later page flag the marcher holds through, and stops at the page where that next
  * move ends. Read from the resolver after the edit, per moved marcher, from its spans alone: no

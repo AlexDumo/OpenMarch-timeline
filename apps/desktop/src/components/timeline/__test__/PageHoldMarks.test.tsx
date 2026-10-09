@@ -18,7 +18,7 @@ import type { LabeledHoldMarks } from "../PageHoldMark";
 import PageTimeline from "../PageTimeline";
 
 /**
- * The selection's hold marks on the page boxes (docs/timeline/ui.md UI-15): drawn only with a
+ * The selection's hold marks on the page boxes (docs/timeline/ui.md UI-18): drawn only with a
  * selection, a key where it moves and a bar where it holds, with the words on the page box.
  */
 

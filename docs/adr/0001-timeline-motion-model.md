@@ -166,7 +166,7 @@ change. A page-mode edit also rewrites the following run of rows that equal the 
 
 There is no schema or file-version change. Files converted by earlier development builds keep their
 holding moves and are converted again by hand, as for C-11. Research and the decision record are in
-`docs/timeline/research/defined-coordinates/`; the interaction is UI-15 in `docs/timeline/ui.md`.
+`docs/timeline/research/defined-coordinates/`; the interaction is UI-18 in `docs/timeline/ui.md`.
 
 Beat editing can still make two timelines share a range; that is in the
 `ui.md` backlog. The interaction is UI-9 in `docs/timeline/ui.md`.

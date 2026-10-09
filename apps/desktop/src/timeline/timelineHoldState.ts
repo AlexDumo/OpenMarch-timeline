@@ -2,7 +2,7 @@ import type { CarrySpan } from "./timelineCarryForward";
 
 /**
  * Whether a selected marcher has its own move on the current page or holds there
- * (docs/timeline/ui.md UI-15, defined-coordinates 07c §6: the inspector line "Holding since Page
+ * (docs/timeline/ui.md UI-18, defined-coordinates 07c §6: the inspector line "Holding since Page
  * X" or "Moves here", with a jump). Read from the marcher's resolver spans alone.
  */
 

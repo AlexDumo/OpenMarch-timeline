@@ -33,7 +33,7 @@ import {
 import { useTimelineHoldMarks } from "../usePageHoldMarks";
 
 /**
- * Where the selected marchers hold, on the page boxes (docs/timeline/ui.md UI-15,
+ * Where the selected marchers hold, on the page boxes (docs/timeline/ui.md UI-18,
  * defined-coordinates 08): each page after the first moves, holds or is mixed for the selection,
  * read from resolver spans in timeline mode and from rows in page mode.
  */

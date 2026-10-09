@@ -186,7 +186,7 @@ export interface TimelineProps {
      * range in spec beats (a clip's stored range).
      */
     readonly onOpenRange?: (range: TimelineBeatRange) => void;
-    /** Where the selected marchers hold, by page id (UI-15); none without a selection */
+    /** Where the selected marchers hold, by page id (UI-18); none without a selection */
     readonly holdMarks?: LabeledHoldMarks;
 }
 
