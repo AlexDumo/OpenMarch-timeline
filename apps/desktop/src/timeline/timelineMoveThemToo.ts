@@ -31,6 +31,7 @@ import {
 import { editedMarcherEnds, type CarrySpan } from "./timelineCarryForward";
 import { toastTimelineError } from "./timelineErrorMessages";
 import { toastPassThrough } from "./timelinePassThrough";
+import { offerOnlyThisPage, ownMovers } from "./timelineOnlyThisPage";
 import {
     resolverSpans,
     timelineResolverSettled,
@@ -276,7 +277,9 @@ const windowKey = (target: TimelineEditTarget) =>
  * A timeline coordinate edit (`moveMarchersInTarget`) with what it says after: the pass-through
  * toast as before; when there's none, once the resolver has the edit, **Move them too** when the
  * edit split its marchers at a later page (`laterOwnMoves`), adding up edits in a row that keep the
- * same marchers. Errors finding them are logged, never thrown: the edit itself has committed.
+ * same marchers; and when it didn't, **Only Page N** when it changed an existing own move and
+ * carried into the later pages that follow it (`offerOnlyThisPage`, UI-18 keep later pages).
+ * Errors finding them are logged, never thrown: the edit itself has committed.
  */
 export async function moveMarchersAndOfferFollowUp({
     database = db,
@@ -290,34 +293,38 @@ export async function moveMarchersAndOfferFollowUp({
     clearOwn?: boolean;
 }): Promise<TimelineMoveResult> {
     let start: EditStart | null = null;
+    let owned: Set<number> = new Set();
+    const marcherIds = moves.map((m) => m.marcherId);
     const result = await moveMarchersInTarget({
         db: database,
         target,
         moves,
         clearOwn,
         onStart: () => {
-            start = readEditStart(
-                target,
-                moves.map((m) => m.marcherId),
-            );
+            start = readEditStart(target, marcherIds);
+            owned = ownMovers(target, marcherIds);
         },
     });
     const mark = editHistoryMark();
     toastPassThrough(result);
     // The pass-through toast and its Keep as a stop win: Move them too would replace it (same id)
     if (result.passThrough) return result;
+    const scope = editScope([windowKey(target)], marcherIds);
     void findLaterOwnMoves({ database, target, result, start })
-        .then((found) =>
-            toastLaterOwnMoves(
-                found,
-                undefined,
+        .then(async (found) => {
+            if (found.length > 0)
+                return toastLaterOwnMoves(found, undefined, mark, scope);
+            // No split: say where a changed move carried, with Only Page N
+            await offerOnlyThisPage({
+                database,
+                target,
+                result,
+                start,
                 mark,
-                editScope(
-                    [windowKey(target)],
-                    moves.map((m) => m.marcherId),
-                ),
-            ),
-        )
+                scope,
+                owned,
+            });
+        })
         .catch((e: unknown) =>
             console.error("Couldn't check the edit's later moves", e),
         );
