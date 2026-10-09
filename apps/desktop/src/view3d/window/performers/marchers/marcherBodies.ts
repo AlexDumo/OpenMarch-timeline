@@ -35,7 +35,7 @@ import {
     type UniformLook,
 } from "@/view3d/core/marchers/looks";
 import { FIELD_SURFACE_Y } from "@/view3d/core/field";
-import { brassModel } from "@/view3d/core/instruments/brass";
+import { instrumentModel } from "@/view3d/core/instruments";
 import {
     hold as holdFor,
     holdId,
@@ -371,11 +371,16 @@ export class MarcherBodies {
                 ? bodies.values().next().value!
                 : bodies.get(g.type)!
         ).mesh.skeleton;
+        const model = instrumentModel(
+            carry.model,
+            this.blockSource ? "low" : "high",
+        );
+        if (model.pieces.length === 0) return null; // mapped, not modeled yet
         const source = instrumentGeometry(
             skeleton,
             poseArms(skeleton, h),
             h,
-            brassModel(carry.model, this.blockSource ? "low" : "high"),
+            model,
             g.look.options.finish,
         );
         if (!this.hornMaterial) {

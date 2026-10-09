@@ -5,10 +5,11 @@
  * metallic material that draws it under the same bake.
  */
 import * as THREE from "three";
-import {
-    BRASS_COLORS,
-    type InstrumentModel,
-} from "@/view3d/core/instruments/brass";
+import { BRASS_COLORS } from "@/view3d/core/instruments/brass";
+import type {
+    InstrumentBone,
+    InstrumentModel,
+} from "@/view3d/core/instruments/model";
 import type { Finish } from "@/view3d/core/instruments/catalog";
 import type { Hold } from "@/view3d/core/instruments/holds";
 import { PART_METAL } from "@/view3d/core/instruments/mesh";
@@ -27,12 +28,20 @@ export const FINISH_COLORS: Record<Finish, number> = {
 /** The instrument frame placed in the body frame by a hold. */
 function placement(hold: Hold): THREE.Matrix4 {
     const z = new THREE.Vector3(...hold.instrument.bellAxis).normalize();
-    const y = new THREE.Vector3(...hold.instrument.capsAxis).normalize();
+    // the caps axis need not be exactly perpendicular: square it against the bell
+    const y = new THREE.Vector3(...hold.instrument.capsAxis);
+    y.sub(z.clone().multiplyScalar(y.dot(z))).normalize();
     const x = new THREE.Vector3().crossVectors(y, z).normalize();
     return new THREE.Matrix4()
         .makeBasis(x, y, z)
         .setPosition(new THREE.Vector3(...hold.instrument.origin));
 }
+
+const BONE_NAMES: Record<InstrumentBone, string> = {
+    handR: "DEF-handR",
+    handL: "DEF-handL",
+    spine002: "DEF-spine002",
+};
 
 const linear = (hex: number) => new THREE.Color(hex); // Color converts sRGB hex to linear
 
@@ -43,14 +52,36 @@ export function instrumentGeometry(
     model: InstrumentModel,
     finish: Finish = "brass",
 ): THREE.BufferGeometry {
-    const handR = skeleton.bones.findIndex((b) => b.name === "DEF-handR");
-    if (handR < 0) throw new Error("instrumentGeometry: no DEF-handR bone");
-    // body (placed) -> hand-local (posed) -> bind pose
-    const bindHand = skeleton.boneInverses[handR].clone().invert();
-    const toBind = bindHand
-        .multiply(pose.handR.clone().invert())
-        .multiply(placement(hold));
-    const normalM = new THREE.Matrix3().getNormalMatrix(toBind);
+    const place = placement(hold);
+    /** Per bone: its index and the matrix taking placed body-frame points to the bind pose. */
+    const frames = new Map<
+        InstrumentBone,
+        { index: number; toBind: THREE.Matrix4 }
+    >();
+    const frameOf = (bone: InstrumentBone) => {
+        let f = frames.get(bone);
+        if (f) return f;
+        const index = skeleton.bones.findIndex(
+            (b) => b.name === BONE_NAMES[bone],
+        );
+        if (index < 0)
+            throw new Error(`instrumentGeometry: no ${BONE_NAMES[bone]} bone`);
+        const bind = skeleton.boneInverses[index].clone().invert();
+        // the hands move with the hold; the chest stays at bind
+        const posed =
+            bone === "handR"
+                ? pose.handR
+                : bone === "handL"
+                  ? pose.handL
+                  : bind;
+        const toBind = bind
+            .clone()
+            .multiply(posed.clone().invert())
+            .multiply(place);
+        f = { index, toBind };
+        frames.set(bone, f);
+        return f;
+    };
     const metal = linear(FINISH_COLORS[finish]);
     const pos: number[] = [];
     const nrm: number[] = [];
@@ -61,6 +92,10 @@ export function instrumentGeometry(
     const idx: number[] = [];
     const v = new THREE.Vector3();
     for (const piece of model.pieces) {
+        const { index: boneIndex, toBind } = frameOf(
+            piece.bone ?? model.bone ?? "handR",
+        );
+        const normalM = new THREE.Matrix3().getNormalMatrix(toBind);
         const first = pos.length / 3;
         const fallback = linear(
             BRASS_COLORS[piece.part] ?? BRASS_COLORS[PART_METAL],
@@ -84,7 +119,7 @@ export function instrumentGeometry(
                     piece.colors[i + 2],
                 );
             else col.push(fallback.r, fallback.g, fallback.b);
-            si.push(handR, 0, 0, 0);
+            si.push(boneIndex, 0, 0, 0);
             sw.push(1, 0, 0, 0);
             part.push(piece.part);
         }

@@ -115,7 +115,7 @@ describe("section uniforms", () => {
         expect(sectionUniform("Trumpet", null, "carry").options.hold).toBe(
             "carry",
         );
-        expect(sectionUniform("Snare", null).options.carry).toBeNull();
+        expect(sectionUniform("Drum Major", null).options.carry).toBeNull();
     });
 
     it("never shows the placeholder instruments, for any section", () => {
@@ -138,10 +138,10 @@ describe("section uniforms", () => {
 
     it("shares one look between sections that only differ in name when the instrument matches", () => {
         const fill = { r: 10, g: 20, b: 30, a: 1 };
-        expect(uniformKey(sectionUniform("Flute", fill))).toBe(
-            uniformKey(sectionUniform("Clarinet", fill)),
+        expect(uniformKey(sectionUniform("Drum Major", fill))).toBe(
+            uniformKey(sectionUniform("Soloist", fill)),
         );
-        expect(uniformKey(sectionUniform("Flute", fill))).not.toBe(
+        expect(uniformKey(sectionUniform("Drum Major", fill))).not.toBe(
             uniformKey(sectionUniform("Trumpet", fill)),
         );
     });

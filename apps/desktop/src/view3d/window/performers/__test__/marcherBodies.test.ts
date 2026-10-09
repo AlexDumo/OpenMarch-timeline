@@ -85,7 +85,7 @@ describe("rows per hold", () => {
         expect(slotHoldId(sectionUniform("Trumpet", null, "carry"))).toBe(
             "brass:carry",
         );
-        expect(slotHoldId(sectionUniform("Flute", null))).toBe(NO_HOLD);
+        expect(slotHoldId(sectionUniform("Color Guard", null))).toBe(NO_HOLD);
     });
 
     it("bakes one row set per hold", async () => {

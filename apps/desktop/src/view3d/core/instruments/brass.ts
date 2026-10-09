@@ -26,25 +26,9 @@ import {
     type Vec3,
 } from "./mesh";
 
-export type BrassModelId =
-    | "trumpet"
-    | "mellophone"
-    | "baritone"
-    | "euphonium"
-    | "trombone"
-    | "bassTrombone"
-    | "contra";
+import type { BrassModelId, Detail, InstrumentModel } from "./model";
 
-export type Detail = "high" | "low";
-
-export interface InstrumentModel {
-    id: BrassModelId;
-    pieces: Piece[];
-    /** The left hand's grip point in the instrument frame. */
-    leftGrip: Vec3;
-    /** The mouthpiece's position in the instrument frame. */
-    mouthpiece: Vec3;
-}
+export type { BrassModelId, Detail, InstrumentModel };
 
 /** Overall length (bell rim to mouthpiece), bell diameter, bore: meters. */
 export const BRASS_DIMENSIONS: Record<

@@ -19,12 +19,17 @@ export interface Piece {
     indices: number[];
     /** Optional linear RGB per vertex (3 numbers each), from `colorPieces`. */
     colors?: number[];
+    /** The bone this piece rides, when not the model's default. */
+    bone?: "handR" | "handL" | "spine002";
 }
 
 /** Part ids for instruments: the metal in the look's finish, chrome, and black hardware. */
 export const PART_METAL = 16;
 export const PART_CHROME = 18;
+export const PART_SHELL = 19;
+export const PART_HEAD = 20;
 export const PART_BLACK = 22;
+export const PART_WOOD = 23;
 
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const cross = (a: Vec3, b: Vec3): Vec3 => [

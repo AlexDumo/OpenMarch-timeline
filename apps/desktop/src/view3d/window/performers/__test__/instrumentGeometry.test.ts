@@ -5,6 +5,8 @@ import path from "node:path";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { brassModel } from "@/view3d/core/instruments/brass";
+import type { InstrumentModel } from "@/view3d/core/instruments/model";
+import type { Piece } from "@/view3d/core/instruments/mesh";
 import { hold } from "@/view3d/core/instruments/holds";
 import { poseArms } from "../marchers/armPose";
 import {
@@ -84,6 +86,72 @@ describe("instrumentGeometry", () => {
         expect(c.z).toBeGreaterThan(h.instrument.origin[2]);
         expect(Math.abs(c.y - h.instrument.origin[1])).toBeLessThan(0.1);
         expect(box.max.z - box.min.z).toBeCloseTo(0.48, 1);
+    });
+});
+
+describe("pieces on other bones", () => {
+    it("weights each piece to its own bone: the chest for a drum, each hand for its stick", async () => {
+        const mesh = await body();
+        const h = hold("snare", "up");
+        const cube = (bone: "handR" | "handL" | "spine002"): Piece => ({
+            part: 19,
+            bone,
+            positions: [0, 0, 0, 0.1, 0, 0, 0, 0.1, 0],
+            normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+            indices: [0, 1, 2],
+        });
+        const model: InstrumentModel = {
+            id: "snare",
+            bone: "spine002",
+            pieces: [cube("spine002"), cube("handR"), cube("handL")],
+            leftGrip: [0, 0, 0],
+            mouthpiece: [0, 0, 0],
+        };
+        const g = instrumentGeometry(
+            mesh.skeleton,
+            poseArms(mesh.skeleton, h),
+            h,
+            model,
+        );
+        const index = (name: string) =>
+            mesh.skeleton.bones.findIndex((b) => b.name === name);
+        const si = g.getAttribute("skinIndex");
+        expect(si.getX(0)).toBe(index("DEF-spine002"));
+        expect(si.getX(3)).toBe(index("DEF-handR"));
+        expect(si.getX(6)).toBe(index("DEF-handL"));
+    });
+
+    it("places a chest piece by the hold's placement in the bind pose", async () => {
+        const mesh = await body();
+        const h = hold("snare", "up");
+        const model: InstrumentModel = {
+            id: "snare",
+            bone: "spine002",
+            pieces: [
+                {
+                    part: 19,
+                    positions: [0, 0, 0],
+                    normals: [0, 1, 0],
+                    indices: [0],
+                },
+            ],
+            leftGrip: [0, 0, 0],
+            mouthpiece: [0, 0, 0],
+        };
+        const g = instrumentGeometry(
+            mesh.skeleton,
+            poseArms(mesh.skeleton, h),
+            h,
+            model,
+        );
+        // the chest doesn't move with the arm pose, so bind = posed: the origin lands on the placement
+        const p = new THREE.Vector3().fromBufferAttribute(
+            g.getAttribute("position") as THREE.BufferAttribute,
+            0,
+        );
+        expect(p.x).toBeCloseTo(h.instrument.origin[0], 6);
+        expect(p.y).toBeCloseTo(h.instrument.origin[1], 6);
+        expect(p.z).toBeCloseTo(h.instrument.origin[2], 6);
     });
 });
 

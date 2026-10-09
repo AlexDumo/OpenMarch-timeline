@@ -17,7 +17,17 @@ import type { Vec3 } from "./mesh";
 
 export type HoldState = "up" | "carry" | "trail";
 export const HOLD_STATES: readonly HoldState[] = ["up", "carry", "trail"];
-export type HoldFamily = "brass" | "trombone" | "contra";
+export type HoldFamily =
+    | "brass"
+    | "trombone"
+    | "contra"
+    | "flute"
+    | "clarinet"
+    | "sax"
+    | "snare"
+    | "tenors"
+    | "bass"
+    | "cymbals";
 
 export interface ArmTargets {
     elbow: Vec3;
@@ -162,10 +172,458 @@ const CONTRA: Record<HoldState, Hold> = {
     trail: { ...CONTRA_UP, state: "trail" },
 };
 
+const FLUTE: Record<HoldState, Hold> = {
+    up: {
+        family: "flute",
+        state: "up",
+        // horizontal to the right, lips at the head joint, keys toward the front
+        right: {
+            elbow: [-0.317, 1.249, 0.048],
+            wrist: [-0.42, 1.42, 0.22],
+            fingers: unit([-1, -0.2, 0]),
+        },
+        left: {
+            elbow: [0.107, 1.404, 0.184],
+            wrist: [-0.13, 1.52, 0.2],
+            fingers: unit([-1, -0.1, 0]),
+        },
+        instrument: {
+            origin: [0, 1.56, 0.12],
+            bellAxis: [-0.968, -0.151, 0.202],
+            capsAxis: [0.2, 0.249, 0.948],
+        },
+    },
+    carry: {
+        family: "flute",
+        state: "carry",
+        // the head joint raised: the embouchure hole at eye level
+        right: {
+            elbow: [-0.336, 1.28, 0.07],
+            wrist: [-0.42, 1.48, 0.22],
+            fingers: unit([-1, -0.2, 0]),
+        },
+        left: {
+            elbow: [0.103, 1.46, 0.172],
+            wrist: [-0.13, 1.58, 0.2],
+            fingers: unit([-1, -0.1, 0]),
+        },
+        instrument: {
+            origin: [0, 1.62, 0.14],
+            bellAxis: [-0.968, -0.151, 0.202],
+            capsAxis: [0.2, 0.249, 0.948],
+        },
+    },
+    trail: {
+        family: "flute",
+        state: "trail",
+        // the head joint raised: the embouchure hole at eye level
+        right: {
+            elbow: [-0.336, 1.28, 0.07],
+            wrist: [-0.42, 1.48, 0.22],
+            fingers: unit([-1, -0.2, 0]),
+        },
+        left: {
+            elbow: [0.103, 1.46, 0.172],
+            wrist: [-0.13, 1.58, 0.2],
+            fingers: unit([-1, -0.1, 0]),
+        },
+        instrument: {
+            origin: [0, 1.62, 0.14],
+            bellAxis: [-0.968, -0.151, 0.202],
+            capsAxis: [0.2, 0.249, 0.948],
+        },
+    },
+};
+
+const CLARINET: Record<HoldState, Hold> = {
+    up: {
+        family: "clarinet",
+        state: "up",
+        // down the center line, angled 30 degrees out; left hand upper joint, right hand lower
+        right: {
+            elbow: [-0.152, 1.261, 0.145],
+            wrist: [-0.04, 1.121, 0.339],
+            fingers: unit([0, -0.8, 0.5]),
+        },
+        left: {
+            elbow: [0.274, 1.274, 0.132],
+            wrist: [0.04, 1.33, 0.24],
+            fingers: unit([0, -0.8, 0.5]),
+        },
+        instrument: {
+            origin: [0, 1.52, 0.13],
+            bellAxis: [0.0, -0.882, 0.471],
+            capsAxis: [0.0, 0.471, 0.882],
+        },
+    },
+    carry: {
+        family: "clarinet",
+        state: "carry",
+        // vertical, ligature at eye level
+        right: {
+            elbow: [-0.278, 1.239, 0.087],
+            wrist: [-0.04, 1.22, 0.2],
+            fingers: unit([0, -1, 0]),
+        },
+        left: {
+            elbow: [0.277, 1.312, 0.157],
+            wrist: [0.04, 1.42, 0.2],
+            fingers: unit([0, -1, 0]),
+        },
+        instrument: {
+            origin: [0, 1.62, 0.14],
+            bellAxis: [0.0, -1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    trail: {
+        family: "clarinet",
+        state: "trail",
+        // vertical, ligature at eye level
+        right: {
+            elbow: [-0.278, 1.239, 0.087],
+            wrist: [-0.04, 1.22, 0.2],
+            fingers: unit([0, -1, 0]),
+        },
+        left: {
+            elbow: [0.277, 1.312, 0.157],
+            wrist: [0.04, 1.42, 0.2],
+            fingers: unit([0, -1, 0]),
+        },
+        instrument: {
+            origin: [0, 1.62, 0.14],
+            bellAxis: [0.0, -1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+};
+
+const SAX: Record<HoldState, Hold> = {
+    up: {
+        family: "sax",
+        state: "up",
+        // on the strap at the right hip, neck to the mouth; left hand upper stack, right hand lower
+        right: {
+            elbow: [-0.258, 1.227, 0.084],
+            wrist: [-0.14, 1.05, 0.24],
+            fingers: unit([-0.2, -0.9, 0.2]),
+        },
+        left: {
+            elbow: [0.207, 1.252, 0.139],
+            wrist: [-0.04, 1.3, 0.22],
+            fingers: unit([-0.2, -0.9, 0.2]),
+        },
+        instrument: {
+            origin: [0, 1.52, 0.12],
+            bellAxis: [-0.202, -0.958, 0.202],
+            capsAxis: [0.909, -0.101, 0.404],
+        },
+    },
+    carry: {
+        family: "sax",
+        state: "carry",
+        // the neck lifts so the ligature sits at eye level
+        right: {
+            elbow: [-0.312, 1.253, 0.068],
+            wrist: [-0.14, 1.15, 0.24],
+            fingers: unit([-0.2, -0.9, 0.2]),
+        },
+        left: {
+            elbow: [0.201, 1.301, 0.176],
+            wrist: [-0.04, 1.4, 0.22],
+            fingers: unit([-0.2, -0.9, 0.2]),
+        },
+        instrument: {
+            origin: [0, 1.62, 0.14],
+            bellAxis: [-0.202, -0.958, 0.202],
+            capsAxis: [0.909, -0.101, 0.404],
+        },
+    },
+    trail: {
+        family: "sax",
+        state: "trail",
+        // the neck lifts so the ligature sits at eye level
+        right: {
+            elbow: [-0.312, 1.253, 0.068],
+            wrist: [-0.14, 1.15, 0.24],
+            fingers: unit([-0.2, -0.9, 0.2]),
+        },
+        left: {
+            elbow: [0.201, 1.301, 0.176],
+            wrist: [-0.04, 1.4, 0.22],
+            fingers: unit([-0.2, -0.9, 0.2]),
+        },
+        instrument: {
+            origin: [0, 1.62, 0.14],
+            bellAxis: [-0.202, -0.958, 0.202],
+            capsAxis: [0.909, -0.101, 0.404],
+        },
+    },
+};
+
+const SNARE: Record<HoldState, Hold> = {
+    up: {
+        family: "snare",
+        state: "up",
+        // the drum at the waist on the carrier, forearms level, sticks over the head
+        right: {
+            elbow: [-0.198, 1.25, 0.138],
+            wrist: [-0.12, 1.1, 0.34],
+            fingers: unit([0.7, 0, 0.7]),
+        },
+        left: {
+            elbow: [0.198, 1.25, 0.138],
+            wrist: [0.12, 1.1, 0.34],
+            fingers: unit([-0.7, 0, 0.7]),
+        },
+        instrument: {
+            origin: [0, 1.0, 0.32],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    carry: {
+        family: "snare",
+        state: "carry",
+        // the drum at the waist on the carrier, forearms level, sticks over the head
+        right: {
+            elbow: [-0.198, 1.25, 0.138],
+            wrist: [-0.12, 1.1, 0.34],
+            fingers: unit([0.7, 0, 0.7]),
+        },
+        left: {
+            elbow: [0.198, 1.25, 0.138],
+            wrist: [0.12, 1.1, 0.34],
+            fingers: unit([-0.7, 0, 0.7]),
+        },
+        instrument: {
+            origin: [0, 1.0, 0.32],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    trail: {
+        family: "snare",
+        state: "trail",
+        // the drum at the waist on the carrier, forearms level, sticks over the head
+        right: {
+            elbow: [-0.198, 1.25, 0.138],
+            wrist: [-0.12, 1.1, 0.34],
+            fingers: unit([0.7, 0, 0.7]),
+        },
+        left: {
+            elbow: [0.198, 1.25, 0.138],
+            wrist: [0.12, 1.1, 0.34],
+            fingers: unit([-0.7, 0, 0.7]),
+        },
+        instrument: {
+            origin: [0, 1.0, 0.32],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+};
+
+const TENORS: Record<HoldState, Hold> = {
+    up: {
+        family: "tenors",
+        state: "up",
+        // wider than the snare: six drums in an arc
+        right: {
+            elbow: [-0.231, 1.261, 0.141],
+            wrist: [-0.219, 1.105, 0.354],
+            fingers: unit([0.7, 0, 0.7]),
+        },
+        left: {
+            elbow: [0.231, 1.261, 0.141],
+            wrist: [0.219, 1.105, 0.354],
+            fingers: unit([-0.7, 0, 0.7]),
+        },
+        instrument: {
+            origin: [0, 0.98, 0.36],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    carry: {
+        family: "tenors",
+        state: "carry",
+        // wider than the snare: six drums in an arc
+        right: {
+            elbow: [-0.231, 1.261, 0.141],
+            wrist: [-0.219, 1.105, 0.354],
+            fingers: unit([0.7, 0, 0.7]),
+        },
+        left: {
+            elbow: [0.231, 1.261, 0.141],
+            wrist: [0.219, 1.105, 0.354],
+            fingers: unit([-0.7, 0, 0.7]),
+        },
+        instrument: {
+            origin: [0, 0.98, 0.36],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+    trail: {
+        family: "tenors",
+        state: "trail",
+        // wider than the snare: six drums in an arc
+        right: {
+            elbow: [-0.231, 1.261, 0.141],
+            wrist: [-0.219, 1.105, 0.354],
+            fingers: unit([0.7, 0, 0.7]),
+        },
+        left: {
+            elbow: [0.231, 1.261, 0.141],
+            wrist: [0.219, 1.105, 0.354],
+            fingers: unit([-0.7, 0, 0.7]),
+        },
+        instrument: {
+            origin: [0, 0.98, 0.36],
+            bellAxis: [0.0, 1.0, 0.0],
+            capsAxis: [0.0, 0.0, 1.0],
+        },
+    },
+};
+
+const BASS: Record<HoldState, Hold> = {
+    up: {
+        family: "bass",
+        state: "up",
+        // the drum sideways on the chest, mallets level at the heads, elbows out
+        right: {
+            elbow: [-0.298, 1.252, 0.087],
+            wrist: [-0.33, 1.1, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        left: {
+            elbow: [0.298, 1.252, 0.087],
+            wrist: [0.33, 1.1, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        instrument: {
+            origin: [0, 1.05, 0.34],
+            bellAxis: [1.0, 0.0, 0.0],
+            capsAxis: [0.0, 1.0, 0.0],
+        },
+    },
+    carry: {
+        family: "bass",
+        state: "carry",
+        // the drum sideways on the chest, mallets level at the heads, elbows out
+        right: {
+            elbow: [-0.298, 1.252, 0.087],
+            wrist: [-0.33, 1.1, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        left: {
+            elbow: [0.298, 1.252, 0.087],
+            wrist: [0.33, 1.1, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        instrument: {
+            origin: [0, 1.05, 0.34],
+            bellAxis: [1.0, 0.0, 0.0],
+            capsAxis: [0.0, 1.0, 0.0],
+        },
+    },
+    trail: {
+        family: "bass",
+        state: "trail",
+        // the drum sideways on the chest, mallets level at the heads, elbows out
+        right: {
+            elbow: [-0.298, 1.252, 0.087],
+            wrist: [-0.33, 1.1, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        left: {
+            elbow: [0.298, 1.252, 0.087],
+            wrist: [0.33, 1.1, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        instrument: {
+            origin: [0, 1.05, 0.34],
+            bellAxis: [1.0, 0.0, 0.0],
+            capsAxis: [0.0, 1.0, 0.0],
+        },
+    },
+};
+
+const CYMBALS: Record<HoldState, Hold> = {
+    up: {
+        family: "cymbals",
+        state: "up",
+        // a pair at chest height, plates vertical
+        right: {
+            elbow: [-0.328, 1.281, 0.084],
+            wrist: [-0.2, 1.2, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        left: {
+            elbow: [0.328, 1.281, 0.084],
+            wrist: [0.2, 1.2, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        instrument: {
+            origin: [0, 1.2, 0.3],
+            bellAxis: [0.0, 0.0, 1.0],
+            capsAxis: [0.0, 1.0, 0.0],
+        },
+    },
+    carry: {
+        family: "cymbals",
+        state: "carry",
+        // a pair at chest height, plates vertical
+        right: {
+            elbow: [-0.328, 1.281, 0.084],
+            wrist: [-0.2, 1.2, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        left: {
+            elbow: [0.328, 1.281, 0.084],
+            wrist: [0.2, 1.2, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        instrument: {
+            origin: [0, 1.2, 0.3],
+            bellAxis: [0.0, 0.0, 1.0],
+            capsAxis: [0.0, 1.0, 0.0],
+        },
+    },
+    trail: {
+        family: "cymbals",
+        state: "trail",
+        // a pair at chest height, plates vertical
+        right: {
+            elbow: [-0.328, 1.281, 0.084],
+            wrist: [-0.2, 1.2, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        left: {
+            elbow: [0.328, 1.281, 0.084],
+            wrist: [0.2, 1.2, 0.3],
+            fingers: unit([0, 0, 1]),
+        },
+        instrument: {
+            origin: [0, 1.2, 0.3],
+            bellAxis: [0.0, 0.0, 1.0],
+            capsAxis: [0.0, 1.0, 0.0],
+        },
+    },
+};
+
 const TABLE: Record<HoldFamily, Record<HoldState, Hold>> = {
     brass: BRASS,
     trombone: TROMBONE,
     contra: CONTRA,
+    flute: FLUTE,
+    clarinet: CLARINET,
+    sax: SAX,
+    snare: SNARE,
+    tenors: TENORS,
+    bass: BASS,
+    cymbals: CYMBALS,
 };
 
 export function hold(family: HoldFamily, state: HoldState): Hold {

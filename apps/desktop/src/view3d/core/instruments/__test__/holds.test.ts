@@ -6,7 +6,18 @@ const UPPER = 0.205;
 const FOREARM = 0.264;
 const dist = (a: readonly number[], b: readonly number[]) =>
     Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-const FAMILIES: HoldFamily[] = ["brass", "trombone", "contra"];
+const FAMILIES: HoldFamily[] = [
+    "brass",
+    "trombone",
+    "contra",
+    "flute",
+    "clarinet",
+    "sax",
+    "snare",
+    "tenors",
+    "bass",
+    "cymbals",
+];
 
 describe("holds", () => {
     it("lists the four states with up first", () => {
@@ -84,5 +95,52 @@ describe("holds", () => {
                 expect(h.right.wrist[2]).toBeGreaterThan(0.12);
                 expect(h.left.wrist[2]).toBeGreaterThan(0.12);
             }
+    });
+});
+
+describe("woodwind and battery holds", () => {
+    it("flute: to the player's right at the lips, keys forward", () => {
+        const h = hold("flute", "up");
+        expect(h.instrument.bellAxis[0]).toBeLessThan(-0.8); // the tube runs to the right
+        expect(h.instrument.origin[1]).toBeGreaterThan(1.5);
+        expect(h.right.wrist[0]).toBeLessThan(h.left.wrist[0] - 0.15);
+    });
+
+    it("clarinet: down the center line, angled out", () => {
+        const h = hold("clarinet", "up");
+        expect(h.instrument.bellAxis[1]).toBeLessThan(-0.7);
+        expect(h.instrument.bellAxis[2]).toBeGreaterThan(0.2);
+        expect(h.right.wrist[1]).toBeLessThan(h.left.wrist[1]);
+    });
+
+    it("sax: body down at the right hip, neck at the lips", () => {
+        const h = hold("sax", "up");
+        expect(h.instrument.origin[1]).toBeGreaterThan(1.45);
+        expect(h.instrument.bellAxis[1]).toBeLessThan(-0.8);
+    });
+
+    it("drums ride the chest with the hands over the heads", () => {
+        for (const family of ["snare", "tenors", "bass"] as const) {
+            const h = hold(family, "up");
+            expect(h.instrument.origin[1]).toBeLessThan(1.2);
+            expect(h.instrument.origin[2]).toBeGreaterThan(0.2);
+            expect(h.right.wrist[1]).toBeGreaterThan(h.instrument.origin[1]);
+        }
+        expect(hold("tenors", "up").right.wrist[0]).toBeLessThan(
+            hold("snare", "up").right.wrist[0],
+        );
+        expect(hold("bass", "up").instrument.bellAxis[0]).not.toBe(0); // the heads face sideways
+    });
+
+    it("woodwinds carry with the ligature at eye level; drums have one hold", () => {
+        for (const family of ["flute", "clarinet", "sax"] as const)
+            expect(hold(family, "carry").instrument.origin[1]).toBeGreaterThan(
+                1.55,
+            );
+        for (const family of ["snare", "tenors", "bass", "cymbals"] as const)
+            expect(hold(family, "carry")).toEqual({
+                ...hold(family, "up"),
+                state: "carry",
+            });
     });
 });
