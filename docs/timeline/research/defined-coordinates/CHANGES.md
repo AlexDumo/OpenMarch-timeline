@@ -1014,8 +1014,9 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
   were **kept** there, from the resolver's spans and the stored markers (`useKeptAssignmentsStore`,
   read again after every resolver or display version). Before its first move a marcher follows the
   start, and counts as following too (`fromStart`), so it can be kept ahead of any move (wp19, lead
-  decision after the final study; wp16 left it out). The quiet "Pages 3–4 follow" line leaves those
-  marchers out (_lead default_: every later page follows them). Each box also names the page(s)
+  decision after the final study; wp16 left it out). The quiet "Pages 3–4 follow" line and the chains
+  leave those marchers out (lead: every later page follows them); the inspector, the menu and K
+  offer to keep them. Each box also names the page(s)
   they follow (`from`), for the words. **K**'s target is `keepToggle` (B-43).
 - **Code:** `timeline/timelineKeepLater.ts` (`pageKeepStates`, `followingPages`,
   `marcherNamesText`, `pageChainWords`, `keepToggle`); `timeline/useKeepLaterPages.ts`
@@ -1030,7 +1031,9 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **After:** with marchers selected, each page box they follow into shows a chain as a quiet
   outline; a box where they were kept a broken chain on a filled accent chip; a box with some of
   each a chain outlined in the accent with a filled kept count (wp19: the final study found the
-  wp16 purple-vs-grey look too close). Never-moved marchers get chains too (B-39). Nothing without
+  wp16 purple-vs-grey look too close). Marchers that haven't moved yet get no chain (lead, wp19: on every box it was noise), but a kept
+  one still shows the kept chip; a mixed chain counts only the marchers that follow a move plus the
+  kept ones. Nothing without
   a selection (owner). A 20 px button, 22 px in from the flag before its box
   (centered in a box narrower than 70 px), so the selected page's flag, the start flag and the
   playhead never cover it (the study's complaint); it stays on the selected box. A sibling of the
@@ -1045,7 +1048,8 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 
   Names (wp19): up to three ("OT1, OT2 and OT3"), then "OT1, OT2 and 4 others"
   (`timeline.keep.names.*`); counts as before where a name isn't known. The chain K would toggle
-  adds " (K)" to its tooltip label and `aria-keyshortcuts="K"`.
+  adds " (K)" to its tooltip label and `aria-keyshortcuts="K"`, only where K changes exactly the
+  chain's marchers.
 
 - **Code:** `components/timeline/PageKeepChain.tsx` (`usePageKeepChains` :71, `chainOffset` :106,
   `PageKeepChainButton` :130); `TimelinePrimitives.tsx` (`TimelinePageBox` :1093);

@@ -814,7 +814,8 @@ from it. The spec still wins on the model; this file decides presentation.
     2026-10-09): the marcher's own move over the page that goes nowhere, marked kept. Pages after
     it follow the kept spot. Marchers that have never moved follow the start, so they can be kept
     too, ahead of any move (wp19, after the final study): a later first move then doesn't reach the
-    kept page.
+    kept page. They get no chain on the page boxes (lead, wp19: it showed on every box); the
+    inspector, the page box menu and **K** offer to keep them, and a kept one shows the kept chip.
     - **Chains on the page boxes.** With marchers selected, each page box they follow into shows a
       chain as a quiet outline. A box where they were kept shows a broken chain on a filled accent
       chip. A box with some of each shows a chain outlined in the accent with a filled kept count.

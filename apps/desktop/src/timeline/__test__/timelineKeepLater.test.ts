@@ -252,12 +252,43 @@ describe("pageChainWords", () => {
         expect(pageChainWords(mixed!, undefined, name)?.label).toBe(
             "1 of the 3 selected is kept on Page 3 (OT2)",
         );
-        // A marcher that never moved: the start is the earlier page
-        const [p2] = states([4]);
-        expect(pageChainWords(p2!, undefined, name)).toMatchObject({
-            label: "Keep OT4 on Page 2",
-            hint: "They won't follow earlier pages any more",
+    });
+
+    it("no chain for marchers that haven't moved yet; a kept one still shows kept", () => {
+        for (const box of states([4])) expect(pageChainWords(box)).toBeNull();
+        // With one that follows a move, the chain counts only that one
+        const [, , p4] = states([1, 4]);
+        expect(pageChainWords(p4!, undefined, (id) => `OT${id}`)).toMatchObject(
+            {
+                kind: "follows",
+                label: "Keep OT1 on Page 4",
+                marcherIds: [1],
+            },
+        );
+        // Kept before any move: a kept chip; mixed with a never-moved one, still only kept
+        const spans: Record<number, SpanInfo[]> = {
+            5: [
+                hold(5, -Infinity, 9),
+                move(5, 9, 17, 500),
+                hold(5, 17, Infinity),
+            ],
+            4: SPANS[4]!,
+        };
+        const [, p3] = pageKeepStates({
+            pages: PAGES,
+            marcherIds: [4, 5],
+            spansOf: (id) => spans[id]!,
+            kept: new Set([500]),
         });
+        expect(p3).toMatchObject({ follows: [4], kept: [5] });
+        expect(pageChainWords(p3!, undefined, (id) => `OT${id}`)).toMatchObject(
+            {
+                kind: "kept",
+                label: "OT5 kept on Page 3",
+                action: "follow",
+                marcherIds: [5],
+            },
+        );
     });
 
     it("lists two kept marchers in a mixed chain", () => {
