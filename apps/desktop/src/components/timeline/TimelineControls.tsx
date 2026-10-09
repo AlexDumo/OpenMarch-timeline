@@ -164,19 +164,20 @@ export function TimelineMetronomeButton() {
  * then a bar on the ruler whose ends drag.
  */
 export function TimelineLoopButton() {
-    const looping = useTimelineSelectionStore(
-        (s) => s.loop !== null && s.isolation === null,
-    );
     const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
+    // An isolated move always loops (UI-17): lit, and it can't be turned off
+    const looping = useTimelineSelectionStore(
+        (s) => s.loop !== null || s.isolation !== null,
+    );
     const shortcut =
         RegisteredActionsObjects.toggleLoop.keyboardShortcut?.toString();
     return (
         <ShortcutTooltip
             label={looping ? "Loop: on" : "Loop: off"}
-            shortcut={shortcut}
+            shortcut={isolated ? undefined : shortcut}
             hint={
                 isolated
-                    ? "An isolated move always loops"
+                    ? "Loop is always on for an isolated move"
                     : looping
                       ? "Space loops the bar on the ruler; drag its ends to change it"
                       : "Loops the page you're on"
@@ -188,16 +189,18 @@ export function TimelineLoopButton() {
                 aria-label="Loop"
                 aria-pressed={looping}
                 aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
-                disabled={isolated}
+                // Not `disabled` in isolation, so the tooltip still says why it can't turn off
+                aria-disabled={isolated || undefined}
                 // Keeps keyboard focus off, so Space after a click is still Play
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => toggleTimelineLoop()}
+                onClick={() => {
+                    if (!isolated) toggleTimelineLoop();
+                }}
                 className={clsx(
-                    "rounded-4 focus-visible:ring-accent enabled:hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden duration-150 focus-visible:ring-2 disabled:opacity-30",
+                    "rounded-4 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden duration-150 focus-visible:ring-2",
+                    isolated ? "cursor-default" : "hover:bg-fg-2",
                     // Lit in the loop bar's color, so the button reads as the bar's (UI-17)
-                    looping
-                        ? START_INK.text
-                        : "text-text enabled:hover:text-accent",
+                    looping ? START_INK.text : "text-text hover:text-accent",
                 )}
             >
                 <RepeatIcon size={16} weight={looping ? "bold" : "regular"} />

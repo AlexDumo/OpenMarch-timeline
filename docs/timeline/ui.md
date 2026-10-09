@@ -805,7 +805,8 @@ from it. The spec still wins on the model; this file decides presentation.
     the window being edited (the page, or the pages Shift+click selected); again turns it off.
     **Ctrl+drag** (Cmd on macOS) on the timeline draws the loop and turns looping on, as dragging
     Logic's cycle bar does; it also sets the edit window, as UI-12 had it. An isolated move always
-    loops its own range.
+    loops its own range, and shows it: the bar over its range (read-only) and the Loop button lit,
+    saying "Loop is always on for an isolated move" (owner, 2026-10-09).
   - **The loop's ends drag**: each end of the bar is a handle above the page flag's grip, so it
     never moves a page. Dragging snaps to page lines and downbeats (Alt turns snapping off); a
     focused end steps with the arrow keys. At rest the bar's rounded ends are the handles; a knob

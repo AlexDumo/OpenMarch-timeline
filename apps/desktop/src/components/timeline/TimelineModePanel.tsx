@@ -390,20 +390,16 @@ function PlayingTimeline(
     const playback = useTimelinePlayback({ beats, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
-    // UI-17: the loop, its own region, drawn as a bar with draggable ends (not while isolated)
-    const storeLoop = useTimelineSelectionStore((s) =>
-        s.isolation === null ? s.loop : null,
-    );
-    const loop = useMemo(
-        () =>
-            storeLoop
-                ? {
-                      startBeatIndex: storeLoop.start,
-                      endBeatIndex: storeLoop.end,
-                  }
-                : null,
-        [storeLoop],
-    );
+    // UI-17: the loop, drawn as a bar with draggable ends; an isolated move always loops, so its
+    // range is drawn as the loop too, read-only
+    const storeLoop = useTimelineSelectionStore((s) => s.loop);
+    const isolation = useTimelineSelectionStore((s) => s.isolation);
+    const loop = useMemo(() => {
+        const region = isolation ?? storeLoop;
+        return region
+            ? { startBeatIndex: region.start, endBeatIndex: region.end }
+            : null;
+    }, [isolation, storeLoop]);
     const changeLoop = useCallback(
         (next: { startBeatIndex: number; endBeatIndex: number }) =>
             useTimelineSelectionStore.getState().setLoop({
@@ -466,7 +462,7 @@ function PlayingTimeline(
             pixelsPerBeat={pixelsPerBeat}
             onPixelsPerBeatChange={setPixelsPerBeat}
             loop={loop}
-            onLoopChange={changeLoop}
+            onLoopChange={isolation ? undefined : changeLoop}
         />
     );
 }
