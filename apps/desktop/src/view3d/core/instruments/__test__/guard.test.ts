@@ -1,7 +1,13 @@
 // apps/desktop/src/view3d/core/instruments/__test__/guard.test.ts
 // cspell:words tris
 import { describe, expect, it } from "vitest";
-import { bounds, triangleCount, PART_SILK, PART_CHROME } from "../mesh";
+import {
+    bounds,
+    triangleCount,
+    PART_BLACK,
+    PART_SILK,
+    PART_CHROME,
+} from "../mesh";
 import { guardModel } from "../guard";
 import type { GuardModelId } from "../model";
 
@@ -62,6 +68,25 @@ describe("guard equipment", () => {
         const s = bounds(guardModel("sabre").pieces);
         expect(s.max[2]).toBeGreaterThan(0.7);
         expect(s.min[2]).toBeLessThan(0);
+    });
+
+    it("hangs the rifle's sling from its swivel tips", () => {
+        // the sling is the rifle's only black piece
+        const sling = guardModel("rifle").pieces.filter(
+            (p) => p.part === PART_BLACK,
+        );
+        expect(sling.length).toBe(1);
+        const ringY = (z: number) => {
+            const ys: number[] = [];
+            const pos = sling[0].positions;
+            for (let i = 0; i < pos.length; i += 3)
+                if (Math.abs(pos[i + 2] - z) < 0.01) ys.push(pos[i + 1]);
+            expect(ys.length).toBeGreaterThan(0);
+            return ys.reduce((a, b) => a + b, 0) / ys.length;
+        };
+        // front swivel tip at (y -0.035, z 0.45), back at (y -0.075, z -0.22)
+        expect(Math.abs(ringY(0.45) - -0.035)).toBeLessThan(0.004);
+        expect(Math.abs(ringY(-0.22) - -0.075)).toBeLessThan(0.004);
     });
 
     it("colors every vertex", () => {

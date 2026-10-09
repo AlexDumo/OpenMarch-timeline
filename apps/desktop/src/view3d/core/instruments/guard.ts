@@ -474,21 +474,34 @@ function rifle(s: SegmentCounts): Omit<InstrumentModel, "id"> {
     const front: Vec3 = [0, -0.035, 0.45];
     const back: Vec3 = [0, -0.075, -0.22];
     const steps = 24;
+    // a flat strap: a round tube squashed wide across X and thin in Y. The
+    // squash scales about the origin, so the path's y is pre-divided by it
+    // and the squash puts the strap's ends back on the swivel tips.
+    const strapY = 0.6;
     const sling: Vec3[] = [];
     for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         sling.push([
             0,
-            front[1] + (back[1] - front[1]) * t - 0.03 * Math.sin(Math.PI * t),
+            (front[1] +
+                (back[1] - front[1]) * t -
+                0.03 * Math.sin(Math.PI * t)) /
+                strapY,
             front[2] + (back[2] - front[2]) * t,
         ]);
     }
     pieces.push(
-        mapPiece(
-            smoothTube(sling, 0.005, s.tube, PART_BLACK),
-            // a flat strap: wide across X, thin in Y
-            [2.4, 0, 0, 0, 0.6, 0, 0, 0, 1],
-        ),
+        mapPiece(smoothTube(sling, 0.005, s.tube, PART_BLACK), [
+            2.4,
+            0,
+            0,
+            0,
+            strapY,
+            0,
+            0,
+            0,
+            1,
+        ]),
         // swivels
         smoothTube(
             [
@@ -610,23 +623,19 @@ function sabre(s: SegmentCounts): Omit<InstrumentModel, "id"> {
     return { pieces, leftGrip: [0, 0, -0.06], mouthpiece: [0, 0, 0] };
 }
 
+/** One builder per id: a new id without one is a compile error. */
+const BUILDERS: Record<
+    GuardModelId,
+    (s: SegmentCounts) => Omit<InstrumentModel, "id">
+> = { flag6, swingFlag, doubleSwingFlag, rifle, sabre };
+
 export function guardModel(
     id: GuardModelId,
     detail: Detail = "high",
     options: ModelOptions = {},
 ): InstrumentModel {
     const s = SEGMENTS[detail];
-    const build =
-        id === "flag6"
-            ? flag6
-            : id === "swingFlag"
-              ? swingFlag
-              : id === "doubleSwingFlag"
-                ? doubleSwingFlag
-                : id === "rifle"
-                  ? rifle
-                  : sabre;
-    const model = build(s);
+    const model = BUILDERS[id](s);
     return {
         id,
         options,
