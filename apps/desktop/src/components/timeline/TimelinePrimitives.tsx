@@ -22,6 +22,7 @@ import {
     type RefObject,
     useCallback,
     useEffect,
+    useId,
     useRef,
     useState,
 } from "react";
@@ -43,6 +44,7 @@ import {
     snapRangeOffset,
 } from "./TimelineGeometry";
 import { timelineRangeTargetProps } from "./TimelineRangeMenu";
+import { PageHoldMarkView, type LabeledHoldMarks } from "./PageHoldMark";
 import type {
     BeatPosition,
     TimelineBeatRange,
@@ -617,6 +619,7 @@ export const TimelineRuler = ({
     showMeasures = true,
     seekSnapBeats = [],
     positionBeat,
+    holdMarks,
 }: {
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
@@ -633,6 +636,8 @@ export const TimelineRuler = ({
     seekSnapBeats?: readonly number[];
     /** The playhead; a show without measures numbers the counts of its page (UI-13) */
     positionBeat?: BeatPosition;
+    /** Where the selected marchers hold, by page id (UI-15); none without a selection */
+    holdMarks?: LabeledHoldMarks;
 }) => {
     // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
     const tabBeats = measures
@@ -649,6 +654,7 @@ export const TimelineRuler = ({
         ),
         pixelsPerBeat,
     );
+    const holdMarkId = useId();
     const scrub = useRulerScrub(
         onSeek,
         beatCount,
@@ -729,6 +735,7 @@ export const TimelineRuler = ({
                     });
                     if (!range) return null;
                     const selected = isSelected(page);
+                    const hold = holdMarks?.get(page.id);
                     return (
                         <button
                             key={page.id}
@@ -740,6 +747,10 @@ export const TimelineRuler = ({
                                 page.id,
                             )}
                             aria-label={`Page ${page.label}`}
+                            aria-describedby={
+                                hold ? `${holdMarkId}-${page.id}` : undefined
+                            }
+                            title={hold?.label}
                             aria-pressed={selected}
                             {...scrub.handlers}
                             onClick={(event) => {
@@ -768,6 +779,10 @@ export const TimelineRuler = ({
                                         range.startBeatIndex) *
                                     pixelsPerBeat
                                 }
+                            />
+                            <PageHoldMarkView
+                                hold={hold}
+                                descriptionId={`${holdMarkId}-${page.id}`}
                             />
                         </button>
                     );

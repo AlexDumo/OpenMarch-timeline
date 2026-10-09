@@ -1,3 +1,4 @@
+import type { LabeledHoldMarks } from "./PageHoldMark";
 import type { ReactNode } from "react";
 import type {
     TimelineAddMarchersMenu,
@@ -202,6 +203,8 @@ export interface TimelineCommonProps
     readonly transportSecondary?: ReactNode;
     /** View controls at the transport's end, such as Compact (UI-12); they fold too */
     readonly transportViewControls?: ReactNode;
+    /** Where the selected marchers hold, on the page boxes (UI-15); none without a selection */
+    readonly holdMarks?: LabeledHoldMarks;
 }
 
 export interface TimelineRangeChange extends TimelineBeatRange {

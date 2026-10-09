@@ -625,6 +625,7 @@ function TimelineSurface({
                         showMeasures={expanded}
                         seekSnapBeats={seekSnapBeats}
                         positionBeat={positionBeat}
+                        holdMarks={props.holdMarks}
                     />
                     {rows.flatMap((row, rowIndex) =>
                         row.map((track) => (

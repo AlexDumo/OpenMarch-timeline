@@ -46,6 +46,8 @@ import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { timeAtBeat } from "@/timeline/timeMap";
 import { useTimelineCommands } from "./useTimelineCommands";
 import { useTimelinePlayback } from "./useTimelinePlayback";
+import { useLabeledHoldMarks } from "./PageHoldMark";
+import { useTimelineHoldMarks } from "@/timeline/usePageHoldMarks";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 
@@ -167,6 +169,14 @@ export default function TimelineModePanel() {
             ),
         [selectedIdsKey],
     );
+    // UI-15: where the selected marchers hold, on the page boxes
+    const selectedIdList = useMemo(
+        () => [...selectedMarcherIds],
+        [selectedMarcherIds],
+    );
+    const holdMarks = useLabeledHoldMarks(
+        useTimelineHoldMarks(pages, selectedIdList),
+    );
     const timelines = useTimelineTracks({
         database: db,
         enabled: useTimelineMode(),
@@ -258,6 +268,7 @@ export default function TimelineModePanel() {
                     transportSecondary={<TimelineSoundButton />}
                     transportViewControls={<TimelineCompactButton />}
                     selection={selection}
+                    holdMarks={holdMarks}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
                     onPlayFromStartOff={() =>
