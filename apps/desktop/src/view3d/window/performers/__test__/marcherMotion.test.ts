@@ -159,17 +159,21 @@ describe("playing a crossfade", () => {
         return { m, writes, xz, placed };
     }
 
-    it("ramps the blend weight from the old loop to the new one over the count", () => {
+    it("ramps the blend weight and the leg turn over the fade window", () => {
         const { m, writes, xz, placed } = motion();
-        m.update(fade.count + 0.25, xz, placed);
-        m.update(fade.count + 0.5, xz, placed);
-        m.update(fade.count + 1, xz, placed);
+        const [y0, y1] = fade.legYaw as [number, number, number, number];
+        m.update(fade.fadeStart - 0.25, xz, placed); // before the window: the old loop as is
+        m.update(fade.fadeStart + 0.25, xz, placed);
+        m.update(fade.fadeStart + 0.5, xz, placed);
+        m.update(fade.fadeEnd + 0.6, xz, placed); // the next event: the new loop alone
         const ws = writes.map((w) => w.clip.weight);
-        expect(ws[0]).toBeCloseTo(0.103515625, 9); // smootherstep(0.25)
-        expect(ws[1]).toBeCloseTo(0.5, 9);
-        // count + 1 is the next event: the slide loop alone
-        expect(writes[2].clip.weight).toBe(0);
-        expect(writes.length).toBe(3);
+        expect(ws[0]).toBe(0);
+        expect(writes[0].clip.legYaw).toBeCloseTo(y0, 9);
+        expect(ws[1]).toBeCloseTo(0.103515625, 9); // smootherstep(0.25)
+        expect(ws[2]).toBeCloseTo(0.5, 9);
+        expect(writes[2].clip.legYaw).toBeCloseTo((y0 + y1) / 2, 9);
+        expect(writes[3].clip.weight).toBe(0);
+        expect(writes.length).toBe(4);
     });
 
     it("writes a loop once, not every frame", () => {

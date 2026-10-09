@@ -340,56 +340,67 @@ describe("in-between step sizes", () => {
 });
 
 describe("moves back to back", () => {
-    it("plays the change clip on the count the move changes, by the loop's time", () => {
-        // 8 forward then 8 slide left toward the 50: the loop is at 0.5 s on count 9
-        const clips = clipPerCount(
-            planMarcher(
-                input(
-                    [
-                        ...repeat<Count>(8, [0, STEP]),
-                        ...repeat<Count>(8, [STEP, 0]),
-                        "hold",
-                    ],
-                    { x0: -10 },
-                ),
-            ),
-        );
-        expect(clips[8]).toBe("change2_8to5__slideL8to5");
-        expect(clips.slice(9, 16)).toEqual(repeat(7, "slideL8to5"));
-        // 7 slide-loop counts after a change2_ (loop starts at time 0): halt2_ ... count 16
-        // is the 8th loop-phase count since the change -> back at time 0.5
-        expect(clips[16]).toMatch(/^halt2?_slideL8to5$/);
-    });
-
-    it("uses change_ when the loop is at time 0 on the change count", () => {
-        const clips = clipPerCount(
-            planMarcher(
-                input(
-                    [
-                        ...repeat<Count>(7, [0, STEP]),
-                        ...repeat<Count>(4, [STEP, 0]),
-                        "hold",
-                    ],
-                    { x0: -10 },
-                ),
-            ),
-        );
-        expect(clips[7]).toBe("change_8to5__slideL8to5");
-    });
-
-    it("changes size with a change clip: 8-to-5 into 6-to-5", () => {
-        const clips = clipPerCount(
-            planMarcher(
-                input([
-                    ...repeat<Count>(4, [0, STEP]),
-                    ...repeat<Count>(4, [0, 0.762]),
+    it("centers a move-to-move change on the page boundary", () => {
+        // 8 forward then 8 slide left toward the 50: the fade runs from the
+        // middle of count 7 (the last of the old move) to the middle of count 8
+        const plan = planMarcher(
+            input(
+                [
+                    ...repeat<Count>(8, [0, STEP]),
+                    ...repeat<Count>(8, [STEP, 0]),
                     "hold",
-                ]),
+                ],
+                { x0: -10 },
             ),
         );
-        // 3 loop counts after the step-off: the loop is at 0.5 s on count 5
-        expect(clips[4]).toBe("change2_8to5__6to5");
-        expect(clips[5]).toBe("6to5");
+        const fade = plan.events[eventIndexAt(plan, 7.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect(fade.count).toBe(7);
+        expect(fade.fadeStart).toBe(7.5);
+        expect(fade.fadeEnd).toBe(8.5);
+        expect([fade.clip, fade.clip2]).toEqual(["8to5", "slideL8to5"]);
+        // one event covers both counts
+        expect(eventIndexAt(plan, 7.1)).toBe(eventIndexAt(plan, 8.9));
+        const clips = clipPerCount(plan);
+        expect(clips[6]).toBe("8to5");
+        expect(clips.slice(9, 16)).toEqual(repeat(7, "slideL8to5"));
+        // the loops stay in phase across the fade
+        const fwd = plan.events.find(
+            (e) => e.kind === "loop" && e.clip === "8to5",
+        )!;
+        const side = plan.events.find(
+            (e) => e.kind === "loop" && e.clip === "slideL8to5",
+        )!;
+        expect(Math.abs(fwd.phaseStart - side.phaseStart) % 2).toBe(0);
+        expect(Math.abs(fwd.phaseStart - fade.phaseStart) % 2).toBe(0);
+    });
+
+    it("falls back to a one-count fade when the change follows the step-off", () => {
+        const plan = planMarcher(
+            input([[0, STEP], ...repeat<Count>(4, [STEP, 0]), "hold"], {
+                x0: -10,
+            }),
+        );
+        expect(clipPerCount(plan)[0]).toBe("stepoff_8to5");
+        const fade = plan.events[eventIndexAt(plan, 1.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect(fade.count).toBe(1);
+        expect(fade.fadeStart).toBe(1);
+        expect(fade.fadeEnd).toBe(2);
+    });
+
+    it("fades a size change the same way", () => {
+        const plan = planMarcher(
+            input([
+                ...repeat<Count>(4, [0, STEP]),
+                ...repeat<Count>(4, [0, 4.572 / 6]),
+                "hold",
+            ]),
+        );
+        const fade = plan.events[eventIndexAt(plan, 3.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect([fade.clip, fade.clip2]).toEqual(["8to5", "6to5"]);
+        expect(fade.fadeStart).toBe(3.5);
     });
 
     it("crossfades between loops when no change clip exists, keeping the loop time", () => {
@@ -407,7 +418,7 @@ describe("moves back to back", () => {
         const clips = clipPerCount(plan);
         const fade = plan.events[eventIndexAt(plan, 4.5)];
         expect(fade.kind).toBe("crossfade");
-        expect(fade.count).toBe(4);
+        expect(fade.count).toBe(3);
         expect(fade.clip).toBe("12to5");
         expect(fade.clip2).toBe("slideR12to5");
         expect(clips[5]).toBe("slideR12to5");
@@ -460,19 +471,39 @@ describe("moves back to back", () => {
         }
     });
 
-    it("still prefers a hand-made change clip over a crossfade", () => {
+    it("widens the fade for a sharp turn within one family, with no second clip", () => {
+        const s = STEP / Math.SQRT2;
+        // forward and left 45°, then forward and right 45°: same loop, 90° of leg turn
+        const plan = planMarcher(
+            input([
+                ...repeat<Count>(4, [s, s]),
+                ...repeat<Count>(4, [-s, s]),
+                "hold",
+            ]),
+        );
+        const fade = plan.events[eventIndexAt(plan, 3.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect(fade.clip).toBe("8to5");
+        expect(fade.clip2).toBeNull();
+        const [y0, y1] = fade.legYaw as [number, number, number, number];
+        expect((y0 * 180) / Math.PI).toBeCloseTo(45, 6);
+        expect((y1 * 180) / Math.PI).toBeCloseTo(-45, 6);
+        expect(fade.fadeStart).toBe(3.5);
+        expect(fade.fadeEnd).toBe(4.5);
+    });
+
+    it("keeps the hand-made change clips for mark time", () => {
         const plan = planMarcher(
             input(
                 [
-                    ...repeat<Count>(4, [-STEP, 0]),
-                    ...repeat<Count>(4, [0, -STEP]),
+                    ...repeat<Count>(4, [0, STEP]),
+                    ...repeat<Count>(2, "hold"),
                     "hold",
                 ],
-                { x0: 10 },
+                { bandMoving: [1, 1, 1, 1, 1, 1, 0] },
             ),
         );
-        expect(clipPerCount(plan)[4]).toBe("change2_slideR8to5__back8to5");
-        expect(plan.events.some((e) => e.kind === "crossfade")).toBe(false);
+        expect(clipPerCount(plan)[4]).toBe("change2_8to5__marktime");
     });
 
     it("crossfades into and out of mark time when no change clip exists", () => {

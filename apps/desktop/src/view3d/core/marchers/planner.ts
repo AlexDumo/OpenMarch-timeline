@@ -17,15 +17,19 @@
  *
  * - rest to step: `stepoff_<move>` (turned via `turnedClips`), or from mark
  *   time `change_marktime__<move>` when that clip exists;
- * - step to step: the loop, phased from its step-off; a different family or
- *   a size jump uses `change_<a>__<b>` (or `change2_`, by the loop's time on
- *   that count) when it exists, and otherwise a `crossfade`: the old loop
- *   blends into the new one over that count, both at the running loop time,
- *   while the leg turn eases from the old travel to the new. The swinging
- *   foot then takes the straight line between the two gaits' plants instead
- *   of a cut;
+ * - step to step: the loop, phased from its step-off. A change of move (a
+ *   different family, a size jump, or a sharp leg turn) is a `crossfade`
+ *   centered on the count boundary: from the middle of the last count of the
+ *   old move to the middle of the first count of the new one, the old loop
+ *   blends into the new, both at the running loop time, while the leg turn
+ *   eases from the old travel to the new. The foot that lands on the new
+ *   page's first count is already turning, so the change reads from count 8
+ *   into count 1 instead of snapping on the downbeat. When the last count
+ *   can't host it (a step-off, or another change), the fade covers the first
+ *   count alone;
  * - step to rest: `halt_<move>` when the loop is at time 0, `halt2_<move>`
- *   when it is at 0.5 s (to mark time: the change clip, or a crossfade).
+ *   when it is at 0.5 s (to mark time: `change_<move>__marktime` when it
+ *   exists, or a crossfade).
  *
  * Body placement: during loops, crossfades and rests the body follows the
  * drill; during a one-count transition it moves by the clip's own root travel. Where that
@@ -61,6 +65,8 @@ export const SIZE_JUMP = 0.05;
 export const WEIGHT_SNAP = 1e-3;
 /** Leg turns within this count as unturned, for change clips (radians). */
 export const TURN_EPS = (1 * Math.PI) / 180;
+/** A leg turn this big within one move is a change of direction, faded like a change of move (radians). */
+export const SHARP_TURN = (20 * Math.PI) / 180;
 /** Between rests, a landing correction anchor at least this often (counts). */
 export const MAX_ANCHOR_SPAN = 16;
 
@@ -85,11 +91,15 @@ export interface PlanEvent {
     kind: EventKind;
     /** Clip names (with the height class suffix), as `bake.rows` keys. */
     clip: string;
-    /** Loops: the second size. Crossfades: the loop faded in over the count. */
+    /** Loops: the second size. Crossfades: the loop faded in, or null for a turn alone. */
     clip2: string | null;
-    /** Crossfades: unused; the weight runs 0 to 1 over the count (`crossfadeWeight`). */
+    /** Crossfades: unused; the weight runs 0 to 1 over the fade window (`crossfadeWeight`). */
     weight: number;
+    /** Crossfades: `[from, to, 0, 1]`, eased over the fade window by the caller. */
     legYaw: number | [number, number, number, number];
+    /** Crossfades: the count clock values the fade runs between. Otherwise the event's own span. */
+    fadeStart: number;
+    fadeEnd: number;
     /** The count clock value at which the clip is at its time 0. */
     phaseStart: number;
     /** Transitions: the pair whose root travel places the body. */
@@ -262,6 +272,11 @@ interface Draft {
     legYaw: number | [number, number, number, number];
     phaseStart: number;
     root: TurnedPair | ClipPair | null;
+    /** Crossfades: the fade window. */
+    fadeStart?: number;
+    fadeEnd?: number;
+    /** The second count of a two-count crossfade: no event of its own. */
+    continued?: boolean;
 }
 
 /** A single clip's root travel as a pair (for change and mark time clips). */
@@ -351,15 +366,38 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                     : st.pick.b
                 : restBase(st) + sfx;
         const yawOf = (st: State) => (st.type === "move" ? st.dir.legYaw : 0);
-        const crossfade = (from: State, to: State): Draft => ({
-            kind: "crossfade",
-            clip: soloLoop(from),
-            clip2: soloLoop(to),
-            weight: 0,
-            legYaw: [yawOf(from), yawOf(to), 0, 1],
-            phaseStart: k - p,
-            root: null,
-        });
+        /**
+         * A change of move at this count. Centered on the boundary when the
+         * previous count is a plain loop of the old move: that draft becomes
+         * the fade's first count and this one continues it. Otherwise the fade
+         * covers this count alone.
+         */
+        const crossfade = (from: State, to: State): Draft => {
+            const a = soloLoop(from);
+            const b = soloLoop(to);
+            const last = drafts[k - 1];
+            const centered =
+                k > 0 &&
+                last !== undefined &&
+                last.kind === "loop" &&
+                !last.continued;
+            const fade: Draft = {
+                kind: "crossfade",
+                clip: a,
+                clip2: b === a ? null : b,
+                weight: 0,
+                legYaw: [yawOf(from), yawOf(to), 0, 1],
+                phaseStart: centered ? last.phaseStart : k - p,
+                root: null,
+                fadeStart: centered ? k - 0.5 : k,
+                fadeEnd: centered ? k + 0.5 : k + 1,
+            };
+            if (centered) {
+                drafts[k - 1] = fade;
+                return { ...fade, continued: true };
+            }
+            return fade;
+        };
 
         if (s.type === "move") {
             if (prev.type === "attention") {
@@ -373,8 +411,9 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                     prev.type === "move" &&
                     prev.family === s.family &&
                     Math.abs(prev.d - s.d) <= SIZE_JUMP;
-                if (sameMove) {
-                    const yaw = s.dir.legYaw;
+                const yaw = s.dir.legYaw;
+                if (sameMove && Math.abs(yaw - prevYaw) <= SHARP_TURN) {
+                    // the same move, drifting: ease the legs over half a loop
                     draft = loopOf(
                         s,
                         Math.abs(yaw - prevYaw) > 1e-6
@@ -382,9 +421,10 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                             : yaw,
                     );
                 } else {
+                    // from mark time, the hand-made change clip when it exists
                     draft =
-                        (unturned(prev) && unturned(s)
-                            ? change(baseOf(prev), baseOf(s))
+                        (prev.type === "marktime" && unturned(s)
+                            ? change("marktime", baseOf(s))
                             : null) ?? crossfade(prev, s);
                 }
                 prevYaw = s.dir.legYaw;
@@ -488,6 +528,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             b = nextAnchor(b);
         }
         const d = drafts[k];
+        if (d.continued) continue; // the second count of a centered fade
         const isTransition = d.kind === "transition";
         const oneCount = isTransition || d.kind === "crossfade";
         const lastEvent = events[events.length - 1];
@@ -535,6 +576,8 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             legYaw: d.legYaw,
             phaseStart: d.phaseStart,
             root: d.root,
+            fadeStart: d.fadeStart ?? k,
+            fadeEnd: d.fadeEnd ?? k + 1,
             baseX: isTransition ? positions[k * 2] + ox[k] : ox[k],
             baseZ: isTransition ? positions[k * 2 + 1] + oz[k] : oz[k],
             a,
