@@ -1063,6 +1063,13 @@
             "onlyEdited": "Only the edited pages",
             "onePage": "Page {page} followed (it was a copy)",
             "pages": "Pages {first}–{last} followed (they were copies)"
+        },
+        "moveThemToo": {
+            "action": "Move them too",
+            "laterMoves": "{names} have their own later moves, so they kept their spots",
+            "namesAndOthers": "{first}, {second} and {count} others",
+            "oneMarcher": "{names} has its own move on Page {page}, so it kept its spot",
+            "onePage": "{names} have their own move on Page {page}, so they kept their spot"
         }
     },
     "measures": {
