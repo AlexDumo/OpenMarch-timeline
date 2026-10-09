@@ -3,38 +3,28 @@ import { db } from "@/global/database/db";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     moveMarchersFromFlagInstead,
-    type TimelineEditTarget,
     type TimelineMoveResult,
     type TimelinePassThrough,
 } from "@/db-functions/timelineMoves";
 import type { BeatRange } from "@/db-functions/timelineMembership";
 import {
+    selectionIsRange,
     useTimelineSelectionStore,
     type PageBox,
 } from "@/stores/TimelineSelectionStore";
-import {
-    carryForwardMessage,
-    editCarryForward,
-    type CarryForwardSummary,
-} from "./timelineCarryForward";
 import { toastTimelineError } from "./timelineErrorMessages";
-import {
-    timelineResolverSettled,
-    useTimelineResolverStore,
-} from "./timelineStore";
 
 /**
  * What the app says after a drag passed through pages (research/ownership/10-cross-page-windows.md
- * §4.1, §4.2): which marchers now move straight through which moves and page flags, which moves
- * catch up after it, and the one-click way back, **Start from Page N**, which moves them from the
- * last flag before the drag's end instead (`moveMarchersFromFlagInstead`). It shows whenever the
- * drag added marchers over a page flag, even where no stored move ended there (sparse rows,
- * defined-coordinates 07a §4). The action was "Only change Page N" until defined-coordinates
- * 07c §2: later pages that hold still follow the edit, so "only" promised too much.
+ * §4.1, §4.2; worded by defined-coordinates 08): which pages are no longer stops, since the
+ * marchers now move straight through their flags, and the one-click way back, **Keep Page N as a
+ * stop**, which takes the marchers out of the long move and moves them from the last flag inside
+ * it instead (`moveMarchersFromFlagInstead`), so every flag inside is a stop again. It shows
+ * whenever the drag added marchers over a page flag, even where no stored move ended there
+ * (sparse rows, defined-coordinates 07a §4). No marcher names: the selection already shows who.
  *
- * An edit also says which later pages it moved, where the marchers hold through them
- * (`timelineCarryForward.ts`, docs/timeline/ui.md UI-15). Both go in one toast (UI-12: one
- * post-edit toast), which keeps **Start from**; the carry-forward part has no action of its own.
+ * Ordinary edits say nothing: which later pages an edit carried into is shown on the page boxes,
+ * not in a toast (defined-coordinates 08, owner decision 2026-10-08).
  */
 
 /** Translates with ICU parameters; the Tolgee singleton by default, anything in tests. */
@@ -47,24 +37,11 @@ export type PassThroughTranslate = (
 const defaultTranslate: PassThroughTranslate = (key, defaultMessage, params) =>
     tolgee.t(key, defaultMessage, params);
 
-/** How many drill numbers a message names before it counts the rest. */
-const MAX_NAMED_MARCHERS = 4;
-
 /** "A", "A and B", "A, B and C". */
 const joinList = (items: readonly string[]): string =>
     items.length <= 1
         ? (items[0] ?? "")
         : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-
-/** "T3", "T3 and T4", "T3, T4, T5, T6 and 2 others". */
-export function marcherList(labels: readonly string[]): string {
-    if (labels.length <= MAX_NAMED_MARCHERS) return joinList(labels);
-    const rest = labels.length - MAX_NAMED_MARCHERS;
-    return joinList([
-        ...labels.slice(0, MAX_NAMED_MARCHERS),
-        rest === 1 ? "1 other" : `${rest} others`,
-    ]);
-}
 
 /** "Page 2" for a range that is a page's box, otherwise "the move over beats [16, 40)". */
 export function moveName(range: BeatRange, boxes: readonly PageBox[]): string {
@@ -76,182 +53,165 @@ export function moveName(range: BeatRange, boxes: readonly PageBox[]): string {
         : `the move over beats [${range.start}, ${range.end})`;
 }
 
-/** Where **Start from** narrows a drag to, from `narrowingFlag`. */
-export interface NarrowingFlag {
-    /** The last page flag strictly inside the drag's range */
-    beat: number;
-    /** The page whose flag it is (the box ending there) */
-    flagPage?: string;
-    /** The page whose box starts there */
-    nextPage?: string;
-    /** The drag ends on that page's own flag, so the narrowed move is exactly that page */
-    endsOnFlag: boolean;
-}
-
 /**
- * The flag **Start from** narrows to: the last page flag strictly inside the drag's range.
+ * The flag **Keep as a stop** moves from: the last page flag strictly inside the drag's range.
  * `null` when no flag is inside (the range crossed only clips).
  */
 export function narrowingFlag(
     range: BeatRange,
     boxes: readonly PageBox[],
-): NarrowingFlag | null {
+): number | null {
     const inside = boxes
         .map((b) => b.end)
         .filter((beat) => range.start < beat && beat < range.end);
-    if (inside.length === 0) return null;
-    const beat = Math.max(...inside);
-    const next = boxes.find((b) => b.start === beat);
-    return {
-        beat,
-        flagPage: boxes.find((b) => b.end === beat)?.name,
-        nextPage: next?.name,
-        endsOnFlag: next?.end === range.end,
-    };
+    return inside.length === 0 ? null : Math.max(...inside);
 }
 
-/** The toast's text for `pass`, worded for one marcher or several. */
+/**
+ * The pages whose flags `pass` moves straight through, as "3" or "3–4" (the flags inside one
+ * range are consecutive), named by the box ending at each. `null` when it passes no flag, or a
+ * flag has no named page.
+ */
+export function passedPages(
+    pass: Pick<TimelinePassThrough, "flags">,
+    boxes: readonly PageBox[],
+): { first: string; last: string } | null {
+    const names = pass.flags.map(
+        (beat) => boxes.find((b) => b.end === beat)?.name,
+    );
+    if (names.length === 0 || names.some((n) => n === undefined)) return null;
+    return { first: names[0]!, last: names[names.length - 1]! };
+}
+
+/**
+ * The toast's text for `pass`: "Page 3 is no longer a stop" or "Pages 3–4 are no longer stops"
+ * when it passes page flags; otherwise (it crossed only other moves) what it moves through and
+ * what catches up after it.
+ */
 export function passThroughMessage(
     pass: TimelinePassThrough,
     boxes: readonly PageBox[],
     translate: PassThroughTranslate = defaultTranslate,
 ): string {
-    const marchers = marcherList(pass.labels);
-    // A flag inside the range that no overridden move ends on is named by its page
-    const flagPages = pass.flags
-        .filter((beat) => !pass.overridden.some((r) => r.end === beat))
-        .flatMap((beat) => boxes.filter((b) => b.end === beat));
-    const through = joinList(
-        [...pass.overridden, ...flagPages]
-            .sort((a, b) => a.end - b.end || a.start - b.start)
-            .map((r) => moveName(r, boxes)),
-    );
+    const pages = passedPages(pass, boxes);
+    if (pages)
+        return pages.first === pages.last
+            ? translate(
+                  "timeline.edit.passThrough.noLongerStop.one",
+                  "Page {page} is no longer a stop",
+                  { page: pages.first },
+              )
+            : translate(
+                  "timeline.edit.passThrough.noLongerStop.many",
+                  "Pages {first}–{last} are no longer stops",
+                  pages,
+              );
+    if (pass.flags.length > 0)
+        return translate(
+            "timeline.edit.passThrough.noLongerStop.unnamed",
+            "The sets inside this move are no longer stops",
+        );
+    const through = joinList(pass.overridden.map((r) => moveName(r, boxes)));
     const caughtUp = joinList(pass.caughtUp.map((r) => moveName(r, boxes)));
-    const one = pass.labels.length === 1;
-    const params = { marchers, through, caughtUp };
+    const params = { through, caughtUp };
     if (through && caughtUp)
-        return one
-            ? translate(
-                  "timeline.edit.passThrough.throughAndCatchUp.one",
-                  "{marchers} now moves straight through {through}, then catches up to {caughtUp}'s set by its end.",
-                  params,
-              )
-            : translate(
-                  "timeline.edit.passThrough.throughAndCatchUp.many",
-                  "{marchers} now move straight through {through}, then catch up to {caughtUp}'s set by its end.",
-                  params,
-              );
+        return translate(
+            "timeline.edit.passThrough.throughAndCatchUp",
+            "Moves straight through {through}, then catches up to {caughtUp}'s set",
+            params,
+        );
     if (through)
-        return one
-            ? translate(
-                  "timeline.edit.passThrough.through.one",
-                  "{marchers} now moves straight through {through}.",
-                  params,
-              )
-            : translate(
-                  "timeline.edit.passThrough.through.many",
-                  "{marchers} now move straight through {through}.",
-                  params,
-              );
-    return one
+        return translate(
+            "timeline.edit.passThrough.through",
+            "Moves straight through {through}",
+            params,
+        );
+    return translate(
+        "timeline.edit.passThrough.catchUp",
+        "Catches up to {caughtUp}'s set by its end",
+        params,
+    );
+}
+
+/**
+ * The action's label, by what it does to the user's sets: every flag inside the drag becomes a
+ * stop again, so "Keep Page 3 as a stop" or "Keep Pages 3–4 as stops".
+ */
+export function keepStopsLabel(
+    pass: Pick<TimelinePassThrough, "flags">,
+    boxes: readonly PageBox[],
+    translate: PassThroughTranslate = defaultTranslate,
+): string {
+    const pages = passedPages(pass, boxes);
+    if (!pages)
+        return translate(
+            "timeline.edit.passThrough.keepStops.unnamed",
+            "Keep them as stops",
+        );
+    return pages.first === pages.last
         ? translate(
-              "timeline.edit.passThrough.catchUp.one",
-              "{marchers} now catches up to {caughtUp}'s set by its end.",
-              params,
+              "timeline.edit.passThrough.keepStops.one",
+              "Keep Page {page} as a stop",
+              { page: pages.first },
           )
         : translate(
-              "timeline.edit.passThrough.catchUp.many",
-              "{marchers} now catch up to {caughtUp}'s set by its end.",
-              params,
+              "timeline.edit.passThrough.keepStops.many",
+              "Keep Pages {first}–{last} as stops",
+              pages,
           );
 }
 
-/**
- * The action's label: "Start from Page 3" when the drag ends on Page 3's flag; otherwise (it ends
- * partway into a page) "Start from Page 2's set", or by beat for an unnamed page.
- */
-export function narrowingLabel(
-    flag: NarrowingFlag,
-    translate: PassThroughTranslate = defaultTranslate,
-): string {
-    if (flag.endsOnFlag && flag.nextPage !== undefined)
-        return translate(
-            "timeline.edit.passThrough.startFromPage",
-            "Start from Page {page}",
-            { page: flag.nextPage },
-        );
-    if (flag.flagPage !== undefined)
-        return translate(
-            "timeline.edit.passThrough.startFromPageSet",
-            "Start from Page {page}'s set",
-            { page: flag.flagPage },
-        );
-    return translate(
-        "timeline.edit.passThrough.startFromBeat",
-        "Start from beat {beat}",
-        { beat: String(flag.beat) },
-    );
-}
-
-/** The one toast an edit shows (`toastTimelineEdit`), so a later edit replaces it. */
-const EDIT_TOAST_ID = "timeline-edit";
+/** The one pass-through toast, so a later one replaces it. */
+const PASS_THROUGH_TOAST_ID = "timeline-edit";
 
 /**
- * The post-edit toast's text: what the move passed through, then what it also moved after its
- * window, as one message. `null` when there is nothing to say.
+ * **Keep as a stop**: moves the passed marchers from the last flag inside the drag instead
+ * (`moveMarchersFromFlagInstead`, which keeps where they are now). Their move is then the one
+ * over `[flag, end)`, often a page box with no clip of its own, so a window still on the drag's
+ * range would name a move that is gone: the window follows to the new range.
  */
-export function timelineEditMessage(
-    pass: TimelinePassThrough | undefined,
-    carry: CarryForwardSummary | null,
-    boxes: readonly PageBox[],
-    translate: PassThroughTranslate = defaultTranslate,
-): string | null {
-    const parts = [
-        pass ? passThroughMessage(pass, boxes, translate) : null,
-        carry ? carryForwardMessage(carry, translate) : null,
-    ].filter((part): part is string => part !== null);
-    return parts.length > 0 ? parts.join(" ") : null;
+export async function keepPassedFlagsAsStops(
+    pass: TimelinePassThrough,
+    flag: number,
+): Promise<TimelineMoveResult> {
+    const result = await moveMarchersFromFlagInstead({
+        db,
+        range: pass.range,
+        from: flag,
+        marcherIds: pass.marcherIds,
+        deleteIfEmpty: pass.createdTimelineId,
+    });
+    const store = useTimelineSelectionStore.getState();
+    if (
+        store.isolation === null &&
+        selectionIsRange(store.selection, pass.range.start, pass.range.end)
+    )
+        store.selectRange(flag, pass.range.end);
+    return result;
 }
 
 /**
- * Shows what a range move passed through, and what it also moved after its window, if anything,
- * with **Start from** when a page flag lies inside the range. The action narrows the passed
- * marchers (`moveMarchersFromFlagInstead`, which keeps where they are now), and says in turn what
- * the narrowed move did.
+ * After a timeline-mode edit (`moveMarchersInTarget` and the like) has committed: when it passed
+ * through page flags or other moves, says so, with **Keep as a stop** when a page flag lies
+ * inside the range. Says nothing otherwise.
  */
-function showTimelineEditToast(
-    pass: TimelinePassThrough | undefined,
-    carry: CarryForwardSummary | null,
+export function toastPassThrough(
+    result: Pick<TimelineMoveResult, "passThrough">,
 ): void {
+    const pass = result.passThrough;
+    if (!pass) return;
     const boxes = useTimelineSelectionStore.getState().pageBoxes;
-    const message = timelineEditMessage(pass, carry, boxes);
-    if (message === null) return;
-    const flag = pass ? narrowingFlag(pass.range, boxes) : null;
-    toast.info(message, {
-        id: EDIT_TOAST_ID,
-        duration: flag ? 10000 : 6000,
+    const flag = narrowingFlag(pass.range, boxes);
+    toast.info(passThroughMessage(pass, boxes), {
+        id: PASS_THROUGH_TOAST_ID,
+        duration: flag !== null ? 10000 : 6000,
         action:
-            pass && flag
+            flag !== null
                 ? {
-                      label: narrowingLabel(flag),
+                      label: keepStopsLabel(pass, boxes),
                       onClick: () => {
-                          moveMarchersFromFlagInstead({
-                              db,
-                              range: pass.range,
-                              from: flag.beat,
-                              marcherIds: pass.marcherIds,
-                              deleteIfEmpty: pass.createdTimelineId,
-                          })
-                              .then((result) =>
-                                  toastTimelineEdit(
-                                      {
-                                          kind: "range",
-                                          start: flag.beat,
-                                          end: pass.range.end,
-                                      },
-                                      result,
-                                  ),
-                              )
+                          keepPassedFlagsAsStops(pass, flag)
+                              .then(toastPassThrough)
                               .catch((e: unknown) =>
                                   toastTimelineError(
                                       e,
@@ -262,35 +222,4 @@ function showTimelineEditToast(
                   }
                 : undefined,
     });
-}
-
-/**
- * After a timeline-mode edit (`moveMarchersInTarget` and the like) has committed: once the
- * resolver has it, one toast says what the edit passed through and which later pages it also
- * moved (`editCarryForward`). Says nothing when neither applies.
- */
-export async function toastTimelineEdit(
-    target: TimelineEditTarget,
-    result: Pick<
-        TimelineMoveResult,
-        "homes" | "slots" | "cleared" | "passThrough"
-    >,
-): Promise<void> {
-    let carry: CarryForwardSummary | null = null;
-    try {
-        // The write delivered its batch before returning; a cold build may still be running
-        await timelineResolverSettled();
-        const { resolver } = useTimelineResolverStore.getState();
-        if (resolver)
-            carry = editCarryForward(
-                resolver,
-                target,
-                result,
-                useTimelineSelectionStore.getState().pageBoxes,
-            );
-    } catch (e) {
-        // The edit is saved either way; only the extra words are lost
-        console.error("Couldn't read what the edit also moved", e);
-    }
-    showTimelineEditToast(result.passThrough, carry);
 }

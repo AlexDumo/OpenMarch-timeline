@@ -13,9 +13,10 @@ import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSetti
 import { conToastError } from "./utils";
 
 /**
- * What page mode says after an edit carried forward to later pages (defined coordinates, 07b):
- * "Also moved on Pages 3–7", with **Only Page 2**, which puts those pages back as a second
- * undoable edit (`restoreCarriedRuns`).
+ * What page mode says after an edit carried forward to later pages (defined coordinates, 07b;
+ * worded by 08): "Pages 3–7 followed (they were copies)", since those pages held copies of the
+ * edited one, with **Only Page 2**, which puts those pages back as a second undoable edit
+ * (`restoreCarriedRuns`).
  */
 
 /** Translates with ICU parameters; the Tolgee singleton by default, anything in tests. */
@@ -43,12 +44,12 @@ export function carryForwardMessage(
         first === last
             ? translate(
                   "marcherPages.carryForward.onePage",
-                  "Also moved on Page {page}",
+                  "Page {page} followed (it was a copy)",
                   { page: first },
               )
             : translate(
                   "marcherPages.carryForward.pages",
-                  "Also moved on Pages {first}–{last}",
+                  "Pages {first}–{last} followed (they were copies)",
                   { first, last },
               );
     const actionLabel =
