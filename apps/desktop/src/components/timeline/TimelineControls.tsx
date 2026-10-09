@@ -29,6 +29,7 @@ import { Slider } from "@openmarch/ui";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { toggleTimelineLoop } from "@/timeline/timelineTransport";
 import { ShortcutTooltip } from "./ShortcutTooltip";
+import { START_INK } from "./startFlagInk";
 
 export default function TimelineControls() {
     const { isFullscreen, toggleFullscreen } = useFullscreenStore();
@@ -193,8 +194,9 @@ export function TimelineLoopButton() {
                 onClick={() => toggleTimelineLoop()}
                 className={clsx(
                     "rounded-4 focus-visible:ring-accent enabled:hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden duration-150 focus-visible:ring-2 disabled:opacity-30",
+                    // Lit in the loop bar's color, so the button reads as the bar's (UI-17)
                     looping
-                        ? "text-accent"
+                        ? START_INK.text
                         : "text-text enabled:hover:text-accent",
                 )}
             >
