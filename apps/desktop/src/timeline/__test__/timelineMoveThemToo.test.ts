@@ -27,7 +27,7 @@ import {
     readShowTiming,
 } from "../convert/writePageConversion";
 import { neighborPageTarget } from "../timelineCoordinateWrites";
-import { forgetAccumulatedShifts } from "@/utilities/moveThemToo";
+import { forgetEditRun } from "@/utilities/moveThemToo";
 import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
 import { pageFlags } from "../timelinePlayhead";
 import {
@@ -49,7 +49,7 @@ import {
 keepFixturesInPageMode("its tests build the show and convert it themselves");
 
 afterEach(() => {
-    forgetAccumulatedShifts();
+    forgetEditRun();
     stopTimelineResolver();
     useTimelineSelectionStore.getState().reset();
     vi.restoreAllMocks();
@@ -188,7 +188,7 @@ describeDbTests("timeline mode: Move them too", (it) => {
             "OT1 and OT8 have their own move on Page 2, so they kept their spot",
         );
         expect(options).toMatchObject({
-            id: "timeline-edit",
+            id: expect.stringMatching(/^timeline-edit-\d+$/),
             action: { label: "Move them too" },
         });
         // Before the action: the others followed, OT1 and OT8 kept their spot
@@ -367,7 +367,7 @@ describeDbTests("timeline mode: Move them too", (it) => {
             `Page ${pages[1]!.name} is no longer a stop`,
         ]);
         expect(info.mock.calls[0]![1]).toMatchObject({
-            id: "timeline-edit",
+            id: expect.stringMatching(/^timeline-edit-\d+$/),
             action: { label: `Keep Page ${pages[1]!.name} as a stop` },
         });
     });

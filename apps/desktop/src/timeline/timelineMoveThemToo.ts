@@ -16,14 +16,15 @@ import {
     type PageBox,
 } from "@/stores/TimelineSelectionStore";
 import {
-    EDIT_SURPRISE_TOAST_ID,
-    EDIT_SURPRISE_TOAST_RESET,
     MOVE_THEM_TOO_TOAST_MS,
-    accumulateShifts,
+    addShifts,
+    continueEditRun,
     editHistoryMark,
+    editSurpriseToastId,
     inDrillOrder,
     marcherLabelsById,
     moveThemTooMessage,
+    type ShiftTotals,
 } from "@/utilities/moveThemToo";
 import { editedMarcherEnds, type CarrySpan } from "./timelineCarryForward";
 import { toastTimelineError } from "./timelineErrorMessages";
@@ -198,10 +199,14 @@ export async function findLaterOwnMoves({
     return found.filter((m) => !shaped.has(m.transitionId));
 }
 
+/** A kept marcher's later move: the marcher, its slot and the flag it ends on */
+const laterMoveKey = (m: LaterOwnMove) =>
+    `${m.marcherId}:${m.transitionId}:${m.slotIndex}:${m.flag}`;
+
 /**
- * Shows the **Move them too** toast for `found` (the edit surprise toast's id). Does nothing for
- * none. With the edit's `mark`, edits in a row that keep the same marchers' same later moves add
- * up, so the action shifts by all of them (`accumulateShifts`).
+ * Shows the **Move them too** toast for `found` (an edit surprise toast). Does nothing for none.
+ * With the edit's `mark`, edits in a row that keep the same marchers' same later moves add up, so
+ * the action shifts by all of them (`continueEditRun`).
  */
 export async function toastLaterOwnMoves(
     found: readonly LaterOwnMove[],
@@ -209,27 +214,30 @@ export async function toastLaterOwnMoves(
     mark: number | null = null,
 ): Promise<void> {
     if (found.length === 0) return;
-    const { shifts: moves, forget } =
-        mark === null
-            ? { shifts: [...found], forget: () => {} }
-            : accumulateShifts(
-                  "timeline",
-                  mark,
-                  found,
-                  (m) =>
-                      `${m.marcherId}:${m.transitionId}:${m.slotIndex}:${m.flag}`,
-              );
-    const labels = await marcherLabelsById(moves.map((m) => m.marcherId));
-    const byMarcher = new Map(moves.map((m) => [m.marcherId, m]));
+    const labels = await marcherLabelsById(found.map((m) => m.marcherId));
+    const byMarcher = new Map(found.map((m) => [m.marcherId, m]));
     const kept = inDrillOrder([...byMarcher.keys()], labels).map((id) => ({
         label: labels.get(id)!.label,
         page: boxes.find((b) => b.end === byMarcher.get(id)!.flag)?.name ?? "?",
     }));
     if (kept.length === 0) return;
+    const run =
+        mark === null
+            ? null
+            : continueEditRun<ShiftTotals>(
+                  "timeline",
+                  mark,
+                  (previous) => addShifts(previous, found, laterMoveKey).totals,
+              );
+    const moves = found.map((m) => ({
+        ...m,
+        ...run?.value.get(laterMoveKey(m)),
+    }));
+    const forget = () => run?.forget();
     const { message, actionLabel } = moveThemTooMessage(kept);
+    const id = editSurpriseToastId();
     toast.info(message, {
-        ...EDIT_SURPRISE_TOAST_RESET,
-        id: EDIT_SURPRISE_TOAST_ID,
+        id,
         duration: MOVE_THEM_TOO_TOAST_MS,
         action: {
             label: actionLabel,
@@ -244,6 +252,7 @@ export async function toastLaterOwnMoves(
         onDismiss: forget,
         onAutoClose: forget,
     });
+    run?.shown(id);
 }
 
 /**

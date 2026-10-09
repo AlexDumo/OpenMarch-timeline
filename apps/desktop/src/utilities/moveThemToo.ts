@@ -1,4 +1,5 @@
 import { inArray } from "drizzle-orm";
+import { toast } from "sonner";
 import { db, schema } from "@/global/database/db";
 import tolgee from "@/global/singletons/Tolgee";
 import { subscribeHistoryChanges } from "@/db-functions/history";
@@ -18,20 +19,26 @@ import { subscribeHistoryChanges } from "@/db-functions/history";
 
 /**
  * The one toast for an edit's surprises: a window passing a flag, page mode's carry-forward, and
- * **Move them too** all use it, so a later one replaces the earlier instead of stacking.
+ * **Move them too** all show through `editSurpriseToastId`, so a later one replaces the earlier
+ * instead of stacking.
  */
-export const EDIT_SURPRISE_TOAST_ID = "timeline-edit";
+let surpriseToasts = 0;
+let currentSurpriseToast: string | null = null;
 
 /**
- * Sonner merges a toast into every earlier one with its id, even one long closed, so an edit
- * surprise toast with one button would keep an earlier one's second button (Only Page N) and close
- * handlers. Spread this first in each one's options.
+ * A fresh id for the next edit surprise toast, closing the one before. Not one fixed id: sonner
+ * merges a toast into every earlier one with its id, even one long closed, so a one-button toast
+ * would keep an earlier one's second button, icon and close handlers.
  */
-export const EDIT_SURPRISE_TOAST_RESET = {
-    cancel: undefined,
-    onDismiss: undefined,
-    onAutoClose: undefined,
-} as const;
+export function editSurpriseToastId(): string {
+    if (currentSurpriseToast !== null) toast.dismiss(currentSurpriseToast);
+    surpriseToasts++;
+    currentSurpriseToast = `timeline-edit-${surpriseToasts}`;
+    return currentSurpriseToast;
+}
+
+/** The edit surprise toast shown last (it may have closed since), or null */
+export const currentEditSurpriseToastId = () => currentSurpriseToast;
 
 /** How long the toast stays: it has an action */
 export const MOVE_THEM_TOO_TOAST_MS = 10000;
@@ -189,63 +196,99 @@ export interface FollowUpShift {
     dy: number;
 }
 
-/** The open toast's shifts, so the next edit can add to them */
+/** Each kept marcher's later move's shift so far, by `keyOf` */
+export type ShiftTotals = ReadonlyMap<string, FollowUpShift>;
+
+/** The open toast's edits so far, so the next edit can add to them */
 let pending: {
     mode: "page" | "timeline";
     mark: number;
-    totals: Map<string, FollowUpShift>;
+    toastId: string | null;
+    value: unknown;
 } | null = null;
 
+/** One edit in a run of edits behind one toast (`continueEditRun`). */
+export interface EditRun<T> {
+    /** This edit's value, combined with the run's so far */
+    value: T;
+    /** Call with the toast's id once it shows */
+    shown: (toastId: string) => void;
+    /** Ends the run: its action ran, or its toast closed */
+    forget: () => void;
+}
+
 /**
- * Several edits in a row, one Move them too: while its toast is open, an edit right after the
- * last (the next history change) that keeps the same marchers at the same later moves adds its
- * shift to theirs, so the action repeats every nudge, not only the last. Anything else in between,
- * an undo or redo, another edit, Move them too or Only Page N, starts over from this edit.
+ * Several edits in a row, one toast: while the toast is open, an edit right after the last (the
+ * next history change) in the same mode continues its run, so **Move them too** and **Only Page
+ * N** repeat or take back every nudge, not only the last. Anything else in between, an undo or
+ * redo, another edit, Move them too, Only Page N, another surprise toast, or the toast closing,
+ * starts over from this edit.
  *
  * @param mark the edit's `editHistoryMark`
- * @param keyOf names the kept marcher's later move (marcher, and the page or slot it stopped at)
- * @returns `shifts` with the totals so far, and a function that forgets them when the toast closes
+ * @param combine this edit's value, given the run's so far (null when it starts one)
  */
-export function accumulateShifts<T extends FollowUpShift>(
+export function continueEditRun<T>(
     mode: "page" | "timeline",
     mark: number,
-    shifts: readonly T[],
-    keyOf: (shift: T) => string,
-): { shifts: T[]; forget: () => void } {
-    const keys = shifts.map(keyOf);
+    combine: (previous: T | null) => T,
+): EditRun<T> {
     const previous = pending;
-    // An older edit's check finishing late leaves the newer toast's totals alone
+    // An older edit's check finishing late leaves the newer toast's run alone
     if (previous && mark < previous.mark)
-        return { shifts: [...shifts], forget: () => {} };
+        return { value: combine(null), shown: () => {}, forget: () => {} };
     const continues =
         previous !== null &&
         previous.mode === mode &&
         previous.mark + 1 === mark &&
-        previous.totals.size === new Set(keys).size &&
-        keys.every((k) => previous.totals.has(k));
-    const summed = shifts.map((shift, i) => {
-        const before = continues ? previous.totals.get(keys[i]!)! : null;
-        return before
-            ? { ...shift, dx: shift.dx + before.dx, dy: shift.dy + before.dy }
-            : { ...shift };
-    });
+        previous.toastId !== null &&
+        previous.toastId === currentSurpriseToast;
     const next = {
         mode,
         mark,
-        totals: new Map(
-            summed.map((s, i) => [keys[i]!, { dx: s.dx, dy: s.dy }]),
-        ),
+        toastId: null as string | null,
+        value: combine(continues ? (previous.value as T) : null),
     };
     pending = next;
     return {
-        shifts: summed,
+        value: next.value,
+        shown: (toastId) => {
+            if (pending === next) next.toastId = toastId;
+        },
         forget: () => {
             if (pending === next) pending = null;
         },
     };
 }
 
-/** Forgets the open toast's shifts: its action ran, or it closed. Tests call it between cases. */
-export function forgetAccumulatedShifts(): void {
+/**
+ * `shifts` with the run's totals added (`previous`), when they keep the same marchers at the same
+ * later moves (`keyOf`: the marcher, and the page or slot it stopped at); otherwise as they are.
+ */
+export function addShifts<T extends FollowUpShift>(
+    previous: ShiftTotals | null,
+    shifts: readonly T[],
+    keyOf: (shift: T) => string,
+): { shifts: T[]; totals: ShiftTotals } {
+    const keys = shifts.map(keyOf);
+    const same =
+        previous !== null &&
+        previous.size === new Set(keys).size &&
+        keys.every((k) => previous.has(k));
+    const summed = shifts.map((shift, i) => {
+        const before = same ? previous.get(keys[i]!)! : null;
+        return before
+            ? { ...shift, dx: shift.dx + before.dx, dy: shift.dy + before.dy }
+            : { ...shift };
+    });
+    return {
+        shifts: summed,
+        totals: new Map(
+            summed.map((s, i) => [keys[i]!, { dx: s.dx, dy: s.dy }]),
+        ),
+    };
+}
+
+/** Forgets the open toast's run. Tests call it between cases. */
+export function forgetEditRun(): void {
     pending = null;
 }

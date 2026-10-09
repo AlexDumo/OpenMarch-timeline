@@ -15,7 +15,9 @@ import { createShapePages } from "@/db-functions/shapePages";
 import { performRedo, performUndo } from "@/db-functions/history";
 import { toastCarryForward } from "../carryForwardToast";
 import {
-    forgetAccumulatedShifts,
+    continueEditRun,
+    editSurpriseToastId,
+    forgetEditRun,
     marcherNamesList,
     moveThemTooMessage,
 } from "../moveThemToo";
@@ -63,11 +65,46 @@ describe("the message", () => {
     });
 });
 
+describe("a run of edits behind one toast", () => {
+    /** An edit adding `n` to the run's total; returns the total and the run */
+    const edit = (mode: "page" | "timeline", mark: number, n: number) => {
+        const run = continueEditRun<number>(
+            mode,
+            mark,
+            (previous) => (previous ?? 0) + n,
+        );
+        run.shown(editSurpriseToastId());
+        return run;
+    };
+
+    it("the next history change in the same mode adds up; anything else starts over", () => {
+        forgetEditRun();
+        expect(edit("page", 10, 1).value).toBe(1);
+        expect(edit("page", 11, 2).value).toBe(3);
+        // A gap (an undo, another edit)
+        expect(edit("page", 13, 4).value).toBe(4);
+        // Another mode
+        expect(edit("timeline", 14, 8).value).toBe(8);
+        // Another surprise toast in between
+        editSurpriseToastId();
+        expect(edit("timeline", 15, 16).value).toBe(16);
+        // The toast closed, or its action ran
+        edit("timeline", 16, 1).forget();
+        expect(edit("timeline", 17, 32).value).toBe(32);
+        // An older edit finishing late leaves the newer run alone
+        expect(continueEditRun<number>("timeline", 12, () => 99).value).toBe(
+            99,
+        );
+        expect(edit("timeline", 18, 1).value).toBe(33);
+        forgetEditRun();
+    });
+});
+
 // These tests write marcher pages, which only page mode allows
 keepFixturesInPageMode("page-mode Move them too writes marcher_pages");
 
 afterEach(() => {
-    forgetAccumulatedShifts();
+    forgetEditRun();
     vi.restoreAllMocks();
 });
 
@@ -212,7 +249,7 @@ describeDbTests("page mode: Move them too", (it) => {
             "Pages 2–3 followed (they were copies). OT1 and OT8 have their own move on Page 2, so they kept their spot",
         );
         expect(info.mock.calls[0]![1]).toMatchObject({
-            id: "timeline-edit",
+            id: expect.stringMatching(/^timeline-edit-\d+$/),
             action: { label: "Move them too" },
             cancel: { label: "Only Page 1" },
         });
@@ -589,7 +626,7 @@ describeDbTests(
                 "Pages 2–3 followed (they were copies)",
             );
             expect(message.mock.calls[0]![1]).toMatchObject({
-                id: "timeline-edit",
+                id: expect.stringMatching(/^timeline-edit-\d+$/),
                 action: { label: "Only Page 1" },
             });
         });
