@@ -175,4 +175,31 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
 - Checked for staleness: camera flies and a horn-state change after idle
   periods all drew (screenshots in the session scratchpad).
 
+### 2026-10-09 · trevor (3d/p7-battery-impl) · P7.2 instrument draw cost and shadows
+
+- Change: instruments draw from one shared set of instanced meshes per model
+  (`hornSet.ts`) instead of one mesh per body row, with a high-detail mesh
+  within 28 m of the camera and a low-detail mesh past 34 m (the gap keeps a
+  marcher from flickering between the two). A still show rewrites the
+  choice when the camera moves more than 0.5 m.
+- Shadows: the sun's shadow camera is fixed on the field, so the shadow map
+  now redraws only while the show plays and for 4 s after a kit, lighting,
+  quality, show or clock change. A camera move alone skips it.
+- Measured in the built Electron app, Fall Show 2026 demo, high school
+  venue, High quality, playing:
+
+  | Measure              | Before | After  |
+  | -------------------- | ------ | ------ |
+  | Draw calls per frame | 198    | 130    |
+  | Triangles per frame  | 3.18 M | 1.12 M |
+  | Instrument triangles | 2.66 M | 0.60 M |
+  | Frame rate (rough)   | 38     | 49     |
+
+- Shadow pass during an orbit: about 4 draw calls a frame saved (10 visible
+  casters on this kit). Small here; larger on the pro kit, whose roof and
+  bowl cast. Frame times drift with GPU clocking, so the counts are the
+  reliable figures.
+- Still open: body meshes are 86 draws (7 body types times looks), the next
+  target, and a real energy reading on battery.
+
 ## Verdicts

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
     BATTERY_FPS,
+    SHADOW_REFRESH_MS,
     createDrawState,
+    createShadowState,
+    refreshShadows,
+    shadowsNeedUpdate,
     loadPowerPrefs,
     nextFrameDelay,
     noteFrame,
@@ -105,5 +109,15 @@ describe("power preferences", () => {
             },
         } as unknown as Storage;
         expect(loadPowerPrefs(broken)).toEqual(prefs);
+    });
+});
+
+describe("shadow refresh", () => {
+    it("redraws shadows only inside the window after a change", () => {
+        const s = createShadowState();
+        expect(shadowsNeedUpdate(s, 0)).toBe(false);
+        refreshShadows(s, 1000, SHADOW_REFRESH_MS);
+        expect(shadowsNeedUpdate(s, 1001)).toBe(true);
+        expect(shadowsNeedUpdate(s, 1000 + SHADOW_REFRESH_MS + 1)).toBe(false);
     });
 });

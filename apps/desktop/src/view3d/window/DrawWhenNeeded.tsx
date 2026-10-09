@@ -14,7 +14,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import { useView3dSceneStore } from "./sceneStore";
 import { useCameraStore } from "./camera/cameraStore";
-import { createDrawState, nextFrameDelay, noteFrame, wake } from "./drawPolicy";
+import {
+    createDrawState,
+    createShadowState,
+    nextFrameDelay,
+    noteFrame,
+    refreshShadows,
+    shadowsNeedUpdate,
+    wake,
+} from "./drawPolicy";
 import { registerDrawWaker } from "./drawWake";
 
 /** How long each kind of change keeps the window drawing (ms). */
@@ -37,8 +45,10 @@ interface BatteryLike extends EventTarget {
 
 export default function DrawWhenNeeded() {
     const invalidate = useThree((s) => s.invalidate);
+    const gl = useThree((s) => s.gl);
     const queryClient = useQueryClient();
     const state = useRef(createDrawState());
+    const shadows = useRef(createShadowState());
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Every request goes through here: extend the wake window and draw.
@@ -47,14 +57,19 @@ export default function DrawWhenNeeded() {
             wake(state.current, performance.now(), ms);
             invalidate();
         };
+        // A change to what casts or lights also redraws the shadow map.
+        const kickLit = (ms: number) => {
+            refreshShadows(shadows.current, performance.now(), ms);
+            kick(ms);
+        };
         const unregister = registerDrawWaker(kick);
-        kick(WAKE.scene);
+        kickLit(WAKE.scene);
 
         const unsubscribe = [
-            useView3dSceneStore.subscribe(() => kick(WAKE.scene)),
+            useView3dSceneStore.subscribe(() => kickLit(WAKE.scene)),
             useCameraStore.subscribe(() => kick(WAKE.camera)),
-            useView3dSyncStore.subscribe(() => kick(WAKE.sync)),
-            queryClient.getQueryCache().subscribe(() => kick(WAKE.data)),
+            useView3dSyncStore.subscribe(() => kickLit(WAKE.sync)),
+            queryClient.getQueryCache().subscribe(() => kickLit(WAKE.data)),
         ];
         const onWindow = () => kick(WAKE.window);
         window.addEventListener("resize", onWindow);
@@ -98,12 +113,16 @@ export default function DrawWhenNeeded() {
         };
     }, []);
 
-    // After each frame: draw again now, after the frame cap, or sleep.
+    // Before each render: decide whether the shadow map redraws. Then draw
+    // again now, after the frame cap, or sleep.
     useFrame(() => {
         const now = performance.now();
         noteFrame(state.current, now);
         const scene = useView3dSceneStore.getState();
         const clock = useView3dSyncStore.getState().clock;
+        gl.shadowMap.autoUpdate = false;
+        if (clock?.playing || shadowsNeedUpdate(shadows.current, now))
+            gl.shadowMap.needsUpdate = true;
         const delay = nextFrameDelay(state.current, now, {
             moving: !!clock?.playing,
             onBattery: scene.onBattery,

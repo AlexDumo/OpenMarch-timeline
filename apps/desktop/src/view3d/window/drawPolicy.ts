@@ -73,6 +73,35 @@ export function nextFrameDelay(
     return wait > 0 ? wait : 0;
 }
 
+/**
+ * Shadows: the sun's shadow camera is fixed on the field, so a camera move
+ * never changes the shadow map. It is redrawn only for a while after a
+ * change to what casts or lights (kit, lighting, quality, a show edit or a
+ * clock change) and while the show plays, instead of every frame.
+ */
+export const SHADOW_REFRESH_MS = 4000;
+
+export interface ShadowState {
+    /** Redraw the shadow map on frames before this time (ms). */
+    refreshUntil: number;
+}
+
+export function createShadowState(): ShadowState {
+    return { refreshUntil: 0 };
+}
+
+export function refreshShadows(
+    state: ShadowState,
+    now: number,
+    ms: number,
+): void {
+    state.refreshUntil = Math.max(state.refreshUntil, now + ms);
+}
+
+export function shadowsNeedUpdate(state: ShadowState, now: number): boolean {
+    return now < state.refreshUntil;
+}
+
 export function parsePowerPrefs(value: unknown): PowerPrefs {
     if (typeof value !== "string") return { ...DEFAULT_POWER_PREFS };
     try {
