@@ -1,9 +1,14 @@
 import { asc, eq } from "drizzle-orm";
+import { generatePageNames } from "@openmarch/core";
 import * as schema from "@om-electron/database/migrations/schema";
-import { isTimelineModeEnabled } from "@/settings/workspaceSettings";
+import {
+    isTimelineModeEnabled,
+    workspaceSettingsSchema,
+} from "@/settings/workspaceSettings";
 import { DbTransaction } from "./types";
 import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
 import { deleteTimelineTransitionsInTransaction } from "./timelineTransitions";
+import { moveInSentence } from "@/timeline/timelineRangeWords";
 
 /**
  * Page and beat ripple (docs/timeline/phases/07-page-parity.md P7.4, P7.5).
@@ -83,6 +88,8 @@ export interface GridPage {
     id: number;
     start: number;
     end: number;
+    /** The page's name ("2", "2A"), for refusals; absent where only the range matters */
+    name?: string;
 }
 
 /** Where every beat and page sits, by ordinal. */
@@ -108,7 +115,11 @@ export async function readPageGrid(tx: DbTransaction): Promise<PageGrid> {
     const beatIds = beats.map((b) => b.id);
     const ordinal = new Map(beatIds.map((id, i) => [id, i]));
     const pageRows = await tx
-        .select({ id: schema.pages.id, start_beat: schema.pages.start_beat })
+        .select({
+            id: schema.pages.id,
+            start_beat: schema.pages.start_beat,
+            is_subset: schema.pages.is_subset,
+        })
         .from(schema.pages)
         .all();
     const utility = await tx
@@ -118,17 +129,29 @@ export async function readPageGrid(tx: DbTransaction): Promise<PageGrid> {
     const lastPageCounts = utility?.lastPageCounts ?? DEFAULT_LAST_PAGE_COUNTS;
     const placed = pageRows
         .filter((p) => ordinal.has(p.start_beat))
-        .map((p) => ({ id: p.id, start: ordinal.get(p.start_beat)! }))
+        .map((p) => ({
+            id: p.id,
+            start: ordinal.get(p.start_beat)!,
+            isSubset: p.is_subset,
+        }))
         .sort((a, b) => a.start - b.start);
+    // Named as `fromDatabasePages` names them, in show order
+    const names = generatePageNames(
+        placed.map((p) => !!p.isSubset),
+        await pageNumberOffsetInTransaction(tx),
+    );
     const n = beatIds.length;
     const pages = placed.map((p, i): GridPage => {
         const next = placed[i + 1];
-        if (p.id === 0) return { id: p.id, start: p.start, end: p.start + 1 };
+        const name = names[i]!;
+        if (p.id === 0)
+            return { id: p.id, start: p.start, end: p.start + 1, name };
         const last = next ? next.start : Math.min(p.start + lastPageCounts, n);
         return {
             id: p.id,
             start: p.start,
             end: last > p.start ? last : p.start + 1,
+            name,
         };
     });
     return { beatIds, pages };
@@ -142,6 +165,23 @@ const sameGrid = (a: PageGrid, b: PageGrid) =>
         const q = b.pages[i]!;
         return p.id === q.id && p.start === q.start && p.end === q.end;
     });
+
+/** The file's first page number (`pageNumberOffset`), read inside `tx` from `workspace_settings`. */
+export async function pageNumberOffsetInTransaction(
+    tx: DbTransaction,
+): Promise<number> {
+    const row = await tx
+        .select({ json: schema.workspace_settings.json_data })
+        .from(schema.workspace_settings)
+        .get();
+    if (!row) return 0;
+    try {
+        const parsed = workspaceSettingsSchema.safeParse(JSON.parse(row.json));
+        return parsed.success ? parsed.data.pageNumberOffset : 0;
+    } catch {
+        return 0;
+    }
+}
 
 /** Whether the file's timeline flag is on, read inside `tx` from `workspace_settings`. */
 export async function timelineModeInTransaction(
@@ -250,9 +290,6 @@ export class GridEdgeMap {
 
 type Range = [number, number];
 
-const describe = (r: { start_beat: number; end_beat: number }) =>
-    `[${r.start_beat}, ${r.end_beat})`;
-
 const union = (a: Range, b: Range): Range => [
     Math.min(a[0], b[0]),
     Math.max(a[1], b[1]),
@@ -263,10 +300,10 @@ const sameRange = (a: Range, b: Range) => a[0] === b[0] && a[1] === b[1];
 const checkBeats = (r: Range, what: string) => {
     if (r[0] >= r[1])
         refuse(
-            `this change would leave ${what} with no beats; delete or shorten it first`,
+            `this change would leave ${what} with no counts; delete or shorten it first`,
         );
     if (r[0] < 0 || r[1] > MAX_BEAT)
-        refuse(`this change would move ${what} outside beats 0 to ${MAX_BEAT}`);
+        refuse(`this change would move ${what} outside the show`);
 };
 
 /**
@@ -299,9 +336,11 @@ export interface RippleRows {
     timelines: (typeof schema.timelines.$inferSelect)[];
     transitions: (typeof schema.timeline_transitions.$inferSelect)[];
     assignments: (typeof schema.timeline_assignments.$inferSelect)[];
+    /** Each marcher's drill number ("T3") by id, for refusals; the id where absent */
+    marcherLabels?: ReadonlyMap<number, string>;
 }
 
-/** Reads every timeline, transition and assignment row (`RippleRows`). */
+/** Reads every timeline, transition and assignment row, and the marchers' labels (`RippleRows`). */
 export async function readRippleRows(tx: DbTransaction): Promise<RippleRows> {
     const timelines = await tx.select().from(schema.timelines).all();
     const transitions = await tx
@@ -312,7 +351,18 @@ export async function readRippleRows(tx: DbTransaction): Promise<RippleRows> {
         .select()
         .from(schema.timeline_assignments)
         .all();
-    return { timelines, transitions, assignments };
+    const marchers = await tx
+        .select({
+            id: schema.marchers.id,
+            prefix: schema.marchers.drill_prefix,
+            order: schema.marchers.drill_order,
+        })
+        .from(schema.marchers)
+        .all();
+    const marcherLabels = new Map(
+        marchers.map((m) => [m.id, `${m.prefix}${m.order}`]),
+    );
+    return { timelines, transitions, assignments, marcherLabels };
 }
 
 /**
@@ -325,7 +375,7 @@ export async function readRippleRows(tx: DbTransaction): Promise<RippleRows> {
 export function planTimelineRipple(
     before: PageGrid,
     after: PageGrid,
-    { timelines, transitions, assignments }: RippleRows,
+    { timelines, transitions, assignments, marcherLabels }: RippleRows,
 ) {
     const map = new GridEdgeMap(before, after);
 
@@ -349,14 +399,24 @@ export function planTimelineRipple(
             )
             .map((t) => t.id),
     );
-    const timelineName = new Map(
-        timelines.map((l) => [
-            l.id,
-            l.name ? `timeline "${l.name}"` : `timeline ${l.id}`,
-        ]),
-    );
-    const moveName = (t: (typeof transitions)[number]) =>
-        `the move over beats ${describe(t)} in ${timelineName.get(t.timeline_id)}`;
+    // Refusals name moves and marchers as the timeline shows them, in pages and counts before
+    // the change (`moveInSentence`, UI-14), never beats
+    const boxes = before.pages.slice(1);
+    const moves = timelines.map((l) => ({
+        id: l.id,
+        start: l.start_beat,
+        end: l.end_beat,
+        name: l.name,
+    }));
+    const moveName = (r: { start_beat: number; end_beat: number }) =>
+        moveInSentence({ start: r.start_beat, end: r.end_beat }, boxes, moves);
+    const marcherName = (id: number) =>
+        `marcher ${marcherLabels?.get(id) ?? id}`;
+    const transitionOf = new Map(transitions.map((t) => [t.id, t]));
+    const partName = (a: (typeof assignments)[number]) => {
+        const t = transitionOf.get(a.transition_id);
+        return `${marcherName(a.marcher_id)}'s part of ${t ? moveName(t) : "a move"}`;
+    };
 
     // A timeline whose transitions all go is deleted with them (C-11), so it isn't rippled
     const emptied = new Set(
@@ -389,24 +449,17 @@ export function planTimelineRipple(
         newTransition.set(t.id, r);
     }
     // Checked after the transitions, so a refusal names the move rather than its timeline
-    for (const l of rippled)
-        checkBeats(
-            newTimeline.get(l.id)!,
-            `${timelineName.get(l.id)} (beats ${describe(l)})`,
-        );
+    for (const l of rippled) checkBeats(newTimeline.get(l.id)!, moveName(l));
     const kept = assignments.filter((a) => !removed.has(a.transition_id));
     const newAssignment = new Map<number, Range>();
     for (const a of kept) {
         const r = map.range(a.start_beat, a.end_beat);
-        checkBeats(
-            r,
-            `marcher ${a.marcher_id}'s part over beats ${describe(a)}`,
-        );
+        checkBeats(r, partName(a));
         const t = newTransition.get(a.transition_id)!;
         if (r[0] < t[0] || r[1] > t[1])
             throw new TimelineWriteError(
                 "E-A1",
-                `this change would move marcher ${a.marcher_id}'s part over beats ${describe(a)} outside its move`,
+                `this change would move ${partName(a)} outside that move`,
             );
         newAssignment.set(a.id, r);
     }
@@ -436,7 +489,7 @@ export function planTimelineRipple(
             if (prev[1] > cur[0])
                 throw new TimelineWriteError(
                     "E-A3",
-                    `this change would overlap marcher ${chain[i]!.marcher_id}'s parts over beats ${describe(chain[i - 1]!)} and ${describe(chain[i]!)}`,
+                    `this change would overlap ${partName(chain[i - 1]!)} and its part of ${moveName(transitionOf.get(chain[i]!.transition_id)!)}`,
                 );
         }
     }
