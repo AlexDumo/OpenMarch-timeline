@@ -271,12 +271,13 @@ const checkBeats = (r: Range, what: string) => {
 
 /**
  * A page move of `page`, which goes when the page goes: a shapeless transition whose assignments
- * are all at layer 0 and cover the whole transition, that ends at the page's flag or lies entirely
- * inside its box. That is what the converter writes for a page and what a drag over a page writes
- * where the marcher has no move yet (stored files may also hold such moves from older builds'
- * holds for added pages). After flag deletes merge pages, the merged box holds several of them,
- * and they all go. Any other transition (a track the user made) stays, and the edit is refused if
- * it would lose its beats.
+ * are all at layer 0 and cover the whole transition, that lies entirely inside the page's box.
+ * That is what the converter writes for a page and what a drag over a page writes where the
+ * marcher has no move yet (stored files may also hold such moves from older builds' holds for
+ * added pages). After flag deletes merge pages, the merged box holds several of them, and they all
+ * go. Any other transition stays, and the edit is refused if it would lose its beats: a track the
+ * user made, and a window move that starts before the box, even one ending at the page's flag
+ * (owner decision V-149: Delete page and its moves keeps longer moves).
  */
 const isPageMove = (
     t: { start_beat: number; end_beat: number; dest_shape_id: number | null },
@@ -284,8 +285,8 @@ const isPageMove = (
     page: GridPage,
 ) =>
     t.dest_shape_id === null &&
+    t.start_beat >= page.start &&
     t.end_beat <= page.end &&
-    (t.end_beat === page.end || t.start_beat >= page.start) &&
     rows.every(
         (a) =>
             a.layer === 0 &&

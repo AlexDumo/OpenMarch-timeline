@@ -117,36 +117,30 @@ describeDbTests(
             return { a: a!, b: b! };
         };
 
-        it("FINDING: Delete page and its moves on page 2 deletes the user's window move over pages 1-2", async ({
+        it("Delete page and its moves on page 2 keeps the user's window move over pages 1-2 (V-149)", async ({
             db,
             marchersAndPages: _,
         }) => {
             const { a } = await windowOverPages1And2(db);
-            const home = (await resolverOf(db)).positionAt(a, 0);
-            expect((await resolverOf(db)).positionAt(a, 25)).toEqual([
-                300, 200,
-            ]);
 
             const result = await deletePagesWithMoves({
                 db,
                 pageIds: new Set([2]),
             });
 
-            // `isPageMove` matches it (shapeless, layer 0, the marcher's only row, and it ends at
-            // page 2's flag), so it goes with page 2 although it also covered page 1
-            expect(await rowsOf(db, a)).toEqual([]);
-            expect(await timelineRanges(db)).toEqual([]);
+            // It starts before page 2's box, so it isn't page 2's move: it stays, and still ends at
+            // beat 17, now page 1's flag
+            expect(await rowsOf(db, a)).toEqual([[1, 17, 0]]);
+            expect(await timelineRanges(db)).toEqual([[1, 17]]);
             const after = await resolverOf(db);
-            expect(after.positionAt(a, 17)).toEqual(home);
-            expect(after.positionAt(a, 49)).toEqual(home);
-            // The toast reports page 1 (halfway along the move at its own flag before, at home
-            // now) and every later page as changed
-            expect(result.changedPages.map((p) => p.id)).toEqual([
-                1, 3, 4, 5, 6,
-            ]);
+            for (const beat of [17, 25, 49])
+                expect(after.positionAt(a, beat)).toEqual([300, 200]);
+            // Page 1's flag (9 before, 17 now) went from partway along the move to its end; later
+            // pages keep their look
+            expect(result.changedPages.map((p) => p.id)).toEqual([1]);
         });
 
-        it("FINDING: a window over pages 1-3 goes when page 3 is deleted with its moves", async ({
+        it("a window over pages 1-3 stays when page 3 is deleted with its moves", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -161,7 +155,35 @@ describeDbTests(
 
             await deletePagesWithMoves({ db, pageIds: new Set([3]) });
 
-            expect(await rowsOf(db, a!)).toEqual([]);
+            expect(await rowsOf(db, a!)).toEqual([[1, 25, 0]]);
+            expect((await resolverOf(db)).positionAt(a!, 49)).toEqual([
+                300, 200,
+            ]);
+        });
+
+        it("a move inside the deleted page's box still goes with it, next to a kept window", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await madeInTimelineMode(db);
+            const [a, b] = await marcherIds(db);
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "range", start: 1, end: 17 },
+                moves: [{ marcherId: a!, x: 300, y: 200 }],
+            });
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "range", start: 9, end: 17 },
+                moves: [{ marcherId: b!, x: 50, y: 50 }],
+            });
+            const homeB = (await resolverOf(db)).positionAt(b!, 0);
+
+            await deletePagesWithMoves({ db, pageIds: new Set([2]) });
+
+            expect(await rowsOf(db, a!)).toEqual([[1, 17, 0]]);
+            expect(await rowsOf(db, b!)).toEqual([]);
+            expect((await resolverOf(db)).positionAt(b!, 25)).toEqual(homeB);
         });
 
         it("deleting a page inside the window (not at its end) keeps the move, which ends a page earlier", async ({
@@ -275,7 +297,8 @@ describeDbTests(
         const toastUndo = (db: DbConnection) =>
             performHistoryAction("undo", db);
 
-        it("FINDING: after another edit, Undo takes back that edit, not the delete", async ({
+        // Why the toast closes on the next history change (usePageFlags `toastDeleteWithMoves`)
+        it("after another edit, the app's undo takes back that edit, not the delete", async ({
             db,
             marchersAndPages: _,
         }) => {
