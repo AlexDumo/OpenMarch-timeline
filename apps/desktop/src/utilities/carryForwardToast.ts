@@ -14,6 +14,7 @@ import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSetti
 import { conToastError } from "./utils";
 import {
     EDIT_SURPRISE_TOAST_ID,
+    EDIT_SURPRISE_TOAST_RESET,
     MOVE_THEM_TOO_TOAST_MS,
     accumulateShifts,
     editHistoryMark,
@@ -145,6 +146,7 @@ export async function toastCarryForward(
     }));
     if (kept.length === 0) {
         toast.message(followed.message, {
+            ...EDIT_SURPRISE_TOAST_RESET,
             id: EDIT_SURPRISE_TOAST_ID,
             duration: 10000,
             action: onlyEdited,

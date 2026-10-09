@@ -17,6 +17,7 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import {
     EDIT_SURPRISE_TOAST_ID,
+    EDIT_SURPRISE_TOAST_RESET,
     MOVE_THEM_TOO_TOAST_MS,
     accumulateShifts,
     editHistoryMark,
@@ -227,6 +228,7 @@ export async function toastLaterOwnMoves(
     if (kept.length === 0) return;
     const { message, actionLabel } = moveThemTooMessage(kept);
     toast.info(message, {
+        ...EDIT_SURPRISE_TOAST_RESET,
         id: EDIT_SURPRISE_TOAST_ID,
         duration: MOVE_THEM_TOO_TOAST_MS,
         action: {

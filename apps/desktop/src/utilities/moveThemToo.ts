@@ -22,6 +22,17 @@ import { subscribeHistoryChanges } from "@/db-functions/history";
  */
 export const EDIT_SURPRISE_TOAST_ID = "timeline-edit";
 
+/**
+ * Sonner merges a toast into every earlier one with its id, even one long closed, so an edit
+ * surprise toast with one button would keep an earlier one's second button (Only Page N) and close
+ * handlers. Spread this first in each one's options.
+ */
+export const EDIT_SURPRISE_TOAST_RESET = {
+    cancel: undefined,
+    onDismiss: undefined,
+    onAutoClose: undefined,
+} as const;
+
 /** How long the toast stays: it has an action */
 export const MOVE_THEM_TOO_TOAST_MS = 10000;
 

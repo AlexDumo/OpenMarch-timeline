@@ -12,6 +12,7 @@ import {
     useTimelineSelectionStore,
     type PageBox,
 } from "@/stores/TimelineSelectionStore";
+import { EDIT_SURPRISE_TOAST_RESET } from "@/utilities/moveThemToo";
 import { toastTimelineError } from "./timelineErrorMessages";
 
 /**
@@ -203,6 +204,7 @@ export function toastPassThrough(
     const boxes = useTimelineSelectionStore.getState().pageBoxes;
     const flag = narrowingFlag(pass.range, boxes);
     toast.info(passThroughMessage(pass, boxes), {
+        ...EDIT_SURPRISE_TOAST_RESET,
         id: PASS_THROUGH_TOAST_ID,
         duration: flag !== null ? 10000 : 6000,
         action:
