@@ -22,7 +22,6 @@ import type { KeptPageBox } from "./timelineKept";
 import {
     followingPages,
     pageKeepStates,
-    pagesText,
     type KeepPage,
     type KeepTranslate,
 } from "./timelineKeepLater";
@@ -200,6 +199,56 @@ const isOnlyRun = (v: unknown): v is OnlyRun =>
     typeof v === "object" && v !== null && (v as OnlyRun).kind === "only-page";
 
 /**
+ * Shows the toast for `found`, whose action keeps the followers on the next page box at their
+ * spots in `positions` (from before the run's first edit).
+ *
+ * @returns the toast's id
+ */
+function showOnlyThisPageToast({
+    database,
+    found,
+    positions,
+    forget,
+}: {
+    database: DbConnection;
+    found: FollowedAfterEdit;
+    positions: ReadonlyMap<number, XY>;
+    forget: () => void;
+}): string {
+    const at = new Map<number, XY>();
+    for (const id of found.marcherIds) {
+        const spot = positions.get(id);
+        if (spot) at.set(id, spot);
+    }
+    const { message, actionLabel } = onlyThisPageMessage(
+        found.pages,
+        found.editedName,
+    );
+    const id = editSurpriseToastId();
+    toast.info(message, {
+        id,
+        duration: MOVE_THEM_TOO_TOAST_MS,
+        action: {
+            label: actionLabel,
+            onClick: () => {
+                forget();
+                keepMarchersOnPage({
+                    db: database,
+                    pageBox: found.next,
+                    marcherIds: found.marcherIds,
+                    at,
+                }).catch((e: unknown) =>
+                    toastTimelineError(e, "Error keeping the later pages"),
+                );
+            },
+        },
+        onDismiss: forget,
+        onAutoClose: forget,
+    });
+    return id;
+}
+
+/**
  * Once the edit has reached the resolver, shows the **Only Page N** toast when it carried into
  * later pages for some of the `owned` marchers it moved (`followedAfterEdit`). Errors reading
  * the kept spots are logged: the edit itself has committed.
@@ -257,36 +306,11 @@ export async function offerOnlyThisPage({
         run.shown(run.value.toastId);
         return true;
     }
-    const at = new Map<number, XY>();
-    for (const id of found.marcherIds) {
-        const spot = run.value.positions.get(id);
-        if (spot) at.set(id, spot);
-    }
-    const { message, actionLabel } = onlyThisPageMessage(
-        found.pages,
-        found.editedName,
-    );
-    const id = editSurpriseToastId();
-    const forget = () => run.forget();
-    toast.info(message, {
-        id,
-        duration: MOVE_THEM_TOO_TOAST_MS,
-        action: {
-            label: actionLabel,
-            onClick: () => {
-                forget();
-                keepMarchersOnPage({
-                    db: database,
-                    pageBox: found.next,
-                    marcherIds: found.marcherIds,
-                    at,
-                }).catch((e: unknown) =>
-                    toastTimelineError(e, "Error keeping the later pages"),
-                );
-            },
-        },
-        onDismiss: forget,
-        onAutoClose: forget,
+    const id = showOnlyThisPageToast({
+        database,
+        found,
+        positions: run.value.positions,
+        forget: () => run.forget(),
     });
     run.value.toastId = id;
     run.shown(id);
