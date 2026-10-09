@@ -983,17 +983,24 @@ export const moveMarchersInTarget = async ({
     target,
     moves,
     clearOwn = false,
+    onStart,
 }: {
     db: DbConnection;
     target: TimelineEditTarget;
     moves: readonly TimelineMarcherMove[];
     /** Range moves only: delete the marchers' own moves over the page box (set to previous page) */
     clearOwn?: boolean;
+    /**
+     * Called inside the edit before it writes, when every earlier write has reached the resolver,
+     * so it can read the positions the edit starts from (**Move them too**)
+     */
+    onStart?: () => void;
 }): Promise<TimelineMoveResult> => {
     if (moves.length === 0)
         return { homes: [], slots: [], convertedTransitionIds: [] };
     try {
         return await transactionWithHistory(db, "moveMarchers", async (tx) => {
+            onStart?.();
             if (target.kind === "timeline")
                 return await moveMarchersInTimelineInTransaction({
                     tx,
@@ -1030,6 +1037,110 @@ export const moveMarchersInTarget = async ({
         });
     } catch (e) {
         if (e instanceof NothingWritten) return e.result;
+        throw e;
+    }
+};
+
+/** One marcher's later move that **Move them too** shifts: the slot it arrives in, and by how much. */
+export interface SlotShift {
+    marcherId: number;
+    transitionId: number;
+    slotIndex: number;
+    dx: number;
+    dy: number;
+}
+
+/** The transitions among `transitionIds` whose destination is a shape. */
+export const shapeBackedTransitionIds = async ({
+    db,
+    transitionIds,
+}: {
+    db: DbConnection;
+    transitionIds: readonly number[];
+}): Promise<Set<number>> => {
+    if (transitionIds.length === 0) return new Set();
+    const t = schema.timeline_transitions;
+    const rows = await db
+        .select({ id: t.id, shapeId: t.dest_shape_id })
+        .from(t)
+        .where(inArray(t.id, [...new Set(transitionIds)]))
+        .all();
+    return new Set(rows.filter((r) => r.shapeId !== null).map((r) => r.id));
+};
+
+class NothingShifted extends Error {
+    constructor() {
+        super("nothing to shift");
+    }
+}
+
+/**
+ * **Move them too** (timeline mode, defined-coordinates 09): moves each slot's destination by its
+ * offset, as one undoable edit. Shape-backed transitions are skipped (their slots have no point of
+ * their own), as are slots that are gone. Later pages that hold from the moved destinations follow.
+ *
+ * @returns the shifts written (empty, with no edit, when none could be)
+ */
+export const shiftSlotDestinations = async ({
+    db,
+    shifts,
+}: {
+    db: DbConnection;
+    shifts: readonly SlotShift[];
+}): Promise<SlotShift[]> => {
+    if (shifts.length === 0) return [];
+    try {
+        return await transactionWithHistory(
+            db,
+            "shiftSlotDestinations",
+            async (tx) => {
+                const t = schema.timeline_transitions;
+                const d = schema.timeline_slot_destinations;
+                const shapeless = new Set(
+                    (
+                        await tx
+                            .select({ id: t.id, shapeId: t.dest_shape_id })
+                            .from(t)
+                            .where(
+                                inArray(
+                                    t.id,
+                                    shifts.map((s) => s.transitionId),
+                                ),
+                            )
+                            .all()
+                    )
+                        .filter((r) => r.shapeId === null)
+                        .map((r) => r.id),
+                );
+                const written: SlotShift[] = [];
+                for (const shift of shifts) {
+                    if (!shapeless.has(shift.transitionId)) continue;
+                    const point = await tx
+                        .select({ x: d.x, y: d.y })
+                        .from(d)
+                        .where(
+                            and(
+                                eq(d.transition_id, shift.transitionId),
+                                eq(d.slot_index, shift.slotIndex),
+                            ),
+                        )
+                        .get();
+                    if (!point) continue;
+                    await updateTimelineSlotDestinationInTransaction({
+                        tx,
+                        transitionId: shift.transitionId,
+                        slotIndex: shift.slotIndex,
+                        point: [point.x + shift.dx, point.y + shift.dy],
+                    });
+                    written.push(shift);
+                }
+                // An edit that writes nothing can't be an undo step
+                if (written.length === 0) throw new NothingShifted();
+                return written;
+            },
+        );
+    } catch (e) {
+        if (e instanceof NothingShifted) return [];
         throw e;
     }
 };

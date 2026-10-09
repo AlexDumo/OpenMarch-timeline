@@ -24,7 +24,7 @@ import { conToastError } from "@/utilities/utils";
 import { DEFAULT_STALE_TIME } from "./constants";
 import tolgee from "@/global/singletons/Tolgee";
 import { toast } from "sonner";
-import { toastPassThrough } from "@/timeline/timelinePassThrough";
+import { moveMarchersAndOfferFollowUp } from "@/timeline/timelineMoveThemToo";
 import { db, schema } from "@/global/database/db";
 import { invalidateAfterMarcherPagesWrite } from "./sharedInvalidators";
 import { toastCarryForward } from "@/utilities/carryForwardToast";
@@ -36,7 +36,6 @@ import { FieldProperties } from "@openmarch/core";
 import { fieldPropertiesQueryOptions } from "./useFieldProperties";
 import { appearanceModelRawToParsed } from "@/entity-components/appearance";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
-import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
 import {
     transformMarchersInSelection,
     type TimelineEditRequest,
@@ -163,7 +162,8 @@ export const updateMarcherPagesMutationOptions = (queryClient: QueryClient) => {
  * through `moveMarchersInTarget` over the page's box, clearing the marchers' own moves there for
  * set to previous page. The resolver store picks the change up from the change log, so there is
  * nothing to invalidate. A refused move shows its friendly message (P8.6); one that passed through
- * page flags or other moves says so (`toastPassThrough`).
+ * page flags or other moves says so, and one that left later own moves behind offers **Move them
+ * too** (`moveMarchersAndOfferFollowUp`).
  */
 export const moveMarchersToNeighborPageMutationOptions = () => {
     return mutationOptions({
@@ -172,10 +172,7 @@ export const moveMarchersToNeighborPageMutationOptions = () => {
             moves,
             clearOwn,
         }: TimelineNeighborPageRequest) =>
-            moveMarchersInTarget({ db, target, moves, clearOwn }),
-        onSuccess: (result) => {
-            toastPassThrough(result);
-        },
+            moveMarchersAndOfferFollowUp({ target, moves, clearOwn }),
         onError: (e, variables) => {
             toastTimelineError(e, `Error moving marchers`, variables);
         },
@@ -185,17 +182,15 @@ export const moveMarchersToNeighborPageMutationOptions = () => {
 /**
  * Timeline mode's write for a canvas move (UI-9 Editing, P8.15): one undoable edit through
  * `moveMarchersInTarget`, setting homes or the endings in the selected timeline. A refused move
- * shows its friendly message; a move that passed through page flags says so
- * (`toastPassThrough`).
+ * shows its friendly message; a move that passed through page flags says so, and one that left
+ * later own moves behind offers **Move them too** (`moveMarchersAndOfferFollowUp`).
  */
 export const moveMarchersInTargetMutationOptions = () => {
     return mutationOptions({
+        // A drag over a window that crosses pages says what it passed through (UI-10), and one
+        // that left marchers' later moves behind offers to move them too
         mutationFn: ({ target, moves }: TimelineEditRequest) =>
-            moveMarchersInTarget({ db, target, moves }),
-        // A drag over a window that crosses pages says what it passed through (UI-10)
-        onSuccess: (result) => {
-            toastPassThrough(result);
-        },
+            moveMarchersAndOfferFollowUp({ target, moves }),
         onError: (e, variables) => {
             toastTimelineError(e, `Error moving marchers`, variables);
         },
