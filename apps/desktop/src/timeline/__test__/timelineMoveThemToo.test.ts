@@ -318,7 +318,7 @@ describeDbTests("timeline mode: Move them too", (it) => {
         expect(info).not.toHaveBeenCalled();
     });
 
-    it("an edit of marchers whose next page holds offers nothing", async ({
+    it("an edit of marchers whose next page holds offers no Move them too, only Only Page N (UI-18 keep later pages)", async ({
         db,
     }) => {
         const { pages, marchers } = await studyShow(db);
@@ -330,7 +330,9 @@ describeDbTests("timeline mode: Move them too", (it) => {
         });
         await timelineResolverSettled();
         await new Promise((r) => setTimeout(r, 200));
-        expect(info).not.toHaveBeenCalled();
+        expect(info.mock.calls.map((c) => c[0])).toEqual([
+            `Pages ${pages[2]!.name}–${pages[3]!.name} followed`,
+        ]);
     });
 
     it("with a window passing a flag that also splits them, only the pass-through toast shows (Keep as a stop stays reachable)", async ({
@@ -372,7 +374,7 @@ describeDbTests("timeline mode: Move them too", (it) => {
         });
     });
 
-    it("a fully held show: shortening page 1 for everyone offers nothing", async ({
+    it("a fully held show: shortening page 1 for everyone offers no Move them too, only Only Page N (UI-18 keep later pages)", async ({
         db,
     }) => {
         const { pages, marchers } = await studyShow(db, { stepOut: false });
@@ -386,7 +388,9 @@ describeDbTests("timeline mode: Move them too", (it) => {
         await new Promise((r) => setTimeout(r, 200));
         // Everyone followed
         expect(at(marchers[0]!, pages[3]!)).toEqual([100, 250]);
-        expect(info).not.toHaveBeenCalled();
+        expect(info.mock.calls.map((c) => c[0])).toEqual([
+            `Pages ${pages[2]!.name}–${pages[3]!.name} followed`,
+        ]);
     });
 
     it("a fully written show (every marcher moves on every page): an ordinary drag and a nudge on page 2 offer nothing", async ({
