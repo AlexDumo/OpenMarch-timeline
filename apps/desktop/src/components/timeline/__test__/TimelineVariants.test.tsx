@@ -88,6 +88,57 @@ describe("timeline views", () => {
         });
     });
 
+    it("Shift+click on a page box extends the window over every page to it (UI-17 follow-up)", () => {
+        const onSelectionChange = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                selection={{
+                    kind: "range",
+                    range: { startBeatIndex: 8, endBeatIndex: 16 },
+                }}
+                onSelectionChange={onSelectionChange}
+            />,
+        );
+        // A plain click selects page 2A alone, which says where it ends
+        fireEvent.click(screen.getByRole("button", { name: "Page 2A" }));
+        const page2a = onSelectionChange.mock.lastCall![0].range;
+        expect(page2a.startBeatIndex).toBe(16);
+        fireEvent.click(screen.getByRole("button", { name: "Page 2A" }), {
+            shiftKey: true,
+        });
+        expect(onSelectionChange).toHaveBeenLastCalledWith({
+            kind: "range",
+            range: { startBeatIndex: 8, endBeatIndex: page2a.endBeatIndex },
+        });
+    });
+
+    it("gives a pinned loop's end its own grip, only while it loops (UI-17 follow-up)", () => {
+        const range = { startBeatIndex: 8, endBeatIndex: 16 };
+        const { rerender } = render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                selection={{ kind: "range", range }}
+                onSelectionChange={vi.fn()}
+            />,
+        );
+        expect(screen.queryByTestId("timeline-loop-end")).toBeNull();
+        rerender(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                selection={{ kind: "range", range, fromStart: true }}
+                onSelectionChange={vi.fn()}
+            />,
+        );
+        expect(screen.getByTestId("timeline-loop-end")).toHaveAttribute(
+            "title",
+            "Drag to change where the loop ends",
+        );
+    });
+
     it("presses the initial box for home", () => {
         render(
             <ExpandedTimeline

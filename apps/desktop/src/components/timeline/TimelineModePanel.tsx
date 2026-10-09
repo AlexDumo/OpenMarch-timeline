@@ -257,10 +257,20 @@ export default function TimelineModePanel() {
         const store = useTimelineSelectionStore.getState();
         if (next?.kind === "home") store.selectHome();
         else if (next?.kind === "range") {
-            store.selectRange(
-                next.range.startBeatIndex,
-                next.range.endBeatIndex,
-            );
+            // UI-17 follow-up: a new window that keeps a pinned flag's beat only moves the
+            // playhead (the loop end's grip), so the pin stays
+            if (
+                store.startPinned &&
+                store.isolation === null &&
+                next.range.startBeatIndex === store.startBeat &&
+                !next.drawn
+            )
+                store.seek(next.range.endBeatIndex);
+            else
+                store.selectRange(
+                    next.range.startBeatIndex,
+                    next.range.endBeatIndex,
+                );
         } else store.selectNothing();
     };
 

@@ -275,13 +275,15 @@ export function toggleTimelinePlayback({
 }
 
 /**
- * **C** (UI-17): pins the start flag on the beat the timeline shows, or unpins it, as Logic's C
- * turns Cycle on and off. A pinned flag is what Play loops from. Does nothing in isolation, whose
- * flag is the isolated move's start.
+ * **C** (UI-17): pins the start flag where it stands, the start of the page being edited, or
+ * unpins it, as Logic's C turns Cycle on and off and editors' Mark Clip marks the clip under the
+ * playhead. A pinned flag is what Play loops from. Does nothing in isolation, whose flag is the
+ * isolated move's start. (A simulated-user A/B test, 2026-10-09: all four expected the page's
+ * start; on the playhead, the page's end, read as "this loops the next page".)
  */
 export function toggleTimelineStartPin(): void {
     const state = useTimelineSelectionStore.getState();
     if (state.isolation) return;
     if (state.startPinned) state.unpinStart();
-    else state.pinStartAt(displayedBeat(state));
+    else state.pinStartAt(state.startBeat);
 }

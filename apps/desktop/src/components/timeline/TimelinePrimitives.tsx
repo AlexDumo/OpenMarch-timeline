@@ -240,7 +240,13 @@ export const TimelineTransport = memo(function TimelineTransport({
     const width = useElementWidth(rowRef);
     const folded = width > 0 && width < TRANSPORT_FOLD_PX;
     const tight = width > 0 && width < TRANSPORT_TIGHT_PX;
-    const readoutText = getPlayheadReadout(model, positionBeat);
+    // While playing, the count being marched: the beat the playhead is in lands on the next count,
+    // so a loop's first count reads as its own page's count 1, not the previous page's last
+    // (UI-17 follow-up; the paused playhead rests on a landed count)
+    const readoutText = getPlayheadReadout(
+        model,
+        isPlaying ? Math.min(positionBeat + 1, model.beatCount) : positionBeat,
+    );
     const mod = isMac() ? "⌘" : "Ctrl";
     const [goTo, setGoTo] = useState<string | null>(null);
     const [goToFailed, setGoToFailed] = useState(false);
@@ -911,14 +917,35 @@ export const TimelineRuler = memo(function TimelineRuler({
             : null;
     const countsTotal = countsAt?.total ?? null;
     const countsStart = countsAt?.startBeat ?? null;
-    const selectPage = useLatestCallback((page: TimelinePageMarker) => {
-        if (page.isInitial) {
-            onSelectionChange?.({ kind: "home" });
-            return;
-        }
-        const range = pageRanges.get(page.id) ?? null;
-        if (range) onSelectionChange?.({ kind: "range", range });
-    })!;
+    // Shift+click (UI-17 follow-up) extends the window over every page from the selected one to
+    // the clicked one, as Shift+click selects a run of clips; the start flag pins at the first
+    const selectPage = useLatestCallback(
+        (page: TimelinePageMarker, extend = false) => {
+            if (page.isInitial) {
+                onSelectionChange?.({ kind: "home" });
+                return;
+            }
+            const range = pageRanges.get(page.id) ?? null;
+            if (!range) return;
+            if (extend && selectedRange) {
+                onSelectionChange?.({
+                    kind: "range",
+                    range: {
+                        startBeatIndex: Math.min(
+                            selectedRange.startBeatIndex,
+                            range.startBeatIndex,
+                        ),
+                        endBeatIndex: Math.max(
+                            selectedRange.endBeatIndex,
+                            range.endBeatIndex,
+                        ),
+                    },
+                });
+                return;
+            }
+            onSelectionChange?.({ kind: "range", range });
+        },
+    )!;
     return (
         <>
             <TimelineRulerBoxes
@@ -983,7 +1010,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     pixelsPerBeat: number;
     initialPageWidth: number;
     scrub: RulerScrub;
-    onSelectPage: (page: TimelinePageMarker) => void;
+    onSelectPage: (page: TimelinePageMarker, extend?: boolean) => void;
 }) {
     const selectedIds = new Set(selectedBoxIds.split("\n"));
     return (
@@ -1050,7 +1077,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
     pixelsPerBeat: number;
     initialPageWidth: number;
     scrub: RulerScrub;
-    onSelectPage: (page: TimelinePageMarker) => void;
+    onSelectPage: (page: TimelinePageMarker, extend?: boolean) => void;
 }) {
     const boxWidth =
         (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
@@ -1065,7 +1092,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
             onClick={(event) => {
                 if (scrub.consumeClick(event)) return;
                 // macOS ctrl+click opens the context menu (UI-9: no selection change)
-                if (!event.ctrlKey) onSelectPage(page);
+                if (!event.ctrlKey) onSelectPage(page, event.shiftKey);
             }}
             className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
             style={{
@@ -2291,6 +2318,29 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     )}
                     style={{ left: startX, width: endX - startX }}
                 />
+            )}
+            {fromStart && onCommit && (
+                // UI-17 follow-up: the loop's end gets its own grip, a tab on the bar's right end
+                // in the ruler's top strip, above the page flag's grip (which would resize the
+                // page). Dragging it moves the window's end, snapping to page lines, and keeps the
+                // pin
+                <button
+                    type="button"
+                    data-timeline-interactive="true"
+                    data-testid="timeline-loop-end"
+                    aria-label="Loop end"
+                    title="Drag to change where the loop ends"
+                    {...flagHandlers("end", preview.endBeatIndex)}
+                    className="pointer-events-auto absolute top-0 z-[58] h-10 w-12 -translate-x-full touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize!"
+                    style={{ left: endX + 1 }}
+                >
+                    <span
+                        className={clsx(
+                            "absolute top-px right-0 h-8 w-6 rounded-r-sm",
+                            START_INK.bg,
+                        )}
+                    />
+                </button>
             )}
             <div className="pointer-events-none absolute inset-0">
                 {flag(

@@ -39,6 +39,13 @@ export function isolatedTimelineName(
     if (!first && lastBox && range.start >= lastBox.range!.end)
         return `After page ${lastBox.page.name}, counts ${range.start - lastBox.range!.end + 1}–${range.end - lastBox.range!.end}`;
     if (!first || !last) return `Beats ${range.start}–${range.end}`;
+    // Whole pages: "Pages 2–3" (UI-17 follow-up, plainer than counts from page to page)
+    if (
+        first !== last &&
+        first.range!.start === range.start &&
+        last.range!.end === range.end
+    )
+        return `Pages ${first.page.name}–${last.page.name}`;
     const from = range.start - first.range!.start + 1;
     const to = range.end - last.range!.start;
     // "count 3" for one count, not "counts 3–3" (UI-14 review)
@@ -105,11 +112,11 @@ export function isWholePageWindow(
     );
 }
 
-/** "page 3's set", "pages 3 and 4's sets", "pages 3, 4 and 5's sets" */
+/** "set 3", "sets 3 and 4", "sets 3, 4 and 5" (UI-17 follow-up: plainer than "page 3's set") */
 export const passedSets = (names: readonly string[]) =>
     names.length === 1
-        ? `page ${names[0]}'s set`
-        : `pages ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}'s sets`;
+        ? `set ${names[0]}`
+        : `sets ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
 /**
  * The line over the field (UI-12, replacing UI-11's From start badge): what a drag edits now, so
@@ -146,7 +153,7 @@ export function TimelineFromStartBadge() {
     const sentence =
         selection.kind === "none"
             ? ""
-            : `Editing ${name}${through.length ? `, passing through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${fromStartShown ? ". Space loops it" : ""}`;
+            : `Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${fromStartShown ? ". Space loops it" : ""}`;
     // Flash when it turns prominent for a new reason: a pin, or crossing flags
     const flashKey = `${fromStartShown}|${pinShown}|${through.join(",")}`;
     const [fresh, setFresh] = useState(false);
@@ -213,7 +220,7 @@ export function TimelineFromStartBadge() {
                         START_INK.strongText,
                     )}
                 >
-                    · passes through {passedSets(through)}
+                    · through {passedSets(through)}
                 </span>
             )}
             {pinShown && (

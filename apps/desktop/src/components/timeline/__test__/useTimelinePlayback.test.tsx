@@ -275,7 +275,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(store().playheadBeat).toBe(0);
     });
 
-    it("C pins the start flag at the displayed beat, and page navigation keeps it (UI-17)", async ({
+    it("C pins the start flag at the page's start, and page navigation keeps it (UI-17)", async ({
         db,
         wrapper,
     }) => {
@@ -290,20 +290,22 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(store().startPinned).toBe(false);
         expect(displayedBeat(store())).toBe(9);
+        // Page 1 is selected: the flag stands at its start (beat 1, show time 0, written as beat
+        // 0) and C pins it there
         act(() => {
             toggleTimelineStartPin();
         });
-        expect(store().startBeat).toBe(9);
+        expect(store().startBeat).toBe(0);
         expect(store().startPinned).toBe(true);
-        // A pinned flag stays: navigation seeks to the next flag (UI-17)
+        // A pinned flag stays: navigation seeks to the next flag, and the window grows (UI-17)
         act(() => {
             result.current.playback.onNavigate!("next-page");
         });
         expect(store().startPinned).toBe(true);
-        expect(store().startBeat).toBe(9);
+        expect(store().startBeat).toBe(0);
         expect(result.current.selection).toEqual({
             kind: "range",
-            start: 9,
+            start: 0,
             end: 17,
         });
         // Home unpins, as it always has (UI-12)
@@ -314,7 +316,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(result.current.selection).toEqual({ kind: "home" });
     });
 
-    it("C pins at the displayed beat, C again unpins, and C in isolation does nothing (UI-17)", async ({
+    it("C pins at the page's start, not the displayed beat; C again unpins; C in isolation does nothing (UI-17)", async ({
         db,
         wrapper,
     }) => {
@@ -331,13 +333,13 @@ describeDbTests("useTimelinePlayback", (it) => {
         act(() => {
             toggleTimelineStartPin();
         });
-        expect(store().startBeat).toBe(12);
+        expect(store().startBeat).toBe(9);
         expect(store().startPinned).toBe(true);
         expect(store().playheadBeat).toBe(17);
         expect(store().cursorBeat).toBeNull();
         expect(store().selection).toEqual({
             kind: "range",
-            start: 12,
+            start: 9,
             end: 17,
         });
 

@@ -791,12 +791,28 @@ from it. The spec still wins on the model; this file decides presentation.
     separate Stop, Loop or second play button.
   - **A click, scrub or page jump while looping**: inside the window it jumps and keeps looping;
     outside it, playback plays on from there and the stop stays (UI-11, UI-12).
-  - **C pins the start flag at the playhead, or unpins it**, as Logic's C turns Cycle on and off. To
-    move a pin, drag the flag or press C twice. Ctrl+drag a range and dragging the flag also pin it;
-    the pin icon and the field line's Unpin unpin it. Page navigation (E, Q, the page buttons) keeps
-    a pinned flag and only moves the playhead, so a pin works as a locator: press C, move on, and
-    Space loops from the pin to there (the owner checked this). A page box and home still unpin
-    (UI-12). C does nothing in isolation.
+  - **C pins the start flag where it stands, the start of the page being edited, or unpins it**, as
+    Logic's C turns Cycle on and off and editors' Mark Clip (X) marks the clip under the playhead.
+    It was first built to pin at the playhead, the page's end; a blind A/B test with four
+    simulated users (2026-10-09, ~/ux-sim/pin-ab) found all four expected the page's start, and
+    a pin on the page's end read as "this loops the next page" (owner adopted page start). To
+    move a pin, drag the flag or press C twice. Ctrl+drag a range and dragging the flag also pin
+    it; the pin icon and the field line's Unpin unpin it. Page navigation (E, Q, the page buttons)
+    keeps a pinned flag and only moves the playhead, so the loop grows to there (the owner checked
+    this). Home unpins; a page box unpins unless it starts on the pinned flag (UI-12). C does
+    nothing in isolation.
+  - **Shift+click on page boxes** extends the window over every page from the selected one to the
+    clicked one, and pins the flag at the first, so Space loops them (UI-17 follow-up; every
+    simulated user tried it first).
+  - **The loop's end has its own grip**: a tab at the yellow bar's right end, in the ruler's top
+    strip and above the page flag's grip. Dragging it moves the window's end (snapping to page
+    lines) and keeps the pin. Before it, the only place to grab the loop's end was the page flag,
+    which resized the page (a simulated user turned page 2 into 15 counts that way).
+  - **While playing, the readout counts the count being marched**: the beat the playhead is in
+    lands on the next count, so a loop's first count reads "Pg 2 · ct 1/8", not the previous page's
+    "ct 8/8". The paused playhead still reads the count it rests on.
+  - **Plainer words on the field line**: whole pages read "Pages 2–3", and a window crossing a flag
+    says "through set 2" (was "passes through page 2's set").
   - **The flag window's bar** (UI-11's yellow bar and filled pennant) marks what Play loops: shown
     while the flag is pinned and while it loops. It doesn't take clicks, which go to the ruler. The
     field line says "start flag pinned · Space loops it". Esc only ends isolation.
