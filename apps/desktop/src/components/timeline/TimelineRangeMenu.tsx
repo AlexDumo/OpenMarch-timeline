@@ -3,6 +3,8 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
     CursorTextIcon,
     FlagIcon,
+    LinkSimpleHorizontalBreakIcon,
+    LinkSimpleHorizontalIcon,
     PencilSimpleIcon,
     TrashIcon,
     UserPlusIcon,
@@ -139,6 +141,25 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      * its page moves. Without it, the menu has no such entry.
      */
     readonly onDeleteWithMoves?: (pageId: string | number) => void;
+    /**
+     * **Keep selected marchers here** and **Let selected marchers follow again** on a page box
+     * (UI-18 keep later pages), above the deletes. Without it, the menu has no such entries.
+     */
+    readonly keepHere?: TimelineKeepHereMenu;
+}
+
+/** The page box menu's keep entries (UI-18 keep later pages), by page id. */
+export interface TimelineKeepHereMenu {
+    /**
+     * Whether some selected marchers follow on the page (Keep applies) or were kept there
+     * (Follow again applies); null when no marchers are selected, so neither entry shows
+     */
+    readonly stateFor: (pageId: string | number) => {
+        readonly canKeep: boolean;
+        readonly canFollow: boolean;
+    } | null;
+    readonly onKeep: (pageId: string | number) => void;
+    readonly onFollow: (pageId: string | number) => void;
 }
 
 /**
@@ -231,7 +252,8 @@ export function useTimelineRangeMenu({
         // Nothing to offer here: no add, no page box to delete the flag of, and no move
         const canDelete =
             (menu?.onDeleteFlag !== undefined ||
-                menu?.onDeleteWithMoves !== undefined) &&
+                menu?.onDeleteWithMoves !== undefined ||
+                menu?.keepHere !== undefined) &&
             target.pageId !== undefined;
         if (!menu?.onAdd && !canDelete && !movesOf(target)) return;
         event.preventDefault();
@@ -239,6 +261,10 @@ export function useTimelineRangeMenu({
     };
     const disabledReason = menu?.disabledReason ?? null;
     const moves = open ? movesOf(open.target) : null;
+    const keepState =
+        open && menu?.keepHere && open.target.pageId !== undefined
+            ? menu.keepHere.stateFor(open.target.pageId)
+            : null;
     const element = open && (
         <DropdownMenu.Root
             open
@@ -281,6 +307,35 @@ export function useTimelineRangeMenu({
                         >
                             {disabledReason}
                         </p>
+                    )}
+                    {keepState && (
+                        <>
+                            <DropdownMenu.Item
+                                data-testid="timeline-range-menu-keep-here"
+                                disabled={!keepState.canKeep}
+                                onSelect={() =>
+                                    menu?.keepHere?.onKeep(open.target.pageId!)
+                                }
+                                className={ITEM_CLASS}
+                            >
+                                <LinkSimpleHorizontalBreakIcon size={14} />
+                                Keep selected marchers here
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                                data-testid="timeline-range-menu-follow-again"
+                                disabled={!keepState.canFollow}
+                                onSelect={() =>
+                                    menu?.keepHere?.onFollow(
+                                        open.target.pageId!,
+                                    )
+                                }
+                                className={ITEM_CLASS}
+                            >
+                                <LinkSimpleHorizontalIcon size={14} />
+                                Let selected marchers follow again
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                        </>
                     )}
                     {menu?.onDeleteFlag && open.target.pageId !== undefined && (
                         <DropdownMenu.Item
