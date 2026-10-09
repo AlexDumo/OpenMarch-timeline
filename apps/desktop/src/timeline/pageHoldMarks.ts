@@ -24,11 +24,20 @@ export type PageHoldMark =
     | { readonly kind: "moves" }
     /**
      * Every selected marcher with a state holds. `from` is the page they hold from, or null when
-     * they hold from different pages
+     * they hold from different pages; `fromStart` when that page is the first (they have held
+     * since their starting set)
      */
-    | { readonly kind: "holds"; readonly from: string | null }
-    /** Some move here and some hold; `from` as for "holds", over the ones that hold */
-    | { readonly kind: "mixed"; readonly from: string | null };
+    | {
+          readonly kind: "holds";
+          readonly from: string | null;
+          readonly fromStart?: true;
+      }
+    /** Some move here and some hold; `from` and `fromStart` as for "holds", over the ones that hold */
+    | {
+          readonly kind: "mixed";
+          readonly from: string | null;
+          readonly fromStart?: true;
+      };
 
 const MOVES: MarcherPageState = { kind: "moves" };
 
@@ -149,7 +158,8 @@ export function classifyPage(
     if (moves === 0 && holds === 0) return null;
     if (holds === 0) return { kind: "moves" };
     const from = since == null ? null : (pageNames[since] ?? null);
-    return moves === 0 ? { kind: "holds", from } : { kind: "mixed", from };
+    const kind = moves === 0 ? "holds" : "mixed";
+    return since === 0 ? { kind, from, fromStart: true } : { kind, from };
 }
 
 /**
@@ -195,6 +205,11 @@ export function pageHoldMarkLabel(
                 "Selected marchers move on this page",
             );
         case "holds":
+            if (mark.fromStart)
+                return t(
+                    "timeline.holdMarks.holdsFromStart",
+                    "Selected marchers hold from the start",
+                );
             return mark.from === null
                 ? t(
                       "timeline.holdMarks.holdsHere",
@@ -206,6 +221,11 @@ export function pageHoldMarkLabel(
                       { page: mark.from },
                   );
         case "mixed":
+            if (mark.fromStart)
+                return t(
+                    "timeline.holdMarks.mixedFromStart",
+                    "Some selected marchers hold from the start",
+                );
             return mark.from === null
                 ? t(
                       "timeline.holdMarks.mixedHere",
@@ -216,5 +236,40 @@ export function pageHoldMarkLabel(
                       "Some selected marchers hold from Page {page}",
                       { page: mark.from },
                   );
+    }
+}
+
+/** The tooltip's second line for a mark: what the mark means on the field. */
+export function pageHoldMarkHint(
+    mark: PageHoldMark,
+    t: HoldMarkTranslate = english,
+): string {
+    switch (mark.kind) {
+        case "moves":
+            return t(
+                "timeline.holdMarks.movesHint",
+                "They have their own move here",
+            );
+        case "holds":
+            if (mark.fromStart)
+                return t(
+                    "timeline.holdMarks.holdsFromStartHint",
+                    "They stand where they started",
+                );
+            return mark.from === null
+                ? t(
+                      "timeline.holdMarks.holdsHereHint",
+                      "They stand where their last move left them",
+                  )
+                : t(
+                      "timeline.holdMarks.holdsHint",
+                      "They stand where Page {page} left them",
+                      { page: mark.from },
+                  );
+        case "mixed":
+            return t(
+                "timeline.holdMarks.mixedHint",
+                "Some have their own move here",
+            );
     }
 }
