@@ -1,6 +1,7 @@
 import { inArray } from "drizzle-orm";
 import { db, schema } from "@/global/database/db";
 import tolgee from "@/global/singletons/Tolgee";
+import { subscribeHistoryChanges } from "@/db-functions/history";
 
 /**
  * **Move them too** (defined-coordinates 09, G4): after an edit splits the marchers it moved at a
@@ -151,4 +152,89 @@ export function inDrillOrder(
                 a - b
             );
         });
+}
+
+/** Counts committed history changes (an edit, an undo or a redo), from the first time it's read */
+let historyChanges = 0;
+let countingHistoryChanges = false;
+
+/**
+ * Which history change the edit that just committed was. Read it as soon as the write returns,
+ * before awaiting anything else, so a later edit can't have committed in between.
+ */
+export function editHistoryMark(): number {
+    if (!countingHistoryChanges) {
+        countingHistoryChanges = true;
+        subscribeHistoryChanges(() => {
+            historyChanges++;
+        });
+    }
+    return historyChanges;
+}
+
+/** One kept marcher's shift: what Move them too adds to its later move */
+export interface FollowUpShift {
+    dx: number;
+    dy: number;
+}
+
+/** The open toast's shifts, so the next edit can add to them */
+let pending: {
+    mode: "page" | "timeline";
+    mark: number;
+    totals: Map<string, FollowUpShift>;
+} | null = null;
+
+/**
+ * Several edits in a row, one Move them too: while its toast is open, an edit right after the
+ * last (the next history change) that keeps the same marchers at the same later moves adds its
+ * shift to theirs, so the action repeats every nudge, not only the last. Anything else in between,
+ * an undo or redo, another edit, Move them too or Only Page N, starts over from this edit.
+ *
+ * @param mark the edit's `editHistoryMark`
+ * @param keyOf names the kept marcher's later move (marcher, and the page or slot it stopped at)
+ * @returns `shifts` with the totals so far, and a function that forgets them when the toast closes
+ */
+export function accumulateShifts<T extends FollowUpShift>(
+    mode: "page" | "timeline",
+    mark: number,
+    shifts: readonly T[],
+    keyOf: (shift: T) => string,
+): { shifts: T[]; forget: () => void } {
+    const keys = shifts.map(keyOf);
+    const previous = pending;
+    // An older edit's check finishing late leaves the newer toast's totals alone
+    if (previous && mark < previous.mark)
+        return { shifts: [...shifts], forget: () => {} };
+    const continues =
+        previous !== null &&
+        previous.mode === mode &&
+        previous.mark + 1 === mark &&
+        previous.totals.size === new Set(keys).size &&
+        keys.every((k) => previous.totals.has(k));
+    const summed = shifts.map((shift, i) => {
+        const before = continues ? previous.totals.get(keys[i]!)! : null;
+        return before
+            ? { ...shift, dx: shift.dx + before.dx, dy: shift.dy + before.dy }
+            : { ...shift };
+    });
+    const next = {
+        mode,
+        mark,
+        totals: new Map(
+            summed.map((s, i) => [keys[i]!, { dx: s.dx, dy: s.dy }]),
+        ),
+    };
+    pending = next;
+    return {
+        shifts: summed,
+        forget: () => {
+            if (pending === next) pending = null;
+        },
+    };
+}
+
+/** Forgets the open toast's shifts: its action ran, or it closed. Tests call it between cases. */
+export function forgetAccumulatedShifts(): void {
+    pending = null;
 }
