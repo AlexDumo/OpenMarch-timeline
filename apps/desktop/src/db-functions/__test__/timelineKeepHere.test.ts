@@ -556,6 +556,65 @@ describeDbTests("Keep later pages: page edits", (it) => {
     });
 });
 
+describeDbTests("Keep later pages: keep at given spots (Only Page N)", (it) => {
+    it("ends the kept move at the given spot, marked kept; later pages hold there; follow again takes it back", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        // Page 2 moved again: a and b now stand at ELSEWHERE on pages 2–4
+        await move(db, PAGE2, [
+            { marcherId: a, xy: ELSEWHERE },
+            { marcherId: b, xy: FAR },
+        ]);
+        const groups = await undoGroups(db);
+        const result = await keepMarchersOnPage({
+            db,
+            pageBox: PAGE3,
+            marcherIds: [a, b],
+            // Only a is given a spot: where it stood before the edit
+            at: new Map([[a, UP]]),
+        });
+        expect(result.changed).toEqual([a, b].sort((x, y) => x - y));
+        expect(await undoGroups(db)).toBe(groups + 1);
+        expect((await atFlags(db, a)).slice(2)).toEqual([ELSEWHERE, UP, UP]);
+        expect((await atFlags(db, b)).slice(2)).toEqual([FAR, FAR, FAR]);
+        // Both are kept spots, though a's walks back
+        expect(await stateOn(db, PAGE3, a)).toBe("kept");
+        expect(await stateOn(db, PAGE3, b)).toBe("kept");
+        expect((await readKeptAssignmentIds(db)).size).toBe(2);
+
+        await followAgainOnPage({ db, pageBox: PAGE3, marcherIds: [a] });
+        await timelineResolverSettled();
+        expect((await atFlags(db, a)).slice(2)).toEqual([
+            ELSEWHERE,
+            ELSEWHERE,
+            ELSEWHERE,
+        ]);
+        // One undo puts the kept move back
+        await performUndo(db);
+        expect((await atFlags(db, a)).slice(2)).toEqual([ELSEWHERE, UP, UP]);
+        expect(await stateOn(db, PAGE3, a)).toBe("kept");
+    });
+
+    it("refuses a spot that isn't a valid destination, writing nothing", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await show(db);
+        const before = await snapshot(db);
+        await expect(
+            keepMarchersOnPage({
+                db,
+                pageBox: PAGE3,
+                marcherIds: [a],
+                at: new Map([[a, [Number.NaN, 0] as XY]]),
+            }),
+        ).rejects.toThrow();
+        expect(await snapshot(db)).toEqual(before);
+    });
+});
+
 describeDbTests("Keep later pages: history round trips", (it) => {
     const testWithHistory = getTestWithHistory(it, TABLES);
 
@@ -578,6 +637,22 @@ describeDbTests("Keep later pages: history round trips", (it) => {
             )!;
             await deleteTimeline({ db, timelineId: page4.id });
             await expectNumberOfChanges.test(db, 5, state);
+        },
+    );
+
+    testWithHistory(
+        "keep at given spots (Only Page N): one undo group, exactly undone and redone",
+        async ({ db, marchersAndPages: _, expectNumberOfChanges }) => {
+            const { a, b } = await show(db);
+            await move(db, PAGE2, [{ marcherId: a, xy: ELSEWHERE }]);
+            const state = await expectNumberOfChanges.getDatabaseState(db);
+            await keepMarchersOnPage({
+                db,
+                pageBox: PAGE3,
+                marcherIds: [a, b],
+                at: new Map([[a, UP]]),
+            });
+            await expectNumberOfChanges.test(db, 1, state);
         },
     );
 });
