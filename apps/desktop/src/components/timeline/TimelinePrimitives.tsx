@@ -85,7 +85,6 @@ import {
     type LabeledHoldMark,
     type LabeledHoldMarks,
 } from "./PageHoldMark";
-import { HintTooltipProvider } from "./HintTooltip";
 import {
     chainOffset,
     PageKeepChainButton,
@@ -1059,7 +1058,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
 }) {
     const selectedIds = new Set(selectedBoxIds.split("\n"));
     return (
-        <HintTooltipProvider>
+        <TransportTooltipProvider disableHoverableContent>
             <div
                 data-testid="timeline-page-ruler"
                 // Clipped without being a scroll container, so labels can stick to the viewport
@@ -1107,7 +1106,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
                     ) : null,
                 )}
             </div>
-        </HintTooltipProvider>
+        </TransportTooltipProvider>
     );
 });
 

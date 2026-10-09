@@ -6,7 +6,7 @@ import {
     type PageHoldMark,
 } from "@/timeline/pageHoldMarks";
 import type { PageHoldMarks } from "@/timeline/usePageHoldMarks";
-import { HintTooltip } from "./HintTooltip";
+import { ShortcutTooltip } from "./ShortcutTooltip";
 
 /** A page box's mark with its words: the tooltip's label and its hint line. */
 export type LabeledHoldMark = {
@@ -82,7 +82,7 @@ export function PageHoldMarkView({
 }
 
 /**
- * A page box's tooltip for its mark (`HintTooltip`, above the box): the mark's words and what they
+ * A page box's tooltip for its mark (`ShortcutTooltip`, above the box): the mark's words and what they
  * mean on the field. No tooltip without a mark (nothing selected). The box keeps its
  * `aria-describedby` for screen readers.
  */
@@ -94,9 +94,14 @@ export function HoldMarkTooltip({
     children: ReactElement;
 }) {
     return (
-        <HintTooltip label={hold?.label} hint={hold?.hint} side="top">
+        <ShortcutTooltip
+            label={hold?.label}
+            hint={hold?.hint}
+            side="top"
+            closeOnPress
+        >
             {children}
-        </HintTooltip>
+        </ShortcutTooltip>
     );
 }
 

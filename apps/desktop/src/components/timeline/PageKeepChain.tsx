@@ -13,7 +13,7 @@ import {
     type PageKeepState,
 } from "@/timeline/timelineKeepLater";
 import { followAgainOn, keepOnPage } from "@/timeline/timelineKeepCommands";
-import { HintTooltip } from "./HintTooltip";
+import { ShortcutTooltip } from "./ShortcutTooltip";
 import {
     timelineRangeTargetProps,
     type TimelineKeepHereMenu,
@@ -194,12 +194,13 @@ export function PageKeepChainButton({
     const stop = (event: { stopPropagation: () => void }) =>
         event.stopPropagation();
     return (
-        <HintTooltip
+        <ShortcutTooltip
             label={
                 chain.withK ? `${chain.label} (${KEEP_SHORTCUT})` : chain.label
             }
             hint={chain.hint}
             side="top"
+            closeOnPress
         >
             <button
                 type="button"
@@ -230,6 +231,6 @@ export function PageKeepChainButton({
                     </span>
                 )}
             </button>
-        </HintTooltip>
+        </ShortcutTooltip>
     );
 }

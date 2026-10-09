@@ -869,7 +869,8 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
 
 - **Mode:** both.
 - **Before:** native `title` only (wp7), invisible to headless capture.
-- **After:** a Radix tooltip above the box (`HintTooltip`: 500 ms hover delay, 300 ms skip delay,
+- **After:** a Radix tooltip above the box (#115's `ShortcutTooltip` with `closeOnPress`: 500 ms hover
+  delay, 300 ms skip delay,
   opens on keyboard focus; a press closes it and keeps it closed until the pointer leaves, so
   clicks, scrubs, drags and right-clicks are undisturbed; no tooltip without a mark). Label + hint:
 
@@ -881,7 +882,8 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
 
   The box gets `aria-describedby` pointing at an `sr-only` span "{label}. {hint}".
 
-- **Code:** `components/timeline/HintTooltip.tsx` (:15, :34); `PageHoldMark.tsx` (`HoldMarkTooltip`
+- **Code:** `components/timeline/ShortcutTooltip.tsx` (`ShortcutTooltip`'s `closeOnPress`,
+  `TransportTooltipProvider`'s `disableHoverableContent`); `PageHoldMark.tsx` (`HoldMarkTooltip`
   :89, `useLabeledHoldMarks`); `pageHoldMarks.ts` (`pageHoldMarkLabel` :197, `pageHoldMarkHint`
   :243).
 - **Tests:** `PageHoldMarks.test.tsx` › "the hold mark's tooltip on the timeline's page boxes" (6);
@@ -889,7 +891,8 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
 - **Real-app:** `wp10-tl.mjs`, `wp10-page.mjs`, `dc4-tl-silence-held.mjs` and
   `dc4-pm-silence-held.mjs` (8); screenshots `dc-summary3/8-*`.
 - **V-row:** V-151.
-- **Limits:** `HintTooltip` is a stand-in for transport-keys' `ShortcutTooltip` (section 8).
+- **Limits:** built on a stand-in (`HintTooltip`) before #115 landed; since the rebase onto it, the
+  marks use #115's shared `ShortcutTooltip` (section 8).
 
 #### B-30 Inspector line: "Hold from Page 2 →" / "Moves on this page"
 
@@ -1068,7 +1071,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 
 - **Mode:** TL.
 - **After:** the hold line (B-30) gains buttons, each a real button styled as the line's link, with
-  a tooltip (`HintTooltip`):
+  a tooltip (`ShortcutTooltip` with `closeOnPress`):
   - a page they follow into: "Hold from Page 2 → · **Keep here**" (tooltip "Keep OT1 and OT8 on
     Page 3, so editing Page 2 won't move them here"); "Hold from the start → · **Keep here**" for
     marchers that never moved (wp19);
@@ -1229,7 +1232,7 @@ Non-doc files changed (`git diff --stat 5888850a e1cd9ea2 -- apps`), one line ea
 | `src/components/inspector/MarcherEditor.tsx`          | Renders `TimelineHoldLine` under Step Size (two places)                                                                                         | B-30                                    |
 | `src/components/inspector/TimelineHoldLine.tsx` (new) | Inspector hold/move line, link seeks the playhead                                                                                               | B-30                                    |
 | `src/components/singletons/StateInitializer.tsx`      | TL: no selected page → page at playhead, not home                                                                                               | B-11                                    |
-| `src/components/timeline/HintTooltip.tsx` (new)       | Label + hint Radix tooltip; press closes it                                                                                                     | B-29                                    |
+| `src/components/timeline/ShortcutTooltip.tsx` (#115)  | `closeOnPress`, `side`, no label no tooltip; provider's `disableHoverableContent` (replaced the stand-in `HintTooltip`)                         | B-29                                    |
 | `src/components/timeline/PageHoldMark.tsx` (new)      | Mark drawing, tooltip wrapper, labeled marks hook                                                                                               | B-27–B-29                               |
 | `src/components/timeline/PageTimeline.tsx`            | TL delete menu (In Place = flag delete, With Its Moves, Yank with report); PM hold marks and tooltips                                           | B-08, B-09, B-28, B-29                  |
 | `src/components/timeline/Timeline.tsx`                | `onDeletePageWithMoves`, `holdMarks` props                                                                                                      | B-09, B-27                              |
@@ -1610,7 +1613,7 @@ This list should drive the next testing pass.
    selected (B-28); timeline marks recompute per resolver version. Not measured.
 4. **Toast transitions:** replacing one surprise toast with the next (B-37) and the two-button
    wrap (B-26) were checked by DOM measurement and stills; no video review of the transition.
-5. **`HintTooltip` inside other overlays** (fullscreen, compact, during playback) beyond the scripted
+5. **The page boxes' `ShortcutTooltip`s inside other overlays** (fullscreen, compact, during playback) beyond the scripted
    cases.
 6. **An older build** opening a file this build touched (pathway triggers, sparse timeline rows):
    reasoning only.
@@ -1644,9 +1647,13 @@ This list should drive the next testing pass.
 - **#111 (timeline edges: drag a page flag, resize a move) and #113:** merged into the base via
   `97c8626b`; no code conflict left. Flag drags and move resizes on sparse rows are now tested
   (`timelineSparseGaps.test.ts`).
-- **Transport keys (UI-17, fork branch `timeline/transport-keys`):** `HintTooltip.tsx` is a stand-in
-  for its `ShortcutTooltip`; replace both with the shared one when it lands. Expect a small conflict
-  in timeline components that both touch.
+- **Transport keys (UI-17, #115):** merged into the base by the 2026-10-09 rebase. The stand-in
+  `HintTooltip.tsx` is gone: the hold marks, keep chains and the inspector's hold line use #115's
+  `ShortcutTooltip`, which gained `side`, `closeOnPress` (a press closes it until the pointer
+  leaves) and "no label, no tooltip"; their provider is `TransportTooltipProvider` with
+  `disableHoverableContent`. **K** is a registered action, so #115's `?` shortcuts list shows it
+  under Timeline. Conflicts kept both sides: #115's Shift+click to extend on page boxes, with the
+  hold marks and chains.
 - **Upstream OpenMarch #1044** (merged upstream): contains the identical Ctrl/Cmd+WASD hunk (B-34).
   Merging main should apply cleanly or as a no-op; keep one copy.
 - **Global `Toaster` (B-26):** the two-button layout applies to any toast with a `cancel` button

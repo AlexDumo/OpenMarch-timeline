@@ -26,9 +26,9 @@ import { followAgainOn, keepOnPage } from "@/timeline/timelineKeepCommands";
 import { KEEP_SHORTCUT } from "@/components/timeline/PageKeepChain";
 import { useKeepToggle, usePageKeepStates } from "@/timeline/useKeepLaterPages";
 import {
-    HintTooltip,
-    HintTooltipProvider,
-} from "@/components/timeline/HintTooltip";
+    ShortcutTooltip,
+    TransportTooltipProvider,
+} from "@/components/timeline/ShortcutTooltip";
 
 /**
  * The selection's state on the current page, in timeline mode (docs/timeline/ui.md UI-18):
@@ -96,9 +96,10 @@ function KeepButton({
     const descriptionId = useId();
     return (
         <>
-            <HintTooltip
+            <ShortcutTooltip
                 label={withK ? `${tooltip} (${KEEP_SHORTCUT})` : tooltip}
                 side="bottom"
+                closeOnPress
             >
                 <button
                     type="button"
@@ -110,7 +111,7 @@ function KeepButton({
                 >
                     {label}
                 </button>
-            </HintTooltip>
+            </ShortcutTooltip>
             <span id={descriptionId} className="sr-only">
                 {tooltip}
             </span>
@@ -356,8 +357,9 @@ function TimelineHoldLineContent({
         const { page: holdPage, fromStart } = state;
         line = (
             <p className="flex flex-wrap items-center gap-6 px-6 leading-none">
-                <HintTooltip
+                <ShortcutTooltip
                     side="bottom"
+                    closeOnPress
                     label={
                         fromStart
                             ? t("inspector.marcher.timeline.goToStart", {
@@ -391,7 +393,7 @@ function TimelineHoldLineContent({
                               })}
                         <ArrowRightIcon size={14} aria-hidden />
                     </button>
-                </HintTooltip>
+                </ShortcutTooltip>
                 {buttons(true, keepButton)}
             </p>
         );
@@ -409,10 +411,10 @@ function TimelineHoldLineContent({
         );
     if (!line && !following) return null;
     return (
-        <HintTooltipProvider>
+        <TransportTooltipProvider disableHoverableContent>
             {line}
             <FollowingPagesLine following={following} />
-        </HintTooltipProvider>
+        </TransportTooltipProvider>
     );
 }
 

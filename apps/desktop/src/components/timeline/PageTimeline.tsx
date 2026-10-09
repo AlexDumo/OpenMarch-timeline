@@ -48,7 +48,7 @@ import {
     PageHoldMarkView,
     useLabeledHoldMarks,
 } from "./PageHoldMark";
-import { HintTooltipProvider } from "./HintTooltip";
+import { TransportTooltipProvider } from "./ShortcutTooltip";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 
 // eslint-disable-next-line max-lines-per-function
@@ -355,7 +355,7 @@ export default function PageTimeline() {
     return (
         <div className="flex h-fit gap-0" id="pages">
             {/* ------------------------------------ FIRST PAGE ------------------------------------ */}
-            <HintTooltipProvider>
+            <TransportTooltipProvider disableHoverableContent>
                 <ul className="rounded-6 border-stroke flex h-fit gap-0 overflow-clip border">
                     {pages.length > 0 && (
                         <li
@@ -624,7 +624,7 @@ export default function PageTimeline() {
                         );
                     })}
                 </ul>
-            </HintTooltipProvider>
+            </TransportTooltipProvider>
             {!isFullscreen && (
                 <button
                     className="bg-accent text-sub text-text-invert ml-8 flex size-[28px] cursor-pointer items-center justify-center self-center rounded-full duration-150 ease-out enabled:hover:-translate-y-2 disabled:cursor-not-allowed disabled:opacity-50"
