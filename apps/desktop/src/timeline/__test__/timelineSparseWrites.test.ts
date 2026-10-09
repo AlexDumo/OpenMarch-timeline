@@ -607,7 +607,7 @@ describeDbTests("sparse timeline writes: the pass-through toast", (it) => {
         expect(at(1, page2.end)).toEqual([200, 200]);
     });
 
-    it("Start from Page N works with no rows underneath: the long move goes and page 3 alone moves", async ({
+    it("Keep Page N as a stop works with no rows underneath: the long move goes and page 3 alone moves", async ({
         db,
         marchersAndPages: _,
     }) => {
