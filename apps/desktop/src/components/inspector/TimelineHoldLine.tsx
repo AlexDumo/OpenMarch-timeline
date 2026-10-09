@@ -1,4 +1,4 @@
-import { Fragment, useMemo, type ReactNode } from "react";
+import { Fragment, useId, useMemo, type ReactNode } from "react";
 import { useTranslate } from "@tolgee/react";
 import { ArrowRightIcon } from "@phosphor-icons/react";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -85,18 +85,24 @@ function KeepButton({
     tooltip: string;
     onClick: () => void;
 }) {
+    const descriptionId = useId();
     return (
-        <HintTooltip label={tooltip} side="bottom">
-            <button
-                type="button"
-                className={LINK_CLASS}
-                data-testid={testId}
-                aria-description={tooltip}
-                onClick={onClick}
-            >
-                {label}
-            </button>
-        </HintTooltip>
+        <>
+            <HintTooltip label={tooltip} side="bottom">
+                <button
+                    type="button"
+                    className={LINK_CLASS}
+                    data-testid={testId}
+                    aria-describedby={descriptionId}
+                    onClick={onClick}
+                >
+                    {label}
+                </button>
+            </HintTooltip>
+            <span id={descriptionId} className="sr-only">
+                {tooltip}
+            </span>
+        </>
     );
 }
 

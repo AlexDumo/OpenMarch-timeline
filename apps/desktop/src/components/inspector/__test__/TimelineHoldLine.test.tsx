@@ -203,8 +203,7 @@ describe("TimelineHoldLine", () => {
             const button = keepHere()!;
             expect(button.tagName).toBe("BUTTON");
             expect(button.textContent).toBe("Keep here");
-            expect(button).toHaveAttribute(
-                "aria-description",
+            expect(button).toHaveAccessibleDescription(
                 "Keep these marchers on Page 3, so editing Page 2 won't move them here",
             );
             expect(followAgain()).toBeNull();
@@ -221,8 +220,7 @@ describe("TimelineHoldLine", () => {
             expect(keepHere()).toBeNull();
             const button = followAgain()!;
             expect(button.textContent).toBe("Follow again");
-            expect(button).toHaveAttribute(
-                "aria-description",
+            expect(button).toHaveAccessibleDescription(
                 "Let these marchers follow Page 2 again, so editing Page 2 moves them here too",
             );
             fireEvent.click(button);
@@ -249,12 +247,10 @@ describe("TimelineHoldLine", () => {
             expect(keepHere()!.parentElement!.firstElementChild).toBe(
                 keepHere(),
             );
-            expect(keepHere()).toHaveAttribute(
-                "aria-description",
+            expect(keepHere()).toHaveAccessibleDescription(
                 "Keep 1 of these marchers on Page 3, so editing Page 2 won't move them here",
             );
-            expect(followAgain()).toHaveAttribute(
-                "aria-description",
+            expect(followAgain()).toHaveAccessibleDescription(
                 "Let 1 of these marchers follow Page 2 again, so editing Page 2 moves them here too",
             );
             fireEvent.click(keepHere()!);

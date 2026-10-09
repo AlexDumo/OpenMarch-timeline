@@ -1012,7 +1012,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
   to keep it, so a fresh show shows no chains. Each box also names the page(s) they follow
   (`from`), for the words.
 - **Code:** `timeline/timelineKeepLater.ts` (`pageKeepStates` :74, `followingPages` :144,
-  `pageChainWords` :206, `nextPageToggle` :312); `timeline/useKeepLaterPages.ts`
+  `pageChainWords` :312, `nextPageToggle` :349); `timeline/useKeepLaterPages.ts`
   (`useKeptAssignmentsHost` :39, mounted in `TimelineResolverHost.tsx` :80; `usePageKeepStates` :72);
   `timeline/timelineKeepCommands.ts` (`keepOnPage`, `followAgainOn`, `toggleKeepOnNextPage`: refusals
   are toasts).
@@ -1112,8 +1112,8 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
     spots before the first nudge.
 - **Strings:** `timeline.keep.followed.onePage` "Page {page} followed", `.pages` "Pages
   {first}–{last} followed", `.only` "Only Page {page}".
-- **Code:** `timeline/timelineOnlyThisPage.ts` (`ownMovers` :57, `followedAfterEdit` :108,
-  `offerOnlyThisPage` :209); `timelineMoveThemToo.ts:moveMarchersAndOfferFollowUp` (:305, :318);
+- **Code:** `timeline/timelineOnlyThisPage.ts` (`ownMovers` :56, `followedAfterEdit` :107,
+  `offerOnlyThisPage` :258); `timelineMoveThemToo.ts:moveMarchersAndOfferFollowUp` (:305, :318);
   `db-functions/timelineKeepHere.ts:keepMarchersOnPage` (`at`, :105).
 - **Tests:** `timelineKeepCommands.test.ts` › "keep later pages: Only Page N after an edit" (5:
   first move silent; study flow with one undo; nudge run; kept page silent; Move them too wins);
