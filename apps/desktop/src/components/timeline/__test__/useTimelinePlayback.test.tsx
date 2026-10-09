@@ -15,7 +15,10 @@ import {
     playbackStep,
     previewBounds,
 } from "@/timeline/timelinePlayhead";
-import { startTimelinePlayOn } from "@/timeline/timelineTransport";
+import {
+    setTimelineStartFlagHere,
+    startTimelinePlayOn,
+} from "@/timeline/timelineTransport";
 import { useTimelinePageBridge } from "@/timeline/useTimelinePageBridge";
 import { useTimelinePlayback } from "../useTimelinePlayback";
 
@@ -163,6 +166,12 @@ const seedShow = (db: DbConnection) =>
         ]);
     });
 
+/** The seeded show's page boxes, as `TimelineModePanel` gives them to the store */
+const PAGE_BOXES = [
+    { start: 1, end: 9 },
+    { start: 9, end: 17 },
+];
+
 describeDbTests("useTimelinePlayback", (it) => {
     const renderPlayback = (
         wrapper: ComponentType<{ children: ReactNode }>,
@@ -222,6 +231,10 @@ describeDbTests("useTimelinePlayback", (it) => {
         await seedShow(db);
         const { result } = renderPlayback(wrapper);
         await waitFor(() => expect(result.current.pages).toHaveLength(3));
+        // TimelineModePanel keeps these; without them every range reads as pinned
+        act(() => {
+            store().setPageBoxes(PAGE_BOXES);
+        });
 
         act(() => {
             result.current.playback.onNavigate!("next-page");
@@ -258,6 +271,42 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(result.current.selection).toEqual({ kind: "home" });
         expect(store().playheadBeat).toBe(0);
+    });
+
+    it("C pins the start flag at the playhead, and page navigation keeps it (UI-17)", async ({
+        db,
+        wrapper,
+    }) => {
+        await seedShow(db);
+        const { result } = renderPlayback(wrapper);
+        await waitFor(() => expect(result.current.pages).toHaveLength(3));
+        act(() => {
+            store().setPageBoxes(PAGE_BOXES);
+        });
+        act(() => {
+            result.current.playback.onNavigate!("next-page");
+        });
+        expect(store().startPinned).toBe(false);
+        act(() => {
+            setTimelineStartFlagHere();
+        });
+        expect(store().startBeat).toBe(9);
+        expect(store().startPinned).toBe(true);
+        act(() => {
+            result.current.playback.onNavigate!("next-page");
+        });
+        expect(store().startPinned).toBe(true);
+        expect(result.current.selection).toEqual({
+            kind: "range",
+            start: 9,
+            end: 17,
+        });
+        // Home unpins, as it always has (UI-12)
+        act(() => {
+            result.current.playback.onNavigate!("first-page");
+        });
+        expect(store().startPinned).toBe(false);
+        expect(result.current.selection).toEqual({ kind: "home" });
     });
 
     it("plays on from here, and previews from the start flag (UI-17)", async ({

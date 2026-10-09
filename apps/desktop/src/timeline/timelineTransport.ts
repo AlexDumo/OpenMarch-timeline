@@ -37,8 +37,10 @@ let scrub: {
 
 /**
  * Page navigation (UI-9 Page-relative tools): moves the playhead to the target flag and selects
- * that page's timeline, or home for the first page. Returns false when there is nowhere to go.
- * Callers don't navigate while playing.
+ * that page's timeline, or home for the first page. A pinned start flag stays (UI-17: it is a
+ * locator, set with C, and only the pin, a page box or home unpin it, UI-12), so the window runs
+ * from it to the flag. Returns false when there is nowhere to go. Callers don't navigate while
+ * playing.
  */
 export function navigateTimelinePages(
     pages: readonly FlagPage[],
@@ -48,7 +50,10 @@ export function navigateTimelinePages(
     // From the beat the timeline shows: a held preview frame, or the playhead (UI-11)
     const target = navigationTarget(pages, displayedBeat(state), direction);
     if (!target) return false;
-    if (target.range) state.selectRange(target.range.start, target.range.end);
+    if (target.range && state.startPinned && !state.isolation)
+        state.seek(target.flag);
+    else if (target.range)
+        state.selectRange(target.range.start, target.range.end);
     else state.selectHome();
     return true;
 }

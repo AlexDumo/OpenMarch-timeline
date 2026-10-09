@@ -779,6 +779,9 @@ from it. The spec still wins on the model; this file decides presentation.
     Shift+Space or the button), the canvas goes back to the playhead, the page you were on, which
     playing never moved (project owner). With no window (home, or a flag on the playhead), it plays
     the show from its start. An isolated timeline still plays its range and loops.
+  - **Play from start flag's icon** is a short bar in the start flag's color, then Play ("play from
+    the mark"), echoing the flag's line on the ruler (project owner, 2026-10-08, from mockups of a
+    pennant on Play, a flag beside Play, a word and a bracket).
   - **There is no Pause and no separate Stop.** Whichever play button started playback reads
     **Stop** (a filled square); the other switches to it: Play from start flag restarts from the flag
     while playing on (the stop still returns to the playhead), and Play from here turns a running
@@ -786,8 +789,10 @@ from it. The spec still wins on the model; this file decides presentation.
   - **A click, scrub or page jump while previewing** turns the preview into playing on, so the stop
     stays where you put it instead of jumping back (UI-12's jump rules otherwise unchanged).
   - **C sets the start flag at the playhead** and pins it, like dropping a locator: move the
-    playhead on and Shift+Space plays from the flag to there. It does nothing in isolation.
-    Dragging a range on empty timeline pins the flag as before, but turns nothing on.
+    playhead on and Shift+Space plays from the flag to there. Page navigation (E, Q, the transport's
+    page buttons) keeps a pinned flag and only moves the playhead, as seeking does; a page box,
+    home or the pin unpin it (UI-12). It does nothing in isolation. Dragging a range on empty
+    timeline pins the flag as before, but turns nothing on.
   - **Loop (Shift+L)** repeats Play from start flag; playing from here never loops. It is one button
     after Next, always enabled, bold and accent-colored while on. Plain L stays the line tool.
     Opening a show turns it off.
