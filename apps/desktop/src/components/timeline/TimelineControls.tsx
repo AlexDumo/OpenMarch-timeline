@@ -198,7 +198,9 @@ export function TimelineLoopButton() {
                 }}
                 className={clsx(
                     "rounded-4 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden duration-150 focus-visible:ring-2",
-                    isolated ? "cursor-default" : "hover:bg-fg-2",
+                    // In isolation: on (lit) but disabled (dimmed), and still takes the pointer for the
+                    // tooltip that says why
+                    isolated ? "cursor-default opacity-50" : "hover:bg-fg-2",
                     // Lit in the loop bar's color, so the button reads as the bar's (UI-17)
                     looping ? START_INK.text : "text-text hover:text-accent",
                 )}
