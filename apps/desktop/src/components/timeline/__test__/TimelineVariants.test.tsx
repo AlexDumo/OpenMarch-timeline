@@ -149,7 +149,7 @@ describe("timeline views", () => {
                 altKey: true,
             }),
         );
-        // Marked drawn, which turns From start on in the app (UI-11)
+        // Marked drawn: a range dragged on empty space (UI-12)
         expect(onSelectionChange).toHaveBeenCalledWith({
             kind: "range",
             range: { startBeatIndex: 3, endBeatIndex: 6 },
@@ -191,7 +191,7 @@ describe("timeline views", () => {
             />,
         );
 
-        fireEvent.click(screen.getByRole("button", { name: "Play" }));
+        fireEvent.click(screen.getByRole("button", { name: "Play from here" }));
         expect(onPlayingChange).toHaveBeenCalledWith(true);
         expect(
             screen.queryByRole("button", { name: "Zoom in" }),

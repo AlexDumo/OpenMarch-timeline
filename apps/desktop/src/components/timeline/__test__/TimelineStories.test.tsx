@@ -61,9 +61,10 @@ describe("timeline stories", () => {
         expect(
             screen.getByRole("button", { name: "Create Track" }),
         ).toBeInTheDocument();
-        fireEvent.click(screen.getByRole("button", { name: "Play" }));
+        // UI-17: Play from here reads Stop while playing on
+        fireEvent.click(screen.getByRole("button", { name: "Play from here" }));
         expect(
-            screen.getByRole("button", { name: "Pause" }),
+            screen.getByRole("button", { name: "Stop" }),
         ).toBeInTheDocument();
     });
 });

@@ -347,7 +347,8 @@ from it. The spec still wins on the model; this file decides presentation.
   leave when and arrive when are the selection, the drag, S and P.
 
 - **UI-11: Play from the start flag (project owner, 2026-10-05).** Supersedes
-  UI-10's **Play, Pause, Stop**. Built on branch `timeline/ui11-preview-playback`.
+  UI-10's **Play, Pause, Stop**. Its **From start** mode, **Pause** and **Stop** are superseded by
+  UI-17 (two play buttons). Built on branch `timeline/ui11-preview-playback`.
   The owner asked for Logic-style "play from the start flag" so the move just
   edited plays back, and for Play to behave normally otherwise. A first
   proposal tied this to a pinned S and swapped keys by state; the critiques (a
@@ -760,6 +761,50 @@ from it. The spec still wins on the model; this file decides presentation.
     pointer, or a drag brought back writes nothing.
   - Not built: clips on the flag only move on release, not during the drag; edge scrolling while
     dragging a flag; a ripple variant (Shift-drag, shifting every later flag).
+
+- **UI-17: two play buttons, and keys for the flag and the loop (project owner, 2026-10-08).**
+  Supersedes UI-11's **From start** mode, **Pause** and **Stop**, and UI-12's Stop button. The owner
+  disliked the stop-versus-pause distinction and asked for a shortcut for the flag and the loop that
+  is easy to communicate. A survey of DAWs and video editors (Logic, Ableton, Pro Tools, Reaper,
+  Cubase, Studio One, FL Studio, GarageBand, Premiere, Resolve, Final Cut) found that users get
+  confused when one global mode or setting decides what Space does. The clearest tools give each
+  behavior its own key: Ableton's Space and Shift+Space, FL Studio's Space and Ctrl+Space, Logic's
+  Play and Play from Selection. Ableton maps the two the other way round; plain Space playing from
+  where you are matches Logic, Studio One, GarageBand and every video editor.
+  - **Play from here (Space)** plays on from the playhead to the end of the show. Space again stops
+    in place: the playhead moves to the last whole beat played, and an unpinned start flag follows
+    (as pausing a play-on run did). Space again carries on from there.
+  - **Play from start flag (Shift+Space)** plays exactly the window from the start flag to the
+    playhead (UI-11, no roll, V-24), looping while Loop is on. However it stops (the end, Space,
+    Shift+Space or the button), the canvas goes back to the playhead, the page you were on, which
+    playing never moved (project owner). With no window (home, or a flag on the playhead), it plays
+    the show from its start. An isolated timeline still plays its range and loops.
+  - **There is no Pause and no separate Stop.** Whichever play button started playback reads
+    **Stop** (a filled square); the other switches to it: Play from start flag restarts from the flag
+    while playing on (the stop still returns to the playhead), and Play from here turns a running
+    preview into playing on, so its stop stays where it is. Space while a preview runs stops it.
+  - **A click, scrub or page jump while previewing** turns the preview into playing on, so the stop
+    stays where you put it instead of jumping back (UI-12's jump rules otherwise unchanged).
+  - **C sets the start flag at the playhead** and pins it, like dropping a locator: move the
+    playhead on and Shift+Space plays from the flag to there. It does nothing in isolation.
+    Dragging a range on empty timeline pins the flag as before, but turns nothing on.
+  - **Loop (Shift+L)** repeats Play from start flag; playing from here never loops. It is one button
+    after Next, always enabled, bold and accent-colored while on. Plain L stays the line tool.
+    Opening a show turns it off.
+  - **The flag window's bar** (UI-11's yellow bar and filled pennant) now marks what Play from start
+    flag will play: shown while the flag is pinned and while a preview plays. It no longer takes
+    clicks, which go to the ruler. The field line says "start flag pinned · Shift+Space replays it".
+    Esc only ends isolation.
+  - **Communicating the shortcuts**: every transport button has a tooltip with its name and the
+    shortcut as keycaps (500 ms, 300 ms between neighbors, at once on keyboard focus, as Figma and
+    Linear do), plus a hint line where the behavior needs one ("Plays from the start flag to the
+    playhead, then goes back"). The first mouse click on Play from start flag or Loop shows a
+    one-time tip with the shortcut, which never comes back. Keycaps are not drawn inside buttons
+    (the survey found that noisy). The Loop key is read from the action registry; the transport's
+    own keys are checked against it by a test.
+  - Deferred: a `?` overlay listing shortcuts, a "stop and stay" key during a preview (Cubase's
+    Return to Start Position, as an explicit key rather than a setting), menu items with
+    accelerators, and a loop symbol on the play button while looping (Pro Tools).
 
 ## Mapping the spec onto the view model
 

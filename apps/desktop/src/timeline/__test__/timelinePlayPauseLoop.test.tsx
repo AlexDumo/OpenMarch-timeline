@@ -6,7 +6,7 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useTimingObjects } from "@/hooks";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { startTimelinePlayback } from "../timelineTransport";
+import { playTimelineFromHere } from "../timelineTransport";
 import { useTimelinePageBridge } from "../useTimelinePageBridge";
 import { useTimelinePlaybackDriver } from "../useTimelinePlaybackDriver";
 
@@ -103,33 +103,40 @@ describeDbTests("timeline play, pause, play", (it) => {
 
         const playPause = (liveSeconds: number) => {
             act(() => {
-                startTimelinePlayback(17, result.current.playing.setIsPlaying);
+                playTimelineFromHere({
+                    isPlaying: false,
+                    showEndBeat: result.current.timing.beats.length,
+                    setIsPlaying: result.current.playing.setIsPlaying,
+                });
             });
             audio.startInfo.current = {};
             audio.seconds = liveSeconds;
             frame();
             act(() => {
-                result.current.playing.setIsPlaying(false);
+                playTimelineFromHere({
+                    isPlaying: true,
+                    showEndBeat: result.current.timing.beats.length,
+                    setIsPlaying: result.current.playing.setIsPlaying,
+                });
             });
         };
 
-        // The page at [5, 9): Play previews it (UI-11); pausing holds the frame and leaves P at 9
+        // The page at [5, 9): Space plays on from P; stopping moves P and must not loop
+        // with the page bridge (UI-17)
         act(() => {
             store().selectRange(5, 9);
-            store().setPlayFromStart(true);
         });
         writes = 0;
-        playPause(3.1); // beat 7.2
-        expect(store().cursorBeat).toBe(7);
-        expect(store().playheadBeat).toBe(9);
-        // Play again resumes from the held frame
-        playPause(3.4); // beat 7.8
-        expect(store().cursorBeat).toBe(7);
-        expect(store().playheadBeat).toBe(9);
+        playPause(3.1); // beat 7.2: Space stops in place, P moves to 7
+        expect(store().cursorBeat).toBeNull();
+        expect(store().playheadBeat).toBe(7);
+        playPause(3.4); // beat 7.8: plays on from the new P and stops there
+        expect(store().cursorBeat).toBeNull();
+        expect(store().playheadBeat).toBe(7);
         unsubscribe();
 
         expect(maxDepthErrors()).toEqual([]);
-        // At most a start cue and a pause cue per play
+        // At most a start cue and a pause seek per play
         expect(writes).toBeLessThanOrEqual(4);
         expect(result.current.selectedPage?.id).toBe(2);
     });

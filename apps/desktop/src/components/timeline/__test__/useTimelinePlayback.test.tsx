@@ -22,7 +22,8 @@ import { useTimelinePlayback } from "../useTimelinePlayback";
 /**
  * The timeline-mode playhead (ui.md UI-9; P8.11): pages are flags, the paused playhead rests on any
  * whole beat, seeking doesn't change the selection, navigation selects a page's range (home for
- * the first), Play previews the window and Play on plays on from the playhead (UI-11).
+ * the first). Play from here plays on from the playhead; Play from start flag previews the window
+ * (UI-17).
  */
 
 /** Pages as `fromDatabasePages` builds them: page 0 holds only the fixed beat 0. */
@@ -259,7 +260,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(store().playheadBeat).toBe(0);
     });
 
-    it("previews the window, and pauses keeping it (UI-11)", async ({
+    it("plays on from here, and previews from the start flag (UI-17)", async ({
         db,
         wrapper,
     }) => {
@@ -276,41 +277,61 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(result.current.playback.isPlaying).toBe(false);
 
-        // UI-11: with From start on, Play starts at the start flag (beat 1, show time 0, written
-        // as 0); the playhead stays on the window's end
         act(() => {
             store().selectRange(1, 9);
-            store().setPlayFromStart(true);
         });
+        // Space: plays on from P. The driver, not this hook, moves P when it stops
         act(() => {
             result.current.playback.onPlayingChange!(true);
         });
         expect(result.current.playback.isPlaying).toBe(true);
+        expect(result.current.playback.playingFromFlag).toBe(false);
+        expect(store().playback).toEqual({ kind: "on" });
         expect(store().playheadBeat).toBe(9);
-        expect(store().cursorBeat).toBe(0);
+        expect(store().cursorBeat).toBe(9);
         // While playing, the cursor follows the audio clock and is never -1
         expect(result.current.playback.positionBeat).toBeGreaterThanOrEqual(0);
 
+        // Shift+Space while playing on restarts from the flag as a preview
         act(() => {
-            result.current.playback.onPlayingChange!(false);
+            result.current.playback.onPlayFromFlag!();
         });
-        expect(result.current.playback.isPlaying).toBe(false);
-        expect(result.current.selection).toEqual({
-            kind: "range",
-            start: 1,
-            end: 9,
-        });
+        expect(result.current.playback.isPlaying).toBe(true);
+        expect(result.current.playback.playingFromFlag).toBe(true);
+        expect(store().playback).toEqual({ kind: "preview", from: 1, to: 9 });
+        // Beat 1 is show time 0, so the cursor is written as 0; P stays
+        expect(store().cursorBeat).toBe(0);
+        expect(store().playheadBeat).toBe(9);
 
-        // Seeking clears the cursor; Play previews the new window
-        act(() => {
-            store().seek(5);
-        });
-        expect(store().cursorBeat).toBeNull();
+        // Play from here while a preview runs continues as play-on
         act(() => {
             result.current.playback.onPlayingChange!(true);
         });
-        expect(store().playheadBeat).toBe(5);
+        expect(result.current.playback.isPlaying).toBe(true);
+        expect(result.current.playback.playingFromFlag).toBe(false);
+        expect(store().playback).toEqual({ kind: "on" });
+
+        // Shift+Space again, then Shift+Space stops the preview
+        act(() => {
+            result.current.playback.onPlayFromFlag!();
+        });
+        expect(store().playback?.kind).toBe("preview");
+        act(() => {
+            result.current.playback.onPlayFromFlag!();
+        });
+        expect(result.current.playback.isPlaying).toBe(false);
+
+        // Home has no window: Shift+Space previews the show from 0
+        act(() => {
+            store().selectHome();
+        });
+        act(() => {
+            result.current.playback.onPlayFromFlag!();
+        });
+        expect(result.current.playback.isPlaying).toBe(true);
+        expect(store().playback).toEqual({ kind: "preview", from: 0, to: 17 });
         expect(store().cursorBeat).toBe(0);
+        expect(store().playheadBeat).toBe(0);
     });
 
     it("keeps the legacy selected page on the playhead's page, and back (TEMPORARY, P8.12)", async ({

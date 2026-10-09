@@ -186,25 +186,32 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         expect(store().startPinned).toBe(false);
     });
 
-    it("playback moves only the playhead, and Stop returns it to the start flag", () => {
+    it("pinStartAt puts S on the beat and pins it, keeping P (UI-17)", () => {
         store().setPageBoxes(BOXES);
         store().selectRange(9, 17);
-        store().seekKeepingStart(30); // paused far past the flag: the flag stays
-        expect(store().selection).toEqual({ kind: "range", start: 9, end: 30 });
-        store().returnToStart();
-        expect(store().playheadBeat).toBe(9);
+        expect(store().startPinned).toBe(false);
+        expect(store().playheadBeat).toBe(17);
+        store().pinStartAt(12);
+        expect(store().startBeat).toBe(12);
+        expect(store().startPinned).toBe(true);
+        expect(store().playheadBeat).toBe(17);
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 12,
+            end: 17,
+        });
+        // Isolation's flag is the isolated move's start: C does nothing
+        store().setStoredTimelines([timeline(2, 9, 17, [1])]);
+        store().isolate(2);
+        store().pinStartAt(3);
         expect(store().startBeat).toBe(9);
-        // On the flag, the window falls back to the page box ending there
-        expect(store().selection).toEqual({ kind: "range", start: 1, end: 9 });
+        expect(store().playheadBeat).toBe(17);
     });
 
-    it("Stop inside page 1 returns home: page 1's box starts at beat 1, show time 0", () => {
+    it("page 1's box starts at beat 1, and show time 0 is home", () => {
         store().setPageBoxes(BOXES);
         store().seek(5);
         expect(store().startBeat).toBe(1);
-        store().returnToStart();
-        expect(store().playheadBeat).toBe(0);
-        expect(store().selection).toEqual({ kind: "home" });
         expect(editWindow(1, 1, BOXES)).toEqual({ kind: "home" });
         expect(followingStart(1, BOXES)).toBe(0);
     });
@@ -343,16 +350,10 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
             expect(isMarcherDimmed(store(), 1)).toBe(false);
         });
 
-        it("Stop and the loop's wrap keep the window on the isolated move (code review 1)", () => {
+        it("seeking onto the isolated start keeps the window on the isolated move (code review 1)", () => {
             store().isolate(2);
-            store().returnToStart();
-            expect(store().playheadBeat).toBe(10);
-            expect(store().selection).toEqual({
-                kind: "range",
-                start: 9,
-                end: 10,
-            });
             store().seek(9);
+            expect(store().playheadBeat).toBe(10);
             expect(store().selection).toEqual({
                 kind: "range",
                 start: 9,
@@ -594,11 +595,13 @@ describe("the playback cursor (UI-11)", () => {
         expect(store().playheadBeat).toBe(17);
     });
 
-    it("toggles the preview loop", () => {
+    it("toggles the preview loop, and reset clears it (UI-17)", () => {
         expect(store().loopPreview).toBe(false);
         store().toggleLoopPreview();
         expect(store().loopPreview).toBe(true);
         store().toggleLoopPreview(true);
         expect(store().loopPreview).toBe(true);
+        store().reset();
+        expect(store().loopPreview).toBe(false);
     });
 });

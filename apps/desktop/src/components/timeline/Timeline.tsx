@@ -105,8 +105,13 @@ export interface TimelinePlayback {
         options?: TimelineSeekOptions,
     ) => number | null | void;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
-    /** **Stop** (UI-11): back to the playhead */
-    readonly onStop?: () => void;
+    /**
+     * **Play from start flag** (UI-17): previews from the start flag, or stops a preview; without
+     * it, there is no such button
+     */
+    readonly onPlayFromFlag?: () => void;
+    /** A Play from start flag preview is running (UI-17), so its button reads Stop */
+    readonly playingFromFlag?: boolean;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -151,8 +156,6 @@ export interface TimelineProps {
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
     /** Resizing a clip by its edges (resize-move), in spec beats */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Turns **From start** off (UI-11), from the range bar */
-    readonly onPlayFromStartOff?: () => void;
     /** Unpins the start flag (UI-12), from its pin */
     readonly onUnpinStart?: () => void;
     /**
@@ -620,7 +623,8 @@ export function Timeline(props: TimelineProps) {
         className: props.className,
         onSeek: seekToBeat,
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
-        onStop: useLatestCallback(playback.onStop),
+        onPlayFromFlag: useLatestCallback(playback.onPlayFromFlag),
+        playingFromFlag: playback.playingFromFlag,
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,
@@ -634,7 +638,6 @@ export function Timeline(props: TimelineProps) {
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
-        onPlayFromStartOff: useLatestCallback(props.onPlayFromStartOff),
         onUnpinStart: useLatestCallback(props.onUnpinStart),
         transportSecondary: props.transportSecondary,
         transportViewControls: props.transportViewControls,

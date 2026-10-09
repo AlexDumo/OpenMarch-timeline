@@ -105,10 +105,10 @@ export interface PlaybackWindow {
 }
 
 /**
- * What **Play** previews (UI-11): exactly the window `[S, P)` the From start bar marks, with no
+ * What **Play from start flag** previews (UI-11, UI-17): exactly the window `[S, P)`, with no
  * roll on either side (project owner, V-24). An isolated timeline previews its whole range, as it
  * always has (09-isolation.md). `null` when there is no window at least a beat long to preview
- * (home, nothing selected), and Play plays on instead.
+ * (home, nothing selected), and Play from start flag plays the show from its start instead.
  */
 export function previewBounds(
     state: PlaybackWindow,

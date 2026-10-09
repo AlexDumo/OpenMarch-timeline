@@ -82,7 +82,7 @@ export const toTimelineSelection = (
                   startBeatIndex: selection.start,
                   endBeatIndex: selection.end,
               },
-              // UI-10: after Stop the window falls back, but the flag stays where it is
+              // UI-10: with P on or before S the window falls back, but the flag stays where it is
               ...(startBeat !== undefined && startBeat !== selection.start
                   ? { startFlagBeatIndex: startBeat }
                   : {}),
@@ -266,8 +266,6 @@ export default function TimelineModePanel() {
                 next.range.startBeatIndex,
                 next.range.endBeatIndex,
             );
-            // UI-11: drawing a range is asking to play it, as Logic's cycle drag does
-            if (next.drawn) store.setPlayFromStart(true);
         } else store.selectNothing();
     };
 
@@ -302,11 +300,6 @@ export default function TimelineModePanel() {
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
                     clipResize={clipResize}
-                    onPlayFromStartOff={() =>
-                        useTimelineSelectionStore
-                            .getState()
-                            .setPlayFromStart(false)
-                    }
                     onUnpinStart={() =>
                         useTimelineSelectionStore.getState().unpinStart()
                     }
@@ -373,7 +366,13 @@ function PlayingTimeline(
     const playback = useTimelinePlayback({ beats, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
-    const playFromStart = useTimelineSelectionStore((s) => s.playFromStart);
+    // UI-17: the bar marks what Play from start flag plays, once the flag is placed by hand or
+    // while it plays
+    const flagWindowLit = useTimelineSelectionStore(
+        (s) =>
+            s.isolation === null &&
+            (s.startPinned || s.playback?.kind === "preview"),
+    );
     // UI-12: the pin shows outside isolation, whose start flag is the isolated move's own
     const startPinned = useTimelineSelectionStore(
         (s) => s.startPinned && s.isolation === null,
@@ -383,10 +382,10 @@ function PlayingTimeline(
             toTimelineSelection(
                 editSelection,
                 startBeat,
-                playFromStart,
+                flagWindowLit,
                 startPinned,
             ),
-        [editSelection, startBeat, playFromStart, startPinned],
+        [editSelection, startBeat, flagWindowLit, startPinned],
     );
     // UI-12: the paused clock reads the beat the timeline shows, not the selected page's end
     const shownBeat = useTimelineSelectionStore(displayedBeat);

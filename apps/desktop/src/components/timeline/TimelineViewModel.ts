@@ -150,13 +150,16 @@ export type TimelineSelection =
           readonly kind: "range";
           readonly range: TimelineBeatRange;
           /**
-           * Where the start flag is drawn (UI-10), when it isn't the range's start: just after
-           * **Stop** the playhead sits on the flag and the window falls back to the page box
+           * Where the start flag is drawn (UI-10), when it isn't the range's start: after C the
+           * flag sits on the playhead and the window falls back to the page box
            */
           readonly startFlagBeatIndex?: number;
-          /** **From start** is on (UI-11): the window is drawn as a bar that turns it off */
+          /**
+           * The window is what Play from start flag plays (UI-17): placed by hand, or playing. It
+           * is drawn with a bar in the start flag's color
+           */
           readonly fromStart?: boolean;
-          /** The range was drawn by dragging on empty timeline space, which turns From start on */
+          /** The range was drawn by dragging on empty timeline space (Ctrl+drag) */
           readonly drawn?: boolean;
           /**
            * The start flag was placed by hand and stays through navigation (UI-10 pinning); UI-12
@@ -209,8 +212,10 @@ export interface TimelineInteractionProps {
     readonly selectedTarget?: TimelineTarget | null;
     readonly onSeek?: TimelineSeek;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
-    /** **Stop** (UI-10): stops and returns the playhead to the start flag; without it, no Stop button */
-    readonly onStop?: () => void;
+    /** **Play from start flag** (UI-17); without it, there is no such button */
+    readonly onPlayFromFlag?: () => void;
+    /** A Play from start flag preview is running (UI-17) */
+    readonly playingFromFlag?: boolean;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
@@ -252,8 +257,6 @@ export interface TimelineCommonProps
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
     /** Resizing a clip by its edges (resize-move), in view beats; without it clips have no handles */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Turns **From start** off (UI-11), from the range bar */
-    readonly onPlayFromStartOff?: () => void;
     /** Unpins the start flag (UI-12), from its pin */
     readonly onUnpinStart?: () => void;
     /** Transport controls that fold into "⋯" on a narrow panel, such as Sound (UI-12) */

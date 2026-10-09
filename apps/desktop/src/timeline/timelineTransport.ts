@@ -22,8 +22,6 @@ import { restartLivePlaybackAt } from "@/components/timeline/audio/AudioPlayer";
  * `useTimelineSelectionStore`; page mode keeps its own page-based transport.
  */
 
-/** Set by `stopTimelinePlayback` while playing, so the pause that follows returns to the playhead. */
-let stopRequested = false;
 /** Set by `suspendTimelinePlayback`, so the pause that follows leaves the cursor and playhead alone. */
 let suspendRequested = false;
 
@@ -57,8 +55,9 @@ export function navigateTimelinePages(
 
 /**
  * A click, scrub or page navigation while playing (UI-12): playback jumps to `beat` and goes on,
- * as in a DAW, and the playhead stays put. A preview jumped outside its window plays on from
- * there; isolation keeps the jump inside the isolated range. Returns false when not playing.
+ * as in a DAW, and the playhead stays put. A preview plays on from there, so stopping no longer
+ * returns to the playhead (UI-17); isolation keeps the jump inside the isolated range. Returns
+ * false when not playing.
  */
 export function jumpTimelinePlayback(
     beats: readonly BeatTiming[],
@@ -67,7 +66,7 @@ export function jumpTimelinePlayback(
     const state = useTimelineSelectionStore.getState();
     if (!state.playback || !Number.isFinite(beat)) return false;
     const target = playbackTarget(beats, beat);
-    const run = runAfterJump(state.playback, target);
+    const run = runAfterJump(state.playback);
     if (run !== state.playback) state.setPlayback(run);
     restartLivePlaybackAt(timeAtBeat(beats, target));
     state.cue(target);
@@ -82,14 +81,12 @@ const playbackTarget = (beats: readonly BeatTiming[], beat: number) => {
         : Math.min(Math.max(beat, 0), beats.length);
 };
 
-/** A preview jumped outside its window plays on from there; isolation keeps its run. */
-const runAfterJump = (
-    run: TimelinePlaybackRun,
-    target: number,
-): TimelinePlaybackRun =>
-    run.kind === "preview" &&
-    !useTimelineSelectionStore.getState().isolation &&
-    (target < run.from || target >= run.to)
+/**
+ * A jump or scrub says "I'm here now" (UI-17): a preview plays on from there, so its stop stays
+ * instead of returning to the playhead. Isolation keeps its run, which loops the isolated range.
+ */
+const runAfterJump = (run: TimelinePlaybackRun): TimelinePlaybackRun =>
+    run.kind === "preview" && !useTimelineSelectionStore.getState().isolation
         ? { kind: "on" }
         : run;
 
@@ -109,8 +106,8 @@ export function suspendTimelinePlayback(
 }
 
 /**
- * The scrub that suspended `run` ended at `beat`: playback starts once from there, as the same
- * run, or playing on when a preview's window doesn't hold it (as `jumpTimelinePlayback` does).
+ * The scrub that suspended `run` ended at `beat`: playback starts once from there, a preview as
+ * playing on (as `jumpTimelinePlayback` does).
  */
 export function resumeTimelinePlayback(
     beats: readonly BeatTiming[],
@@ -122,9 +119,8 @@ export function resumeTimelinePlayback(
     const target = playbackTarget(beats, beat);
     // A suspension whose pause never landed mustn't turn the next ordinary pause into one
     suspendRequested = false;
-    stopRequested = false;
     state.cue(target);
-    state.setPlayback(runAfterJump(run, target));
+    state.setPlayback(runAfterJump(run));
     setIsPlaying(true);
 }
 
@@ -211,36 +207,52 @@ export function jumpTimelinePages(
 }
 
 /**
- * **Play** (UI-11). With **From start** on, it previews the window from the start flag to the
- * playhead (`previewBounds`), looping when the loop is on; a paused preview
- * holding a frame inside those bounds resumes from it. With From start off, or no window to
- * preview (home), it plays on from where the cursor is (`startTimelinePlayOn`). Returns false,
- * and doesn't start, when there's nothing to play.
- *
- * @param showEndBeat the end of the show, `beats.length`
+ * Where **Play from start flag** plays (UI-17): the window from the start flag to the playhead
+ * (`previewBounds`). With no window (home, or a flag on the playhead), the show from its start.
+ * `null` when the show is empty.
  */
-export function startTimelinePlayback(
-    showEndBeat: number,
-    setIsPlaying: (isPlaying: boolean) => void,
+const flagPreviewBounds = (showEndBeat: number) => {
+    const state = useTimelineSelectionStore.getState();
+    const bounds = previewBounds(state);
+    if (bounds) return bounds;
+    return showEndBeat > 0 ? { from: 0, to: showEndBeat } : null;
+};
+
+/**
+ * **Play from start flag** (UI-17, Shift+Space): previews the window from the start flag to the
+ * playhead, looping when the loop is on. Any stop puts the cursor back on the playhead, the page
+ * you were on. While a preview runs it stops it; while playing from here it restarts from the
+ * flag, and the stop still returns to the playhead, which playing never moved.
+ *
+ * @param beats the show's beats, to restart the audio when it is already playing
+ */
+export function playTimelineFromFlag(
+    beats: readonly BeatTiming[],
+    {
+        isPlaying,
+        setIsPlaying,
+    }: {
+        isPlaying: boolean;
+        setIsPlaying: (isPlaying: boolean) => void;
+    },
 ): boolean {
     const state = useTimelineSelectionStore.getState();
-    const bounds = state.playFromStart ? previewBounds(state) : null;
-    if (!bounds) return startTimelinePlayOn(showEndBeat, setIsPlaying);
-    // A Stop whose pause never landed (pressed with a stale isPlaying) mustn't turn the next
-    // ordinary pause into a return
-    stopRequested = false;
-    const held = state.cursorBeat;
-    const resume = held !== null && held >= bounds.from && held < bounds.to;
-    state.cue(resume ? held : bounds.from);
+    if (isPlaying && state.playback?.kind === "preview") {
+        setIsPlaying(false);
+        return true;
+    }
+    const bounds = flagPreviewBounds(beats.length);
+    if (!bounds) return false;
+    state.cue(bounds.from);
     state.setPlayback({ kind: "preview", ...bounds });
-    setIsPlaying(true);
+    if (isPlaying) restartLivePlaybackAt(timeAtBeat(beats, bounds.from));
+    else setIsPlaying(true);
     return true;
 }
 
 /**
- * Playing on (UI-11, Play with From start off): plays from the playhead, or from the frame a
- * paused preview holds, to the end of the show, as UI-10's Play did. Returns false when there's
- * nothing after it.
+ * Playing on (UI-17, Play from here): plays from the playhead to the end of the show, as UI-10's
+ * Play did. Returns false when there's nothing after it.
  */
 export function startTimelinePlayOn(
     showEndBeat: number,
@@ -249,7 +261,6 @@ export function startTimelinePlayOn(
     const state = useTimelineSelectionStore.getState();
     const start = state.cursorBeat ?? state.playheadBeat;
     if (!canPlayOn(start, showEndBeat)) return false;
-    stopRequested = false;
     state.cue(start);
     state.setPlayback({ kind: "on" });
     setIsPlaying(true);
@@ -257,10 +268,11 @@ export function startTimelinePlayOn(
 }
 
 /**
- * Play/pause from the transport or the shortcut (Space): pausing keeps the selection; playing
- * follows From start (`startTimelinePlayback`).
+ * **Play from here** (UI-17, Space): plays on from the playhead. Playing, it stops: playing on
+ * stops in place, moving the playhead there, and a preview returns to the playhead (the playback
+ * driver does both once the pause lands).
  */
-export function toggleTimelinePlayback({
+export function playTimelineFromHere({
     isPlaying,
     showEndBeat,
     setIsPlaying,
@@ -270,35 +282,25 @@ export function toggleTimelinePlayback({
     setIsPlaying: (isPlaying: boolean) => void;
 }): void {
     if (isPlaying) setIsPlaying(false);
-    else startTimelinePlayback(showEndBeat, setIsPlaying);
-}
-
-/** Whether the pause in progress came from **Stop**; clears the request. */
-export function consumeStopRequest(): boolean {
-    const requested = stopRequested;
-    stopRequested = false;
-    return requested;
+    else startTimelinePlayOn(showEndBeat, setIsPlaying);
 }
 
 /**
- * **Stop** (UI-11): stops playback and puts the cursor back on the playhead, so the edit window is
- * as it was before Play. While playing, the playback driver does this once the pause lands, so its
- * pause handling doesn't overwrite it. Paused with a held frame, it drops the frame. Paused on the
- * playhead, it returns the playhead to the start flag (UI-10).
+ * The Play from here button while a preview runs (UI-17): playback goes on from where it is, as
+ * playing on, so stopping stays there instead of returning to the playhead.
  */
-export function stopTimelinePlayback({
-    isPlaying,
-    setIsPlaying,
-}: {
-    isPlaying: boolean;
-    setIsPlaying: (isPlaying: boolean) => void;
-}): void {
-    if (isPlaying) {
-        stopRequested = true;
-        setIsPlaying(false);
-        return;
-    }
+export function continueTimelinePlayback(): void {
     const state = useTimelineSelectionStore.getState();
-    if (state.cursorBeat !== null) state.clearCursor();
-    else state.returnToStart();
+    if (state.playback?.kind === "preview") state.setPlayback({ kind: "on" });
+}
+
+/**
+ * **C** (UI-17): puts the start flag on the beat the timeline shows and pins it, so Play from start
+ * flag plays from there once the playhead moves on. Does nothing in isolation, whose flag is the
+ * isolated move's start.
+ */
+export function setTimelineStartFlagHere(): void {
+    const state = useTimelineSelectionStore.getState();
+    if (state.isolation) return;
+    state.pinStartAt(displayedBeat(state));
 }

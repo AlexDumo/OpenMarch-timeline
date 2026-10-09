@@ -722,7 +722,8 @@ const TimelineSurface = memo(function TimelineSurface({
                         positionBeat={positionBeat}
                         isPlaying={props.isPlaying}
                         onPlayingChange={props.onPlayingChange}
-                        onStop={props.onStop}
+                        onPlayFromFlag={props.onPlayFromFlag}
+                        playingFromFlag={props.playingFromFlag}
                         onNavigate={onNavigate}
                         onFit={
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
@@ -903,7 +904,6 @@ const TimelineSurface = memo(function TimelineSurface({
                                 selection?.kind === "range" &&
                                 selection.fromStart === true
                             }
-                            onFromStartOff={props.onPlayFromStartOff}
                             startPinned={
                                 selection?.kind === "range" &&
                                 selection.startPinned === true
