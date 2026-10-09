@@ -1,3 +1,4 @@
+import type { XY } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { assignmentFromRow } from "@/timeline/timelineRows";
 import {
@@ -10,6 +11,7 @@ import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { refuse } from "./timelineErrors";
 import { addMarchersToTimelineInTransaction } from "./timelineMembership";
+import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
 import { readPageGrid } from "./timelineRipple";
 import { clearOwnPageMoves, isPageBox, ownPageMoves } from "./timelineMoves";
 import {
@@ -92,16 +94,25 @@ const asOneEdit = async (
  * beats) gets its own zero-motion move over the box, at where it stands there, marked kept.
  * Marchers already kept, with their own move there, or partway through a longer move at one of
  * the box's flags are skipped. Refused (E-ARGS) when `pageBox` isn't a page's box, or a marcher
- * doesn't exist. Nobody to keep writes nothing and adds no undo step.
+ * doesn't exist (or an `at` spot isn't a valid destination). Nobody to keep writes nothing and
+ * adds no undo step.
+ *
+ * With `at`, a marcher given a spot there ends the box at that spot instead: **Only Page N**
+ * after an edit (UI-18) keeps the next page where it was before the edit, so the kept move walks
+ * back from the edited spot. It is still the designer's kept spot (marked), and **Follow again**
+ * takes it back.
  */
 export async function keepMarchersOnPage({
     db,
     pageBox,
     marcherIds,
+    at,
 }: {
     db: DbConnection;
     pageBox: KeptPageBox;
     marcherIds: readonly number[];
+    /** Where some marchers end the box, when not where they stand there */
+    at?: ReadonlyMap<number, XY>;
 }): Promise<KeepResult> {
     if (marcherIds.length === 0) return { changed: [], skipped: [] };
     return await asOneEdit(db, "keepMarchersOnPage", async (tx) => {
@@ -127,6 +138,17 @@ export async function keepMarchersOnPage({
             range: pageBox,
             marcherIds: toKeep,
         });
+        // Before the markers: moving a marked spot's ending would unmark it (`timelineMoves.ts`)
+        for (const own of added) {
+            const point = at?.get(own.marcherId);
+            if (point)
+                await updateTimelineSlotDestinationInTransaction({
+                    tx,
+                    transitionId: own.transitionId,
+                    slotIndex: 0,
+                    point,
+                });
+        }
         await markAssignmentsKeptInTransaction(
             tx,
             added.map((o) => o.assignmentId),
