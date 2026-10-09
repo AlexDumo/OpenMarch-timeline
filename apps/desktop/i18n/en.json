@@ -1373,7 +1373,7 @@
         },
         "edit": {
             "passThrough": {
-                "catchUp": "Catches up to {caughtUp}'s set by its end",
+                "catchUp": "Now catches up to the set at the end of {caughtUp}",
                 "keepStops": {
                     "many": "Keep Pages {first}–{last} as stops",
                     "one": "Keep Page {page} as a stop",
@@ -1384,8 +1384,8 @@
                     "one": "Page {page} is no longer a stop",
                     "unnamed": "The sets inside this move are no longer stops"
                 },
-                "through": "Moves straight through {through}",
-                "throughAndCatchUp": "Moves straight through {through}, then catches up to {caughtUp}'s set"
+                "through": "Now moves straight through {through}",
+                "throughAndCatchUp": "Now moves straight through {through}, then catches up to the set at the end of {caughtUp}"
             }
         },
         "errors": {
