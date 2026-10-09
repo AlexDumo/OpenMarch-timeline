@@ -742,7 +742,7 @@ from it. The spec still wins on the model; this file decides presentation.
   - **The grip** is the page line through the whole page-box row (owner, 2026-10-08: the
     lower-half grip was hard to find, and "just the line at the top in the page boxes"; below the
     row the line isn't a grip), 12px wide (narrower on a narrow box), with a bar on hover and a
-    `col-resize` cursor. On a flag it takes the place of the playhead's head and the start
+    horizontal-drag (`ew-resize`) cursor. On a flag it takes the place of the playhead's head and the start
     pennant; those are dragged from the measure row, and clicking a page box puts the playhead on
     its flag. A press that doesn't move selects the box on that side; a plain drag elsewhere on a
     box still scrubs (UI-12). Home's flag has no grip. While playing or isolated, there are no
