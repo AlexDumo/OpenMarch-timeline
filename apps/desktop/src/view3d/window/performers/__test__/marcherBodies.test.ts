@@ -1,4 +1,5 @@
 // @vitest-environment node
+// cspell:words Interpolant
 import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
@@ -16,11 +17,13 @@ import {
     MarcherBodies,
     NO_HOLD,
     bakeForBodies,
+    clipForBake,
     clipsToLoad,
     rowKey,
     slotHoldId,
     visibleIndex,
 } from "../marchers/marcherBodies";
+import { platformRig } from "../marchers/platformClip";
 
 async function body(): Promise<BufferGeometry> {
     const b = fs.readFileSync(
@@ -392,5 +395,42 @@ describe("part-filtered index", () => {
         expect([...parts].sort((a, b) => a - b)).toEqual([
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
         ]);
+    });
+});
+
+describe("the clips the bake plays", () => {
+    it("puts backward marching and closes on the platform of the foot, and leaves forward marching flat", async () => {
+        const bodies = await loadedBodies();
+        const skeleton = bodies.values().next().value!.mesh.skeleton;
+        const c = fs.readFileSync(
+            path.resolve(
+                __dirname,
+                "../../../assets/om-pose/clips/clips-h100.glb",
+            ),
+        );
+        const gltf = await new GLTFLoader().parseAsync(
+            c.buffer.slice(c.byteOffset, c.byteOffset + c.byteLength),
+            "",
+        );
+        const clips = Object.fromEntries(
+            gltf.animations
+                .filter((a) =>
+                    ["8to5", "back8to5", "halt_8to5"].includes(a.name),
+                )
+                .map((a) => [a.name, a]),
+        );
+        const rig = platformRig(skeleton);
+        const rootY = (clip: THREE.AnimationClip) => {
+            const t = clip.tracks.find((x) => x.name === "root.position")!;
+            const sampler = (
+                t as unknown as { createInterpolant(): THREE.Interpolant }
+            ).createInterpolant();
+            return sampler.evaluate(clip.duration / 2)[1];
+        };
+        for (const name of ["back8to5", "halt_8to5"]) {
+            const baked = clipForBake(name, clips, "left", rig);
+            expect(rootY(baked) - rootY(clips[name])).toBeGreaterThan(0.01);
+        }
+        expect(clipForBake("8to5", clips, "left", rig)).toBe(clips["8to5"]);
     });
 });

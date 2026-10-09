@@ -46,6 +46,12 @@ import { holdClip, poseArms } from "./armPose";
 import { instrumentMaterial } from "./instrumentGeometry";
 import { HornSet } from "./hornSet";
 import { mirrorClip, mirrorName } from "./mirrorClip";
+import {
+    platformClip,
+    platformRig,
+    platformWeight,
+    type PlatformRig,
+} from "./platformClip";
 
 /**
  * Contact shadow under each marcher: a soft dark disc on the turf, in place
@@ -195,12 +201,36 @@ export function clipsToLoad(
 }
 
 /**
+ * The clip a row bakes from: on the right foot the mirror of its partner
+ * (`mirrorName`), so slides and built turns keep their travel direction
+ * while the feet swap; then backward marching and closes go up on the
+ * platform of the foot (`platformClip.ts`).
+ */
+export function clipForBake(
+    name: string,
+    clips: Record<string, THREE.AnimationClip>,
+    foot: StepOffFoot,
+    rig: PlatformRig,
+): THREE.AnimationClip {
+    let clip = clips[name];
+    if (foot === "right") {
+        const partner = mirrorName(name);
+        const source = clips[partner];
+        if (!source)
+            throw new Error(
+                `3D View: clip ${partner} isn't loaded to mirror as ${name}`,
+            );
+        clip = mirrorClip(source, name);
+    }
+    const weight = platformWeight(name);
+    return weight ? platformClip(clip, rig, weight) : clip;
+}
+
+/**
  * Every v4u body shares one skeleton, so any of them bakes for all. Each
  * clip is baked once per hold in `holds` (docs/3d/instruments.md §5): the
- * arm tracks replaced by the hold's pose, under `rowKey` names. On the
- * right foot every row comes from the mirror of its partner clip
- * (`mirrorName`), so slides and built turns keep their travel direction
- * while the feet swap.
+ * arm tracks replaced by the hold's pose, under `rowKey` names. Each row's
+ * clip comes from `clipForBake`.
  */
 export function bakeForBodies(
     bodies: ReadonlyMap<BodyType, LoadedBody>,
@@ -210,16 +240,10 @@ export function bakeForBodies(
 ): Bake {
     const first = bodies.values().next().value;
     if (!first) throw new Error("3D View: no bodies to bake on");
-    const source = (name: string): THREE.AnimationClip => {
-        if (foot === "left") return clips[name];
-        const partner = mirrorName(name);
-        const clip = clips[partner];
-        if (!clip)
-            throw new Error(
-                `3D View: clip ${partner} isn't loaded to mirror as ${name}`,
-            );
-        return mirrorClip(clip, name);
-    };
+    const rig = platformRig(first.mesh.skeleton);
+    const sources: Record<string, THREE.AnimationClip> = {};
+    for (const name of Object.keys(clips))
+        sources[name] = clipForBake(name, clips, foot, rig);
     const all: Record<string, THREE.AnimationClip> = {};
     for (const h of holds) {
         const pose =
@@ -227,7 +251,7 @@ export function bakeForBodies(
                 ? null
                 : poseArms(first.mesh.skeleton, parseHoldId(h));
         for (const name of Object.keys(clips)) {
-            const clip = source(name);
+            const clip = sources[name];
             all[rowKey(name, h)] = pose
                 ? holdClip(clip, pose, rowKey(name, h))
                 : clip;

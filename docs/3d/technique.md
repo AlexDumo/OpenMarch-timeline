@@ -66,6 +66,19 @@ the 3D View shows the difference.
 - The half step is along the line of travel only; the side-to-side offset of
   a foot from the body's center (about half the hip width) isn't modeled.
 
+## On the platform of the foot
+
+- **A close and backward marching happen on the platform of the foot**,
+  with the heel about an inch off the ground (2026-10-09).
+- Code: `window/performers/marchers/platformClip.ts`, applied when the clips
+  are baked. Each foot tips down about its ankle, the toes counter-rotated to
+  stay flat, and the body rises by what that drops the ball, so the ball stays
+  put and the heel comes up 2.54 cm (`HEEL_LIFT`). Backward loops are on the
+  platform throughout, a backward step-off rises onto it through its first
+  half, and every close rises onto it as it starts (or stays up from a
+  backward march) and comes down flat over the last fifth of the count, as
+  the feet meet.
+
 ## The halt (the close)
 
 - In an 8-count move the right foot lands on count 8 and the left foot comes
