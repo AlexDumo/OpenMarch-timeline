@@ -5,11 +5,11 @@ import {
     type Resolver,
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
-import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import {
+    pageNumberOffsetInTransaction,
     readPageGrid,
     timelineModeInTransaction,
     withTimelinePageRipple,
@@ -73,20 +73,6 @@ export interface PageDeleteWithMovesResult {
 /** How far a position may move, in canvas pixels, and still count as unchanged */
 const SAME_POSITION = 1e-6;
 
-const pageNumberOffsetIn = async (tx: DbTransaction): Promise<number> => {
-    const row = await tx
-        .select({ json: schema.workspace_settings.json_data })
-        .from(schema.workspace_settings)
-        .get();
-    if (!row) return 0;
-    try {
-        const parsed = workspaceSettingsSchema.safeParse(JSON.parse(row.json));
-        return parsed.success ? parsed.data.pageNumberOffset : 0;
-    } catch {
-        return 0;
-    }
-};
-
 /** Every page's name, as `fromDatabasePages` gives it, by id. */
 async function readPageNames(
     tx: DbTransaction,
@@ -99,7 +85,7 @@ async function readPageNames(
         .all();
     const names = generatePageNames(
         rows.map((r) => Boolean(r.is_subset)),
-        await pageNumberOffsetIn(tx),
+        await pageNumberOffsetInTransaction(tx),
     );
     return new Map(
         rows.map((r, order) => [
