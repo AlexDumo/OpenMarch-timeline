@@ -101,3 +101,33 @@ describe("mirrorName", () => {
         expect(mirrorName("marktime")).toBe("marktime");
     });
 });
+
+describe("the step-off foot is the performer's own", () => {
+    it("steps off on the performer's left as baked, and on their right mirrored", async () => {
+        const { scene, clips } = await load();
+        const clip = (name: string) => clips.find((c) => c.name === name)!;
+        // the body faces +Z (the toes point that way), so the performer's left is +X
+        const att = clip("attention");
+        expect(posed(scene, att, 0, "DEF-toeL").z).toBeGreaterThan(
+            posed(scene, att, 0, "DEF-footL").z,
+        );
+        expect(posed(scene, att, 0, "DEF-footL").x).toBeGreaterThan(0);
+
+        // three tenths of the way through the step-off count: which foot is out front?
+        const lead = (c: THREE.AnimationClip) => {
+            const a = posed(scene, c, 0.3, "DEF-footL");
+            const b = posed(scene, c, 0.3, "DEF-footR");
+            return a.z > b.z ? a : b;
+        };
+        // "left": the clip as baked
+        const left = lead(clip("stepoff_8to5"));
+        expect(left.x).toBeGreaterThan(0);
+        expect(left.z).toBeGreaterThan(0.2);
+        // "right": every row mirrored from its partner
+        const right = lead(
+            mirrorClip(clip(mirrorName("stepoff_8to5")), "stepoff_8to5"),
+        );
+        expect(right.x).toBeLessThan(0);
+        expect(right.z).toBeGreaterThan(0.2);
+    });
+});

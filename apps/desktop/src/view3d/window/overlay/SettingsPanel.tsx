@@ -413,7 +413,10 @@ function BeatLeadRow() {
     );
 }
 
-/** Which foot the band steps off on: a window setting until the show stores it. */
+/**
+ * Which foot the band steps off on, always the performer's own: a window
+ * setting until the show stores it.
+ */
 function StepOffFootRow() {
     const { t } = useTranslate();
     const foot = useView3dSceneStore((s) => s.stepOffFoot);
@@ -430,6 +433,9 @@ function StepOffFootRow() {
                 label={t("view3d.settings.stepOffFoot")}
                 testId="view3d-step-off-foot-picker"
             />
+            <p className="text-sub text-text/60">
+                {t("view3d.settings.stepOffFootHint")}
+            </p>
         </Row>
     );
 }
