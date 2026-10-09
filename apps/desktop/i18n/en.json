@@ -1291,6 +1291,16 @@
                 "trail": "Trail"
             },
             "hornStateHint": "Shows always play horns up. The other positions are here to check the poses.",
+            "guardEquipment": "Guard equipment",
+            "guardEquipmentMode": {
+                "section": "By section",
+                "flag6": "6 ft flag",
+                "swingFlag": "Swing flag",
+                "doubleSwingFlag": "Double swing",
+                "rifle": "Rifle",
+                "sabre": "Sabre"
+            },
+            "guardEquipmentHint": "By section gives flags the 6 ft flag and rifles the rifle. Pick one piece to put it in every guard member's hands.",
             "stepOffFoot": "Step off",
             "stepOffFootMode": {
                 "left": "Performer's left",

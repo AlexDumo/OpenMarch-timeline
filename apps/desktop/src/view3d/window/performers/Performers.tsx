@@ -95,6 +95,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const queryClient = useQueryClient();
     const quality = useView3dSceneStore((s) => s.quality);
     const hornState = useView3dSceneStore((s) => s.hornState);
+    const guardEquipment = useView3dSceneStore((s) => s.guardEquipment);
     const stepOffFoot = useView3dSceneStore((s) => s.stepOffFoot);
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
@@ -154,9 +155,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         return rows.map(([id, section, fill], i) => ({
             // varied heights at high quality; one height (one bake class) at low
             body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
-            uniform: sectionUniform(section, fill, hornState, options[i]),
+            uniform: sectionUniform(
+                section,
+                fill,
+                hornState,
+                options[i],
+                guardEquipment === "section" ? undefined : guardEquipment,
+            ),
         }));
-    }, [looksKey, quality, hornState]);
+    }, [looksKey, quality, hornState, guardEquipment]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],

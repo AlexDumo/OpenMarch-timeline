@@ -15,6 +15,7 @@ import {
     sectionUniform,
     uniformKey,
 } from "../looks";
+import type { GuardModelId } from "../../instruments/model";
 
 const assets = path.resolve(__dirname, "../../../assets/om-pose");
 const manifest = JSON.parse(
@@ -117,6 +118,33 @@ describe("section uniforms", () => {
             "carry",
         );
         expect(sectionUniform("Drum Major", null).options.carry).toBeNull();
+    });
+
+    it("gives every guard section the chosen equipment, and no one else", () => {
+        const pick = (section: string, guard?: GuardModelId) =>
+            sectionUniform(section, null, "up", undefined, guard).options.carry;
+        expect(pick("Color Guard")).toEqual({ model: "flag6", family: "flag" });
+        expect(pick("Rifle")).toEqual({ model: "rifle", family: "rifle" });
+        expect(pick("Color Guard", "sabre")).toEqual({
+            model: "sabre",
+            family: "sabre",
+        });
+        expect(pick("Rifle", "doubleSwingFlag")).toEqual({
+            model: "doubleSwingFlag",
+            family: "flag",
+        });
+        expect(pick("Dancer", "swingFlag")).toEqual({
+            model: "swingFlag",
+            family: "flag",
+        });
+        expect(pick("Flag", "rifle")).toEqual({
+            model: "rifle",
+            family: "rifle",
+        });
+        expect(pick("Trumpet", "sabre")).toEqual({
+            model: "trumpet",
+            family: "brass",
+        });
     });
 
     it("never shows the placeholder instruments, for any section", () => {

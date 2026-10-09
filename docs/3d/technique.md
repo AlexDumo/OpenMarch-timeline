@@ -234,6 +234,10 @@ backward march, and so on).
 
 - Equipment basics: 6 ft flag, swing flag, double swing flag, weapon (rifle),
   sabre.
+- Flag and Color Guard sections carry the 6 ft flag and Rifle sections the
+  rifle. The Guard equipment setting puts any one piece in every guard
+  section's hands, to see the others, until sections store their equipment
+  (`guardEquipment` in `window/sceneStore.ts`).
 - The front ensemble and speakers are props, not dots: they need geometry
   but don't march.
 

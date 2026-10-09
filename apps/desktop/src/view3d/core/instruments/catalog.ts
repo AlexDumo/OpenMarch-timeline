@@ -3,7 +3,7 @@
  * Sections without a model carry nothing. Pure.
  */
 import type { HoldFamily } from "./holds";
-import type { ModelId, ModelOptions } from "./model";
+import type { GuardModelId, ModelId, ModelOptions } from "./model";
 
 export type Finish = "brass" | "silver";
 
@@ -44,4 +44,20 @@ const SECTIONS: Record<string, Carry> = {
 
 export function carryForSection(section: string): Carry | null {
     return SECTIONS[section.trim().toLowerCase()] ?? null;
+}
+
+/** The color guard's equipment, in the order the settings list it. */
+export const GUARD_EQUIPMENT: readonly GuardModelId[] = [
+    "flag6",
+    "swingFlag",
+    "doubleSwingFlag",
+    "rifle",
+    "sabre",
+];
+
+/** Carrying one piece of guard equipment: every flag uses the flag hold. */
+export function guardCarry(model: GuardModelId): Carry {
+    const family: HoldFamily =
+        model === "rifle" ? "rifle" : model === "sabre" ? "sabre" : "flag";
+    return { model, family };
 }

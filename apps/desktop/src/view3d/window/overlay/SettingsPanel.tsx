@@ -19,6 +19,8 @@ import clsx from "clsx";
 import { useView3dSceneStore } from "../sceneStore";
 import { QUALITY_MODES } from "../qualityPreference";
 import { HOLD_STATES } from "../hornState";
+import { GUARD_EQUIPMENT } from "@/view3d/core/instruments/catalog";
+import type { GuardEquipment } from "../sceneStore";
 import { Segmented } from "./Panel";
 import { LightingControl, VenuePicker, useVenueRequest } from "./VenueControls";
 
@@ -81,6 +83,7 @@ export function SettingsPanel({
                     <QualityRow />
                     <PowerRows />
                     <HornStateRow />
+                    <GuardEquipmentRow />
                     <StepOffFootRow />
                 </Section>
                 <Section title={t("view3d.settings.keysSection")}>
@@ -382,6 +385,36 @@ function HornStateRow() {
             />
             <p className="text-sub text-text/60">
                 {t("view3d.settings.hornStateHint")}
+            </p>
+        </Row>
+    );
+}
+
+const GUARD_CHOICES: readonly GuardEquipment[] = [
+    "section",
+    ...GUARD_EQUIPMENT,
+];
+
+/** What the guard carries: each section's own, or one piece for all, to see the others. */
+function GuardEquipmentRow() {
+    const { t } = useTranslate();
+    const equipment = useView3dSceneStore((s) => s.guardEquipment);
+    const setEquipment = useView3dSceneStore((s) => s.setGuardEquipment);
+    return (
+        <Row label={t("view3d.settings.guardEquipment")} stacked>
+            <Segmented
+                value={equipment}
+                options={GUARD_CHOICES.map((value) => ({
+                    value,
+                    label: t(`view3d.settings.guardEquipmentMode.${value}`),
+                }))}
+                onChange={setEquipment}
+                label={t("view3d.settings.guardEquipment")}
+                testId="view3d-guard-equipment-picker"
+                className="grid! grid-cols-3 [&>*]:justify-start"
+            />
+            <p className="text-sub text-text/60">
+                {t("view3d.settings.guardEquipmentHint")}
             </p>
         </Row>
     );

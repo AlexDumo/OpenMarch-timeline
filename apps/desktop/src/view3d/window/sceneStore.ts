@@ -17,6 +17,10 @@
  *   shadows and halves the crowd.
  * - `hornState`: which hold the brass plays. Always `up` for shows; the
  *   settings panel can switch it to check the other holds (`hornState.ts`).
+ * - `guardEquipment`: what the guard sections carry: `section` for each
+ *   section's own (flags carry the 6 ft flag, rifles the rifle), or one
+ *   piece for every guard section, to see the other equipment. A window
+ *   setting until sections store their equipment.
  * - `stepOffFoot`: which foot the band steps off on; `right` plays every
  *   clip mirrored. A window setting until the show stores it.
  * - `powerPrefs`: pause drawing when nothing moves, and cap the frame rate
@@ -48,6 +52,7 @@ import {
     type QualityMode,
 } from "./qualityPreference";
 import type { HoldState } from "./hornState";
+import type { GuardModelId } from "@/view3d/core/instruments/model";
 import { loadPowerPrefs, savePowerPrefs, type PowerPrefs } from "./drawPolicy";
 import type { StepOffFoot } from "./performers/marchers/marcherBodies";
 
@@ -55,6 +60,9 @@ import type { StepOffFoot } from "./performers/marchers/marcherBodies";
 export const CROWD_CLEAR_RADIUS = 4.9;
 
 export type View3dQuality = "low" | "high";
+
+/** Each guard section's own equipment, or one piece for all of them. */
+export type GuardEquipment = "section" | GuardModelId;
 
 export interface View3dSceneState {
     kitId: VenueKitId | null;
@@ -66,6 +74,8 @@ export interface View3dSceneState {
     setQuality: (quality: View3dQuality) => void;
     hornState: HoldState;
     setHornState: (state: HoldState) => void;
+    guardEquipment: GuardEquipment;
+    setGuardEquipment: (equipment: GuardEquipment) => void;
     stepOffFoot: StepOffFoot;
     setStepOffFoot: (foot: StepOffFoot) => void;
     powerPrefs: PowerPrefs;
@@ -102,6 +112,8 @@ export const useView3dSceneStore = create<View3dSceneState>()((set) => ({
     setQuality: (quality) => set({ quality }),
     hornState: "up",
     setHornState: (hornState) => set({ hornState }),
+    guardEquipment: "section",
+    setGuardEquipment: (guardEquipment) => set({ guardEquipment }),
     stepOffFoot: "left",
     setStepOffFoot: (stepOffFoot) => set({ stepOffFoot }),
     powerPrefs: loadPowerPrefs(),
