@@ -9,7 +9,9 @@ import {
     platformClip,
     platformRig,
     platformWeight,
+    prepBase,
 } from "../marchers/platformClip";
+import { prepName } from "@/view3d/core/marchers/planner";
 
 async function parse(file: string) {
     const b = fs.readFileSync(
@@ -148,5 +150,33 @@ describe("marching on the platform of the foot", () => {
             expect(end[1][s].heel.distanceTo(end[0][s].heel)).toBeLessThan(
                 1e-3,
             );
+    });
+});
+
+describe("prep landings on the platform", () => {
+    it("rises into the landing at its loop time and comes down through the next half count", () => {
+        // a two-count loop: clip fraction u is clip time / 2 counts
+        const w = platformWeight(prepName("8to5", 1))!;
+        expect(w(1 / 2)).toBeCloseTo(1, 9); // the landing
+        expect(w(0.75 / 2)).toBeGreaterThan(0.5); // rising
+        expect(w(0.3 / 2)).toBe(0); // well before
+        expect(w(1.5 / 2)).toBe(0); // down by the next half count
+        expect(w(1.25 / 2)).toBeGreaterThan(0); // still coming down
+        // a landing at loop time 0 wraps across the loop's end
+        const w0 = platformWeight(prepName("8to5", 0))!;
+        expect(w0(0)).toBeCloseTo(1, 9);
+        expect(w0(1.8 / 2)).toBeGreaterThan(0.5);
+    });
+
+    it("keeps a backward loop on the platform throughout", () => {
+        const w = platformWeight(prepName("back8to5", 0))!;
+        for (const u of [0, 0.3, 0.6, 0.9]) expect(w(u)).toBe(1);
+    });
+
+    it("reads a prep row's base clip back", () => {
+        expect(prepBase(prepName("slideL8to5-h095", 1))).toBe(
+            "slideL8to5-h095",
+        );
+        expect(prepBase("8to5")).toBe("8to5");
     });
 });

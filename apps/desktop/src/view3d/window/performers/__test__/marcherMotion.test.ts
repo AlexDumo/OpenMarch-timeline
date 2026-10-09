@@ -5,6 +5,7 @@ import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
 import type { MarcherTimeline } from "@/utilities/Keyframes";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { buildCountClock } from "@/view3d/core/marchers/countClock";
+import { eventRows } from "@/view3d/core/marchers/planner";
 import { MarcherMotion, planShow, STEP_AHEAD } from "../marchers/marcherMotion";
 import { planMarcher } from "@/view3d/core/marchers/planner";
 import type { MarcherBodies } from "../marchers/marcherBodies";
@@ -143,8 +144,9 @@ describe("playing a crossfade", () => {
             { row: number; frames: number; counts: number }
         > = {};
         for (const e of plan.events) {
-            rows[e.clip] = { row: 0, frames: 60, counts: 2 };
-            if (e.clip2) rows[e.clip2] = { row: 1, frames: 60, counts: 2 };
+            const [a, b] = eventRows(e);
+            rows[a] = { row: 0, frames: 60, counts: 2 };
+            if (b) rows[b] = { row: 1, frames: 60, counts: 2 };
         }
         const bodies = {
             bake: { rows },

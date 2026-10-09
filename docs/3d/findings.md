@@ -202,4 +202,22 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
 - Still open: body meshes are 86 draws (7 body types times looks), the next
   target, and a real energy reading on battery.
 
+### 2026-10-09 · trevor (3d/p7-instruments) · bake only the rows marchers play
+
+- Change: the clip bake took every planned clip times every hold in the show
+  (11 holds on the Fall Show 2026 demo). It now bakes only the clip and hold
+  pairs some marcher plays, plus attention per height class and hold.
+- Measured in the built Electron app, console bake log, High quality, Fall
+  Show 2026 (385 marchers):
+
+  | Build             | Bake                                   |
+  | ----------------- | -------------------------------------- |
+  | Before prep steps | 350 clips × 11 holds, 208.0 MB, 1.75 s |
+  | Prep steps added  | 438 clips × 11 holds, 295.4 MB, 2.41 s |
+  | Rows played only  | 1,963 rows, 126.6 MB, 1.05 s           |
+
+- Reading: the GPU bake texture is 39 percent smaller than before prep steps
+  and bakes in 60 percent of the time, prep rows included. A copy of
+  JackBrittAct1 bakes 1,639 rows, 123.6 MB, in 0.99 s.
+
 ## Verdicts

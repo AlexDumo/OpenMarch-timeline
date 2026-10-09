@@ -72,8 +72,12 @@ export const SIZE_JUMP = 0.05;
 export const WEIGHT_SNAP = 1e-3;
 /** Leg turns within this count as unturned, for change clips (radians). */
 export const TURN_EPS = (1 * Math.PI) / 180;
-/** A leg turn this big within one move is a change of direction, faded like a change of move (radians). */
-export const SHARP_TURN = (20 * Math.PI) / 180;
+/**
+ * A leg turn this big between counts is a change of direction, faded like a
+ * change of move with a prep step (docs/3d/technique.md): under it the legs
+ * just ease to the new direction (radians).
+ */
+export const SHARP_TURN = (10 * Math.PI) / 180;
 /** A halt's residual leg turn starts this far into its count: after the foot has closed. */
 export const HALT_TURN_START = 0.8;
 /** Between rests, a landing correction anchor at least this often (counts). */
@@ -123,6 +127,12 @@ export interface PlanEvent {
     fadeEnd: number;
     /** The count clock value at which the clip is at its time 0. */
     phaseStart: number;
+    /**
+     * Crossfades centered on a change of move: the loop time (0 or 1 count)
+     * of the old move's last landing, the prep step, which plays on the
+     * platform of the foot (`prepName` rows). Otherwise null.
+     */
+    prep: number | null;
     /** Transitions: the pair whose root travel places the body. */
     root: TurnedPair | ClipPair | null;
     /**
@@ -298,6 +308,8 @@ interface Draft {
     fadeEnd?: number;
     /** The second count of a two-count crossfade: no event of its own. */
     continued?: boolean;
+    /** See `PlanEvent.prep`. */
+    prep?: number | null;
 }
 
 /** A single clip's root travel as a pair (for change and mark time clips). */
@@ -434,6 +446,8 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                 root: null,
                 fadeStart: centered ? k - 0.5 : k,
                 fadeEnd: centered ? k + 0.5 : k + 1,
+                // the old move's last landing, at boundary k, is the prep step
+                prep: centered ? (((k - last.phaseStart) % 2) + 2) % 2 : null,
             };
             if (centered) {
                 drafts[k - 1] = fade;
@@ -672,6 +686,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             legYaw: d.legYaw,
             phaseStart: d.phaseStart,
             root: d.root,
+            prep: d.prep ?? null,
             fadeStart: d.fadeStart ?? k,
             fadeEnd: d.fadeEnd ?? k + 1,
             baseX: isTransition ? positions[k * 2] + ox[k] : ox[k],
@@ -744,13 +759,25 @@ export function bodyAt(
     }
 }
 
-/** Every clip a set of plans plays: what to bake. */
+/** The bake row of `clip` with a prep landing on the platform at loop time `landing`. */
+export function prepName(clip: string, landing: number): string {
+    return `${clip}~prep${landing}`;
+}
+
+/** The rows an event plays: its clips, as prep rows when it carries a prep step. */
+export function eventRows(e: PlanEvent): [string, string | null] {
+    const row = (c: string) => (e.prep === null ? c : prepName(c, e.prep));
+    return [row(e.clip), e.clip2 ? row(e.clip2) : null];
+}
+
+/** Every row a set of plans plays: what to bake. */
 export function plannedClips(plans: Iterable<MarcherPlan>): Set<string> {
     const out = new Set<string>();
     for (const p of plans)
         for (const e of p.events) {
-            out.add(e.clip);
-            if (e.clip2) out.add(e.clip2);
+            const [a, b] = eventRows(e);
+            out.add(a);
+            if (b) out.add(b);
         }
     return out;
 }

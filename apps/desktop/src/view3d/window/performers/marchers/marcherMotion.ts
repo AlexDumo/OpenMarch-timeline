@@ -14,6 +14,7 @@ import {
     REST_EPS,
     crossfadeWeight,
     planMarcher,
+    eventRows,
 } from "@/view3d/core/marchers/planner";
 import type { MarcherPlan } from "@/view3d/core/marchers/planner";
 import { bodyAt, eventIndexAt } from "@/view3d/core/marchers/planner";
@@ -194,9 +195,10 @@ export class MarcherMotion {
         const e = plan.events[index];
         const rows: Bake["rows"] = this.bodies.bake.rows;
         const hold = this.bodies.holdOf(slot);
-        const row = rows[rowKey(e.clip, hold)];
+        const [clip, clip2] = eventRows(e);
+        const row = rows[rowKey(clip, hold)];
         if (!row) return; // not baked yet (the bake set is catching up)
-        const row2 = e.clip2 ? (rows[rowKey(e.clip2, hold)] ?? null) : null;
+        const row2 = clip2 ? (rows[rowKey(clip2, hold)] ?? null) : null;
         let weight = e.weight;
         let legYaw = e.legYaw;
         if (e.kind === "crossfade") {

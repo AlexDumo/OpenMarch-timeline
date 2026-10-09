@@ -45,7 +45,7 @@ import {
     countAt,
     msAtCount,
 } from "@/view3d/core/marchers/countClock";
-import { plannedClips } from "@/view3d/core/marchers/planner";
+import { plannedClips, eventRows } from "@/view3d/core/marchers/planner";
 import {
     defaultPerformerBody,
     bassOptions,
@@ -80,7 +80,7 @@ import {
     useMarcherAssets,
     useMarcherBodies,
 } from "./marchers/useMarcherBodies";
-import { clipsToLoad } from "./marchers/marcherBodies";
+import { clipsToLoad, rowKey, slotHoldId } from "./marchers/marcherBodies";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -195,12 +195,28 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         // on the right foot every row is baked from its mirrored partner
         return clipsToLoad([...names], stepOffFoot);
     }, [showPlans, heightClasses, stepOffFoot]);
+    // Only the rows some marcher plays: its planned clips in its own hold,
+    // and attention for its height class.
+    const bakeRows = useMemo(() => {
+        if (!marcherLooks) return undefined;
+        const out = new Set<string>();
+        marcherLooks.forEach((look, i) => {
+            const hold = slotHoldId(look.uniform);
+            out.add(rowKey(clipName("attention", look.body.heightClass), hold));
+            const plan = showPlans?.plans[i];
+            if (!plan) return;
+            for (const e of plan.events)
+                for (const c of eventRows(e)) if (c) out.add(rowKey(c, hold));
+        });
+        return [...out];
+    }, [marcherLooks, showPlans]);
     const marcherBodies = useMarcherBodies(
         marcherAssets,
         clipNames,
         marcherLooks,
         quality,
         stepOffFoot,
+        bakeRows,
     );
     // Meshes, bakes and plans land outside React's props: draw them.
     useEffect(() => requestDraw(1000));

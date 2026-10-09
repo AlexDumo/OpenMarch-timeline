@@ -89,6 +89,29 @@ the 3D View shows the difference.
   backward march) and comes down flat over the last fifth of the count, as
   the feet meet.
 
+## Prep steps (transition steps)
+
+- **The last count of every move is a platform step** (2026-10-09), closes
+  included: the foot lands on the platform (the ball), heel off the ground.
+  A "move" ends wherever the step changes: its direction (by 10 degrees or
+  more), its size, or its gait, or a halt. A straight path that carries on
+  across a page boundary has no end there.
+- **The prep foot points halfway to the next direction** (2026-10-09), unless
+  the paths differ by under 10 degrees. Examples: forward 8, then a backward
+  slide right 8: the prep is 45 degrees to the left; forward 8, then a forward
+  slide right 8: the prep is 45 degrees to the right.
+- Code: a change of move is a crossfade centered on the boundary
+  (`core/marchers/planner.ts`), so at the prep landing the gaits are blended
+  50-50 and the residual leg turn is halfway: the slide's 90 degree leg turn
+  shows as 45. Turns of 10 degrees or more (`SHARP_TURN`) are changes of move;
+  smaller drifts just ease. The crossfade's `prep` field names the loop time of
+  the prep landing, and those rows bake with the platform lift peaked there
+  (`prepName` rows, `platformClip.ts`): up over the 0.6 count before the
+  landing, down flat over the half count after it.
+- Not yet: a prep step when the move before the change was only a step-off
+  (the fade then covers one count), and hand-made change clips (mark time
+  into a move) keep their own feet.
+
 ## The halt (the close)
 
 - In an 8-count move the right foot lands on count 8 and the left foot comes

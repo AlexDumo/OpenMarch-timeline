@@ -3,6 +3,7 @@
  * (ADR 0002 D-7). Returns null until they are ready; the caller keeps the
  * cylinders until then.
  */
+import { prepBase } from "./platformClip";
 import { useEffect, useMemo, useState } from "react";
 import type { AnimationClip } from "three";
 import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
@@ -90,8 +91,11 @@ export function useMarcherBodies(
     looks: readonly MarcherSlotLook[] | null,
     quality: MarcherQuality,
     foot: StepOffFoot = "left",
+    /** The rows (`rowKey`) marchers play; only these are baked. All when omitted. */
+    rows?: readonly string[],
 ): MarcherBodies | null {
     const namesKey = [...new Set(names)].sort().join(",");
+    const rowsKey = rows ? [...new Set(rows)].sort().join("|") : null;
     const holdsKey = [
         ...new Set((looks ?? []).map((l) => slotHoldId(l.uniform))),
     ]
@@ -101,21 +105,29 @@ export function useMarcherBodies(
         if (!assets || !namesKey || !holdsKey) return null;
         const clips: Record<string, AnimationClip> = {};
         for (const n of namesKey.split(",")) {
-            const clip = assets.clips.get(n);
+            // a prep row bakes from its base clip (`clipForBake` lifts it)
+            const clip = assets.clips.get(prepBase(n));
             if (!clip) throw new Error(`3D View: clip ${n} isn't loaded`);
             clips[n] = clip;
         }
         const holds = holdsKey.split(",");
         const t0 = performance.now();
-        const baked = bakeForBodies(assets.bodies, clips, holds, foot);
+        const baked = bakeForBodies(
+            assets.bodies,
+            clips,
+            holds,
+            foot,
+            rowsKey === null ? undefined : new Set(rowsKey.split("|")),
+        );
         // eslint-disable-next-line no-console -- the bake size and time are the main cost to watch
         console.info(
-            `3D View: baked ${Object.keys(clips).length} clips × ${holds.length} holds, ` +
+            `3D View: baked ${Object.keys(baked.rows).length} rows of ` +
+                `${Object.keys(clips).length} clips × ${holds.length} holds, ` +
                 `${(baked.bytes / 1e6).toFixed(1)} MB, in ` +
                 `${(performance.now() - t0).toFixed(0)} ms`,
         );
         return baked;
-    }, [assets, namesKey, holdsKey, foot]);
+    }, [assets, namesKey, holdsKey, foot, rowsKey]);
     useEffect(() => () => bake?.texture.dispose(), [bake]);
 
     const bodies = useMemo(() => {

@@ -36,8 +36,35 @@ const smooth = (t: number) => {
     return x * x * (3 - 2 * x);
 };
 
+const PREP = /~prep([01])$/;
+
+/** A prep row's clip without its prep suffix (`prepName` in the planner). */
+export function prepBase(name: string): string {
+    return name.replace(PREP, "");
+}
+
+/**
+ * A prep step on a two-count loop (docs/3d/technique.md, "Prep steps"):
+ * up onto the platform over the 0.6 count before the landing at loop time
+ * `landing`, and down flat over the half count after it, as the next step
+ * swings.
+ */
+function prepPeak(landing: number): (u: number) => number {
+    return (u) => {
+        let d = u * 2 - landing;
+        d -= 2 * Math.round(d / 2); // wrap to (-1, 1]
+        return d < 0 ? smooth((d + 0.6) / 0.6) : 1 - smooth(d / 0.5);
+    };
+}
+
 /** How much of the platform a clip uses at fraction `u` of its length, or null for none. */
 export function platformWeight(name: string): ((u: number) => number) | null {
+    const prep = PREP.exec(name);
+    if (prep) {
+        const base = platformWeight(prepBase(name));
+        const peak = prepPeak(Number(prep[1]));
+        return base ? (u) => Math.max(base(u), peak(u)) : peak;
+    }
     if (/^back/.test(name)) return () => 1;
     if (/^stepoff_back/.test(name)) return (u) => smooth(u / 0.5);
     const halt = /^halt2?_(.*)$/.exec(name);

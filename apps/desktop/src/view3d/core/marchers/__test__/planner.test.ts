@@ -4,7 +4,9 @@ import path from "node:path";
 import type { Manifest } from "../../../vendor/om-pose/step-blend.js";
 import {
     bodyAt,
+    crossfadeWeight,
     eventIndexAt,
+    prepName,
     planMarcher,
     plannedClips,
     type MarcherPlan,
@@ -751,5 +753,70 @@ describe("body center (an option for later)", () => {
             const o = offsetAt(plan, inp, k);
             expect(Math.hypot(o.x, o.z)).toBeLessThan(1e-6);
         }
+    });
+});
+
+describe("prep steps at the end of a move", () => {
+    /** 8 counts forward toward the audience, then 8 counts of `next`, then holds. */
+    const plan2 = (next: Count) => {
+        const inp = input(
+            [
+                ...repeat(2, "hold" as const),
+                ...repeat<Count>(8, [0, STEP]),
+                ...repeat<Count>(8, next),
+                ...repeat(4, "hold" as const),
+            ],
+            { x0: -10 },
+        );
+        return { inp, plan: planMarcher(inp) };
+    };
+    // the boundary between the moves: the last landing of the forward move
+    const B = 10;
+
+    it("lands the last step of the old move on the platform, at the loop time of that landing", () => {
+        const { plan } = plan2([STEP, 0]); // a slide toward the 50
+        const fade = plan.events[eventIndexAt(plan, B - 0.25)];
+        expect(fade.kind).toBe("crossfade");
+        expect(typeof fade.prep).toBe("number");
+        expect((((B - fade.phaseStart) % 2) + 2) % 2).toBe(fade.prep);
+        // the second count of the fade keeps it
+        expect(plan.events[eventIndexAt(plan, B + 0.75)].prep).toBe(fade.prep);
+        // loops away from the change carry none
+        expect(plan.events[eventIndexAt(plan, 5.5)].prep ?? null).toBeNull();
+    });
+
+    it("is halfway into the new direction on the prep landing", () => {
+        const { plan } = plan2([STEP, 0]);
+        const fade = plan.events[eventIndexAt(plan, B - 0.25)];
+        // the slide's leg turn lives in its clip: halfway is a 50-50 blend
+        // of the old gait and the new one, plus half of any residual leg turn
+        const u = (B - fade.fadeStart) / (fade.fadeEnd - fade.fadeStart);
+        expect(crossfadeWeight(u)).toBeCloseTo(0.5, 9);
+        const [y0, y1] = fade.legYaw as [number, number, number, number];
+        const yaw = y0 + (y1 - y0) * crossfadeWeight(u);
+        expect(yaw).toBeCloseTo((y0 + y1) / 2, 9);
+    });
+
+    it("preps a 15 degree change, but not one under 10 degrees", () => {
+        const turn = (deg: number): Count => {
+            const a = (deg * Math.PI) / 180;
+            return [STEP * Math.sin(a), STEP * Math.cos(a)];
+        };
+        const at15 = plan2(turn(15)).plan;
+        expect(typeof at15.events[eventIndexAt(at15, B - 0.25)].prep).toBe(
+            "number",
+        );
+        const at8 = plan2(turn(8)).plan;
+        expect(
+            at8.events.some((e) => e.prep !== null && e.prep !== undefined),
+        ).toBe(false);
+    });
+
+    it("bakes the prep landings as their own rows", () => {
+        const { plan } = plan2([STEP, 0]);
+        const fade = plan.events[eventIndexAt(plan, B - 0.25)];
+        const clips = plannedClips([plan]);
+        expect(clips.has(prepName(fade.clip, fade.prep!))).toBe(true);
+        expect(clips.has(prepName(fade.clip2!, fade.prep!))).toBe(true);
     });
 });

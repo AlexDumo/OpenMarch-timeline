@@ -237,6 +237,8 @@ export function bakeForBodies(
     clips: Record<string, THREE.AnimationClip>,
     holds: readonly string[] = [NO_HOLD],
     foot: StepOffFoot = "left",
+    /** When given, only these rows (`rowKey`) are baked: the ones marchers play. */
+    only?: ReadonlySet<string>,
 ): Bake {
     const first = bodies.values().next().value;
     if (!first) throw new Error("3D View: no bodies to bake on");
@@ -251,6 +253,7 @@ export function bakeForBodies(
                 ? null
                 : poseArms(first.mesh.skeleton, parseHoldId(h));
         for (const name of Object.keys(clips)) {
+            if (only && !only.has(rowKey(name, h))) continue;
             const clip = sources[name];
             all[rowKey(name, h)] = pose
                 ? holdClip(clip, pose, rowKey(name, h))

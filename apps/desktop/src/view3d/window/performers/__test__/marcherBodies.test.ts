@@ -114,6 +114,25 @@ describe("rows per hold", () => {
     });
 });
 
+describe("baking only the rows marchers play", () => {
+    it("skips clip and hold pairs no marcher plays", async () => {
+        const bodies = await loadedBodies();
+        const clip = await clip8to5();
+        const bake = bakeForBodies(
+            bodies,
+            { "8to5": clip, attention: clip },
+            [NO_HOLD, "brass:up"],
+            "left",
+            new Set(["8to5@brass:up", "attention", "attention@brass:up"]),
+        );
+        expect(Object.keys(bake.rows).sort()).toEqual([
+            "8to5@brass:up",
+            "attention",
+            "attention@brass:up",
+        ]);
+    });
+});
+
 describe("horns as their own meshes", () => {
     async function trumpetAndDrumMajor(quality: "high" | "low") {
         const bodies = await loadedBodies();
@@ -432,5 +451,22 @@ describe("the clips the bake plays", () => {
             expect(rootY(baked) - rootY(clips[name])).toBeGreaterThan(0.01);
         }
         expect(clipForBake("8to5", clips, "left", rig)).toBe(clips["8to5"]);
+        // a prep row (loaded under its own name from the base clip) rises
+        // only around its landing, at loop time 1 of 2: halfway through
+        const prep = { ...clips, "8to5~prep1": clips["8to5"] };
+        const baked = clipForBake("8to5~prep1", prep, "left", rig);
+        const rootAt = (clip: THREE.AnimationClip, u: number) => {
+            const t = clip.tracks.find((x) => x.name === "root.position")!;
+            const sampler = (
+                t as unknown as { createInterpolant(): THREE.Interpolant }
+            ).createInterpolant();
+            return sampler.evaluate(clip.duration * u)[1];
+        };
+        expect(rootAt(baked, 0.5) - rootAt(clips["8to5"], 0.5)).toBeGreaterThan(
+            0.01,
+        );
+        expect(
+            Math.abs(rootAt(baked, 0.05) - rootAt(clips["8to5"], 0.05)),
+        ).toBeLessThan(1e-6);
     });
 });
