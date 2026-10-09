@@ -158,6 +158,17 @@ describe("woodwind and battery holds", () => {
         expect(hold("bass", "up").instrument.bellAxis[0]).not.toBe(0); // the heads face sideways
     });
 
+    it("bass drummers play with bent arms, wrists well inside full reach", () => {
+        const h = hold("bass", "up");
+        // full reach is the upper arm plus the forearm, 0.469
+        expect(dist(SHOULDER_R, h.right.wrist)).toBeLessThan(
+            (UPPER + FOREARM) * 0.7,
+        );
+        // the hands sit outside the heads (±0.178), above and behind the drum's middle
+        expect(Math.abs(h.right.wrist[0])).toBeGreaterThan(0.2);
+        expect(h.right.wrist[1]).toBeGreaterThan(1.2);
+    });
+
     it("woodwinds carry with the ligature at eye level; drums have one hold", () => {
         for (const family of ["flute", "clarinet", "sax"] as const)
             expect(hold(family, "carry").instrument.origin[1]).toBeGreaterThan(

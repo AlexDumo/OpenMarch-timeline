@@ -22,7 +22,6 @@
 import {
     arc,
     colorPieces,
-    cylinder,
     smoothLathe,
     smoothTube,
     transformPiece,
@@ -137,13 +136,43 @@ function alongAxis(dir: Vec3, at: Vec3): Mat4 {
 /** A lathe along +Z, its base at `at`. */
 const upZ = (p: Piece, at: Vec3) => transformPiece(p, alongAxis([0, 0, 1], at));
 
-/** The hold's hand grips and finger directions, in the instrument frame. */
-function hands(family: HoldFamily) {
+/** The hold's instrument axes in the body's rest frame. */
+function axes(family: HoldFamily) {
     const h = hold(family, "up");
     const z = unit(h.instrument.bellAxis);
     const caps = h.instrument.capsAxis;
     const y = unit(sub(caps, scale(z, dot(caps, z))));
     const x = cross(y, z);
+    return { h, x, y, z };
+}
+
+/** A matrix taking body rest-frame points into the hold's instrument frame. */
+function bodyToFrame(family: HoldFamily): Mat4 {
+    const { h, x, y, z } = axes(family);
+    const o = h.instrument.origin;
+    return [
+        x[0],
+        y[0],
+        z[0],
+        0,
+        x[1],
+        y[1],
+        z[1],
+        0,
+        x[2],
+        y[2],
+        z[2],
+        0,
+        -dot(x, o),
+        -dot(y, o),
+        -dot(z, o),
+        1,
+    ];
+}
+
+/** The hold's hand grips and finger directions, in the instrument frame. */
+function hands(family: HoldFamily) {
+    const { h, x, y, z } = axes(family);
     const toFrame = (v: Vec3): Vec3 => [dot(v, x), dot(v, y), dot(v, z)];
     const grip = (wrist: Vec3, fingers: Vec3): Vec3 =>
         toFrame(sub(add(wrist, scale(fingers, 0.07)), h.instrument.origin));
@@ -313,33 +342,97 @@ function sphereProfile(r: number, steps: number): [number, number][] {
 }
 
 /**
- * The carrier at the chest: a black plate (radius 0.12, 0.02 thick) whose
- * axis is `normal`, at `center`, and chrome bars from `mounts` to it.
+ * Where the carrier's J-bars leave the belly plate, in the body's rest
+ * frame (+X the performer's left), one per side.
  */
-function carrier(
-    center: Vec3,
-    normal: Vec3,
-    mounts: [Vec3, Vec3][],
+const PLATE_MOUNT: Vec3 = [0.06, 1.07, 0.19];
+
+/**
+ * A shoulder-hoop carrier, built in the body's rest frame and returned in
+ * the hold's instrument frame: two chrome hoops from the belly plate up
+ * over the shoulders (whose tops sit at 1.46 on every body) and down the
+ * back, padded where they sit, a black plate on the belly, and chrome
+ * J-bars from the plate to `drumMounts` (instrument frame, the first on the
+ * performer's right). Clearances come from the seven body meshes: chests
+ * reach z 0.17, upper backs z −0.19.
+ */
+function vestCarrier(
+    family: HoldFamily,
+    drumMounts: [Vec3, Vec3],
     s: SegmentCounts,
 ): Piece[] {
-    const n = unit(normal);
-    return [
-        cylinder(
-            0.12,
-            sub(center, scale(n, 0.01)),
-            add(center, scale(n, 0.01)),
-            s.round,
-            PART_BLACK,
-        ),
-        ...mounts.map(([a, b]) =>
+    const body: Piece[] = [];
+    for (const side of [-1, 1]) {
+        const at = (x: number, y: number, z: number): Vec3 => [side * x, y, z];
+        body.push(
             smoothTube(
-                [a, add(scale(a, 0.5), scale(b, 0.5)), b],
-                0.007,
+                [
+                    at(0.085, 1.06, 0.19),
+                    at(0.095, 1.28, 0.19),
+                    at(0.11, 1.4, 0.158),
+                    at(0.12, 1.465, 0.09),
+                    at(0.125, 1.497, 0),
+                    at(0.125, 1.472, -0.1),
+                    at(0.125, 1.37, -0.205),
+                    at(0.125, 1.26, -0.195),
+                ],
+                0.009,
                 s.small,
                 PART_CHROME,
             ),
+            smoothTube(
+                [
+                    at(0.12, 1.45, 0.11),
+                    at(0.125, 1.497, 0),
+                    at(0.125, 1.472, -0.1),
+                    at(0.125, 1.43, -0.16),
+                ],
+                0.02,
+                s.small,
+                PART_BLACK,
+            ),
+        );
+    }
+    // the plate: a flattened tube, 0.18 wide and 0.025 thick, on the belly
+    const plate = smoothTube(
+        [
+            [0, 0, 0],
+            [0, 0.26, 0],
+        ],
+        0.09,
+        s.round / 2,
+        PART_BLACK,
+    );
+    body.push(
+        transformPiece(
+            plate,
+            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.14, 0, 0, 1.04, 0.18, 1],
         ),
-    ];
+    );
+    const toFrame = bodyToFrame(family);
+    const point = (v: Vec3): Vec3 => {
+        const m = toFrame;
+        return [
+            m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12],
+            m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13],
+            m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14],
+        ];
+    };
+    const bars = drumMounts.map((end, i) => {
+        const side = i === 0 ? -1 : 1;
+        const start = point([
+            side * PLATE_MOUNT[0],
+            PLATE_MOUNT[1],
+            PLATE_MOUNT[2],
+        ]);
+        return smoothTube(
+            [start, add(scale(start, 0.5), scale(end, 0.5)), end],
+            0.008,
+            s.small,
+            PART_CHROME,
+        );
+    });
+    return [...body.map((p) => transformPiece(p, toFrame)), ...bars];
 }
 
 const finish = (
@@ -372,22 +465,15 @@ function snare(detail: Detail, options: ModelOptions): InstrumentModel {
     const s = SEGMENTS[detail];
     const r = 0.356 / 2;
     const d = 0.305;
-    const back = -Math.sqrt(r * r - 0.1 * 0.1) - 0.012;
+    // the J-bars meet the shell's back (instrument −Y) 0.08 either side
+    const back = -Math.sqrt(r * r - 0.08 * 0.08) - 0.006;
     const pieces: Piece[] = [
         ...drum({ diameter: 0.356, depth: d, lugs: 10, bottom: true }, s),
-        // the plate sits against the chest, behind and below the shell's middle
-        ...carrier(
-            [0, -0.215, -0.2],
-            [0, 1, 0],
+        ...vestCarrier(
+            "snare",
             [
-                [
-                    [0.1, back, -0.03],
-                    [0.08, -0.205, -0.28],
-                ],
-                [
-                    [-0.1, back, -0.03],
-                    [-0.08, -0.205, -0.28],
-                ],
+                [0.08, back, -0.07],
+                [-0.08, back, -0.07],
             ],
             s,
         ),
@@ -397,85 +483,95 @@ function snare(detail: Detail, options: ModelOptions): InstrumentModel {
 }
 
 /**
- * Quads and spocks. Instrument +X is the performer's right, so the
- * 10 inch drum sits at −X and the 14 at +X; the middle drums sit 0.2 m
- * forward of the outer ones, the spocks in front of them.
+ * Quints, by drum number: instrument +X is the performer's right and +Y
+ * forward, with the belly 0.23 behind the origin. Drums 3 (13 inch) and 4
+ * (14) sit outside at the hips, 1 (10) and 2 (12) in front, the 6 inch
+ * shot ahead in the gap between them: left to right 3, 1, shot, 2, 4.
  */
 const TENOR_DRUMS: { inches: number; x: number; y: number; depth: number }[] = [
-    { inches: 10, x: -0.42, y: -0.05, depth: 0.25 },
-    { inches: 12, x: -0.16, y: 0.15, depth: 0.27 },
-    { inches: 13, x: 0.17, y: 0.15, depth: 0.28 },
-    { inches: 14, x: 0.48, y: -0.05, depth: 0.29 },
-    // spocks
-    { inches: 6, x: -0.08, y: 0.4, depth: 0.16 },
-    { inches: 8, x: 0.12, y: 0.42, depth: 0.18 },
+    { inches: 13, x: -0.275, y: -0.04, depth: 0.28 },
+    { inches: 10, x: -0.15, y: 0.24, depth: 0.25 },
+    { inches: 6, x: -0.01, y: 0.48, depth: 0.16 },
+    { inches: 12, x: 0.14, y: 0.28, depth: 0.27 },
+    { inches: 14, x: 0.285, y: -0.03, depth: 0.29 },
 ];
+/** Where the player stands in the tenor frame: the belly's front. */
+const TENOR_PLAYER: [number, number] = [0, -0.23];
+/** Each head leans this far toward the player. */
+const TENOR_TILT = (4 * Math.PI) / 180;
+
+/** Unit vector in the head plane from a drum toward the player. */
+const towardPlayer = (x: number, y: number): [number, number] => {
+    const t: [number, number] = [TENOR_PLAYER[0] - x, TENOR_PLAYER[1] - y];
+    const l = Math.hypot(t[0], t[1]) || 1;
+    return [t[0] / l, t[1] / l];
+};
 
 function tenors(detail: Detail, options: ModelOptions): InstrumentModel {
     const s = TENOR_SEGMENTS[detail];
     const pieces: Piece[] = [];
     for (const t of TENOR_DRUMS) {
-        const diameter = t.inches * IN;
+        const [tx, ty] = towardPlayer(t.x, t.y);
+        const n = unit([
+            tx * Math.sin(TENOR_TILT),
+            ty * Math.sin(TENOR_TILT),
+            Math.cos(TENOR_TILT),
+        ]);
+        const ax = unit(cross([0, 1, 0], n));
+        const ay = cross(n, ax);
+        const place: Mat4 = [...ax, 0, ...ay, 0, ...n, 0, t.x, t.y, 0, 1];
         pieces.push(
-            ...moved(
-                drum(
-                    {
-                        diameter,
-                        depth: t.depth,
-                        lugs: t.inches < 10 ? 4 : 6,
-                        bottom: false,
-                    },
-                    s,
-                ),
-                [t.x, t.y, 0],
-            ),
+            ...drum(
+                {
+                    diameter: t.inches * IN,
+                    depth: t.depth,
+                    lugs: t.inches < 10 ? 4 : 6,
+                    bottom: false,
+                },
+                s,
+            ).map((p) => transformPiece(p, place)),
         );
     }
-    // the frame: a chrome bar behind the four drums, struts to the spocks, and the carrier
-    const z = -0.07;
-    const behind = TENOR_DRUMS.slice(0, 4).map(
-        (t): Vec3 => [t.x, t.y - (t.inches * IN) / 2 - 0.015, z],
-    );
-    const front = (i: number): Vec3 => {
+    // the rack: a chrome bar along the drums' player side, a strut out to the shot
+    const z = -0.06;
+    const backOf = (i: number): Vec3 => {
         const t = TENOR_DRUMS[i];
-        return [t.x, t.y + (t.inches * IN) / 2 + 0.01, z];
+        const [tx, ty] = towardPlayer(t.x, t.y);
+        const r = (t.inches * IN) / 2 + 0.015;
+        return [t.x + tx * r, t.y + ty * r, z];
     };
-    const spockBack = (i: number): Vec3 => {
-        const t = TENOR_DRUMS[i];
-        return [t.x, t.y - (t.inches * IN) / 2 - 0.01, z];
-    };
+    const shot = TENOR_DRUMS[2];
+    const shotBack: Vec3 = [
+        shot.x,
+        shot.y - (shot.inches * IN) / 2 - 0.012,
+        z + 0.02,
+    ];
+    const between: Vec3 = [0, 0.13, z];
     pieces.push(
-        smoothTube(behind, 0.009, s.small, PART_CHROME),
-        smoothTube([front(1), spockBack(4)], 0.006, s.small, PART_CHROME),
-        smoothTube([front(2), spockBack(5)], 0.006, s.small, PART_CHROME),
-        smoothTube([front(1), front(2)], 0.006, s.small, PART_CHROME),
-        ...carrier(
-            [0, -0.235, -0.15],
-            [0, 1, 0],
-            [
-                [
-                    [-0.1, -0.03, z],
-                    [-0.07, -0.225, -0.2],
-                ],
-                [
-                    [0.1, -0.045, z],
-                    [0.07, -0.225, -0.2],
-                ],
-            ],
-            s,
+        smoothTube(
+            [backOf(0), backOf(1), between, backOf(3), backOf(4)],
+            0.009,
+            s.small,
+            PART_CHROME,
         ),
+        smoothTube([between, shotBack], 0.007, s.small, PART_CHROME),
+        ...vestCarrier("tenors", [backOf(3), backOf(1)], s),
         ...sticks("tenors", s),
     );
     return finish("tenors", pieces, { bone: "spine002", options });
 }
 
 /**
- * How far forward of the hold's origin a bass drum's axis sits, along
- * instrument −X (forward, away from the player): the drum's back stays
- * 0.2 m in front of the origin, clear of the chest, whatever its size.
+ * The bass drum's back (the shell toward the player, instrument +X) sits
+ * here, just in front of the carrier plate, whatever its size.
  */
-export const bassForward = (inches: number) =>
-    Math.max(0, (inches * IN) / 2 - 0.2);
+const BASS_BACK = 0.14;
+
+/**
+ * How far forward of the hold's origin a bass drum's axis sits, along
+ * instrument −X (forward, away from the player).
+ */
+export const bassForward = (inches: number) => (inches * IN) / 2 - BASS_BACK;
 
 /** The mallet's head center from the grip, and the head's radius. */
 const MALLET_REACH = 0.375;
@@ -484,43 +580,39 @@ const MALLET_HEAD = 0.045;
 const MALLET_OFF_HEAD = 0.025;
 
 /**
- * A marching bass on its side: heads along ±Z, the carrier plate at +X
- * (the player). Bigger drums sit further forward so every size clears the
- * chest; the mallets reach for each head's center from the hold's grips.
+ * A marching bass on its side: heads along ±Z, the carrier at +X (the
+ * player). Every size keeps its back at the carrier, so bigger drums reach
+ * further forward; each hangs at the height where its center is one mallet
+ * length from the hold's grips, so small drums ride lower and big ones
+ * higher, as on a real line.
  */
 function bass(detail: Detail, options: ModelOptions): InstrumentModel {
     const inches = options.bassInches ?? 26;
     const s = SEGMENTS[detail];
     const diameter = inches * IN;
-    const r = diameter / 2;
     const d = 0.356;
     const ax = -bassForward(inches);
-    const drumPieces: Piece[] = [
+    const h = hands("bass");
+    const g = h.right.grip;
+    const off = Math.abs(g[2]) - (d / 2 + MALLET_OFF_HEAD);
+    const rho = Math.sqrt(Math.max(MALLET_REACH ** 2 - off * off, 0));
+    const ay = g[1] - Math.sqrt(Math.max(rho * rho - (ax - g[0]) ** 2, 0));
+    const pieces: Piece[] = [
         ...moved(drum({ diameter, depth: d, lugs: 10, bottom: true }, s), [
-            0,
-            0,
+            ax,
+            ay,
             d / 2,
         ]),
-        ...carrier(
-            [r + 0.04, 0, 0],
-            [1, 0, 0],
+        ...vestCarrier(
+            "bass",
             [
-                [
-                    [r + 0.004, 0.06, d / 2 - 0.004],
-                    [r + 0.03, 0.06, 0.06],
-                ],
-                [
-                    [r + 0.004, 0.06, -d / 2 + 0.004],
-                    [r + 0.03, 0.06, -0.06],
-                ],
+                [BASS_BACK + 0.006, ay + 0.06, -0.08],
+                [BASS_BACK + 0.006, ay + 0.06, 0.08],
             ],
             s,
         ),
     ];
-    const pieces = moved(drumPieces, [ax, 0, 0]);
-    // mallets: the head as near the head's center as the mallet's length
-    // allows, its center just outside the head's plane
-    const h = hands("bass");
+    // mallets: the head on the drum head's center, just outside its plane
     for (const [side, bone, sign] of [
         [h.right, "handR", -1],
         [h.left, "handL", 1],
@@ -530,7 +622,7 @@ function bass(detail: Detail, options: ModelOptions): InstrumentModel {
         const dz = headZ - g[2];
         const rho = Math.sqrt(Math.max(MALLET_REACH ** 2 - dz * dz, 0));
         // the grip dropped onto the head's plane, then out toward the axis
-        const toAxis = [ax - g[0], -g[1]];
+        const toAxis = [ax - g[0], ay - g[1]];
         const len = Math.hypot(toAxis[0], toAxis[1]) || 1;
         const head: Vec3 = [
             g[0] + (toAxis[0] / len) * rho,
