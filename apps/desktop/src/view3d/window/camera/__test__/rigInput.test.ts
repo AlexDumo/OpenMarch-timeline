@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { PerspectiveCamera } from "three";
+import { PerspectiveCamera, Vector3 } from "three";
 import { RigController } from "../rigController";
-import { MAX_PAN, MIN_RADIUS } from "../rigMath";
+import {
+    DEFAULT_NEAR,
+    MAX_PAN,
+    MAX_RADIUS,
+    MIN_EYE_Y,
+    MIN_ZOOM_DISTANCE,
+} from "../rigMath";
 
 function rigAt(
     position: [number, number, number],
@@ -38,11 +44,89 @@ describe("smoothed wheel zoom toward a point", () => {
         expect(rig.target[2]).toBeCloseTo(-10 * k, 3);
     });
 
-    it("doesn't zoom past the closest distance", () => {
-        const { rig } = rigAt([0, 3, 3], [0, 0, 0]);
-        for (let i = 0; i < 20; i++) rig.zoomWheelAt(-500, [0, 0, 0], i);
+    it("doesn't zoom past the closest distance to the point", () => {
+        const { camera, rig } = rigAt([0, 3, 3], [0, 0, 0]);
+        for (let i = 0; i < 20; i++) rig.zoomWheelAt(-500, [0, 1, 0], i);
         for (let t = 16; t <= 2000; t += 16) rig.update(t);
-        expect(rig.spherical.radius).toBeGreaterThanOrEqual(MIN_RADIUS - 1e-9);
+        const d = camera.position.distanceTo(new Vector3(0, 1, 0));
+        expect(d).toBeGreaterThanOrEqual(MIN_ZOOM_DISTANCE - 1e-6);
+        expect(d).toBeLessThan(MIN_ZOOM_DISTANCE + 0.05);
+    });
+});
+
+/** Where `p` lands on screen (normalized device coordinates). */
+function ndc(camera: PerspectiveCamera, p: [number, number, number]) {
+    camera.updateMatrixWorld();
+    const v = new Vector3(...p).project(camera);
+    return [v.x, v.y];
+}
+
+describe("zooming about the point under the cursor, as CAD tools do", () => {
+    it("keeps a point at any height fixed on screen and the view's angle unchanged", () => {
+        const { camera, rig } = rigAt([0, 60, 80], [0, 0, 0]);
+        const head: [number, number, number] = [12, 1.7, -5];
+        const before = ndc(camera, head);
+        const look = camera.getWorldDirection(new Vector3());
+        for (const ratio of [0.5, 0.3, 0.6, 1.8])
+            expect(rig.zoomRatioAt(ratio, head)).toBe(true);
+        rig.update(16);
+        const after = ndc(camera, head);
+        expect(after[0]).toBeCloseTo(before[0], 6);
+        expect(after[1]).toBeCloseTo(before[1], 6);
+        expect(camera.getWorldDirection(new Vector3()).dot(look)).toBeCloseTo(
+            1,
+            9,
+        );
+    });
+
+    it("zooms right up to a marcher, 0.3 m short of the point", () => {
+        const { camera, rig } = rigAt([0, 60, 80], [0, 0, 0]);
+        const head: [number, number, number] = [12, 1.7, -5];
+        for (let i = 0; i < 60; i++) rig.zoomRatioAt(0.6, head);
+        rig.update(16);
+        const d = camera.position.distanceTo(new Vector3(...head));
+        expect(d).toBeCloseTo(MIN_ZOOM_DISTANCE, 6);
+        // the orbit center comes with it, so orbiting now turns about the marcher
+        expect(
+            new Vector3(...rig.target).distanceTo(new Vector3(...head)),
+        ).toBeLessThan(0.05);
+    });
+
+    it("pulls the near plane in up close so the point isn't clipped, and back out after", () => {
+        const { camera, rig } = rigAt([0, 60, 80], [0, 0, 0]);
+        const head: [number, number, number] = [12, 1.7, -5];
+        for (let i = 0; i < 60; i++) rig.zoomRatioAt(0.6, head);
+        rig.update(16);
+        expect(camera.near).toBeLessThanOrEqual(MIN_ZOOM_DISTANCE / 3);
+        for (let i = 0; i < 60; i++) rig.zoomRatioAt(1.6, head);
+        rig.update(32);
+        expect(camera.near).toBeCloseTo(DEFAULT_NEAR, 6);
+    });
+
+    it("keeps the point fixed while the wheel zoom eases in", () => {
+        const { camera, rig } = rigAt([0, 60, 80], [0, 0, 0]);
+        const p: [number, number, number] = [-15, 0.9, 10];
+        const before = ndc(camera, p);
+        rig.zoomWheelAt(-300, p, 0);
+        for (let t = 16; t <= 200; t += 16) {
+            rig.update(t);
+            const now = ndc(camera, p);
+            expect(now[0]).toBeCloseTo(before[0], 6);
+            expect(now[1]).toBeCloseTo(before[1], 6);
+        }
+    });
+
+    it("stops before the eye drops below the minimum height", () => {
+        const { camera, rig } = rigAt([0, 2, 30], [0, 0, 0]);
+        for (let i = 0; i < 80; i++) rig.zoomRatioAt(0.6, [0, 0, -20]);
+        rig.update(16);
+        expect(camera.position.y).toBeGreaterThanOrEqual(MIN_EYE_Y - 1e-6);
+    });
+
+    it("zooms out no further than the farthest radius", () => {
+        const { rig } = rigAt([0, 60, 80], [0, 0, 0]);
+        for (let i = 0; i < 80; i++) rig.zoomRatioAt(1.5, [5, 0, 5]);
+        expect(rig.spherical.radius).toBeLessThanOrEqual(MAX_RADIUS + 1e-6);
     });
 });
 

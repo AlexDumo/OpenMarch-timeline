@@ -37,6 +37,7 @@ import { createReadoutThrottle, useCameraStore } from "./cameraStore";
 import { RigController } from "./rigController";
 import { classifyWheel, groundHit, wheelPixels } from "./inputMath";
 import { requestDraw } from "../drawWake";
+import { pickAlong } from "../scenePick";
 import {
     cameraIndexForKey,
     defaultCameraId,
@@ -230,6 +231,46 @@ export default function CameraRig() {
             const d = raycaster.ray.direction;
             return groundHit([o.x, o.y, o.z], [d.x, d.y, d.z]);
         };
+
+        /**
+         * The point to zoom toward under a client position: the nearest
+         * marcher or ground along the cursor's ray, or, looking at the sky,
+         * the point at the orbit's distance along it.
+         */
+        const zoomPointAt = (
+            clientX: number,
+            clientY: number,
+        ): Vector3Tuple => {
+            const rect = el.getBoundingClientRect();
+            const ndc = new Vector2(
+                ((clientX - rect.left) / rect.width) * 2 - 1,
+                -((clientY - rect.top) / rect.height) * 2 + 1,
+            );
+            rig.sync();
+            raycaster.setFromCamera(ndc, camera);
+            const o: Vector3Tuple = [
+                raycaster.ray.origin.x,
+                raycaster.ray.origin.y,
+                raycaster.ray.origin.z,
+            ];
+            const d: Vector3Tuple = [
+                raycaster.ray.direction.x,
+                raycaster.ray.direction.y,
+                raycaster.ray.direction.z,
+            ];
+            let t = pickAlong(o, d);
+            const ground = groundHit(o, d);
+            if (ground) {
+                const tg = Math.hypot(
+                    ground[0] - o[0],
+                    ground[1] - o[1],
+                    ground[2] - o[2],
+                );
+                if (t === null || tg < t) t = tg;
+            }
+            if (t === null) t = rig.spherical.radius;
+            return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+        };
         /** The ground point grabbed by a pan drag, or null when the drag started above the horizon. */
         let grab: Vector3Tuple | null = null;
         let orbiting = false;
@@ -318,7 +359,7 @@ export default function CameraRig() {
             if (kind === "pinch") {
                 changed = rig.zoomRatioAt(
                     Math.exp(e.deltaY * PINCH_ZOOM),
-                    groundAt(e.clientX, e.clientY),
+                    zoomPointAt(e.clientX, e.clientY),
                 );
             } else if (kind === "trackpad") {
                 // natural scrolling: moving the fingers right gives a negative
@@ -332,7 +373,7 @@ export default function CameraRig() {
             } else {
                 changed = rig.zoomWheelAt(
                     wheelPixels(e.deltaY, e.deltaMode),
-                    groundAt(e.clientX, e.clientY),
+                    zoomPointAt(e.clientX, e.clientY),
                     performance.now(),
                 );
             }

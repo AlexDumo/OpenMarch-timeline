@@ -21,6 +21,25 @@ export const ARC_LIFT_SHARE = 0.25;
 export const ARC_LIFT_MAX = 36.6;
 /** Closest and farthest zoom, in meters from the target (8 ft and 2200 ft). */
 export const MIN_RADIUS = 2.4;
+/**
+ * Zooming toward the point under the cursor stops this far (m) from it:
+ * close enough to read a marcher's instrument.
+ */
+export const MIN_ZOOM_DISTANCE = 0.3;
+/** The camera's near plane (m) at a normal distance ... */
+export const DEFAULT_NEAR = 0.3;
+/** ... and the closest it comes in, for a close-up. */
+export const MIN_NEAR = 0.05;
+
+/**
+ * The near plane for a camera this far (m) from its orbit target: a quarter
+ * of the distance, between `MIN_NEAR` and `DEFAULT_NEAR`. Up close the
+ * plane comes in so a zoomed-in marcher isn't clipped; at a normal distance
+ * it stays put, which keeps the depth precision the far stadium needs.
+ */
+export function nearFor(radius: number): number {
+    return Math.min(DEFAULT_NEAR, Math.max(MIN_NEAR, radius * 0.25));
+}
 export const MAX_RADIUS = 670;
 /** Orbit limits for `phi`: just off straight down, to just below level. */
 export const MIN_PHI = 0.02;

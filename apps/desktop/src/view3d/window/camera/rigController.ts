@@ -8,8 +8,11 @@ import {
     clampRadius,
     FLY_MS,
     MAX_PAN,
+    MAX_RADIUS,
     maxPhiAboveGround,
     MIN_EYE_Y,
+    MIN_ZOOM_DISTANCE,
+    nearFor,
     orbitPhi,
     ORBIT_PER_PX,
     panTarget,
@@ -21,7 +24,7 @@ import {
     type Spherical,
     type Tween,
 } from "./rigMath";
-import { damp, zoomTargetTowards } from "./inputMath";
+import { damp, zoomAbout, zoomRatioLimits } from "./inputMath";
 
 /** A wheel zoom eases in with this half-life (ms): quick, but not a jump. */
 export const ZOOM_HALF_LIFE_MS = 45;
@@ -156,8 +159,8 @@ export class RigController {
     }
 
     /**
-     * Wheel zoom toward `point` (the ground under the cursor), eased over a
-     * few frames by `update`. `pixels` is the wheel's deltaY in pixels.
+     * Wheel zoom toward `point` (what's under the cursor), eased over a few
+     * frames by `update`. `pixels` is the wheel's deltaY in pixels.
      */
     zoomWheelAt(
         pixels: number,
@@ -308,13 +311,28 @@ export class RigController {
         }
     }
 
-    /** Scales the radius by `ratio`, moving the target toward `point` so it stays put on screen. */
+    /**
+     * Zooms by `ratio` (new distance over old). With a `point` (the one
+     * under the cursor), the camera and the orbit target scale about it, as
+     * CAD tools zoom: the view keeps its angle and the point stays where it
+     * is on screen, the zoom stopping `MIN_ZOOM_DISTANCE` short of it, with
+     * the eye above the ground and within `MAX_RADIUS` of the target.
+     */
     private zoomBy(ratio: number, point: Vector3Tuple | null) {
-        const before = this.spherical.radius;
-        const after = clampRadius(before * ratio);
-        if (point)
-            this.target = zoomTargetTowards(this.target, point, before, after);
-        this.setRadius(after);
+        if (!point) {
+            this.setRadius(clampRadius(this.spherical.radius * ratio));
+            return;
+        }
+        const position = positionFromSpherical(this.spherical, this.target);
+        const [lo, hi] = zoomRatioLimits(position, this.target, point, {
+            minDistance: MIN_ZOOM_DISTANCE,
+            minEyeY: MIN_EYE_Y,
+            maxRadius: MAX_RADIUS,
+        });
+        const k = Math.min(hi, Math.max(lo, ratio));
+        if (k === 1) return;
+        const next = zoomAbout(position, this.target, point, k);
+        this.setPose(next.position, next.target);
     }
 
     private setRadius(radius: number) {
@@ -342,6 +360,14 @@ export class RigController {
         this.camera.position.set(...pos);
         this.camera.lookAt(...this.target);
         this.camera.updateMatrixWorld();
+        this.setNear(nearFor(this.spherical.radius));
+    }
+
+    private setNear(near: number) {
+        if (!(this.camera instanceof PerspectiveCamera)) return;
+        if (Math.abs(this.camera.near - near) < 1e-6) return;
+        this.camera.near = near;
+        this.camera.updateProjectionMatrix();
     }
 
     private fov(): number {

@@ -17,6 +17,8 @@
  * Meshes and buffers are rebuilt only when the marcher set changes.
  */
 // cspell:ignore metalness
+import { registerPicker } from "../scenePick";
+import { pickMarchers } from "../camera/inputMath";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -308,6 +310,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         },
         [meshes],
     );
+
+    // The cursor can pick a performer to zoom toward (`scenePick.ts`).
+    useEffect(() => {
+        if (!meshes) return;
+        return registerPicker((origin, dir) =>
+            pickMarchers(origin, dir, meshes.xz, meshes.placed, count),
+        );
+    }, [meshes, count]);
 
     // Shadows follow the scene's quality.
     useEffect(() => {

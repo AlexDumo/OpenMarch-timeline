@@ -61,6 +61,7 @@ import type {
 } from "@/view3d/core/types";
 import type { VenueSettings } from "@/view3d/core/venueSettings";
 import CameraRig from "./camera/CameraRig";
+import { DEFAULT_NEAR } from "./camera/rigMath";
 import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "./sceneStore";
 import { useFieldImage } from "./useFieldImage";
 import {
@@ -74,7 +75,8 @@ import Performers from "./performers/Performers";
 export const DEFAULT_FOV_DEG = 45;
 /** Must exceed the sky dome's radius (`SKY_RADIUS`, 1524 m). */
 export const CAMERA_FAR = 3000;
-export const CAMERA_NEAR = 0.3;
+/** The near plane at a normal distance; the rig pulls it in for close-ups. */
+export const CAMERA_NEAR = DEFAULT_NEAR;
 /**
  * Passed to `kit.onFrame` as `dt` once after a kit or lighting change when
  * the viewer prefers reduced motion, so animated parts (the pro roof) snap.

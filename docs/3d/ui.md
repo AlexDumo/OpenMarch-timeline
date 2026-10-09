@@ -51,6 +51,14 @@ replacing the first layout's venue and lighting bars and the wide camera bar.
   - on a trackpad: two-finger scroll orbits, Shift or Option plus scroll
     pans, pinch zooms toward the cursor (owner, 2026-10-09: the controls
     should feel good on a trackpad and a mouse alike);
+  - zooming works as in CAD tools (owner, 2026-10-09): the camera and the
+    orbit center scale about the point under the cursor (the nearest
+    performer, else the ground, else a point at the orbit's distance), so
+    that point stays put on screen and the view keeps its angle. It goes
+    right up to the point, stopping 0.3 m short, and the orbit center comes
+    along, so orbiting afterward turns about what you zoomed into. The near
+    plane follows the distance in, down to 5 cm, so a close-up isn't
+    clipped;
   - double-click to move the orbit center to the clicked spot.
 
   The camera can't go below ground level. Moving manually deselects the camera
