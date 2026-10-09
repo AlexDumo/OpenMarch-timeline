@@ -75,36 +75,51 @@ rotors).
 
 ### Woodwinds (`FAMILIES.Woodwind`)
 
-| Section       | Model                     | Working dimensions     | Hold          |
-| ------------- | ------------------------- | ---------------------- | ------------- |
-| Piccolo       | piccolo                   | length 0.32            | flute         |
-| Flute         | C flute                   | length 0.67            | flute         |
-| Clarinet      | Bb clarinet               | length 0.66            | clarinet      |
-| Bass Clarinet | bass clarinet with peg    | length 1.0             | bass clarinet |
-| Soprano Sax   | straight soprano          | length 0.65            | clarinet      |
-| Alto Sax      | alto sax on a strap       | height 0.65, bell 0.12 | sax           |
-| Tenor Sax     | tenor sax on a strap      | height 0.80, bell 0.14 | sax           |
-| Bari Sax      | baritone sax on a harness | height 1.0, bell 0.19  | sax           |
+| Section       | Model                     | Working dimensions     | Hold     |
+| ------------- | ------------------------- | ---------------------- | -------- |
+| Piccolo       | piccolo                   | length 0.32            | piccolo  |
+| Flute         | C flute                   | length 0.67            | flute    |
+| Clarinet      | Bb clarinet               | length 0.66            | clarinet |
+| Bass Clarinet | bass clarinet with peg    | length 1.0             | clarinet |
+| Soprano Sax   | straight soprano          | length 0.65            | clarinet |
+| Alto Sax      | alto sax on a strap       | height 0.65, bell 0.12 | sax      |
+| Tenor Sax     | tenor sax on a strap      | height 0.80, bell 0.14 | sax      |
+| Bari Sax      | baritone sax on a harness | height 1.0, bell 0.19  | sax      |
 
 ### Battery (`FAMILIES.Battery`)
 
-| Section   | Model                                  | Working dimensions                         | Hold    |
-| --------- | -------------------------------------- | ------------------------------------------ | ------- |
-| Snare     | marching snare on a carrier            | 14 in × 12 in shell                        | snare   |
-| Tenors    | quads plus two spocks on a carrier     | 10, 12, 13, 14 in drums, 6 and 8 in spocks | tenors  |
-| Bass Drum | marching bass on a carrier, five sizes | 18 to 32 in diameter, 14 in deep           | bass    |
-| Cymbals   | pair of 18 in crash cymbals            | 18 in                                      | cymbals |
-| Flub Drum | the bass model at 20 in                |                                            | bass    |
+| Section   | Model                                     | Working dimensions                             | Hold    |
+| --------- | ----------------------------------------- | ---------------------------------------------- | ------- |
+| Snare     | marching snare on a carrier               | 14 in × 12 in shell                            | snare   |
+| Tenors    | quads plus two spocks on a carrier        | 10, 12, 13, 14 in drums, 6 and 8 in spocks     | tenors  |
+| Bass Drum | marching bass on a carrier, sized per dot | 18 to 32 in diameter in 2 in steps, 14 in deep | bass    |
+| Cymbals   | pair of 18 in crash cymbals               | 18 in                                          | cymbals |
+| Flub Drum | the bass model, sized with the bass line  |                                                | bass    |
 
-Bass drum size: the Bass Drum section has no per-marcher size. Default:
-spread 18, 22, 26, 28, 32 in across the section's marchers in drill order,
-smallest first. A stored per-marcher size is a later schema change.
+Bass drum size: the show stores no size, so each marcher gets one. The
+marchers whose section carries the bass model (Bass Drum and Flub Drum), in
+id order, spread evenly over 18, 20, … 32 in, smallest first; a lone drum
+gets 26 in (`bassSizesFor`, `bassOptions` in `looks.ts`). A stored
+per-marcher size is a later schema change. Bigger drums sit further
+forward on the carrier, so each drum's back stays 0.2 m in front of the
+hold's origin and clears the chest whatever its size.
 
 ### Guard, Other, Pit
 
-Guard carries nothing in this design (flags and rifles are a separate
-task). Drum Major and Soloist carry nothing. Pit marchers carry nothing on
-their dots: their instruments are props (§6).
+| Model             | What it is                                                          | Working dimensions         | Hold  |
+| ----------------- | ------------------------------------------------------------------- | -------------------------- | ----- |
+| 6 ft flag         | chrome pole, rubber end caps, tape, a silk in the section's color   | pole 1.83, silk 36 × 54 in | flag  |
+| Swing flag        | short pole with the silk along its length                           | pole 0.9, silk 1.2 × 0.9   | flag  |
+| Double swing flag | two swing flags, one in each hand                                   | as the swing flag          | flag  |
+| Rifle             | white drill rifle, chrome bolt and swivels, black sling             | 0.91 long                  | rifle |
+| Sabre             | curved chrome blade, brass guard and knuckle bow, wire-wrapped grip | blade 0.8, grip 0.12       | sabre |
+
+Today the Color Guard and Flag sections carry the 6 ft flag and the Rifle
+section the rifle. The swing flag, the double swing flag and the sabre are
+built and held but no section maps to them: they wait for a per-section
+choice (owner, 2026-10-09), which lands in the catalog's `Carry.model` like
+the sousaphone. Drum Major and Soloist carry nothing. Pit marchers carry
+nothing on their dots: their instruments are props (§6).
 
 ## 4. Geometry: procedural, one bone each
 
@@ -191,18 +206,38 @@ points and where the elbows go.
   instrument's layout, 2026-10-08; the owner checks it against a photo of a
   player.)
 - **flute.** Horizontal to the player's right, lips at the head joint, left
-  hand near, right hand far. Carry: the same hands with the head joint
+  hand near, right hand far. The lip plate faces straight back at the lips
+  and the keys face forward. Carry: the same hands with the head joint
   raised so the embouchure hole sits at eye level.
+- **piccolo.** The flute's hold with the right hand brought in to the
+  short body (0.24 m from the lips against the flute's 0.43), so it holds
+  the tube rather than the air past its end.
 - **clarinet.** Down the center line, angled 30 degrees out, left hand upper
   joint, right hand lower. Carry: vertical, ligature at eye level.
 - **sax.** On the strap at the right hip, neck to the mouth, left hand upper
   stack, right hand lower stack. Carry: hands stay, the neck lifts so the
   ligature sits at eye level.
-- **snare, tenors.** Drum at waist height on the carrier, forearms level,
-  hands over the heads with sticks. Tenors wider.
-- **bass.** Drum sideways on the chest, mallets held level at the heads,
-  elbows out.
+- **snare, tenors.** Drum at waist height on the carrier, hands over the
+  back of the heads, elbows a little out and back. Each stick runs through
+  the hand a third of the way up (the butt behind the fist) and angles in
+  and down: on the snare the tips meet short of the front rim without
+  crossing; on the tenors each hand sits behind one of the two front drums
+  and reaches in to that drum's head.
+- **bass.** Drum sideways on the chest, elbows out, the hands above and
+  outside the heads where one mallet length reaches the center of every
+  size from 18 to 32 in.
 - **cymbals.** Pair held at chest height, plates vertical.
+- **flag.** Up (present): the pole vertical in front of the body, right
+  hand at the chest, left hand low on the pole, the silk overhead toward
+  the performer's left. Carry and trail: the pole vertical at the right
+  side, left arm down.
+- **rifle.** Up (port arms): diagonal across the chest, muzzle up to the
+  performer's left, right hand at the wrist of the stock by the right hip,
+  left hand on the fore-end by the left shoulder. Carry and trail (right
+  shoulder arms): vertical at the right shoulder, left arm down.
+- **sabre.** Up (present): the blade vertical in front of the right
+  shoulder. Carry and trail: at the right hip, blade up along the
+  shoulder, left arm down.
 
 **Which hold plays when.** The show stores no horn state. Default: brass,
 woodwinds and battery play their _up_ hold while the band moves or marks

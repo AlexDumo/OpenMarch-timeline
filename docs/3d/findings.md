@@ -67,4 +67,61 @@ Budgets are in [design.md](design.md) §9.
   renderer: left to the owner; no GPU or browser in the session. Wireframe
   side views were checked against the photos for silhouette only.
 
+### 2026-10-09 · trevor (3d/p7-instruments) · woodwinds, battery and guard
+
+- Triangles per model (`triangleCount`, high / low):
+
+| Model           | High  | Low   |
+| --------------- | ----- | ----- |
+| piccolo         | 4,128 | 1,688 |
+| flute           | 4,752 | 1,936 |
+| clarinet        | 9,168 | 2,352 |
+| bassClarinet    | 6,624 | 2,016 |
+| sopranoSax      | 4,704 | 1,652 |
+| altoSax         | 6,720 | 2,280 |
+| tenorSax        | 7,344 | 2,404 |
+| bariSax         | 8,976 | 2,672 |
+| snare           | 6,152 | 1,660 |
+| tenors          | 9,904 | 2,616 |
+| cymbals         | 7,424 | 1,200 |
+| bass 18 in      | 6,728 | 1,900 |
+| bass 32 in      | 6,728 | 1,900 |
+| flag6           | 4,736 | 288   |
+| swingFlag       | 4,736 | 288   |
+| doubleSwingFlag | 9,472 | 576   |
+| rifle           | 4,480 | 1,308 |
+| sabre           | 7,264 | 684   |
+
+Every woodwind and battery model sits inside the 4,000–12,000 / 1,000–3,500
+budgets. The flags are lighter at low (288 for one silk, 576 for the pair):
+a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
+
+- Render check in the built Electron app, the demo show (piccolos, alto and
+  tenor saxes, snares, tenors, cymbals, color guard, rifles; no bass drums,
+  so the bass was checked by its tests only), horns up and carry, from the
+  front row, the podium, the end zone and zoomed free views.
+- Before tuning: the snare sticks crossed right in front of the body and ran
+  past the drum's front rim; the tenor sticks crossed in an X over the middle
+  drums; the piccolo's right hand floated in the air past the end of the
+  short tube (it shared the flute's hold); the rifle's back swivel and the
+  sling's end sat inside the stock. Cymbals, flags, rifles and saxes read
+  right: plates vertical at the chest, poles vertical with the silk overhead,
+  the rifle across the chest at port arms and vertical at the shoulder in
+  carry, the sax on the right side with the bell by the hip.
+- Changes: sticks now run through the fist a third of the way up and angle
+  in and down, so the snare tips meet short of the front rim without crossing
+  and each tenor stick reaches the head of one front drum; the piccolo has its
+  own hold with the right hand 0.24 m along the tube; the flute's lip plate
+  faces straight back at the lips (keys forward); the bass drum moves forward
+  with its size (the back stays 0.2 m ahead of the hold's origin) and the
+  bass hold raises the hands so one mallet length reaches the center of every
+  head from 18 to 32 in; the sax and clarinet key rods follow the body's
+  surface; the bari's neck runs out further so its body hangs as far in front
+  of the chest as the alto's; the rifle's back swivel hangs from the stock's
+  underside.
+- After: the snare V and the tenor sticks sit over the heads, the piccolo's
+  hands are on the tube, and nothing else changed for the worse. Not seen in
+  the frames: the bass drum (not in the show) and the bari, clarinet and
+  bass clarinet (not in the show).
+
 ## Verdicts
