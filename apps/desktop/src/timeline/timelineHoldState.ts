@@ -16,8 +16,15 @@ export interface NamedFlag {
 export type HoldState =
     /** A move of the marcher's own ends on the current page (in its box, up to its flag) */
     | { readonly kind: "movesHere" }
-    /** The marcher holds at the current flag, where it has been since `page`'s flag */
-    | { readonly kind: "holding"; readonly page: NamedFlag };
+    /**
+     * The marcher holds at the current flag, where it has been since `page`'s flag; `fromStart`
+     * when that is the first page's (it hasn't moved since its starting set)
+     */
+    | {
+          readonly kind: "holding";
+          readonly page: NamedFlag;
+          readonly fromStart: boolean;
+      };
 
 /**
  * One marcher's state at the flag `current`. `null` on the first page (its home is its own), when
@@ -44,8 +51,10 @@ export function marcherHoldState(
     const at = spans.find((s) => s.start < current && current <= s.end);
     if (!at || at.kind !== "hold") return null;
     // Held since the move before it ended: the first flag at or after that end (home's for none)
-    const since = flags.find((f) => f.beat >= at.start);
-    return since ? { kind: "holding", page: since } : null;
+    const since = flags.findIndex((f) => f.beat >= at.start);
+    return since < 0
+        ? null
+        : { kind: "holding", page: flags[since]!, fromStart: since === 0 };
 }
 
 /** What the selection shows: the state every marcher shares, or `null` when they differ. */

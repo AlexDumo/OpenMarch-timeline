@@ -19,7 +19,8 @@ import {
 
 /**
  * The selection's state on the current page, in timeline mode (docs/timeline/ui.md UI-18):
- * "Moves on this page" or "Hold from Page X", where the selected marchers agree; nothing when they
+ * "Moves on this page" or "Hold from Page X" ("Hold from the start" when they haven't moved since
+ * their starting set), where the selected marchers agree; nothing when they
  * don't. The current page is the selected page, which follows the paused playhead
  * (`useTimelinePageBridge`).
  */
@@ -71,26 +72,36 @@ function TimelineHoldLineContent({
                 })}
             </p>
         );
-    const { page } = state;
+    const { page, fromStart } = state;
     return (
         <p className="px-6 leading-none">
             <button
                 type="button"
                 className="text-body text-text decoration-text/40 hover:decoration-text focus-visible:ring-accent rounded-6 inline-flex items-center gap-4 leading-none underline underline-offset-4 focus-visible:ring focus-visible:outline-none"
                 data-testid="timeline-hold-line"
-                title={t("inspector.marcher.timeline.goToPage", {
-                    defaultValue: "Go to Page {page}",
-                    page: page.name,
-                })}
+                title={
+                    fromStart
+                        ? t("inspector.marcher.timeline.goToStart", {
+                              defaultValue: "Go to the start",
+                          })
+                        : t("inspector.marcher.timeline.goToPage", {
+                              defaultValue: "Go to Page {page}",
+                              page: page.name,
+                          })
+                }
                 // The go-to-page navigation: the playhead to the page's flag
                 onClick={() =>
                     useTimelineSelectionStore.getState().seek(page.beat)
                 }
             >
-                {t("inspector.marcher.timeline.holdFrom", {
-                    defaultValue: "Hold from Page {page}",
-                    page: page.name,
-                })}
+                {fromStart
+                    ? t("inspector.marcher.timeline.holdFromStart", {
+                          defaultValue: "Hold from the start",
+                      })
+                    : t("inspector.marcher.timeline.holdFrom", {
+                          defaultValue: "Hold from Page {page}",
+                          page: page.name,
+                      })}
                 <ArrowRightIcon size={14} aria-hidden />
             </button>
         </p>

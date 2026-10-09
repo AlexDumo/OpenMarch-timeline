@@ -119,6 +119,16 @@ describe("TimelineHoldLine", () => {
         expect(useTimelineSelectionStore.getState().playheadBeat).toBe(9);
     });
 
+    it("says a marcher that never moved holds from the start, not from the first page by name, and jumps there", () => {
+        mocks.selectedPage = PAGES[3];
+        useTimelineSelectionStore.getState().seek(17);
+        show([3]);
+        expect(line()?.textContent).toBe("Hold from the start");
+        expect(line()).toHaveAttribute("title", "Go to the start");
+        fireEvent.click(line()!);
+        expect(useTimelineSelectionStore.getState().playheadBeat).toBe(0);
+    });
+
     it("is a real button styled as a link, in the normal text color, with a focus ring", () => {
         mocks.selectedPage = PAGES[3];
         show([1]);
