@@ -9,6 +9,12 @@ in `97c8626b`). Source of truth for what the branch changes before it merges int
 entry is grounded in the code diff (`git diff 5888850a 2470207c`); where the docs say something else,
 the entry says so under **Doc vs code** and describes what the code does.
 
+**Keep later pages (wp15 + wp16, 2026-10-09):** B-38 … B-44 describe the kept spots (stored by
+wp15 at `c56996f0`, with migration 0018) and their UI (wp16, branch `dc/wp16-keep-ui`). Their line
+numbers are at the wp16 branch tip, not `2470207c`. They change two statements below: there is now a
+schema addition (B-38), and a changed move that carried into later pages now shows a toast (B-44,
+amending B-25).
+
 How to use this file:
 
 - **Testers / QA:** section 5 is a runnable script per behavior; section 7 is what nobody has
@@ -23,7 +29,7 @@ mode (what every released user runs).
 ## Contents
 
 1. [Summary](#1-summary)
-2. [Behavior catalog](#2-behavior-catalog) (B-01 … B-37)
+2. [Behavior catalog](#2-behavior-catalog) (B-01 … B-44)
 3. [File map](#3-file-map)
 4. [Test map](#4-test-map)
 5. [QA checklist](#5-qa-checklist)
@@ -51,8 +57,10 @@ with its own move, and stops there.
 
 ### What did NOT change
 
-- **No schema change.** The only edit in `electron/database/migrations/schema.ts` is a comment on
-  `tag_appearances.start_page_id` (the cascade stays; code now moves rows before it fires).
+- **No schema change** before keep later pages. The only edit in
+  `electron/database/migrations/schema.ts` was a comment on `tag_appearances.start_page_id` (the
+  cascade stays; code now moves rows before it fires). Since wp15, migration 0018 adds the
+  `timeline_kept_assignments` table (B-38, ADR 0001 amendment 2026-10-09).
 - **No file/user version change** and no migration. Existing files are read as they are.
 - **The resolver (`@openmarch/core`) is untouched.** Positions at every flag of an unedited show are
   identical (real-app T7: max difference 0.0 across 8 files).
@@ -61,17 +69,19 @@ with its own move, and stops there.
 
 ### Owner decisions (all 2026-10-08 unless noted)
 
-| #   | Decision                                                                                                                                                                                           | Where recorded                        |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| 1   | Sparse model adopted; amend ADR 0001                                                                                                                                                               | README Decisions; ADR 0001 amendment  |
-| 2   | Page mode carries edits forward now, per marcher, with a tolerance, with Only Page N and the pre-existing fixes; no schema change                                                                  | README Decisions                      |
-| 3   | Delete page in timeline mode keeps later pages' look (flag delete); "Delete page and its moves" is explicit                                                                                        | README Decisions                      |
-| 4   | Lock here / Keep later pages deferred (no stored kind)                                                                                                                                             | README Decisions                      |
-| 5   | Delete page and its moves keeps tracks (layer > 0) inside the box ("I think no" to deleting them)                                                                                                  | README; V-149                         |
-| 6   | Page-mode shape edits carry forward ("I think so")                                                                                                                                                 | README; V-148                         |
-| 7   | After the persona study (08): carry-forward is shown by hold marks, not toasts; toasts only for surprises, shorter                                                                                 | ui.md UI-18; V-146                    |
-| 8   | 2026-10-09: hold-mark tooltips and **Move them too** built at the owner's request (PR #112 comment); renumbered UI-18 (UI-15/16 went to timeline edges, UI-17 to transport keys)                   | PR comment; ui.md UI-18; V-150, V-151 |
-| 9   | 2026-10-09 (lead defaults after review): Move them too only when an edit splits a group (V-150); runs of edits add up behind one toast, two-button toasts put the buttons on their own row (V-153) | ui.md UI-18; VALIDATION               |
+| #   | Decision                                                                                                                                                                                                                                        | Where recorded                        |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| 1   | Sparse model adopted; amend ADR 0001                                                                                                                                                                                                            | README Decisions; ADR 0001 amendment  |
+| 2   | Page mode carries edits forward now, per marcher, with a tolerance, with Only Page N and the pre-existing fixes; no schema change                                                                                                               | README Decisions                      |
+| 3   | Delete page in timeline mode keeps later pages' look (flag delete); "Delete page and its moves" is explicit                                                                                                                                     | README Decisions                      |
+| 4   | Lock here / Keep later pages deferred (no stored kind)                                                                                                                                                                                          | README Decisions                      |
+| 5   | Delete page and its moves keeps tracks (layer > 0) inside the box ("I think no" to deleting them)                                                                                                                                               | README; V-149                         |
+| 6   | Page-mode shape edits carry forward ("I think so")                                                                                                                                                                                              | README; V-148                         |
+| 7   | After the persona study (08): carry-forward is shown by hold marks, not toasts; toasts only for surprises, shorter                                                                                                                              | ui.md UI-18; V-146                    |
+| 8   | 2026-10-09: hold-mark tooltips and **Move them too** built at the owner's request (PR #112 comment); renumbered UI-18 (UI-15/16 went to timeline edges, UI-17 to transport keys)                                                                | PR comment; ui.md UI-18; V-150, V-151 |
+| 9   | 2026-10-09 (lead defaults after review): Move them too only when an edit splits a group (V-150); runs of edits add up behind one toast, two-button toasts put the buttons on their own row (V-153)                                              | ui.md UI-18; VALIDATION               |
+| 10  | 2026-10-09: keep later pages (study 10): chains on the page boxes (none without a selection), the inspector's Keep here / Follow again, the page box menu entries, the after-edit Only Page N toast (the C rule); Alt-drag dropped, **K** added | 10; ui.md UI-18; V-154 … V-158        |
+| 11  | 2026-10-09: store kept spots: a schema addition while user version 8 is unreleased, with an ADR 0001 amendment (supersedes decision 4's "no stored kind")                                                                                       | ADR 0001 amendment; B-38              |
 
 ---
 
@@ -93,6 +103,7 @@ Index:
 | Toasts                       | B-24 … B-26, B-36, B-37 |
 | Hold marks and inspector     | B-27 … B-30             |
 | Focus, selection, keys       | B-31 … B-35             |
+| Keep later pages             | B-38 … B-44             |
 
 ### Timeline writes
 
@@ -741,6 +752,9 @@ Index:
   Rounds 1–3 "no toast" checks (dc-page-p56 P6, wp8) were unreliable (a hidden reused toast node) and
   are superseded by dc4.
 - **V-row:** V-146.
+- **Amended by B-44 (wp16):** an edit that changes an existing own move and carries into later
+  pages now shows "Pages 3–4 followed" · Only Page 2. A page's first move, and edits that carry
+  nowhere, stay silent.
 
 #### B-26 Toast button layout: one line; two buttons on their own row
 
@@ -961,6 +975,155 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
 - **Tests:** `timelineToastPaths.test.ts`.
 - **Limits:** any other branch calling the old names breaks at compile time (merge note).
 
+### Keep later pages
+
+Owner decision 2026-10-09 after `10-keep-later-pages-study.md` (decisions 10 and 11). Timeline mode
+only; page mode keeps its runtime comparison and its own Only Page N (B-16).
+
+#### B-38 Kept spots are stored (wp15)
+
+- **Mode:** TL.
+- **Before:** a "kept" page could only be an ordinary move that goes nowhere; nothing told it apart.
+- **After:** a kept spot is the marcher's own one-slot shapeless move over a page box, plus a row in
+  `timeline_kept_assignments` keyed by that assignment's id (cascade delete; history triggers; no
+  change-log triggers; the display version follows it). **Keep** (`keepMarchersOnPage`) gives each
+  marcher that follows on the box (no row over any of its beats) such a move, ending where it stands
+  there, and marks it; **Follow again** (`followAgainOnPage`) deletes a kept move and its marker.
+  One undo step each; nobody to change writes nothing and adds no step. Marchers already kept, with
+  their own move there, or partway through a longer move are skipped and reported. Moving a kept
+  spot's ending (a canvas drag on its page, the inspector's destination) makes it an ordinary own
+  move in the same edit; a drag back never clears it; Move them too never offers it; the page deletes
+  that take a page's moves take it with its marker.
+- **States:** `KeptState` per marcher per box: `follows`, `kept`, `own`, `midMove`
+  (`keptStatesForSelection`).
+- **Code:** migration `0018_clean_sentinels.sql`, `schema.ts`, `repair.ts`; `db-functions/timelineKeepHere.ts`,
+  `timelineKeptMarkers.ts`, `timelineMoves.ts` (`keptAssignmentsMovedBy`); `timeline/timelineKept.ts`.
+- **Tests:** `timelineKeepHere.test.ts` (owner flow, skips, edits of a kept spot, page edits, history
+  round trips), `timelineKept.test.ts`, `0018_clean_sentinels.test.ts`.
+- **V-row:** V-154 … V-158 (the UI on top). ADR 0001 amendment 2026-10-09.
+
+#### B-39 Keep states for the selection (renderer)
+
+- **Mode:** TL.
+- **After (wp16):** the UI reads, per page box, which selected marchers **follow** into it and which
+  were **kept** there, from the resolver's spans and the stored markers (`useKeptAssignmentsStore`,
+  read again after every resolver or display version). A marcher counts as following only after an
+  earlier move (_lead default_): before its first move it holds from the start, and nothing offers
+  to keep it, so a fresh show shows no chains. Each box also names the page(s) they follow
+  (`from`), for the words.
+- **Code:** `timeline/timelineKeepLater.ts` (`pageKeepStates` :74, `followingPages` :144,
+  `pageChainWords` :312, `nextPageToggle` :349); `timeline/useKeepLaterPages.ts`
+  (`useKeptAssignmentsHost` :39, mounted in `TimelineResolverHost.tsx` :80; `usePageKeepStates` :72);
+  `timeline/timelineKeepCommands.ts` (`keepOnPage`, `followAgainOn`, `toggleKeepOnNextPage`: refusals
+  are toasts).
+- **Tests:** `timelineKeepLater.test.ts` (14).
+
+#### B-40 Chains on the page boxes
+
+- **Mode:** TL.
+- **After:** with marchers selected, each page box they follow into shows a chain; a box where they
+  were kept a broken chain filled in the accent; a box with some of each a chain with a small kept
+  count. Nothing without a selection (owner). A 20 px button, 22 px in from the flag before its box
+  (centered in a box narrower than 70 px), so the selected page's flag, the start flag and the
+  playhead never cover it (the study's complaint); it stays on the selected box. A sibling of the
+  box: a press never selects, scrubs or drags it; a right-click opens the box's menu (B-42).
+- **Strings** (`timeline.keep.chain.*`), label · hint:
+
+  | State   | Words                                                                                                                                                   | Click                           |
+  | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+  | follows | "Keep 2 marchers on Page 3" · "They won't follow Page 2 any more" (one: "It won't …"; several source pages: "They won't follow earlier pages any more") | keeps those marchers            |
+  | kept    | "2 marchers kept on Page 3" · "Click to follow Page 2 again" ("…earlier pages again")                                                                   | lets them follow again          |
+  | mixed   | "2 of 8 kept on Page 3" · "Click to keep the other 6 too" ("…the other one too")                                                                        | keeps the rest (_lead default_) |
+
+- **Code:** `components/timeline/PageKeepChain.tsx` (`usePageKeepChains` :71, `chainOffset` :106,
+  `PageKeepChainButton` :130); `TimelinePrimitives.tsx` (`TimelinePageBox` :1093);
+  `TimelineModePanel.tsx` (:168); `Timeline.tsx`, `TimelineVariants.tsx`, `TimelineViewModel.ts`
+  (`keepChains` prop).
+- **Tests:** `PageKeepChain.test.tsx` › "the chains on the page boxes" (6).
+- **Real-app:** `~/ux-study/wp16/run` (study flow, 37 steps), `~/ux-study/wp16/mixed` (mixed chain).
+- **V-row:** V-154.
+
+#### B-41 Inspector: Keep here, Follow again, and the pages that follow
+
+- **Mode:** TL.
+- **After:** the hold line (B-30) gains buttons, each a real button styled as the line's link, with
+  a tooltip (`HintTooltip`):
+  - a page they follow into: "Hold from Page 2 → · **Keep here**" (tooltip "Keep these marchers on
+    Page 3, so editing Page 2 won't move them here");
+  - kept: "Kept on this page · **Follow again**" ("Let these marchers follow Page 2 again, so editing
+    Page 2 moves them here too");
+  - mixed: "Some of these marchers are kept on this page" or "Some of these marchers hold here", with
+    the buttons on a row of their own; tooltips name the count ("Keep 6 of these marchers …");
+  - "These marchers hold here · Keep here" where they all follow but from different pages (B-30
+    showed nothing there).
+  - A quiet line under it on any page later pages follow from: "Pages 3–4 follow these marchers",
+    "Page 4 follows these marchers", "… some of these marchers".
+  - A move that goes nowhere without the marker still reads "Moves on this page".
+- **Strings:** `inspector.marcher.timeline.*` (18 new keys).
+- **Code:** `components/inspector/TimelineHoldLine.tsx` (`KeepButton`, `useSelectionKeepState`,
+  `FollowingPagesLine`, `TimelineHoldLineContent`).
+- **Tests:** `TimelineHoldLine.test.tsx` › "keep later pages (UI-18)" (6) and the updated
+  multi-selection case.
+- **V-row:** V-155.
+
+#### B-42 Page box menu: Keep selected marchers here / Let selected marchers follow again
+
+- **Mode:** TL.
+- **After:** above the deletes, both entries show with a selection, each enabled by the selection's
+  state on that box (some follow / some kept); neither without a selection. They act on the
+  marchers in that state, one undo step each.
+- **Code:** `TimelineRangeMenu.tsx` (`TimelineKeepHereMenu` :152, entries); `PageKeepChain.tsx`
+  (`keepHereMenu` :34); `Timeline.tsx` (`keepHere` prop).
+- **Tests:** `PageKeepChain.test.tsx` › "the page box menu's keep entries" (4);
+  `timelineKeepCommands.test.ts` › "the menu keeps the selected marchers that follow, and lets them
+  follow again".
+- **V-row:** V-156.
+
+#### B-43 K: keep on the next page, or follow again
+
+- **Mode:** TL (does nothing in PM).
+- **After:** a registered action on **K** (free in both modes): on the page after the selected page,
+  keeps the selected marchers that follow there, or, when none does, lets the kept ones follow
+  again; with some of each it keeps the rest. Reads the markers from the file, so two quick presses
+  toggle. No toast. Not while playing; never from a text field (the handler's input check).
+- **Strings:** `actions.timeline.toggleKeepOnNextPage`.
+- **Code:** `RegisteredActionsHandler.tsx` (enum :135, object :572, case :1429);
+  `timelineKeepCommands.ts:toggleKeepOnNextPage`.
+- **Tests:** `KeepOnNextPageKey.test.tsx` (both modes: K calls the toggle only in TL, never from a
+  field; K has no other action); `timelineKeepCommands.test.ts` › "K keeps the selection…", "K does
+  nothing…".
+- **V-row:** V-157. The app has no shortcuts list to add it to; the action's description is its
+  only listing.
+
+#### B-44 Timeline Only Page N after an edit
+
+- **Mode:** TL.
+- **Before:** silent (B-25).
+- **After:** after a range edit ending on a page flag that changed an **existing** own move of some
+  marchers in its window (`ownMovers`, read before the write) and carried them into the next page
+  box (they follow there), one surprise toast: "Pages 3–4 followed" ("Page 3 followed"), action
+  **Only Page 2**. The action, as its own undo step, keeps those marchers on the next page box at
+  their spots from before the edit (`keepMarchersOnPage` with `at`; the kept move walks back from
+  the edited spot, and the chain shows it kept), so the later pages look as before. Rules:
+  - a page's first move stays silent (no owned marchers);
+  - kept marchers don't follow, so they don't count;
+  - the pass-through toast wins, then **Move them too**; Only Page N shows only when neither does;
+  - nudges in a row share one toast (`continueEditRun`, V-153), and the action goes back to the
+    spots before the first nudge.
+- **Strings:** `timeline.keep.followed.onePage` "Page {page} followed", `.pages` "Pages
+  {first}–{last} followed", `.only` "Only Page {page}".
+- **Code:** `timeline/timelineOnlyThisPage.ts` (`ownMovers` :56, `followedAfterEdit` :107,
+  `offerOnlyThisPage` :258); `timelineMoveThemToo.ts:moveMarchersAndOfferFollowUp` (:305, :318);
+  `db-functions/timelineKeepHere.ts:keepMarchersOnPage` (`at`, :105).
+- **Tests:** `timelineKeepCommands.test.ts` › "keep later pages: Only Page N after an edit" (5:
+  first move silent; study flow with one undo; nudge run; kept page silent; Move them too wins);
+  `timelineKeepHere.test.ts` › "keep at given spots (Only Page N)" (2) and its history round trip;
+  `timelineMoveThemToo.test.ts` (two "offers nothing" cases now expect this toast; pass-through
+  precedence unchanged).
+- **Real-app:** `~/ux-study/wp16/run` steps 30–35.
+- **V-row:** V-158.
+- **Limits:** windows that don't end on a flag, isolated moves and home edits never offer it.
+
 ---
 
 ## 3. File map
@@ -1020,6 +1183,28 @@ Non-doc files changed (`git diff --stat 5888850a e1cd9ea2 -- apps`), one line ea
 | `src/utilities/setMarchersToNeighborPage.ts`          | TL writes over the page box; previous clears own moves                                                                                          | B-05                                    |
 
 Test files are in section 4.
+
+Keep later pages (wp15 storage, wp16 UI), under `apps/desktop/`:
+
+| File                                                                                                            | What changed                                                                          | B-IDs      |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------- |
+| `electron/database/migrations/0018_*`, `schema.ts`, `repair.ts`                                                 | `timeline_kept_assignments` (wp15)                                                    | B-38       |
+| `src/db-functions/timelineKeepHere.ts` (new, wp15)                                                              | Keep / Follow again / states; wp16: `at` spots for Only Page N                        | B-38, B-44 |
+| `src/db-functions/timelineKeptMarkers.ts` (new, wp15)                                                           | Marker reads and writes                                                               | B-38       |
+| `src/timeline/timelineKept.ts` (new, wp15)                                                                      | `KeptState`, `keptStatesForSelection`                                                 | B-38       |
+| `src/timeline/timelineKeepLater.ts` (new)                                                                       | Per-box follows/kept for the selection, following pages, chain words, K's toggle      | B-39–B-43  |
+| `src/timeline/useKeepLaterPages.ts` (new)                                                                       | Kept-marker store and its host; `usePageKeepStates`                                   | B-39       |
+| `src/timeline/timelineKeepCommands.ts` (new)                                                                    | Keep / follow again with error toasts; `toggleKeepOnNextPage`                         | B-39, B-43 |
+| `src/timeline/timelineOnlyThisPage.ts` (new)                                                                    | Timeline Only Page N toast                                                            | B-44       |
+| `src/timeline/timelineMoveThemToo.ts`                                                                           | Offers Only Page N when there is no pass-through or Move them too                     | B-44       |
+| `src/timeline/TimelineResolverHost.tsx`                                                                         | Mounts the kept-marker host                                                           | B-39       |
+| `src/components/timeline/PageKeepChain.tsx` (new)                                                               | Chain button, chains hook, menu adapter                                               | B-40, B-42 |
+| `src/components/timeline/TimelinePrimitives.tsx`                                                                | Page boxes draw their chain beside them                                               | B-40       |
+| `src/components/timeline/Timeline.tsx`, `TimelineVariants.tsx`, `TimelineViewModel.ts`, `TimelineModePanel.tsx` | `keepChains`, `keepHere` props and wiring                                             | B-40, B-42 |
+| `src/components/timeline/TimelineRangeMenu.tsx`                                                                 | Keep entries in the page box menu                                                     | B-42       |
+| `src/components/inspector/TimelineHoldLine.tsx`                                                                 | Keep here / Follow again, mixed wordings, following-pages line                        | B-41       |
+| `src/utilities/RegisteredActionsHandler.tsx`                                                                    | K                                                                                     | B-43       |
+| `i18n/en.json`                                                                                                  | `inspector.marcher.timeline.*` (18), `timeline.keep.*` (15), `actions.timeline.*` (1) | B-40–B-44  |
 
 ---
 
@@ -1144,6 +1329,18 @@ RegisteredActionsHandlerModes. New history tests since: `pageDeleteGaps`, `march
 
 ---
 
+Keep later pages (wp16):
+
+| Test file (under `apps/desktop/src/`)                     | New/changed  | Covers           | Notes                                             |
+| --------------------------------------------------------- | ------------ | ---------------- | ------------------------------------------------- |
+| `timeline/__test__/timelineKeepLater.test.ts`             | new          | B-39–B-43 (pure) | 14                                                |
+| `components/timeline/__test__/PageKeepChain.test.tsx`     | new          | B-40, B-42       | 10, jsdom                                         |
+| `components/inspector/__test__/TimelineHoldLine.test.tsx` | changed (+6) | B-41             | multi-selection case updated by design            |
+| `timeline/__test__/timelineKeepCommands.test.ts`          | new          | B-42–B-44        | 8, real database                                  |
+| `utilities/__test__/KeepOnNextPageKey.test.tsx`           | new          | B-43             | run in both modes                                 |
+| `db-functions/__test__/timelineKeepHere.test.ts`          | changed (+3) | B-38, B-44       | `at` spots; one history round trip                |
+| `timeline/__test__/timelineMoveThemToo.test.ts`           | changed      | B-44             | two "offers nothing" cases now expect Only Page N |
+
 ## 5. QA checklist
 
 ### Setup
@@ -1232,12 +1429,28 @@ RegisteredActionsHandlerModes. New history tests since: `pageDeleteGaps`, `march
 | B-34 | Linux/Windows: select a marcher, Ctrl+A, Ctrl+S; then A alone.               | Ctrl+A selects all, nothing moves, no "No marchers selected"; A alone nudges.             |
 | B-35 | TL: a refused set to previous/next (e.g. follow-the-leader into a shape).    | A friendly refusal toast; nothing written.                                                |
 
+### Keep later pages (TL)
+
+Start from `ux-starter-timeline.dots`: press E (page 2), Ctrl+A, drag the band forward; Esc; select
+OT1 and OT8.
+
+| ID   | Steps                                                                                       | Expected                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B-40 | Hover the chain on page 3; click it; select the whole band; hover page 3's chain; deselect. | "Keep 2 marchers on Page 3 · They won't follow Page 2 any more"; after the click a filled broken chain; whole band: "2 of 8 kept" with a 2 badge; none. U/R.    |
+| B-40 | Select page 3 (Q/E or the box), check the chain; press on the chain and drag sideways.      | The chain stays visible beside the start flag; the box isn't selected, scrubbed or dragged.                                                                     |
+| B-41 | Page 3 with OT1/OT8 following: Keep here; then Follow again; page 2: read the quiet line.   | Tooltips as in B-41; "Kept on this page · Follow again" after keeping; "Pages 3–4 follow these marchers" on page 2 while they follow. U/R.                      |
+| B-42 | Right-click page 3 and page 4 before and after keeping; with nothing selected.              | Entries enabled by state; none without a selection.                                                                                                             |
+| B-43 | Page 2 selected: K; look at page 3; K again; type K in a text field.                        | Kept, then following again, no toast; typing does nothing to the show.                                                                                          |
+| B-44 | Keep nothing; drag OT1 (with OT8) on page 2; press Only Page 2; go to page 3; Ctrl+Z.       | "Pages 3–4 followed · Only Page 2"; pages 3–4 back at the old spots, page 3 shows kept; one undo takes back only Only Page 2. A first move on a page: no toast. |
+
 ---
 
 ## 6. Data and compatibility
 
-- **No schema, user-version or file-format change; no migration.** Older and newer builds open the
-  same files.
+- **No schema, user-version or file-format change; no migration** before keep later pages. Since
+  wp15, migration 0018 creates `timeline_kept_assignments` (user version stays 8, unreleased); files
+  from earlier development builds get the empty table when they open. A build without 0018 shows a
+  kept spot as an ordinary move that goes nowhere (B-38, ADR 0001 amendment 2026-10-09).
 - **Page-mode files (user version 7, released):** read unchanged. Behavior changes start on the next
   edit (carry-forward). Pages already left stale by the old app stay stale; the fix is a manual
   Shift+P or re-edit (README finding 7). Rows that share a pathway with the previous page (copied by
@@ -1303,6 +1516,10 @@ This list should drive the next testing pass.
 7. **Runs that add up (B-36)** across mode switches or after a file reload: not tested (the run is
    module state and should reset; not checked).
 8. **Partial-follow wording:** no "6 of 8 followed" count (09 rec. 2, not built).
+9. **Keep later pages (B-38 … B-44):** no persona run on the built UI yet (V-154 … V-158); chains
+   at 100+ pages and large selections not measured (one span pass per marcher per resolver
+   version); the new strings exist only in `en.json`; chains in compact mode and on very narrow
+   boxes checked by unit test only.
 
 ### Checks never run
 
@@ -1337,7 +1554,7 @@ This list should drive the next testing pass.
   `joinNewMarchersToTimelinesInTransaction`, `marcherList`, `narrowingLabel` or the removed
   `EDIT_SURPRISE_TOAST_ID` must be updated (`editSurpriseToastId()` replaces the constant).
 - **UI numbering:** this feature is **UI-18**. UI-15 and UI-16 belong to timeline edges (#111),
-  UI-17 to transport keys. VALIDATION rows are V-140..V-149 and V-150..V-159 (V-150..V-153 used).
+  UI-17 to transport keys. VALIDATION rows are V-140..V-149 and V-150..V-159 (V-150..V-158 used).
 
 ### Doc vs code discrepancies
 

@@ -16,6 +16,7 @@ import {
     toTimelineMoves,
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { toggleKeepOnNextPage } from "@/timeline/timelineKeepCommands";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { PAGE_SHAPES_TIMELINE_MESSAGE } from "@/db-functions/shapePages";
 import {
@@ -129,6 +130,9 @@ export enum RegisteredActionsEnum {
 
     // Shapes
     createCircle = "createCircle",
+
+    // Timeline
+    toggleKeepOnNextPage = "toggleKeepOnNextPage",
 }
 
 /**
@@ -562,6 +566,13 @@ export const RegisteredActionsObjects: {
         descKey: "actions.shape.createCircle",
         keyboardShortcut: new KeyboardShortcut({ key: "o" }),
         enumString: "createCircle",
+    }),
+
+    // Timeline (UI-18 keep later pages; timeline mode only)
+    toggleKeepOnNextPage: new RegisteredAction({
+        descKey: "actions.timeline.toggleKeepOnNextPage",
+        keyboardShortcut: new KeyboardShortcut({ key: "k" }),
+        enumString: "toggleKeepOnNextPage",
     }),
 } as const;
 
@@ -1410,6 +1421,19 @@ function RegisteredActionsHandler() {
                             x: coordinate.x,
                             y: coordinate.y,
                         }));
+                    });
+                    break;
+                }
+
+                /****************** Timeline ******************/
+                case RegisteredActionsEnum.toggleKeepOnNextPage: {
+                    // UI-18 keep later pages: keep the selection on the next page, or let it
+                    // follow again there. No toast: the chain and the inspector line show it
+                    if (!timelineMode || isPlaying || !pages) break;
+                    void toggleKeepOnNextPage({
+                        pages,
+                        currentPageId: selectedPage.id,
+                        marcherIds: selectedMarchers.map((m) => m.id),
                     });
                     break;
                 }

@@ -60,6 +60,8 @@ import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { useLabeledHoldMarks } from "./PageHoldMark";
 import { useTimelineHoldMarks } from "@/timeline/usePageHoldMarks";
+import { usePageKeepStates } from "@/timeline/useKeepLaterPages";
+import { keepHereMenu, usePageKeepChains } from "./PageKeepChain";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
@@ -161,6 +163,10 @@ export default function TimelineModePanel() {
     const holdMarks = useLabeledHoldMarks(
         useTimelineHoldMarks(pages, selectedIdList),
     );
+    // UI-18 keep later pages: the chains on the page boxes, and the page box menu's entries
+    const keepStates = usePageKeepStates(pages, selectedIdList);
+    const keepChains = usePageKeepChains(keepStates);
+    const keepHere = useMemo(() => keepHereMenu(keepStates), [keepStates]);
     const timelines = useTimelineTracks({
         database: db,
         enabled: useTimelineMode(),
@@ -327,6 +333,8 @@ export default function TimelineModePanel() {
                     transportSecondary={SOUND_BUTTON}
                     transportViewControls={COMPACT_BUTTON}
                     holdMarks={holdMarks}
+                    keepChains={keepChains}
+                    keepHere={keepHere}
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
                     clipResize={clipResize}
