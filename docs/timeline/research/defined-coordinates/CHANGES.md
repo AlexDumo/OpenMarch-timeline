@@ -2,11 +2,12 @@
 
 # Defined coordinates: change catalog (branch `timeline/defined-coordinates`, fork PR #112)
 
-Status: written 2026-10-09 against HEAD `e1cd9ea2`, compared with the fork's `timeline-try-2` tip
-`5888850a` (the merge base: the branch already merged it in `97c8626b`). Source of truth for what
-the branch changes before it merges into the app. Every entry is grounded in the code diff
-(`git diff 5888850a e1cd9ea2`, 80 non-doc files); where the docs say something else, the entry says
-so under **Doc vs code** and describes what the code does.
+Status: updated 2026-10-09 to HEAD `2470207c` (first written at `e1cd9ea2`; since then wp12 Move them
+too trigger, wp13 gap tests and window-move fix, wp14 toast polish, and the doc commit `5b2c5c6c`).
+Compared with the fork's `timeline-try-2` tip `5888850a` (the merge base: the branch already merged it
+in `97c8626b`). Source of truth for what the branch changes before it merges into the app. Every
+entry is grounded in the code diff (`git diff 5888850a 2470207c`); where the docs say something else,
+the entry says so under **Doc vs code** and describes what the code does.
 
 How to use this file:
 
@@ -16,13 +17,13 @@ How to use this file:
   existing docs are stale.
 - **Reviewers:** section 3 maps every changed file to the behaviors it carries.
 
-Line numbers are at `e1cd9ea2`. "TL" = timeline mode (the file's timeline flag on), "PM" = page
+Line numbers are at `2470207c`. "TL" = timeline mode (the file's timeline flag on), "PM" = page
 mode (what every released user runs).
 
 ## Contents
 
 1. [Summary](#1-summary)
-2. [Behavior catalog](#2-behavior-catalog) (B-01 … B-35)
+2. [Behavior catalog](#2-behavior-catalog) (B-01 … B-37)
 3. [File map](#3-file-map)
 4. [Test map](#4-test-map)
 5. [QA checklist](#5-qa-checklist)
@@ -46,7 +47,7 @@ with its own move, and stops there.
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Timeline mode** (dev flag)   | Already sparse (no move = hold). The branch stops every path that wrote rows on a page's behalf: page add/split/append holding moves, new-marcher stays, converter copies, set to previous/next stays, and no-op range writes. Delete page becomes the flag delete. Adds hold marks, an inspector line, Move them too, and new toast wording.                                                                                                                         |
 | **Page mode** (released model) | Dense `marcher_pages` rows stay. An edit on page N also rewrites the following run of that marcher's rows that still equal the old position (within 1e-6), stopping at a different value, a page where the marcher is in a shape, or a row with its own pathway. Toast "Pages 3–4 followed (they were copies)" with **Only Page N**. Plus pre-existing fixes: new pages don't copy pathways, `pathways` is in undo history, undo focus works, followed pages refresh. |
-| **Both**                       | Tag appearances on a deleted page move to the next page; hold marks on the page boxes for the selection; Move them too; selection box refits; Ctrl+A/Ctrl+S no longer nudge; one-line toast buttons; a pending page selection expires after 2 s.                                                                                                                                                                                                                      |
+| **Both**                       | Tag appearances on a deleted page move to the next page; hold marks on the page boxes for the selection; Move them too; selection box refits; Ctrl+A/Ctrl+S no longer nudge; one surprise toast at a time (fresh ids, runs of edits add up); toast button layout; a pending page selection expires after 2 s.                                                                                                                                                         |
 
 ### What did NOT change
 
@@ -60,37 +61,38 @@ with its own move, and stops there.
 
 ### Owner decisions (all 2026-10-08 unless noted)
 
-| #   | Decision                                                                                                                                                                         | Where recorded                       |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| 1   | Sparse model adopted; amend ADR 0001                                                                                                                                             | README Decisions; ADR 0001 amendment |
-| 2   | Page mode carries edits forward now, per marcher, with a tolerance, with Only Page N and the pre-existing fixes; no schema change                                                | README Decisions                     |
-| 3   | Delete page in timeline mode keeps later pages' look (flag delete); "Delete page and its moves" is explicit                                                                      | README Decisions                     |
-| 4   | Lock here / Keep later pages deferred (no stored kind)                                                                                                                           | README Decisions                     |
-| 5   | Delete page and its moves keeps tracks (layer > 0) inside the box ("I think no" to deleting them)                                                                                | README; V-149                        |
-| 6   | Page-mode shape edits carry forward ("I think so")                                                                                                                               | README; V-148                        |
-| 7   | After the persona study (08): carry-forward is shown by hold marks, not toasts; toasts only for surprises, shorter                                                               | ui.md UI-18; V-146                   |
-| 8   | 2026-10-09: hold-mark tooltips and **Move them too** built at the owner's request (PR #112 comment); renumbered UI-18 (UI-15/16 went to timeline edges, UI-17 to transport keys) | PR comment only (see section 8)      |
+| #   | Decision                                                                                                                                                                                           | Where recorded                        |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| 1   | Sparse model adopted; amend ADR 0001                                                                                                                                                               | README Decisions; ADR 0001 amendment  |
+| 2   | Page mode carries edits forward now, per marcher, with a tolerance, with Only Page N and the pre-existing fixes; no schema change                                                                  | README Decisions                      |
+| 3   | Delete page in timeline mode keeps later pages' look (flag delete); "Delete page and its moves" is explicit                                                                                        | README Decisions                      |
+| 4   | Lock here / Keep later pages deferred (no stored kind)                                                                                                                                             | README Decisions                      |
+| 5   | Delete page and its moves keeps tracks (layer > 0) inside the box ("I think no" to deleting them)                                                                                                  | README; V-149                         |
+| 6   | Page-mode shape edits carry forward ("I think so")                                                                                                                                                 | README; V-148                         |
+| 7   | After the persona study (08): carry-forward is shown by hold marks, not toasts; toasts only for surprises, shorter                                                                                 | ui.md UI-18; V-146                    |
+| 8   | 2026-10-09: hold-mark tooltips and **Move them too** built at the owner's request (PR #112 comment); renumbered UI-18 (UI-15/16 went to timeline edges, UI-17 to transport keys)                   | PR comment; ui.md UI-18; V-150, V-151 |
+| 9   | 2026-10-09 (lead defaults after review): Move them too only when an edit splits a group (V-150); runs of edits add up behind one toast, two-button toasts put the buttons on their own row (V-153) | ui.md UI-18; VALIDATION               |
 
 ---
 
 ## 2. Behavior catalog
 
-Entry template: **Mode** · **Before** (`5888850a`) → **After** (`e1cd9ea2`) · **Strings** ·
+Entry template: **Mode** · **Before** (`5888850a`) → **After** (`2470207c`) · **Strings** ·
 **Edges** · **Code** · **Tests** · **Real-app** (scenarios in `~/om-capture/scenarios/`) · **V-row** ·
 **Limits / open**.
 
 Index:
 
-| Group                        | IDs         |
-| ---------------------------- | ----------- |
-| Timeline writes              | B-01 … B-07 |
-| Delete                       | B-08 … B-13 |
-| Page mode carry-forward      | B-14 … B-17 |
-| Page mode pre-existing fixes | B-18 … B-21 |
-| Move them too                | B-22, B-23  |
-| Toasts                       | B-24 … B-26 |
-| Hold marks and inspector     | B-27 … B-30 |
-| Focus, selection, keys       | B-31 … B-35 |
+| Group                        | IDs                     |
+| ---------------------------- | ----------------------- |
+| Timeline writes              | B-01 … B-07             |
+| Delete                       | B-08 … B-13             |
+| Page mode carry-forward      | B-14 … B-17             |
+| Page mode pre-existing fixes | B-18 … B-21             |
+| Move them too                | B-22, B-23              |
+| Toasts                       | B-24 … B-26, B-36, B-37 |
+| Hold marks and inspector     | B-27 … B-30             |
+| Focus, selection, keys       | B-31 … B-35             |
 
 ### Timeline writes
 
@@ -143,7 +145,7 @@ Index:
   "a new marcher stands at home at every beat in a converted show";
   `useMarchersTimelineMode.test.ts` › "a create with no settings loaded follows the file's flag";
   `timelineNoAutoStays.test.ts` › "a new marcher moved on page 2 stays there on pages 3 and 4".
-- **Real-app:** none dedicated.
+- **Real-app:** `dc4-tl-marcher.mjs` (6: add a marcher mid-show, drag it on page 2, it holds on 3–4).
 - **V-row:** none (ADR rule).
 - **Limits:** undo focus for the add is B-31.
 
@@ -173,12 +175,15 @@ Index:
   it leaves still…", "distribute writes no row for the endpoints it keeps", "a write that moves
   nobody creates no timeline and no undo step", "a marcher already in the window's timeline moved to
   where it is writes nothing for it"; `timelineMovesByTimeline.test.ts` › "opens no edit when
-  nothing moves".
+  nothing moves"; `timelineSparseGaps.test.ts` › "a range write that leaves everyone where they are
+  writes nothing and opens no undo step (contrast)", and two "documents current behavior" tests that
+  pin the isolated-move and home caveat below.
 - **Real-app:** `dc-tl.mjs` T2 (align/distribute on held page 3, then edit page 2: only movers get
   rows).
 - **V-row:** V-140 (indirectly).
-- **Doc vs code:** ui.md UI-18 says "A write that leaves a marcher where it already is writes nothing
-  for that marcher"; the code does that for range writes only.
+- **Doc vs code:** resolved in `5b2c5c6c`: ui.md UI-18 now says "a range write". Isolated-move
+  (`{kind:"timeline"}`) and home writes to an unchanged position still write and open an undo step
+  (pinned by `timelineSparseGaps.test.ts` as current behavior; open caveat).
 - **Limits:** a row that _becomes_ zero-motion after an upstream edit is kept (07c §1 "auto-block").
 
 #### B-04 A drag back onto the start of an own page move clears that move
@@ -200,7 +205,7 @@ Index:
   `back` test inside `moveMarchersInRangeInTransaction` (~:780–:800).
 - **Tests:** `timelineSparseWrites.test.ts` › "sparse timeline writes: a drag back clears the move"
   (6 tests).
-- **Real-app:** none dedicated (not scripted).
+- **Real-app:** `dc4-tl-marcher.mjs` (7: drag away and back on its own page box clears the move).
 - **V-row:** V-143.
 - **Limits:** only exact page boxes; Pyware users may expect a zero-motion "stay" to be a deliberate
   block (deferred "Lock here").
@@ -269,25 +274,31 @@ Index:
   flag delete merged two boxes, the merged page held two such moves, neither matched, and the
   delete was refused (E-A3, "E-A3 fix" in commits).
 - **After:**
-  - `isPageMove`: shapeless, all assignments layer 0 covering the transition, `end ≤ page.end`, and
-    (`end == page.end` **or** `start ≥ page.start`). All such moves in the box go.
+  - `isPageMove`: shapeless, all assignments layer 0 covering the transition, and lying **entirely
+    inside the deleted page's box** (`start ≥ page.start` and `end ≤ page.end`). All such moves in a
+    merged box go. (wp11 also matched a move that started before the box and ended at its flag;
+    wp13 `566254e8` narrowed it, so window moves survive.)
   - **Clamp:** a row that would stretch (following the page before into the deleted box) past the
     marcher's next row at the same layer ends where that row starts instead (a track or a move
     crossing the deleted page's flag); the stretched move then arrives partway ("catches up").
 - **Edges:** tracks (layer > 0) inside the box stay (owner decision 5); a move crossing the deleted
-  page's **end** flag stays; a move that starts **before** the page and ends **at** its flag now
-  matches `isPageMove` and is deleted (see Limits).
-- **Code:** `db-functions/timelineRipple.ts:isPageMove` (:281), clamp in `planTimelineRipple`
-  (:324, the `prev[1] = cur[0]` at :434).
-- **Tests:** `pageDelete.test.ts` › "deleting a page with its moves after a flag delete" (6 tests),
-  `timelineRipple.test.ts` › "tracks that aren't page moves".
+  page's **end** flag stays; a user's window move that starts **before** the box stays even when it
+  ends at the deleted page's flag (V-149), and so does one the deleted page is inside (it then ends a
+  page earlier); a window drawn over stored page moves sits at layer 1 and stays; Undo brings it
+  back.
+- **Code:** `db-functions/timelineRipple.ts:isPageMove` (:282), clamp in `planTimelineRipple`
+  (:325, the `prev[1] = cur[0]` at :435).
+- **Tests:** `pageDelete.test.ts` › "deleting a page with its moves after a flag delete" (6 tests);
+  `pageDeleteGaps.test.ts` › window-move block (7 tests: "Delete page and its moves on page 2 keeps
+  the user's window move over pages 1-2 (V-149)", "a window over pages 1-3 stays when page 3 is
+  deleted with its moves", "a move inside the deleted page's box still goes with it, next to a kept
+  window", "deleting a page inside the window…", "Delete page (the flag delete) keeps the window
+  move…", "drawn over stored page moves, the window sits at layer 1 and stays", "Undo brings the
+  window move back"); `timelineRipple.test.ts` › "tracks that aren't page moves".
 - **Real-app:** `dc-tl-merge.mjs` (converted show: flag delete page 2, then delete the merged page
   with its moves, Ctrl+Z ×2).
 - **V-row:** V-149.
-- **Limits / open:** a user's cross-page window move that ends at the deleted page's flag, starts
-  before its box, and sits at layer 0 (possible when drawn over held pages with no rows underneath;
-  over stored moves it lands on layer 1 and stays) is now deleted with the page; not covered by a
-  test.
+- **Limits:** none known beyond V-149's open question (whether tracks should go).
 
 ### Delete
 
@@ -351,7 +362,9 @@ Index:
 
 - **Mode:** TL.
 - **After:** `toast.success`, 10 s: "Deleted Page 2 · Page 1 is now 32 counts · old Pages 3–4
-  changed", with **Undo** (runs the app's normal undo, `usePerformHistoryAction("undo")`).
+  changed", with **Undo** (runs the app's normal undo, `usePerformHistoryAction("undo")`). Since
+  wp13 (`ece0dfbe`) the toast **closes on the next history change** (an edit, undo or redo), as
+  Delete move's does, so its Undo can only ever undo the delete.
   - Parts: "Deleted Page N" / "Deleted Pages 2, 4"; one "… is now N counts" per page that grew;
     "Pages X–Y changed" for unrenamed pages and "old Pages X–Y changed" for renumbered ones, joined
     with " and "; or "No other page changed".
@@ -363,15 +376,17 @@ Index:
 - **Strings:** composed in English in `pageDeleteWithMovesMessage` (not i18n); action label
   `fileTab.undo` ("Undo").
 - **Code:** `pageDelete.ts:changedFlagPageIds` (:129), `pageRunsLabel` (:318),
-  `pageDeleteWithMovesMessage` (:349); `usePageFlags.ts:toastDeleteWithMoves` (:72).
+  `pageDeleteWithMovesMessage` (:349); `usePageFlags.ts:toastDeleteWithMoves` (:78,
+  `subscribeHistoryChanges`).
 - **Tests:** `pageDelete.test.ts` › "pageRunsLabel and the toast" (2), "owner S4: … the toast names
   every page whose flag changed", "a page no one moved on: … the toast says so", "a converted show
   with copied pages: reports exactly the flags that look different";
-  `usePageFlags.deleteToast.test.ts` (2).
-- **Real-app:** `dc-tl-flag.mjs` T4 (string + Undo), `wp8-f5.mjs`.
+  `usePageFlags.deleteToast.test.ts` (2); `pageDeleteFollowUps.test.tsx` › "gap 8: the delete
+  toast's Undo after a later edit" (3); `pageDeleteGaps.test.ts` › "after another edit, the app's
+  undo takes back that edit, not the delete", "with no edit in between, Undo takes back exactly the
+  delete; redo deletes again".
+- **Real-app:** `dc-tl-flag.mjs` T4 (string + Undo), `wp8-f5.mjs`, `dc4-tl-delete.mjs`.
 - **V-row:** V-142 (wording is a lead default from study 08).
-- **Limits:** the Undo button is not invalidated by a later edit (unlike Delete move's toast, which
-  closes on the next history change); clicking it after another edit undoes that edit instead.
 
 #### B-11 The view stays on the merged page after a delete
 
@@ -381,10 +396,12 @@ Index:
 - **After:** with no selected page in TL, it selects the page at the paused playhead
   (`pageAtPlayhead`), i.e. the page that took the deleted page's box; PM still selects the first page.
 - **Code:** `components/singletons/StateInitializer.tsx` (~:76–:89).
-- **Tests:** none direct (the selection helpers in B-08/B-09 are unit-tested).
-- **Real-app:** `wp8-f5.mjs` (lands on merged page), `wp8-probe-f5.mjs`.
+- **Tests:** `StateInitializerDelete.test.tsx` (6: TL page at the playhead, not home; TL Delete
+  page and its moves selects the page before; PM falls back to the first page; and three full-app
+  runs deleting the **selected** page: TL Delete page, TL with its moves, PM In Place).
+- **Real-app:** `dc4-tl-delete.mjs` and `dc4-pm-delete.mjs` (delete the **selected** page: lands on
+  the merged page, not home; Undo restores); `wp8-f5.mjs`; screenshots `dc-summary3/4-*`.
 - **V-row:** none.
-- **Limits:** the PR's "not scripted: delete when the deleted page itself is selected" still holds.
 
 #### B-12 Delete move names the pages that change
 
@@ -399,8 +416,8 @@ Index:
   (:170), `toastMoveDeleted` (:185), call (:292).
 - **Tests:** `timelineMoveThemToo.test.ts` › "the delete-move toast: appends the pages that changed,
   as runs", "deleting a move names the pages that changed: later pages that held from it fall back…".
-- **Real-app:** none (PR comment: "tests only, no screenshot").
-- **V-row:** none.
+- **Real-app:** `dc4-tl-delete.mjs` (5); screenshot `dc-summary3/5-tl-delete-move-toast.png`.
+- **V-row:** V-152.
 
 #### B-13 Tag appearances move to the next page on any page delete
 
@@ -420,7 +437,8 @@ Index:
   next page; one undo puts it back", "is dropped where the next page has its own…", "is dropped with
   the last page"; "several pages at once…", "several flags at once, in timeline mode", 2 history
   tests); `pageFlagsAdversarial.test.ts` › "a tag appearance on a deleted page moves to the next page,
-  and undo restores it".
+  and undo restores it"; `pageDeleteFollowUps.test.tsx` › "${path.name}: page 3's tag appearances
+  and the page map are fetched again" (per delete path) and a control without the invalidation.
 - **Real-app:** none.
 - **V-row:** none.
 
@@ -450,11 +468,14 @@ Index:
   page inserted inside a run joins it; deleting a copy inside a run keeps the run; the last page
   carries nowhere.
 - **Code:** `db-functions/marcherPage.ts`: `COORDINATE_TOLERANCE`/`sameCoordinate` (:147–:150),
-  `updateMarcherPagesInTransaction` (:317), `updateMarcherPages` (:540), result type
+  `updateMarcherPagesInTransaction` (:321), `updateMarcherPages` (:549), result type
   `MarcherPagesWriteResult`.
 - **Tests:** `marcherPageCarryForward.test.ts` › "page mode carries an edit forward" (owner
   scenario, back to the opening set, 41 pages, merge leak, tolerance, shape stop, carryForward:false,
-  swap, inserting/deleting pages, pathways, undo/redo, 200×100 timing).
+  swap, inserting/deleting pages, pathways, undo/redo, 200×100 timing);
+  `setMarchersToNeighborPageCarry.test.tsx` (4: Shift+P, Ctrl+Shift+P, Ctrl+Shift+N, Shift+N);
+  `newShowCompletion.test.ts` › "in page mode, imported first-page coordinates carry to every later
+  page".
 - **Real-app:** `dc-page.mjs` P1 (DB and field), P3 (undo/redo), P4 (playback mid page 3 holds);
   `dc-page-p56.mjs` P5–P6; `wp7-page.mjs`, `wp10-page.mjs`, `ux-f4.mjs`, `wp8-f4.mjs`.
 - **V-row:** V-140, V-141.
@@ -462,7 +483,6 @@ Index:
   - **Merge leak** (known, tested): equality can't tell a copy from a page moved onto the same spot
     on purpose; such a page follows too. Way back: Only Page N, undo.
   - Undo cost: 200 × 100 edit 0.45–0.72 s, undo 2.3–4.0 s (logged, not asserted).
-  - PM set to previous/next and the new-show import carrying forward are not separately tested.
 
 #### B-15 Page-mode no-op writes are skipped (no undo step)
 
@@ -474,7 +494,7 @@ Index:
   anyway so the caller's undo group isn't empty.
 - **Edges:** a write that also changes another field (notes, pathway) is never skipped; fabric's
   ~1e-14 drift on a selection drag is ignored.
-- **Code:** `marcherPage.ts:withoutNoOpWrites` (:509), skip logic in
+- **Code:** `marcherPage.ts:withoutNoOpWrites` (:518), skip logic in
   `updateMarcherPagesInTransaction` (~:345–:350, fallback ~:470).
 - **Tests:** `marcherPageCarryForward.test.ts` › "a write within the tolerance is skipped, and drift
   doesn't break a run"; `timelineCoordinateWrites.test.ts` › "align vertically, flag off" (now
@@ -485,26 +505,40 @@ Index:
 #### B-16 Page-mode toast: "Pages 3–4 followed (they were copies)" with Only Page N
 
 - **Mode:** PM.
-- **After:** after a write that carried, `toast.message` (no icon), 10 s, id `timeline-edit`:
+- **After:** after a write that carried, one edit surprise toast (fresh id, B-37), 10 s:
   - "Pages {first}–{last} followed (they were copies)" (`marcherPages.carryForward.pages`) or "Page
     {page} followed (it was a copy)" (`…onePage`); first/last aggregated over all marchers.
   - Action **Only Page {page}** (`…only`) when one page was edited, **Only the edited pages**
     (`…onlyEdited`) otherwise. It runs `restoreCarriedRuns`: a **second** undoable edit that puts
     the followed rows back where they were (rows that changed since are left alone), restores the
     next page's pathway start, and refreshes those pages.
-  - Not shown when nothing carried, or when the write also left own moves behind (then the Move
-    them too toast is shown instead, without Only Page N; B-22).
+  - **Runs add up (B-36):** after several edits in a row on the same page(s) with the same marchers,
+    Only Page N puts the followed pages back to before the **first** of them (`mergeCarriedRuns`).
+  - **Split (B-22):** when the write also split the marchers at a later page, the same toast says
+    both ("Pages 3–4 followed (they were copies). OT1 and OT8 have their own move on Page 3, so they
+    kept their spot", `marcherPages.moveThemToo.withFollowed` = "{followed}. {kept}") with **Move them
+    too** as the action and **Only Page N** as the second (sonner `cancel`) button.
+  - Plain followed toast: `toast.message` (no icon); combined toast: `toast.info`.
+  - Not shown when nothing carried.
 - **Edges:** Ctrl+Z after Only Page 2 undoes only the restore (pages follow again); a second Ctrl+Z
-  undoes the edit.
-- **Code:** `utilities/carryForwardToast.ts:carryForwardMessage` (:48), `toastCarryForward` (:102);
-  `marcherPage.ts:restoreCarriedRuns` (:617); wired in `useMarcherPages.ts` (:152, :217, :375).
+  undoes the edit; Only Page 2 clicked after the edit was undone restores nothing and writes no step;
+  after Only Page 2 a second edit of page 2 no longer carries into the restored pages, while an edit
+  of page 3 still carries to page 4.
+- **Code:** `utilities/carryForwardToast.ts:carryForwardMessage` (:56), `mergeCarriedRuns` (:119),
+  `toastCarryForward` (:203), `withFollowedMessage` (:298); `marcherPage.ts:restoreCarriedRuns`
+  (:626); wired in `useMarcherPages.ts` (:152, :217, :375).
 - **Tests:** `marcherPageCarryForward.test.ts` › "Only Page N puts the followed pages back as its own
   undoable edit", "Only Page N leaves a page alone that changed since", "Only Page 2 (no carry) leaves
-  a shared pathway's start alone", `carryForwardMessage` (3).
-- **Real-app:** `dc-page.mjs` P2 (toast text, Only Page 2, Ctrl+Z after it), `wp8-f4.mjs`, `ux-f4.mjs`.
-- **V-row:** V-141.
-- **Doc vs code:** README Recommendation says Only Page N "redoes the edit without carrying it
-  forward"; the code restores the followed rows as a separate edit (same end state, two undo steps).
+  a shared pathway's start alone", `carryForwardMessage` (3); `marcherPageCarryForwardGaps.test.ts` ›
+  "gap 7: Only Page N, then more steps" (4) and history; `moveThemToo.test.ts` › "page mode: Only Page
+  N after several edits" (5), "mergeCarriedRuns", "the toast's Only Page N puts the followed pages
+  back, and leaves the kept marchers alone", "a fully held show: editing page 2 says only that later
+  pages followed".
+- **Real-app:** `dc-page.mjs` P2, `wp8-f4.mjs`, `ux-f4.mjs`, `dc4-pm-study-only.mjs`,
+  `dc4-pm-silence-held.mjs`, `wp14-pm-only.mjs` (two nudges, Only Page 2 back to before the first).
+- **V-row:** V-141, V-153.
+- **Doc vs code:** resolved: README now says Only Page N "puts the followed pages back as a second
+  undo step".
 - **Limits:** study 09: users didn't know what Only Page 2 would do; with a partial follow the toast
   doesn't say "6 of 8 followed" (09 rec. 2, not built).
 
@@ -548,7 +582,10 @@ Index:
   in existing files that lack them.
 - **Code:** `db-functions/historyTriggers.ts` (:22).
 - **Tests:** `marcherPageCarryForward.test.ts` › "undo puts back every carried row and both pathway
-  ends in one step; redo reapplies", "a file without pathway history triggers gets them".
+  ends in one step; redo reapplies", "a file without pathway history triggers gets them";
+  `marcherPageCarryForwardGaps.test.ts` › "without them (an older file), undo puts the marcher back
+  but leaves the curve's end where the edit put it", "opening the file creates them, and the next
+  edit's curve end is undone and redone with it".
 - **Real-app:** none.
 
 #### B-20 Page-mode undo/redo goes to the earliest changed page and selects its marchers
@@ -589,10 +626,12 @@ Index:
 
 - **Mode:** PM.
 - **Before:** not present (proposed by study 09, G4).
-- **After:** when a write moved marchers whose run stopped at a later page that is somewhere else
-  (their own move; not a shape page, and not a page the same write also edits for that marcher), a
-  toast (`toast.info`, 10 s, id `timeline-edit`) names them in drill order and replaces the
-  "followed" toast:
+- **After (wp12 trigger):** only when the write **splits the marchers it moved at a later page**: at
+  that page some of them followed (they were copies) and some stopped because they have their own
+  move there (`OwnMoveStop`, not a shape page, not a page the same write also edits for that marcher).
+  Stops on pages nobody followed into are dropped (`followedPositions.has(stopPageId)`), so a fully
+  written show (every page differs) and a fully held show say nothing about kept marchers. The kept
+  marchers are named, in drill order, inside the combined followed toast (B-16):
   - one page, one marcher: "{names} has its own move on Page {page}, so it kept its spot"
     (`marcherPages.moveThemToo.oneMarcher`);
   - one page, several: "{names} have their own move on Page {page}, so they kept their spot"
@@ -600,48 +639,56 @@ Index:
   - several pages: "{names} have their own later moves, so they kept their spots" (`…laterMoves`);
   - names: "OT1", "OT1 and OT8", "OT1, OT2 and OT3", past three "{first}, {second} and {count}
     others" (`…namesAndOthers`; the "and" lists are English-only).
-  - Action **Move them too** (`…action`) → `moveLaterMovesToo`: shifts each stop row by the offset
-    the edit moved that marcher (read from where the stop is **now**), as its own undo step; it
-    carries forward to copies of the stop page; rows that are gone are skipped.
-- **Edges:** no toast for an edit that moves nobody / only within tolerance, for Only Page N
-  (`carryForward:false`), or for undo; a stop on a shape page isn't listed.
-- **Code:** `marcherPage.ts` (`OwnMoveStop`, stop recording in the carry loop, filter at end of
-  `updateMarcherPagesInTransaction`; `moveLaterMovesToo` :580); `carryForwardToast.ts:toastMoveThemToo`
-  (:145); `utilities/moveThemToo.ts` (`moveThemTooMessage` :67, `marcherNamesList` :45).
-- **Tests:** `moveThemToo.test.ts` › "the message" (3), "page mode: Move them too" (6).
-- **Real-app:** screenshots only, `~/ux-study/wp11/pm*` via `ux-replay.mjs` (no assertions).
-- **V-row:** **none** (see section 8).
-- **Limits / open (important):** the stop is recorded whenever the next differing row exists. In a
-  fully written show, where every page has its own positions, **every ordinary page-mode drag or
-  nudge** shows this toast naming each moved marcher. That contradicts V-146 "ordinary edits and
-  nudges are silent" (the P6 "no toast" checks ran before wp11). Needs an owner decision and a test.
+  - Action **Move them too** (`…action`), with **Only Page N** beside it → `moveLaterMovesToo`: shifts
+    each stop row by the offset (summed over a run of edits, B-36) from where the stop is **now**, as
+    its own undo step; it carries forward to copies of the stop page; rows that are gone are skipped.
+- **Edges:** no offer for an edit that moves nobody / only within tolerance, for Only Page N
+  (`carryForward:false`), or for undo; a stop on a shape page isn't listed; a different split in
+  between doesn't add up.
+- **Code:** `marcherPage.ts` (`OwnMoveStop`, split filter :505, `moveLaterMovesToo` :589);
+  `carryForwardToast.ts` (`toastCarryForward` :203, `moveKeptMarchersToo` :279);
+  `utilities/moveThemToo.ts` (`moveThemTooMessage` :88, `marcherNamesList` :66).
+- **Tests:** `moveThemToo.test.ts` › "the message" (3), "page mode: Move them too" (6), "page mode:
+  Move them too after several edits" (5), "a fully written show (every page differs): an ordinary
+  drag and a nudge on page 2 say nothing", "the same page, other marchers (all but OT4)…", "another
+  page, the same marchers…".
+- **Real-app:** `dc4-pm-study-move.mjs` (9/9), `dc4-pm-silence-written.mjs` (written show: no toast),
+  `dc4-pm-silence-held.mjs`, `wp14-pm.mjs`; screenshots `dc-summary3/1-pm-*`, `~/ux-study/wp14/pm-*`.
+- **V-row:** V-150, V-153.
+- **Limits:** a split edit in a written show that also has some held pages still names everyone who
+  stopped on a page others followed into; there is no "6 of 8 followed" count.
 
 #### B-23 Move them too, timeline mode
 
 - **Mode:** TL.
 - **After:** every canvas/coordinate edit and set to previous/next goes through
   `moveMarchersAndOfferFollowUp`: positions at the edit's end beat are read just before the write
-  (`onStart`), and after the resolver settles, for each moved marcher whose offset exceeds 1e-6, its
-  **next own move** (first non-hold span ending after the edit end) is taken if it starts at or after
-  the edit end and **ends on a page flag**; shape-backed transitions are dropped. Same strings and
-  10 s toast as B-22, same id, so it **replaces** the pass-through toast. **Move them too** →
-  `shiftSlotDestinations`: each slot's destination moves by the offset, one undo step; later pages
-  holding from it follow.
-- **Edges:** next move ending between flags → not offered; next page holds → nothing; within
-  tolerance → nothing; edits of homes (beat 0) and isolated moves (`editEndBeat`) are handled;
-  errors finding them are logged, never thrown (the edit has committed).
-- **Code:** `timeline/timelineMoveThemToo.ts` (`readEditStart` :74, `laterOwnMoves` :98,
-  `findLaterOwnMoves` :154, `toastLaterOwnMoves` :192, `moveMarchersAndOfferFollowUp` :226);
-  `timelineMoves.ts:shapeBackedTransitionIds` (:1054), `shiftSlotDestinations` (:1084), `onStart`
-  in `moveMarchersInTarget`; wired from `timelineCoordinateWrites.ts:transformMarchersInSelection`
-  (:244) and `useMarcherPages.ts` mutations.
-- **Tests:** `timelineMoveThemToo.test.ts` › "timeline mode: Move them too" (6 tests incl. "with a
-  window passing a flag, the one toast becomes Move them too (same id)").
-- **Real-app:** screenshots only, `~/ux-study/wp11/tl*` (`ux-replay.mjs`).
-- **V-row:** none.
-- **Limits / open:** same as B-22: on a converted show every page has a move per marcher, so nearly
-  every edit offers it. When both apply, the pass-through toast's **Keep as a stop** becomes
-  unreachable (replaced by id).
+  (`onStart`). **If the edit produced a pass-through toast, nothing more is offered** (the
+  pass-through toast and its Keep as a stop win). Otherwise, after the resolver settles, `laterOwnMoves`
+  keeps a moved marcher (offset > 1e-6) whose next own move starts at or after the edit end and ends
+  on a page flag **only where the edit split the group at that flag**: at least one moved marcher
+  follows into it (holds from the edit's end through the flag). Shape-backed transitions are dropped.
+  Same strings and 10 s as B-22, one button (no Only Page N in TL). **Move them too** →
+  `shiftSlotDestinations` with the run's summed offset (B-36): one undo step; later pages holding
+  from it follow.
+- **Edges:** fully held show → nothing; fully written/converted show (every marcher moves on every
+  page) → nothing on drags and nudges; next move ending between flags or starting before the edit's
+  end → not kept; within tolerance → nothing; homes (beat 0) and isolated moves handled
+  (`editEndBeat`); errors finding them are logged, never thrown.
+- **Code:** `timeline/timelineMoveThemToo.ts` (`laterOwnMoves` :107, `findLaterOwnMoves` :169,
+  `toastLaterOwnMoves` :212, `moveMarchersAndOfferFollowUp` :275, pass-through early return :302);
+  `timelineMoves.ts:shapeBackedTransitionIds` (:1054), `shiftSlotDestinations` (:1084).
+- **Tests:** `timelineMoveThemToo.test.ts` › "timeline mode: Move them too" (incl. "with a window
+  passing a flag that also splits them, only the pass-through toast shows (Keep as a stop stays
+  reachable)", "a fully held show: shortening page 1 for everyone offers nothing", "a fully written
+  show…: an ordinary drag and a nudge on page 2 offer nothing"), "Move them too after several edits"
+  (6).
+- **Real-app:** `dc4-tl-study.mjs`, `dc4-tl-window.mjs` (pass-through wins),
+  `dc4-tl-silence-held.mjs`, `dc4-tl-silence-written.mjs`, `wp14-tl.mjs`; screenshots
+  `dc-summary3/1-tl-*`, `3-tl-window-split-toast.png`, `~/ux-study/wp14/tl-*`.
+- **V-row:** V-150, V-153.
+- **Limits:** when a window both passes a flag and splits a group, the user gets Keep as a stop but
+  no Move them too for that edit.
 
 ### Toasts
 
@@ -652,8 +699,9 @@ Index:
   OT3, OT4 and 4 others now move straight through Page 3."); action "Only change Page N" / "Only
   change from Page N's set" / "Only change from beat N"; no id, 10 s.
 - **After:** the range write reports every page flag strictly inside the range (`flags`), and every
-  added marcher passes them, stored moves or not. Toast (`toast.info`, id `timeline-edit`, 10 s with
-  an action, 6 s without):
+  added marcher passes them, stored moves or not. Toast (`toast.info`, a fresh edit surprise id
+  `timeline-edit-N` (B-37), 10 s with an action, 6 s without; it suppresses Move them too for that
+  edit, B-23):
   - "Page {page} is no longer a stop" / "Pages {first}–{last} are no longer stops" / "The sets
     inside this move are no longer stops" (flag with no named page) (`timeline.edit.passThrough.noLongerStop.*`);
   - no flag inside (crossed only moves): "Moves straight through {through}, then catches up to
@@ -666,40 +714,98 @@ Index:
 - **Edges:** a window inside one page passes no flag and says nothing; a marcher already in the
   window's timeline passes nothing; a window the user left keeps its selection; Keep works with no
   rows underneath.
-- **Code:** `timeline/timelinePassThrough.ts` (`passedPages` :75, `passThroughMessage` :91,
-  `keepStopsLabel` :140, `keepPassedFlagsAsStops` :173, `toastPassThrough` :198);
+- **Code:** `timeline/timelinePassThrough.ts` (`passedPages` :76, `passThroughMessage` :92,
+  `keepStopsLabel` :141, `keepPassedFlagsAsStops` :171, `toastPassThrough` :196);
   `timelineMoves.ts` `TimelinePassThrough.flags`.
 - **Tests:** `timelinePassThrough.test.ts` (5); `timelineSparseWrites.test.ts` › "the pass-through
   toast" (3); `timelineCarryForward.test.ts` › "a window passing a flag says only…", "Keep as a stop
   restores the passed flag, and the window follows…", "a window the user has left keeps its
-  selection…"; `timelineMovesByTimeline.test.ts` › the "Start from Page N" tests (named after an
-  earlier label).
+  selection…"; `timelineMovesByTimeline.test.ts` › the "Keep Page N as a stop" tests (5, renamed in
+  `65ac6298`); `timelineSparseGaps.test.ts` › "gap 7: Keep as a stop, then undo and redo".
 - **Real-app:** `dc-tl-flag.mjs` T5 (+ "(e) Keep Page 3 as a stop": flag 3 shows page 3's set again),
-  `wp8-f2.mjs`, `ux-f2.mjs`.
+  `wp8-f2.mjs`, `ux-f2.mjs`, `dc4-tl-window.mjs`.
 - **V-row:** V-144.
 
 #### B-25 Ordinary timeline edits show no toast
 
-- **Mode:** TL.
+- **Mode:** TL (and PM for edits that carry nowhere).
 - **Before:** none existed in the base either; the branch's first build (wp5) added "Also moves Pages
   3–4 · stops at Page 5", removed in wp8.
-- **After:** no carry-forward toast. `editCarryForward`/`summarizeCarryForward` remain in
-  `timelineCarryForward.ts` but have **no production caller** (tests only).
-- **Tests:** `timelineCarryForward.test.ts` › "an ordinary edit that carries forward shows no toast"
-  (checks `toastPassThrough` only, not Move them too).
-- **Real-app:** wp8 scenarios; `dc-page-p56.mjs` P6 (page mode).
+- **After:** no carry-forward toast. Since wp12, Move them too fires only on a split (B-22, B-23), so
+  ordinary drags and nudges are silent in fully held and fully written shows. `editCarryForward` /
+  `summarizeCarryForward` remain in `timelineCarryForward.ts` with **no production caller** (tests
+  only).
+- **Tests:** `timelineCarryForward.test.ts` › "an ordinary edit that carries forward shows no toast";
+  the "fully held" / "fully written" tests in `timelineMoveThemToo.test.ts` and `moveThemToo.test.ts`.
+- **Real-app:** `dc4-tl-silence-held.mjs`, `dc4-tl-silence-written.mjs`, `dc4-pm-silence-written.mjs`.
+  Rounds 1–3 "no toast" checks (dc-page-p56 P6, wp8) were unreliable (a hidden reused toast node) and
+  are superseded by dc4.
 - **V-row:** V-146.
-- **Limits:** see B-22/B-23: Move them too can still fire on ordinary edits.
 
-#### B-26 Toast action buttons stay on one line
+#### B-26 Toast button layout: one line; two buttons on their own row
 
 - **Mode:** both (global `Toaster`).
-- **After:** `content: min-w-0 flex-1`; `actionButton`: `shrink-0 self-center whitespace-nowrap
-rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus-visible ring. Affects every
-  toast with an action in the app.
-- **Code:** `components/ui/Toaster.tsx` (:20–:24).
-- **Tests:** `Toaster.test.tsx` › "keeps an action's label on one line, with a focus ring".
-- **Real-app:** wp8/ux screenshots.
+- **After:**
+  - One button: `content: min-w-0 flex-1`; `actionButton`: `shrink-0 self-center whitespace-nowrap
+rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside the text.
+  - Two buttons (wp14 `addf75ec`, any toast with sonner's `cancel`): the toast wraps
+    (`[&:has([data-cancel])]:flex-wrap`); the text keeps the first row (beside the icon, or the full
+    width without one) and the buttons go on their own row underneath, right-aligned;
+    `cancelButton` is the quieter one (`ml-auto … text-text`), before the action.
+  - Affects every toast with an action in the app; today only B-16's combined toast has two.
+- **Code:** `components/ui/Toaster.tsx` (:19–:36).
+- **Tests:** `Toaster.test.tsx` › "keeps an action's label on one line, with a focus ring", "with one
+  button, keeps it beside the text on one row", "with two buttons, wraps them onto their own row
+  under the text, right-aligned".
+- **Real-app:** `wp14-pm.mjs` (layout measured: buttons on one row under the text, single-line, toast
+  under 160 px), `wp14-tl.mjs` (one-button toast keeps its row); `~/ux-study/wp14/*.png`.
+- **V-row:** V-153.
+
+#### B-36 Runs of edits add up behind one surprise toast
+
+- **Mode:** both.
+- **Before:** each nudge replaced the toast, and its action covered only the last nudge (so two
+  nudges then Move them too shifted by one nudge's offset).
+- **After (wp14):** an edit **continues the open toast's run** when all hold:
+  - it is the very next history change after the run's last edit (`editHistoryMark`, counted with
+    `subscribeHistoryChanges`);
+  - same mode (page vs timeline);
+  - same scope: same page(s) (PM, rows the write edited, not the carried ones) or same window/target
+    (TL: `range:start-end`, `home`, `timeline:id`) **and exactly the same marchers** (`editScope`);
+  - the run's toast is still the current surprise toast.
+    Then **Move them too** shifts by the summed offsets (`addShifts`, only when the same marchers stop at
+    the same later moves) and **Only Page N** puts the followed pages back to before the first edit
+    (`mergeCarriedRuns`). Anything else starts a new run from this edit: an undo/redo in between,
+    another edit, Move them too or Only Page N clicked, another surprise toast, the toast closing, or
+    nudging only some of the marchers. A late check from an older edit leaves the newer run alone.
+- **Code:** `utilities/moveThemToo.ts` (`editHistoryMark` :183, `editScope` :215, `continueEditRun`
+  :246, `addShifts` :286, `forgetEditRun` :311); `carryForwardToast.ts` (`pageEditScope` :154,
+  `continuePageEditRun`); `timelineMoveThemToo.ts` (`toastLaterOwnMoves` :212, `windowKey`).
+- **Tests:** `moveThemToo.test.ts` › "a run of edits behind one toast", "mergeCarriedRuns", "page
+  mode: Only Page N after several edits" (5), "page mode: Move them too after several edits" (5);
+  `timelineMoveThemToo.test.ts` › "timeline mode: Move them too after several edits" (6).
+- **Real-app:** `wp14-pm.mjs` (two nudges, Move them too shifts by both), `wp14-pm-only.mjs`,
+  `wp14-tl.mjs`.
+- **V-row:** V-153.
+- **Limits:** the run is module state (one per app window); a nudge on a different selection, even
+  overlapping, starts over (by design).
+
+#### B-37 Each surprise toast gets a fresh id; the previous one closes
+
+- **Mode:** both.
+- **Before (wp11):** pass-through, page-mode followed and Move them too toasts all used the fixed id
+  `timeline-edit`. Sonner merges a toast into every earlier one with its id, even a closed one, so a
+  one-button toast kept an earlier toast's second button, icon and close handlers (`839492b8`).
+- **After:** `editSurpriseToastId()` dismisses the current surprise toast and returns
+  `timeline-edit-N` (N counts up). Still one surprise toast on screen at a time.
+- **Code:** `utilities/moveThemToo.ts:editSurpriseToastId` (:33); callers in `timelinePassThrough.ts`
+  (:204), `carryForwardToast.ts` (:246), `timelineMoveThemToo.ts` (:241).
+- **Tests:** `Toaster.test.tsx` › "an edit toast replaces the one before, and keeps none of its
+  buttons or icon".
+- **Real-app:** `wp14-pm-only.mjs` ("a followed toast right after a Move them too toast has no icon
+  and one button").
+- **V-row:** V-153 (indirectly).
+- **Limits:** a toast transition video has not been reviewed (section 7).
 
 ### Hold marks and inspector
 
@@ -761,8 +867,9 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus-visible ring.
   :243).
 - **Tests:** `PageHoldMarks.test.tsx` › "the hold mark's tooltip on the timeline's page boxes" (6);
   `pageHoldMarks.test.ts` › "words each mark…", "gives each mark a hint line…".
-- **Real-app:** `wp10-tl.mjs`, `wp10-page.mjs`.
-- **V-row:** none (V-146 covers the marks, not the tooltips).
+- **Real-app:** `wp10-tl.mjs`, `wp10-page.mjs`, `dc4-tl-silence-held.mjs` and
+  `dc4-pm-silence-held.mjs` (8); screenshots `dc-summary3/8-*`.
+- **V-row:** V-151.
 - **Limits:** `HintTooltip` is a stand-in for transport-keys' `ShortcutTooltip` (section 8).
 
 #### B-30 Inspector line: "Hold from Page 2 →" / "Moves on this page"
@@ -799,7 +906,7 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus-visible ring.
   :170/:215, `timelineHistoryFocus` :264).
 - **Tests:** `timelineHistoryFocus.test.ts` › "a marcher add: undo and redo stay on the current page
   and select the new marcher".
-- **Real-app:** none.
+- **Real-app:** `dc4-tl-marcher.mjs` (6: undo of an add keeps the current page).
 
 #### B-32 A page selection waiting for its page expires after 2 s
 
@@ -860,57 +967,57 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus-visible ring.
 
 Non-doc files changed (`git diff --stat 5888850a e1cd9ea2 -- apps`), one line each.
 
-| File (under `apps/desktop/`)                          | What changed                                                                                                   | B-IDs                                   |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `electron/database/migrations/schema.ts`              | Comment only on `tag_appearances.start_page_id`                                                                | B-13                                    |
-| `i18n/en.json`                                        | 56 new keys (inspector timeline, marcherPages, passThrough, holdMarks, delete menu); other locales not updated | B-08–B-10, B-16, B-22, B-24, B-29, B-30 |
-| `src/components/inspector/MarcherEditor.tsx`          | Renders `TimelineHoldLine` under Step Size (two places)                                                        | B-30                                    |
-| `src/components/inspector/TimelineHoldLine.tsx` (new) | Inspector hold/move line, link seeks the playhead                                                              | B-30                                    |
-| `src/components/singletons/StateInitializer.tsx`      | TL: no selected page → page at playhead, not home                                                              | B-11                                    |
-| `src/components/timeline/HintTooltip.tsx` (new)       | Label + hint Radix tooltip; press closes it                                                                    | B-29                                    |
-| `src/components/timeline/PageHoldMark.tsx` (new)      | Mark drawing, tooltip wrapper, labeled marks hook                                                              | B-27–B-29                               |
-| `src/components/timeline/PageTimeline.tsx`            | TL delete menu (In Place = flag delete, With Its Moves, Yank with report); PM hold marks and tooltips          | B-08, B-09, B-28, B-29                  |
-| `src/components/timeline/Timeline.tsx`                | `onDeletePageWithMoves`, `holdMarks` props                                                                     | B-09, B-27                              |
-| `src/components/timeline/TimelineModePanel.tsx`       | Hold marks, delete with moves + Undo, `selectionAfterDeleteWithMoves`                                          | B-09, B-10, B-27                        |
-| `src/components/timeline/TimelinePrimitives.tsx`      | Page boxes draw marks, tooltips, `aria-describedby`                                                            | B-27, B-29                              |
-| `src/components/timeline/TimelineRangeMenu.tsx`       | "Delete page flag" → "Delete page"; new "Delete page and its moves"                                            | B-08, B-09                              |
-| `src/components/timeline/TimelineVariants.tsx`        | Passes `holdMarks`                                                                                             | B-27                                    |
-| `src/components/timeline/TimelineViewModel.ts`        | `holdMarks` prop type                                                                                          | B-27                                    |
-| `src/components/timeline/useTimelineCommands.ts`      | Delete move toast names changed pages                                                                          | B-12                                    |
-| `src/components/ui/Toaster.tsx`                       | One-line action buttons                                                                                        | B-26                                    |
-| `src/context/SelectedPageContext.tsx`                 | Pending page selection with 2 s expiry; latest-pages ref                                                       | B-32                                    |
-| `src/db-functions/history.ts`                         | `rowIdFromSql` fix; earliest changed page focus                                                                | B-20                                    |
-| `src/db-functions/historyTriggers.ts`                 | `pathways` in history                                                                                          | B-19                                    |
-| `src/db-functions/marcher.ts`                         | Calls `giveNewMarchersHomesInTransaction`                                                                      | B-02                                    |
-| `src/db-functions/marcherPage.ts`                     | Carry-forward, no-op skip, pathway detach, `restoreCarriedRuns`, `moveLaterMovesToo`, `OwnMoveStop`            | B-14–B-18, B-22                         |
-| `src/db-functions/page.ts`                            | No pathway copy on new page; tag move on delete; `deletePageYankInTransaction` extracted                       | B-09, B-13, B-18                        |
-| `src/db-functions/pageDelete.ts` (new)                | Delete with moves / yank with report; changed-flag comparison; toast text; `changedPagesAround`                | B-09, B-10, B-12                        |
-| `src/db-functions/pageFlags.ts`                       | Flag delete moves tag appearances                                                                              | B-13                                    |
-| `src/db-functions/tagAppearancePageDelete.ts` (new)   | Moves/drops tag appearances off deleted pages                                                                  | B-13                                    |
-| `src/db-functions/timelineCommands.ts`                | `deleteTimelineAndCompare`                                                                                     | B-12                                    |
-| `src/db-functions/timelineHistoryFocus.ts`            | Added/removed marchers belong to the current page                                                              | B-31                                    |
-| `src/db-functions/timelineMarchers.ts`                | New marchers: home only                                                                                        | B-02                                    |
-| `src/db-functions/timelineMoves.ts`                   | No-op skip, drag back/clearOwn, flags in pass-through, `NothingWritten`, `onStart`, `shiftSlotDestinations`    | B-03–B-05, B-23, B-24                   |
-| `src/db-functions/timelineRipple.ts`                  | `addHoldingMoves` removed; `isPageMove` widened; next-row clamp                                                | B-01, B-07                              |
-| `src/global/classes/canvasObjects/MarcherShape.ts`    | New shape invalidates all marcher pages                                                                        | B-17                                    |
-| `src/global/classes/canvasObjects/OpenMarchCanvas.ts` | `fitActiveSelectionToMarchers`                                                                                 | B-33                                    |
-| `src/hooks/queries/sharedInvalidators.ts`             | `invalidateAfterMarcherPagesWrite`, `invalidateAllMarcherPages`                                                | B-17, B-21                              |
-| `src/hooks/queries/useMarcherPages.ts`                | Carry toast + invalidation; TL writes through `moveMarchersAndOfferFollowUp`; neighbor-page mutation           | B-05, B-16, B-21–B-23                   |
-| `src/hooks/queries/usePageFlags.ts`                   | Delete-with-moves mutations + toast + Undo; tag invalidation                                                   | B-09, B-10, B-13                        |
-| `src/hooks/queries/usePages.ts`                       | Tag invalidation after deletes                                                                                 | B-13                                    |
-| `src/hooks/queries/useShapePages.ts`                  | Invalidate all marcher pages after shape edits                                                                 | B-17                                    |
-| `src/timeline/convert/planPageConversion.ts`          | Skip unchanged points                                                                                          | B-06                                    |
-| `src/timeline/pageHoldMarks.ts` (new)                 | Per-marcher states (both modes), page classification, words                                                    | B-27–B-29                               |
-| `src/timeline/timelineCarryForward.ts` (new)          | Carry-forward spans; `editedMarcherEnds` used by Move them too; summary functions unused in production         | B-23, B-25                              |
-| `src/timeline/timelineCoordinateWrites.ts`            | `copyPagePositions.targets`, `neighborPageTarget`; edits via `moveMarchersAndOfferFollowUp`                    | B-05, B-23                              |
-| `src/timeline/timelineHoldState.ts` (new)             | Inspector state per marcher / selection                                                                        | B-30                                    |
-| `src/timeline/timelineMoveThemToo.ts` (new)           | TL Move them too                                                                                               | B-23                                    |
-| `src/timeline/timelinePassThrough.ts`                 | New wording, flags, Keep as a stop, window follows, toast id                                                   | B-24                                    |
-| `src/timeline/usePageHoldMarks.ts` (new)              | Hooks for TL and PM marks                                                                                      | B-27, B-28                              |
-| `src/utilities/RegisteredActionsHandler.tsx`          | Ctrl+WASD fix; neighbor-page mutation                                                                          | B-05, B-34                              |
-| `src/utilities/carryForwardToast.ts` (new)            | PM carry toast and PM Move them too toast                                                                      | B-16, B-22                              |
-| `src/utilities/moveThemToo.ts` (new)                  | Shared message, names, toast id/duration                                                                       | B-22, B-23                              |
-| `src/utilities/setMarchersToNeighborPage.ts`          | TL writes over the page box; previous clears own moves                                                         | B-05                                    |
+| File (under `apps/desktop/`)                          | What changed                                                                                                                                    | B-IDs                                   |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `electron/database/migrations/schema.ts`              | Comment only on `tag_appearances.start_page_id`                                                                                                 | B-13                                    |
+| `i18n/en.json`                                        | 57 new keys (inspector timeline, marcherPages incl. `moveThemToo.withFollowed`, passThrough, holdMarks, delete menu); other locales not updated | B-08–B-10, B-16, B-22, B-24, B-29, B-30 |
+| `src/components/inspector/MarcherEditor.tsx`          | Renders `TimelineHoldLine` under Step Size (two places)                                                                                         | B-30                                    |
+| `src/components/inspector/TimelineHoldLine.tsx` (new) | Inspector hold/move line, link seeks the playhead                                                                                               | B-30                                    |
+| `src/components/singletons/StateInitializer.tsx`      | TL: no selected page → page at playhead, not home                                                                                               | B-11                                    |
+| `src/components/timeline/HintTooltip.tsx` (new)       | Label + hint Radix tooltip; press closes it                                                                                                     | B-29                                    |
+| `src/components/timeline/PageHoldMark.tsx` (new)      | Mark drawing, tooltip wrapper, labeled marks hook                                                                                               | B-27–B-29                               |
+| `src/components/timeline/PageTimeline.tsx`            | TL delete menu (In Place = flag delete, With Its Moves, Yank with report); PM hold marks and tooltips                                           | B-08, B-09, B-28, B-29                  |
+| `src/components/timeline/Timeline.tsx`                | `onDeletePageWithMoves`, `holdMarks` props                                                                                                      | B-09, B-27                              |
+| `src/components/timeline/TimelineModePanel.tsx`       | Hold marks, delete with moves + Undo, `selectionAfterDeleteWithMoves`                                                                           | B-09, B-10, B-27                        |
+| `src/components/timeline/TimelinePrimitives.tsx`      | Page boxes draw marks, tooltips, `aria-describedby`                                                                                             | B-27, B-29                              |
+| `src/components/timeline/TimelineRangeMenu.tsx`       | "Delete page flag" → "Delete page"; new "Delete page and its moves"                                                                             | B-08, B-09                              |
+| `src/components/timeline/TimelineVariants.tsx`        | Passes `holdMarks`                                                                                                                              | B-27                                    |
+| `src/components/timeline/TimelineViewModel.ts`        | `holdMarks` prop type                                                                                                                           | B-27                                    |
+| `src/components/timeline/useTimelineCommands.ts`      | Delete move toast names changed pages                                                                                                           | B-12                                    |
+| `src/components/ui/Toaster.tsx`                       | One-line action button; two-button toasts wrap the buttons onto their own row (`cancelButton`)                                                  | B-26                                    |
+| `src/context/SelectedPageContext.tsx`                 | Pending page selection with 2 s expiry; latest-pages ref                                                                                        | B-32                                    |
+| `src/db-functions/history.ts`                         | `rowIdFromSql` fix; earliest changed page focus                                                                                                 | B-20                                    |
+| `src/db-functions/historyTriggers.ts`                 | `pathways` in history                                                                                                                           | B-19                                    |
+| `src/db-functions/marcher.ts`                         | Calls `giveNewMarchersHomesInTransaction`                                                                                                       | B-02                                    |
+| `src/db-functions/marcherPage.ts`                     | Carry-forward, no-op skip, pathway detach, `restoreCarriedRuns`, `moveLaterMovesToo`, `OwnMoveStop` (kept only where the write split the group) | B-14–B-18, B-22                         |
+| `src/db-functions/page.ts`                            | No pathway copy on new page; tag move on delete; `deletePageYankInTransaction` extracted                                                        | B-09, B-13, B-18                        |
+| `src/db-functions/pageDelete.ts` (new)                | Delete with moves / yank with report; changed-flag comparison; toast text; `changedPagesAround`                                                 | B-09, B-10, B-12                        |
+| `src/db-functions/pageFlags.ts`                       | Flag delete moves tag appearances                                                                                                               | B-13                                    |
+| `src/db-functions/tagAppearancePageDelete.ts` (new)   | Moves/drops tag appearances off deleted pages                                                                                                   | B-13                                    |
+| `src/db-functions/timelineCommands.ts`                | `deleteTimelineAndCompare`                                                                                                                      | B-12                                    |
+| `src/db-functions/timelineHistoryFocus.ts`            | Added/removed marchers belong to the current page                                                                                               | B-31                                    |
+| `src/db-functions/timelineMarchers.ts`                | New marchers: home only                                                                                                                         | B-02                                    |
+| `src/db-functions/timelineMoves.ts`                   | No-op skip, drag back/clearOwn, flags in pass-through, `NothingWritten`, `onStart`, `shiftSlotDestinations`                                     | B-03–B-05, B-23, B-24                   |
+| `src/db-functions/timelineRipple.ts`                  | `addHoldingMoves` removed; `isPageMove` = entirely inside the box (merged boxes; window moves survive); next-row clamp                          | B-01, B-07                              |
+| `src/global/classes/canvasObjects/MarcherShape.ts`    | New shape invalidates all marcher pages                                                                                                         | B-17                                    |
+| `src/global/classes/canvasObjects/OpenMarchCanvas.ts` | `fitActiveSelectionToMarchers`                                                                                                                  | B-33                                    |
+| `src/hooks/queries/sharedInvalidators.ts`             | `invalidateAfterMarcherPagesWrite`, `invalidateAllMarcherPages`                                                                                 | B-17, B-21                              |
+| `src/hooks/queries/useMarcherPages.ts`                | Carry toast + invalidation; TL writes through `moveMarchersAndOfferFollowUp`; neighbor-page mutation                                            | B-05, B-16, B-21–B-23                   |
+| `src/hooks/queries/usePageFlags.ts`                   | Delete-with-moves mutations + toast + Undo (closes on next history change); tag invalidation                                                    | B-09, B-10, B-13                        |
+| `src/hooks/queries/usePages.ts`                       | Tag invalidation after deletes                                                                                                                  | B-13                                    |
+| `src/hooks/queries/useShapePages.ts`                  | Invalidate all marcher pages after shape edits                                                                                                  | B-17                                    |
+| `src/timeline/convert/planPageConversion.ts`          | Skip unchanged points                                                                                                                           | B-06                                    |
+| `src/timeline/pageHoldMarks.ts` (new)                 | Per-marcher states (both modes), page classification, words                                                                                     | B-27–B-29                               |
+| `src/timeline/timelineCarryForward.ts` (new)          | Carry-forward spans; `editedMarcherEnds` used by Move them too; summary functions unused in production                                          | B-23, B-25                              |
+| `src/timeline/timelineCoordinateWrites.ts`            | `copyPagePositions.targets`, `neighborPageTarget`; edits via `moveMarchersAndOfferFollowUp`                                                     | B-05, B-23                              |
+| `src/timeline/timelineHoldState.ts` (new)             | Inspector state per marcher / selection                                                                                                         | B-30                                    |
+| `src/timeline/timelineMoveThemToo.ts` (new)           | TL Move them too: split-only trigger, pass-through wins, runs add up                                                                            | B-23, B-36                              |
+| `src/timeline/timelinePassThrough.ts`                 | New wording, flags, Keep as a stop, window follows, fresh toast id                                                                              | B-24, B-37                              |
+| `src/timeline/usePageHoldMarks.ts` (new)              | Hooks for TL and PM marks                                                                                                                       | B-27, B-28                              |
+| `src/utilities/RegisteredActionsHandler.tsx`          | Ctrl+WASD fix; neighbor-page mutation                                                                                                           | B-05, B-34                              |
+| `src/utilities/carryForwardToast.ts` (new)            | PM followed toast; combined split toast (Move them too + Only Page N); runs add up (`mergeCarriedRuns`)                                         | B-16, B-22, B-36                        |
+| `src/utilities/moveThemToo.ts` (new)                  | Shared message and names; fresh surprise toast ids; edit runs (`editHistoryMark`, `editScope`, `continueEditRun`, `addShifts`)                  | B-22, B-23, B-36, B-37                  |
+| `src/utilities/setMarchersToNeighborPage.ts`          | TL writes over the page box; previous clears own moves                                                                                          | B-05                                    |
 
 Test files are in section 4.
 
@@ -935,21 +1042,27 @@ npx tsc --noEmit -p .
 
 The package scripts are the same: `pnpm --dir apps/desktop run test:focused|test:timeline|test:history|test:timeline-history <file>`.
 
-**Env trap ("Invalid Chai property").** In this worktree the root `node_modules/vitest` links vitest
-**3.2.3** while `apps/desktop/node_modules/vitest` is **4.1.2**. `@testing-library/jest-dom/vitest`
-resolves `vitest` from the root, so it extends the wrong `expect`, and every DOM matcher
-(`toBeInTheDocument`, `toHaveAttribute`, …) fails with "Invalid Chai property: …". It hits
-`PageHoldMarks.test.tsx` and `TimelineHoldLine.test.tsx` (10 failures in normal mode, 9 in timeline
-mode on 2026-10-09). Workaround: make the root link match the desktop version (run `pnpm install`
-at the repo root, or point `node_modules/vitest` at the `vitest@4.1.2…` entry in
-`node_modules/.pnpm`), or run those two files from a checkout whose root link is 4.1.2 (the main
-checkout's is). Check with `ls -l node_modules/vitest apps/desktop/node_modules/vitest`.
+**Env trap ("Invalid Chai property").** When the root `node_modules/vitest` links a different
+vitest than `apps/desktop/node_modules/vitest` (seen on 2026-10-09: root **3.2.3**, desktop
+**4.1.2**), `@testing-library/jest-dom/vitest` resolves `vitest` from the root and extends the wrong
+`expect`, so every DOM matcher (`toBeInTheDocument`, `toHaveAttribute`, …) fails with "Invalid Chai
+property: …". It hit `PageHoldMarks.test.tsx` and `TimelineHoldLine.test.tsx`. Workaround: make the
+root link match the desktop version (`pnpm install` at the repo root, or point `node_modules/vitest`
+at the `vitest@4.1.2…` entry in `node_modules/.pnpm`). Check with
+`ls -l node_modules/vitest apps/desktop/node_modules/vitest`. Later the same day the root link was
+4.1.2 again and the jsdom files passed.
+
+**Concurrent runs collide.** Two vitest runs in the same worktree share `apps/desktop/*.tmp.dots`
+temp databases; a second run makes the first fail with "Expected DB file … to exist" or "Failed
+query: … history_stats". Run one suite at a time per worktree.
 
 **Known load-only timeouts.** In a full or large parallel run, `timelineRender`,
 `timelineSelection`, `useTimelinePlaybackDriver`, `TimelineContainerMode` and `useTimelinePlayback`
 can time out; they pass when run alone. They are not touched by this branch.
 
-### Runs on 2026-10-09 (this catalog's author, HEAD `e1cd9ea2`)
+### Runs on 2026-10-09 (this catalog's author)
+
+At `e1cd9ea2` (first catalog):
 
 | Run                                               | Result                                                             |
 | ------------------------------------------------- | ------------------------------------------------------------------ |
@@ -957,47 +1070,66 @@ can time out; they pass when run alone. They are not touched by this branch.
 | Same, `VITEST_TIMELINE_MODE=true`                 | 408 / 417 passed; 9 failures, same env trap                        |
 | 13 DB/history files, `VITEST_ENABLE_HISTORY=true` | 217 / 217 passed                                                   |
 | Same 13, history + timeline mode                  | 217 / 217 passed                                                   |
-| `tsc`, eslint, full `test:history`, e2e           | not run by the author                                              |
 
-The 13 history files: timelineNoAutoStays, timelineSparseWrites, pageDelete, marcherPageCarryForward,
-timelineCarryForward, timelineHistoryFocus, timelineRipple, moveThemToo, timelineMoveThemToo,
-pageFlagsAdversarial, timelineMarchers, timelineMembershipAdversarial, RegisteredActionsHandlerModes.
+At `2470207c` (this update):
+
+| Run                                               | Result                                                                                                                                                                                                                       |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 38 changed test files, normal                     | 486 / 508 passed. All 22 failures (in `p910Adversarial`, `timelinePageCopy`) were temp-database errors caused by another agent's full vitest run in the same worktree at the same time; the jsdom files passed (no env trap) |
+| Timeline mode, history, timeline + history, `tsc` | not completed by the author: the worktree was busy with that concurrent full-suite run for the whole session; rerun when it is idle                                                                                          |
+| eslint, full `test:history`, e2e                  | not run by the author                                                                                                                                                                                                        |
+
+The wp12–wp14 work packages report their own runs (in their merge commits and the lead's notes); this
+file does not repeat them as its own evidence.
+
+The 13 history files of the first run: timelineNoAutoStays, timelineSparseWrites, pageDelete,
+marcherPageCarryForward, timelineCarryForward, timelineHistoryFocus, timelineRipple, moveThemToo,
+timelineMoveThemToo, pageFlagsAdversarial, timelineMarchers, timelineMembershipAdversarial,
+RegisteredActionsHandlerModes. New history tests since: `pageDeleteGaps`, `marcherPageCarryForwardGaps`,
+`timelineSparseGaps` (each has a `testWithHistory` block).
 
 ### Files
 
-| Test file (under `apps/desktop/src/`)                              | New/changed  | Covers                           | Notes                                                             |
-| ------------------------------------------------------------------ | ------------ | -------------------------------- | ----------------------------------------------------------------- |
-| `db-functions/__test__/timelineNoAutoStays.test.ts`                | new          | B-01, B-02, B-06                 | Owner scenario per add path; converted copies                     |
-| `timeline/__test__/timelineSparseWrites.test.ts`                   | new          | B-03, B-04, B-05, B-24           | No-op writes, drag back, set to previous/next, pass-through flags |
-| `db-functions/__test__/pageDelete.test.ts`                         | new          | B-07, B-08, B-09, B-10, B-13     | Flag delete, with moves, merged boxes, tags, history              |
-| `db-functions/__test__/marcherPageCarryForward.test.ts`            | new          | B-14–B-20                        | Includes 200×100 timing (logged); history tests                   |
-| `timeline/__test__/timelineCarryForward.test.ts`                   | new          | B-24, B-25 (+ dead summary code) | Keep as a stop; window follows                                    |
-| `timeline/__test__/timelineMoveThemToo.test.ts`                    | new          | B-12, B-23                       |                                                                   |
-| `utilities/__test__/moveThemToo.test.ts`                           | new          | B-22                             |                                                                   |
-| `timeline/__test__/pageHoldMarks.test.ts`                          | new          | B-27, B-28, B-29 (words)         | Pure + one resolver test                                          |
-| `components/timeline/__test__/PageHoldMarks.test.tsx`              | new          | B-27, B-28, B-29                 | jsdom: hit by the env trap                                        |
-| `components/inspector/__test__/TimelineHoldLine.test.tsx`          | new          | B-30                             | jsdom: hit by the env trap                                        |
-| `timeline/__test__/timelineHoldState.test.ts`                      | new          | B-30                             |                                                                   |
-| `hooks/queries/__test__/usePageFlags.deleteToast.test.ts`          | new          | B-10                             |                                                                   |
-| `global/classes/canvasObjects/__test__/activeSelectionFit.test.ts` | new          | B-33                             |                                                                   |
-| `components/ui/__test__/Toaster.test.tsx`                          | new          | B-26                             |                                                                   |
-| `context/__test__/SelectedPageContext.test.tsx`                    | changed (+3) | B-32                             |                                                                   |
-| `utilities/__test__/RegisteredActionsHandlerModes.test.tsx`        | changed (+2) | B-20, B-34                       |                                                                   |
-| `components/timeline/__test__/TimelinePageFlagControls.test.tsx`   | changed      | B-08, B-09                       |                                                                   |
-| `components/timeline/__test__/TimelineMoveMenu.test.tsx`           | changed      | B-08 (label)                     |                                                                   |
-| `db-functions/__test__/timelineRipple.test.ts`                     | changed      | B-01, B-07                       | Expectations flipped from holding moves to no rows                |
-| `db-functions/__test__/timelineMarchers.test.ts`                   | changed      | B-02                             | Join tests replaced                                               |
-| `db-functions/__test__/timelineMembershipAdversarial.test.ts`      | changed      | B-02                             |                                                                   |
-| `db-functions/__test__/timelineHistoryFocus.test.ts`               | changed      | B-31                             |                                                                   |
-| `db-functions/__test__/pageFlagsAdversarial.test.ts`               | changed      | B-13                             |                                                                   |
-| `db-functions/__test__/timelineMovesByTimeline.test.ts`            | changed      | B-24                             | Test names still say "Start from Page N"                          |
-| `hooks/queries/__test__/useMarchersTimelineMode.test.ts`           | changed      | B-02                             |                                                                   |
-| `timeline/__test__/planPageConversion.test.ts`                     | changed      | B-06                             |                                                                   |
-| `timeline/__test__/p910Adversarial.test.ts`                        | changed      | B-01, B-06                       |                                                                   |
-| `timeline/__test__/timelinePageCopy.test.ts`                       | changed      | B-05                             |                                                                   |
-| `timeline/__test__/timelinePassThrough.test.ts`                    | changed      | B-24                             | Message tests rewritten                                           |
-| `timeline/__test__/timelineCoordinateWrites.test.ts`               | changed      | B-15                             | `toBeCloseTo` for PM align                                        |
-| `timeline/__test__/timelineToastPaths.test.ts`                     | changed      | B-35                             | Rename only                                                       |
+| Test file (under `apps/desktop/src/`)                              | New/changed    | Covers                           | Notes                                                                                    |
+| ------------------------------------------------------------------ | -------------- | -------------------------------- | ---------------------------------------------------------------------------------------- |
+| `db-functions/__test__/timelineNoAutoStays.test.ts`                | new            | B-01, B-02, B-06                 | Owner scenario per add path; converted copies                                            |
+| `timeline/__test__/timelineSparseWrites.test.ts`                   | new            | B-03, B-04, B-05, B-24           | No-op writes, drag back, set to previous/next, pass-through flags                        |
+| `db-functions/__test__/pageDelete.test.ts`                         | new            | B-07, B-08, B-09, B-10, B-13     | Flag delete, with moves, merged boxes, tags, history                                     |
+| `db-functions/__test__/marcherPageCarryForward.test.ts`            | new            | B-14–B-20                        | Includes 200×100 timing (logged); history tests                                          |
+| `timeline/__test__/timelineCarryForward.test.ts`                   | new            | B-24, B-25 (+ dead summary code) | Keep as a stop; window follows                                                           |
+| `timeline/__test__/timelineMoveThemToo.test.ts`                    | new            | B-12, B-23, B-36                 |                                                                                          |
+| `utilities/__test__/moveThemToo.test.ts`                           | new            | B-16, B-22, B-36                 |                                                                                          |
+| `timeline/__test__/pageHoldMarks.test.ts`                          | new            | B-27, B-28, B-29 (words)         | Pure + one resolver test                                                                 |
+| `components/timeline/__test__/PageHoldMarks.test.tsx`              | new            | B-27, B-28, B-29                 | jsdom: hit by the env trap                                                               |
+| `components/inspector/__test__/TimelineHoldLine.test.tsx`          | new            | B-30                             | jsdom: hit by the env trap                                                               |
+| `timeline/__test__/timelineHoldState.test.ts`                      | new            | B-30                             |                                                                                          |
+| `hooks/queries/__test__/usePageFlags.deleteToast.test.ts`          | new            | B-10                             |                                                                                          |
+| `global/classes/canvasObjects/__test__/activeSelectionFit.test.ts` | new            | B-33                             |                                                                                          |
+| `components/ui/__test__/Toaster.test.tsx`                          | new            | B-26, B-37                       |                                                                                          |
+| `context/__test__/SelectedPageContext.test.tsx`                    | changed (+3)   | B-32                             |                                                                                          |
+| `utilities/__test__/RegisteredActionsHandlerModes.test.tsx`        | changed (+2)   | B-20, B-34                       |                                                                                          |
+| `components/timeline/__test__/TimelinePageFlagControls.test.tsx`   | changed        | B-08, B-09                       |                                                                                          |
+| `components/timeline/__test__/TimelineMoveMenu.test.tsx`           | changed        | B-08 (label)                     |                                                                                          |
+| `db-functions/__test__/timelineRipple.test.ts`                     | changed        | B-01, B-07                       | Expectations flipped from holding moves to no rows                                       |
+| `db-functions/__test__/timelineMarchers.test.ts`                   | changed        | B-02                             | Join tests replaced                                                                      |
+| `db-functions/__test__/timelineMembershipAdversarial.test.ts`      | changed        | B-02                             |                                                                                          |
+| `db-functions/__test__/timelineHistoryFocus.test.ts`               | changed        | B-31                             |                                                                                          |
+| `db-functions/__test__/pageFlagsAdversarial.test.ts`               | changed        | B-13                             |                                                                                          |
+| `db-functions/__test__/timelineMovesByTimeline.test.ts`            | changed        | B-24                             | Keep Page N as a stop tests (renamed in `65ac6298`)                                      |
+| `hooks/queries/__test__/useMarchersTimelineMode.test.ts`           | changed        | B-02                             |                                                                                          |
+| `timeline/__test__/planPageConversion.test.ts`                     | changed        | B-06                             |                                                                                          |
+| `timeline/__test__/p910Adversarial.test.ts`                        | changed        | B-01, B-06                       |                                                                                          |
+| `timeline/__test__/timelinePageCopy.test.ts`                       | changed        | B-05                             |                                                                                          |
+| `timeline/__test__/timelinePassThrough.test.ts`                    | changed        | B-24                             | Message tests rewritten                                                                  |
+| `timeline/__test__/timelineCoordinateWrites.test.ts`               | changed        | B-15                             | `toBeCloseTo` for PM align                                                               |
+| `timeline/__test__/timelineToastPaths.test.ts`                     | changed        | B-35                             | Rename only                                                                              |
+| `db-functions/__test__/pageDeleteGaps.test.ts`                     | new (wp13)     | B-07, B-10                       | Window moves survive delete-with-moves; toast Undo vs a later edit; history              |
+| `hooks/queries/__test__/pageDeleteFollowUps.test.tsx`              | new (wp13)     | B-10, B-13                       | Tag/page refetch per delete path; toast closes on next edit                              |
+| `components/singletons/__test__/StateInitializerDelete.test.tsx`   | new (wp13)     | B-11                             | Selected page deleted, both modes; full-app runs                                         |
+| `db-functions/__test__/marcherPageCarryForwardGaps.test.ts`        | new (wp13)     | B-16, B-19                       | Only Page N chains; pathway triggers in older files; history                             |
+| `utilities/__test__/setMarchersToNeighborPageCarry.test.tsx`       | new (wp13)     | B-05, B-14                       | Shift+P/N and Ctrl+Shift+P/N carry in PM                                                 |
+| `components/launchpage/__test__/newShowCompletion.test.ts`         | changed (wp13) | B-14                             | New-show import carries                                                                  |
+| `db-functions/__test__/timelineSparseGaps.test.ts`                 | new (wp13)     | B-03, B-24, #111                 | Flag drags and move resizes on sparse rows; B-03 caveat pinned; Keep as a stop undo/redo |
 
 ---
 
@@ -1019,54 +1151,56 @@ pageFlagsAdversarial, timelineMarchers, timelineMembershipAdversarial, Registere
 
 ### Timeline writes
 
-| ID   | Steps                                                                                                                                                                              | Expected                                                                                                                                                                         |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B-01 | TL blank show. Move everyone on page 1. Add pages 2, 3, 4 with the **+** after the playhead (also repeat with Alt+T and with Split). Drag everyone on page 2. Visit flags 3 and 4. | Pages 3–4 show page 2's new set. Base: page 1's set. U/R on the drag. Adding pages writes no timeline rows (DB: `timeline_transitions` count unchanged by the adds).             |
-| B-02 | TL show with pages 1–4. Add a marcher. Visit every page. Then move it on page 2 and visit 3–4.                                                                                     | It stands at its home on every page; after the move it stays at the new spot on 3–4. U/R of the add keeps the current page (B-31).                                               |
-| B-03 | TL: pages 1–4, page 1 moved. Select 3 marchers on page 3 (held) and align so one doesn't move; distribute. Then drag everyone on page 2.                                           | Only marchers that moved on page 3 have rows there; the unmoved ones follow page 2. A drag that moves nobody (drop in place) adds no undo step.                                  |
-| B-04 | TL: on page 3 drag a marcher away, then back to exactly where page 3 starts (snap to grid). Edit page 2.                                                                           | Page 3 follows page 2 again (its move was cleared). U/R restores the move. Repeat in a cross-page window: the zero-motion move is kept.                                          |
-| B-05 | TL: pages 1–4, page 1 moved, 2–4 held. On page 3 press Ctrl+Shift+N. Then on page 3 press Shift+P with a marcher selected, and edit page 2.                                        | Next works (base: refused toast) and page 3 shows page 4's set. Previous clears page 3's move so page 3 follows the page-2 edit. U/R each.                                       |
-| B-06 | Convert a page show with copied pages (e.g. `page-marchers-and-pages.dots`). Compare every flag with page mode, then edit an early page.                                           | Same positions at every flag as page mode; held pages have no rows; an edit carries through held pages.                                                                          |
-| B-07 | TL converted show: Delete page on page 2 (flag delete); then on the merged page choose Delete page and its moves. Ctrl+Z twice.                                                    | No error toast; later flags keep their look; two undos restore the original. Also: draw a window over the merged box, then delete with moves: the window's move (a track) stays. |
+| ID   | Steps                                                                                                                                                                                                                                                          | Expected                                                                                                                                                                                            |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B-01 | TL blank show. Move everyone on page 1. Add pages 2, 3, 4 with the **+** after the playhead (also repeat with Alt+T and with Split). Drag everyone on page 2. Visit flags 3 and 4.                                                                             | Pages 3–4 show page 2's new set. Base: page 1's set. U/R on the drag. Adding pages writes no timeline rows (DB: `timeline_transitions` count unchanged by the adds).                                |
+| B-02 | TL show with pages 1–4. Add a marcher. Visit every page. Then move it on page 2 and visit 3–4.                                                                                                                                                                 | It stands at its home on every page; after the move it stays at the new spot on 3–4. U/R of the add keeps the current page (B-31).                                                                  |
+| B-03 | TL: pages 1–4, page 1 moved. Select 3 marchers on page 3 (held) and align so one doesn't move; distribute. Then drag everyone on page 2.                                                                                                                       | Only marchers that moved on page 3 have rows there; the unmoved ones follow page 2. A drag that moves nobody (drop in place) adds no undo step.                                                     |
+| B-04 | TL: on page 3 drag a marcher away, then back to exactly where page 3 starts (snap to grid). Edit page 2.                                                                                                                                                       | Page 3 follows page 2 again (its move was cleared). U/R restores the move. Repeat in a cross-page window: the zero-motion move is kept.                                                             |
+| B-05 | TL: pages 1–4, page 1 moved, 2–4 held. On page 3 press Ctrl+Shift+N. Then on page 3 press Shift+P with a marcher selected, and edit page 2.                                                                                                                    | Next works (base: refused toast) and page 3 shows page 4's set. Previous clears page 3's move so page 3 follows the page-2 edit. U/R each.                                                          |
+| B-06 | Convert a page show with copied pages (e.g. `page-marchers-and-pages.dots`). Compare every flag with page mode, then edit an early page.                                                                                                                       | Same positions at every flag as page mode; held pages have no rows; an edit carries through held pages.                                                                                             |
+| B-07 | TL converted show: Delete page on page 2 (flag delete); then on the merged page choose Delete page and its moves. Ctrl+Z twice. Then, on a held show, Ctrl+drag a window from inside page 1 to page 2's flag, drag marchers, and delete page 2 with its moves. | No error toast; later flags keep their look; two undos restore the original. The window move survives the delete (it starts before page 2's box) and ends a page earlier if the page was inside it. |
 
 ### Delete
 
-| ID   | Steps                                                                                                                            | Expected                                                                                                                                                                                                                                                      |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B-08 | TL: marchers 3–5 move on page 2, hold on 3–4. Right-click page 2's box.                                                          | Menu: **Delete page**, **Delete page and its moves** (both red). Delete page: flags 3–4 look the same; page 3 takes page 2's box. U/R. Also via beat editing's page strip **In Place** (tooltip "Delete this page. Later pages keep their timing and look."). |
-| B-09 | Same show: **Delete page and its moves** on page 2, first with page 2 selected, then with another page selected.                 | Page 2's move goes; held pages fall back; selection: the merged box if page 2 was selected, else unchanged. U/R. Beat-editing strip: **With Its Moves** and **Yank** give the same toast.                                                                     |
-| B-10 | After B-09.                                                                                                                      | Toast "Deleted Page 2 · Page 1 is now N counts · old Pages 3–4 changed" (exact pages depend on the show) with **Undo**; Undo restores page, move and later look in one step. On a page nobody moved: "… · No other page changed".                             |
-| B-11 | TL: select page 2's box, delete it (either command).                                                                             | The view stays on the merged page (no jump to home / beat 0). **Not yet scripted.**                                                                                                                                                                           |
-| B-12 | TL: make a move (window) that later held pages rely on; right-click its clip → Delete move.                                      | "Deleted Move N · Pages X–Y changed" + Undo; with no page affected just "Deleted Move N". Undo restores.                                                                                                                                                      |
-| B-13 | Both modes: add a tag with an appearance starting on page 3; delete page 3 (PM: In Place and Yank; TL: Delete page, with moves). | The appearance now starts on the next page (later pages keep the tag look). If the next page already has one for that tag, the deleted one is dropped. Last page: dropped. U/R restores it.                                                                   |
+| ID   | Steps                                                                                                                            | Expected                                                                                                                                                                                                                                                         |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B-08 | TL: marchers 3–5 move on page 2, hold on 3–4. Right-click page 2's box.                                                          | Menu: **Delete page**, **Delete page and its moves** (both red). Delete page: flags 3–4 look the same; page 3 takes page 2's box. U/R. Also via beat editing's page strip **In Place** (tooltip "Delete this page. Later pages keep their timing and look.").    |
+| B-09 | Same show: **Delete page and its moves** on page 2, first with page 2 selected, then with another page selected.                 | Page 2's move goes; held pages fall back; selection: the merged box if page 2 was selected, else unchanged. U/R. Beat-editing strip: **With Its Moves** and **Yank** give the same toast.                                                                        |
+| B-10 | After B-09. Then delete again, make any other edit, and click the toast's Undo if still visible.                                 | Toast "Deleted Page 2 · Page 1 is now N counts · old Pages 3–4 changed" with **Undo**; Undo restores page, move and later look in one step. On a page nobody moved: "… · No other page changed". The toast closes as soon as another edit, undo or redo happens. |
+| B-11 | TL: select page 2's box, delete it (Delete page, then separately Delete page and its moves). PM: select page 2, In Place.        | The view stays on the merged page (no jump to home / beat 0); Undo restores. Scripted in `dc4-tl-delete.mjs`, `dc4-pm-delete.mjs`.                                                                                                                               |
+| B-12 | TL: make a move (window) that later held pages rely on; right-click its clip → Delete move.                                      | "Deleted Move N · Pages X–Y changed" + Undo; with no page affected just "Deleted Move N". Undo restores.                                                                                                                                                         |
+| B-13 | Both modes: add a tag with an appearance starting on page 3; delete page 3 (PM: In Place and Yank; TL: Delete page, with moves). | The appearance now starts on the next page (later pages keep the tag look). If the next page already has one for that tag, the deleted one is dropped. Last page: dropped. U/R restores it.                                                                      |
 
 ### Page mode
 
-| ID   | Steps                                                                                                                                                    | Expected                                                                                                                                                                                                          |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B-14 | PM blank show: add pages 2–4 (copies). Drag everyone on page 2. Visit 3 and 4; play through page 3. Then set page 4 to a new spot and edit page 2 again. | Pages 3–4 follow (playback holds on page 3). Second edit: page 3 follows, page 4 keeps its own spot. U/R restores all rows in one step. Also try: nudge, align, swap two marchers, Shift+P: each carries.         |
-| B-15 | PM: click a marcher without moving it; nudge right then left back.                                                                                       | The click adds no undo step; nothing on later pages changes.                                                                                                                                                      |
-| B-16 | After B-14's first drag.                                                                                                                                 | Toast "Pages 3–4 followed (they were copies)" with **Only Page 2**; clicking it puts 3–4 back; Ctrl+Z then makes them follow again; second Ctrl+Z undoes the drag. Edits on two pages: **Only the edited pages**. |
-| B-17 | PM: make a line shape on page 2 with copies on 3–4 (not in shapes); edit the shape.                                                                      | Pages 3–4 follow; no toast. U/R.                                                                                                                                                                                  |
-| B-18 | PM: give page 2 a curved pathway, add page 3. Play page 3; edit page 3; edit page 2.                                                                     | Page 3 holds (no replayed curve); editing page 3 doesn't bend page 2's curve.                                                                                                                                     |
-| B-19 | PM: edit page 2 when page 3 has its own pathway; Ctrl+Z.                                                                                                 | Page 3's curve start moves with the edit and comes back on undo.                                                                                                                                                  |
-| B-20 | PM: edit page 2 (with copies 3–4), go to page 5, Ctrl+Z; Ctrl+Shift+Z.                                                                                   | Undo jumps to page 2 and selects the changed marchers (base: stayed on page 5).                                                                                                                                   |
-| B-21 | PM: after B-14, without reloading, visit 3–4 and check the canvas and coordinate sheet panel.                                                            | Followed pages show new positions immediately.                                                                                                                                                                    |
+| ID   | Steps                                                                                                                                                    | Expected                                                                                                                                                                                                                                                                                                  |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B-14 | PM blank show: add pages 2–4 (copies). Drag everyone on page 2. Visit 3 and 4; play through page 3. Then set page 4 to a new spot and edit page 2 again. | Pages 3–4 follow (playback holds on page 3). Second edit: page 3 follows, page 4 keeps its own spot. U/R restores all rows in one step. Also try: nudge, align, swap two marchers, Shift+P: each carries.                                                                                                 |
+| B-15 | PM: click a marcher without moving it; nudge right then left back.                                                                                       | The click adds no undo step; nothing on later pages changes.                                                                                                                                                                                                                                              |
+| B-16 | After B-14's first drag; then nudge page 2 twice (same selection) and click Only Page 2.                                                                 | Toast "Pages 3–4 followed (they were copies)" with **Only Page 2** (one button beside the text). Only Page 2 after two nudges puts 3–4 back to before the **first** nudge; Ctrl+Z makes them follow again; further Ctrl+Z undoes the nudges one at a time. Edits on two pages: **Only the edited pages**. |
+| B-17 | PM: make a line shape on page 2 with copies on 3–4 (not in shapes); edit the shape.                                                                      | Pages 3–4 follow; no toast. U/R.                                                                                                                                                                                                                                                                          |
+| B-18 | PM: give page 2 a curved pathway, add page 3. Play page 3; edit page 3; edit page 2.                                                                     | Page 3 holds (no replayed curve); editing page 3 doesn't bend page 2's curve.                                                                                                                                                                                                                             |
+| B-19 | PM: edit page 2 when page 3 has its own pathway; Ctrl+Z.                                                                                                 | Page 3's curve start moves with the edit and comes back on undo.                                                                                                                                                                                                                                          |
+| B-20 | PM: edit page 2 (with copies 3–4), go to page 5, Ctrl+Z; Ctrl+Shift+Z.                                                                                   | Undo jumps to page 2 and selects the changed marchers (base: stayed on page 5).                                                                                                                                                                                                                           |
+| B-21 | PM: after B-14, without reloading, visit 3–4 and check the canvas and coordinate sheet panel.                                                            | Followed pages show new positions immediately.                                                                                                                                                                                                                                                            |
 
 ### Move them too
 
-| ID   | Steps                                                                                                                                                 | Expected                                                                                                                                                                                                                                                                                                                                                 |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B-22 | PM: 8 marchers in a line; page 2 everyone forward; page 3 only OT1 and OT8 step out; page 4 copy of 3. Shorten the page-2 move (drag all back a bit). | Toast "OT1 and OT8 have their own move on Page 3, so they kept their spot" + **Move them too** (no Only Page 2). Click: OT1/OT8 shift by the same offset on page 3, page 4 follows. Ctrl+Z reverts only the shift. **Also check:** a fully written show (every page different): does every drag show this toast? (expected per code: yes; open question) |
-| B-23 | Same in TL (`ux-starter-timeline.dots`).                                                                                                              | Same message and action; one Ctrl+Z reverts the shift only. With a window passing a flag, only one toast (Move them too). Next move ending between flags: no offer.                                                                                                                                                                                      |
+| ID   | Steps                                                                                                                                                                                                                                                 | Expected                                                                                                                                                                                                                                                                                                                                           |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B-22 | PM: 8 marchers in a line; page 2 everyone forward; page 3 only OT1 and OT8 step out; page 4 copy of 3. Shorten the page-2 move (select all, nudge back twice). Also: a fully written show (`page-marchers-and-pages.dots`), drag and nudge on page 2. | Study show: one toast "Pages 3–4 followed (they were copies). OT1 and OT8 have their own move on Page 3, so they kept their spot" with **Only Page 2** and **Move them too** on their own row under the text. Move them too: OT1/OT8 shift by both nudges on page 3, page 4 follows; Ctrl+Z reverts only the shift. Written show: no toast at all. |
+| B-23 | Same study show in TL (`ux-starter-timeline.dots`): shorten page 2 with two nudges. Then a fully written converted show: drag and nudge on page 2. Then a window across a flag whose edit also splits the group.                                      | Study: "OT1 and OT8 have their own move on Page 3, so they kept their spot" + **Move them too** (one button); it shifts by both nudges; one Ctrl+Z reverts the shift only. Written show: no toast. Window: only "Page N is no longer a stop" with Keep as a stop (no Move them too).                                                               |
 
 ### Toasts
 
-| ID   | Steps                                                                                                            | Expected                                                                                                                                                                                                                                    |
-| ---- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B-24 | TL: pages 1–5, only page 1 moved. Ctrl+drag a window from inside page 3 to the end of page 4; drag all marchers. | One toast "Page 4 is no longer a stop" (two flags: "Pages 3–4 are no longer stops") with **Keep Page 4 as a stop**; click: flag shows its earlier set again and the window moves to the last part. U/R. A window inside one page: no toast. |
-| B-25 | TL: ordinary drags and arrow nudges on held pages.                                                               | No toast (unless Move them too applies).                                                                                                                                                                                                    |
-| B-26 | Any toast with an action, at a narrow window width.                                                              | The button stays on one line beside the text; keyboard focus shows a ring.                                                                                                                                                                  |
+| ID   | Steps                                                                                                                                                                                                   | Expected                                                                                                                                                                                                                                    |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B-24 | TL: pages 1–5, only page 1 moved. Ctrl+drag a window from inside page 3 to the end of page 4; drag all marchers.                                                                                        | One toast "Page 4 is no longer a stop" (two flags: "Pages 3–4 are no longer stops") with **Keep Page 4 as a stop**; click: flag shows its earlier set again and the window moves to the last part. U/R. A window inside one page: no toast. |
+| B-25 | TL and PM: ordinary drags and arrow nudges on a fully held show (TL) and a fully written show (both modes).                                                                                             | TL held: no toast. Written (both modes): no toast. PM held: only "Pages … followed".                                                                                                                                                        |
+| B-26 | A one-button toast (PM followed) and the two-button combined toast (B-22), at the default and a narrow window width.                                                                                    | One button: stays on one line beside the text. Two buttons: text on top, both buttons on one row underneath, right-aligned, labels on one line; keyboard focus shows a ring.                                                                |
+| B-36 | PM study show: nudge page 2 twice with all selected, then Move them too. Repeat with: nudge, Ctrl+Z, nudge; nudge, nudge on a smaller selection; nudge, wait for the toast to close, nudge. Same in TL. | Two nudges in a row: the action covers both. Any undo in between, a different selection, another edit, or the toast closing: the action covers only the last nudge.                                                                         |
+| B-37 | PM: trigger a combined two-button toast (B-22), then right after an edit that gives only "Pages … followed".                                                                                            | The second toast replaces the first and shows one button and no info icon (nothing left over from the earlier toast).                                                                                                                       |
 
 ### Hold marks and inspector
 
@@ -1118,54 +1252,55 @@ pageFlagsAdversarial, timelineMarchers, timelineMembershipAdversarial, Registere
 
 ## 7. Coverage gaps
 
-Behaviors with no automated test, or checked only by reasoning or screenshots; checks never run.
+What is still unchecked, and what the first catalog listed that is now closed (with the evidence).
 This list should drive the next testing pass.
 
-### Behaviors
+### Closed since the first catalog (wp12–wp14, real-app round 4)
 
-1. **Move them too on ordinary edits in written shows (B-22, B-23).** By code, any edit whose
-   marchers have an own move on the next page (nearly every edit in a written or converted show)
-   shows the toast, contradicting V-146's "ordinary edits silent". No test, no real-app check, no
-   owner decision. Also untested: Move them too replacing the pass-through toast hides **Keep as a
-   stop**.
-2. **Move them too in the real app** was captured as screenshots only (`~/ux-study/wp11`, replay); no
-   scripted assertions; no V-row.
-3. **Delete with the deleted page selected (B-09, B-11)** in the real app: not scripted (PR says so).
-   `StateInitializer`'s page-at-playhead fallback has no unit test.
-4. **Delete move's changed pages (B-12):** tests only; no real-app run.
-5. **Cross-page window move ending at a deleted page's flag (B-07):** now matched by `isPageMove` and
-   deleted with the page; no test.
-6. **Page-mode carry from set to previous/next page (Shift+P/N), and from the new-show "previous
-   dots" import (B-14):** not tested.
-7. **Page-mode Move them too after Move them too, or Only Page N after Move them too:** not tested.
-8. **Delete toast Undo after another edit (B-10):** the button isn't invalidated; behavior not
-   tested.
-9. **Tag appearances (B-13):** unit tests only; no real-app check, no check of the tag UI refresh.
-10. **New marchers (B-02), undo focus for marcher add (B-31), drag back (B-04):** no real-app run.
-11. **Hold marks performance:** page mode loads every page's rows while something is selected
-    (B-28); timeline marks recompute per resolver version. Not measured on 100+ page shows.
-12. **`HintTooltip` inside other overlays** (fullscreen, compact, playback) beyond the scripted cases.
-13. **#111 page-flag drag on sparse rows** (a held page's flag moved): no dedicated test on this
-    branch.
-14. **Pathway history triggers in an older build** (section 6): reasoning only.
-15. **i18n:** "Delete page", "Delete page and its moves", the delete toast and the delete-move toast
-    are hard-coded English; the name lists in Move them too use English "and"; es/fr/ja/pt-BR have
-    none of the 56 new keys (they fall back to the defaults).
+| #   | Gap (first catalog)                                               | Closed by                                                                                                                                                                                    |
+| --- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Move them too on ordinary edits; hiding Keep as a stop            | wp12 code change (split-only trigger; pass-through wins). Tests: "fully written / fully held" and "window … only the pass-through toast" cases. Real app: `dc4-*-silence-*`, `dc4-tl-window` |
+| 2   | Move them too in the real app: screenshots only                   | `dc4-pm-study-move` (9/9), `dc4-pm-study-only` (7/7), `dc4-tl-study`, `wp14-pm`, `wp14-tl`, `wp14-pm-only`; V-150, V-153 rows                                                                |
+| 3   | Delete with the deleted page selected; StateInitializer test      | `StateInitializerDelete.test.tsx` (6); `dc4-tl-delete`, `dc4-pm-delete`                                                                                                                      |
+| 4   | Delete move's changed pages, real app                             | `dc4-tl-delete` (5); V-152                                                                                                                                                                   |
+| 5   | Window move ending at a deleted page's flag was deleted           | wp13 code change (`566254e8`, `isPageMove` entirely inside the box) and `pageDeleteGaps.test.ts` (7)                                                                                         |
+| 6   | PM carry from Shift+P/N and the new-show import                   | `setMarchersToNeighborPageCarry.test.tsx` (4), `newShowCompletion.test.ts` (1)                                                                                                               |
+| 7   | Chained follow-ups (Only Page N / Move them too after more steps) | `marcherPageCarryForwardGaps.test.ts` "gap 7"; `timelineSparseGaps.test.ts` "gap 7: Keep as a stop…"; the run tests in `moveThemToo.test.ts` and `timelineMoveThemToo.test.ts`               |
+| 8   | Delete toast Undo after another edit                              | wp13 code change (`ece0dfbe`, closes on next history change); `pageDeleteFollowUps.test.tsx`, `pageDeleteGaps.test.ts`                                                                       |
+| 9   | Tag UI refresh after a delete                                     | `pageDeleteFollowUps.test.tsx` (per delete path + control)                                                                                                                                   |
+| 10  | New marchers, undo focus for an add, drag back: real app          | `dc4-tl-marcher` (6, 7)                                                                                                                                                                      |
+| 13  | #111 flag drags on sparse rows                                    | `timelineSparseGaps.test.ts` (6 flag-drag/resize tests)                                                                                                                                      |
+| 14  | Pathway triggers in older files                                   | `marcherPageCarryForwardGaps.test.ts` (undo without triggers; triggers created on open). An actual older **build** opening the file is still untested                                        |
+| —   | Rounds 1–3 "no toast" checks                                      | Unreliable (a hidden, reused toast node); superseded by round 4 (`~/om-capture/runs/*dc4-*`, 56/56 assertions pass per the lead; screenshots `runs/dc-summary3`)                             |
+
+### Still open
+
+1. **B-03 caveat:** isolated-move (`{kind:"timeline"}`) and home writes to an unchanged position
+   still write and open an undo step. Pinned as current behavior by `timelineSparseGaps.test.ts`; not
+   decided whether to change.
+2. **i18n:** "Delete page", "Delete page and its moves", the delete-with-moves toast and the
+   Delete move toast are hard-coded English; the name lists in Move them too use English "and"; the
+   es/fr/ja/pt-BR files have none of the 57 new keys (they show the English defaults).
+3. **Hold-mark performance at 100+ pages:** page mode loads every page's rows while something is
+   selected (B-28); timeline marks recompute per resolver version. Not measured.
+4. **Toast transitions:** replacing one surprise toast with the next (B-37) and the two-button
+   wrap (B-26) were checked by DOM measurement and stills; no video review of the transition.
+5. **`HintTooltip` inside other overlays** (fullscreen, compact, during playback) beyond the scripted
+   cases.
+6. **An older build** opening a file this build touched (pathway triggers, sparse timeline rows):
+   reasoning only.
+7. **Runs that add up (B-36)** across mode switches or after a file reload: not tested (the run is
+   module state and should reset; not checked).
+8. **Partial-follow wording:** no "6 of 8 followed" count (09 rec. 2, not built).
 
 ### Checks never run
 
-- Full `test:history` and full `test:timeline-history` suites (only the 13 files above).
+- The full `test:history` and `test:timeline-history` suites (only the changed files, section 4).
 - The Playwright e2e suite and the browser harness.
 - Coordinate sheet and PDF export, and the "Hold" wording on coordinate sheets (deferred).
 - Live playback value comparison in timeline mode (paused seeks only, T7).
 - Convert on open through the app's dialog (each build's own converter was used).
-- `tsc` and eslint at `e1cd9ea2` by the author of this file (the PR reports them clean at earlier
-  heads).
-- The jsdom tests `PageHoldMarks.test.tsx` and `TimelineHoldLine.test.tsx` at `e1cd9ea2` (blocked by
-  the env trap here; they passed at wp10 per the PR).
-- Two once-only real-app failures on the branch (dc-tl-flag page box selection after undoing a
-  delete-with-moves; dc-page-p56 final DB after a missed Ctrl+A, before B-34): not reproduced in
-  reruns, cause not proven.
+- eslint and `tsc` at `2470207c` by the author of this file.
 
 ---
 
@@ -1174,31 +1309,44 @@ This list should drive the next testing pass.
 ### Interplay with other work
 
 - **#106 (edit moves, UI-14):** already merged into the base. This branch extends its Delete move
-  toast (B-12) and keeps both page box menu sets. Under the sparse model, deleting a move makes later
-  held pages fall back, hence the changed-pages text.
+  toast (B-12, V-152) and keeps both page box menu sets. Under the sparse model, deleting a move makes
+  later held pages fall back, hence the changed-pages text. Both delete toasts now close on the next
+  history change.
 - **#111 (timeline edges: drag a page flag, resize a move) and #113:** merged into the base via
-  `97c8626b`; no code conflict left. Flag drags on sparse rows have no dedicated test (gap 13).
+  `97c8626b`; no code conflict left. Flag drags and move resizes on sparse rows are now tested
+  (`timelineSparseGaps.test.ts`).
 - **Transport keys (UI-17, fork branch `timeline/transport-keys`):** `HintTooltip.tsx` is a stand-in
   for its `ShortcutTooltip`; replace both with the shared one when it lands. Expect a small conflict
   in timeline components that both touch.
 - **Upstream OpenMarch #1044** (merged upstream): contains the identical Ctrl/Cmd+WASD hunk (B-34).
   Merging main should apply cleanly or as a no-op; keep one copy.
+- **Global `Toaster` (B-26):** the two-button layout applies to any toast with a `cancel` button
+  anywhere in the app; other branches adding such toasts get it too.
 - **Renamed exports (B-35):** any open branch calling `moveMarchersOnPageMutationOptions`,
-  `joinNewMarchersToTimelinesInTransaction`, `marcherList` or `narrowingLabel` must be updated.
+  `joinNewMarchersToTimelinesInTransaction`, `marcherList`, `narrowingLabel` or the removed
+  `EDIT_SURPRISE_TOAST_ID` must be updated (`editSurpriseToastId()` replaces the constant).
 - **UI numbering:** this feature is **UI-18**. UI-15 and UI-16 belong to timeline edges (#111),
-  UI-17 to transport keys. VALIDATION rows are V-140..V-149.
+  UI-17 to transport keys. VALIDATION rows are V-140..V-149 and V-150..V-159 (V-150..V-153 used).
 
-### Doc vs code discrepancies found
+### Doc vs code discrepancies
 
-| Doc                                                               | Says                                                                                                                    | Code at `e1cd9ea2`                                                                                                                                |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| README "Built" table                                              | Lists wp1–wp6 only                                                                                                      | wp7 (hold marks), wp8 (text and bugs), wp9 (Ctrl+A), wp10 (tooltips), wp11 (Move them too) are merged too                                         |
-| README Recommendation 5                                           | Toast "Also pages 3–7 · stops at Page 8"; "Holding since Page X" / "Moves here"                                         | Superseded by study 08: no carry toast; "Hold from Page X →" / "Moves on this page"; README doesn't mark it superseded                            |
-| README Recommendation (page mode)                                 | Only Page N "redoes the edit without carrying it forward"                                                               | `restoreCarriedRuns` puts the followed rows back as a second undo step                                                                            |
-| PR #112 body                                                      | UI-15; "Also moves Pages 3–4 · stops at Page 5"; "Start from Page N"; "Holding since Page X"; "Also moved on Pages 3–4" | UI-18; no carry toast; "Keep Page N as a stop"; "Hold from Page N"; "Pages 3–4 followed (they were copies)" (the PR's later comments are current) |
-| ui.md UI-18, VALIDATION                                           | Silent on Move them too, hold-mark tooltips, "Hold from the start", Delete move's changed pages                         | All built (B-12, B-22, B-23, B-29, B-30); no V-row for Move them too or the tooltips                                                              |
-| ui.md UI-18 / V-146                                               | "Ordinary edits and nudges show no toast"                                                                               | True for carry-forward, but Move them too can fire on ordinary edits (B-22, B-23)                                                                 |
-| ui.md UI-18                                                       | "A write that leaves a marcher where it already is writes nothing for that marcher"                                     | Only for range writes; isolated-move (`{kind:"timeline"}`) and home writes still write unchanged values                                           |
-| ADR 0001 amendment                                                | "Deleting a page in timeline mode deletes its flag only"                                                                | The default does; "Delete page and its moves" and Yank (beat-editing strip) still delete moves, as explicit commands                              |
-| `timelineMovesByTimeline.test.ts`, `timelineSparseWrites.test.ts` | Test names say "Start from Page N"                                                                                      | The action is "Keep Page N as a stop"                                                                                                             |
-| ui.md UI-18 page mode                                             | Carry stops "at a different value, a page shape or the marcher's own pathway"                                           | Matches; additionally, when the write left own moves behind, the toast is Move them too and Only Page N is not offered                            |
+Resolved since the first catalog (lead's `5b2c5c6c`, wp12–wp14):
+
+- README "Built" table now lists wp7–wp14 (wp12–wp14 rows added with this update); Recommendation 5 is marked historical; Only Page N wording
+  fixed.
+- ui.md UI-18 now covers Move them too (split-only), Delete move's changed pages, "Hold from the
+  start" and the hold-mark tooltips; V-150 (Move them too), V-151 (tooltips), V-152 (Delete move)
+  added; V-153 (runs add up, two-button layout) added with this update.
+- ui.md UI-18 says "a range write … writes nothing", matching B-03.
+- ADR 0001: "deletes its flag only by default; 'Delete page and its moves' and Yank still remove the
+  page's own moves".
+- Test names: "Start from Page N" → "Keep Page N as a stop" (`65ac6298`).
+- "Ordinary edits silent" (V-146) now holds in code (B-25), verified by dc4.
+
+Still open:
+
+| Doc              | Says                                                           | Code at `2470207c`                                                                                       |
+| ---------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| ui.md UI-18      | Silent on runs of edits adding up and on the two-button layout | Built (B-26, B-36); recorded only in V-153 and here                                                      |
+| VALIDATION V-149 | "removes only layer-0 page moves in the box"                   | Matches; additionally a window move starting before the box is kept even when it ends at the flag (wp13) |
+| PR #112 body     | Rewritten with this update to match the branch                 | —                                                                                                        |

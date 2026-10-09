@@ -176,20 +176,22 @@ Owner, 2026-10-08, after the build (PR #112):
 
 ## Built (branch `timeline/defined-coordinates`)
 
-| Branch (merged)        | What                                                                                                                                                       |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dc/wp1-no-auto-stays` | No holding moves on page add, split or append; new marchers get a home only; the converter skips unchanged positions; undoing a marcher add keeps the page |
-| `dc/wp2-writers`       | Writes that move nobody write nothing; a drag back clears an own page move; set to previous/next page on held pages; **Start from Page N**                 |
-| `dc/wp3-delete`        | Timeline Delete page = flag delete; **Delete page and its moves** with a changed-pages toast; tag appearances move to the next page                        |
-| `dc/wp4-page-mode`     | Page-mode carry-forward with **Only Page N**; no copied pathways; pathways in undo; undo focus fix; cache invalidation                                     |
-| `dc/wp5-feedback`      | Carry-forward toast in timeline mode; inspector "Holding since Page X" / "Moves here"                                                                      |
-| `dc/wp6-followups`     | Delete with moves after a flag delete (E-A3 fix); English toast strings                                                                                    |
-
-| `dc/wp7-hold-marks` | Hold marks on the page boxes for the selected marchers, both modes |
-| `dc/wp8-text-and-bugs` | Carry-forward toast removed; shorter pass-through, page-mode and delete toasts; delete Undo; inspector link; selection refit; page selection after undo |
-| `dc/wp9-selectall` | Ctrl+A and Ctrl+S no longer nudge (same fix as upstream #1044) |
-| `dc/wp10-tooltips` | Hold-mark tooltips (HintTooltip, stand-in for transport-keys' ShortcutTooltip); stronger marks; "Hold from the start" |
-| `dc/wp11-move-them-too` | Move them too, both modes; Delete move names the pages that changed |
+| Branch (merged)         | What                                                                                                                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dc/wp1-no-auto-stays`  | No holding moves on page add, split or append; new marchers get a home only; the converter skips unchanged positions; undoing a marcher add keeps the page                    |
+| `dc/wp2-writers`        | Writes that move nobody write nothing; a drag back clears an own page move; set to previous/next page on held pages; **Start from Page N**                                    |
+| `dc/wp3-delete`         | Timeline Delete page = flag delete; **Delete page and its moves** with a changed-pages toast; tag appearances move to the next page                                           |
+| `dc/wp4-page-mode`      | Page-mode carry-forward with **Only Page N**; no copied pathways; pathways in undo; undo focus fix; cache invalidation                                                        |
+| `dc/wp5-feedback`       | Carry-forward toast in timeline mode; inspector "Holding since Page X" / "Moves here"                                                                                         |
+| `dc/wp6-followups`      | Delete with moves after a flag delete (E-A3 fix); English toast strings                                                                                                       |
+| `dc/wp7-hold-marks`     | Hold marks on the page boxes for the selected marchers, both modes                                                                                                            |
+| `dc/wp8-text-and-bugs`  | Carry-forward toast removed; shorter pass-through, page-mode and delete toasts; delete Undo; inspector link; selection refit; page selection after undo                       |
+| `dc/wp9-selectall`      | Ctrl+A and Ctrl+S no longer nudge (same fix as upstream #1044)                                                                                                                |
+| `dc/wp10-tooltips`      | Hold-mark tooltips (HintTooltip, stand-in for transport-keys' ShortcutTooltip); stronger marks; "Hold from the start"                                                         |
+| `dc/wp11-move-them-too` | Move them too, both modes; Delete move names the pages that changed                                                                                                           |
+| `dc/wp12-mtt-trigger`   | Move them too only when an edit splits a group at a later page; a window's pass-through toast wins in timeline mode; page mode's one toast with Move them too and Only Page N |
+| `dc/wp13-gap-tests`     | Coverage-gap tests (7 files); window moves survive Delete page and its moves; the delete toast closes on the next history change                                              |
+| `dc/wp14-mtt-polish`    | Two-button toast layout; runs of edits add up for Move them too and Only Page N; a fresh id per surprise toast                                                                |
 
 The full, code-grounded list of behavior changes, tests and the QA script is [CHANGES.md](CHANGES.md).
-Lead defaults are logged as V-140..V-149 and V-150.. in [VALIDATION.md](../ownership/VALIDATION.md).
+Lead defaults are logged as V-140..V-149 and V-150..V-153 in [VALIDATION.md](../ownership/VALIDATION.md).
