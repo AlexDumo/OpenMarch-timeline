@@ -767,6 +767,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     pageFlagMove,
     height = 28,
     flagSnapPlayhead,
+    flagRowsTop,
 }: {
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
@@ -791,6 +792,8 @@ export const TimelineRuler = memo(function TimelineRuler({
     height?: number;
     /** The playhead, which a dragged flag lands on when near, as on downbeats and page lines */
     flagSnapPlayhead?: () => BeatPosition;
+    /** Where the waveform and move rows start: the page lines are flag grips down to the bottom */
+    flagRowsTop?: number;
 }) {
     // A dragged flag snaps to downbeats, never to page lines (`flagSnapBeat`)
     const flagDownbeats = useMemo(
@@ -895,6 +898,7 @@ export const TimelineRuler = memo(function TimelineRuler({
                     preview={flagPreview}
                     onPreviewChange={setFlagPreview}
                     onSelectPage={selectPage}
+                    rowsTop={flagRowsTop}
                 />
             )}
             {showMeasures && (

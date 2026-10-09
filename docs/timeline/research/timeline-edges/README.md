@@ -23,7 +23,7 @@ the two were reconciled, so the next edge gesture follows the same rules.
 | Walls                    | An edge stops at whatever would collide with it or cut it short, and the readout names it                                                                                                                                                                                                                                                                                                                                                                      | flags: `pageFlagMoveLimits`; moves: `timelineResizeLimits` |
 | Readouts                 | "Page 3: 8 → 11 counts" / "Move 3: 4 → 6 counts", then the reason                                                                                                                                                                                                                                                                                                                                                                                              | grips' readout; `clipResizeTagText`                        |
 | Commit and cancel        | One undoable edit on release. Esc, a lost pointer, or a drag brought back writes nothing. Esc during a clip gesture never also leaves isolation (`clipGestureActive`). Flag grips are hidden in isolation                                                                                                                                                                                                                                                      | both gestures                                              |
-| Where grabbed            | A flag only by its ruler grip, never by a page box's edge in the clip rows. A move by handles inside its clip's ends. #106's ⋯ button keeps clear of the end handle                                                                                                                                                                                                                                                                                            | UI-16, V-65; V-120                                         |
+| Where grabbed            | A flag anywhere along its page line (owner: the ruler-only grip was hard to find); under the clips in the move rows. A move by handles inside its clip's ends. #106's ⋯ button keeps clear of the end handle                                                                                                                                                                                                                                                   | UI-16, V-65; V-120                                         |
 
 ## What stays separate, and why
 
@@ -54,8 +54,10 @@ the two were reconciled, so the next edge gesture follows the same rules.
   edge cases. Their idea is a multi-select that moves several things at once, where the moved moves
   keep their length. That's unlike a flag move, which changes the pages' lengths by nature. Not
   built; needs its own design pass.
-- **V-65, V-67, open.** The owner isn't sure: whether the ruler grip is found, and whether a run of
-  arrow presses should be one undo step. Both need hands-on checks.
+- **V-65, decided: the whole page line is the grip.** The ruler-only grip was hard to find. The
+  line is the flag from the ruler's lower half to the bottom, under the clips in the move rows.
+  The playhead is put on a flag by clicking its page box.
+- **V-67, decided: keep the arrow keys,** one undo step per press (for keyboard users).
 
 ## Not built (both gestures)
 

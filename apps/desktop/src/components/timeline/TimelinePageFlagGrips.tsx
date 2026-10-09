@@ -219,6 +219,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
     preview,
     onPreviewChange,
     onSelectPage,
+    rowsTop,
 }: {
     /** The page boxes as they are, without the preview */
     boxes: readonly TimelineFlagBox[];
@@ -236,6 +237,13 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
     preview: TimelinePageFlagPreview | null;
     onPreviewChange: (preview: TimelinePageFlagPreview | null) => void;
     onSelectPage: (page: TimelinePageMarker) => void;
+    /**
+     * Where the waveform and move rows start. Down to there the whole page line is the flag's grip,
+     * above the start flag's and the playhead's lines; below, it still is, but under the clips, so a
+     * move's own edge or body wins where they overlap (owner, 2026-10-08). Without it, the grip is
+     * only the ruler's lower half.
+     */
+    rowsTop?: number;
 }) {
     const drag = useRef<{
         pointerId: number;
@@ -298,7 +306,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
     };
 
     const onPointerDown = (
-        event: ReactPointerEvent<HTMLButtonElement>,
+        event: ReactPointerEvent<HTMLElement>,
         index: number,
     ) => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey) return;
@@ -360,7 +368,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
         );
     };
 
-    const onPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const onPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
         const current = drag.current;
         if (!current || current.pointerId !== event.pointerId) return;
         if (
@@ -381,7 +389,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
         onPreviewChange(next);
     };
 
-    const onPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const onPointerUp = (event: ReactPointerEvent<HTMLElement>) => {
         const current = drag.current;
         if (!current || current.pointerId !== event.pointerId) return;
         const element = event.currentTarget;
@@ -488,7 +496,10 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                             ),
                             left: Math.round(beatToX(beat, pixelsPerBeat)),
                             top: GRIP_TOP,
-                            height: GRIP_HEIGHT,
+                            height:
+                                rowsTop === undefined
+                                    ? GRIP_HEIGHT
+                                    : Math.max(GRIP_HEIGHT, rowsTop - GRIP_TOP),
                         }}
                     >
                         <span
@@ -503,6 +514,48 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                     </button>
                 );
             })}
+            {rowsTop !== undefined &&
+                height > rowsTop &&
+                boxes.map(({ page, range }, index) => {
+                    if (!range) return null;
+                    const dragging = preview?.pageId === page.id;
+                    const beat = dragging ? preview.beat : range.endBeatIndex;
+                    // The same grip down the waveform and move rows, for the pointer only (the
+                    // button above is the one that takes focus and keys). z-0 and before the clips
+                    // in the DOM, so a clip over it wins
+                    return (
+                        <span
+                            key={`${page.id}-rows`}
+                            aria-hidden="true"
+                            data-testid="timeline-page-flag-grip-rows"
+                            data-page-id={page.id}
+                            data-timeline-interactive="true"
+                            title={`Page ${page.label}'s flag: drag to move it`}
+                            onPointerDown={(event) =>
+                                onPointerDown(event, index)
+                            }
+                            onPointerMove={onPointerMove}
+                            onPointerUp={onPointerUp}
+                            onPointerCancel={(event) =>
+                                cancel(event.currentTarget)
+                            }
+                            onLostPointerCapture={() => {
+                                if (drag.current) cancel();
+                            }}
+                            className="pointer-events-auto absolute z-0 -translate-x-1/2 cursor-col-resize touch-none"
+                            style={{
+                                width: gripWidth(
+                                    range,
+                                    boxes[index + 1]?.range ?? null,
+                                    pixelsPerBeat,
+                                ),
+                                left: Math.round(beatToX(beat, pixelsPerBeat)),
+                                top: rowsTop,
+                                height: height - rowsTop,
+                            }}
+                        />
+                    );
+                })}
             {shownPreview && (
                 <span
                     aria-hidden="true"

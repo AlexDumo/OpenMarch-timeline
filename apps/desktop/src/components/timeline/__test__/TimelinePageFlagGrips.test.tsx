@@ -153,6 +153,30 @@ describe("page flag grips", () => {
         expect(commit).toHaveBeenCalledWith(2, 12);
     });
 
+    it("the whole page line is the grip: the ruler and measure rows, and on down the move rows (owner)", async () => {
+        const { commit } = show();
+        const top = grip(2);
+        const rows = screen
+            .getAllByTestId("timeline-page-flag-grip-rows")
+            .find((g) => g.getAttribute("data-page-id") === "2")!;
+        // The upper part runs from the ruler's lower half down to the rows; the rows part on down
+        const rowsTop = Number.parseFloat(rows.style.top);
+        expect(Number.parseFloat(top.style.top)).toBe(14);
+        expect(
+            Number.parseFloat(top.style.top) +
+                Number.parseFloat(top.style.height),
+        ).toBe(rowsTop);
+        expect(Number.parseFloat(rows.style.height)).toBeGreaterThan(0);
+        expect(rows.style.left).toBe("80px");
+        // Under the clips (z-0), which win where they overlap
+        expect(rows.className).toContain("z-0");
+        pointer(rows, "pointerdown", 80);
+        await settle();
+        pointer(rows, "pointermove", 112);
+        pointer(rows, "pointerup", 112);
+        expect(commit).toHaveBeenCalledWith(2, 12);
+    });
+
     it("stops where the limits say, and says why", async () => {
         const { commit } = show({
             limits: {
