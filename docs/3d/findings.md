@@ -264,3 +264,22 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
 - Checked in the web preview (Guard equipment set to Rifle, front-row camera,
   zoomed in on one guard member): the rifle is matte white, level at the
   waist, butt past the right hip, both hands on it.
+
+### 2026-10-09 · trevor (3d/p7-instruments) · swing flag holds
+
+- Owner: a swing flag is held in one hand; two are one in each hand at down
+  45, kept ready for swing animations later.
+- Before: both used the 6 ft flag's two-handed hold, the pole vertical in
+  front of the body. Now `swingFlag` and `doubleSwingFlag` are hold
+  families of their own, the same in every state. Wrists at
+  (∓0.50, 1.08, 0.09), 45 degrees out and down from the shoulders. The pole
+  runs on along the arm from a fist at its butt end (pole now −0.06 to 0.96
+  in the instrument frame), and the silk trails back, its lowest corner
+  0.09 m above the ground before the ripple. The silk no longer droops
+  along the pole.
+- The second flag is the first one's exact mirror image through the body's
+  center plane, worked out from the hold; `guard.test.ts` checks every
+  vertex, and that no silk vertex reaches the ground.
+- Checked in the web preview with Guard equipment set to Swing flag and to
+  Double swing, from the front row and the press box: one flag in the right
+  hand with the left arm down, or a low V with a flag in each hand.

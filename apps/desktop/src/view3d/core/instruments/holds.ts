@@ -31,6 +31,8 @@ export type HoldFamily =
     | "bass"
     | "cymbals"
     | "flag"
+    | "swingFlag"
+    | "doubleSwingFlag"
     | "rifle"
     | "sabre";
 
@@ -851,6 +853,61 @@ const FLAG: Record<HoldState, Hold> = {
 };
 
 /**
+ * Swing flags wait at down 45 (owner, 2026-10-09), ready to start
+ * swinging: the arm straight, out and down at 45 degrees from the shoulder
+ * and a little forward, the pole running on along the arm from a short tab
+ * in the fist. The silk trails back from the pole and a little down, so its
+ * fly clears the ground. One swing flag rides the right hand with the left
+ * arm relaxed at the side; a pair puts one in each hand, mirrored.
+ */
+const DOWN45_RIGHT: ArmTargets = {
+    elbow: [-0.327, 1.255, 0.036],
+    wrist: [-0.5, 1.082, 0.086],
+    fingers: unit([-0.69, -0.69, 0.2]),
+};
+/** The same targets on the other side of the body's center plane. */
+const mirrorArm = (a: ArmTargets): ArmTargets => ({
+    elbow: [-a.elbow[0], a.elbow[1], a.elbow[2]],
+    wrist: [-a.wrist[0], a.wrist[1], a.wrist[2]],
+    fingers: [-a.fingers[0], a.fingers[1], a.fingers[2]],
+});
+const DOWN45_LEFT = mirrorArm(DOWN45_RIGHT);
+const SWING_INSTRUMENT: Hold["instrument"] = {
+    origin: DOWN45_RIGHT.wrist,
+    // the pole along the arm; the silk's face, so its fly (+X) trails back
+    bellAxis: unit([-0.69, -0.69, 0.2]),
+    capsAxis: [0.719, -0.687, 0.109],
+};
+const SWING_FLAG = (state: HoldState): Hold => ({
+    family: "swingFlag",
+    state,
+    right: DOWN45_RIGHT,
+    left: {
+        elbow: [0.231, 1.202, -0.047],
+        wrist: [0.25, 0.95, 0.03],
+        fingers: unit([0, -1, 0]),
+    },
+    instrument: SWING_INSTRUMENT,
+});
+const DOUBLE_SWING_FLAG = (state: HoldState): Hold => ({
+    family: "doubleSwingFlag",
+    state,
+    right: DOWN45_RIGHT,
+    left: DOWN45_LEFT,
+    instrument: SWING_INSTRUMENT,
+});
+const SWING: Record<HoldState, Hold> = {
+    up: SWING_FLAG("up"),
+    carry: SWING_FLAG("carry"),
+    trail: SWING_FLAG("trail"),
+};
+const DOUBLE_SWING: Record<HoldState, Hold> = {
+    up: DOUBLE_SWING_FLAG("up"),
+    carry: DOUBLE_SWING_FLAG("carry"),
+    trail: DOUBLE_SWING_FLAG("trail"),
+};
+
+/**
  * The rifle is always carried level (owner, 2026-10-09): across the front
  * of the body at the waist, top up, the butt out past the right hip and the
  * muzzle to the performer's left. The right hand holds the wrist of the
@@ -959,6 +1016,8 @@ const TABLE: Record<HoldFamily, Record<HoldState, Hold>> = {
     bass: BASS,
     cymbals: CYMBALS,
     flag: FLAG,
+    swingFlag: SWING,
+    doubleSwingFlag: DOUBLE_SWING,
     rifle: RIFLE,
     sabre: SABRE,
 };

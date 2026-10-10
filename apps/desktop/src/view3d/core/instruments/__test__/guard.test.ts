@@ -11,6 +11,8 @@ import {
     PART_METAL,
 } from "../mesh";
 import { guardModel, sectionAt, RIFLE_STATIONS, RIFLE_SWIVELS } from "../guard";
+import { hold } from "../holds";
+import type { Piece } from "../mesh";
 import type { GuardModelId } from "../model";
 
 const IDS: GuardModelId[] = [
@@ -140,25 +142,64 @@ describe("guard equipment", () => {
         expect(ahead.every((p) => p.part === PART_WOOD)).toBe(true);
     });
 
-    it("hangs a swing flag's silk from above the hand, its fly drooping", () => {
+    it("holds a swing flag at its butt, a bare tab above the fist", () => {
         const m = guardModel("swingFlag");
         const silk = m.pieces.filter((p) => p.part === PART_SILK);
         const pole = bounds(m.pieces.filter((p) => p.part === PART_CHROME));
+        // the butt just past the fist, the pole running on from it
+        expect(pole.min[2]).toBeGreaterThan(-0.12);
+        expect(pole.max[2]).toBeGreaterThan(0.9);
         // the sheet: the silk piece that reaches out from the pole
         const sheet = silk.find((p) => bounds([p]).max[0] > 1);
         expect(sheet).toBeDefined();
-        const s = bounds([sheet!]);
-        // a bare tab below the silk where the hand holds the pole
-        const hoist = sheet!.positions.filter(
-            (_, i) => i % 3 === 2 && sheet!.positions[i - 2] < 0.05,
-        );
-        expect(Math.min(...hoist)).toBeGreaterThan(0.03);
-        expect(pole.min[2]).toBeLessThan(-0.2);
-        // longer than it is tall, and its fly end falls below the hoist
-        expect(s.max[0]).toBeGreaterThan(1.2);
-        expect(s.min[2]).toBeLessThan(Math.min(...hoist) - 0.2);
+        // a bare tab between the hand and the silk
+        expect(bounds([sheet!]).min[2]).toBeGreaterThan(0.2);
+        expect(bounds([sheet!]).max[0]).toBeGreaterThan(1.2);
         // a sleeve of silk around the pole
         expect(silk.length).toBe(2);
+    });
+
+    it("mirrors the second swing flag onto the left hand", () => {
+        const m = guardModel("doubleSwingFlag");
+        const h = hold("doubleSwingFlag", "up").instrument;
+        // instrument frame to body, as instrumentGeometry places it
+        const z = h.bellAxis;
+        const dz = h.capsAxis.reduce((a, v, i) => a + v * z[i], 0);
+        const y0 = h.capsAxis.map((v, i) => v - dz * z[i]);
+        const ly = Math.hypot(...y0);
+        const y = y0.map((v) => v / ly);
+        const x = [
+            y[1] * z[2] - y[2] * z[1],
+            y[2] * z[0] - y[0] * z[2],
+            y[0] * z[1] - y[1] * z[0],
+        ];
+        const toBody = (p: Piece) => {
+            const out: number[] = [];
+            for (let i = 0; i < p.positions.length; i += 3) {
+                const [a, b, c] = p.positions.slice(i, i + 3);
+                for (let k = 0; k < 3; k++)
+                    out.push(x[k] * a + y[k] * b + z[k] * c + h.origin[k]);
+            }
+            return out;
+        };
+        const right = m.pieces.filter((p) => !p.bone);
+        const left = m.pieces.filter((p) => p.bone === "handL");
+        expect(left.length).toBe(right.length);
+        for (let i = 0; i < right.length; i++) {
+            const r = toBody(right[i]);
+            const l = toBody(left[i]);
+            for (let k = 0; k < r.length; k += 3) {
+                expect(l[k]).toBeCloseTo(-r[k], 6);
+                expect(l[k + 1]).toBeCloseTo(r[k + 1], 6);
+                expect(l[k + 2]).toBeCloseTo(r[k + 2], 6);
+            }
+        }
+        // and the silks stay off the ground
+        for (const p of m.pieces.filter((q) => q.part === PART_SILK)) {
+            const b = toBody(p);
+            for (let k = 1; k < b.length; k += 3)
+                expect(b[k]).toBeGreaterThan(0);
+        }
     });
 
     it("gives the sabre a chrome hilt and a capped tip", () => {

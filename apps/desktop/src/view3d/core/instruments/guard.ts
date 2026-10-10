@@ -30,6 +30,7 @@ import type {
     ModelOptions,
     GuardModelId,
 } from "./model";
+import { hold } from "./holds";
 
 /**
  * Default colors by part: chrome, black, a brass hilt, the white of a drill
@@ -540,17 +541,52 @@ function flag(
 const FLAG6_DRAPE: Drape = { ripple: 0.03, waves: 1.5, droop: 0 };
 
 /**
- * A swing flag's silk: long and light, so its fly end falls well below the
- * top of the pole and rolls in a deep, slow wave.
+ * A swing flag's silk: long and light, rolling in a deep, slow wave. The
+ * hold trails it back from the pole, so it doesn't droop along the pole.
  */
-const SWING_DRAPE: Drape = { ripple: 0.12, waves: 1.4, droop: 0.5 };
+const SWING_DRAPE: Drape = { ripple: 0.12, waves: 1.4, droop: 0 };
 
 /**
- * Where the left hand holds the second swing flag in the instrument frame:
- * the `flag` carry hold's left wrist relative to the right. The flag hold
- * turns instrument +X onto the body's right, so the left hand is at −X.
+ * The second swing flag as the first one's mirror image through the body's
+ * center plane, in the instrument frame of the `doubleSwingFlag` hold.
+ * With the hold's axes R (columns +X, +Y, +Z in the body) and origin o, the
+ * body mirror M = diag(−1, 1, 1) becomes `p' = Rᵀ M R p + Rᵀ (M o − o)`, and
+ * Rᵀ M R = I − 2 r rᵀ for r, the body's X axis seen in the instrument frame.
  */
-const LEFT_FLAG: Vec3 = [-0.55, -0.07, -0.05];
+function leftSwingFlag(): { m: Mat3; t: Vec3 } {
+    const { origin, bellAxis, capsAxis } = hold(
+        "doubleSwingFlag",
+        "up",
+    ).instrument;
+    const norm = (v: Vec3): Vec3 => {
+        const l = Math.hypot(v[0], v[1], v[2]) || 1;
+        return [v[0] / l, v[1] / l, v[2] / l];
+    };
+    // the same frame `instrumentGeometry` places the model in
+    const z = norm(bellAxis);
+    const d = capsAxis[0] * z[0] + capsAxis[1] * z[1] + capsAxis[2] * z[2];
+    const y = norm([
+        capsAxis[0] - d * z[0],
+        capsAxis[1] - d * z[1],
+        capsAxis[2] - d * z[2],
+    ]);
+    const x: Vec3 = [
+        y[1] * z[2] - y[2] * z[1],
+        y[2] * z[0] - y[0] * z[2],
+        y[0] * z[1] - y[1] * z[0],
+    ];
+    const r: Vec3 = [x[0], y[0], z[0]];
+    const m = [0, 1, 2].flatMap((i) =>
+        [0, 1, 2].map((j) => (i === j ? 1 : 0) - 2 * r[i] * r[j]),
+    ) as Mat3;
+    // Rᵀ (M o − o) is Rᵀ (−2 o_x, 0, 0): −2 o_x times r
+    const t: Vec3 = [
+        -2 * origin[0] * r[0],
+        -2 * origin[0] * r[1],
+        -2 * origin[0] * r[2],
+    ];
+    return { m, t };
+}
 
 /** The 6 ft flag: a 1.83 m pole (butt below the hand) and a 36 by 54 in silk. */
 function flag6(s: SegmentCounts): Omit<InstrumentModel, "id"> {
@@ -562,29 +598,27 @@ function flag6(s: SegmentCounts): Omit<InstrumentModel, "id"> {
 }
 
 /**
- * A swing flag: a 1 m pole held at its tab, the bare quarter below the
- * silk, and a 1.5 m by 0.7 m silk sleeved along the rest of it.
+ * A swing flag: a 1 m pole held in one fist at its butt end, a bare tab
+ * above the hand, and a 1.5 m by 0.7 m silk sleeved along the rest of it.
  */
 function swingFlag(s: SegmentCounts): Omit<InstrumentModel, "id"> {
     return {
-        pieces: flag(-0.25, 0.77, 0.0125, 1.5, 0.7, SWING_DRAPE, s, true),
+        pieces: flag(-0.06, 0.96, 0.0125, 1.5, 0.7, SWING_DRAPE, s, true),
         leftGrip: [0, 0, -0.2],
         mouthpiece: [0, 0, 0],
     };
 }
 
-/** Two swing flags: the second mirrored in x and riding the left hand. */
+/** Two swing flags: the second the first's mirror image, riding the left hand. */
 function doubleSwingFlag(s: SegmentCounts): Omit<InstrumentModel, "id"> {
     const right = swingFlag(s).pieces;
+    const { m, t } = leftSwingFlag();
     const left = right.map(
-        (p): Piece => ({
-            ...mapPiece(p, [-1, 0, 0, 0, 1, 0, 0, 0, 1], LEFT_FLAG),
-            bone: "handL",
-        }),
+        (p): Piece => ({ ...mapPiece(p, m, t), bone: "handL" }),
     );
     return {
         pieces: [...right, ...left],
-        leftGrip: LEFT_FLAG,
+        leftGrip: t,
         mouthpiece: [0, 0, 0],
     };
 }

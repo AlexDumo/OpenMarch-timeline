@@ -21,7 +21,13 @@ const FAMILIES: HoldFamily[] = [
     "cymbals",
 ];
 /** The guard carries at the side with an arm down, so only the reach test covers it. */
-const GUARD: HoldFamily[] = ["flag", "rifle", "sabre"];
+const GUARD: HoldFamily[] = [
+    "flag",
+    "swingFlag",
+    "doubleSwingFlag",
+    "rifle",
+    "sabre",
+];
 
 describe("holds", () => {
     it("lists the four states with up first", () => {
@@ -441,6 +447,31 @@ describe("woodwind carry and trail", () => {
             expect(h.left.wrist[1]).toBeCloseTo(h.right.wrist[1], 6);
             expect(h.right.wrist[1]).toBeLessThan(1.15);
             expect(h.left.wrist[0]).toBeGreaterThan(h.right.wrist[0]);
+        }
+    });
+
+    it("swing flags wait at down 45: one in the right hand, a pair mirrored", () => {
+        const shoulderR = [-0.185, 1.397];
+        for (const state of HOLD_STATES) {
+            const one = hold("swingFlag", state);
+            const pair = hold("doubleSwingFlag", state);
+            // the right arm out and down at 45 degrees
+            const [x, y] = one.right.wrist;
+            const out = shoulderR[0] - x;
+            const down = shoulderR[1] - y;
+            expect(Math.atan2(down, out)).toBeCloseTo(Math.PI / 4, 1);
+            // the left arm hangs at the side with one flag
+            expect(one.left.fingers[1]).toBeLessThan(-0.9);
+            // a pair: the left arm the right one's mirror image
+            for (const k of ["elbow", "wrist", "fingers"] as const) {
+                const r = pair.right[k];
+                const l = pair.left[k];
+                expect(l[0]).toBeCloseTo(-r[0], 6);
+                expect(l[1]).toBeCloseTo(r[1], 6);
+                expect(l[2]).toBeCloseTo(r[2], 6);
+            }
+            // the pole runs on along the arm
+            expect(one.instrument.bellAxis).toEqual(one.right.fingers);
         }
     });
 });

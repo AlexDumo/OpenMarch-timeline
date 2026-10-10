@@ -55,9 +55,11 @@ export const GUARD_EQUIPMENT: readonly GuardModelId[] = [
     "sabre",
 ];
 
-/** Carrying one piece of guard equipment: every flag uses the flag hold. */
+/**
+ * Carrying one piece of guard equipment: the 6 ft flag uses the flag hold,
+ * and every other piece has a hold of its own name.
+ */
 export function guardCarry(model: GuardModelId): Carry {
-    const family: HoldFamily =
-        model === "rifle" ? "rifle" : model === "sabre" ? "sabre" : "flag";
+    const family: HoldFamily = model === "flag6" ? "flag" : model;
     return { model, family };
 }

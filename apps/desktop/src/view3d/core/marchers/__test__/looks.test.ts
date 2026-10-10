@@ -131,11 +131,11 @@ describe("section uniforms", () => {
         });
         expect(pick("Rifle", "doubleSwingFlag")).toEqual({
             model: "doubleSwingFlag",
-            family: "flag",
+            family: "doubleSwingFlag",
         });
         expect(pick("Dancer", "swingFlag")).toEqual({
             model: "swingFlag",
-            family: "flag",
+            family: "swingFlag",
         });
         expect(pick("Flag", "rifle")).toEqual({
             model: "rifle",
