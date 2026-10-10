@@ -181,21 +181,21 @@ describe("sampleAlong", () => {
             3,
             STEP,
         );
-        expect(fromStart.map((s) => s.x)).toEqual([0, 20, 40]);
+        fromStart.forEach((s, i) => close(s.x, [0, 20, 40][i]!, 1e-6));
         const fromEnd = sampleAlong(
             path,
             { mode: "interval", runs, anchor: "end" },
             3,
             STEP,
         );
-        expect(fromEnd.map((s) => s.x)).toEqual([60, 80, 100]);
+        fromEnd.forEach((s, i) => close(s.x, [60, 80, 100][i]!, 1e-6));
         const centered = sampleAlong(
             path,
             { mode: "interval", runs, anchor: "center" },
             3,
             STEP,
         );
-        expect(centered.map((s) => s.x)).toEqual([30, 50, 70]);
+        centered.forEach((s, i) => close(s.x, [30, 50, 70][i]!, 1e-6));
     });
 
     it("lays mixed intervals in order and runs past a short path", () => {
@@ -208,7 +208,28 @@ describe("sampleAlong", () => {
             anchor: "start",
         };
         const slots = sampleAlong(path, spacing, 4, STEP);
-        expect(slots.map((s) => s.x)).toEqual([0, 50, 130, 210]);
+        slots.forEach((s, i) => close(s.x, [0, 50, 130, 210][i]!, 1e-6));
+    });
+
+    it("measures intervals straight between neighbors on a curve", () => {
+        const arc = makePath([
+            { type: "arc", center: xy(0, 0), r: 30, start: 0, sweep: Math.PI },
+        ]);
+        const slots = sampleAlong(
+            arc,
+            {
+                mode: "interval",
+                runs: [{ steps: 2, count: 0 }],
+                anchor: "start",
+            },
+            4,
+            STEP,
+        );
+        slots
+            .slice(1)
+            .forEach((slot, i) => close(dist(slot, slots[i]!), 20, 1e-6));
+        // Each gap reaches a little farther along the arc than its 20-unit chord
+        expect(slots[1]!.s!).toBeGreaterThan(20);
     });
 
     it("puts one marcher in the middle when fitting", () => {
@@ -291,7 +312,7 @@ describe("line kind", () => {
         expect(next.b).toEqual(xy(10, 10));
     });
 
-    it("reports the length the interval covers", () => {
+    it("reports the run, not the shape, when the run is laid on it", () => {
         const params: LineParams = {
             a: xy(0, 0),
             b: xy(10, 0),
@@ -302,7 +323,7 @@ describe("line kind", () => {
             },
         };
         expect(lineKind.readouts!(params, 6, ctx)).toEqual([
-            { label: "Length", value: "10 steps" },
+            { label: "Run", value: "10 steps" },
         ]);
     });
 });

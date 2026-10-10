@@ -30,6 +30,10 @@ import { useShapeToolStore } from "../shapeToolStore";
 import { describeGaps, formatIntervals, parseIntervals } from "../spacing";
 import {
     followsInterval,
+    lockInterval,
+    setSizeLock,
+    sizeIsLocked,
+    unlockInterval,
     type AnyShapeKind,
     type IntervalRun,
     type Measure,
@@ -165,11 +169,13 @@ function SessionControls({ session }: { session: ShapeSession }) {
         useShapeToolStore
             .getState()
             .setParams({ ...params, [key]: value }, ctx);
-    // The interval the shape gives in Fit, shown gray beside the Interval lock
-    const path = kind.path?.(session.params);
-    const derivedInterval = path
-        ? path.length / Math.max(path.closed ? n : n - 1, 1)
-        : undefined;
+    // The interval the shape gives in Fit, shown gray beside the Interval lock: straight between
+    // neighbors, as drill measures it
+    const [first, second] = preview.slots;
+    const derivedInterval =
+        kind.path && first && second
+            ? Math.hypot(second.x - first.x, second.y - first.y)
+            : undefined;
 
     const measures = measuresOf(kind).filter(
         (m) => !m.visibleWhen || m.visibleWhen(session.params),
@@ -212,6 +218,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
                 </p>
             </div>
 
+            {basic.map(renderGroup)}
             {measures.length > 0 && (
                 <Section label="Size">
                     {measures.map((measure) => (
@@ -220,12 +227,12 @@ function SessionControls({ session }: { session: ShapeSession }) {
                             measure={measure}
                             session={session}
                             ctx={ctx}
+                            keepsPath={kind.keepsPath === true}
                         />
                     ))}
                 </Section>
             )}
 
-            {basic.map(renderGroup)}
             {advanced.length > 0 && (
                 <button
                     type="button"
@@ -318,21 +325,27 @@ function MeasureField<P>({
     measure,
     session,
     ctx,
+    keepsPath,
 }: {
     measure: Measure<P>;
     session: ShapeSession;
     ctx: ShapeContext;
+    keepsPath: boolean;
 }) {
     const n = session.marchers.length;
     const raw = measure.get(session.params as P, n, ctx);
     const isLength = measure.unit === "length";
     const shown = isLength ? raw / ctx.stepPx : raw * RAD_TO_DEG;
-    // With a locked interval the size has a lock too: open, it follows the interval (derived);
-    // closed, the run is laid on the shape as sized
+    // The size lock, shown whenever the shape has spacing. Open with the interval locked, the
+    // size follows the interval (worked out, gray); closed, the run is laid on the shape as
+    // sized. In Fit it decides what locking the interval will do. A shape that keeps its drawn
+    // path has it closed for good.
     const spacing = (session.params as { spacing?: Spacing }).spacing;
-    const sizeLock =
-        measure.size && spacing?.mode === "interval" ? spacing : undefined;
-    const derived = sizeLock !== undefined && followsInterval(sizeLock);
+    const hasLock = measure.size === true && spacing !== undefined;
+    const sizeLocked =
+        keepsPath || (spacing !== undefined && sizeIsLocked(spacing));
+    const derived =
+        hasLock && spacing !== undefined && followsInterval(spacing);
     return (
         <Row label={measure.label}>
             <NumberInput
@@ -354,20 +367,22 @@ function MeasureField<P>({
             <span className="text-sub text-text/60 w-[2.5rem]">
                 {isLength ? "steps" : "°"}
             </span>
-            {sizeLock && (
+            {hasLock && spacing && (
                 <LockButton
-                    locked={!derived}
+                    locked={sizeLocked}
+                    disabled={keepsPath}
                     testId={`shape-lock-${measure.key}`}
-                    lockedHelp="inspector.shapeTool.sizeLocked"
+                    lockedHelp={
+                        keepsPath
+                            ? "inspector.shapeTool.sizeKeepsPath"
+                            : "inspector.shapeTool.sizeLocked"
+                    }
                     unlockedHelp="inspector.shapeTool.sizeFollows"
                     onToggle={() =>
                         useShapeToolStore.getState().setParams(
                             {
                                 ...(session.params as object),
-                                spacing: {
-                                    ...sizeLock,
-                                    size: derived ? "keep" : "follow",
-                                },
+                                spacing: setSizeLock(spacing, !sizeLocked),
                             },
                             ctx,
                         )
@@ -381,12 +396,14 @@ function MeasureField<P>({
 /** A padlock: closed when the value is set by you, open when the tool works it out */
 function LockButton({
     locked,
+    disabled,
     testId,
     lockedHelp,
     unlockedHelp,
     onToggle,
 }: {
     locked: boolean;
+    disabled?: boolean;
     testId: string;
     lockedHelp: string;
     unlockedHelp: string;
@@ -402,6 +419,7 @@ function LockButton({
             aria-pressed={locked}
             aria-label={help}
             title={help}
+            disabled={disabled}
             onClick={onToggle}
             data-testid={testId}
         >
@@ -436,13 +454,20 @@ function NumberInput({
     testId?: string;
     onCommit: (value: number) => void;
 }) {
+    // A worked-out value shows its true size (to the hundredth), not one rounded to the step
     const rounded = integer
         ? Math.round(value)
-        : Math.round(value / step) * step;
+        : derived
+          ? Math.round(value * 100) / 100
+          : Math.round(value / step) * step;
     const text = String(Number(rounded.toFixed(4)));
     const [draft, setDraft] = useState<string | null>(null);
     const commit = () => {
-        if (draft === null) return;
+        // Focusing a value and leaving it as it was changes nothing (so it doesn't round it)
+        if (draft === null || draft === text) {
+            setDraft(null);
+            return;
+        }
         const v = Number(draft);
         setDraft(null);
         if (draft.trim() === "" || !Number.isFinite(v)) return;
@@ -562,6 +587,18 @@ function FieldControl({
                     </ToggleGroup>
                 </Row>
             );
+        case "lock":
+            return (
+                <Row label={field.label}>
+                    <LockButton
+                        locked={value === true}
+                        testId={`shape-lock-${field.key}`}
+                        lockedHelp={field.lockedHelp}
+                        unlockedHelp={field.unlockedHelp}
+                        onToggle={() => onChange(value !== true)}
+                    />
+                </Row>
+            );
         case "bool":
             return (
                 <Row label={field.label}>
@@ -605,7 +642,7 @@ function SpacingControl({
     const lockedText = locked ? formatIntervals(spacing.runs) : "";
     const derivedSteps =
         derivedInterval !== undefined
-            ? Math.round((derivedInterval / ctx.stepPx) * 4) / 4
+            ? Math.round((derivedInterval / ctx.stepPx) * 100) / 100
             : 2;
     const text = draft ?? (locked ? lockedText : `= ${derivedSteps}`);
     const parsed = draft !== null ? parseIntervals(draft) : null;
@@ -619,11 +656,7 @@ function SpacingControl({
     }, [error, setInputError]);
 
     const lockAt = (runs: readonly IntervalRun[]) =>
-        onChange(
-            spacing.mode === "interval"
-                ? { ...spacing, runs }
-                : { mode: "interval", runs, anchor: "center", size: "follow" },
-        );
+        onChange(lockInterval(spacing, runs));
     const note = locked ? describeGaps(spacing.runs, n) : undefined;
     const follows = followsInterval(spacing);
 
@@ -634,6 +667,7 @@ function SpacingControl({
                     compact
                     className={`w-[8rem] font-mono ${locked || draft !== null ? "" : "text-text/50"}`}
                     aria-label="Interval in steps"
+                    title={t("inspector.shapeTool.intervalHelp")}
                     placeholder={t("inspector.shapeTool.intervalPlaceholder")}
                     value={text}
                     data-testid="shape-interval-input"
@@ -662,7 +696,7 @@ function SpacingControl({
                     unlockedHelp="inspector.shapeTool.intervalFits"
                     onToggle={() => {
                         setDraft(null);
-                        if (locked) onChange({ mode: "fit" });
+                        if (locked) onChange(unlockInterval(spacing));
                         else lockAt([{ steps: derivedSteps, count: 0 }]);
                     }}
                 />
@@ -687,11 +721,6 @@ function SpacingControl({
                     data-testid="shape-interval-error"
                 >
                     {error}
-                </p>
-            )}
-            {draft !== null && !error && (
-                <p className="text-sub text-text/60">
-                    <T keyName="inspector.shapeTool.intervalHelp" />
                 </p>
             )}
             {note && (

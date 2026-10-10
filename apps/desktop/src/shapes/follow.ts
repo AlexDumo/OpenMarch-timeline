@@ -1,10 +1,12 @@
-import { requiredLength } from "./spacing";
+import type { Path } from "./geometry/path";
+import { chordOffsets, gapsInSteps } from "./spacing";
 import {
     followsInterval,
     type AnyShapeKind,
     type Measure,
     type ShapeContext,
     type Spacing,
+    type XY,
 } from "./types";
 
 /**
@@ -20,21 +22,60 @@ import {
 
 type WithSpacing = { readonly spacing?: Spacing };
 
-/** The run length `n` marchers need, or undefined when the shape doesn't follow an interval */
-export function followLength(
+/**
+ * The point a "center" anchor keeps: halfway between an open path's ends (an arc's chord middle,
+ * so it doesn't drift toward its bend), or the middle of a closed one
+ */
+function centerOf(path: Path, length: number): XY {
+    if (path.closed) return path.at(length / 2);
+    const a = path.at(0);
+    const b = path.at(length);
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+/**
+ * The gaps, in field units, a shape keeping its locked interval has to hold: n − 1 along an
+ * open path, n around a closed one (the last gap closes the loop). Undefined when the shape
+ * doesn't follow an interval.
+ */
+export function followGaps(
     kind: AnyShapeKind,
     params: unknown,
     n: number,
     ctx: ShapeContext,
-): number | undefined {
+): number[] | undefined {
     const spacing = (params as WithSpacing).spacing;
     if (!spacing || !followsInterval(spacing) || !kind.path) return undefined;
-    return requiredLength(
-        spacing.runs,
-        n,
-        kind.path(params).closed,
-        ctx.stepPx,
+    const closed = kind.path(params).closed;
+    return gapsInSteps(spacing.runs, closed ? n : n - 1).map(
+        (g) => g * ctx.stepPx,
     );
+}
+
+/**
+ * How much to scale `path` so `gaps`, measured straight between neighbors, take exactly its
+ * length. Scaling the path by k is the same as laying the gaps scaled by 1/k on it, and the
+ * distance the gaps reach along the path grows with them, so a bisection finds it.
+ */
+export function scaleToFit(path: Path, gaps: readonly number[]): number {
+    const length = path.length;
+    const total = gaps.reduce((sum, g) => sum + g, 0);
+    if (length <= 1e-9 || total <= 1e-9) return 1;
+    const reach = (t: number) =>
+        chordOffsets(
+            path,
+            0,
+            gaps.map((g) => g * t),
+        ).at(-1)!;
+    // How far the gaps reach grows almost in proportion to their size, so rescaling by the
+    // shortfall converges in a few rounds (at once on a straight path)
+    let t = length / total;
+    for (let i = 0; i < 12; i++) {
+        const r = reach(t);
+        if (Math.abs(r - length) <= length * 1e-10) break;
+        t *= length / r;
+    }
+    return 1 / t;
 }
 
 /** `params` resized to keep its locked interval; unchanged in any other state */
@@ -45,16 +86,23 @@ export function settle(
     ctx: ShapeContext,
     dragged?: string,
 ): unknown {
-    const length = followLength(kind, params, n, ctx);
-    if (length === undefined || !kind.path) return params;
-    if (kind.float) return kind.float(params, length, ctx, dragged);
-    if (!kind.scale) return params;
-    const path = kind.path(params);
-    const current = path.length;
-    if (current <= 1e-9 || Math.abs(current - length) < 1e-9) return params;
+    const spacing = (params as WithSpacing).spacing;
+    if (kind.keepsPath && spacing && followsInterval(spacing)) {
+        // This kind keeps its drawn path: the locked interval is laid along it
+        return { ...(params as object), spacing: { ...spacing, size: "keep" } };
+    }
+    const gaps = followGaps(kind, params, n, ctx);
+    if (!gaps || !kind.path) return params;
     const handle = dragged
         ? kind.handles(params, n, ctx).find((h) => h.key === dragged)
         : undefined;
+    const floated = kind.float?.(params, gaps, ctx, handle);
+    if (floated !== undefined) return floated;
+    if (!kind.scale) return params;
+    const path = kind.path(params);
+    const current = path.length;
+    const k = scaleToFit(path, gaps);
+    if (current <= 1e-9 || Math.abs(k - 1) < 1e-12) return params;
     const anchor = (params as WithSpacing).spacing;
     const pivot = handle?.start
         ? path.at(current)
@@ -63,9 +111,9 @@ export function settle(
           : anchor?.mode === "interval" && anchor.anchor === "end"
             ? path.at(current)
             : anchor?.mode === "interval" && anchor.anchor === "center"
-              ? path.at(current / 2)
+              ? centerOf(path, current)
               : path.at(0);
-    return kind.scale(params, pivot, length / current);
+    return kind.scale(params, pivot, k);
 }
 
 /**

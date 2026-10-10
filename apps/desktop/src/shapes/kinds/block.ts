@@ -117,6 +117,26 @@ const snapRotation = (angle: number, stepRad: number) => {
 
 const ROTATE_OFFSET = Math.PI / 2;
 
+/**
+ * The marchers' usual distance to their nearest neighbor, rounded to the quarter step: the
+ * interval a block fitted to them starts with. Two steps for one marcher.
+ */
+function typicalSpacing(points: readonly XY[], ctx: ShapeContext): number {
+    if (points.length < 2) return 2 * ctx.stepPx;
+    const nearest = points
+        .map((p, i) =>
+            Math.min(
+                ...points.map((q, j) =>
+                    i === j ? Infinity : Math.hypot(p.x - q.x, p.y - q.y),
+                ),
+            ),
+        )
+        .sort((a, b) => a - b);
+    const median = nearest[Math.floor(nearest.length / 2)]!;
+    const quarters = Math.max(1, Math.round((median / ctx.stepPx) * 4));
+    return (quarters / 4) * ctx.stepPx;
+}
+
 const trim = (v: number) => String(Math.round(v * 100) / 100);
 
 export const blockKind: ShapeKind<BlockParams> = {
@@ -125,12 +145,19 @@ export const blockKind: ShapeKind<BlockParams> = {
     label: "Block",
     icon: SquaresFourIcon,
     family: "fill",
-    defaultOrder: "nearest",
     groups: [
         {
             label: "Size",
             fields: [
-                { type: "bool", key: "keepIntervals", label: "Keep intervals" },
+                {
+                    type: "lock",
+                    key: "keepIntervals",
+                    label: "Intervals",
+                    lockedHelp:
+                        "Intervals locked: dragging the side adds or removes files. Click to stretch the intervals instead",
+                    unlockedHelp:
+                        "Dragging the side stretches the intervals. Click to lock them, so it adds or removes files",
+                },
                 { type: "count", key: "files", label: "Files", min: 1 },
                 { type: "length", key: "across", label: "Across" },
                 { type: "length", key: "deep", label: "Deep" },
@@ -182,12 +209,14 @@ export const blockKind: ShapeKind<BlockParams> = {
             );
             if (straight) files = n;
         }
+        const spacing = typicalSpacing(current, ctx);
         return {
             center: n === 0 ? xy(0, 0) : centroid(current),
             rotation,
             files,
-            across: 2 * ctx.stepPx,
-            deep: 2 * ctx.stepPx,
+            // The marchers' own spacing, so the block opens through where they stand
+            across: spacing,
+            deep: spacing,
             pattern: "grid",
             shortRank: "start",
             keepIntervals: true,
@@ -234,13 +263,19 @@ export const blockKind: ShapeKind<BlockParams> = {
         if (key === "across") {
             const along = Math.abs(toLocal(p, to).x);
             if (p.keepIntervals) {
-                // Whole files at the kept interval, never more than there are marchers
-                const files =
-                    Math.round((2 * along) / Math.max(p.across, 1e-9)) + 1;
-                return {
-                    ...p,
-                    files: Math.min(Math.max(files, 1), Math.max(n, 1)),
-                };
+                // Whole files at the kept interval, one per interval dragged, never more than
+                // there are marchers. The opposite side stays where it is.
+                const left = -((filesOf(p) - 1) / 2) * p.across;
+                const reach = toLocal(p, to).x - left;
+                const files = Math.min(
+                    Math.max(
+                        Math.round(reach / Math.max(p.across, 1e-9)) + 1,
+                        1,
+                    ),
+                    Math.max(n, 1),
+                );
+                const middle = left + ((files - 1) / 2) * p.across;
+                return { ...p, files, center: toField(p, middle, 0) };
             }
             return { ...p, across: (2 * along) / Math.max(filesOf(p) - 1, 1) };
         }

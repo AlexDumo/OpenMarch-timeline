@@ -12,7 +12,7 @@ import type {
 } from "./types";
 import { validateSlots } from "./validate";
 import { measuresOf, settle } from "./follow";
-import { followsInterval, type Spacing } from "./types";
+import { setSizeLock, type Spacing } from "./types";
 
 /**
  * One use of the shape tool: the marchers it places, the kind and its params, and who goes to
@@ -49,7 +49,7 @@ function fieldsOf(kind: AnyShapeKind): ParamField[] {
 
 /**
  * `toParams` with the panel fields it shares with the other kind (same key and type) taken from
- * `fromParams`, so a spacing set on a line carries over to an arc.
+ * `fromParams`. Spacing doesn't carry over: a new shape fits through the marchers first.
  */
 export function carryOverParams(
     fromKind: AnyShapeKind,
@@ -60,6 +60,8 @@ export function carryOverParams(
     const from = new Map(fieldsOf(fromKind).map((f) => [f.key, f.type]));
     const next = { ...(toParams as Record<string, unknown>) };
     for (const field of fieldsOf(toKind)) {
+        // A new shape starts in Fit, through where the marchers stand: locks don't carry over
+        if (field.type === "spacing") continue;
         if (from.get(field.key) !== field.type) continue;
         const value = (fromParams as Record<string, unknown>)[field.key];
         if (value !== undefined) next[field.key] = value;
@@ -177,9 +179,10 @@ export function changeMeasure(
     const kind = kindOf(session.kindId);
     const measure = measuresOf(kind).find((m) => m.key === key);
     if (!measure) return session;
+    // Typing the size locks it, as typing the interval does
     let params = session.params as { spacing?: Spacing };
-    if (measure.size && params.spacing && followsInterval(params.spacing)) {
-        params = { ...params, spacing: { ...params.spacing, size: "keep" } };
+    if (measure.size && params.spacing) {
+        params = { ...params, spacing: setSizeLock(params.spacing, true) };
     }
     const n = session.marchers.length;
     return {
@@ -220,6 +223,27 @@ export function dragHandle(
     const n = session.marchers.length;
     const dragged = kind.drag(base, key, ctx.snapPoint(to), { shift }, n, ctx);
     return { ...session, params: settle(kind, dragged, n, ctx, key) };
+}
+
+/** A defining point added where the shape was double-clicked, if the kind takes one */
+export function insertPoint(
+    session: ShapeSession,
+    at: XY,
+    ctx: ShapeContext,
+): ShapeSession {
+    const kind = kindOf(session.kindId);
+    if (!kind.insertPoint) return session;
+    return changeParams(session, kind.insertPoint(session.params, at), ctx);
+}
+
+/** The defining point of a double-clicked handle removed, if the kind allows it */
+export function removePoint(
+    session: ShapeSession,
+    key: string,
+    ctx: ShapeContext,
+): ShapeSession {
+    const next = kindOf(session.kindId).removePoint?.(session.params, key);
+    return next === undefined ? session : changeParams(session, next, ctx);
 }
 
 /**

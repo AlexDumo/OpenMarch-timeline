@@ -1,4 +1,5 @@
 import { CircleIcon } from "@phosphor-icons/react";
+import { radiusForChords } from "../geometry/chords";
 import { fitCircle } from "../geometry/fit";
 import { makePath, type Path } from "../geometry/path";
 import { centroid, dist, polar, scaleAbout, snapAngle } from "../geometry/vec";
@@ -54,7 +55,6 @@ export const circleKind: ShapeKind<CircleParams> = {
     label: "Circle",
     icon: CircleIcon,
     family: "path",
-    defaultOrder: "nearest",
     groups: [SPACING_GROUP],
     measures: [
         {
@@ -74,8 +74,9 @@ export const circleKind: ShapeKind<CircleParams> = {
         center: scaleAbout(p.center, pivot, k),
         r: p.r * k,
     }),
-    // Keeping a locked interval, the circle keeps its center and start: only the radius follows
-    float: (p, length) => ({ ...p, r: length / TAU }),
+    // Keeping a locked interval, the circle keeps its center and start: only the radius follows,
+    // the one on which the gaps go exactly once around
+    float: (p, gaps) => ({ ...p, r: radiusForChords(gaps, TAU) }),
 
     fit({ current }, ctx: ShapeContext) {
         const fitted = fitCircle(current);

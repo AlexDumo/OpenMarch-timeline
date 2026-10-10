@@ -100,42 +100,61 @@ export function runsGapCount(runs: readonly IntervalRun[]): number | undefined {
     return runs.reduce((sum, run) => sum + run.count, 0);
 }
 
-/** The length, in field units, that `n` marchers cover with this spacing on `path` */
-export function spacedLength(
+/**
+ * Arc-length offsets along `path` for marchers whose neighbors are `gaps` apart in a straight
+ * line, the way drill measures an interval, starting at `from`. On a straight path that is the
+ * gaps themselves; on a curve each gap reaches a little farther along the path than its chord.
+ */
+export function chordOffsets(
     path: Path,
-    spacing: Spacing,
-    n: number,
-    stepPx: number,
-): number {
-    if (spacing.mode === "fit") return path.length;
-    if (spacing.size === "follow")
-        return requiredLength(spacing.runs, n, path.closed, stepPx);
-    // `sampleAlong` lays n - 1 gaps along a drawn shape, closed or not
-    return (
-        gapsInSteps(spacing.runs, n - 1).reduce((sum, g) => sum + g, 0) * stepPx
-    );
+    from: number,
+    gaps: readonly number[],
+): number[] {
+    const offsets = [from];
+    let s = from;
+    for (const gap of gaps) {
+        offsets.push((s = nextAtChord(path, s, gap)));
+    }
+    return offsets;
 }
 
-/**
- * The path length `n` marchers need at these intervals: n − 1 gaps along an open path, n around
- * a closed one (the last gap closes the loop).
- */
-export function requiredLength(
-    runs: readonly IntervalRun[],
-    n: number,
-    closed: boolean,
-    stepPx: number,
-): number {
-    const gaps = closed ? n : n - 1;
-    return gapsInSteps(runs, gaps).reduce((sum, g) => sum + g, 0) * stepPx;
+/** The first offset past `s` whose point is `gap` from `s`'s point, in a straight line */
+function nextAtChord(path: Path, s: number, gap: number): number {
+    if (gap <= 0) return s;
+    const origin = path.at(s);
+    const far = (t: number) => {
+        const q = path.at(t);
+        return Math.hypot(q.x - origin.x, q.y - origin.y);
+    };
+    // A chord is never longer than its arc, so the answer is at least `gap` along. On a straight
+    // stretch it is exactly that.
+    let lo = s + gap;
+    if (far(lo) >= gap * (1 - 1e-12)) return lo;
+    // March out in quarter gaps until the point is far enough, then bisect that step. A path
+    // that never gets that far (a gap wider than a small circle) falls back to the arc length.
+    const step = gap / 4;
+    let hi = lo;
+    for (let i = 0; ; i++) {
+        hi = lo + step;
+        if (far(hi) >= gap) break;
+        lo = hi;
+        if (i === 4096) return s + gap;
+    }
+    while (hi - lo > gap * 1e-9) {
+        const mid = (lo + hi) / 2;
+        if (far(mid) < gap) lo = mid;
+        else hi = mid;
+    }
+    return (lo + hi) / 2;
 }
 
 /**
  * `n` slots along `path`, tagged with their distance `s` from the path's start.
  *
- * Fit spreads them over the whole path (around it when closed). Interval lays the gaps from the
- * anchor: from the start, centered on the path's middle, or back from the end; a run longer than
- * the path continues past its end (see `Path.at`).
+ * Fit spreads them over the whole path (around it when closed). Interval puts neighbors the
+ * typed distance apart (`chordOffsets`), laid from the anchor: from the start, centered on the
+ * path, or back from the end; a run longer than the path continues past its end (`Path.at`). A
+ * shape that follows the interval is already sized to the run, so it is laid from the start.
  */
 export function sampleAlong(
     path: Path,
@@ -144,7 +163,7 @@ export function sampleAlong(
     stepPx: number,
 ): Slot[] {
     if (n <= 0) return [];
-    const offsets: number[] = [];
+    let offsets: number[] = [];
     if (spacing.mode === "fit") {
         if (n === 1) offsets.push(path.closed ? 0 : path.length / 2);
         else {
@@ -154,18 +173,14 @@ export function sampleAlong(
         }
     } else {
         const gaps = gapsInSteps(spacing.runs, n - 1).map((g) => g * stepPx);
-        const total = gaps.reduce((sum, g) => sum + g, 0);
-        // A shape that follows the interval is already as long as the run: lay it from the start
-        let s =
-            spacing.size === "follow" || spacing.anchor === "start"
-                ? 0
-                : spacing.anchor === "end"
-                  ? path.length - total
-                  : (path.length - total) / 2;
-        offsets.push(s);
-        for (const gap of gaps) {
-            s += gap;
-            offsets.push(s);
+        offsets = chordOffsets(path, 0, gaps);
+        if (spacing.size !== "follow" && spacing.anchor !== "start") {
+            const extent = offsets.at(-1)! - offsets[0]!;
+            const from =
+                spacing.anchor === "end"
+                    ? path.length - extent
+                    : (path.length - extent) / 2;
+            offsets = chordOffsets(path, from, gaps);
         }
     }
     return offsets.map((s) => ({ ...path.at(s), s }));
