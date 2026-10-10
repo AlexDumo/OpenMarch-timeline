@@ -248,3 +248,19 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   close views, high and low), not in the Electron app. Holds were not
   changed; the Guard equipment setting puts the swing flags and sabre in
   the guard's hands to check them there.
+
+### 2026-10-09 · trevor (3d/p7-instruments) · rifle finish and hold
+
+- Owner: the rifle read wrong in the app. It should be solid white and always
+  held parallel to the ground.
+- Cause of the color: one instrument material for every part, metalness 1 and
+  roughness 0.25, so the white stock drew as a mirror of the sky and field.
+  Wood, silk, black and drum-head parts now draw non-metallic at roughness
+  0.65, chosen per vertex from `_part` in the shader; brass, chrome and
+  shells are unchanged.
+- The hold: port arms (diagonal) and right shoulder arms (vertical) are
+  replaced by one level hold for every state, wrists at y 1.08 and z 0.22,
+  the muzzle along +X.
+- Checked in the web preview (Guard equipment set to Rifle, front-row camera,
+  zoomed in on one guard member): the rifle is matte white, level at the
+  waist, butt past the right hip, both hands on it.

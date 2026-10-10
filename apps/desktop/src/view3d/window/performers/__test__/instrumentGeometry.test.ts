@@ -10,9 +10,18 @@ import type { Piece } from "@/view3d/core/instruments/mesh";
 import { hold } from "@/view3d/core/instruments/holds";
 import { poseArms } from "../marchers/armPose";
 import {
+    MATTE_PARTS,
     instrumentGeometry,
     instrumentMaterial,
+    matteShader,
 } from "../marchers/instrumentGeometry";
+import {
+    PART_BLACK,
+    PART_CHROME,
+    PART_METAL,
+    PART_SILK,
+    PART_WOOD,
+} from "@/view3d/core/instruments/mesh";
 import { NO_HOLD, bakeForBodies } from "../marchers/marcherBodies";
 
 async function body() {
@@ -216,5 +225,28 @@ describe("instrument color and material", () => {
         // bells and tube ends are open surfaces: their insides must draw too
         expect(m.side).toBe(THREE.DoubleSide);
         expect(m.customProgramCacheKey()).toContain("baked-instances");
+    });
+
+    it("draws the rifle's stock, silks and rubber matte, the metal shiny", () => {
+        expect(MATTE_PARTS).toEqual(
+            expect.arrayContaining([PART_WOOD, PART_SILK, PART_BLACK]),
+        );
+        expect(MATTE_PARTS).not.toContain(PART_METAL);
+        expect(MATTE_PARTS).not.toContain(PART_CHROME);
+        // every hook the patch needs is in three's standard shader, so it
+        // can't silently do nothing
+        const shader = {
+            vertexShader: THREE.ShaderLib.standard.vertexShader,
+            fragmentShader: THREE.ShaderLib.standard.fragmentShader,
+        };
+        matteShader(shader);
+        expect(shader.vertexShader).toContain("vMatte = (");
+        expect(shader.vertexShader).toContain("attribute float _part;");
+        expect(shader.fragmentShader).toContain(
+            "metalnessFactor *= 1.0 - vMatte;",
+        );
+        expect(shader.fragmentShader).toContain(
+            "roughnessFactor = mix(roughnessFactor",
+        );
     });
 });

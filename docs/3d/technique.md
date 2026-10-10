@@ -234,6 +234,10 @@ backward march, and so on).
 
 - Equipment basics: 6 ft flag, swing flag, double swing flag, weapon (rifle),
   sabre.
+- A drill rifle is held parallel to the ground: level across the front of the
+  body at the waist, butt at the right hip, muzzle to the performer's left,
+  right hand at the wrist of the stock and left hand on the fore-end. It is
+  painted solid white, so it must never read as chrome (owner, 2026-10-09).
 - Flag and Color Guard sections carry the 6 ft flag and Rifle sections the
   rifle. The Guard equipment setting puts any one piece in every guard
   section's hands, to see the others, until sections store their equipment

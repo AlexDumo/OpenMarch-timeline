@@ -850,67 +850,36 @@ const FLAG: Record<HoldState, Hold> = {
     },
 };
 
+/**
+ * The rifle is always carried level (owner, 2026-10-09): across the front
+ * of the body at the waist, top up, the butt out past the right hip and the
+ * muzzle to the performer's left. The right hand holds the wrist of the
+ * stock, the left the fore-end.
+ */
+const RIFLE_LEVEL = (state: HoldState): Hold => ({
+    family: "rifle",
+    state,
+    right: {
+        elbow: [-0.276, 1.217, 0.033],
+        wrist: [-0.15, 1.08, 0.22],
+        fingers: unit([0.5, 0, 0.85]),
+    },
+    left: {
+        elbow: [0.301, 1.23, 0.022],
+        wrist: [0.21, 1.08, 0.22],
+        fingers: unit([-0.5, 0, 0.85]),
+    },
+    instrument: {
+        origin: [-0.15, 1.08, 0.22],
+        bellAxis: [1.0, 0.0, 0.0],
+        capsAxis: [0.0, 1.0, 0.0],
+    },
+});
+
 const RIFLE: Record<HoldState, Hold> = {
-    up: {
-        family: "rifle",
-        state: "up",
-        // port arms: diagonal across the chest, muzzle up to the left
-        right: {
-            elbow: [-0.293, 1.268, 0.112],
-            wrist: [-0.12, 1.2, 0.3],
-            fingers: unit([0.7, 0.7, 0]),
-        },
-        left: {
-            elbow: [0.331, 1.371, 0.136],
-            wrist: [0.14, 1.45, 0.3],
-            fingers: unit([-0.7, 0.7, 0]),
-        },
-        instrument: {
-            origin: [-0.12, 1.2, 0.3],
-            bellAxis: [0.6, 0.8, 0.0],
-            capsAxis: [0.0, 0.0, 1.0],
-        },
-    },
-    carry: {
-        family: "rifle",
-        state: "carry",
-        // right shoulder arms: the rifle vertical at the right shoulder, left arm down
-        right: {
-            elbow: [-0.313, 1.299, -0.131],
-            wrist: [-0.25, 1.35, 0.12],
-            fingers: unit([0, 1, 0]),
-        },
-        left: {
-            elbow: [0.231, 1.202, -0.047],
-            wrist: [0.25, 0.95, 0.03],
-            fingers: unit([0, -1, 0]),
-        },
-        instrument: {
-            origin: [-0.25, 1.35, 0.12],
-            bellAxis: [0.0, 1.0, 0.0],
-            capsAxis: [1.0, 0.0, 0.0],
-        },
-    },
-    trail: {
-        family: "rifle",
-        state: "trail",
-        // right shoulder arms: the rifle vertical at the right shoulder, left arm down
-        right: {
-            elbow: [-0.313, 1.299, -0.131],
-            wrist: [-0.25, 1.35, 0.12],
-            fingers: unit([0, 1, 0]),
-        },
-        left: {
-            elbow: [0.231, 1.202, -0.047],
-            wrist: [0.25, 0.95, 0.03],
-            fingers: unit([0, -1, 0]),
-        },
-        instrument: {
-            origin: [-0.25, 1.35, 0.12],
-            bellAxis: [0.0, 1.0, 0.0],
-            capsAxis: [1.0, 0.0, 0.0],
-        },
-    },
+    up: RIFLE_LEVEL("up"),
+    carry: RIFLE_LEVEL("carry"),
+    trail: RIFLE_LEVEL("trail"),
 };
 
 const SABRE: Record<HoldState, Hold> = {

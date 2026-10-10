@@ -1,3 +1,4 @@
+// cspell:words metalnessmap roughnessmap
 /**
  * An instrument as rigid geometry on the right hand (docs/3d/instruments.md
  * §4), in the body's bind pose so om-pose's instanced skinning carries it
@@ -13,9 +14,12 @@ import type {
 import type { Finish } from "@/view3d/core/instruments/catalog";
 import type { Hold } from "@/view3d/core/instruments/holds";
 import {
+    PART_BLACK,
+    PART_HEAD,
     PART_METAL,
     PART_SHELL,
     PART_SILK,
+    PART_WOOD,
 } from "@/view3d/core/instruments/mesh";
 import {
     instancedSkinning,
@@ -146,8 +150,53 @@ export function instrumentGeometry(
 }
 
 /**
+ * Parts that aren't metal: a drill rifle's painted stock, a silk, rubber and
+ * plastic, a drum's head. They draw matte, at {@link MATTE_ROUGHNESS}; a
+ * metallic surface shows only reflections, so a white stock would read as
+ * chrome.
+ */
+export const MATTE_PARTS = [PART_WOOD, PART_SILK, PART_BLACK, PART_HEAD];
+export const MATTE_ROUGHNESS = 0.65;
+
+/**
+ * Patches a standard material's shaders so vertices whose `_part` is one
+ * of the {@link MATTE_PARTS} draw non-metallic at {@link MATTE_ROUGHNESS}.
+ */
+export function matteShader(shader: {
+    vertexShader: string;
+    fragmentShader: string;
+}): void {
+    const isMatte = MATTE_PARTS.map(
+        (p) => `abs(_part - ${p.toFixed(1)}) < 0.5`,
+    ).join(" || ");
+    shader.vertexShader = shader.vertexShader
+        .replace(
+            "#include <common>",
+            "#include <common>\nattribute float _part;\nvarying float vMatte;",
+        )
+        .replace(
+            "#include <begin_vertex>",
+            `#include <begin_vertex>\n  vMatte = (${isMatte}) ? 1.0 : 0.0;`,
+        );
+    shader.fragmentShader = shader.fragmentShader
+        .replace(
+            "#include <common>",
+            "#include <common>\nvarying float vMatte;",
+        )
+        .replace(
+            "#include <metalnessmap_fragment>",
+            "#include <metalnessmap_fragment>\n  metalnessFactor *= 1.0 - vMatte;",
+        )
+        .replace(
+            "#include <roughnessmap_fragment>",
+            `#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, ${MATTE_ROUGHNESS.toFixed(2)}, vMatte);`,
+        );
+}
+
+/**
  * The instruments' material: smooth, metallic, colored per vertex, driven
- * by the same bake as the bodies. One per marcher set.
+ * by the same bake as the bodies, with the {@link MATTE_PARTS} matte. One
+ * per marcher set.
  */
 export function instrumentMaterial(bake: Bake): THREE.MeshStandardMaterial {
     const material = new THREE.MeshStandardMaterial({
@@ -160,5 +209,7 @@ export function instrumentMaterial(bake: Bake): THREE.MeshStandardMaterial {
         // bells and tube ends are open surfaces: looking into a bell must show its inside
         side: THREE.DoubleSide,
     });
+    // instancedSkinning chains onto this, so it runs first
+    material.onBeforeCompile = matteShader;
     return instancedSkinning(THREE, material, bake);
 }

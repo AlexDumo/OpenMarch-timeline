@@ -431,4 +431,16 @@ describe("woodwind carry and trail", () => {
             expect(origin[1]).toBeLessThan(1.05);
         },
     );
+
+    it("rifle: level across the waist in every state, top up", () => {
+        for (const state of HOLD_STATES) {
+            const h = hold("rifle", state);
+            expect(h.instrument.bellAxis).toEqual([1, 0, 0]);
+            expect(h.instrument.capsAxis).toEqual([0, 1, 0]);
+            // both hands on it at the same height, below the chest
+            expect(h.left.wrist[1]).toBeCloseTo(h.right.wrist[1], 6);
+            expect(h.right.wrist[1]).toBeLessThan(1.15);
+            expect(h.left.wrist[0]).toBeGreaterThan(h.right.wrist[0]);
+        }
+    });
 });

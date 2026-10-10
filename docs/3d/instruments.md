@@ -171,7 +171,10 @@ something to reflect, so the scene gains an environment map generated from
 the sky gradient over a bright ground, applied scene-wide (the fidelity
 brief's "sky-baked environment lighting"). One extra draw call per brass
 group. The part ids below remain the mesh's own attribute for the material
-to color by.
+to color by. Parts that aren't metal (the rifle's painted stock, silks,
+rubber and plastic, drum heads: `MATTE_PARTS` in `instrumentGeometry.ts`)
+draw non-metallic at roughness 0.65, because a fully metallic white stock
+shows only reflections and reads as chrome (owner, 2026-10-09).
 
 **Parts and finish.** The uniform shader paints parts by id; it knows ids 0
 to 15 today. Instruments take new ids from 16 upward: 16 brass finish (gold
@@ -293,10 +296,10 @@ points and where the elbows go.
   audience it flies to the camera's left). Carry and trail: the pole
   vertical at the right side, left arm down. Which side a guard presents
   the silk to is unconfirmed; flipping it is one sign in `guard.ts`.
-- **rifle.** Up (port arms): diagonal across the chest, muzzle up to the
-  performer's left, right hand at the wrist of the stock by the right hip,
-  left hand on the fore-end by the left shoulder. Carry and trail (right
-  shoulder arms): vertical at the right shoulder, left arm down.
+- **rifle.** Always level, in every state (owner, 2026-10-09): across the
+  front of the body at the waist, top up, the butt out past the right hip
+  and the muzzle to the performer's left. Right hand at the wrist of the
+  stock, left hand on the fore-end.
 - **sabre.** Up (present): the blade vertical in front of the right
   shoulder. Carry and trail: at the right hip, blade up along the
   shoulder, left arm down.
