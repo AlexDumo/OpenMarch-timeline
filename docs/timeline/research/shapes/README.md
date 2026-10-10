@@ -110,6 +110,16 @@ pop-up.
 8. **Slides deck:** not needed; the brief above is enough.
 9. **Clean slate:** existing shape code (legacy page shapes, the timeline shape editor and overlay, `ShapeSelector`, the line tool) can be thrown out. This is a complete redesign, built from scratch.
 
+## Owner decisions (round 2, 2026-10-10)
+
+10. **Shape shortcuts.** There won't be a global key for every shape (A is already the left nudge).
+    If per-kind keys come, they work only while the shape picker is open, for example A for
+    Arc inside the picker. That needs context in the keyboard shortcut system, like VS Code's
+    `when` clauses that depend on which part of the app has focus. Deferred.
+11. **Interval modes.** Both camps should be served: an interval that is locked, where the shape
+    adjusts to keep it, and spacing that flexes as the shape is edited. Research is in
+    [05-interval-modes.md](05-interval-modes.md).
+
 ## Suggested build order (after decisions)
 
 1. Contract, `pathSampler` and `lattice` helpers, and line and arc kinds, with pure unit tests.
