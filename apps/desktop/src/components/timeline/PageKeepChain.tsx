@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useTranslate } from "@tolgee/react";
+import tolgee from "@/global/singletons/Tolgee";
 import {
     LinkSimpleHorizontalBreakIcon,
     LinkSimpleHorizontalIcon,
@@ -211,7 +212,11 @@ export function PageKeepChainButton({
                 data-testid="page-keep-chain"
                 data-chain={chain.kind}
                 {...timelineRangeTargetProps(range, undefined, pageId)}
-                aria-label={`Page ${pageLabel}: ${chain.label}. ${chain.hint}`}
+                aria-label={tolgee.t(
+                    "timeline.keep.chain.ariaLabel",
+                    "Page {page}: {label}. {hint}",
+                    { page: pageLabel, label: chain.label, hint: chain.hint },
+                )}
                 aria-keyshortcuts={chain.withK ? KEEP_SHORTCUT : undefined}
                 className={`${BASE} ${KIND_CLASS[chain.kind]}`}
                 style={{ left, width: CHAIN_SIZE, height: CHAIN_SIZE }}

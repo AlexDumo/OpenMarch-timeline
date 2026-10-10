@@ -9,6 +9,7 @@ import {
     TrashIcon,
     UserPlusIcon,
 } from "@phosphor-icons/react";
+import tolgee from "@/global/singletons/Tolgee";
 import type { TimelineBeatRange } from "./TimelineViewModel";
 
 /**
@@ -334,7 +335,10 @@ export function useTimelineRangeMenu({
                                 className={ITEM_CLASS}
                             >
                                 <LinkSimpleHorizontalBreakIcon size={14} />
-                                Keep selected marchers here
+                                {tolgee.t(
+                                    "timeline.rangeMenu.keepHere",
+                                    "Keep selected marchers here",
+                                )}
                                 <MenuShortcut keys={keepState.keepShortcut} />
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
@@ -349,7 +353,10 @@ export function useTimelineRangeMenu({
                                 className={ITEM_CLASS}
                             >
                                 <LinkSimpleHorizontalIcon size={14} />
-                                Let selected marchers follow again
+                                {tolgee.t(
+                                    "timeline.rangeMenu.followAgain",
+                                    "Let selected marchers follow again",
+                                )}
                                 <MenuShortcut keys={keepState.followShortcut} />
                             </DropdownMenu.Item>
                             <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
@@ -379,7 +386,10 @@ export function useTimelineRangeMenu({
                                 className={`${ITEM_CLASS} text-red`}
                             >
                                 <TrashIcon size={14} />
-                                Delete page and its moves
+                                {tolgee.t(
+                                    "timeline.rangeMenu.deleteWithMoves",
+                                    "Delete page and its moves",
+                                )}
                             </DropdownMenu.Item>
                         )}
                     {moves && <TimelineMoveMenuItems actions={moves} />}

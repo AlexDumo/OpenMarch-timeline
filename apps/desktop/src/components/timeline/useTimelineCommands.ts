@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import tolgee from "@/global/singletons/Tolgee";
 import { useQueryClient } from "@tanstack/react-query";
 import {
     deleteTimelineAndCompare,
@@ -171,10 +172,22 @@ export function moveDeletedMessage(
     label: string,
     changedPages: readonly NamedPage[] = [],
 ): string {
-    const deleted = `Deleted ${label}`;
-    if (changedPages.length === 0) return deleted;
-    const pages = `${changedPages.length === 1 ? "Page" : "Pages"} ${pageRunsLabel(changedPages)}`;
-    return `${deleted} · ${pages} changed`;
+    if (changedPages.length === 0)
+        return tolgee.t("timeline.moveDeleted.message", "Deleted {label}", {
+            label,
+        });
+    const pages = pageRunsLabel(changedPages);
+    return changedPages.length === 1
+        ? tolgee.t(
+              "timeline.moveDeleted.withPage",
+              "Deleted {label} · Page {pages} changed",
+              { label, pages },
+          )
+        : tolgee.t(
+              "timeline.moveDeleted.withPages",
+              "Deleted {label} · Pages {pages} changed",
+              { label, pages },
+          );
 }
 
 /**

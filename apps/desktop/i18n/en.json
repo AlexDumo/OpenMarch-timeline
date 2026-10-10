@@ -1448,6 +1448,7 @@
         },
         "keep": {
             "chain": {
+                "ariaLabel": "Page {page}: {label}. {hint}",
                 "followHint": "Click to follow Page {from} again",
                 "followHintEarlier": "Click to follow earlier pages again",
                 "keep": "Keep {count} marchers on Page {page}",
@@ -1483,6 +1484,11 @@
         },
         "label": "Timeline",
         "masterVolume": "Master Volume",
+        "moveDeleted": {
+            "message": "Deleted {label}",
+            "withPage": "Deleted {label} · Page {pages} changed",
+            "withPages": "Deleted {label} · Pages {pages} changed"
+        },
         "music": {
             "add": "Add Music"
         },
@@ -1509,6 +1515,11 @@
         "pages": "Pages",
         "perspective": {
             "label": "Perspective"
+        },
+        "rangeMenu": {
+            "deleteWithMoves": "Delete page and its moves",
+            "followAgain": "Let selected marchers follow again",
+            "keepHere": "Keep selected marchers here"
         }
     },
     "titlebar": {
