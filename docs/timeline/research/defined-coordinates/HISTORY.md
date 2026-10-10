@@ -348,6 +348,20 @@ owner's request it was then **rebased** onto `timeline-try-2` `8ce94e69`:
 - Tests after the rebase: 60 files 828/828 in normal and timeline mode; 49 history files 712/712;
   `tsc` clean.
 
+### Pre-merge review (2026-10-09)
+
+After the rebase, three independent reviewers (canvas, UI, database) read PR #112 and found no
+blockers. One pass then fixed what they raised: Move them too clears the kept markers of the spots
+it moves; the keep refusal speaks in pages and counts; a run's toast closing ends its run, and an
+older edit's late check shows no toast; the keep commands update the kept markers at once (no
+"own" flicker); Enter and Space press the new chain and inspector buttons instead of Create shape
+or Play; the keep states are computed once per change, with each marcher's moves indexed; a held K
+toggles once; a kept page shows the hold bar, "Selected marchers are kept here" (lead default); the
+new menu entries, the chain's name and the Delete-move toast are translated; the selection box
+refits after a refused drop; the kept marks are never culled offscreen and stay above refreshed
+marchers; and a page not found yet logs at debug. The list, with tests, is in CHANGES.md section 8
+("Pre-merge review fixes").
+
 ## 8. Open items (2026-10-09)
 
 1. **Hold marks and chains with nothing selected:** the owner said nothing without a selection; the

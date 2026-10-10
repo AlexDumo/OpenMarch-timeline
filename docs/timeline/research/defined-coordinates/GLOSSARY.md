@@ -43,16 +43,18 @@ which build it shows.
 _TL, page 2 selected, all eight marchers selected (as of wp10). The marchers move on pages 1 and 2
 (diamonds at the bottom right of those boxes) and hold on pages 3 and 4 (bars along the bottom)._
 
-| Mark                                           | Means                                                      |
-| ---------------------------------------------- | ---------------------------------------------------------- |
-| **Diamond** (10×7 px, bottom right of the box) | Every selected marcher has its own move ending in this box |
-| **Bar** (3 px, along the bottom of the box)    | Every selected marcher holds here (no move of its own)     |
-| **Dashed bar** (same bar, 4 px on, 3 px off)   | Some selected marchers hold here, some move                |
-| Nothing                                        | Nobody selected, or no selected marcher has a state here   |
+| Mark                                           | Means                                                                   |
+| ---------------------------------------------- | ----------------------------------------------------------------------- |
+| **Diamond** (10×7 px, bottom right of the box) | Every selected marcher has its own move ending in this box              |
+| **Bar** (3 px, along the bottom of the box)    | Every selected marcher holds here (no move of its own), or is kept here |
+| **Dashed bar** (same bar, 4 px on, 3 px off)   | Some selected marchers hold here, some move                             |
+| Nothing                                        | Nobody selected, or no selected marcher has a state here                |
 
 - **When:** both modes. TL on the timeline's page boxes (B-27); PM on the page strip (B-28). Only
   while marchers are selected; every page box after home. A marcher partway through a longer move at
-  the page's flag counts as neither.
+  the page's flag counts as neither. A kept marcher (TL, keep later pages) counts as holding on
+  its kept page: it stays there, so the box shows the bar, not the diamond (pre-merge review, lead
+  default).
 - **PM caveat:** in page mode "holds" means "same position as the previous page" (within 1e-6), so a
   deliberate move back onto the same spot reads as a hold.
 - **Not shown:** with nothing selected (owner decision: calm timeline). Whether to show them for the
@@ -76,6 +78,9 @@ _TL, hover on page 3's box (as of wp10, on the stand-in tooltip; now #115's `Sho
     [Keep here from the start](#keep-here-for-marchers-that-never-moved) frame below); from
     different pages, "Selected marchers hold on this page" · "They stand where their last move left
     them";
+  - kept (TL, every selected marcher kept on the page): "Selected marchers are kept here" · "They
+    stay here when earlier pages change"; kept and following marchers together read "Selected
+    marchers hold on this page";
   - mixed: "Some selected marchers hold from Page 2" (or "…from the start", "…on this page") · "Some
     have their own move here".
 - Screen readers get the same text through `aria-describedby`.

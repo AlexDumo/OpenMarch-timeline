@@ -19,6 +19,9 @@ where the marchers hold, the words name the marchers, the menu and tooltips show
 chains differ at a glance, and never-moved marchers can be kept ahead of any move; B-44 is unchanged.
 wp20 (branch `dc/wp20-kept-on-field`) adds B-45: the kept marchers are marked on the field with
 the same broken chain, whatever is selected (owner, mock-up D, 2026-10-09).
+**Pre-merge review (2026-10-09):** three independent reviews of PR #112 (canvas, UI, database)
+found no blockers; their fixes are listed in [Pre-merge review fixes](#pre-merge-review-fixes)
+(section 8) and noted under the B-entries they touch.
 
 How to use this file:
 
@@ -442,6 +445,7 @@ _TL, before the rebase onto #115._
   as runs", "deleting a move names the pages that changed: later pages that held from it fall back…".
 - **Real-app:** `dc4-tl-delete.mjs` (5); screenshot `dc-summary3/5-tl-delete-move-toast.png`.
 - **V-row:** V-183.
+- **Pre-merge review (U8):** the toast text is translated (`timeline.moveDeleted.message`, `.withPage`, `.withPages`; same English).
 
 #### B-13 Tag appearances move to the next page on any page delete
 
@@ -729,6 +733,7 @@ _TL, as of wp11._
 - **V-row:** V-181, V-184.
 - **Limits:** when a window both passes a flag and splits a group, the user gets Keep as a stop but
   no Move them too for that edit.
+- **Pre-merge review (D1):** `shiftSlotDestinations` clears the kept marker of every slot it moves, in the same edit, as the other destination writes do (`timelineMoveThemToo.test.ts` › "shifting a kept spot clears its kept marker…").
 
 ### Toasts
 
@@ -836,6 +841,7 @@ rounded-6 px-8 py-4 text-body text-accent hover:underline` + focus ring, beside 
 - **V-row:** V-184.
 - **Limits:** the run is module state (one per app window); a nudge on a different selection, even
   overlapping, starts over (by design).
+- **Pre-merge review (U1, U5):** a run's `forget` matches by toast id, so the toast closing ends a continued run and the next nudge shows a new toast (`timelineKeepCommands.test.ts` › "after a run's toast closes, the next nudge shows a new toast"); an older edit whose check lands after a newer one's is `stale` and shows nothing (`moveThemToo.test.ts` run test; `timelineMoveThemToo.test.ts` › "an older edit's check finishing after a newer one's shows no toast").
 
 #### B-37 Each surprise toast gets a fresh id; the previous one closes
 
@@ -881,6 +887,7 @@ _TL, all eight selected, as of wp10._
 - **V-row:** V-146.
 - **Limits:** first-time users didn't notice them unprompted (09); "show for the whole band with no
   selection" is an open owner question.
+- **Pre-merge review (U7, lead default):** a page where the selection's move is a kept spot shows the hold bar, not the moves diamond (`timelineMarcherPageStates` takes the kept markers; `classifyPage` returns `{ kind: "holds", kept: true }` when every selected marcher is kept; kept with others names no page).
 
 #### B-28 Hold marks on page mode's page strip
 
@@ -929,6 +936,7 @@ _As of wp10, on the stand-in tooltip; now #115's ShortcutTooltip._
 - **V-row:** V-182.
 - **Limits:** built on a stand-in (`HintTooltip`) before #115 landed; since the rebase onto it, the
   marks use #115's shared `ShortcutTooltip` (section 8).
+- **Pre-merge review (U7):** kept pages read "Selected marchers are kept here" (`timeline.holdMarks.kept`) · "They stay here when earlier pages change" (`keptHint`).
 
 #### B-30 Inspector line: "Hold from Page 2 →" / "Moves on this page"
 
@@ -997,6 +1005,7 @@ _As of wp10. "Hold from Page 1 →" is visible in the B-10 frame._
 - **Tests:** `activeSelectionFit.test.ts` (3).
 - **Real-app:** `dc-page.mjs` check "(d) after Only Page 2: selection box contains every selected
   dot".
+- **Pre-merge review (C1):** a refused or snapped-back timeline drop refreshes the marchers from `object:modified`, while Fabric still holds the transform; the fit now runs again right after the transform ends (a microtask, or the next mouse up for a drag still going) (`activeSelectionFit.test.ts` › "refits after a refused or snapped-back drop…", "refits after a drag still going…").
 
 #### B-34 Ctrl+A and Ctrl+S no longer nudge (Ctrl/Cmd + W/A/S/D)
 
@@ -1051,6 +1060,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
 - **Tests:** `timelineKeepHere.test.ts` (owner flow, skips, edits of a kept spot, page edits, history
   round trips; wp19: keep a never-moved marcher, and its history round trip), `timelineKept.test.ts`, `0018_clean_sentinels.test.ts`.
 - **V-row:** V-185 … V-189 (the UI on top). ADR 0001 amendment 2026-10-09.
+- **Pre-merge review (D2, U2):** the not-a-page refusal reads "Keep works on a whole page, not Page 3, counts 1–4"; `KeepResult` gains `markers: { added, removed }` (assignment ids).
 
 #### B-39 Keep states for the selection (renderer)
 
@@ -1069,6 +1079,7 @@ only; page mode keeps its runtime comparison and its own Only Page N (B-16).
   `useKeepToggle`, `useMarcherNameOf`); `timeline/timelineKeepCommands.ts` (`keepOnPage`,
   `followAgainOn`, `toggleKeepOnPage`: refusals are toasts).
 - **Tests:** `timelineKeepLater.test.ts` (23).
+- **Pre-merge review (U2, U4):** the keep commands update `useKeptAssignmentsStore` as they return (`applyKeptChange`), so states never read "own" before the re-read; `pageKeepStates` indexes each marcher's moves once (binary search), and `sharedPageKeepStates` computes it once per resolver version, kept markers, selection and pages for the panel, the inspector and K (`sharedPageKeepStates.test.ts`; `timelineKeepLater.test.ts` › "pageKeepStates at scale").
 
 #### B-40 Chains on the page boxes
 
@@ -1118,6 +1129,7 @@ _Mixed, as of wp19._
   wp19: `~/ux-study/wp19/a` (linked outline vs kept chip, step 14 crop), `~/ux-study/wp19/b`
   (mixed chip and named tooltip, step 13 crop).
 - **V-row:** V-185.
+- **Pre-merge review (U3, U8):** Enter and Space press the chain (`data-timeline-own-keys="with-space"`), not Create shape or Play; its accessible name is translated (`timeline.keep.chain.ariaLabel`).
 
 #### B-41 Inspector: Keep here, Follow again, and the pages that follow
 
@@ -1156,6 +1168,7 @@ _A never-moved marcher on page 3, as of wp19. Kept and following lines are in th
 - **Real-app:** `~/ux-study/wp19/d` step 22 (link tooltip), `~/ux-study/wp19/c` step 6 (Keep here
   for a never-moved marcher).
 - **V-row:** V-186.
+- **Pre-merge review (U3):** Enter and Space press Keep here, Follow again and the hold link (`OWN_KEYS_WITH_SPACE`).
 
 #### B-42 Page box menu: Keep selected marchers here / Let selected marchers follow again
 
@@ -1176,6 +1189,7 @@ _As of wp19, with a mixed selection._
   `timelineKeepCommands.test.ts` › "the menu keeps the selected marchers that follow, and lets them
   follow again".
 - **V-row:** V-187.
+- **Pre-merge review (U8):** the entries (and Delete page and its moves) are translated: `timeline.rangeMenu.keepHere`, `.followAgain`, `.deleteWithMoves`.
 
 #### B-43 K: keep where the marchers hold, or on the next page
 
@@ -1202,6 +1216,7 @@ _As of wp19, with a mixed selection._
   walks back there).
 - **V-row:** V-188. #115's `?` shortcuts list shows it under Timeline, with the action's
   description as its label (`transportShortcuts.test.ts`).
+- **Pre-merge review (U6):** a held K (key repeat) toggles once. The `?` list has no mode filter, so K stays listed in page mode (where it does nothing).
 
 #### B-44 Timeline Only Page N after an edit
 
@@ -1235,6 +1250,7 @@ _As of wp19._
 - **Real-app:** `~/ux-study/wp16/run` steps 30–35.
 - **V-row:** V-189.
 - **Limits:** windows that don't end on a flag, isolated moves and home edits never offer it.
+- **Pre-merge review (U1, U2, U5):** see B-36 and B-39; Only Page N's keep updates the kept markers at once too.
 
 #### B-45 Kept marchers on the field
 
@@ -1292,6 +1308,8 @@ _wp20, current build. Mock-ups D (chosen) and E (opacity, rejected) are in GLOSS
   below about 100%); tooltips use the light accent on a white square in dark field themes too.
 
 ---
+
+- **Pre-merge review (C2):** the layer is never culled offscreen (`isOnScreen()` is always true) and `refreshMarchers` raises it back above the marchers.
 
 ## 3. File map
 
@@ -1738,6 +1756,32 @@ This list should drive the next testing pass.
   UI-17 to transport keys. VALIDATION rows are V-140..V-149 and V-181..V-191
   (V-150..V-160 until the 2026-10-09 rebase onto #115, which took V-150..V-180; commit messages
   from before it use the old numbers).
+
+### Pre-merge review fixes
+
+Three independent reviews (canvas, UI, database) of PR #112 on 2026-10-09; no blockers. Fixed:
+
+| Id  | Fix                                                                                                   | B-entry          |
+| --- | ----------------------------------------------------------------------------------------------------- | ---------------- |
+| D1  | Move them too (`shiftSlotDestinations`) clears the kept markers of the slots it moves                 | B-23             |
+| D2  | The keep refusal names pages and counts, not beats                                                    | B-38             |
+| D3  | The carry-forward timing test logs only with `OM_REPORT_TIMING=1`                                     | —                |
+| U1  | A run's toast closing ends the run (forget by toast id); the next nudge shows a toast                 | B-36, B-44       |
+| U2  | Keep / Follow again update the renderer's kept markers as they return: no "own" flicker               | B-39, B-44       |
+| U3  | Enter and Space press the chain and the inspector's Keep here, Follow again and hold link             | B-40, B-41       |
+| U4  | Keep states computed once per change, shared, with each marcher's moves indexed                       | B-39             |
+| U5  | An older edit's late check (`stale`) shows no toast                                                   | B-36             |
+| U6  | Held K (key repeat) toggles once; K stays in the `?` list in page mode (the list has no mode filter)  | B-43             |
+| U7  | A kept page shows the hold bar, "Selected marchers are kept here" (lead default)                      | B-27, B-29       |
+| U8  | Keep menu entries, Delete page and its moves, the chain's name and the Delete-move toast translated   | B-12, B-40, B-42 |
+| C1  | The selection box refits after a refused or snapped-back drop                                         | B-33             |
+| C2  | Kept marks never culled offscreen; raised above marchers after `refreshMarchers`                      | B-45             |
+| C3  | "Page not found yet" logs at debug; `SelectedPageContext.test.tsx` restores its mocks after each test | —                |
+
+Left as they are: `timelineRangeWords` fragments ("Page 2, counts 1–4") are English, shared by the
+write path's refusals and the renderer's toasts; translating them needs a translate function in
+`db-functions`, a separate change. Not addressed (not in the fix list): the reviewers' notes on
+`pagesText`, the page box memo, and the test-only quadratic fallback.
 
 ### Doc vs code discrepancies
 
