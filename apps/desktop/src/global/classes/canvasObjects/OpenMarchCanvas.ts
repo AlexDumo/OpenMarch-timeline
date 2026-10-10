@@ -1350,6 +1350,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             );
         });
         this.bringObjectsToFront(canvasMarchers);
+        // The kept marks and shape handles stay above the marchers just raised
+        this.bringAllControlPointsTooFront();
         this.fitActiveSelectionToMarchers();
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();

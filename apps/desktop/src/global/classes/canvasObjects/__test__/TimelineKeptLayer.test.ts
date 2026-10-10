@@ -1,3 +1,4 @@
+import { fabric } from "fabric";
 import { describe, expect, it, vi } from "vitest";
 import OpenMarchCanvas from "../OpenMarchCanvas";
 import CanvasMarcher, { DEFAULT_DOT_RADIUS } from "../CanvasMarcher";
@@ -103,6 +104,17 @@ describe("OpenMarchCanvas.renderTimelineKeptMarks", () => {
         canvas.sendCanvasMarchersToFront();
         const objects = canvas.getObjects();
         expect(objects[objects.length - 1]).toBe(canvas.timelineKeptLayer);
+    });
+
+    it("stays above the marchers after refreshMarchers, and is never culled offscreen (pre-merge review C2)", () => {
+        const { canvas } = setup();
+        canvas.renderTimelineKeptMarks([{ marcherId: 2, text: "b" }]);
+        canvas.refreshMarchers();
+        const objects = canvas.getObjects();
+        expect(objects[objects.length - 1]).toBe(canvas.timelineKeptLayer);
+        // Panned far from the layer's own box, its marks still draw
+        canvas.absolutePan(new fabric.Point(100000, 100000));
+        expect(canvas.timelineKeptLayer!.isOnScreen()).toBe(true);
     });
 
     it("marks only the kept marchers' dots, where they are now", () => {

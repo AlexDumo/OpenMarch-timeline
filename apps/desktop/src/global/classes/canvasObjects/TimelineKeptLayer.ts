@@ -103,6 +103,15 @@ export default class TimelineKeptLayer extends fabric.Object {
         this.marks = marks;
     }
 
+    /**
+     * Always drawn: the layer covers the field from (0, 0) at its size when made, but marks sit
+     * beside dots anywhere, so Fabric's offscreen culling by the layer's own box would drop them
+     * when the field is panned or resized (pre-merge review).
+     */
+    override isOnScreen(): boolean {
+        return true;
+    }
+
     update(marks: readonly TimelineKeptMark[]): void {
         this.marks = marks;
         this.dirty = true;
