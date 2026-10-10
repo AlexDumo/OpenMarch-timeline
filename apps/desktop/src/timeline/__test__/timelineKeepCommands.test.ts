@@ -231,6 +231,23 @@ describeDbTests("keep later pages: Only Page N after an edit", (it) => {
         expect(at(ot1, pages[2]!)).toEqual([100, 200]);
     });
 
+    it("after a run's toast closes, the next nudge shows a new toast (pre-merge review U1)", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await starterShow(db);
+        await forward(db, pages, marchers);
+        await timelineResolverSettled();
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        await stepOut(db, pages, marchers, 10);
+        await toastsAfter(info);
+        await stepOut(db, pages, marchers, 20);
+        expect(await toastsAfter(info)).toHaveLength(1);
+        // The run's one toast times out
+        (info.mock.calls[0]![1] as { onAutoClose: () => void }).onAutoClose();
+        await stepOut(db, pages, marchers, 30);
+        expect(await toastsAfter(info)).toHaveLength(2);
+    });
+
     it("a kept page doesn't follow, so changing the move before it says nothing", async ({
         db,
     }) => {

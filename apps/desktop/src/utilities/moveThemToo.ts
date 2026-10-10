@@ -273,8 +273,14 @@ export function continueEditRun<T>(
         shown: (toastId) => {
             if (pending === next) next.toastId = toastId;
         },
+        // By toast: a nudge that continues the run replaces `pending` but keeps its toast, whose
+        // close handlers are still this edit's
         forget: () => {
-            if (pending === next) pending = null;
+            if (
+                pending === next ||
+                (next.toastId !== null && pending?.toastId === next.toastId)
+            )
+                pending = null;
         },
     };
 }
