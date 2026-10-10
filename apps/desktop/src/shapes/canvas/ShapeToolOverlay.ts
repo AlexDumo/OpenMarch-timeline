@@ -19,20 +19,6 @@ export type ShapeToolHandleObject = fabric.Object & {
     shapeToolHandle: HandleDef;
 };
 
-/**
- * Whether `object` is a shape tool handle. The canvas's selection listeners treat handles as
- * transparent: pressing one starts its drag and leaves the marcher selection alone.
- */
-export function isShapeToolHandle(
-    object: unknown,
-): object is ShapeToolHandleObject {
-    return (
-        typeof object === "object" &&
-        object !== null &&
-        "shapeToolHandle" in object
-    );
-}
-
 export interface HandleDragEvents {
     start(key: string): void;
     /** `to` in field units, before snapping */
@@ -47,6 +33,8 @@ export interface HandleDragEvents {
 const HANDLE_RADIUS = 6;
 const MOVE_HANDLE_SIZE = 12;
 const GHOST_RADIUS = 5;
+/** How far from a handle a press still takes it, in screen pixels */
+const HIT_RADIUS_PX = 10;
 const offset = FieldProperties.GRID_STROKE_WIDTH / 2;
 
 const toCanvas = (p: XY) => ({ x: p.x + offset, y: p.y + offset });
@@ -66,11 +54,114 @@ export default class ShapeToolOverlay {
     private handles: ShapeToolHandleObject[] = [];
     private handleRoles: string = "";
 
+    /** The handle being dragged */
+    private dragKey: string | null = null;
+
     constructor(
         private readonly canvas: fabric.Canvas,
         private colors: ShapeToolOverlayColors,
         private readonly events: HandleDragEvents,
-    ) {}
+    ) {
+        // Capture on the wrapper runs before fabric's own listeners on the canvas element
+        const wrapper = this.wrapper();
+        wrapper?.addEventListener("pointerdown", this.onPointerDown, true);
+        wrapper?.addEventListener("mousedown", this.swallowIfDragging, true);
+        canvas.on("mouse:move", this.onHover);
+    }
+
+    /** Removes everything drawn and every listener. */
+    dispose(): void {
+        this.endDrag();
+        this.clear();
+        const wrapper = this.wrapper();
+        wrapper?.removeEventListener("pointerdown", this.onPointerDown, true);
+        wrapper?.removeEventListener("mousedown", this.swallowIfDragging, true);
+        this.canvas.off("mouse:move", this.onHover as never);
+    }
+
+    private wrapper(): HTMLElement | null {
+        return (
+            (this.canvas as unknown as { wrapperEl?: HTMLElement }).wrapperEl ??
+            null
+        );
+    }
+
+    /** The handle within reach of the pointer, move handles first (they win where handles overlap) */
+    private handleAt(e: MouseEvent): ShapeToolHandleObject | null {
+        const zoom = this.canvas.getZoom() || 1;
+        const reach = HIT_RADIUS_PX / zoom;
+        const p = this.canvas.getPointer(e);
+        let best: ShapeToolHandleObject | null = null;
+        let bestD = Infinity;
+        for (const handle of this.handles) {
+            const d = Math.hypot(
+                (handle.left ?? 0) - p.x,
+                (handle.top ?? 0) - p.y,
+            );
+            const moveBonus = handle.shapeToolHandle.role === "move" ? 0.5 : 1;
+            if (d <= reach && d * moveBonus < bestD) {
+                best = handle;
+                bestD = d * moveBonus;
+            }
+        }
+        return best;
+    }
+
+    private fieldPoint(e: MouseEvent): XY {
+        const p = this.canvas.getPointer(e);
+        return { x: p.x - offset, y: p.y - offset };
+    }
+
+    private readonly onPointerDown = (e: PointerEvent) => {
+        if (e.button !== 0 || e.altKey) return;
+        const handle = this.handleAt(e);
+        if (!handle) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.dragKey = handle.shapeToolHandle.key;
+        this.events.start(this.dragKey);
+        window.addEventListener("pointermove", this.onPointerMove, true);
+        window.addEventListener("pointerup", this.onPointerUp, true);
+    };
+
+    /** The mousedown that follows a handle's pointerdown mustn't reach fabric either */
+    private readonly swallowIfDragging = (e: MouseEvent) => {
+        if (this.dragKey === null) return;
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    private readonly onPointerMove = (e: PointerEvent) => {
+        if (this.dragKey === null) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.events.move(this.dragKey, this.fieldPoint(e), {
+            shift: e.shiftKey,
+            alt: e.altKey,
+        });
+    };
+
+    private readonly onPointerUp = (e: PointerEvent) => {
+        if (this.dragKey === null) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.endDrag();
+    };
+
+    private endDrag(): void {
+        window.removeEventListener("pointermove", this.onPointerMove, true);
+        window.removeEventListener("pointerup", this.onPointerUp, true);
+        if (this.dragKey === null) return;
+        this.dragKey = null;
+        this.events.end();
+    }
+
+    private readonly onHover = (event: fabric.IEvent<MouseEvent>) => {
+        if (this.handles.length === 0 || !event.e) return;
+        const handle = this.dragKey === null ? this.handleAt(event.e) : null;
+        if (handle)
+            this.canvas.setCursor(cursorFor(handle.shapeToolHandle.role));
+    };
 
     setColors(colors: ShapeToolOverlayColors): void {
         this.colors = colors;
@@ -102,9 +193,6 @@ export default class ShapeToolOverlay {
     }
 
     clear(): void {
-        const active = this.canvas.getActiveObject();
-        if (active && isShapeToolHandle(active))
-            this.canvas.discardActiveObject();
         for (const o of [
             ...this.outlines,
             ...this.travel,
@@ -231,10 +319,12 @@ export default class ShapeToolOverlay {
             fill: this.colors.handleFill,
             stroke: this.colors.shape,
             strokeWidth: 3,
+            // Presses are taken before fabric sees them (`onPointerDown`), so a handle never
+            // becomes the active object and the marcher selection is left alone
+            selectable: false,
+            evented: false,
             hasControls: false,
             hasBorders: false,
-            hoverCursor: cursorFor(def.role),
-            moveCursor: cursorFor(def.role),
         } as const;
         const object = (
             def.role === "move"
@@ -253,21 +343,6 @@ export default class ShapeToolOverlay {
                   : new fabric.Circle({ ...common, radius: HANDLE_RADIUS })
         ) as ShapeToolHandleObject;
         object.shapeToolHandle = def;
-        object.on("mousedown", () =>
-            this.events.start(object.shapeToolHandle.key),
-        );
-        object.on("moving", (options) => {
-            const e = (options as { e?: MouseEvent }).e;
-            this.events.move(
-                object.shapeToolHandle.key,
-                {
-                    x: (object.left ?? 0) - offset,
-                    y: (object.top ?? 0) - offset,
-                },
-                { shift: e?.shiftKey ?? false, alt: e?.altKey ?? false },
-            );
-        });
-        object.on("mouseup", () => this.events.end());
         return object;
     }
 }

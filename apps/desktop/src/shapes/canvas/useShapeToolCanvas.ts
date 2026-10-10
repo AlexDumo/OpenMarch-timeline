@@ -52,7 +52,7 @@ export function useShapeToolCanvas({
         overlayRef.current = overlay;
         canvas.shapeToolOverlay = overlay;
         return () => {
-            overlay.clear();
+            overlay.dispose();
             if (canvas.shapeToolOverlay === overlay)
                 canvas.shapeToolOverlay = null;
             overlayRef.current = null;
