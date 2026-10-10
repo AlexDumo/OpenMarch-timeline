@@ -1,5 +1,5 @@
 import { SquaresFourIcon } from "@phosphor-icons/react";
-import { principalExtremes } from "../geometry/fit";
+import { principalExtremes, typicalSpacing } from "../geometry/fit";
 import {
     add,
     centroid,
@@ -117,26 +117,6 @@ const snapRotation = (angle: number, stepRad: number) => {
 
 const ROTATE_OFFSET = Math.PI / 2;
 
-/**
- * The marchers' usual distance to their nearest neighbor, rounded to the quarter step: the
- * interval a block fitted to them starts with. Two steps for one marcher.
- */
-function typicalSpacing(points: readonly XY[], ctx: ShapeContext): number {
-    if (points.length < 2) return 2 * ctx.stepPx;
-    const nearest = points
-        .map((p, i) =>
-            Math.min(
-                ...points.map((q, j) =>
-                    i === j ? Infinity : Math.hypot(p.x - q.x, p.y - q.y),
-                ),
-            ),
-        )
-        .sort((a, b) => a - b);
-    const median = nearest[Math.floor(nearest.length / 2)]!;
-    const quarters = Math.max(1, Math.round((median / ctx.stepPx) * 4));
-    return (quarters / 4) * ctx.stepPx;
-}
-
 const trim = (v: number) => String(Math.round(v * 100) / 100);
 
 export const blockKind: ShapeKind<BlockParams> = {
@@ -209,7 +189,7 @@ export const blockKind: ShapeKind<BlockParams> = {
             );
             if (straight) files = n;
         }
-        const spacing = typicalSpacing(current, ctx);
+        const spacing = typicalSpacing(current, ctx.stepPx);
         return {
             center: n === 0 ? xy(0, 0) : centroid(current),
             rotation,

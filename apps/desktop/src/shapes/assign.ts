@@ -17,7 +17,14 @@ export type OrderMode =
 
 export interface AssignMarcher {
     readonly id: number;
+    /** Where the marcher is drawn now, at the moment being edited: what a shape fits through */
     readonly at: XY;
+    /**
+     * Where the marcher starts the move being edited (its position at the start flag), when that
+     * differs from `at`. Who goes where is decided from here, so the move reads cleanly from where
+     * marchers really come from, not from the spots the edit replaces.
+     */
+    readonly from?: XY;
     /** Sort position by drill number (drill prefix, then number) */
     readonly drillRank: number;
 }
@@ -60,7 +67,10 @@ export function assignSlots<P>({
 
     if (mode === "nearest" && n <= NEAREST_LIMIT) {
         const cost = marchers.map((m) =>
-            slots.map((s) => (m.at.x - s.x) ** 2 + (m.at.y - s.y) ** 2),
+            slots.map((s) => {
+                const p = m.from ?? m.at;
+                return (p.x - s.x) ** 2 + (p.y - s.y) ** 2;
+            }),
         );
         // assignment[slot + 1] = marcher + 1
         const assignment = hungarianAlgorithm(cost, n);
@@ -88,7 +98,7 @@ export function assignSlots<P>({
             : marchers
                   .map((m, index) => ({
                       index,
-                      key: kind.orderKey(params, m.at, ctx, n),
+                      key: kind.orderKey(params, m.from ?? m.at, ctx, n),
                       rank: m.drillRank,
                   }))
                   .sort((a, b) => compareKeys(a.key, b.key) || a.rank - b.rank)

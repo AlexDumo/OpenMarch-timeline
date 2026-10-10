@@ -76,3 +76,48 @@ export function fitCircle(
     if (!Number.isFinite(r)) return undefined;
     return { center: xy(c.x + uc, c.y + vc), r };
 }
+
+/**
+ * The marchers' usual distance to their nearest neighbor, rounded to the quarter step: the
+ * interval a shape fitted to them starts with when it can't keep their footprint. Two steps for
+ * one marcher.
+ */
+export function typicalSpacing(points: readonly XY[], stepPx: number): number {
+    if (points.length < 2) return 2 * stepPx;
+    const nearest = points
+        .map((p, i) =>
+            Math.min(
+                ...points.map((q, j) =>
+                    i === j ? Infinity : Math.hypot(p.x - q.x, p.y - q.y),
+                ),
+            ),
+        )
+        .sort((a, b) => a - b);
+    const median = nearest[Math.floor(nearest.length / 2)]!;
+    const quarters = Math.max(1, Math.round((median / stepPx) * 4));
+    return (quarters / 4) * stepPx;
+}
+
+/**
+ * How line-like the points are: 0 for points on a line, 1 for points spread evenly every way
+ * (the spread across the principal axis over the spread along it).
+ */
+export function flatness(points: readonly XY[]): number {
+    if (points.length < 2) return 0;
+    const c = centroid(points);
+    let sxx = 0;
+    let sxy = 0;
+    let syy = 0;
+    for (const p of points) {
+        const dx = p.x - c.x;
+        const dy = p.y - c.y;
+        sxx += dx * dx;
+        sxy += dx * dy;
+        syy += dy * dy;
+    }
+    const mean = (sxx + syy) / 2;
+    const spread = Math.sqrt(((sxx - syy) / 2) ** 2 + sxy * sxy);
+    const major = mean + spread;
+    const minor = mean - spread;
+    return major <= 0 ? 0 : Math.sqrt(Math.max(minor, 0) / major);
+}

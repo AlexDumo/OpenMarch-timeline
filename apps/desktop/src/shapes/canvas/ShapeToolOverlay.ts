@@ -55,7 +55,7 @@ export interface HandleDragEvents {
     doubleClick(at: XY, key?: string): void;
 }
 
-const HANDLE_RADIUS = 7;
+const HANDLE_RADIUS = 10;
 const MOVE_HANDLE_SIZE = 13;
 const GHOST_RADIUS = 4;
 /** How far from a handle a press still takes it, in screen pixels */
@@ -76,6 +76,7 @@ export default class ShapeToolOverlay {
     private outlines: fabric.Polyline[] = [];
     /** Result preview: drill numbers over the new spots, faint rings where marchers come from */
     private labels: fabric.Text[] = [];
+    private originLabels: fabric.Text[] = [];
     private origins: fabric.Circle[] = [];
     /** While a lock holds a dragged handle back: a line to the cursor and a tag saying why */
     private holdLine: fabric.Line | null = null;
@@ -360,6 +361,7 @@ export default class ShapeToolOverlay {
             ...this.ghosts,
             ...this.labels,
             ...this.origins,
+            ...this.originLabels,
             ...this.handles,
         ]) {
             this.canvas.remove(o);
@@ -370,6 +372,7 @@ export default class ShapeToolOverlay {
         this.ghosts = [];
         this.labels = [];
         this.origins = [];
+        this.originLabels = [];
         this.handles = [];
         this.handleRoles = "";
         this.takesPoints = false;
@@ -429,6 +432,7 @@ export default class ShapeToolOverlay {
         trim(this.ghosts, n);
         trim(this.labels, result ? n : 0);
         trim(this.origins, result ? n : 0);
+        trim(this.originLabels, result ? n : 0);
         // `flagged` holds slot indexes; map them to targets through the slots' positions
         const flaggedSpots = new Set([...flagged].map((i) => preview.slots[i]));
         preview.targets.forEach((target, i) => {
@@ -443,11 +447,12 @@ export default class ShapeToolOverlay {
                 // The new shape, drawn as the marchers themselves
                 this.placeCircle(this.ghosts, i, to, {
                     radius: look?.radius ?? GHOST_RADIUS,
-                    fill: issue
+                    fill: look?.fill ?? this.colors.shape,
+                    // A marcher with a problem (crossing paths, too close) gets a warning ring
+                    stroke: issue
                         ? this.colors.issue
-                        : (look?.fill ?? this.colors.shape),
-                    stroke: look?.stroke ?? this.colors.shape,
-                    strokeWidth: 1,
+                        : (look?.stroke ?? this.colors.shape),
+                    strokeWidth: issue ? 3 : 1,
                 });
                 this.placeLabel(
                     i,
@@ -456,6 +461,12 @@ export default class ShapeToolOverlay {
                     look?.radius ?? GHOST_RADIUS,
                 );
                 // Where they come from: faint
+                this.placeOriginLabel(
+                    i,
+                    from,
+                    look?.label ?? "",
+                    look?.radius ?? GHOST_RADIUS,
+                );
                 this.placeCircle(this.origins, i, from, {
                     radius: look?.radius ?? GHOST_RADIUS,
                     fill: "",
@@ -525,6 +536,33 @@ export default class ShapeToolOverlay {
         this.canvas.add(created);
     }
 
+    /** A small faint drill number beside a start ring, so starts can be told apart */
+    private placeOriginLabel(
+        i: number,
+        at: XY,
+        text: string,
+        radius: number,
+    ): void {
+        const props = { left: at.x + radius + 2, top: at.y, text };
+        const label = this.originLabels[i];
+        if (label) {
+            label.set(props);
+            return;
+        }
+        const created = new fabric.Text(text, {
+            ...props,
+            originX: "left",
+            originY: "center",
+            fontSize: 10,
+            fontFamily: "courier new",
+            fill: this.colors.travel,
+            objectCaching: false,
+            ...NoControls,
+        });
+        this.originLabels.push(created);
+        this.canvas.add(created);
+    }
+
     /** A drill number above a result dot, as on the marchers */
     private placeLabel(i: number, at: XY, text: string, radius: number): void {
         // Placed like the marchers' own labels
@@ -580,10 +618,12 @@ export default class ShapeToolOverlay {
             top: at.y,
             originX: "center",
             originY: "center",
-            // The start is filled, so "Lay from Start" has a visible end
-            fill: def.start ? this.colors.shape : this.colors.handleFill,
+            // Point handles are rings around the spot, so the marcher drawn there stays visible;
+            // the start's ring is thicker, so "Lay from Start" has a visible end
+            fill:
+                def.role === "point" ? "rgba(0,0,0,0)" : this.colors.handleFill,
             stroke: this.colors.shape,
-            strokeWidth: 2.5,
+            strokeWidth: def.start ? 4 : 2,
             // A dark halo keeps handles readable over grass, grid lines and marchers
             shadow: new fabric.Shadow({ color: "rgba(0,0,0,0.45)", blur: 4 }),
             // Presses are taken before fabric sees them (`onPointerDown`), so a handle never

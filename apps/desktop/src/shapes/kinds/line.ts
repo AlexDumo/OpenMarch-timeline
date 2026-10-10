@@ -1,8 +1,9 @@
 import { LineSegmentIcon } from "@phosphor-icons/react";
-import { principalExtremes } from "../geometry/fit";
+import { flatness, principalExtremes, typicalSpacing } from "../geometry/fit";
 import { makePath, type Path } from "../geometry/path";
 import {
     add,
+    centroid,
     dist,
     mid,
     scaleAbout,
@@ -19,6 +20,9 @@ import {
 } from "./pathKind";
 import { sampleAlong } from "../spacing";
 import type { ShapeKind, Spacing, XY } from "../types";
+
+/** Above this flatness (see `flatness`) the marchers aren't treated as a rough line */
+const LINE_LIKE = 0.35;
 
 export interface LineParams {
     readonly a: XY;
@@ -68,6 +72,19 @@ export const lineKind: ShapeKind<LineParams> = {
         if (!ends) {
             const c = current[0] ?? xy(0, 0);
             const half = 2 * ctx.stepPx;
+            return {
+                a: xy(c.x - half, c.y),
+                b: xy(c.x + half, c.y),
+                spacing: FIT,
+            };
+        }
+        // Marchers that aren't roughly in a line already (a circle, a block): a level line
+        // through their middle at their usual spacing, rather than their short diagonal
+        if (flatness(current) > LINE_LIKE) {
+            const c = centroid(current);
+            const half =
+                ((current.length - 1) * typicalSpacing(current, ctx.stepPx)) /
+                2;
             return {
                 a: xy(c.x - half, c.y),
                 b: xy(c.x + half, c.y),
