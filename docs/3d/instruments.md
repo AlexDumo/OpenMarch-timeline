@@ -169,7 +169,15 @@ the instrument frame with `apps/desktop/scripts/view3d-assets/export-horn.py`
 and a per-horn config (scale, grip origin, material-to-part map, a decimate
 ratio per detail), writing quantized JSON that `core/instruments/meshAsset.ts`
 turns back into pieces. The trumpet keeps the procedural trumpet's mouthpiece
-rim, (0, 0.018, −0.168), so the brass holds are unchanged. Only meshes whose
+rim, (0, 0.018, −0.168), so the brass holds are unchanged. The mellophone,
+baritone, euphonium and contra followed the same day: no licensed models
+were found, so `build-horns.py` builds them in Blender from the trumpet's
+valve block and mouthpiece, with tubing and bells to the reference photos'
+proportions (oval wrap behind the valves, leadpipe across the top into an
+inner loop, slides below, bell forward on the wrap's top line; the contra
+the same layout, its valves low by the bell). Each keeps its procedural
+predecessor's mouthpiece and left grip, so the holds are unchanged too. The
+trombones stay procedural. Only meshes whose
 license allows redistribution under AGPL, such as CC0 or CC BY with credit,
 can ship here.
 

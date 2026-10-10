@@ -61,6 +61,25 @@ describe("brass models", () => {
         }
     });
 
+    it.each([
+        ["mellophone", 0.35],
+        ["baritone", 0.36],
+        ["euphonium", 0.36],
+    ] as const)(
+        "%s keeps the procedural horn's mouthpiece rim, behind the wrap",
+        (id, grip) => {
+            const L = BRASS_DIMENSIONS[id].length;
+            for (const detail of ["high", "low"] as const) {
+                const m = brassModel(id, detail);
+                // the rim is the rearmost point
+                expect(bounds(m.pieces).min[2]).toBeCloseTo(-grip * L, 2);
+                expect(m.mouthpiece[2]).toBeCloseTo(-grip * L + 0.075, 3);
+                // the trumpet's valve block: its pearl buttons
+                expect(m.pieces.some((p) => p.part === 23)).toBe(true);
+            }
+        },
+    );
+
     it("lays the contra's loop behind the grip with the bell forward", () => {
         const m = brassModel("contra");
         const { min, max } = bounds(m.pieces);

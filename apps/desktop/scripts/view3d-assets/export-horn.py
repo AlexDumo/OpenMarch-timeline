@@ -26,7 +26,8 @@ def nrm_inst(n):
 result = {"source": cfg["source"], "lods": {}}
 for lod, ratio in cfg["lods"].items():
     parts = {}
-    for o in bpy.context.scene.objects:
+    # sorted by name, so the output depends only on the scene, not on load order
+    for o in sorted(bpy.context.scene.objects, key=lambda o: o.name):
         if o.type != "MESH": continue
         bm = bmesh.new(); bm.from_mesh(o.data); bm.transform(o.matrix_world)
         bmesh.ops.triangulate(bm, faces=bm.faces[:])

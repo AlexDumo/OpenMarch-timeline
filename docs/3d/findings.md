@@ -300,3 +300,28 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
 - Checked in the web preview from the front row: the trumpets draw the new
   mesh, bells forward at the lips, valves and silver slides visible from
   the side.
+
+### 2026-10-09 · trevor (3d/p7-instruments) · modeled mellophone, baritone, euphonium, contra
+
+- Owner: no more models to be found; build the rest to the reference photos.
+- `build-horns.py` (Blender 4.2.3) reuses the trumpet's valve block (scaled
+  1.25 mellophone, 1.45 baritone and euphonium, 1.7 contra) and mouthpiece
+  (1.1, 1.35, 1.4, 1.8), and sweeps new tubing and lathes new bells. Lengths
+  and heights are fractions of the horn's length measured off side-view
+  photos, with the procedural horns' lengths and bell diameters.
+- Sizes (length × width × height, m): mellophone 0.552 × 0.266 × 0.301,
+  baritone 0.622 × 0.256 × 0.347, euphonium 0.662 × 0.287 × 0.377, contra
+  0.974 × 0.512 × 0.562.
+- Triangles (high / low): mellophone 10,103 / 2,633; baritone 10,104 /
+  2,634; euphonium 10,105 / 2,631; contra 10,186 / 2,657. The five baked
+  meshes are 1.95 MB of JSON, about 650 KB gzipped.
+- Mouthpiece rims match the procedural horns' (−0.35 L mellophone, −0.36 L
+  baritone and euphonium, the contra's point unchanged), so no hold moved;
+  `brass.test.ts` pins them.
+- First pass faults fixed before baking, from Blender side renders: the
+  leadpipe sat inside the bell tube, the inner loop crossed the valves on a
+  diagonal, the contra's wrap kinked where it met the bell, and the wrap's
+  front bow climbed diagonally into the valves.
+- Checked in the web preview: the trumpet and mellophone sections at the lips from the
+  front row; a contra on the shoulder from the podium. A clean side-on view
+  of the baritones in their holds wasn't captured.
