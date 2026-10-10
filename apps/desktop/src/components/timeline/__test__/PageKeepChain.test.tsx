@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
 import { Timeline } from "../Timeline";
+import { isTimelineOwnKey } from "../timelineHotkeys";
 import type { TimelineSelection } from "../TimelineViewModel";
 import type { TimelineKeepHereMenu } from "../TimelineRangeMenu";
 import {
@@ -141,6 +142,14 @@ describe("the chains on the page boxes", () => {
         fireEvent.click(button!);
         expect(linked.onToggle).toHaveBeenCalledTimes(1);
         expect(onSelectionChange).not.toHaveBeenCalled();
+        // Enter and Space press it, not the app's shortcuts (pre-merge review U3)
+        for (const k of ["Enter", " "])
+            expect(
+                isTimelineOwnKey(
+                    { key: k, code: k, ctrlKey: false, metaKey: false },
+                    button!,
+                ),
+            ).toBe(true);
     });
 
     it("a kept chain is broken and filled in the accent, so it can't be read as linked", () => {

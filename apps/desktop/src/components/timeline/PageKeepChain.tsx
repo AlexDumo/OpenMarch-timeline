@@ -13,6 +13,7 @@ import {
     type PageKeepState,
 } from "@/timeline/timelineKeepLater";
 import { followAgainOn, keepOnPage } from "@/timeline/timelineKeepCommands";
+import { OWN_KEYS_WITH_SPACE } from "./timelineHotkeys";
 import { ShortcutTooltip } from "./ShortcutTooltip";
 import {
     timelineRangeTargetProps,
@@ -205,6 +206,8 @@ export function PageKeepChainButton({
             <button
                 type="button"
                 data-timeline-interactive="true"
+                // Enter and Space press it, not the app's shortcuts (pre-merge review)
+                data-timeline-own-keys={OWN_KEYS_WITH_SPACE}
                 data-testid="page-keep-chain"
                 data-chain={chain.kind}
                 {...timelineRangeTargetProps(range, undefined, pageId)}

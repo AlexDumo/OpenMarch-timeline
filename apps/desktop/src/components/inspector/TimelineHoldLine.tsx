@@ -24,6 +24,7 @@ import {
 } from "@/timeline/timelineKeepLater";
 import { followAgainOn, keepOnPage } from "@/timeline/timelineKeepCommands";
 import { KEEP_SHORTCUT } from "@/components/timeline/PageKeepChain";
+import { OWN_KEYS_WITH_SPACE } from "@/components/timeline/timelineHotkeys";
 import { useKeepToggle, usePageKeepStates } from "@/timeline/useKeepLaterPages";
 import {
     ShortcutTooltip,
@@ -104,6 +105,8 @@ function KeepButton({
                 <button
                     type="button"
                     className={LINK_CLASS}
+                    // Enter and Space press it, not the app's shortcuts (pre-merge review)
+                    data-timeline-own-keys={OWN_KEYS_WITH_SPACE}
                     data-testid={testId}
                     aria-describedby={descriptionId}
                     aria-keyshortcuts={withK ? KEEP_SHORTCUT : undefined}
@@ -375,6 +378,7 @@ function TimelineHoldLineContent({
                     <button
                         type="button"
                         className={LINK_CLASS}
+                        data-timeline-own-keys={OWN_KEYS_WITH_SPACE}
                         data-testid="timeline-hold-line"
                         // The go-to-page navigation: the playhead to the page's flag
                         onClick={() =>

@@ -15,6 +15,7 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useKeptAssignmentsStore } from "@/timeline/useKeepLaterPages";
 import { followAgainOn, keepOnPage } from "@/timeline/timelineKeepCommands";
+import { isTimelineOwnKey } from "@/components/timeline/timelineHotkeys";
 import TimelineHoldLine from "../TimelineHoldLine";
 
 /**
@@ -248,6 +249,22 @@ describe("TimelineHoldLine", () => {
             // The line still links to page 2
             fireEvent.click(line()!);
             expect(useTimelineSelectionStore.getState().playheadBeat).toBe(9);
+        });
+
+        it("Enter and Space press Keep here, Follow again and the hold link, not the app's shortcuts (pre-merge review U3)", () => {
+            const owns = (el: Element) =>
+                ["Enter", " "].every((k) =>
+                    isTimelineOwnKey(
+                        { key: k, code: k, ctrlKey: false, metaKey: false },
+                        el,
+                    ),
+                );
+            show([1, 4]);
+            expect(owns(keepHere()!)).toBe(true);
+            expect(owns(followAgain()!)).toBe(true);
+            cleanup();
+            show([1]);
+            expect(owns(line()!)).toBe(true);
         });
 
         it("on a page where they were kept: Kept on this page, with Follow again", () => {
