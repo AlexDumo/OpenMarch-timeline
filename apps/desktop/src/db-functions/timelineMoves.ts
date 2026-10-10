@@ -1237,6 +1237,23 @@ export const shiftSlotDestinations = async ({
                 }
                 // An edit that writes nothing can't be an undo step
                 if (written.length === 0) throw new NothingShifted();
+                // A moved kept spot is its marcher's own move from now on (as writeSlotMoves)
+                const a = schema.timeline_assignments;
+                const moved: number[] = [];
+                for (const shift of written) {
+                    const rows = await tx
+                        .select({ id: a.id })
+                        .from(a)
+                        .where(
+                            and(
+                                eq(a.transition_id, shift.transitionId),
+                                eq(a.slot_index, shift.slotIndex),
+                            ),
+                        )
+                        .all();
+                    moved.push(...rows.map((r) => r.id));
+                }
+                await clearKeptMarkersInTransaction(tx, moved);
                 return written;
             },
         );
