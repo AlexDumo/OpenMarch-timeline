@@ -133,6 +133,34 @@ export const curveKind: ShapeKind<CurveParams> = {
     },
 
     path: curvePath,
+    keepsPath: true,
+    insertPoint(p, at) {
+        // Between the two points whose stretch of curve passes nearest `at`
+        const path = curvePath(p);
+        const s = path.project(at);
+        const marks = p.points.map((q) => path.project(q));
+        let index = p.points.length - 1;
+        for (let i = 1; i < marks.length; i++) {
+            if (s <= marks[i]!) {
+                index = i;
+                break;
+            }
+        }
+        return {
+            ...p,
+            points: [...p.points.slice(0, index), at, ...p.points.slice(index)],
+        };
+    },
+    removePoint(p, key) {
+        const index = Number(key.slice(1));
+        if (
+            !key.startsWith("p") ||
+            !Number.isInteger(index) ||
+            p.points.length <= 2
+        )
+            return undefined;
+        return { ...p, points: p.points.filter((_, i) => i !== index) };
+    },
     scale: (p, pivot, k) => ({
         ...p,
         points: p.points.map((q) => scaleAbout(q, pivot, k)),

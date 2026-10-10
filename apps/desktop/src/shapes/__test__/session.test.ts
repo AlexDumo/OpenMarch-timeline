@@ -65,7 +65,7 @@ describe("shape sessions", () => {
         expect((dragged.params as LineParams).b).toEqual(xy(90, 0));
     });
 
-    it("carries spacing and order to another kind", () => {
+    it("carries the chosen order, not the spacing, to another kind", () => {
         let session = startSession({ kindId: "line", marchers: row, ctx });
         session = {
             ...session,
@@ -81,10 +81,9 @@ describe("shape sessions", () => {
         session = changeOrder(session, "drill", true, ctx);
         const arc = changeKind(session, "arc", ctx);
         expect(arc.kindId).toBe("arc");
+        // A new shape starts in Fit, through where the marchers stand
         expect((arc.params as { spacing: unknown }).spacing).toEqual({
-            mode: "interval",
-            runs: [{ steps: 2, count: 0 }],
-            anchor: "start",
+            mode: "fit",
         });
         expect(arc.order).toBe("drill");
         expect(arc.reverse).toBe(true);

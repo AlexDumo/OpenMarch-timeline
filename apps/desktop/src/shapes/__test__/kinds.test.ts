@@ -75,8 +75,8 @@ describe("circle kind", () => {
         const slots = circleKind.generate(p, 5, ctx);
         expect(slots).toHaveLength(5);
         slots.forEach((slot, i) => {
-            close(slot.s!, i * 2 * STEP);
             close(dist(slot, base.center), base.r);
+            if (i > 0) close(dist(slot, slots[i - 1]!), 2 * STEP, 1e-6);
         });
         expect(
             circleKind.validate!(p, slots, ctx).filter(

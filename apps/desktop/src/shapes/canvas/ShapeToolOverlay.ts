@@ -30,6 +30,11 @@ export interface HandleDragEvents {
         modifiers: { shift: boolean; alt: boolean },
     ): void;
     end(): void;
+    /**
+     * A double-click on the shape: on a handle (`key`), to remove that point; elsewhere on the
+     * shape's outline, to add one at `at`
+     */
+    doubleClick(at: XY, key?: string): void;
 }
 
 const HANDLE_RADIUS = 7;
@@ -51,6 +56,9 @@ const toCanvas = (p: XY) => ({ x: p.x + offset, y: p.y + offset });
  */
 export default class ShapeToolOverlay {
     private outlines: fabric.Polyline[] = [];
+    /** While a lock holds a dragged handle back: a line to the cursor and a tag saying why */
+    private holdLine: fabric.Line | null = null;
+    private holdTag: fabric.Text | null = null;
     /** Fainter lines for the rest of the shape */
     private guides: fabric.Polyline[] = [];
     private travel: fabric.Line[] = [];
@@ -70,6 +78,7 @@ export default class ShapeToolOverlay {
         const wrapper = this.wrapper();
         wrapper?.addEventListener("pointerdown", this.onPointerDown, true);
         wrapper?.addEventListener("mousedown", this.swallowIfDragging, true);
+        wrapper?.addEventListener("dblclick", this.onDoubleClick, true);
         canvas.on("mouse:move", this.onHover);
     }
 
@@ -80,6 +89,7 @@ export default class ShapeToolOverlay {
         const wrapper = this.wrapper();
         wrapper?.removeEventListener("pointerdown", this.onPointerDown, true);
         wrapper?.removeEventListener("mousedown", this.swallowIfDragging, true);
+        wrapper?.removeEventListener("dblclick", this.onDoubleClick, true);
         this.canvas.off("mouse:move", this.onHover as never);
     }
 
@@ -91,6 +101,52 @@ export default class ShapeToolOverlay {
     }
 
     /** The handle within reach of the pointer, move handles first (they win where handles overlap) */
+    private readonly onDoubleClick = (e: MouseEvent) => {
+        if (this.handles.length === 0) return;
+        const handle = this.handleAt(e);
+        const at = this.fieldPoint(e);
+        if (handle) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.events.doubleClick(at, handle.shapeToolHandle.key);
+            return;
+        }
+        if (this.nearOutline(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.events.doubleClick(at);
+        }
+    };
+
+    /** Whether the pointer is within reach of the shape's solid outline */
+    private nearOutline(e: MouseEvent): boolean {
+        const reach = HIT_RADIUS_PX / (this.canvas.getZoom() || 1);
+        const p = this.canvas.getPointer(e);
+        for (const line of this.outlines) {
+            const points = line.points ?? [];
+            for (let i = 1; i < points.length; i++) {
+                const a = points[i - 1]!;
+                const b = points[i]!;
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const len2 = dx * dx + dy * dy;
+                const t =
+                    len2 === 0
+                        ? 0
+                        : Math.max(
+                              0,
+                              Math.min(
+                                  1,
+                                  ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2,
+                              ),
+                          );
+                if (Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y) <= reach)
+                    return true;
+            }
+        }
+        return false;
+    }
+
     private handleAt(e: MouseEvent): ShapeToolHandleObject | null {
         const zoom = this.canvas.getZoom() || 1;
         const reach = HIT_RADIUS_PX / zoom;
@@ -174,6 +230,58 @@ export default class ShapeToolOverlay {
         this.clear();
     }
 
+    /**
+     * Shows, or with null hides, why a dragged handle isn't under the cursor: a dashed line from
+     * the handle to the cursor and a short tag such as "Interval locked".
+     */
+    showHold(hold: { from: XY; to: XY; label: string } | null): void {
+        if (!hold) {
+            if (this.holdLine) this.canvas.remove(this.holdLine);
+            if (this.holdTag) this.canvas.remove(this.holdTag);
+            this.holdLine = null;
+            this.holdTag = null;
+            this.canvas.requestRenderAll();
+            return;
+        }
+        const from = toCanvas(hold.from);
+        const to = toCanvas(hold.to);
+        const zoom = this.canvas.getZoom() || 1;
+        if (this.holdLine) {
+            this.holdLine.set({ x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+            this.holdLine.setCoords();
+        } else {
+            this.holdLine = new fabric.Line([from.x, from.y, to.x, to.y], {
+                stroke: this.colors.shape,
+                strokeWidth: 1.5,
+                strokeDashArray: [3, 3],
+                objectCaching: false,
+                ...NoControls,
+            });
+            this.canvas.add(this.holdLine);
+        }
+        const tag = {
+            left: to.x + 10 / zoom,
+            top: to.y + 10 / zoom,
+            fontSize: 12 / zoom,
+            text: hold.label,
+        };
+        if (this.holdTag) this.holdTag.set(tag);
+        else {
+            this.holdTag = new fabric.Text(hold.label, {
+                ...tag,
+                fill: this.colors.shape,
+                backgroundColor: this.colors.handleFill,
+                fontFamily: "sans-serif",
+                objectCaching: false,
+                ...NoControls,
+            });
+            this.canvas.add(this.holdTag);
+        }
+        this.holdLine.bringToFront();
+        this.holdTag.bringToFront();
+        this.canvas.requestRenderAll();
+    }
+
     show(preview: ShapePreview): void {
         this.syncLines(this.guides, preview.guide, {
             stroke: this.colors.travel,
@@ -210,6 +318,7 @@ export default class ShapeToolOverlay {
     }
 
     clear(): void {
+        this.showHold(null);
         for (const o of [
             ...this.guides,
             ...this.outlines,

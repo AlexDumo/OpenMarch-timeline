@@ -16,9 +16,11 @@ import {
     xy,
     scaleAbout,
 } from "../geometry/vec";
-import { sampleAlong } from "../spacing";
+import { gapsInSteps, sampleAlong } from "../spacing";
+import { angleOfChords, radiusForChords } from "../geometry/chords";
 import {
     followsInterval,
+    type HandleDef,
     type ShapeContext,
     type ShapeKind,
     type Spacing,
@@ -76,6 +78,64 @@ const arcPath = (p: ArcParams): Path => makePath([arcSegment(p)]);
  * The arc with radius `r` and sweep `sweep` that keeps this one's middle point, chord direction
  * and side: for typing a radius or sweep while the arc keeps a locked interval.
  */
+/** The gaps, in field units, between `n` marchers at the arc's locked interval */
+function runGaps(p: ArcParams, n: number, ctx: ShapeContext): number[] {
+    if (p.spacing.mode !== "interval") return [];
+    return gapsInSteps(p.spacing.runs, n - 1).map((g) => g * ctx.stepPx);
+}
+
+const maxHalf = (gaps: readonly number[]) => Math.max(...gaps, 0) / 2;
+
+/**
+ * Keeping a locked interval while an end is dragged: the dragged end stays under the cursor and
+ * the arc bends so the marchers still reach from end to end, like a chain of fixed links. Ends
+ * pulled apart straighten it; pushed together they bend it toward a circle. Past the run's full
+ * length the arc goes straight and the end stops on the way to the cursor. Other edits use the
+ * generic scale (undefined).
+ */
+function bendToReach(
+    p: ArcParams,
+    gaps: readonly number[],
+    _ctx: ShapeContext,
+    dragged?: HandleDef,
+): ArcParams | undefined {
+    if (!dragged || (!dragged.start && !dragged.end)) return undefined;
+    const fixed = dragged.start ? p.b : p.a;
+    const moving = dragged.start ? p.a : p.b;
+    const chord = dist(fixed, moving);
+    const total = gaps.reduce((sum, g) => sum + g, 0);
+    const build = (moved: XY, bulge: number): ArcParams =>
+        dragged.start
+            ? { ...p, a: moved, b: fixed, bulge }
+            : { ...p, a: fixed, b: moved, bulge };
+    if (total <= 1e-9) return undefined;
+    if (chord >= total - 1e-9) {
+        const toward = chord > 1e-9 ? unit(sub(moving, fixed)) : xy(1, 0);
+        return build(add(fixed, scale(toward, total)), 0);
+    }
+    // The chord across the whole run on radius r: 2r·sin(θ/2), with θ the angle the gaps turn
+    // through. It grows with r, from nothing on the circle the run closes to the straight run.
+    const chordAt = (r: number) => {
+        const theta = Math.min(angleOfChords(gaps, r), 2 * Math.PI);
+        return 2 * r * Math.sin(theta / 2);
+    };
+    let lo = radiusForChords(gaps, 2 * Math.PI - 1e-6);
+    let hi = Math.max(lo * 2, total);
+    while (chordAt(hi) < chord && hi < 1e12) hi *= 2;
+    for (let i = 0; i < 60; i++) {
+        const mid = (lo + hi) / 2;
+        if (chordAt(mid) < chord) lo = mid;
+        else hi = mid;
+    }
+    const r = (lo + hi) / 2;
+    const theta = angleOfChords(gaps, r);
+    const half = chord / 2;
+    const rise = Math.sqrt(Math.max(r * r - half * half, 0));
+    const sagitta = theta > Math.PI ? r + rise : r - rise;
+    const side = p.bulge < 0 ? -1 : 1;
+    return build(moving, side * sagitta);
+}
+
 function arcAround(p: ArcParams, r: number, sweep: number): ArcParams {
     const theta = Math.min(Math.max(sweep, 1e-3), 2 * Math.PI - 1e-3);
     const u = unit(sub(p.b, p.a));
@@ -153,11 +213,15 @@ export const arcKind: ShapeKind<ArcParams> = {
             get: (p) => arcGeometry(p)?.r ?? 0,
             // Same ends; the bulge that gives this radius, keeping the arc's side and whether it
             // is more or less than half a circle. A radius under half the chord is a half circle.
-            set(p, r) {
+            set(p, r, n, ctx) {
                 // Keeping a locked interval: same length, so the sweep follows the radius
                 if (followsInterval(p.spacing)) {
-                    const length = arcPath(p).length;
-                    return arcAround(p, r, length / Math.max(r, 1e-9));
+                    const gaps = runGaps(p, n, ctx);
+                    return arcAround(
+                        p,
+                        r,
+                        angleOfChords(gaps, Math.max(r, maxHalf(gaps))),
+                    );
                 }
                 const h = dist(p.a, p.b) / 2;
                 const radius = Math.max(r, h);
@@ -177,10 +241,10 @@ export const arcKind: ShapeKind<ArcParams> = {
             min: 1,
             get: (p) => arcGeometry(p)?.sweep ?? 0,
             // The sagitta of an arc over chord 2h sweeping θ is h·tan(θ/4)
-            set(p, sweep) {
+            set(p, sweep, n, ctx) {
                 if (followsInterval(p.spacing)) {
-                    const length = arcPath(p).length;
-                    return arcAround(p, length / Math.max(sweep, 1e-3), sweep);
+                    const gaps = runGaps(p, n, ctx);
+                    return arcAround(p, radiusForChords(gaps, sweep), sweep);
                 }
                 const h = dist(p.a, p.b) / 2;
                 const clamped = Math.min(
@@ -194,6 +258,7 @@ export const arcKind: ShapeKind<ArcParams> = {
     ],
 
     path: (p) => arcPath(p),
+    float: bendToReach,
     scale: (p, pivot, k) => ({
         ...p,
         a: scaleAbout(p.a, pivot, k),

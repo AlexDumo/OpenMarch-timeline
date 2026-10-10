@@ -3,6 +3,7 @@ import { dist, xy } from "../geometry/vec";
 import type { ArcParams } from "../kinds/arc";
 import type { BlockParams } from "../kinds/block";
 import type { LineParams } from "../kinds/line";
+import { arcSegment } from "../kinds/arc";
 import { blockKind } from "../kinds/block";
 import {
     changeMeasure,
@@ -16,6 +17,10 @@ import { shapeKind } from "../registry";
 import type { ShapeContext, Spacing } from "../types";
 
 const STEP = 10;
+const arcRadius = (p: ArcParams) => {
+    const segment = arcSegment(p);
+    return segment.type === "arc" ? segment.r : Infinity;
+};
 const ctx: ShapeContext = { stepPx: STEP, snapPoint: (p) => p };
 const close = (a: number, b: number, eps = 1e-6) =>
     expect(Math.abs(a - b)).toBeLessThan(eps);
@@ -48,6 +53,15 @@ function locked(kindId: string, n: number, spacing = keepTwo()): ShapeSession {
 
 const pathLength = (session: ShapeSession) =>
     shapeKind(session.kindId)!.path!(session.params).length;
+
+/** Every neighbor `steps` apart in a straight line */
+function expectGaps(session: ShapeSession, steps: number) {
+    const slots = previewSession(session, ctx).slots;
+    slots
+        .slice(1)
+        .forEach((slot, i) => close(dist(slot, slots[i]!), steps * STEP, 1e-6));
+    return slots;
+}
 
 describe("keeping a locked interval", () => {
     it("resizes a line to the run when the interval is typed", () => {
@@ -115,11 +129,12 @@ describe("keeping a locked interval", () => {
             ctx,
         );
         const p = session.params as { r: number; center: typeof center };
-        close(p.r, (16 * 2 * STEP) / (2 * Math.PI));
+        // 16 chords of 2 steps close the circle
+        close(p.r, (2 * STEP) / (2 * Math.sin(Math.PI / 16)), 1e-6);
         expect(p.center).toEqual(center);
+        const slots = expectGaps(session, 2);
         // Even all the way round: the gap that closes the circle is 2 steps too
-        const slots = previewSession(session, ctx).slots;
-        close(dist(slots[0]!, slots[15]!), dist(slots[0]!, slots[1]!), 1e-6);
+        close(dist(slots[0]!, slots[15]!), 2 * STEP, 1e-6);
     });
 
     it("only turns a circle's start when its rim is dragged", () => {
@@ -136,16 +151,17 @@ describe("keeping a locked interval", () => {
         close(dragged.start, Math.PI / 2);
     });
 
-    it("keeps an arc's length when its radius is typed", () => {
+    it("keeps an arc's interval when its radius is typed", () => {
         const session = locked("arc", 6);
-        const before = pathLength(session);
         const typed = changeMeasure(session, "radius", 12 * STEP, ctx);
-        close(pathLength(typed), before, 1e-6);
-        const segment = (typed.params as ArcParams).bulge;
-        expect(segment).not.toBe(0);
+        const slots = expectGaps(typed, 2);
+        const p = typed.params as ArcParams;
+        // The run reaches exactly from end to end
+        close(dist(slots.at(-1)!, p.b), 0, 1e-6);
+        close(arcRadius(p), 12 * STEP, 1e-6);
     });
 
-    it("keeps an arc's length when its bulge is dragged", () => {
+    it("keeps an arc's interval when its bulge is dragged", () => {
         const session = locked("arc", 6);
         const p = session.params as ArcParams;
         const dragged = dragHandle(
@@ -156,12 +172,65 @@ describe("keeping a locked interval", () => {
             false,
             ctx,
         );
-        close(pathLength(dragged), 10 * STEP, 1e-6);
+        const slots = expectGaps(dragged, 2);
+        close(dist(slots.at(-1)!, (dragged.params as ArcParams).b), 0, 1e-6);
     });
 
-    it("scales a curve to the run", () => {
+    it("bends a locked arc so a dragged end lands under the cursor", () => {
+        const session = locked("arc", 6);
+        const p = session.params as ArcParams;
+        // 5 gaps of 2 steps reach 10 steps straight; aim at 7 steps from the fixed end
+        const target = xy(p.a.x + 7 * STEP, p.a.y);
+        const dragged = dragHandle(session, p, "b", target, false, ctx);
+        const q = dragged.params as ArcParams;
+        expect(q.a).toEqual(p.a);
+        close(dist(q.b, target), 0, 1e-6);
+        expect(Math.abs(q.bulge)).toBeGreaterThan(0);
+        const slots = expectGaps(dragged, 2);
+        close(dist(slots.at(-1)!, target), 0, 1e-6);
+    });
+
+    it("straightens a locked arc when its end is pulled past the run", () => {
+        const session = locked("arc", 6);
+        const p = session.params as ArcParams;
+        const dragged = dragHandle(
+            session,
+            p,
+            "b",
+            xy(p.a.x + 50 * STEP, p.a.y),
+            false,
+            ctx,
+        );
+        const q = dragged.params as ArcParams;
+        expect(q.bulge).toBe(0);
+        close(dist(q.a, q.b), 10 * STEP, 1e-6);
+    });
+
+    it("keeps a curve's drawn path and lays the locked interval along it", () => {
+        const fit = startSession({ kindId: "curve", marchers: row(7), ctx });
+        const drawn = pathLength(fit);
         const session = locked("curve", 7);
-        close(pathLength(session), 12 * STEP, 1e-6);
+        close(pathLength(session), drawn, 1e-6);
+        const spacing = (session.params as { spacing: Spacing }).spacing;
+        expect(spacing.mode === "interval" && spacing.size).toBe("keep");
+        expectGaps(session, 2);
+    });
+
+    it("adds and removes curve points by double-click", () => {
+        const session = startSession({
+            kindId: "curve",
+            marchers: row(7),
+            ctx,
+        });
+        const kind = shapeKind("curve")!;
+        const p = session.params as { points: { x: number; y: number }[] };
+        const added = kind.insertPoint!(p, xy(45, 0)) as typeof p;
+        expect(added.points).toHaveLength(p.points.length + 1);
+        const removed = kind.removePoint!(added, "p1") as typeof p;
+        expect(removed.points).toHaveLength(p.points.length);
+        expect(
+            kind.removePoint!({ ...p, points: p.points.slice(0, 2) }, "p0"),
+        ).toBeUndefined();
     });
 });
 
@@ -177,17 +246,21 @@ describe("block intervals", () => {
         keepIntervals: true,
     };
 
-    it("changes the files, not the interval, when the side is dragged", () => {
+    it("changes the files one at a time, the other side staying put", () => {
+        // 4 files 2 steps apart: the left file at -3 steps. To +7 steps is 5 intervals: 6 files
         const next = blockKind.drag(
             base,
             "across",
-            xy(5 * STEP, 0),
+            xy(7 * STEP, 0),
             { shift: false },
             12,
             ctx,
         );
         expect(next.across).toBe(base.across);
         expect(next.files).toBe(6);
+        const left = (b: BlockParams) =>
+            Math.min(...blockKind.generate(b, 12, ctx).map((s) => s.x));
+        close(left(next), left(base));
         expect(
             blockKind.handles(base, 12, ctx).some((h) => h.key === "deep"),
         ).toBe(false);

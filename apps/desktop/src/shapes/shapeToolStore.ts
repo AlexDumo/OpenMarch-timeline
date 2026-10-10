@@ -6,7 +6,9 @@ import {
     changeOrder,
     changeParams,
     dragHandle,
+    insertPoint,
     reassign,
+    removePoint,
     startSession,
     translateSession,
     type ShapeSession,
@@ -34,10 +36,14 @@ interface ShapeToolState {
     setInputError(error: string | null): void;
     setOrder(order: OrderMode, reverse: boolean, ctx: ShapeContext): void;
     reassign(ctx: ShapeContext): void;
+    /** Double-click on the shape: add a defining point there (curves) */
+    insertPoint(at: XY, ctx: ShapeContext): void;
+    /** Double-click on a handle: remove that point, if the shape allows it */
+    removePoint(key: string, ctx: ShapeContext): void;
     /** Moves the whole shape by `delta` field units (the nudge keys while the tool is open) */
     nudge(delta: XY, ctx: ShapeContext): void;
     /** The handle being dragged and the params when its drag started */
-    dragging: { key: string; base: unknown } | null;
+    dragging: { key: string; base: unknown; cursor?: XY } | null;
     startDrag(key: string): void;
     drag(to: XY, shift: boolean, ctx: ShapeContext): void;
     endDrag(): void;
@@ -78,6 +84,8 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
         setOrder: (order, reverse, ctx) =>
             update((s) => changeOrder(s, order, reverse, ctx)),
         reassign: (ctx) => update((s) => reassign(s, ctx)),
+        insertPoint: (at, ctx) => update((s) => insertPoint(s, at, ctx)),
+        removePoint: (key, ctx) => update((s) => removePoint(s, key, ctx)),
         nudge(delta, ctx) {
             if (!get().dragging) update((s) => translateSession(s, delta, ctx));
         },
@@ -88,10 +96,11 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
         },
         drag(to, shift, ctx) {
             const { dragging } = get();
-            if (dragging)
-                update((s) =>
-                    dragHandle(s, dragging.base, dragging.key, to, shift, ctx),
-                );
+            if (!dragging) return;
+            set({ dragging: { ...dragging, cursor: to } });
+            update((s) =>
+                dragHandle(s, dragging.base, dragging.key, to, shift, ctx),
+            );
         },
         endDrag() {
             if (get().dragging) set({ dragging: null });

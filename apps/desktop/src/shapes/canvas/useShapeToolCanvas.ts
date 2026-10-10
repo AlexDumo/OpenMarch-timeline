@@ -2,7 +2,12 @@ import { useEffect, useRef } from "react";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { previewSession } from "../session";
+import {
+    previewSession,
+    type ShapePreview,
+    type ShapeSession,
+} from "../session";
+import type { Spacing, XY } from "../types";
 import { useShapeToolStore } from "../shapeToolStore";
 import ShapeToolOverlay, {
     type ShapeToolOverlayColors,
@@ -34,6 +39,7 @@ export function useShapeToolCanvas({
     theme?: FieldTheme;
 }): void {
     const session = useShapeToolStore((s) => s.session);
+    const dragging = useShapeToolStore((s) => s.dragging);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
 
     useEffect(() => {
@@ -48,6 +54,12 @@ export function useShapeToolCanvas({
                         .getState()
                         .drag(to, shift, shapeContextFor(canvas, !alt)),
                 end: () => useShapeToolStore.getState().endDrag(),
+                doubleClick: (at, key) => {
+                    const store = useShapeToolStore.getState();
+                    const ctx = shapeContextFor(canvas);
+                    if (key) store.removePoint(key, ctx);
+                    else store.insertPoint(at, ctx);
+                },
             },
         );
         overlayRef.current = overlay;
@@ -78,8 +90,10 @@ export function useShapeToolCanvas({
             overlay.clear();
             return;
         }
-        overlay.show(previewSession(session, shapeContextFor(canvas)));
-    }, [canvas, session, theme]);
+        const preview = previewSession(session, shapeContextFor(canvas));
+        overlay.show(preview);
+        overlay.showHold(holdFeedback(session, preview, dragging, canvas));
+    }, [canvas, session, dragging, theme]);
 }
 
 /**
@@ -129,4 +143,35 @@ function useShapeToolSelection(
     useEffect(() => {
         canvas?.setSelectionLocked(isOpen);
     }, [canvas, isOpen]);
+}
+
+/**
+ * While a handle is dragged with a lock holding it back from the cursor (a locked interval or
+ * kept block intervals), what to show: the handle, the cursor and which lock it is.
+ */
+function holdFeedback(
+    session: ShapeSession,
+    preview: ShapePreview,
+    dragging: { key: string; cursor?: XY } | null,
+    canvas: OpenMarchCanvas,
+) {
+    if (!dragging?.cursor) return null;
+    const handle = preview.handles.find((h) => h.key === dragging.key);
+    if (!handle || handle.role === "move") return null;
+    const gap = Math.hypot(
+        handle.at.x - dragging.cursor.x,
+        handle.at.y - dragging.cursor.y,
+    );
+    if (gap < canvas.fieldProperties.pixelsPerStep / 2) return null;
+    const params = session.params as {
+        spacing?: Spacing;
+        keepIntervals?: boolean;
+    };
+    const label =
+        params.spacing?.mode === "interval"
+            ? "Interval locked"
+            : params.keepIntervals
+              ? "Intervals kept"
+              : null;
+    return label ? { from: handle.at, to: dragging.cursor, label } : null;
 }

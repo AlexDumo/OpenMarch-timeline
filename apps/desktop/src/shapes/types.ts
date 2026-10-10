@@ -42,6 +42,7 @@ export interface IntervalRun {
  * the same everywhere. There are three states, which the panel shows as two locks:
  *
  * - `fit` (interval unlocked): the shape is as drawn and the marchers spread evenly over it.
+ *   Its `sizeLocked` remembers the size lock for when the interval is locked.
  * - `interval` with `size: "follow"` (interval locked, "Keep interval"): the gaps are fixed (one
  *   interval, or mixed runs like `5x3,2x4`) and the shape is resized to fit them as it is edited.
  *   `anchor` is the point that stays put when the length changes.
@@ -50,7 +51,15 @@ export interface IntervalRun {
  *   its end. Absent `size` reads as `keep`.
  */
 export type Spacing =
-    | { readonly mode: "fit" }
+    | {
+          readonly mode: "fit";
+          /**
+           * The size lock, closed by typing a size or clicking its padlock. In Fit the shape is
+           * as drawn either way; it decides what locking the interval does: with the size
+           * locked the run is laid on the shape ("on the path"), otherwise the shape follows.
+           */
+          readonly sizeLocked?: boolean;
+      }
     | {
           readonly mode: "interval";
           readonly runs: readonly IntervalRun[];
@@ -59,6 +68,38 @@ export type Spacing =
       };
 
 /** Whether the shape is resized to keep the interval (the "Keep interval" state) */
+/** Whether the size lock is closed */
+export const sizeIsLocked = (spacing: Spacing): boolean =>
+    spacing.mode === "fit"
+        ? spacing.sizeLocked === true
+        : spacing.size !== "follow";
+
+/** `spacing` with the interval locked at `runs`, laid on the shape or followed per the size lock */
+export function lockInterval(
+    spacing: Spacing,
+    runs: readonly IntervalRun[],
+): Spacing {
+    if (spacing.mode === "interval") return { ...spacing, runs };
+    return {
+        mode: "interval",
+        runs,
+        anchor: "center",
+        size: spacing.sizeLocked ? "keep" : "follow",
+    };
+}
+
+/** `spacing` with the interval unlocked (Fit), keeping the size lock */
+export const unlockInterval = (spacing: Spacing): Spacing => ({
+    mode: "fit",
+    sizeLocked: sizeIsLocked(spacing),
+});
+
+/** `spacing` with the size lock set */
+export function setSizeLock(spacing: Spacing, locked: boolean): Spacing {
+    if (spacing.mode === "fit") return { mode: "fit", sizeLocked: locked };
+    return { ...spacing, size: locked ? "keep" : "follow" };
+}
+
 export const followsInterval = (
     spacing: Spacing,
 ): spacing is Extract<Spacing, { mode: "interval" }> =>
@@ -163,6 +204,14 @@ export type ParamField =
           }[];
       }
     | { readonly type: "bool"; readonly key: string; readonly label: string }
+    /** A boolean shown as a padlock, for "keep this value" settings, so locks look the same */
+    | {
+          readonly type: "lock";
+          readonly key: string;
+          readonly label: string;
+          readonly lockedHelp: string;
+          readonly unlockedHelp: string;
+      }
     /** The shared spacing control; the field must hold a {@link Spacing} */
     | {
           readonly type: "spacing";
@@ -223,15 +272,32 @@ export interface ShapeKind<P> {
     guide?(params: P, n: number, ctx: ShapeContext): readonly XY[][];
     /** Sizes typed in the panel's Size section, before the kind's own groups */
     readonly measures?: readonly Measure<P>[];
+    /**
+     * With a locked interval, keep the drawn path and lay the run along it (Pyware's fixed
+     * interval float) instead of resizing the shape: for free-form shapes, where a resize would
+     * move points away from where they were drawn.
+     */
+    readonly keepsPath?: boolean;
+    /** Adds a defining point at `at`, where the shape was double-clicked */
+    insertPoint?(params: P, at: XY): P;
+    /** Removes the defining point of handle `key` (double-clicked); undefined if it can't go */
+    removePoint?(params: P, key: string): P | undefined;
     /** The path marchers are spaced along (path kinds) */
     path?(params: P): Path;
     /** The shape scaled by `k` about `pivot` (path kinds that can keep a locked interval) */
     scale?(params: P, pivot: XY, k: number): P;
     /**
-     * Resizes the shape to path length `length` when the generic scale is the wrong feel; a
-     * circle keeps its center. `dragged` is the handle just dragged, if any.
+     * Resizes the shape to hold `gaps` (field units, measured straight between neighbors) when
+     * the generic scale is the wrong feel: a circle keeps its center, an arc's dragged end
+     * stays under the cursor. `dragged` is the handle just dragged, if any. Undefined means
+     * "use the generic scale".
      */
-    float?(params: P, length: number, ctx: ShapeContext, dragged?: string): P;
+    float?(
+        params: P,
+        gaps: readonly number[],
+        ctx: ShapeContext,
+        dragged?: HandleDef,
+    ): P | undefined;
     /** The spots for `n` marchers, in the kind's natural order. Deterministic. */
     generate(params: P, n: number, ctx: ShapeContext): Slot[];
     /**

@@ -1,5 +1,5 @@
 import type { Path } from "../geometry/path";
-import { sampleAlong, spacedLength } from "../spacing";
+import { sampleAlong } from "../spacing";
 import type { ParamGroup, Readout, ShapeContext, Spacing, XY } from "../types";
 
 /** Shared pieces of path kinds (line, arc, curve, ...), so spacing reads the same in each. */
@@ -62,18 +62,29 @@ export function pathReadouts(
     n: number,
     ctx: ShapeContext,
 ): Readout[] {
-    const covered = spacedLength(path, spacing, n, ctx.stepPx);
+    // On the path, the run can be shorter (or longer) than the shape: say "run" then, so it
+    // doesn't read as the shape's length
+    if (spacing.mode === "interval" && spacing.size !== "follow") {
+        const slots = sampleAlong(path, spacing, n, ctx.stepPx);
+        const run = (slots.at(-1)?.s ?? 0) - (slots[0]?.s ?? 0);
+        return [{ label: "Run", value: formatSteps(run, ctx) }];
+    }
     const readouts: Readout[] = [
-        { label: "Length", value: formatSteps(covered, ctx) },
+        { label: "Length", value: formatSteps(path.length, ctx) },
     ];
-    if (spacing.mode === "fit") {
-        const gaps = path.closed ? n : n - 1;
-        if (gaps > 0) {
-            readouts.push({
-                label: "Interval",
-                value: formatSteps(path.length / gaps, ctx),
-            });
-        }
+    if (spacing.mode === "fit" && n > 1) {
+        // Straight between neighbors, as drill measures it
+        const slots = sampleAlong(path, spacing, n, ctx.stepPx);
+        readouts.push({
+            label: "Interval",
+            value: formatSteps(
+                Math.hypot(
+                    slots[1]!.x - slots[0]!.x,
+                    slots[1]!.y - slots[0]!.y,
+                ),
+                ctx,
+            ),
+        });
     }
     return readouts;
 }
