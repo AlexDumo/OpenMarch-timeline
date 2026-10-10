@@ -77,7 +77,7 @@ export function SelectedPageProvider({ children }: { children: ReactNode }) {
             // Not in the page list yet (an undo that just restored it, seen first by the
             // caller): select it if it appears soon, so a page that never comes back can't be
             // selected by a much later undo
-            console.warn(
+            console.debug(
                 `Page with id ${newPage.id} not found yet. Selecting it once it is.`,
             );
             // While this provider's page list hasn't loaded yet (each `useTimingObjects` caller
