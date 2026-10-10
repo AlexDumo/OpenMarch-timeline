@@ -379,16 +379,20 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         if (!active) return;
         if (locked) this.applySelectionLock(active);
         else {
+            // Back to the selection's own controls and movement locks, in place: selecting again
+            // would clear the app's selection on the way (selection:cleared)
             active.set({
-                lockRotation: false,
                 lockScalingX: false,
                 lockScalingY: false,
                 hoverCursor: null as unknown as string,
+                lockMovementX:
+                    this.uiSettings.lockX || (active as any).locked === true,
+                lockMovementY:
+                    this.uiSettings.lockY || (active as any).locked === true,
             });
-            // Selecting again restores the selection's own controls and movement locks
-            const objects = this.getActiveSelectableObjects();
-            this.discardActiveObject();
-            this.setActiveObjects(objects);
+            if (active instanceof fabric.Group) setGroupAttributes(active);
+            else active.set({ lockRotation: false });
+            active.setCoords();
         }
         this.requestRenderAll();
     }

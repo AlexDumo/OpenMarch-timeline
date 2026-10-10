@@ -184,6 +184,50 @@ describeDbTests("Shape recipes", (it) => {
         expect(after.some((r) => r.id === arc)).toBe(false);
     });
 
+    it("at Home, too: one undo takes back the homes and the recipe", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        const homesBefore = await db
+            .select({ id: schema.marchers.id, x: schema.marchers.home_x })
+            .from(schema.marchers)
+            .all();
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "home" },
+            moves: [
+                { marcherId: a, x: 11, y: 22 },
+                { marcherId: b, x: 33, y: 22 },
+            ],
+            afterWrite: async (tx, timelineId) => {
+                expect(timelineId).toBeNull();
+                await saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId,
+                    recipe: LINE,
+                    members: [
+                        { marcherId: a, slot: 0, x: 11, y: 22 },
+                        { marcherId: b, slot: 1, x: 33, y: 22 },
+                    ],
+                });
+            },
+        });
+        expect(
+            await readShapeRecipes({ db, timelineId: null, marcherIds: [a] }),
+        ).toHaveLength(1);
+        await performUndo(db);
+        expect(
+            await db
+                .select({ id: schema.marchers.id, x: schema.marchers.home_x })
+                .from(schema.marchers)
+                .all(),
+        ).toEqual(homesBefore);
+        expect(
+            await db.select().from(schema.timeline_shape_recipes).all(),
+        ).toEqual([]);
+    });
+
     it("an edited recipe keeps its id", async ({ db, marchersAndPages: _ }) => {
         const { a, b } = await show(db);
         const id = await place(db, [a, b], ARC);
