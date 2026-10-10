@@ -73,7 +73,7 @@ export function assignSlots<P>({
     const slotOrder = slots
         .map((slot, index) => ({
             index,
-            key: kind.orderKey(params, slot, ctx),
+            key: kind.orderKey(params, slot, ctx, n),
         }))
         .sort((a, b) => compareKeys(a.key, b.key) || a.index - b.index)
         .map((entry) => entry.index);
@@ -88,7 +88,7 @@ export function assignSlots<P>({
             : marchers
                   .map((m, index) => ({
                       index,
-                      key: kind.orderKey(params, m.at, ctx),
+                      key: kind.orderKey(params, m.at, ctx, n),
                       rank: m.drillRank,
                   }))
                   .sort((a, b) => compareKeys(a.key, b.key) || a.rank - b.rank)

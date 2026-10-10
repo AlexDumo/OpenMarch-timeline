@@ -9,10 +9,8 @@ import { useNavigationActionHandlers } from "./handlers/useNavigationActionHandl
 import { useNudgeActionHandlers } from "./handlers/useNudgeActionHandlers";
 import { useTimelineActionEffects } from "./handlers/useTimelineActionEffects";
 import { useUiActionHandlers } from "./handlers/useUiActionHandlers";
-import {
-    ShapeToolEscape,
-    useShapeToolActions,
-} from "@/shapes/useShapeToolActions";
+import { useShapeToolActions } from "@/shapes/useShapeToolActions";
+import { ShapeToolKeys } from "@/shapes/ShapeToolKeys";
 import { useShapeToolStore } from "@/shapes/shapeToolStore";
 
 /** Handlers available before a show is open (launch page). */
@@ -34,7 +32,7 @@ export function EditorActionHandlers() {
     useShapeToolActions();
     useKeepActionHandlers();
     useTimelineActionEffects();
-    // Mounted after the handlers above, so the open shape tool's Escape is on top
+    // Mounted after the handlers above, so the open shape tool's keys are on top
     const shapeToolOpen = useShapeToolStore((s) => s.session !== null);
-    return shapeToolOpen ? <ShapeToolEscape /> : null;
+    return shapeToolOpen ? <ShapeToolKeys /> : null;
 }

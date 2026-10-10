@@ -181,8 +181,14 @@ export interface ShapeKind<P> {
     /**
      * A sort key for a point, comparable with the same key of the slots, used by "Keep order"
      * assignment: path kinds return the distance along the path, fills their rank then file.
+     * `n` is the marcher count, for kinds whose lattice depends on it (a block's ranks).
      */
-    orderKey(params: P, point: XY, ctx: ShapeContext): readonly number[];
+    orderKey(
+        params: P,
+        point: XY,
+        ctx: ShapeContext,
+        n: number,
+    ): readonly number[];
     readouts?(params: P, n: number, ctx: ShapeContext): Readout[];
     /** Kind-specific checks; the generic ones run for every kind (`validate.ts`) */
     validate?(

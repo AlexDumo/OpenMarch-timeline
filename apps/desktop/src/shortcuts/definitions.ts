@@ -462,6 +462,30 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         args: { kind: "arc" },
     },
+    shapeCircle: {
+        labelKey: "actions.shape.circle",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["O"],
+        args: { kind: "circle" },
+    },
+    shapeCurve: {
+        labelKey: "actions.shape.curve",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { kind: "curve" },
+    },
+    shapeBlock: {
+        labelKey: "actions.shape.block",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { kind: "block" },
+    },
     applyShape: {
         labelKey: "actions.shape.apply",
         category: "shape",
@@ -516,7 +540,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.createCircle",
         category: "shape",
         scope: "canvas",
-        defaultBindings: ["O"],
+        defaultBindings: [],
     },
 
     // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it

@@ -363,7 +363,50 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                 event.selected[0].angle = 0;
             }
         }
+        this.applySelectionLock(this.getActiveObject());
         this.fire("group:selection", { group: this._activeGroup });
+    }
+
+    /** While the shape tool is open, the selected marchers can't be dragged, turned or scaled */
+    private _selectionLocked = false;
+
+    /**
+     * Locks the active selection in place, or frees it again. The shape tool locks it while open:
+     * its handles move the shape, and a drag of the marchers themselves would move them under a
+     * preview that no longer matches.
+     */
+    setSelectionLocked(locked: boolean): void {
+        if (this._selectionLocked === locked) return;
+        this._selectionLocked = locked;
+        const active = this.getActiveObject();
+        if (!active) return;
+        if (locked) this.applySelectionLock(active);
+        else {
+            active.set({
+                lockRotation: false,
+                lockScalingX: false,
+                lockScalingY: false,
+                hoverCursor: null as unknown as string,
+            });
+            // Selecting again restores the selection's own controls and movement locks
+            const objects = this.getActiveSelectableObjects();
+            this.discardActiveObject();
+            this.setActiveObjects(objects);
+        }
+        this.requestRenderAll();
+    }
+
+    private applySelectionLock(object: fabric.Object | null | undefined): void {
+        if (!object || !this._selectionLocked) return;
+        object.set({
+            hasControls: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true,
+            hoverCursor: "default",
+        });
     }
 
     get activeGroup() {
@@ -1111,7 +1154,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     setActiveObject(object: fabric.Object, e?: Event): fabric.Canvas {
         object.lockMovementX = this.uiSettings.lockX || (object as any).locked;
         object.lockMovementY = this.uiSettings.lockY || (object as any).locked;
-        return super.setActiveObject(object, e);
+        const result = super.setActiveObject(object, e);
+        this.applySelectionLock(object);
+        return result;
     }
 
     resetCursorsToDefault = () => {
