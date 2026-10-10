@@ -2,7 +2,7 @@ import MarcherEditor from "./MarcherEditor";
 import PageEditor from "./PageEditor";
 import AlignmentEditor from "./AlignmentEditor";
 import ShapeEditor from "./ShapeEditor";
-import ShapeSelector from "./ShapeSelector";
+import ShapeToolPanel from "@/shapes/ui/ShapeToolPanel";
 import { PageNotesSection } from "./PageNotesSection";
 import { TimelineInspectorSection } from "./TimelineInspectorSection";
 import { TimelineMoveCardSlot } from "./TimelineMoveCard";
@@ -24,7 +24,7 @@ function Inspector() {
                 <MarcherEditor />
                 <ShapeEditor />
                 <AlignmentEditor />
-                <ShapeSelector />
+                <ShapeToolPanel />
                 <TimelineInspectorSection />
             </div>
 

@@ -8,7 +8,12 @@ import { useQuery } from "@tanstack/react-query";
 import { marcherPagesByPageQueryOptions } from "@/hooks/queries";
 import { useSelectionStore } from "@/stores/SelectionStore";
 import { useSelectedPage } from "@/context/SelectedPageContext";
-import { isTimelineShapeHandle } from "@/global/classes/canvasObjects/TimelineShapeOverlay";
+import { isTimelineShapeHandle as isSpecShapeHandle } from "@/global/classes/canvasObjects/TimelineShapeOverlay";
+import { isShapeToolHandle } from "@/shapes/canvas/ShapeToolOverlay";
+
+/** A handle of a canvas tool (shape tool or spec shape editor): transparent to the selection */
+const isTimelineShapeHandle = (object: unknown): boolean =>
+    isSpecShapeHandle(object) || isShapeToolHandle(object);
 
 // eslint-disable-next-line max-lines-per-function
 export const useSelectionListeners = ({
