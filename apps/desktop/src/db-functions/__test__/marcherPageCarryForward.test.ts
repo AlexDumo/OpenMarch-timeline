@@ -726,18 +726,19 @@ describeDbTests("page mode carries an edit forward", (it) => {
             t = performance.now();
             await performUndo(db);
             const plainUndoMs = performance.now() - t;
-            // Reported, not asserted: test-environment numbers vary by machine
-            // (stderr: the test setup quiets console.log)
-            process.stderr.write(
-                `carry-forward timing ${JSON.stringify({
-                    carryForward,
-                    editMs: Math.round(editMs),
-                    undoMsWithFocus: Math.round(undoMs),
-                    undoMsWithoutFocus: Math.round(plainUndoMs),
-                    redoMs: Math.round(redoMs),
-                    historyRows,
-                })}\n`,
-            );
+            // Reported, not asserted: test-environment numbers vary by machine. Only with
+            // OM_REPORT_TIMING=1 (stderr: the test setup quiets console.log)
+            if (process.env.OM_REPORT_TIMING)
+                process.stderr.write(
+                    `carry-forward timing ${JSON.stringify({
+                        carryForward,
+                        editMs: Math.round(editMs),
+                        undoMsWithFocus: Math.round(undoMs),
+                        undoMsWithoutFocus: Math.round(plainUndoMs),
+                        redoMs: Math.round(redoMs),
+                        historyRows,
+                    })}\n`,
+                );
             return { result, undo };
         };
 
