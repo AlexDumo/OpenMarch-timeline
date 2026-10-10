@@ -149,18 +149,18 @@ export const blockKind: ShapeKind<BlockParams> = {
         {
             label: "Size",
             fields: [
+                { type: "count", key: "files", label: "Files", min: 1 },
+                { type: "length", key: "across", label: "Across" },
+                { type: "length", key: "deep", label: "Deep" },
                 {
                     type: "lock",
                     key: "keepIntervals",
-                    label: "Intervals",
+                    label: "Keep intervals",
                     lockedHelp:
                         "Intervals locked: dragging the side adds or removes files. Click to stretch the intervals instead",
                     unlockedHelp:
                         "Dragging the side stretches the intervals. Click to lock them, so it adds or removes files",
                 },
-                { type: "count", key: "files", label: "Files", min: 1 },
-                { type: "length", key: "across", label: "Across" },
-                { type: "length", key: "deep", label: "Deep" },
             ],
         },
         {
@@ -169,7 +169,7 @@ export const blockKind: ShapeKind<BlockParams> = {
                 {
                     type: "enum",
                     key: "pattern",
-                    label: "Pattern",
+                    label: "Ranks",
                     options: [
                         { value: "grid", label: "Grid" },
                         { value: "offset", label: "Staggered" },

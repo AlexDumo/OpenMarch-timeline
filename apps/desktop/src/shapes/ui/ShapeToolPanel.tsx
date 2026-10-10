@@ -201,6 +201,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
                     n={n}
                     ctx={ctx}
                     derivedInterval={derivedInterval}
+                    closed={kind.path?.(session.params).closed === true}
                 />
             ))}
         </Section>
@@ -457,11 +458,8 @@ function NumberInput({
     onCommit: (value: number) => void;
 }) {
     // A worked-out value shows its true size (to the hundredth), not one rounded to the step
-    const rounded = integer
-        ? Math.round(value)
-        : derived
-          ? Math.round(value * 100) / 100
-          : Math.round(value / step) * step;
+    // The true value to the hundredth, not rounded to the input's step (2.61, not 2.5)
+    const rounded = integer ? Math.round(value) : Math.round(value * 100) / 100;
     const text = String(Number(rounded.toFixed(4)));
     const [draft, setDraft] = useState<string | null>(null);
     const commit = () => {
@@ -513,6 +511,7 @@ function FieldControl({
     n,
     ctx,
     derivedInterval,
+    closed,
 }: {
     field: ParamField;
     value: unknown;
@@ -521,6 +520,7 @@ function FieldControl({
     ctx: ShapeContext;
     /** Field units; the interval the drawn shape gives in Fit */
     derivedInterval?: number;
+    closed?: boolean;
 }) {
     switch (field.type) {
         case "spacing":
@@ -531,6 +531,7 @@ function FieldControl({
                     n={n}
                     ctx={ctx}
                     derivedInterval={derivedInterval}
+                    closed={closed}
                 />
             );
         case "length":
@@ -631,12 +632,15 @@ function SpacingControl({
     n,
     ctx,
     derivedInterval,
+    closed,
 }: {
     spacing: Spacing;
     onChange: (spacing: Spacing) => void;
     n: number;
     ctx: ShapeContext;
     derivedInterval?: number;
+    /** A closed shape (a circle) keeps its center when it resizes, so "Keep fixed" has no say */
+    closed?: boolean;
 }) {
     const { t } = useTolgee();
     const locked = spacing.mode === "interval";
@@ -733,7 +737,7 @@ function SpacingControl({
                     {note}
                 </p>
             )}
-            {locked && (
+            {locked && !(follows && closed) && (
                 <Row
                     label={
                         <T

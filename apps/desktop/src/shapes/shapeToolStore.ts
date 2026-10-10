@@ -50,17 +50,37 @@ interface ShapeToolState {
     /** Escape during a drag: back to where the drag started, tool still open */
     cancelDrag(): void;
     close(): void;
+    /** Earlier and undone states of the open session, for the tool's own Undo and Redo */
+    past: ShapeSession[];
+    future: ShapeSession[];
+    undo(): void;
+    redo(): void;
 }
 
+const HISTORY_LIMIT = 100;
+
 export const useShapeToolStore = create<ShapeToolState>((set, get) => {
-    /** Applies `change` to the open session, if any */
+    /**
+     * Applies `change` to the open session, if any, as one step the tool's own Undo can take
+     * back. Nothing is written to the show until Place, so the show's undo isn't involved.
+     */
     const update = (change: (session: ShapeSession) => ShapeSession) => {
-        const { session } = get();
-        if (session) set({ session: change(session) });
+        const { session, past } = get();
+        if (!session) return;
+        const next = change(session);
+        if (next === session) return;
+        set({
+            session: next,
+            past: [...past.slice(-(HISTORY_LIMIT - 1)), session],
+            future: [],
+        });
     };
     return {
         session: null,
         last: null,
+        past: [],
+        future: [],
+        ...historyActions(get, set),
         open(kindId, marchers, ctx) {
             const { session, last } = get();
             set({
@@ -71,6 +91,8 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                     previous: session ?? last,
                 }),
                 inputError: null,
+                past: [],
+                future: [],
             });
         },
         setKind: (kindId, ctx) => update((s) => changeKind(s, kindId, ctx)),
@@ -89,30 +111,7 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
         nudge(delta, ctx) {
             if (!get().dragging) update((s) => translateSession(s, delta, ctx));
         },
-        dragging: null,
-        startDrag(key) {
-            const { session } = get();
-            if (session) set({ dragging: { key, base: session.params } });
-        },
-        drag(to, shift, ctx) {
-            const { dragging } = get();
-            if (!dragging) return;
-            set({ dragging: { ...dragging, cursor: to } });
-            update((s) =>
-                dragHandle(s, dragging.base, dragging.key, to, shift, ctx),
-            );
-        },
-        endDrag() {
-            if (get().dragging) set({ dragging: null });
-        },
-        cancelDrag() {
-            const { session, dragging } = get();
-            if (!session || !dragging) return;
-            set({
-                session: changeParams(session, dragging.base),
-                dragging: null,
-            });
-        },
+        ...dragActions(get, set),
         close() {
             const { session } = get();
             if (session)
@@ -121,7 +120,92 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                     last: session,
                     dragging: null,
                     inputError: null,
+                    past: [],
+                    future: [],
                 });
         },
     };
 });
+
+type Get = () => ShapeToolState;
+type Set = (partial: Partial<ShapeToolState>) => void;
+
+/** Undo and Redo through the open session's own edits (not the show's history) */
+function historyActions(
+    get: Get,
+    set: Set,
+): Pick<ShapeToolState, "undo" | "redo"> {
+    return {
+        undo() {
+            const { session, past, future, dragging } = get();
+            const previous = past.at(-1);
+            if (!session || !previous || dragging) return;
+            set({
+                session: previous,
+                past: past.slice(0, -1),
+                future: [...future, session],
+            });
+        },
+        redo() {
+            const { session, past, future, dragging } = get();
+            const next = future.at(-1);
+            if (!session || !next || dragging) return;
+            set({
+                session: next,
+                past: [...past, session],
+                future: future.slice(0, -1),
+            });
+        },
+    };
+}
+
+/** Dragging a handle: one undo step per drag, Escape puts it back */
+function dragActions(
+    get: Get,
+    set: Set,
+): Pick<
+    ShapeToolState,
+    "dragging" | "startDrag" | "drag" | "endDrag" | "cancelDrag"
+> {
+    return {
+        dragging: null,
+        startDrag(key) {
+            const { session, past } = get();
+            if (!session) return;
+            set({
+                dragging: { key, base: session.params },
+                // The whole drag is one step back
+                past: [...past.slice(-(HISTORY_LIMIT - 1)), session],
+                future: [],
+            });
+        },
+        drag(to, shift, ctx) {
+            const { session, dragging } = get();
+            if (!session || !dragging) return;
+            set({
+                dragging: { ...dragging, cursor: to },
+                session: dragHandle(
+                    session,
+                    dragging.base,
+                    dragging.key,
+                    to,
+                    shift,
+                    ctx,
+                ),
+            });
+        },
+        endDrag() {
+            if (get().dragging) set({ dragging: null });
+        },
+        cancelDrag() {
+            const { session, dragging, past } = get();
+            if (!session || !dragging) return;
+            set({
+                session: changeParams(session, dragging.base),
+                dragging: null,
+                // A cancelled drag leaves nothing to undo
+                past: past.slice(0, -1),
+            });
+        },
+    };
+}
