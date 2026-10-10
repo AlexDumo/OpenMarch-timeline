@@ -50,6 +50,9 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     "timeline_assignments",
     // A kept marker after the assignment it marks
     "timeline_kept_assignments",
+    // Shape recipes after their moves, then their members (ADR 0004)
+    "timeline_shape_recipes",
+    "timeline_shape_recipe_marchers",
 ];
 
 /**

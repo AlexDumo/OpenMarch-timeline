@@ -3,7 +3,7 @@ import {
     type TimelineMarcherMove,
     type TimelineMovePage,
 } from "@/db-functions/timelineMoves";
-import type { DbConnection } from "@/db-functions/types";
+import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import { withTimelineWriteLock } from "@/db-functions/history";
 import {
     useTimelineSelectionStore,
@@ -246,11 +246,17 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     marcherIds,
     transform,
     plan = planCanvasEdit(),
+    afterWrite,
 }: {
     db: DbConnection;
     marcherIds: readonly number[];
     transform: (current: CoordinateRecord[]) => R[];
     plan?: CanvasEditPlan;
+    /** App data written in the same edit, such as a shape recipe (ADR 0004) */
+    afterWrite?: (
+        tx: DbTransaction,
+        timelineId: number | null,
+    ) => Promise<void>;
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
     snapIsolatedPlayheadToEnd();
@@ -260,6 +266,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
         database: db,
         target: plan.target,
         moves,
+        afterWrite,
     });
     return next;
 }

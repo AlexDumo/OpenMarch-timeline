@@ -855,6 +855,11 @@
         "shapeTool": {
             "title": "Shape",
             "hint": "Select marchers, then pick a shape.",
+            "hintPlaced": "These marchers were placed as a shape. Edit it, or pick a new shape.",
+            "editPlaced": "Edit {kind}",
+            "movedByHand": "{count, plural, one {# moved by hand} other {# moved by hand}}",
+            "overridesKeep": "Keep",
+            "overridesReset": "Reset",
             "pick": "Pick a shape",
             "spacing": "Spacing",
             "gaps": "Interval",

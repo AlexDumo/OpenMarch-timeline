@@ -651,6 +651,65 @@ export const timeline_kept_assignments = sqliteTable(
 );
 
 /**
+ * A placed shape's **recipe** (ADR 0004): the Shape tool kind and parameters that laid out its
+ * marchers at the end of a move (`timeline_id`), or their homes (`NULL`), so the shape can be
+ * reopened and edited. The positions themselves are ordinary destinations; this row only
+ * remembers how they were made. App data: not in `timeline_change_log`, never read by the
+ * resolver. Deleted with its move.
+ */
+export const timeline_shape_recipes = sqliteTable(
+    "timeline_shape_recipes",
+    {
+        id: integer().primaryKey(),
+        timeline_id: integer().references(() => timelines.id, {
+            onDelete: "cascade",
+        }),
+        /** The Shape tool kind's id: line, arc, circle, curve, block, ... */
+        kind: text().notNull(),
+        /** The kind's generator version when placed */
+        kind_version: integer().notNull(),
+        /** The kind's parameters, JSON, in field units */
+        params: text().notNull(),
+        /** Who goes where: keep, nearest or drill */
+        order_mode: text().notNull(),
+        reverse: integer({ mode: "boolean" }).notNull().default(false),
+        created_at: text()
+            .notNull()
+            .default(sql`(CURRENT_TIMESTAMP)`),
+    },
+    (_table) => [
+        check("timeline_shape_recipes_params_check", sql`json_valid(params)`),
+    ],
+);
+
+/**
+ * A marcher placed by a recipe: its spot in the recipe's slot order and where the recipe put it
+ * when last placed (ADR 0004). Where the marcher stands now, less this point, is its override.
+ * A surrogate id, so undo restores the same row (ADR 0001 C-2).
+ */
+export const timeline_shape_recipe_marchers = sqliteTable(
+    "timeline_shape_recipe_marchers",
+    {
+        id: integer().primaryKey(),
+        recipe_id: integer()
+            .notNull()
+            .references(() => timeline_shape_recipes.id, {
+                onDelete: "cascade",
+            }),
+        marcher_id: integer()
+            .notNull()
+            .references(() => marchers.id, { onDelete: "cascade" }),
+        slot: integer().notNull(),
+        x: real().notNull(),
+        y: real().notNull(),
+    },
+    (table) => [
+        unique().on(table.recipe_id, table.marcher_id),
+        index("timeline_shape_recipe_marchers_marcher").on(table.marcher_id),
+    ],
+);
+
+/**
  * Bookkeeping, not data: one row per changed timeline row, written by triggers and drained by
  * the write wrapper inside each transaction (spec §10.2). Has no history triggers.
  */

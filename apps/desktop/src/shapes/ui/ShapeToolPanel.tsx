@@ -23,7 +23,11 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import ActionButton from "@/shortcuts/ActionButton";
 import { runAction } from "@/shortcuts/registry";
 import type { OrderMode } from "../assign";
-import { currentCanvas, shapeContextFor } from "../canvas/shapeCanvasContext";
+import {
+    currentCanvas,
+    marchersOnCanvas,
+    shapeContextFor,
+} from "../canvas/shapeCanvasContext";
 import { SHAPE_KINDS, shapeKind } from "../registry";
 import { previewSession, type ShapeSession } from "../session";
 import { useShapeToolStore } from "../shapeToolStore";
@@ -43,6 +47,8 @@ import {
 } from "../types";
 import { measuresOf } from "../follow";
 import { SHAPE_KIND_ACTIONS } from "../useShapeToolActions";
+import { useRecipeForSelection } from "../useRecipeForSelection";
+import type { StoredShapeRecipe } from "@/db-functions/shapeRecipes";
 
 const FAMILIES: { family: AnyShapeKind["family"]; label: string }[] = [
     { family: "path", label: "Paths" },
@@ -58,6 +64,7 @@ const FAMILIES: { family: AnyShapeKind["family"]; label: string }[] = [
 export default function ShapeToolPanel() {
     const session = useShapeToolStore((s) => s.session);
     const selectedCount = useSelectedMarchers()?.selectedMarchers.length ?? 0;
+    const recipe = useRecipeForSelection();
     const ref = useRef<HTMLDivElement>(null);
     const isOpen = session !== null;
 
@@ -85,14 +92,56 @@ export default function ShapeToolPanel() {
                     <SessionControls session={session} />
                 ) : (
                     <>
+                        {recipe && <EditRecipe recipe={recipe} />}
                         <KindPicker activeKind={null} />
                         <p className="text-sub text-text/60">
-                            <T keyName="inspector.shapeTool.hint" />
+                            <T
+                                keyName={
+                                    recipe
+                                        ? "inspector.shapeTool.hintPlaced"
+                                        : "inspector.shapeTool.hint"
+                                }
+                            />
                         </p>
                     </>
                 )}
             </div>
         </InspectorCollapsible>
+    );
+}
+
+/**
+ * The selection is one placed shape: offer to reopen it, saying how many of its marchers have
+ * been moved by hand since (they keep their offsets unless the designer resets them).
+ */
+function EditRecipe({ recipe }: { recipe: StoredShapeRecipe }) {
+    const kind = shapeKind(recipe.kind)!;
+    const Icon = kind.icon;
+    const open = () => {
+        const canvas = currentCanvas();
+        if (!canvas) return;
+        useShapeToolStore.getState().openRecipe(
+            recipe,
+            marchersOnCanvas(
+                canvas,
+                recipe.members.map((m) => m.marcherId),
+            ),
+        );
+    };
+    return (
+        <Button
+            size="compact"
+            variant="secondary"
+            className="justify-start gap-6"
+            onClick={open}
+            data-testid="shape-edit-recipe"
+        >
+            <Icon size={16} />
+            <T
+                keyName="inspector.shapeTool.editPlaced"
+                params={{ kind: kind.label }}
+            />
+        </Button>
     );
 }
 
@@ -164,6 +213,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
     if (!ctx || !preview) return null;
 
     const n = session.marchers.length;
+    const overrideCount = Object.keys(session.overrides ?? {}).length;
     const params = session.params as Record<string, unknown>;
     const setField = (key: string, value: unknown) =>
         useShapeToolStore
@@ -246,6 +296,45 @@ function SessionControls({ session }: { session: ShapeSession }) {
             {showMore && advanced.map(renderGroup)}
 
             <OrderRow session={session} ctx={ctx} />
+
+            {overrideCount > 0 && (
+                <Row
+                    label={
+                        <T
+                            keyName="inspector.shapeTool.movedByHand"
+                            params={{ count: overrideCount }}
+                        />
+                    }
+                >
+                    <ToggleGroup
+                        type="single"
+                        aria-label="Moved by hand"
+                        className="h-[1.625rem]"
+                        value={
+                            session.keepOverrides === false ? "reset" : "keep"
+                        }
+                        onValueChange={(v) =>
+                            v &&
+                            useShapeToolStore
+                                .getState()
+                                .setKeepOverrides(v === "keep")
+                        }
+                    >
+                        <ToggleGroupItem
+                            value="keep"
+                            data-testid="shape-overrides-keep"
+                        >
+                            <T keyName="inspector.shapeTool.overridesKeep" />
+                        </ToggleGroupItem>
+                        <ToggleGroupItem
+                            value="reset"
+                            data-testid="shape-overrides-reset"
+                        >
+                            <T keyName="inspector.shapeTool.overridesReset" />
+                        </ToggleGroupItem>
+                    </ToggleGroup>
+                </Row>
+            )}
 
             {preview.issues.length > 0 && (
                 <ul

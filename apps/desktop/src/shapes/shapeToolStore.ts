@@ -7,6 +7,8 @@ import {
     changeParams,
     dragHandle,
     insertPoint,
+    openRecipe as openRecipeSession,
+    type RecipeToOpen,
     reassign,
     removePoint,
     startSession,
@@ -28,6 +30,10 @@ interface ShapeToolState {
         marchers: readonly AssignMarcher[],
         ctx: ShapeContext,
     ): void;
+    /** Reopens a placed shape from its stored recipe (ADR 0004) */
+    openRecipe(recipe: RecipeToOpen, marchers: readonly AssignMarcher[]): void;
+    /** Whether marchers moved by hand keep their offsets when the shape is placed again */
+    setKeepOverrides(keep: boolean): void;
     setKind(kindId: string, ctx: ShapeContext): void;
     setParams(params: unknown, ctx: ShapeContext): void;
     setMeasure(key: string, value: number, ctx: ShapeContext): void;
@@ -95,6 +101,13 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                 future: [],
             });
         },
+        openRecipe(recipe, marchers) {
+            const session = openRecipeSession(recipe, marchers);
+            if (session)
+                set({ session, inputError: null, past: [], future: [] });
+        },
+        setKeepOverrides: (keep) =>
+            update((s) => ({ ...s, keepOverrides: keep })),
         setKind: (kindId, ctx) => update((s) => changeKind(s, kindId, ctx)),
         setParams: (params, ctx) => update((s) => changeParams(s, params, ctx)),
         setMeasure: (key, value, ctx) =>
