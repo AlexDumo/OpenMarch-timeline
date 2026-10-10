@@ -11,6 +11,7 @@ import {
     sub,
     unit,
     xy,
+    scaleAbout,
 } from "../geometry/vec";
 import { sampleAlong } from "../spacing";
 import type { ShapeKind, Spacing, XY } from "../types";
@@ -131,6 +132,12 @@ export const curveKind: ShapeKind<CurveParams> = {
         return { points, spacing: FIT };
     },
 
+    path: curvePath,
+    scale: (p, pivot, k) => ({
+        ...p,
+        points: p.points.map((q) => scaleAbout(q, pivot, k)),
+    }),
+
     handles(p) {
         return [
             ...p.points.map((at, i) => ({
@@ -138,6 +145,7 @@ export const curveKind: ShapeKind<CurveParams> = {
                 role: "point" as const,
                 at,
                 start: i === 0,
+                end: i === p.points.length - 1,
             })),
             { key: "move", role: "move", at: middleOf(curvePath(p)) },
         ];

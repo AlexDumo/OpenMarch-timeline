@@ -27,7 +27,7 @@ interface ShapeToolState {
         ctx: ShapeContext,
     ): void;
     setKind(kindId: string, ctx: ShapeContext): void;
-    setParams(params: unknown): void;
+    setParams(params: unknown, ctx: ShapeContext): void;
     setMeasure(key: string, value: number, ctx: ShapeContext): void;
     /** A panel field holds text that doesn't parse (an interval); Place waits until it does */
     inputError: string | null;
@@ -68,7 +68,7 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
             });
         },
         setKind: (kindId, ctx) => update((s) => changeKind(s, kindId, ctx)),
-        setParams: (params) => update((s) => changeParams(s, params)),
+        setParams: (params, ctx) => update((s) => changeParams(s, params, ctx)),
         setMeasure: (key, value, ctx) =>
             update((s) => changeMeasure(s, key, value, ctx)),
         inputError: null,

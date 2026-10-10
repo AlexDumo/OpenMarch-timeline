@@ -13,6 +13,7 @@
  */
 
 import type { Icon } from "@phosphor-icons/react";
+import type { Path } from "./geometry/path";
 
 export interface XY {
     readonly x: number;
@@ -38,11 +39,15 @@ export interface IntervalRun {
 
 /**
  * How marchers are spaced along a path. Shared by every path kind so spacing reads and behaves
- * the same everywhere.
+ * the same everywhere. There are three states, which the panel shows as two locks:
  *
- * - `fit`: the path is fixed and the marchers spread evenly over it.
- * - `interval`: the gaps are fixed (one interval, or mixed runs like `5x3,2x4`) and the length the
- *   marchers cover follows from them. `anchor` says which part of the path the run is laid from.
+ * - `fit` (interval unlocked): the shape is as drawn and the marchers spread evenly over it.
+ * - `interval` with `size: "follow"` (interval locked, "Keep interval"): the gaps are fixed (one
+ *   interval, or mixed runs like `5x3,2x4`) and the shape is resized to fit them as it is edited.
+ *   `anchor` is the point that stays put when the length changes.
+ * - `interval` with `size: "keep"` (interval and size locked, "on the path"): the shape is as
+ *   drawn and the run is laid along it from `anchor`; a run longer than the shape continues past
+ *   its end. Absent `size` reads as `keep`.
  */
 export type Spacing =
     | { readonly mode: "fit" }
@@ -50,7 +55,14 @@ export type Spacing =
           readonly mode: "interval";
           readonly runs: readonly IntervalRun[];
           readonly anchor: "start" | "center" | "end";
+          readonly size?: "follow" | "keep";
       };
+
+/** Whether the shape is resized to keep the interval (the "Keep interval" state) */
+export const followsInterval = (
+    spacing: Spacing,
+): spacing is Extract<Spacing, { mode: "interval" }> =>
+    spacing.mode === "interval" && spacing.size === "follow";
 
 /** A spot a marcher can be put on. The tags let assignment and later tools reason about it. */
 export interface Slot extends XY {
@@ -78,6 +90,8 @@ export interface HandleDef {
     readonly at: XY;
     /** Where the shape starts: marked on the field so "Lay from Start" has a visible end */
     readonly start?: boolean;
+    /** The far end of an open path; with `start`, the handles a resize keeps the other one of */
+    readonly end?: boolean;
 }
 
 /**
@@ -95,6 +109,11 @@ export interface Measure<P> {
     set(params: P, value: number, n: number, ctx: ShapeContext): P;
     /** Hidden unless this holds */
     visibleWhen?(params: P): boolean;
+    /**
+     * The shape's size (a circle's radius). With a locked interval it is derived, and the panel
+     * puts the size lock beside it. Path kinds without one get a generic Length.
+     */
+    readonly size?: boolean;
 }
 
 export interface DragModifiers {
@@ -204,6 +223,15 @@ export interface ShapeKind<P> {
     guide?(params: P, n: number, ctx: ShapeContext): readonly XY[][];
     /** Sizes typed in the panel's Size section, before the kind's own groups */
     readonly measures?: readonly Measure<P>[];
+    /** The path marchers are spaced along (path kinds) */
+    path?(params: P): Path;
+    /** The shape scaled by `k` about `pivot` (path kinds that can keep a locked interval) */
+    scale?(params: P, pivot: XY, k: number): P;
+    /**
+     * Resizes the shape to path length `length` when the generic scale is the wrong feel; a
+     * circle keeps its center. `dragged` is the handle just dragged, if any.
+     */
+    float?(params: P, length: number, ctx: ShapeContext, dragged?: string): P;
     /** The spots for `n` marchers, in the kind's natural order. Deterministic. */
     generate(params: P, n: number, ctx: ShapeContext): Slot[];
     /**

@@ -32,6 +32,11 @@ export interface BlockParams {
     readonly pattern: "grid" | "offset";
     /** Where the last, short rank's marchers sit along it */
     readonly shortRank: "start" | "center" | "end";
+    /**
+     * The across and deep intervals are locked (the default): dragging the side changes how many
+     * files there are. Unlocked, dragging the sides stretches the intervals.
+     */
+    readonly keepIntervals?: boolean;
 }
 
 const filesOf = (p: BlockParams) => Math.max(1, Math.round(p.files));
@@ -125,6 +130,7 @@ export const blockKind: ShapeKind<BlockParams> = {
         {
             label: "Size",
             fields: [
+                { type: "bool", key: "keepIntervals", label: "Keep intervals" },
                 { type: "count", key: "files", label: "Files", min: 1 },
                 { type: "length", key: "across", label: "Across" },
                 { type: "length", key: "deep", label: "Deep" },
@@ -184,6 +190,7 @@ export const blockKind: ShapeKind<BlockParams> = {
             deep: 2 * ctx.stepPx,
             pattern: "grid",
             shortRank: "start",
+            keepIntervals: true,
         };
     },
 
@@ -199,7 +206,16 @@ export const blockKind: ShapeKind<BlockParams> = {
                 at: toField(p, 0, backRank - reach),
             },
             { key: "across", role: "bulge", at: toField(p, half.x, 0) },
-            { key: "deep", role: "bulge", at: toField(p, 0, half.y) },
+            // With the intervals kept, the ranks follow the files, so depth has no handle
+            ...(p.keepIntervals
+                ? []
+                : [
+                      {
+                          key: "deep",
+                          role: "bulge" as const,
+                          at: toField(p, 0, half.y),
+                      },
+                  ]),
         ];
     },
 
@@ -217,6 +233,15 @@ export const blockKind: ShapeKind<BlockParams> = {
         }
         if (key === "across") {
             const along = Math.abs(toLocal(p, to).x);
+            if (p.keepIntervals) {
+                // Whole files at the kept interval, never more than there are marchers
+                const files =
+                    Math.round((2 * along) / Math.max(p.across, 1e-9)) + 1;
+                return {
+                    ...p,
+                    files: Math.min(Math.max(files, 1), Math.max(n, 1)),
+                };
+            }
             return { ...p, across: (2 * along) / Math.max(filesOf(p) - 1, 1) };
         }
         if (key === "deep") {

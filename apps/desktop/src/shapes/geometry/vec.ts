@@ -38,3 +38,7 @@ export function snapAngle(from: XY, to: XY, stepRad: number): XY {
     const angle = Math.round(Math.atan2(d.y, d.x) / stepRad) * stepRad;
     return polar(from, len(d), angle);
 }
+
+/** `p` scaled by `k` about `pivot` */
+export const scaleAbout = (p: XY, pivot: XY, k: number): XY =>
+    xy(pivot.x + (p.x - pivot.x) * k, pivot.y + (p.y - pivot.y) * k);
