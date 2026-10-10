@@ -9,6 +9,8 @@ export interface ShapeToolOverlayColors {
     shape: string;
     /** The thin lines from each marcher to its spot */
     travel: string;
+    /** The spots marchers will stand on */
+    ghost: string;
     /** Spots with a warning or error */
     issue: string;
     handleFill: string;
@@ -30,9 +32,9 @@ export interface HandleDragEvents {
     end(): void;
 }
 
-const HANDLE_RADIUS = 6;
-const MOVE_HANDLE_SIZE = 12;
-const GHOST_RADIUS = 5;
+const HANDLE_RADIUS = 7;
+const MOVE_HANDLE_SIZE = 13;
+const GHOST_RADIUS = 4;
 /** How far from a handle a press still takes it, in screen pixels */
 const HIT_RADIUS_PX = 10;
 const offset = FieldProperties.GRID_STROKE_WIDTH / 2;
@@ -49,6 +51,8 @@ const toCanvas = (p: XY) => ({ x: p.x + offset, y: p.y + offset });
  */
 export default class ShapeToolOverlay {
     private outlines: fabric.Polyline[] = [];
+    /** Fainter lines for the rest of the shape */
+    private guides: fabric.Polyline[] = [];
     private travel: fabric.Line[] = [];
     private ghosts: fabric.Circle[] = [];
     private handles: ShapeToolHandleObject[] = [];
@@ -119,6 +123,8 @@ export default class ShapeToolOverlay {
         e.preventDefault();
         e.stopPropagation();
         this.dragKey = handle.shapeToolHandle.key;
+        if (handle.shapeToolHandle.role !== "move")
+            this.canvas.setCursor("grabbing");
         this.events.start(this.dragKey);
         window.addEventListener("pointermove", this.onPointerMove, true);
         window.addEventListener("pointerup", this.onPointerUp, true);
@@ -169,7 +175,16 @@ export default class ShapeToolOverlay {
     }
 
     show(preview: ShapePreview): void {
-        this.syncOutlines(preview.outline);
+        this.syncLines(this.guides, preview.guide, {
+            stroke: this.colors.travel,
+            strokeWidth: 1.5,
+            strokeDashArray: [2, 4],
+        });
+        this.syncLines(this.outlines, preview.outline, {
+            stroke: this.colors.shape,
+            strokeWidth: 2,
+            strokeDashArray: [6, 4],
+        });
         const flagged = new Set<number>();
         for (const issue of preview.issues) {
             if (issue.level !== "info")
@@ -183,7 +198,9 @@ export default class ShapeToolOverlay {
 
     /** Keeps the handles above marchers, so a marcher can't take their drag. */
     bringToFront(): void {
+        for (const guide of this.guides) guide.bringToFront();
         for (const outline of this.outlines) outline.bringToFront();
+        for (const ghost of this.ghosts) ghost.bringToFront();
         for (const handle of this.handles) {
             if (handle.shapeToolHandle.role !== "move") handle.bringToFront();
         }
@@ -194,6 +211,7 @@ export default class ShapeToolOverlay {
 
     clear(): void {
         for (const o of [
+            ...this.guides,
             ...this.outlines,
             ...this.travel,
             ...this.ghosts,
@@ -201,6 +219,7 @@ export default class ShapeToolOverlay {
         ]) {
             this.canvas.remove(o);
         }
+        this.guides = [];
         this.outlines = [];
         this.travel = [];
         this.ghosts = [];
@@ -209,14 +228,22 @@ export default class ShapeToolOverlay {
         this.canvas.requestRenderAll();
     }
 
-    private syncOutlines(paths: readonly XY[][]): void {
-        while (this.outlines.length > paths.length)
-            this.canvas.remove(this.outlines.pop()!);
+    /** Makes `pool` draw `paths`, reusing its polylines */
+    private syncLines(
+        pool: fabric.Polyline[],
+        paths: readonly XY[][],
+        style: {
+            stroke: string;
+            strokeWidth: number;
+            strokeDashArray: number[];
+        },
+    ): void {
+        while (pool.length > paths.length) this.canvas.remove(pool.pop()!);
         paths.forEach((path, i) => {
             const points = (
                 path.length === 1 ? [path[0]!, path[0]!] : path
             ).map(toCanvas);
-            const existing = this.outlines[i];
+            const existing = pool[i];
             if (existing) {
                 existing.points = points.map((p) => new fabric.Point(p.x, p.y));
                 // fabric 5 keeps left/top/pathOffset from construction; recompute them
@@ -229,16 +256,14 @@ export default class ShapeToolOverlay {
                 existing.setCoords();
                 return;
             }
-            const outline = new fabric.Polyline(points, {
-                stroke: this.colors.shape,
-                strokeWidth: 2,
-                strokeDashArray: [6, 4],
+            const line = new fabric.Polyline(points, {
+                ...style,
                 fill: "",
                 objectCaching: false,
                 ...NoControls,
             });
-            this.outlines.push(outline);
-            this.canvas.add(outline);
+            pool.push(line);
+            this.canvas.add(line);
         });
     }
 
@@ -256,7 +281,7 @@ export default class ShapeToolOverlay {
             const to = toCanvas(target.to);
             const color = flaggedSpots.has(target.to)
                 ? this.colors.issue
-                : this.colors.shape;
+                : this.colors.ghost;
             const line = this.travel[i];
             if (line) line.set({ x1: from.x, y1: from.y, x2: to.x, y2: to.y });
             else {
@@ -270,7 +295,7 @@ export default class ShapeToolOverlay {
                 this.canvas.add(created);
             }
             const ghost = this.ghosts[i];
-            if (ghost) ghost.set({ left: to.x, top: to.y, stroke: color });
+            if (ghost) ghost.set({ left: to.x, top: to.y, fill: color });
             else {
                 const created = new fabric.Circle({
                     left: to.x,
@@ -278,9 +303,8 @@ export default class ShapeToolOverlay {
                     radius: GHOST_RADIUS,
                     originX: "center",
                     originY: "center",
-                    fill: "",
-                    stroke: color,
-                    strokeWidth: 2,
+                    fill: color,
+                    strokeWidth: 0,
                     objectCaching: false,
                     ...NoControls,
                 });
@@ -292,7 +316,9 @@ export default class ShapeToolOverlay {
     }
 
     private syncHandles(defs: readonly HandleDef[]): void {
-        const roles = defs.map((d) => `${d.key}:${d.role}`).join("|");
+        const roles = defs
+            .map((d) => `${d.key}:${d.role}:${d.start ? 1 : 0}`)
+            .join("|");
         if (roles !== this.handleRoles) {
             for (const handle of this.handles) this.canvas.remove(handle);
             this.handles = defs.map((def) => this.makeHandle(def));
@@ -316,9 +342,12 @@ export default class ShapeToolOverlay {
             top: at.y,
             originX: "center",
             originY: "center",
-            fill: this.colors.handleFill,
+            // The start is filled, so "Lay from Start" has a visible end
+            fill: def.start ? this.colors.shape : this.colors.handleFill,
             stroke: this.colors.shape,
-            strokeWidth: 3,
+            strokeWidth: 2.5,
+            // A dark halo keeps handles readable over grass, grid lines and marchers
+            shadow: new fabric.Shadow({ color: "rgba(0,0,0,0.45)", blur: 4 }),
             // Presses are taken before fabric sees them (`onPointerDown`), so a handle never
             // becomes the active object and the marcher selection is left alone
             selectable: false,
@@ -348,5 +377,5 @@ export default class ShapeToolOverlay {
 }
 
 function cursorFor(role: HandleRole): string {
-    return role === "move" ? "move" : "pointer";
+    return role === "move" ? "move" : "grab";
 }

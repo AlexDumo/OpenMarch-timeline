@@ -29,10 +29,6 @@
             "setSelectedToPrevious": "Copiar posiciones de la página anterior (selección)",
             "setSelectedToPreviousSuccess": "{count, plural, other {Configurado con éxito '{count} coordenada{{count, plural, one {} other {s}}} de marcha en la página {currentPage} a las coordenadas de la página anterior {previousPage}'}}"
         },
-        "cursor": {
-            "defaultMode": "Modo de selección",
-            "lineMode": "Crear línea"
-        },
         "edit": {
             "noRedoAvailable": "No hay acción para rehacer",
             "noUndoAvailable": "No hay acción para deshacer",
@@ -77,9 +73,6 @@
             "selectAll": "Seleccionar todo"
         },
         "shape": {
-            "applyQuick": "Ajustar a la forma",
-            "create": "Crear forma",
-            "createCircle": "Crear círculo",
             "delete": "Elimina las formas seleccionadas actualmente",
             "noMarchersSelected": "Ningún manifestante seleccionado"
         },
@@ -580,14 +573,7 @@
         "valueMissing": "Por favor ingrese un valor."
     },
     "inspector": {
-        "alignment": {
-            "applyCoordinates": "Aplicar coordenadas",
-            "cancelUpdates": "Cancelar",
-            "createShape": "Crear forma",
-            "drawLine": "Dibuja una línea."
-        },
         "marcher": {
-            "createLine": "Crear línea",
             "drillNumber": "Número de Ejercicio",
             "errorLoadingCoords": "Error al cargar coordenadas",
             "loading": "Cargando marcha",
@@ -640,11 +626,6 @@
             "ungroupShapeButton": "Desagrupar",
             "ungroupShapeTooltip": "Eliminar esta forma para esta página. No moverá los marchadores de su posición actual",
             "viewTab": "Vista"
-        },
-        "shapes": {
-            "moreShapesComingSoon": "¡Más formas próximamente!",
-            "selectShape": "Seleccionar Forma",
-            "title": "Formas"
         },
         "title": "Inspector"
     },

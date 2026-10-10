@@ -4,11 +4,14 @@ import type { IntervalRun, Slot, Spacing } from "./types";
 /**
  * Spacing along a path, shared by every path kind.
  *
- * Mixed intervals are written as `steps x count` runs separated by commas, as in Pyware:
- * `5x3,2x4` is three gaps of 5 steps, then four gaps of 2 steps. A bare number is one interval
- * for every gap (`2` means 2-step spacing).
+ * Intervals are typed in steps:
+ * - one number is that interval for every gap: `2`;
+ * - a list is one gap each, in order: `4,4,4,2,2,2,2`;
+ * - `steps x gaps` repeats an interval: `4x3,2x4` is three gaps of 4 steps, then four of 2 (the
+ *   same as the list above). Runs and single gaps can be mixed: `4x3,2,2`.
+ *
+ * A list shorter than the marchers need repeats from its start (`describeGaps` says so).
  */
-
 export type ParsedIntervals =
     | { readonly ok: true; readonly runs: IntervalRun[] }
     | { readonly ok: false; readonly message: string };
@@ -29,7 +32,7 @@ export function parseIntervals(text: string): ParsedIntervals {
         if (!match) {
             return {
                 ok: false,
-                message: `"${part}" isn't an interval. Use steps, or steps x count like 5x3`,
+                message: `"${part}" isn't an interval. Type steps (2), a list (4,4,2) or steps x gaps (4x3)`,
             };
         }
         const steps = Number(match[1]);
@@ -45,11 +48,13 @@ export function parseIntervals(text: string): ParsedIntervals {
         }
         runs.push({ steps, count });
     }
-    if (runs.length > 1 && runs.some((run) => run.count === 0)) {
+    // In a list, a bare number is a single gap; alone, it repeats for every gap
+    if (runs.length > 1) {
         return {
-            ok: false,
-            message:
-                "With mixed intervals, give each run a count, like 5x3,2x4",
+            ok: true,
+            runs: runs.map((run) =>
+                run.count === 0 ? { ...run, count: 1 } : run,
+            ),
         };
     }
     return { ok: true, runs };
@@ -60,7 +65,7 @@ const trim = (n: number) => String(Number(n.toFixed(4)));
 export function formatIntervals(runs: readonly IntervalRun[]): string {
     return runs
         .map((run) =>
-            run.count === 0
+            run.count === 0 || (run.count === 1 && runs.length > 1)
                 ? trim(run.steps)
                 : `${trim(run.steps)}x${run.count}`,
         )
@@ -147,4 +152,22 @@ export function sampleAlong(
         }
     }
     return offsets.map((s) => ({ ...path.at(s), s }));
+}
+
+/**
+ * What a typed list does for `n` marchers, when that isn't obvious: a list shorter than the gaps
+ * needed repeats from its start, a longer one leaves its end unused. Undefined when it fits
+ * exactly or is a single repeating interval.
+ */
+export function describeGaps(
+    runs: readonly IntervalRun[],
+    n: number,
+): string | undefined {
+    const given = runsGapCount(runs);
+    const needed = Math.max(n - 1, 0);
+    if (given === undefined || given === needed) return undefined;
+    const gaps = (k: number) => `${k} ${k === 1 ? "gap" : "gaps"}`;
+    return given < needed
+        ? `${gaps(needed)} needed, ${given} typed: repeating from the first`
+        : `${gaps(needed)} needed, ${given} typed: the last ${given - needed} unused`;
 }

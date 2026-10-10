@@ -15,10 +15,6 @@ import {
 } from "@/global/classes/canvasObjects/stepSizeWarning";
 import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import MarcherVisualGroup from "@/global/classes/MarcherVisualGroup";
-import CanvasMarcher from "@/global/classes/canvasObjects/CanvasMarcher";
-import Pathway from "@/global/classes/canvasObjects/Pathway";
-import MarcherLine from "@/global/classes/canvasObjects/MarcherLine";
-import LineListeners from "@/components/canvas/listeners/LineListeners";
 import type Marcher from "@/global/classes/Marcher";
 import { defaultSettings } from "@/stores/UiSettingsStore";
 import { GOLDEN_FIXTURES } from "../fixtures/goldenFixtures";
@@ -36,7 +32,7 @@ import {
 /**
  * Review fixes for P7.10 (PR #33): the step size is the stride of the fastest moving stretch,
  * count seeding for zig-zags, the real first and last page shapes, mid-page corners, warning
- * styling, the sampling budget and the line tool's marcher ids.
+ * styling and the sampling budget.
  */
 
 const fieldProperties =
@@ -338,49 +334,5 @@ describe("warning styling on the curved path", () => {
             fieldProperties,
         });
         expect(visual.getNextTimelinePathway().visible).toBe(false);
-    });
-});
-
-describe("line tool preview in timeline mode", () => {
-    it("keys the temporary paths by marcher even when positions came from the resolver", () => {
-        const canvas = new OpenMarchCanvas({
-            canvasRef: null,
-            fieldProperties,
-            uiSettings: defaultSettings,
-        });
-        // Positions as the timeline static render leaves them: no marcher_pages row behind them
-        const marchers = [1, 2, 3].map(
-            (id) =>
-                new CanvasMarcher({
-                    marcher: marcher(id),
-                    coordinate: { x: id * 20, y: 40 },
-                }),
-        );
-        for (const canvasMarcher of marchers) {
-            canvas.add(canvasMarcher);
-            canvasMarcher.setMarcherCoords({ x: canvasMarcher.left!, y: 40 });
-        }
-        canvas.eventMarchers = marchers;
-        const setNew = vi.fn();
-        canvas.setGlobalNewMarcherPages = setNew;
-        const listeners = new LineListeners({ canvas });
-        (listeners as unknown as { _activeLine: MarcherLine })._activeLine =
-            new MarcherLine({
-                x1: 0,
-                y1: 100,
-                x2: 200,
-                y2: 100,
-                color: "black",
-                startPageId: 1,
-                endPageId: 1,
-            });
-
-        listeners.drawNewMarcherPaths();
-        const newDots = setNew.mock.calls[0]![0] as { marcher_id: number }[];
-        expect(newDots.map((d) => d.marcher_id).sort()).toEqual([1, 2, 3]);
-        expect(canvas.getObjectsByType(Pathway)).toHaveLength(3);
-
-        listeners.clearPathwaysAndStaticMarchers();
-        expect(canvas.getObjectsByType(Pathway)).toHaveLength(0);
     });
 });

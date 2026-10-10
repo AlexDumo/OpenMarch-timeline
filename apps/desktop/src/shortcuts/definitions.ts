@@ -494,37 +494,11 @@ const STATIC_ACTIONS = {
     },
 
     // Cursor mode
-    applyQuickShape: {
-        labelKey: "actions.shape.applyQuick",
-        category: "cursor",
-        scope: "canvas",
-        defaultBindings: ["Shift+Enter"],
-    },
-    createMarcherShape: {
-        labelKey: "actions.shape.create",
-        category: "cursor",
-        scope: "canvas",
-        // Enter places the shape tool's marchers now (applyShape)
-        defaultBindings: [],
-    },
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
         category: "cursor",
         scope: "canvas",
         defaultBindings: ["Escape"],
-    },
-    alignmentEventDefault: {
-        labelKey: "actions.cursor.defaultMode",
-        category: "cursor",
-        scope: "canvas",
-        defaultBindings: ["V"],
-    },
-    alignmentEventLine: {
-        labelKey: "actions.cursor.lineMode",
-        category: "cursor",
-        scope: "canvas",
-        // L is the shape tool's Line now
-        defaultBindings: [],
     },
 
     // Select
@@ -533,14 +507,6 @@ const STATIC_ACTIONS = {
         category: "select",
         scope: "canvas",
         defaultBindings: ["$mod+A", "Control+A"],
-    },
-
-    // Shapes
-    createCircle: {
-        labelKey: "actions.shape.createCircle",
-        category: "shape",
-        scope: "canvas",
-        defaultBindings: [],
     },
 
     // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it

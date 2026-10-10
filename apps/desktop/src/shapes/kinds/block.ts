@@ -120,6 +120,7 @@ export const blockKind: ShapeKind<BlockParams> = {
     label: "Block",
     icon: SquaresFourIcon,
     family: "fill",
+    defaultOrder: "nearest",
     groups: [
         {
             label: "Size",

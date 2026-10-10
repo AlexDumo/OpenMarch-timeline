@@ -29,10 +29,6 @@
             "setSelectedToPrevious": "Copier les positions de la page précédente (sélection)",
             "setSelectedToPreviousSuccess": "{count, plural, other {Coordonnée'{{count, plural, one {} other {s}}} de {{count}} marcheur{{count, plural, one {} other {s}}} sur la page {{currentPage}} définie avec succès aux coordonnées de la page précédente {{previousPage}}'}}"
         },
-        "cursor": {
-            "defaultMode": "Mode sélection",
-            "lineMode": "Créer une ligne"
-        },
         "edit": {
             "noRedoAvailable": "Aucune action à rétablir",
             "noUndoAvailable": "Aucune action à annuler",
@@ -77,9 +73,6 @@
             "selectAll": "Tout sélectionner"
         },
         "shape": {
-            "applyQuick": "Aligner sur la forme",
-            "create": "Créer une forme",
-            "createCircle": "Créer cercle",
             "delete": "Supprime les formes sélectionnées actuelles",
             "noMarchersSelected": "Aucun marcheur sélectionné"
         },
@@ -580,14 +573,7 @@
         "valueMissing": "Veuillez entrer une valeur."
     },
     "inspector": {
-        "alignment": {
-            "applyCoordinates": "Appliquer coordonnées",
-            "cancelUpdates": "Annuler",
-            "createShape": "Créer Forme",
-            "drawLine": "Tracer une ligne."
-        },
         "marcher": {
-            "createLine": "Créer la Ligne",
             "drillNumber": "Numéro de parcours",
             "errorLoadingCoords": "Erreur de chargement des coordonnées",
             "loading": "Chargement du marcheur",
@@ -640,11 +626,6 @@
             "ungroupShapeButton": "Dissocier",
             "ungroupShapeTooltip": "Supprimer cette forme pour cette page. Ne déplacera pas les marcheurs de leur position actuelle",
             "viewTab": "Vue"
-        },
-        "shapes": {
-            "moreShapesComingSoon": "Davantage de formes bientôt disponibles !",
-            "selectShape": "Sélectionner Forme",
-            "title": "Formes"
         },
         "title": "Inspecteur"
     },

@@ -27,6 +27,8 @@ export interface ShapeSession {
     readonly marchers: readonly AssignMarcher[];
     readonly order: OrderMode;
     readonly reverse: boolean;
+    /** The user picked the order (or Reverse), so it carries over to other kinds */
+    readonly orderChosen?: boolean;
     /** The slot index for each marcher, in `marchers` order */
     readonly assignment: readonly number[];
 }
@@ -110,8 +112,16 @@ export function startSession({
             kindId,
             params,
             marchers,
-            order: previous?.order ?? DEFAULT_ORDER,
-            reverse: previous?.reverse ?? false,
+            ...(previous?.orderChosen
+                ? {
+                      order: previous.order,
+                      reverse: previous.reverse,
+                      orderChosen: true,
+                  }
+                : {
+                      order: kind.defaultOrder ?? DEFAULT_ORDER,
+                      reverse: false,
+                  }),
         },
         ctx,
     );
@@ -139,13 +149,36 @@ export function changeParams(
     return { ...session, params };
 }
 
+/** The session with one of its kind's measures set to `value` (field units or radians) */
+export function changeMeasure(
+    session: ShapeSession,
+    key: string,
+    value: number,
+    ctx: ShapeContext,
+): ShapeSession {
+    const measure = kindOf(session.kindId).measures?.find((m) => m.key === key);
+    if (!measure) return session;
+    return {
+        ...session,
+        params: measure.set(
+            session.params,
+            value,
+            session.marchers.length,
+            ctx,
+        ),
+    };
+}
+
 export function changeOrder(
     session: ShapeSession,
     order: OrderMode,
     reverse: boolean,
     ctx: ShapeContext,
 ): ShapeSession {
-    return withAssignment({ ...session, order, reverse }, ctx);
+    return withAssignment(
+        { ...session, order, reverse, orderChosen: true },
+        ctx,
+    );
 }
 
 export function reassign(
@@ -216,6 +249,8 @@ export interface ShapePreview {
         readonly to: XY;
     }[];
     readonly outline: readonly XY[][];
+    /** Fainter lines for the rest of the shape */
+    readonly guide: readonly XY[][];
     readonly handles: readonly HandleDef[];
     readonly readouts: readonly Readout[];
     readonly issues: readonly ShapeIssue[];
@@ -243,6 +278,7 @@ export function previewSession(
         slots,
         targets,
         outline: kind.outline(session.params, n, ctx),
+        guide: kind.guide?.(session.params, n, ctx) ?? [],
         handles: kind.handles(session.params, n, ctx),
         readouts: kind.readouts?.(session.params, n, ctx) ?? [],
         issues,

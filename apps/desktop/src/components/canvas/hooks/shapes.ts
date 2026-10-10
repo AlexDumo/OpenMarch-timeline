@@ -13,8 +13,7 @@ import { useEffect, useRef } from "react";
  * In timeline mode (P7.11) it draws none and reads none: shape pages are frozen page-era rows
  * that no longer say where marchers are, and their edits would write `marcher_pages`. Turning
  * timeline mode on removes the page shapes, and a page render still running then (it awaits each
- * shape's marchers) stops and is cleared. Timeline mode draws the spec shape picked in the
- * inspector instead (`useTimelineShapeCanvas`).
+ * shape's marchers) stops and is cleared.
  */
 export const useRenderMarcherShapes = ({
     canvas,

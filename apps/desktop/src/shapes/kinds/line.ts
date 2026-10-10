@@ -1,8 +1,23 @@
 import { LineSegmentIcon } from "@phosphor-icons/react";
 import { principalExtremes } from "../geometry/fit";
 import { makePath, type Path } from "../geometry/path";
-import { add, dist, mid, snapAngle, sub, xy } from "../geometry/vec";
-import { FIT, pathReadouts, SPACING_GROUP } from "./pathKind";
+import {
+    add,
+    dist,
+    mid,
+    scale,
+    snapAngle,
+    sub,
+    unit,
+    xy,
+} from "../geometry/vec";
+import {
+    FIT,
+    pathReadouts,
+    SPACING_GROUP,
+    pathGuide,
+    pathOutline,
+} from "./pathKind";
 import { sampleAlong } from "../spacing";
 import type { ShapeKind, Spacing, XY } from "../types";
 
@@ -22,6 +37,39 @@ export const lineKind: ShapeKind<LineParams> = {
     icon: LineSegmentIcon,
     family: "path",
     groups: [SPACING_GROUP],
+    measures: [
+        {
+            key: "length",
+            label: "Length",
+            unit: "length",
+            min: 0.25,
+            get: (p) => dist(p.a, p.b),
+            // From the start end, keeping the direction
+            set: (p, length) => ({
+                ...p,
+                b: add(p.a, scale(unit(sub(p.b, p.a)), length)),
+            }),
+            // With an interval the marchers set the length
+            visibleWhen: (p) => p.spacing.mode === "fit",
+        },
+        {
+            key: "angle",
+            label: "Angle",
+            unit: "angle",
+            // Counterclockwise as seen on screen, 0 along the sidelines
+            get: (p) => Math.atan2(-(p.b.y - p.a.y), p.b.x - p.a.x),
+            set: (p, angle) => {
+                const length = dist(p.a, p.b);
+                return {
+                    ...p,
+                    b: add(
+                        p.a,
+                        xy(length * Math.cos(angle), -length * Math.sin(angle)),
+                    ),
+                };
+            },
+        },
+    ],
 
     fit({ current }, ctx) {
         const ends = principalExtremes(current);
@@ -38,7 +86,7 @@ export const lineKind: ShapeKind<LineParams> = {
     },
 
     handles: (p) => [
-        { key: "a", role: "point", at: p.a },
+        { key: "a", role: "point", at: p.a, start: true },
         { key: "b", role: "point", at: p.b },
         { key: "move", role: "move", at: mid(p.a, p.b) },
     ],
@@ -55,13 +103,9 @@ export const lineKind: ShapeKind<LineParams> = {
         return p;
     },
 
-    outline(p, n, ctx) {
-        const path = linePath(p);
-        const slots = sampleAlong(path, p.spacing, n, ctx.stepPx);
-        const first = Math.min(0, slots[0]?.s ?? 0);
-        const last = Math.max(path.length, slots.at(-1)?.s ?? 0);
-        return [[path.at(first), path.at(last)]];
-    },
+    outline: (p, n, ctx) => pathOutline(linePath(p), p.spacing, n, ctx),
+
+    guide: (p, _n, ctx) => pathGuide(linePath(p), p.spacing, ctx),
 
     generate: (p, n, ctx) => sampleAlong(linePath(p), p.spacing, n, ctx.stepPx),
 

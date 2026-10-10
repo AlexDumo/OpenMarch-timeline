@@ -33,8 +33,8 @@ export function useApplyShape(): () => Promise<void> {
     const { mutateAsync } = useUpdateSelectedMarchersOnSelectedPage();
     return useCallback(async () => {
         const canvas = currentCanvas();
-        const { session, close } = useShapeToolStore.getState();
-        if (!canvas || !session) return;
+        const { session, close, inputError } = useShapeToolStore.getState();
+        if (!canvas || !session || inputError) return;
         const preview = previewSession(session, shapeContextFor(canvas));
         if (!preview.canApply) return;
         const targets = new Map(preview.targets.map((t) => [t.id, t.to]));
@@ -55,6 +55,7 @@ export function useShapeToolActions(): void {
     const { ready, selectedMarchers } = useEditorReadiness();
     const open = useShapeToolStore((s) => s.session !== null);
     const dragging = useShapeToolStore((s) => s.dragging !== null);
+    const inputError = useShapeToolStore((s) => s.inputError !== null);
     const apply = useApplyShape();
 
     useActionHandlerGroup(
@@ -79,6 +80,6 @@ export function useShapeToolActions(): void {
         () => {
             void apply();
         },
-        { enabled: open && !dragging },
+        { enabled: open && !dragging && !inputError },
     );
 }
