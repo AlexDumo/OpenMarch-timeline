@@ -57,7 +57,7 @@ reference pages during the build.
 
 | Section       | Model                                                                    | Working dimensions          | Hold     |
 | ------------- | ------------------------------------------------------------------------ | --------------------------- | -------- |
-| Trumpet       | Bb trumpet, 3 piston valves                                              | length 0.48, bell 0.125     | brass    |
+| Trumpet       | Bb trumpet, 3 piston valves; a modeled mesh (Kagelok, CC BY 4.0)         | length 0.48, bell 0.125     | brass    |
 | Mellophone    | marching mellophone, front bell                                          | length 0.55, bell 0.26      | brass    |
 | Baritone      | marching baritone, front bell                                            | length 0.62, bell 0.25      | brass    |
 | Euphonium     | marching euphonium, front bell                                           | length 0.66, bell 0.28      | brass    |
@@ -160,6 +160,18 @@ style lives in proportion and finish rather than surface detail, the
 geometry instances with the body for free, and a dimension change is a
 number. Hand-modeled GLB assets are the alternative if the result reads as
 too simple; the attachment and paint path below is the same either way.
+
+**Modeled meshes (2026-10-09).** The trumpet is the first instrument from a
+modeled mesh rather than code: "Trumpet" by Kagelok on Sketchfab, CC BY 4.0
+(credit and changes in `src/view3d/assets/instruments/CREDITS.md`). The
+owner picked it as the look every horn should match. Blender bakes it into
+the instrument frame with `apps/desktop/scripts/view3d-assets/export-horn.py`
+and a per-horn config (scale, grip origin, material-to-part map, a decimate
+ratio per detail), writing quantized JSON that `core/instruments/meshAsset.ts`
+turns back into pieces. The trumpet keeps the procedural trumpet's mouthpiece
+rim, (0, 0.018, −0.168), so the brass holds are unchanged. Only meshes whose
+license allows redistribution under AGPL, such as CC0 or CC BY with credit,
+can ship here.
 
 **Material (revised 2026-10-08).** The first pass painted horns through the
 uniform shader: flat-shaded, no metalness, one color. It cannot read as

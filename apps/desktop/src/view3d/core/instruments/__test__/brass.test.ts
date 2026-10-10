@@ -42,6 +42,25 @@ describe("brass models", () => {
         expect(max[1]).toBeGreaterThan(0.03);
     });
 
+    it("bakes the modeled trumpet with its mouthpiece rim where the holds expect it", () => {
+        for (const detail of ["high", "low"] as const) {
+            const m = brassModel("trumpet", detail);
+            const { min } = bounds(m.pieces);
+            // the rim is the rearmost point, level with the leadpipe
+            expect(min[2]).toBeCloseTo(-0.168, 2);
+            expect(m.pieces.some((p) => p.part === 23)).toBe(true);
+            for (const p of m.pieces)
+                for (let i = 0; i < p.normals.length; i += 3)
+                    expect(
+                        Math.hypot(
+                            p.normals[i],
+                            p.normals[i + 1],
+                            p.normals[i + 2],
+                        ),
+                    ).toBeCloseTo(1, 5);
+        }
+    });
+
     it("lays the contra's loop behind the grip with the bell forward", () => {
         const m = brassModel("contra");
         const { min, max } = bounds(m.pieces);
@@ -63,7 +82,7 @@ describe("brass models", () => {
     it("uses only instrument part ids and colors every vertex at high detail", () => {
         for (const id of IDS)
             for (const p of brassModel(id, "high").pieces) {
-                expect([16, 18, 22]).toContain(p.part);
+                expect([16, 18, 22, 23]).toContain(p.part);
                 expect(p.colors?.length).toBe(p.positions.length);
             }
     });

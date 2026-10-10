@@ -21,12 +21,15 @@ import {
     PART_BLACK,
     PART_CHROME,
     PART_METAL,
+    PART_WOOD,
     type Mat4,
     type Piece,
     type Vec3,
 } from "./mesh";
 
 import type { BrassModelId, Detail, InstrumentModel } from "./model";
+import { bakedPieces, type BakedMesh } from "./meshAsset";
+import trumpetMesh from "../../assets/instruments/trumpet.json";
 
 export type { BrassModelId, Detail, InstrumentModel };
 
@@ -44,11 +47,15 @@ export const BRASS_DIMENSIONS: Record<
     contra: { length: 0.95, bell: 0.5, bore: 0.0185 },
 };
 
-/** Default colors by part: gold lacquer, chrome, black. The window recolors silver. */
+/**
+ * Default colors by part: gold lacquer, chrome, black, and the pearl of the
+ * trumpet's valve buttons. The window recolors silver.
+ */
 export const BRASS_COLORS: Record<number, number> = {
     [PART_METAL]: 0xd9ad4f,
     [PART_CHROME]: 0xd9dde2,
     [PART_BLACK]: 0x141416,
+    [PART_WOOD]: 0xf2efe6,
 };
 
 interface SegmentCounts {
@@ -559,12 +566,31 @@ function contra(detail: Detail): InstrumentModel {
     };
 }
 
+/**
+ * The trumpet: "Trumpet" by Kagelok (CC BY 4.0, see
+ * `assets/instruments/CREDITS.md`), baked into the instrument frame at
+ * 0.48 m long with its mouthpiece rim where the valved horns put theirs,
+ * so the brass holds bring it to the lips.
+ */
+function trumpet(detail: Detail): InstrumentModel {
+    return {
+        id: "trumpet",
+        pieces: colorPieces(
+            bakedPieces(trumpetMesh as BakedMesh, detail),
+            (part) => BRASS_COLORS[part] ?? BRASS_COLORS[PART_METAL],
+        ),
+        leftGrip: [0.03, -0.012, 0.03],
+        mouthpiece: [0, 0.018, -0.093],
+    };
+}
+
 export function brassModel(
     id: BrassModelId,
     detail: Detail = "high",
 ): InstrumentModel {
     switch (id) {
         case "trumpet":
+            return trumpet(detail);
         case "mellophone":
         case "baritone":
         case "euphonium":

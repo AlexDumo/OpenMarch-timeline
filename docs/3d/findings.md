@@ -283,3 +283,20 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
 - Checked in the web preview with Guard equipment set to Swing flag and to
   Double swing, from the front row and the press box: one flag in the right
   hand with the left arm down, or a low V with a flag in each hand.
+
+### 2026-10-09 · trevor (3d/p7-instruments) · modeled trumpet
+
+- Owner supplied "Trumpet" by Kagelok (Sketchfab, CC BY 4.0) as the
+  trumpet to use and the look for the other horns.
+- Source: 58 objects, 28,332 triangles, materials Gold, Silver, Black and
+  White, bell along +X and valve caps up +Z, 8.93 units long. The pinky hook
+  sits on the leadpipe side (−Y), the player's right with the bell forward,
+  so the file isn't mirrored.
+- Baked (Blender 4.2.3, `export-horn.py`, `trumpet.config.json`): scale
+  0.05375 to 0.48 m, origin chosen so the mouthpiece rim is at
+  (0, 0.018, −0.168) like the procedural trumpet's. High: 10,836 triangles
+  and 7,376 vertices; low: 3,423 and 2,483. The JSON is 406 KB. Re-running
+  the exporter reproduces it byte for byte.
+- Checked in the web preview from the front row: the trumpets draw the new
+  mesh, bells forward at the lips, valves and silver slides visible from
+  the side.

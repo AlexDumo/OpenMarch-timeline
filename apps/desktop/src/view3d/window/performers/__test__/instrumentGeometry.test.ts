@@ -65,7 +65,8 @@ describe("instrumentGeometry", () => {
         const parts = new Set<number>();
         const part = g.getAttribute("_part");
         for (let i = 0; i < part.count; i++) parts.add(part.getX(i));
-        expect([...parts].sort()).toEqual([16, 18, 22]);
+        // gold, chrome, black, and the pearl valve buttons
+        expect([...parts].sort()).toEqual([16, 18, 22, 23]);
     });
 
     it("lands on the hold's placement once skinned with the posed hand", async () => {
