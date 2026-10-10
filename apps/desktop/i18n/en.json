@@ -94,6 +94,9 @@
             "noMarchersSelected": "No marchers selected",
             "line": "Shape: Line",
             "arc": "Shape: Arc",
+            "circle": "Shape: Circle",
+            "curve": "Shape: Curve",
+            "block": "Shape: Block",
             "apply": "Place marchers on the shape",
             "keywords": "shape form formation set place"
         },

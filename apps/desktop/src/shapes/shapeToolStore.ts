@@ -7,6 +7,7 @@ import {
     dragHandle,
     reassign,
     startSession,
+    translateSession,
     type ShapeSession,
 } from "./session";
 import type { ShapeContext, XY } from "./types";
@@ -28,6 +29,8 @@ interface ShapeToolState {
     setParams(params: unknown): void;
     setOrder(order: OrderMode, reverse: boolean, ctx: ShapeContext): void;
     reassign(ctx: ShapeContext): void;
+    /** Moves the whole shape by `delta` field units (the nudge keys while the tool is open) */
+    nudge(delta: XY, ctx: ShapeContext): void;
     /** The handle being dragged and the params when its drag started */
     dragging: { key: string; base: unknown } | null;
     startDrag(key: string): void;
@@ -68,6 +71,11 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => ({
     reassign(ctx) {
         const { session } = get();
         if (session) set({ session: reassign(session, ctx) });
+    },
+    nudge(delta, ctx) {
+        const { session, dragging } = get();
+        if (session && !dragging)
+            set({ session: translateSession(session, delta, ctx) });
     },
     dragging: null,
     startDrag(key) {

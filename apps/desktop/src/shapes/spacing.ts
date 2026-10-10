@@ -103,10 +103,9 @@ export function spacedLength(
     stepPx: number,
 ): number {
     if (spacing.mode === "fit") return path.length;
-    const gapCount = path.closed ? n : n - 1;
+    // `sampleAlong` lays n - 1 gaps, closed path or not
     return (
-        gapsInSteps(spacing.runs, gapCount).reduce((sum, g) => sum + g, 0) *
-        stepPx
+        gapsInSteps(spacing.runs, n - 1).reduce((sum, g) => sum + g, 0) * stepPx
     );
 }
 

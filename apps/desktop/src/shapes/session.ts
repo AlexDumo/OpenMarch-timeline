@@ -178,6 +178,35 @@ export function dragHandle(
     };
 }
 
+/**
+ * The whole shape moved by `delta`, through the kind's move handle, so every kind that has one
+ * can be nudged the same way. A kind without a move handle doesn't move.
+ */
+export function translateSession(
+    session: ShapeSession,
+    delta: XY,
+    ctx: ShapeContext,
+): ShapeSession {
+    const kind = kindOf(session.kindId);
+    const n = session.marchers.length;
+    const handle = kind
+        .handles(session.params, n, ctx)
+        .find((h) => h.role === "move");
+    if (!handle) return session;
+    const to = { x: handle.at.x + delta.x, y: handle.at.y + delta.y };
+    return {
+        ...session,
+        params: kind.drag(
+            session.params,
+            handle.key,
+            to,
+            { shift: false },
+            n,
+            ctx,
+        ),
+    };
+}
+
 export interface ShapePreview {
     readonly slots: readonly Slot[];
     /** Where each marcher goes, in `session.marchers` order */

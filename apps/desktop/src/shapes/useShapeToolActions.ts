@@ -18,6 +18,9 @@ import { useShapeToolStore } from "./shapeToolStore";
 export const SHAPE_KIND_ACTIONS = {
     line: "shapeLine",
     arc: "shapeArc",
+    circle: "shapeCircle",
+    curve: "shapeCurve",
+    block: "shapeBlock",
 } as const satisfies Record<string, ActionId>;
 
 const KIND_ACTION_IDS = Object.values(SHAPE_KIND_ACTIONS);
@@ -78,19 +81,4 @@ export function useShapeToolActions(): void {
         },
         { enabled: open && !dragging },
     );
-}
-
-/**
- * While the tool is open it takes Escape ("Cancel or deselect"): a drag goes back to where it
- * started, otherwise the tool closes and the marchers stay selected. Mounted only while a session
- * is open, so its handler sits on top of the cursor mode's and Escape deselects again once the
- * tool is closed.
- */
-export function ShapeToolEscape(): null {
-    useActionHandler("cancelAlignmentUpdates", () => {
-        const store = useShapeToolStore.getState();
-        if (store.dragging) store.cancelDrag();
-        else store.close();
-    });
-    return null;
 }

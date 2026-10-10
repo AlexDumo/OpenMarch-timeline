@@ -20,7 +20,8 @@ const colorsOf = (theme: FieldTheme): ShapeToolOverlayColors => ({
  * Draws the open shape tool session on the canvas and turns handle drags into param changes.
  *
  * The session follows the selection: selecting other marchers restarts it on them with the same
- * kind and settings, and clearing the selection or starting playback closes it.
+ * kind and settings. Clicking empty field keeps the tool's marchers selected; Escape or
+ * playback closes it. The marchers' own selection is locked meanwhile, so only the handles move.
  */
 export function useShapeToolCanvas({
     canvas,
@@ -33,7 +34,6 @@ export function useShapeToolCanvas({
 }): void {
     const session = useShapeToolStore((s) => s.session);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
-    const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
 
     useEffect(() => {
         if (!canvas) return;
@@ -68,28 +68,7 @@ export function useShapeToolCanvas({
         if (isPlaying) useShapeToolStore.getState().close();
     }, [isPlaying]);
 
-    // Follow the selection
-    useEffect(() => {
-        if (!canvas || !selectedMarchers) return;
-        const {
-            session: open,
-            open: restart,
-            close,
-        } = useShapeToolStore.getState();
-        if (!open) return;
-        const ids = selectedMarchers.map((m) => m.id);
-        const same =
-            ids.length === open.marchers.length &&
-            ids.every((id, i) => open.marchers[i]!.id === id);
-        if (same) return;
-        if (ids.length === 0) close();
-        else
-            restart(
-                open.kindId,
-                marchersOnCanvas(canvas, ids),
-                shapeContextFor(canvas),
-            );
-    }, [canvas, selectedMarchers]);
+    useShapeToolSelection(canvas, session !== null);
 
     useEffect(() => {
         const overlay = overlayRef.current;
@@ -100,4 +79,53 @@ export function useShapeToolCanvas({
         }
         overlay.show(previewSession(session, shapeContextFor(canvas)));
     }, [canvas, session, theme]);
+}
+
+/**
+ * The session follows the selection: selecting other marchers restarts it on them with the same
+ * kind and settings, and clicking empty field keeps the tool's marchers selected. The marchers'
+ * own selection is locked while the tool is open, so only the handles move.
+ */
+function useShapeToolSelection(
+    canvas: OpenMarchCanvas | null,
+    isOpen: boolean,
+): void {
+    const selectedContext = useSelectedMarchers();
+    const selectedMarchers = selectedContext?.selectedMarchers;
+    const setSelectedMarchers = selectedContext?.setSelectedMarchers;
+
+    // Follow the selection
+    useEffect(() => {
+        if (!canvas || !selectedMarchers) return;
+        const { session: open, open: restart } = useShapeToolStore.getState();
+        if (!open) return;
+        const ids = selectedMarchers.map((m) => m.id);
+        // The same marchers in another order (after restoring them below) are the same session
+        const inSession = new Set(open.marchers.map((m) => m.id));
+        const same =
+            ids.length === inSession.size &&
+            ids.every((id) => inSession.has(id));
+        if (same) return;
+        // A click on empty field doesn't drop a shape being tuned: keep its marchers selected.
+        // Escape closes the tool.
+        if (ids.length === 0) {
+            setSelectedMarchers?.(
+                canvas
+                    .getCanvasMarchers()
+                    .filter((m) => inSession.has(m.id))
+                    .map((m) => m.marcherObj),
+            );
+            return;
+        }
+        restart(
+            open.kindId,
+            marchersOnCanvas(canvas, ids),
+            shapeContextFor(canvas),
+        );
+    }, [canvas, selectedMarchers, setSelectedMarchers]);
+
+    // The selection stays put while the tool is open; the handles move the shape
+    useEffect(() => {
+        canvas?.setSelectionLocked(isOpen);
+    }, [canvas, isOpen]);
 }
