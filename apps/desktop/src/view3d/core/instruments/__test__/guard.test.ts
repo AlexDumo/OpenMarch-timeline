@@ -8,8 +8,9 @@ import {
     PART_SILK,
     PART_CHROME,
     PART_WOOD,
+    PART_METAL,
 } from "../mesh";
-import { guardModel } from "../guard";
+import { guardModel, sectionAt, RIFLE_STATIONS, RIFLE_SWIVELS } from "../guard";
 import type { GuardModelId } from "../model";
 
 const IDS: GuardModelId[] = [
@@ -71,10 +72,11 @@ describe("guard equipment", () => {
         expect(s.min[2]).toBeLessThan(0);
     });
 
-    it("hangs the rifle's sling from its swivel tips", () => {
-        // the sling is the rifle's only black piece
-        const sling = guardModel("rifle").pieces.filter(
-            (p) => p.part === PART_BLACK,
+    it("hangs the rifle's sling taut between its swivel tips", () => {
+        const m = guardModel("rifle");
+        // the sling: the black piece that runs between the swivels
+        const sling = m.pieces.filter(
+            (p) => p.part === PART_BLACK && bounds([p]).min[2] < 0,
         );
         expect(sling.length).toBe(1);
         const ringY = (z: number) => {
@@ -85,37 +87,89 @@ describe("guard equipment", () => {
             expect(ys.length).toBeGreaterThan(0);
             return ys.reduce((a, b) => a + b, 0) / ys.length;
         };
-        // front swivel tip at (y -0.035, z 0.45), back at (y -0.095, z -0.22)
-        expect(Math.abs(ringY(0.45) - -0.035)).toBeLessThan(0.004);
-        expect(Math.abs(ringY(-0.22) - -0.095)).toBeLessThan(0.004);
+        // each end at its swivel's tip, 12 mm under the body
+        for (const z of [RIFLE_SWIVELS.back, RIFLE_SWIVELS.front]) {
+            const tip = sectionAt(RIFLE_STATIONS, z).bottom - 0.012;
+            expect(Math.abs(ringY(z) - tip)).toBeLessThan(0.004);
+        }
     });
 
-    it("hangs the back swivel from the stock's underside, not inside it", () => {
+    it("hangs each swivel from the body's underside, not inside it", () => {
         const m = guardModel("rifle");
-        // the stock: the white body behind the grip
-        const stock = m.pieces.filter(
-            (p) => p.part === PART_WOOD && bounds([p]).min[2] < -0.25,
+        const body = m.pieces.filter((p) => p.part === PART_WOOD);
+        expect(body.length).toBe(1);
+        for (const z of [RIFLE_SWIVELS.back, RIFLE_SWIVELS.front]) {
+            // the body's lowest point on its ring nearest the swivel
+            let underside = 0;
+            const bp = body[0].positions;
+            for (let i = 0; i < bp.length; i += 3)
+                if (Math.abs(bp[i + 2] - z) < 0.01)
+                    underside = Math.min(underside, bp[i + 1]);
+            const swivel = m.pieces.filter((p) => {
+                const b = bounds([p]);
+                return (
+                    p.part === PART_CHROME &&
+                    b.min[2] > z - 0.01 &&
+                    b.max[2] < z + 0.01
+                );
+            });
+            expect(swivel.length).toBe(1);
+            const b = bounds(swivel);
+            // it starts just inside the wood and hangs below it
+            expect(b.max[1]).toBeLessThan(underside + 0.008);
+            expect(b.min[1]).toBeLessThan(underside - 0.01);
+        }
+    });
+
+    it("shapes the rifle like a drill rifle: deep butt, slim wrist, no barrel", () => {
+        const depth = (z: number) => {
+            const s = sectionAt(RIFLE_STATIONS, z);
+            return s.top - s.bottom;
+        };
+        expect(depth(-0.28)).toBeGreaterThan(0.1);
+        // the wrist under the hand is the slimmest part behind the muzzle
+        expect(depth(0)).toBeLessThan(0.04);
+        expect(depth(0)).toBeLessThan(depth(0.3));
+        // flat-sided: deeper than it is wide at the butt
+        expect(depth(-0.2)).toBeGreaterThan(
+            2 * 2 * sectionAt(RIFLE_STATIONS, -0.2).half,
         );
-        expect(stock.length).toBe(1);
-        // the stock's lowest point on its ring at z -0.2, just ahead of the
-        // swivel at -0.22 (the underside drops toward the butt from there)
-        let underside = 0;
-        const sp = stock[0].positions;
-        for (let i = 0; i < sp.length; i += 3)
-            if (Math.abs(sp[i + 2] - -0.2) < 0.005)
-                underside = Math.min(underside, sp[i + 1]);
-        expect(underside).toBeLessThan(-0.07);
-        const swivel = m.pieces.filter((p) => {
-            const b = bounds([p]);
-            return (
-                p.part === PART_CHROME && b.min[2] > -0.24 && b.max[2] < -0.2
-            );
-        });
-        expect(swivel.length).toBe(1);
-        const b = bounds(swivel);
-        // it starts just inside the wood and hangs below it
-        expect(b.max[1]).toBeLessThan(underside + 0.008);
-        expect(b.min[1]).toBeLessThan(underside - 0.01);
+        // nothing but the body reaches the muzzle
+        const m = guardModel("rifle");
+        const ahead = m.pieces.filter((p) => bounds([p]).max[2] > 0.5);
+        expect(ahead.every((p) => p.part === PART_WOOD)).toBe(true);
+    });
+
+    it("hangs a swing flag's silk from above the hand, its fly drooping", () => {
+        const m = guardModel("swingFlag");
+        const silk = m.pieces.filter((p) => p.part === PART_SILK);
+        const pole = bounds(m.pieces.filter((p) => p.part === PART_CHROME));
+        // the sheet: the silk piece that reaches out from the pole
+        const sheet = silk.find((p) => bounds([p]).max[0] > 1);
+        expect(sheet).toBeDefined();
+        const s = bounds([sheet!]);
+        // a bare tab below the silk where the hand holds the pole
+        const hoist = sheet!.positions.filter(
+            (_, i) => i % 3 === 2 && sheet!.positions[i - 2] < 0.05,
+        );
+        expect(Math.min(...hoist)).toBeGreaterThan(0.03);
+        expect(pole.min[2]).toBeLessThan(-0.2);
+        // longer than it is tall, and its fly end falls below the hoist
+        expect(s.max[0]).toBeGreaterThan(1.2);
+        expect(s.min[2]).toBeLessThan(Math.min(...hoist) - 0.2);
+        // a sleeve of silk around the pole
+        expect(silk.length).toBe(2);
+    });
+
+    it("gives the sabre a chrome hilt and a capped tip", () => {
+        const m = guardModel("sabre");
+        expect(m.pieces.some((p) => p.part === PART_METAL)).toBe(false);
+        const tip = m.pieces.filter((p) => p.part === PART_WOOD);
+        expect(tip.length).toBe(1);
+        const all = bounds(m.pieces);
+        expect(bounds(tip).max[2]).toBeCloseTo(all.max[2], 3);
+        // the knuckle bow stands out past the fingers on the edge side
+        expect(all.max[0]).toBeGreaterThan(0.06);
     });
 
     it("colors every vertex", () => {

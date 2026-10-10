@@ -1,6 +1,6 @@
 # Instruments, holds and front ensemble props: design
 
-<!-- cspell:words mellophone mellophones sousaphone sousaphones contras leadpipe Mylar lathed swept subwoofer spocks ligature -->
+<!-- cspell:words Zaber mellophone mellophones sousaphone sousaphones contras leadpipe Mylar lathed swept subwoofer spocks ligature -->
 
 Status: reviewed by the owner 2026-10-08; §9 item 3 (props persistence) is
 still open. Nothing here is built.
@@ -126,13 +126,13 @@ drum 2.
 
 ### Guard, Other, Pit
 
-| Model             | What it is                                                          | Working dimensions         | Hold  |
-| ----------------- | ------------------------------------------------------------------- | -------------------------- | ----- |
-| 6 ft flag         | chrome pole, rubber end caps, tape, a silk in the section's color   | pole 1.83, silk 36 × 54 in | flag  |
-| Swing flag        | short pole with the silk along its length                           | pole 0.9, silk 1.2 × 0.9   | flag  |
-| Double swing flag | two swing flags, one in each hand                                   | as the swing flag          | flag  |
-| Rifle             | white drill rifle, chrome bolt and swivels, black sling             | 0.91 long                  | rifle |
-| Sabre             | curved chrome blade, brass guard and knuckle bow, wire-wrapped grip | blade 0.8, grip 0.12       | sabre |
+| Model             | What it is                                                                                                   | Working dimensions                    | Hold  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------- | ----- |
+| 6 ft flag         | chrome pole, rubber end caps, tape, a silk in the section's color                                            | pole 1.83, silk 36 × 54 in            | flag  |
+| Swing flag        | pole held at a bare tab, the silk sleeved along the rest, its long fly drooping                              | pole 1.02 (tab 0.32), silk 1.5 × 0.7  | flag  |
+| Double swing flag | two swing flags, one in each hand                                                                            | as the swing flag                     | flag  |
+| Rifle             | white spinning rifle (an Ultra Spin): flat-sided stock, wrist dip, chrome bolt plate, black sling drawn taut | 0.91 long, butt 0.12 deep             | rifle |
+| Sabre             | spinning sabre (a Zaber): broad curved chrome blade, rubber tip, chrome cup and D-bow, finger-grooved grip   | blade 0.8 (85 mm of curve), grip 0.12 | sabre |
 
 Today the Color Guard and Flag sections carry the 6 ft flag and the Rifle
 section the rifle. The swing flag, the double swing flag and the sabre are

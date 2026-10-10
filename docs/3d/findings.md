@@ -221,3 +221,30 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   JackBrittAct1 bakes 1,639 rows, 123.6 MB, in 0.99 s.
 
 ## Verdicts
+
+### 2026-10-09 · trevor (3d/architecture-props) · rifle, sabre and swing flag models
+
+- Rebuilt against product photos: an Ultra Spin rifle, a Zaber <!-- cspell:ignore Zaber --> sabre, and
+  swing flags held at the tab.
+- Rifle: the stock was a round lathe with a barrel, a barrel band and a
+  trigger guard standing proud of it. It is now a loft of rounded-rectangle
+  sections (`RIFLE_STATIONS`): 0.12 m deep at the butt, 0.033 m at the wrist
+  under the hand, a chrome bolt plate let into the top, no barrel or trigger
+  guard, and the sling drawn nearly straight from under the butt (z −0.255)
+  to under the fore-end (z 0.40). The hold's grip point and `leftGrip` are
+  unchanged.
+- Sabre: the blade went from 30 to 8 mm wide (a rapier point) to 25 to 19 mm
+  with a white rubber tip cap, and curves 85 mm off straight instead of 50.
+  The hilt is chrome, no longer the brass finish: a cup guard, a 24 mm flat
+  D-bow, two side bars, and four finger grooves on the edge side of the grip.
+- Swing flag: the silk covered the hand (it ran the pole's full 0.9 m). Now
+  the pole is 1.02 m with a 0.32 m bare tab below the hand side, the silk is
+  1.5 × 0.7 m with a sleeve around the pole, and its fly end droops 0.5 m and
+  rolls in a deeper wave. The 6 ft flag's silk is unchanged.
+- Triangles (high / low): swingFlag 4,864 / 328, doubleSwingFlag
+  9,728 / 656, rifle 6,464 / 1,104, sabre 9,088 / 924, flag6 4,736 / 288
+  (unchanged). All are inside the budgets in `guard.test.ts`.
+- Checked in a three.js preview of each model (side, top, three-quarter and
+  close views, high and low), not in the Electron app. Holds were not
+  changed; the Guard equipment setting puts the swing flags and sabre in
+  the guard's hands to check them there.
