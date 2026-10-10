@@ -21,6 +21,7 @@ const NUDGE_DELTA = {
  * - Escape ("Cancel or deselect"): a drag goes back to where it started, otherwise the tool closes
  *   and the marchers stay selected.
  * - The nudge keys move the shape, not the marchers, by the same distances.
+ * - Undo and Redo step through the shape's own edits.
  */
 export function ShapeToolKeys(): null {
     useActionHandler("cancelAlignmentUpdates", () => {
@@ -28,6 +29,11 @@ export function ShapeToolKeys(): null {
         if (store.dragging) store.cancelDrag();
         else store.close();
     });
+
+    // Undo and Redo step through the shape's edits while it's open; the show is untouched until
+    // Place, so its own history would undo something else (the last placed shape)
+    useActionHandler("performUndo", () => useShapeToolStore.getState().undo());
+    useActionHandler("performRedo", () => useShapeToolStore.getState().redo());
 
     useActionHandlerGroup(NUDGE_ACTION_IDS, (_id, args) => {
         const canvas = currentCanvas();

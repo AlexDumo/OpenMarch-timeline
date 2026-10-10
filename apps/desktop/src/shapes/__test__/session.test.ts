@@ -112,6 +112,27 @@ describe("shape tool store", () => {
         });
     });
 
+    it("undoes and redoes its own edits, a whole drag as one step", () => {
+        useShapeToolStore.setState({ past: [], future: [] });
+        const store = useShapeToolStore.getState();
+        store.open("line", row, ctx);
+        const opened = useShapeToolStore.getState().session!.params;
+        store.startDrag("b");
+        store.drag(xy(300, 0), false, ctx);
+        store.drag(xy(400, 0), false, ctx);
+        store.endDrag();
+        const dragged = useShapeToolStore.getState().session!.params;
+        store.setOrder("drill", false, ctx);
+        store.undo();
+        expect(useShapeToolStore.getState().session!.order).toBe("keep");
+        store.undo();
+        expect(useShapeToolStore.getState().session!.params).toEqual(opened);
+        store.undo(); // nothing earlier: stays
+        expect(useShapeToolStore.getState().session!.params).toEqual(opened);
+        store.redo();
+        expect(useShapeToolStore.getState().session!.params).toEqual(dragged);
+    });
+
     it("puts a drag back on Escape and stays open", () => {
         const store = useShapeToolStore.getState();
         store.open("line", row, ctx);
