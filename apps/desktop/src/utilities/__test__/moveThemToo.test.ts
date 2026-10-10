@@ -92,11 +92,13 @@ describe("a run of edits behind one toast", () => {
         expect(edit("timeline", 15, 16).value).toBe(16);
         // The toast closed, or its action ran
         edit("timeline", 16, 1).forget();
-        expect(edit("timeline", 17, 32).value).toBe(32);
-        // An older edit finishing late leaves the newer run alone
-        expect(
-            continueEditRun<number>("timeline", 12, "", () => 99).value,
-        ).toBe(99);
+        const newer = edit("timeline", 17, 32);
+        expect(newer.value).toBe(32);
+        expect(newer.stale).toBe(false);
+        // An older edit finishing late leaves the newer run alone, and is stale: no toast
+        const late = continueEditRun<number>("timeline", 12, "", () => 99);
+        expect(late.value).toBe(99);
+        expect(late.stale).toBe(true);
         expect(edit("timeline", 18, 1).value).toBe(33);
         // Another page, or other marchers
         expect(

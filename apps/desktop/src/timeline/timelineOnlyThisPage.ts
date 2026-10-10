@@ -301,6 +301,8 @@ export async function offerOnlyThisPage({
                   continued: false,
               },
     );
+    // A newer edit's toast already shows
+    if (run.stale) return false;
     // A nudge in a run keeps the run's open toast, whose action now covers this edit too
     if (run.value.continued && run.value.toastId !== null) {
         run.shown(run.value.toastId);

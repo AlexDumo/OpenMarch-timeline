@@ -229,6 +229,11 @@ export interface EditRun<T> {
     shown: (toastId: string) => void;
     /** Ends the run: its action ran, or its toast closed */
     forget: () => void;
+    /**
+     * An older edit whose check finished after a newer one's: its toast would describe an edit
+     * that's no longer the last, so the caller shows none
+     */
+    stale: boolean;
 }
 
 /**
@@ -252,7 +257,12 @@ export function continueEditRun<T>(
     const previous = pending;
     // An older edit's check finishing late leaves the newer toast's run alone
     if (previous && mark < previous.mark)
-        return { value: combine(null), shown: () => {}, forget: () => {} };
+        return {
+            value: combine(null),
+            shown: () => {},
+            forget: () => {},
+            stale: true,
+        };
     const continues =
         previous !== null &&
         previous.mode === mode &&
@@ -270,6 +280,7 @@ export function continueEditRun<T>(
     pending = next;
     return {
         value: next.value,
+        stale: false,
         shown: (toastId) => {
             if (pending === next) next.toastId = toastId;
         },

@@ -213,6 +213,8 @@ export async function toastCarryForward(
         pageEditScope(result),
     ]);
     const run = continuePageEditRun(result, mark, scope);
+    // A newer edit's toast already shows
+    if (run.stale) return;
     const { carried } = run.value;
     const order = [...names.keys()];
     const editedPageIds = [...new Set(carried.map((r) => r.pageId))].sort(

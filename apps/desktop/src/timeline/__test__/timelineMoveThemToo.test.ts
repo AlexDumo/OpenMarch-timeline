@@ -28,7 +28,10 @@ import {
 } from "../convert/writePageConversion";
 import { neighborPageTarget } from "../timelineCoordinateWrites";
 import { forgetEditRun } from "@/utilities/moveThemToo";
-import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
+import {
+    moveMarchersAndOfferFollowUp,
+    toastLaterOwnMoves,
+} from "../timelineMoveThemToo";
 import { pageFlags } from "../timelinePlayhead";
 import {
     resolverSpans,
@@ -342,6 +345,26 @@ describeDbTests("timeline mode: Move them too", (it) => {
                 await db.select().from(schema.timeline_kept_assignments).all()
             ).map((r) => r.assignment_id),
         ).toEqual([assignment.id]);
+    });
+
+    it("an older edit's check finishing after a newer one's shows no toast (pre-merge review U5)", async ({
+        db,
+    }) => {
+        const { pages, marchers, boxes } = await studyShow(db);
+        const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
+        const found = [
+            {
+                marcherId: marchers[7]!,
+                transitionId: 1,
+                slotIndex: 0,
+                dx: 0,
+                dy: 10,
+                flag: box(pages[2]!).end,
+            },
+        ];
+        await toastLaterOwnMoves(found, boxes, 20, "newer");
+        await toastLaterOwnMoves(found, boxes, 19, "older");
+        expect(info).toHaveBeenCalledTimes(1);
     });
 
     it("an edit that moves them only within the tolerance offers nothing", async ({

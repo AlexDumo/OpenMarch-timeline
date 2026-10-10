@@ -239,6 +239,8 @@ export async function toastLaterOwnMoves(
                   scope,
                   (previous) => addShifts(previous, found, laterMoveKey).totals,
               );
+    // A newer edit's toast already shows
+    if (run?.stale) return;
     const moves = found.map((m) => ({
         ...m,
         ...run?.value.get(laterMoveKey(m)),
