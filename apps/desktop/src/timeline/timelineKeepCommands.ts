@@ -10,14 +10,18 @@ import type { KeptPageBox } from "./timelineKept";
 import { keepToggle, pageKeepStates } from "./timelineKeepLater";
 import { toastTimelineError } from "./timelineErrorMessages";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
-import { keepPagesOf } from "./useKeepLaterPages";
+import { applyKeptChange, keepPagesOf } from "./useKeepLaterPages";
 
 /**
  * The keep later pages commands as the UI runs them (the chains, the inspector line, the page box
  * menu and **K**): one undo step each, and a refusal is a toast, never thrown.
  */
 
-const NOTHING: KeepResult = { changed: [], skipped: [] };
+const NOTHING: KeepResult = {
+    changed: [],
+    skipped: [],
+    markers: { added: [], removed: [] },
+};
 
 /** **Keep** `marcherIds` on the page box `box` (`keepMarchersOnPage`). */
 export async function keepOnPage(
@@ -26,11 +30,13 @@ export async function keepOnPage(
     database: DbConnection = db,
 ): Promise<KeepResult> {
     try {
-        return await keepMarchersOnPage({
+        const result = await keepMarchersOnPage({
             db: database,
             pageBox: box,
             marcherIds,
         });
+        applyKeptChange(result.markers);
+        return result;
     } catch (error) {
         toastTimelineError(error, "Error keeping marchers on the page");
         return NOTHING;
@@ -44,11 +50,13 @@ export async function followAgainOn(
     database: DbConnection = db,
 ): Promise<KeepResult> {
     try {
-        return await followAgainOnPage({
+        const result = await followAgainOnPage({
             db: database,
             pageBox: box,
             marcherIds,
         });
+        applyKeptChange(result.markers);
+        return result;
     } catch (error) {
         toastTimelineError(error, "Error letting marchers follow again");
         return NOTHING;

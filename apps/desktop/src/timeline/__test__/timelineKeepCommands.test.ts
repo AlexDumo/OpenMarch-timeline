@@ -23,8 +23,16 @@ import { neighborPageTarget } from "../timelineCoordinateWrites";
 import { moveMarchersAndOfferFollowUp } from "../timelineMoveThemToo";
 import { pageFlags } from "../timelinePlayhead";
 import { pageKeepStates } from "../timelineKeepLater";
-import { toggleKeepOnPage } from "../timelineKeepCommands";
-import { keepPagesOf } from "../useKeepLaterPages";
+import {
+    followAgainOn,
+    keepOnPage,
+    toggleKeepOnPage,
+} from "../timelineKeepCommands";
+import {
+    keepPagesOf,
+    refreshKeptAssignments,
+    useKeptAssignmentsStore,
+} from "../useKeepLaterPages";
 import {
     resolverSpans,
     startTimelineResolver,
@@ -351,6 +359,29 @@ describeDbTests("keep later pages: the menu and K", (it) => {
         );
         // Nothing selected: no entries
         expect(keepHereMenu([]).stateFor(pages[2]!.id)).toBeNull();
+    });
+
+    it("Keep and Follow again update the renderer's kept markers as they return, before any re-read (pre-merge review U2)", async ({
+        db,
+    }) => {
+        const { pages, marchers } = await starterShow(db);
+        const [ot1, ot8] = [marchers[0]!, marchers[7]!];
+        await forward(db, pages, marchers);
+        await timelineResolverSettled();
+        useKeptAssignmentsStore.setState({ ids: new Set() });
+        // A read that started before the write can't put the old markers back
+        const earlier = refreshKeptAssignments(db);
+        await keepOnPage(box(pages[2]!), [ot1, ot8], db);
+        const kept = await readKeptAssignmentIds(db);
+        expect(kept.size).toBe(2);
+        expect(useKeptAssignmentsStore.getState().ids).toEqual(kept);
+        await earlier;
+        expect(useKeptAssignmentsStore.getState().ids).toEqual(kept);
+
+        await timelineResolverSettled();
+        await followAgainOn(box(pages[2]!), [ot1, ot8], db);
+        expect(useKeptAssignmentsStore.getState().ids).toEqual(new Set());
+        useKeptAssignmentsStore.setState({ ids: new Set() });
     });
 
     it("K on the page they move keeps the next page, a second K lets it follow again; one undo step each", async ({

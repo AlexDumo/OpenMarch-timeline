@@ -27,6 +27,7 @@ import {
 } from "./timelineKeepLater";
 import { editedMarcherEnds } from "./timelineCarryForward";
 import { toastTimelineError } from "./timelineErrorMessages";
+import { applyKeptChange } from "./useKeepLaterPages";
 import {
     resolverSpans,
     timelineResolverSettled,
@@ -237,9 +238,11 @@ function showOnlyThisPageToast({
                     pageBox: found.next,
                     marcherIds: found.marcherIds,
                     at,
-                }).catch((e: unknown) =>
-                    toastTimelineError(e, "Error keeping the later pages"),
-                );
+                })
+                    .then((kept) => applyKeptChange(kept.markers))
+                    .catch((e: unknown) =>
+                        toastTimelineError(e, "Error keeping the later pages"),
+                    );
             },
         },
         onDismiss: forget,

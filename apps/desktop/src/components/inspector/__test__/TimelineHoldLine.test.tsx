@@ -56,8 +56,20 @@ vi.mock("@/hooks", () => ({
 }));
 // The keep commands write through the real API (tested on a database elsewhere); here, who asks
 vi.mock("@/timeline/timelineKeepCommands", () => ({
-    keepOnPage: vi.fn(() => Promise.resolve({ changed: [], skipped: [] })),
-    followAgainOn: vi.fn(() => Promise.resolve({ changed: [], skipped: [] })),
+    keepOnPage: vi.fn(() =>
+        Promise.resolve({
+            changed: [],
+            skipped: [],
+            markers: { added: [], removed: [] },
+        }),
+    ),
+    followAgainOn: vi.fn(() =>
+        Promise.resolve({
+            changed: [],
+            skipped: [],
+            markers: { added: [], removed: [] },
+        }),
+    ),
 }));
 
 let nextAssignment = 1;

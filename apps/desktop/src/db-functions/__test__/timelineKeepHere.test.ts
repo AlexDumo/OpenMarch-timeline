@@ -170,13 +170,15 @@ describeDbTests("Keep later pages: storage and commands", (it) => {
             pageBox: PAGE3,
             marcherIds: [b, a],
         });
+        const kept = await readKeptAssignmentIds(db);
         expect(result).toEqual({
             changed: [a, b].sort((x, y) => x - y),
             skipped: [],
+            // The markers it wrote, for the renderer's copy (pre-merge review U2)
+            markers: { added: [...kept].sort((x, y) => x - y), removed: [] },
         });
         // Nothing moved, but each has its own move over page 3, marked kept
         expect(await atFlags(db, a)).toEqual(before);
-        const kept = await readKeptAssignmentIds(db);
         expect(kept.size).toBe(2);
         const own = (
             await db.select().from(schema.timeline_assignments).all()
@@ -269,6 +271,14 @@ describeDbTests("Keep later pages: storage and commands", (it) => {
             marcherIds: [a, b],
         });
         expect(result.changed).toEqual([a, b].sort((x, y) => x - y));
+        expect(result.markers).toEqual({
+            added: [],
+            removed: (
+                kept.timeline_kept_assignments as { assignment_id: number }[]
+            )
+                .map((r) => r.assignment_id)
+                .sort((x, y) => x - y),
+        });
         // The kept moves, their markers and the emptied timeline are gone
         expect(await snapshot(db)).toEqual(beforeKeep);
         await timelineResolverSettled();
@@ -560,7 +570,8 @@ describeDbTests("Keep later pages: page edits", (it) => {
             pageBox: PAGE3,
             marcherIds: [c],
         });
-        expect(result).toEqual({ changed: [c], skipped: [] });
+        expect(result).toMatchObject({ changed: [c], skipped: [] });
+        expect(result.markers.added).toHaveLength(1);
         expect(await stateOn(db, PAGE3, c)).toBe("kept");
         // Nothing moved: it's kept where it stands, its starting spot
         expect(await atFlags(db, c)).toEqual(home);

@@ -49,7 +49,14 @@ export interface KeepResult {
     changed: number[];
     /** The others, with why */
     skipped: KeepSkip[];
+    /**
+     * The kept markers written (Keep) or cleared (Follow again), by assignment id, so the renderer
+     * can update its copy at once (`applyKeptChange`)
+     */
+    markers: { added: number[]; removed: number[] };
 }
+
+const NO_MARKERS = () => ({ added: [], removed: [] });
 
 /** Thrown inside an edit that turned out to write nothing, so it rolls back with no undo step. */
 class NothingToDo extends Error {
@@ -117,7 +124,8 @@ export async function keepMarchersOnPage({
     /** Where some marchers end the box, when not where they stand there */
     at?: ReadonlyMap<number, XY>;
 }): Promise<KeepResult> {
-    if (marcherIds.length === 0) return { changed: [], skipped: [] };
+    if (marcherIds.length === 0)
+        return { changed: [], skipped: [], markers: NO_MARKERS() };
     return await asOneEdit(db, "keepMarchersOnPage", async (tx) => {
         await refuseUnlessPageBox(tx, pageBox);
         const states = await statesOnBox(tx, pageBox, marcherIds);
@@ -132,6 +140,7 @@ export async function keepMarchersOnPage({
                     marcherId,
                     state: states.get(marcherId)!,
                 })),
+            markers: NO_MARKERS(),
         };
         if (toKeep.length === 0) throw new NothingToDo(result);
         // Each one holds through the box, so the add's destination (where it is at the box's
@@ -152,10 +161,9 @@ export async function keepMarchersOnPage({
                     point,
                 });
         }
-        await markAssignmentsKeptInTransaction(
-            tx,
-            added.map((o) => o.assignmentId),
-        );
+        const marked = ascending(added.map((o) => o.assignmentId));
+        await markAssignmentsKeptInTransaction(tx, marked);
+        result.markers.added = marked;
         return result;
     });
 }
@@ -176,7 +184,8 @@ export async function followAgainOnPage({
     pageBox: KeptPageBox;
     marcherIds: readonly number[];
 }): Promise<KeepResult> {
-    if (marcherIds.length === 0) return { changed: [], skipped: [] };
+    if (marcherIds.length === 0)
+        return { changed: [], skipped: [], markers: NO_MARKERS() };
     return await asOneEdit(db, "followAgainOnPage", async (tx) => {
         await refuseUnlessPageBox(tx, pageBox);
         const states = await statesOnBox(tx, pageBox, marcherIds);
@@ -191,6 +200,7 @@ export async function followAgainOnPage({
                     marcherId,
                     state: states.get(marcherId)!,
                 })),
+            markers: NO_MARKERS(),
         };
         // A kept move is the marcher's own page move (`ownPageMoves`), as Keep wrote it
         const own = await ownPageMoves(
@@ -202,6 +212,7 @@ export async function followAgainOnPage({
         result.changed = ascending(own.keys());
         if (own.size === 0) throw new NothingToDo(result);
         await clearOwnPageMoves(tx, [...own.values()]);
+        result.markers.removed = ascending([...own.values()].map((r) => r.id));
         return result;
     });
 }

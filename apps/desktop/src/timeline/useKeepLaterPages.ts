@@ -39,6 +39,24 @@ export async function refreshKeptAssignments(
 }
 
 /**
+ * Updates `useKeptAssignmentsStore` at once with a keep command's marker changes (`KeepResult`'s
+ * `markers`), in the same tick the command returns, so the chains and the inspector line never
+ * read a kept spot as an own move between the resolver's new version and the read that follows
+ * it. Drops reads already under way: they may predate the write.
+ */
+export function applyKeptChange(markers: {
+    readonly added: readonly number[];
+    readonly removed: readonly number[];
+}): void {
+    if (markers.added.length === 0 && markers.removed.length === 0) return;
+    reads++;
+    const ids = new Set(useKeptAssignmentsStore.getState().ids);
+    for (const id of markers.removed) ids.delete(id);
+    for (const id of markers.added) ids.add(id);
+    useKeptAssignmentsStore.setState({ ids });
+}
+
+/**
  * Keeps `useKeptAssignmentsStore` current while `enabled` (timeline mode): one read per resolver
  * or display version. Mounted once, by `TimelineResolverHost`.
  */
