@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { historyKeys } from "@/hooks/queries/useHistory";
 import { db } from "@/global/database/db";
 import { useUpdateSelectedMarchersOnSelectedPage } from "@/hooks/queries";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
@@ -95,6 +96,9 @@ export function useApplyShape(): () => Promise<void> {
             toastTimelineError(e, "Error placing the shape");
             return;
         }
+        // Not a React Query mutation, so refresh what one would: whether Undo is available, and
+        // the placed shape the panel offers to edit
+        void queryClient.invalidateQueries({ queryKey: historyKeys.all() });
         void queryClient.invalidateQueries({
             queryKey: ["timeline_shape_recipes"],
         });
