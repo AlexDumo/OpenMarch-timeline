@@ -241,6 +241,10 @@ describeDbTests("Keep later pages: storage and commands", (it) => {
             marcherIds: [a],
         }).catch((e: unknown) => e);
         expect(timelineErrorCode(notABox)).toBe("E-ARGS");
+        // Worded in pages and counts, never beats (pre-merge review D2)
+        expect((notABox as Error).message).toContain(
+            "Keep works on a whole page, not Page 3, counts 1–4",
+        );
         expect(await snapshot(db)).toEqual(rows);
     });
 

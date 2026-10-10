@@ -12,6 +12,7 @@ import { transactionWithHistory } from "./history";
 import { refuse } from "./timelineErrors";
 import { addMarchersToTimelineInTransaction } from "./timelineMembership";
 import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
+import { countsText } from "@/timeline/timelineRangeWords";
 import { readPageGrid } from "./timelineRipple";
 import { clearOwnPageMoves, isPageBox, ownPageMoves } from "./timelineMoves";
 import {
@@ -58,9 +59,11 @@ class NothingToDo extends Error {
 }
 
 const refuseUnlessPageBox = async (tx: DbTransaction, box: KeptPageBox) => {
-    if (!isPageBox(await readPageGrid(tx), box))
+    const grid = await readPageGrid(tx);
+    // Worded in pages and counts like the other refusals; home has no box
+    if (!isPageBox(grid, box))
         refuse(
-            `beats ${box.start}–${box.end} aren't a page, so there's nothing to keep there`,
+            `Keep works on a whole page, not ${countsText(box, grid.pages.slice(1))}`,
         );
 };
 
