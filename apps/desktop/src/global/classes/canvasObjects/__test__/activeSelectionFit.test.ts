@@ -96,4 +96,48 @@ describe("the selection box after a render moves selected marchers", () => {
             before,
         );
     });
+
+    it("refits after a refused or snapped-back drop, which refreshes the marchers while Fabric still holds the transform (pre-merge review C1)", async () => {
+        const { canvas, marchers } = setUp();
+        const fabricCanvas = canvas as unknown as {
+            _currentTransform: unknown;
+        };
+        // The drop handler puts the marchers back (here: elsewhere) from `object:modified`
+        canvas.on("object:modified", () => {
+            for (const m of marchers)
+                m.coordinate = {
+                    ...m.coordinate,
+                    x: m.coordinate.x + 300,
+                    y: m.coordinate.y + 200,
+                };
+            canvas.refreshMarchers();
+        });
+        // Fabric's mouse up: modified and mouse:up with the transform held, then cleared
+        fabricCanvas._currentTransform = {};
+        canvas.fire("object:modified", {});
+        canvas.fire("mouse:up", {});
+        expect(boxHoldsMarchers(canvas, marchers)).toBe(false);
+        fabricCanvas._currentTransform = null;
+        await Promise.resolve();
+        expect(canvas.getActiveObjects()).toHaveLength(3);
+        expect(boxHoldsMarchers(canvas, marchers)).toBe(true);
+    });
+
+    it("refits after a drag still going ends at the next mouse up", async () => {
+        const { canvas, marchers } = setUp();
+        const fabricCanvas = canvas as unknown as {
+            _currentTransform: unknown;
+        };
+        fabricCanvas._currentTransform = {};
+        for (const m of marchers)
+            m.coordinate = { ...m.coordinate, x: m.coordinate.x + 300 };
+        canvas.refreshMarchers();
+        await Promise.resolve();
+        expect(boxHoldsMarchers(canvas, marchers)).toBe(false);
+        canvas.fire("mouse:up", {});
+        fabricCanvas._currentTransform = null;
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(boxHoldsMarchers(canvas, marchers)).toBe(true);
+    });
 });

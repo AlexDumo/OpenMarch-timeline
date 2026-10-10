@@ -1278,18 +1278,48 @@ export default class OpenMarchCanvas extends fabric.Canvas {
      * Fits a multi-marcher selection's box to where its marchers are now. Moving a selected
      * marcher (`setMarcherCoords`) moves it inside the selection but leaves the box where it was,
      * so after a render that moved selected marchers (an undo, **Only Page 2**, another page) an
-     * empty box would stay behind. Not during a drag or transform, which owns the box.
+     * empty box would stay behind. Not during a drag or transform, which owns the box: then it
+     * fits once the transform ends (a refused or snapped-back drop refreshes the marchers from
+     * `object:modified`, while Fabric still holds the transform; pre-merge review).
      */
     fitActiveSelectionToMarchers = () => {
         const active = this.getActiveObject();
         if (!(active instanceof fabric.ActiveSelection)) return;
-        if (
-            (this as unknown as { _currentTransform: unknown })
-                ._currentTransform
-        )
+        if (this.isTransforming()) {
+            this.fitAfterTransform();
             return;
+        }
         (active as fabric.Group).addWithUpdate();
     };
+
+    private isTransforming = () =>
+        !!(this as unknown as { _currentTransform: unknown })._currentTransform;
+
+    private fitPending = false;
+
+    /**
+     * Fits the selection's box once the transform in progress ends: Fabric clears it at the end
+     * of its mouse up, after `object:modified` and `mouse:up`, so this checks again right after
+     * (a microtask), and after the next mouse up for a drag still going.
+     */
+    private fitAfterTransform() {
+        if (this.fitPending) return;
+        this.fitPending = true;
+        const check = () => {
+            if (this.isTransforming()) {
+                const onUp = () => {
+                    this.off("mouse:up", onUp);
+                    queueMicrotask(check);
+                };
+                this.on("mouse:up", onUp);
+                return;
+            }
+            this.fitPending = false;
+            this.fitActiveSelectionToMarchers();
+            this.requestRenderAll();
+        };
+        queueMicrotask(check);
+    }
 
     /**
      * The objects a drag, scale or rotate in progress holds: the transform's target, or each
