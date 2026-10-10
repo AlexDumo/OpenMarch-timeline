@@ -96,6 +96,25 @@ describe("one marcher's states, timeline mode", () => {
         ]);
     });
 
+    it("a kept spot holds, kept, and the pages after it hold from it (pre-merge review U7)", () => {
+        // Moved on page 2; kept on page 3 (assignment 7, over the whole box)
+        const spans = [
+            hold(-Infinity, 1),
+            own(1, 8),
+            { start: 8, end: 16, kind: "join" as const, assignmentId: 7 },
+            hold(16, Infinity),
+        ];
+        expect(timelineMarcherPageStates(spans, FLAGS, new Set([7]))).toEqual([
+            null,
+            MOVES,
+            { kind: "holds", since: 2, kept: true },
+            holdsSince(2),
+            holdsSince(2),
+        ]);
+        // Without the marker it's the marcher's own move
+        expect(timelineMarcherPageStates(spans, FLAGS)[2]).toEqual(MOVES);
+    });
+
     it("agrees with the inspector's marcherHoldState on every page", () => {
         const named: NamedFlag[] = FLAGS.map((beat, i) => ({
             beat,
@@ -218,6 +237,28 @@ describe("a page's mark for the selection", () => {
             { kind: "holds", from: null },
             { kind: "holds", from: null },
         ]);
+    });
+
+    it("a page where every selected marcher is kept holds, kept; kept with others names no page (pre-merge review U7)", () => {
+        const kept = { kind: "holds", since: 2, kept: true } as const;
+        expect(classifyPage([kept, kept], NAMES)).toEqual({
+            kind: "holds",
+            from: null,
+            kept: true,
+        });
+        expect(classifyPage([kept, holdsSince(1)], NAMES)).toEqual({
+            kind: "holds",
+            from: null,
+        });
+        expect(classifyPage([kept, MOVES], NAMES)).toEqual({
+            kind: "mixed",
+            from: null,
+        });
+        const mark = { kind: "holds", from: null, kept: true } as const;
+        expect(pageHoldMarkLabel(mark)).toBe("Selected marchers are kept here");
+        expect(pageHoldMarkHint(mark)).toBe(
+            "They stay here when earlier pages change",
+        );
     });
 
     it("has no marks without a selection", () => {

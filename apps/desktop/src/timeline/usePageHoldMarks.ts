@@ -10,6 +10,7 @@ import {
 } from "./pageHoldMarks";
 import { pageFlags, type FlagPage } from "./timelinePlayhead";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
+import { useKeptAssignmentsStore } from "./useKeepLaterPages";
 
 /** Each page's mark for the selection, by page id; pages without a mark aren't in it. */
 export type PageHoldMarks = ReadonlyMap<number, PageHoldMark>;
@@ -30,9 +31,9 @@ function marksById(
 }
 
 /**
- * The selection's marks in timeline mode (`pageHoldMarks`), from the resolver's spans. Computed
- * once per selection, page list and resolver version (a committed edit, undo or redo), so
- * playback and scrubbing never recompute it.
+ * The selection's marks in timeline mode (`pageHoldMarks`), from the resolver's spans and the
+ * kept markers (a kept page holds). Computed once per selection, page list, kept markers and
+ * resolver version (a committed edit, undo or redo), so playback and scrubbing never recompute it.
  *
  * @param marcherIds the selected marchers; keep the array stable while the selection is
  */
@@ -42,6 +43,7 @@ export function useTimelineHoldMarks(
 ): PageHoldMarks {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
+    const kept = useKeptAssignmentsStore((s) => s.ids);
     return useMemo(() => {
         void version; // a new version means new spans
         if (!resolver || marcherIds.length === 0) return NO_HOLD_MARKS;
@@ -54,12 +56,13 @@ export function useTimelineHoldMarks(
                     timelineMarcherPageStates(
                         resolverSpans(resolver, id),
                         beats,
+                        kept,
                     ),
                 ),
                 flags.map((f) => f.page.name),
             ),
         );
-    }, [resolver, version, pages, marcherIds]);
+    }, [resolver, version, kept, pages, marcherIds]);
 }
 
 /** Every page's marcher rows, by page index (undefined while one loads). */

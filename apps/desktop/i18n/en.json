@@ -1437,6 +1437,8 @@
             "holdsHere": "Selected marchers hold on this page",
             "holdsHereHint": "They stand where their last move left them",
             "holdsHint": "They stand where Page {page} left them",
+            "kept": "Selected marchers are kept here",
+            "keptHint": "They stay here when earlier pages change",
             "mixed": "Some selected marchers hold from Page {page}",
             "mixedFromStart": "Some selected marchers hold from the start",
             "mixedHere": "Some selected marchers hold on this page",
