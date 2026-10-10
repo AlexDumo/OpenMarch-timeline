@@ -5,6 +5,9 @@
  *
  * - `high` quality draws the seven v4u bodies; `low` draws om-pose's block
  *   bodies (264 triangles against 1,796), which play the same clips.
+ * - A look that carries an instrument gets a second `InstancedMesh` over
+ *   the same instances: the horn, posed by the look's hold, in a smooth
+ *   metallic material (docs/3d/instruments.md §4).
  * - Built once per marcher set, look set, clip set and quality; per frame
  *   the caller writes positions and the count clock.
  * - Dispose with {@link MarcherBodies.dispose}: the instanced geometries
@@ -32,7 +35,23 @@ import {
     type UniformLook,
 } from "@/view3d/core/marchers/looks";
 import { FIELD_SURFACE_Y } from "@/view3d/core/field";
+import {
+    hold as holdFor,
+    holdId,
+    type HoldFamily,
+    type HoldState,
+} from "@/view3d/core/instruments/holds";
 import type { LoadedBody } from "./marcherAssets";
+import { holdClip, poseArms } from "./armPose";
+import { instrumentMaterial } from "./instrumentGeometry";
+import { HornSet } from "./hornSet";
+import { mirrorClip, mirrorName } from "./mirrorClip";
+import {
+    platformClip,
+    platformRig,
+    platformWeight,
+    type PlatformRig,
+} from "./platformClip";
 
 /**
  * Contact shadow under each marcher: a soft dark disc on the turf, in place
@@ -92,8 +111,11 @@ export function visibleIndex(
  * `disposeInstancedGeometry` for a geometry with its own index: frees the
  * per-instance buffers and that index, never the body's shared buffers.
  */
-function disposeMarcherGeometry(g: THREE.BufferGeometry, ownIndex: boolean) {
-    if (!ownIndex) {
+function disposeMarcherGeometry(
+    g: THREE.BufferGeometry,
+    own: "shared" | "index",
+) {
+    if (own === "shared") {
         disposeInstancedGeometry(g);
         return;
     }
@@ -142,18 +164,103 @@ interface MeshEntry {
     mesh: THREE.InstancedMesh;
     /** Slot index per instance. */
     slots: number[];
-    /** Whether the geometry has its own (part-filtered) index. */
-    ownIndex: boolean;
+    /** What the body geometry owns: nothing (shared buffers) or its own part-filtered index. */
+    own: "shared" | "index";
 }
 
-/** Every v4u body shares one skeleton, so any of them bakes for all. */
+/** The hold id of a slot that carries nothing: its clips bake unposed. */
+export const NO_HOLD = "none";
+
+/** The hold a look plays: `<family>:<state>`, or NO_HOLD when it carries nothing. */
+export function slotHoldId(look: UniformLook): string {
+    const c = look.options.carry;
+    return c ? holdId(c.family, look.options.hold) : NO_HOLD;
+}
+
+/** The bake row name of a clip played in a hold. */
+export function rowKey(clip: string, hold: string): string {
+    return hold === NO_HOLD ? clip : `${clip}@${hold}`;
+}
+
+const parseHoldId = (id: string) => {
+    const [family, state] = id.split(":") as [HoldFamily, HoldState];
+    return holdFor(family, state);
+};
+
+/** Which foot the band steps off on. "right" plays every clip mirrored. */
+export type StepOffFoot = "left" | "right";
+
+/** The clips to load for `names`: on the right foot, each row's mirrored partner too. */
+export function clipsToLoad(
+    names: readonly string[],
+    foot: StepOffFoot,
+): string[] {
+    const out = new Set(names);
+    if (foot === "right") for (const n of names) out.add(mirrorName(n));
+    return [...out];
+}
+
+/**
+ * The clip a row bakes from: on the right foot the mirror of its partner
+ * (`mirrorName`), so slides and built turns keep their travel direction
+ * while the feet swap; then backward marching and closes go up on the
+ * platform of the foot (`platformClip.ts`).
+ */
+export function clipForBake(
+    name: string,
+    clips: Record<string, THREE.AnimationClip>,
+    foot: StepOffFoot,
+    rig: PlatformRig,
+): THREE.AnimationClip {
+    let clip = clips[name];
+    if (foot === "right") {
+        const partner = mirrorName(name);
+        const source = clips[partner];
+        if (!source)
+            throw new Error(
+                `3D View: clip ${partner} isn't loaded to mirror as ${name}`,
+            );
+        clip = mirrorClip(source, name);
+    }
+    const weight = platformWeight(name);
+    return weight ? platformClip(clip, rig, weight) : clip;
+}
+
+/**
+ * Every v4u body shares one skeleton, so any of them bakes for all. Each
+ * clip is baked once per hold in `holds` (docs/3d/instruments.md §5): the
+ * arm tracks replaced by the hold's pose, under `rowKey` names. Each row's
+ * clip comes from `clipForBake`.
+ */
 export function bakeForBodies(
     bodies: ReadonlyMap<BodyType, LoadedBody>,
     clips: Record<string, THREE.AnimationClip>,
+    holds: readonly string[] = [NO_HOLD],
+    foot: StepOffFoot = "left",
+    /** When given, only these rows (`rowKey`) are baked: the ones marchers play. */
+    only?: ReadonlySet<string>,
 ): Bake {
     const first = bodies.values().next().value;
     if (!first) throw new Error("3D View: no bodies to bake on");
-    return bakeClips(THREE, first.scene, clips);
+    const rig = platformRig(first.mesh.skeleton);
+    const sources: Record<string, THREE.AnimationClip> = {};
+    for (const name of Object.keys(clips))
+        sources[name] = clipForBake(name, clips, foot, rig);
+    const all: Record<string, THREE.AnimationClip> = {};
+    for (const h of holds) {
+        const pose =
+            h === NO_HOLD
+                ? null
+                : poseArms(first.mesh.skeleton, parseHoldId(h));
+        for (const name of Object.keys(clips)) {
+            if (only && !only.has(rowKey(name, h))) continue;
+            const clip = sources[name];
+            all[rowKey(name, h)] = pose
+                ? holdClip(clip, pose, rowKey(name, h))
+                : clip;
+        }
+    }
+    return bakeClips(THREE, first.scene, all);
 }
 
 export class MarcherBodies {
@@ -161,12 +268,16 @@ export class MarcherBodies {
     readonly bake: Bake;
     private readonly entries: MeshEntry[] = [];
     private readonly materials: THREE.Material[] = [];
+    /** The instruments, one group per look, near and far detail (`hornSet.ts`). */
+    private readonly horns: HornSet | null = null;
     private readonly blockSource: THREE.BufferGeometry | null = null;
     private readonly contact: THREE.InstancedMesh;
     /** Mesh entry and instance index per slot. */
     private readonly meshOf: Int32Array;
     private readonly instanceOf: Int32Array;
     private readonly scaleOf: Float32Array;
+    /** The hold id each slot plays (`slotHoldId`). */
+    private readonly holdIds: string[];
 
     constructor(
         bodies: ReadonlyMap<BodyType, LoadedBody>,
@@ -179,6 +290,7 @@ export class MarcherBodies {
         this.meshOf = new Int32Array(looks.length).fill(-1);
         this.instanceOf = new Int32Array(looks.length);
         this.scaleOf = new Float32Array(looks.length);
+        this.holdIds = looks.map((l) => slotHoldId(l.uniform));
 
         this.contact = createContactMesh(looks.length);
         this.group.add(this.contact);
@@ -220,9 +332,7 @@ export class MarcherBodies {
                 materialByLook.set(u, material);
                 this.materials.push(material);
             }
-            const source =
-                this.blockSource ?? bodies.get(g.type)!.mesh.geometry;
-            const { mesh, filtered } = this.buildMesh(source, material, g);
+            const { mesh, own } = this.buildMesh(bodies, material, g);
             const entry = this.entries.length;
             g.slots.forEach((slot, k) => {
                 this.meshOf[slot] = entry;
@@ -232,23 +342,28 @@ export class MarcherBodies {
                     skin: looks[slot].body.skinTone,
                 });
             });
-            this.entries.push({
-                mesh,
-                slots: g.slots,
-                ownIndex: filtered !== null,
-            });
+            this.entries.push({ mesh, slots: g.slots, own });
             this.group.add(mesh);
+        }
+        if (looks.some((l) => l.uniform.options.carry)) {
+            // in `materials` so writeFrame drives its clip clock and dispose frees it
+            const material = instrumentMaterial(bake);
+            this.materials.push(material);
+            this.horns = new HornSet(bodies, bake, looks, quality, material);
+            for (const m of this.horns.meshes) this.group.add(m);
         }
     }
 
     /** One InstancedMesh for a group of slots sharing a body and a look. */
     private buildMesh(
-        source: THREE.BufferGeometry,
+        bodies: ReadonlyMap<BodyType, LoadedBody>,
         material: THREE.Material,
         g: { type: BodyType; look: UniformLook; slots: number[] },
     ) {
-        const geometry = instancedGeometry(THREE, source, g.slots.length);
+        const source = this.blockSource ?? bodies.get(g.type)!.mesh.geometry;
         const filtered = this.blockSource ? null : visibleIndex(source, g.look);
+        const own: MeshEntry["own"] = filtered ? "index" : "shared";
+        const geometry = instancedGeometry(THREE, source, g.slots.length);
         if (filtered) geometry.setIndex(filtered);
         const mesh = new THREE.InstancedMesh(
             geometry,
@@ -263,7 +378,12 @@ export class MarcherBodies {
         // would show the rest pose (openmarch-3d.md, "Not done yet").
         mesh.castShadow = false;
         mesh.receiveShadow = false;
-        return { mesh, filtered };
+        return { mesh, own };
+    }
+
+    /** The hold id slot `slot` plays, for `rowKey`. */
+    holdOf(slot: number): string {
+        return this.holdIds[slot] ?? NO_HOLD;
     }
 
     private firstRow() {
@@ -272,9 +392,9 @@ export class MarcherBodies {
         return row;
     }
 
-    /** Draw calls this set issues per frame. */
+    /** Draw calls this set issues per frame: a body mesh per group, plus the instruments. */
     get drawCalls(): number {
-        return this.entries.length;
+        return this.entries.length + (this.horns?.drawCalls ?? 0);
     }
 
     /** Sets what slot `slot` plays; call when its clip changes. */
@@ -282,17 +402,20 @@ export class MarcherBodies {
         const e = this.meshOf[slot];
         if (e < 0) return;
         writeMarcher(this.entries[e].mesh, this.instanceOf[slot], clip);
+        this.horns?.setClip(slot, clip);
     }
 
     /**
      * Places every slot: at (x, z) facing `heading` when placed, collapsed
-     * (not drawn) otherwise. `count` is the show's count clock.
+     * (not drawn) otherwise. `count` is the show's count clock. `camera`
+     * picks each instrument's detail; null draws them all at full detail.
      */
     writeFrame(
         xz: Float32Array,
         heading: Float32Array,
         placed: Uint8Array,
         count: number,
+        camera: [number, number, number] | null = null,
     ): void {
         for (const { mesh, slots } of this.entries) {
             const array = mesh.instanceMatrix.array as Float32Array;
@@ -309,6 +432,7 @@ export class MarcherBodies {
             }
             mesh.instanceMatrix.needsUpdate = true;
         }
+        this.horns?.writeFrame(xz, heading, placed, this.scaleOf, camera);
         const discs = this.contact.instanceMatrix.array as Float32Array;
         for (let i = 0; i < placed.length; i++) {
             const o = i * 16;
@@ -331,10 +455,11 @@ export class MarcherBodies {
     }
 
     dispose(): void {
-        for (const { mesh, ownIndex } of this.entries) {
-            disposeMarcherGeometry(mesh.geometry, ownIndex);
+        for (const { mesh, own } of this.entries) {
+            disposeMarcherGeometry(mesh.geometry, own);
             mesh.dispose();
         }
+        this.horns?.dispose();
         for (const m of this.materials) m.dispose();
         this.blockSource?.dispose();
         this.contact.geometry.dispose();

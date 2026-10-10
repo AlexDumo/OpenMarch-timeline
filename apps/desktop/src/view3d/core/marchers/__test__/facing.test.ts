@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { pixelsToWorld } from "@openmarch/core";
 import FieldPropertiesTemplates from "../../../../global/classes/FieldProperties.templates";
-import { FRONT_HEADING, marcherHeading, travelDirection } from "../facing";
+import {
+    FRONT_HEADING,
+    SLIDE_BAND,
+    marcherHeading,
+    travelDirection,
+} from "../facing";
 import { writeMatrix } from "../../../vendor/om-pose/instanced-marchers.js";
 
 const fp = FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
@@ -72,5 +77,57 @@ describe("travel direction for a marcher facing front", () => {
 
     it("doesn't travel when the dot doesn't move", () => {
         expect(travelDirection(0, 0).family).toBe("none");
+    });
+});
+
+describe("slides face the 50", () => {
+    /** Travel at `angle` degrees from the front (+ toward the performer's left, side 2), any length. */
+    const at = (angle: number) => {
+        const r = (angle * Math.PI) / 180;
+        return [Math.sin(r), Math.cos(r)] as const;
+    };
+
+    it("is a 10 degree band either side of sideways", () => {
+        expect((SLIDE_BAND * 180) / Math.PI).toBeCloseTo(10, 9);
+    });
+
+    it("keeps the forward slide clips when sliding toward the 50", () => {
+        const d = travelDirection(...at(90), 0, "toward");
+        expect(d.family).toBe("slideL");
+        expect(d.legYaw).toBeCloseTo(0, 12);
+    });
+
+    it("marches backward with the legs turned 90 degrees when sliding away from the 50", () => {
+        const l = travelDirection(...at(90), 0, "away");
+        expect(l.family).toBe("backward");
+        expect(deg(l.legYaw)).toBeCloseTo(-90, 9);
+        const r = travelDirection(...at(-90), 0, "away");
+        expect(r.family).toBe("backward");
+        expect(deg(r.legYaw)).toBeCloseTo(90, 9);
+    });
+
+    it("applies the rule to slides a little ahead of or behind sideways", () => {
+        // 95 degrees (a little behind) toward the 50: still a forward gait
+        const f = travelDirection(...at(95), 0, "toward");
+        expect(f.family).toBe("forward");
+        expect(deg(f.legYaw)).toBeCloseTo(95, 9);
+        // 85 degrees (a little ahead) away from the 50: a backward gait
+        const b = travelDirection(...at(85), 0, "away");
+        expect(b.family).toBe("backward");
+        expect(deg(b.legYaw)).toBeCloseTo(-95, 9);
+    });
+
+    it("flips the feet outside the band: 101 degrees is backward, 79 forward, whatever the 50", () => {
+        expect(travelDirection(...at(101), 0, "toward").family).toBe(
+            "backward",
+        );
+        expect(travelDirection(...at(79), 0, "away").family).toBe("forward");
+    });
+
+    it("turns the legs toward the travel as before when the 50 gives no answer", () => {
+        const d = travelDirection(...at(85), 0, null);
+        expect(d.family).toBe("forward");
+        expect(deg(d.legYaw)).toBeCloseTo(85, 9);
+        expect(travelDirection(...at(-90)).family).toBe("slideR");
     });
 });

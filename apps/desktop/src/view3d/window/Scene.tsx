@@ -25,6 +25,8 @@
 // cspell:ignore frameloop
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import DrawWhenNeeded from "./DrawWhenNeeded";
+import { requestDraw } from "./drawWake";
 import { useQuery } from "@tanstack/react-query";
 import { fieldFootprint, type FieldProperties } from "@openmarch/core";
 import {
@@ -41,6 +43,7 @@ import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import {
     buildCrowd,
     createEnvironment,
+    createEnvironmentMap,
     defaultCrowdPalette,
     type Environment,
 } from "@/view3d/core/environment";
@@ -58,6 +61,7 @@ import type {
 } from "@/view3d/core/types";
 import type { VenueSettings } from "@/view3d/core/venueSettings";
 import CameraRig from "./camera/CameraRig";
+import { DEFAULT_NEAR } from "./camera/rigMath";
 import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "./sceneStore";
 import { useFieldImage } from "./useFieldImage";
 import {
@@ -71,7 +75,8 @@ import Performers from "./performers/Performers";
 export const DEFAULT_FOV_DEG = 45;
 /** Must exceed the sky dome's radius (`SKY_RADIUS`, 1524 m). */
 export const CAMERA_FAR = 3000;
-export const CAMERA_NEAR = 0.3;
+/** The near plane at a normal distance; the rig pulls it in for close-ups. */
+export const CAMERA_NEAR = DEFAULT_NEAR;
 /**
  * Passed to `kit.onFrame` as `dt` once after a kit or lighting change when
  * the viewer prefers reduced motion, so animated parts (the pro roof) snap.
@@ -115,6 +120,10 @@ export default function Scene() {
     const kitId = useView3dSceneStore((s) => s.kitId);
     const lighting = useView3dSceneStore((s) => s.lighting);
     const quality = useView3dSceneStore((s) => s.quality);
+    const onBattery = useView3dSceneStore((s) => s.onBattery);
+    const saveOnBattery = useView3dSceneStore(
+        (s) => s.powerPrefs.saveOnBattery,
+    );
 
     const ready = venue.data && field.data && fieldImage.loaded;
     return (
@@ -126,8 +135,15 @@ export default function Scene() {
         >
             <Canvas
                 shadows
-                // `low` renders at 1x so HiDPI screens on integrated GPUs keep up.
-                dpr={quality === "low" ? 1 : [1, 2]}
+                // Draw only when something changes (`DrawWhenNeeded`).
+                frameloop="demand"
+                // `low` renders at 1x so HiDPI screens on integrated GPUs keep
+                // up; so does battery power when saving power is on.
+                dpr={
+                    quality === "low" || (onBattery && saveOnBattery)
+                        ? 1
+                        : [1, 2]
+                }
                 camera={{
                     fov: DEFAULT_FOV_DEG,
                     near: CAMERA_NEAR,
@@ -147,6 +163,7 @@ export default function Scene() {
                     />
                 )}
                 {ready && <CameraRig />}
+                <DrawWhenNeeded />
             </Canvas>
         </div>
     );
@@ -167,6 +184,9 @@ function SceneContents({
     const gl = useThree((s) => s.gl);
     const scene = useThree((s) => s.scene);
     const camera = useThree((s) => s.camera);
+    // Effects below rebuild parts of the scene outside React's props: draw
+    // the result after any render.
+    useEffect(() => requestDraw(1000));
     const quality = useView3dSceneStore((s) => s.quality);
     const kit = useView3dSceneStore((s) => s.kit);
     const [env, setEnv] = useState<Environment | null>(null);
@@ -278,6 +298,20 @@ function SceneContents({
         litKitRef.current = kit;
         useView3dSceneStore.getState()._setLighting(preset);
     }, [gl, env, kit, settings.lighting]);
+
+    // Environment map: what brass and glossy surfaces reflect, in the
+    // preset's sky (instruments.md §4). Rebuilt for a new preset.
+    const appliedLighting = useView3dSceneStore((s) => s.lighting);
+    useEffect(() => {
+        if (!appliedLighting || !gl.capabilities.isWebGL2) return;
+        const map = createEnvironmentMap(gl, appliedLighting);
+        scene.environment = map.texture;
+        scene.environmentIntensity = 0.6;
+        return () => {
+            if (scene.environment === map.texture) scene.environment = null;
+            map.dispose();
+        };
+    }, [gl, scene, appliedLighting]);
 
     // Clear the store when the scene goes away.
     useEffect(

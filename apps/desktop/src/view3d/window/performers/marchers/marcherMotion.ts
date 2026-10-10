@@ -1,7 +1,8 @@
 /**
  * Drives the 3D View's marchers from the drill (ADR 0002 D-7): plans every
  * marcher's clips for the whole show once, then each frame switches clips
- * where a marcher's event changes and places its body.
+ * where a marcher's event changes and places its body. A crossfade rewrites
+ * its blend weight and leg turn every frame; everything else is written once.
  */
 import type { FieldProperties } from "@openmarch/core";
 import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
@@ -9,11 +10,16 @@ import type { Bake } from "@/view3d/vendor/om-pose/instanced-marchers.js";
 import type { MarcherTimeline } from "@/utilities/Keyframes";
 import { positionAtInto } from "@/view3d/positions";
 import type { CountClock } from "@/view3d/core/marchers/countClock";
-import { REST_EPS, planMarcher } from "@/view3d/core/marchers/planner";
+import {
+    REST_EPS,
+    crossfadeWeight,
+    planMarcher,
+    eventRows,
+} from "@/view3d/core/marchers/planner";
 import type { MarcherPlan } from "@/view3d/core/marchers/planner";
 import { bodyAt, eventIndexAt } from "@/view3d/core/marchers/planner";
 import type { HeightClass } from "@/view3d/core/marchers/looks";
-import type { MarcherBodies } from "./marcherBodies";
+import { rowKey, type MarcherBodies } from "./marcherBodies";
 
 export interface ShowPlans {
     /** Per slot; null when the marcher has no positions. */
@@ -154,6 +160,18 @@ export function planShow(
     };
 }
 
+/**
+ * How far the marchers run ahead of the show's count clock, in counts
+ * (docs/3d/technique.md, "Steps and timing"). The planner lands each step at
+ * the end of the drill count it covers, but the editor's "Count C" click is
+ * that count's start: playing the plan one count ahead lands each heel on
+ * its click. The step-off plays during the count before a move, the left
+ * foot lands on count 1, the right on count 8, and the close finishes on
+ * the hold's count 1, as the 2D dot arrives. During a move the body runs
+ * half a step ahead of the 2D dot.
+ */
+export const STEP_AHEAD = 1;
+
 /** Per-frame state: which event each marcher plays. */
 export class MarcherMotion {
     private readonly cursor: Int32Array;
@@ -168,33 +186,64 @@ export class MarcherMotion {
         this.cursor = new Int32Array(plans.length).fill(-1);
     }
 
-    private apply(slot: number, plan: MarcherPlan, index: number): void {
+    private apply(
+        slot: number,
+        plan: MarcherPlan,
+        index: number,
+        planCount: number,
+    ): void {
         const e = plan.events[index];
         const rows: Bake["rows"] = this.bodies.bake.rows;
-        const row = rows[e.clip];
+        const hold = this.bodies.holdOf(slot);
+        const [clip, clip2] = eventRows(e);
+        const row = rows[rowKey(clip, hold)];
         if (!row) return; // not baked yet (the bake set is catching up)
+        const row2 = clip2 ? (rows[rowKey(clip2, hold)] ?? null) : null;
+        let weight = e.weight;
+        let legYaw = e.legYaw;
+        if (e.kind === "crossfade") {
+            // the fade's progress, 0 before its window and 1 after
+            const u = Math.min(
+                Math.max(
+                    (planCount - e.fadeStart) / (e.fadeEnd - e.fadeStart),
+                    0,
+                ),
+                1,
+            );
+            const t = crossfadeWeight(u);
+            weight = t;
+            if (Array.isArray(legYaw))
+                legYaw = legYaw[0] + (legYaw[1] - legYaw[0]) * t;
+        }
         this.bodies.setClip(slot, {
             row,
-            row2: e.clip2 ? (rows[e.clip2] ?? null) : null,
-            weight: e.clip2 && rows[e.clip2] ? e.weight : 0,
-            phase: -e.phaseStart,
+            row2,
+            weight: row2 ? weight : 0,
+            // the shader plays clip time uCount + phase, and uCount is the
+            // show's count clock: plan time minus the event's phase start
+            phase: STEP_AHEAD - e.phaseStart,
             rate: 1,
-            legYaw: e.legYaw,
+            legYaw,
         });
     }
 
     /**
-     * At count clock `count`: switches clips where needed and replaces each
-     * placed slot's drill position in `xz` with its body position.
+     * At show count clock `count`: switches clips where needed and replaces
+     * each placed slot's position in `xz`, which the caller fills with the
+     * drill position `STEP_AHEAD` counts later, with its body position.
      */
     update(count: number, xz: Float32Array, placed: Uint8Array): void {
         const out = this.out;
+        const planCount = count + STEP_AHEAD;
         for (let i = 0; i < this.plans.length; i++) {
             const plan = this.plans[i];
             if (!plan || plan.events.length === 0) continue;
-            const index = eventIndexAt(plan, count, this.cursor[i]);
-            if (index !== this.cursor[i]) {
-                this.apply(i, plan, index);
+            const index = eventIndexAt(plan, planCount, this.cursor[i]);
+            if (
+                index !== this.cursor[i] ||
+                plan.events[index].kind === "crossfade"
+            ) {
+                this.apply(i, plan, index, planCount);
                 this.cursor[i] = index;
             }
             if (!placed[i]) continue;
@@ -202,7 +251,7 @@ export class MarcherMotion {
                 this.manifest,
                 plan,
                 index,
-                count,
+                planCount,
                 xz[i * 2],
                 xz[i * 2 + 1],
                 this.heading,

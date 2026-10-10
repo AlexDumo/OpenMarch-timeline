@@ -8,34 +8,50 @@
  * - no travel: a rest count, `marktime` while any marcher moves on that
  *   count, `attention` while the whole band holds;
  * - travel: a step along that count's own vector. The family and leg turn
- *   come from `pickDirection`, the two sizes and weight from `pickBlend`.
- *   A curved path is a new vector every count.
+ *   come from `travelDirection`, the two sizes and weight from `pickBlend`.
+ *   A curved path is a new vector every count. A run of slide counts faces
+ *   the 50: forward when the run ends nearer the 50 than it started, backward
+ *   when farther (`facing.ts`).
  *
  * From the sequence of counts it builds clip events:
  *
  * - rest to step: `stepoff_<move>` (turned via `turnedClips`), or from mark
  *   time `change_marktime__<move>` when that clip exists;
- * - step to step: the loop, phased from its step-off; a different family or
- *   a size jump uses `change_<a>__<b>` (or `change2_`, by the loop's time on
- *   that count) when it exists, and otherwise cuts between the loops keeping
- *   the loop time (the spec's stopgap);
+ * - step to step: the loop, phased from its step-off. A change of move (a
+ *   different family, a size jump, or a sharp leg turn) is a `crossfade`
+ *   centered on the count boundary: from the middle of the last count of the
+ *   old move to the middle of the first count of the new one, the old loop
+ *   blends into the new, both at the running loop time, while the leg turn
+ *   eases from the old travel to the new. The foot that lands on the new
+ *   page's first count is already turning, so the change reads from count 8
+ *   into count 1 instead of snapping on the downbeat. When the last count
+ *   can't host it (a step-off, or another change), the fade covers the first
+ *   count alone;
  * - step to rest: `halt_<move>` when the loop is at time 0, `halt2_<move>`
- *   when it is at 0.5 s (to mark time: the change clip, or a cut).
+ *   when it is at 0.5 s (to mark time: `change_<move>__marktime` when it
+ *   exists, or a crossfade).
  *
- * Body placement: during loops and rests the body follows the drill; during
- * a one-count transition it moves by the clip's own root travel. Where that
- * leaves the body off the drill (the step-off covers about 0.31 m against an
- * 8-to-5 step's 0.57 m; a halt closes onto the last planted foot), the
- * landing correction spreads the difference linearly between anchors: count
- * boundaries next to a rest, where the body is exactly on its dot.
+ * Body placement (docs/3d/technique.md, "Foot on the dot"): during loops,
+ * crossfades and rests the body follows the drill; during a one-count
+ * transition it moves by the clip's own root travel. By default the dot
+ * marks the landing foot's ankle, so after each moving count the body sits
+ * half that count's step behind the dot, with the weight between the feet,
+ * and it reaches the dot only as the feet close. The step-off's root travel
+ * (about 0.31 m against an 8-to-5 step's 0.57 m) leaves the body about
+ * there by itself. The landing correction spreads what remains linearly
+ * between anchors, the boundaries next to a rest and both ends of a count
+ * whose step changes, where the body is exactly at its target: the ankle
+ * is on the dot on count 8 and the body swings to the new direction during
+ * count 1, while the legs' fade stays centered on the boundary. With
+ * `dotMode: "body"` the target is the dot itself at every boundary.
  *
  * Pure: no three.js, React or database.
  */
 
 import {
     pickBlend,
-    pickDirection,
     turnedClips,
+    turnEase,
     turnRoot,
     type ClipPair,
     type Direction,
@@ -46,6 +62,7 @@ import {
     type TurnedPair,
 } from "../../vendor/om-pose/step-blend.js";
 import { classSuffix, type HeightClass } from "./looks";
+import { isSlide, travelDirection, type SlideSense } from "./facing";
 
 /** Less travel than this in a count is a rest (meters). */
 export const REST_EPS = 0.01;
@@ -55,8 +72,18 @@ export const SIZE_JUMP = 0.05;
 export const WEIGHT_SNAP = 1e-3;
 /** Leg turns within this count as unturned, for change clips (radians). */
 export const TURN_EPS = (1 * Math.PI) / 180;
+/**
+ * A leg turn this big between counts is a change of direction, faded like a
+ * change of move with a prep step (docs/3d/technique.md): under it the legs
+ * just ease to the new direction (radians).
+ */
+export const SHARP_TURN = (10 * Math.PI) / 180;
+/** A halt's residual leg turn starts this far into its count: after the foot has closed. */
+export const HALT_TURN_START = 0.8;
 /** Between rests, a landing correction anchor at least this often (counts). */
 export const MAX_ANCHOR_SPAN = 16;
+/** A change in the foot-on-dot target bigger than this (meters) pins the boundaries around it. */
+export const TARGET_EPS = 0.01;
 
 export interface PlanInput {
     manifest: Manifest;
@@ -69,9 +96,19 @@ export interface PlanInput {
     bpm: Float64Array;
     /** 1 when any marcher travels during that count. */
     bandMoving: Uint8Array;
+    /**
+     * What the dot marks (docs/3d/technique.md): `foot` (the default) puts
+     * the landing foot's ankle on the dot at the end of each count of a
+     * move, the body half a step behind it with the weight 50-50; `body`
+     * keeps the body's center over the dot. Not offered in the UI yet.
+     */
+    dotMode?: DotMode;
 }
 
-export type EventKind = "rest" | "loop" | "transition";
+/** What a marcher's dot marks: the landing foot's ankle, or the body's center. */
+export type DotMode = "foot" | "body";
+
+export type EventKind = "rest" | "loop" | "transition" | "crossfade";
 
 export interface PlanEvent {
     /** First count it covers; it lasts until the next event's count. */
@@ -79,11 +116,23 @@ export interface PlanEvent {
     kind: EventKind;
     /** Clip names (with the height class suffix), as `bake.rows` keys. */
     clip: string;
+    /** Loops: the second size. Crossfades: the loop faded in, or null for a turn alone. */
     clip2: string | null;
+    /** Crossfades: unused; the weight runs 0 to 1 over the fade window (`crossfadeWeight`). */
     weight: number;
+    /** Crossfades: `[from, to, 0, 1]`, eased over the fade window by the caller. */
     legYaw: number | [number, number, number, number];
+    /** Crossfades: the count clock values the fade runs between. Otherwise the event's own span. */
+    fadeStart: number;
+    fadeEnd: number;
     /** The count clock value at which the clip is at its time 0. */
     phaseStart: number;
+    /**
+     * Crossfades centered on a change of move: the loop time (0 or 1 count)
+     * of the old move's last landing, the prep step, which plays on the
+     * platform of the foot (`prepName` rows). Otherwise null.
+     */
+    prep: number | null;
     /** Transitions: the pair whose root travel places the body. */
     root: TurnedPair | ClipPair | null;
     /**
@@ -92,7 +141,7 @@ export interface PlanEvent {
      */
     baseX: number;
     baseZ: number;
-    /** The correction span this event lies in: counts a..b and the raw offsets there. */
+    /** The correction span this event lies in: counts a..b and the corrections there (raw offset minus target). */
     a: number;
     b: number;
     oaX: number;
@@ -168,11 +217,57 @@ function snapPick(p: Pick): Pick {
     return p;
 }
 
+/**
+ * Which way each count's slide goes relative to the 50 (x = 0): decided per
+ * run of consecutive slide counts in the same lateral direction, by whether
+ * the run ends nearer the 50 than it started. One gait per run, so a slide
+ * across the 50 doesn't flip halfway.
+ */
+function slideSenses(input: PlanInput): SlideSense[] {
+    const { positions, heading } = input;
+    const K = positions.length / 2 - 1;
+    const out: SlideSense[] = new Array(K).fill(null);
+    let k = 0;
+    while (k < K) {
+        const dx = positions[(k + 1) * 2] - positions[k * 2];
+        const dz = positions[(k + 1) * 2 + 1] - positions[k * 2 + 1];
+        const side = Math.sign(dx);
+        if (
+            !(Math.hypot(dx, dz) > REST_EPS) ||
+            side === 0 ||
+            !isSlide(travelDirection(dx, dz, heading))
+        ) {
+            k++;
+            continue;
+        }
+        let end = k + 1;
+        while (end < K) {
+            const ex = positions[(end + 1) * 2] - positions[end * 2];
+            const ez = positions[(end + 1) * 2 + 1] - positions[end * 2 + 1];
+            if (
+                !(Math.hypot(ex, ez) > REST_EPS) ||
+                Math.sign(ex) !== side ||
+                !isSlide(travelDirection(ex, ez, heading))
+            )
+                break;
+            end++;
+        }
+        const x0 = Math.abs(positions[k * 2]);
+        const x1 = Math.abs(positions[end * 2]);
+        const sense: SlideSense =
+            x1 < x0 - REST_EPS ? "toward" : x1 > x0 + REST_EPS ? "away" : null;
+        for (let i = k; i < end; i++) out[i] = sense;
+        k = end;
+    }
+    return out;
+}
+
 /** The states of every count from the drill. */
 function countStates(input: PlanInput): State[] {
     const { positions, bpm, bandMoving, manifest, heightClass, heading } =
         input;
     const K = positions.length / 2 - 1;
+    const senses = slideSenses(input);
     const out: State[] = [];
     for (let k = 0; k < K; k++) {
         const dx = positions[(k + 1) * 2] - positions[k * 2];
@@ -182,7 +277,7 @@ function countStates(input: PlanInput): State[] {
             out.push({ type: bandMoving[k] ? "marktime" : "attention" });
             continue;
         }
-        const dir = pickDirection(heading, dx, dz);
+        const dir = travelDirection(dx, dz, heading, senses[k]);
         const family = dir.family as Family;
         const pick = snapPick(
             pickBlend(manifest, family, d, {
@@ -195,6 +290,11 @@ function countStates(input: PlanInput): State[] {
     return out;
 }
 
+/** The blend weight of a crossfade at `u` in [0, 1] of its count. */
+export function crossfadeWeight(u: number): number {
+    return turnEase(u);
+}
+
 interface Draft {
     kind: EventKind;
     clip: string;
@@ -203,6 +303,13 @@ interface Draft {
     legYaw: number | [number, number, number, number];
     phaseStart: number;
     root: TurnedPair | ClipPair | null;
+    /** Crossfades: the fade window. */
+    fadeStart?: number;
+    fadeEnd?: number;
+    /** The second count of a two-count crossfade: no event of its own. */
+    continued?: boolean;
+    /** See `PlanEvent.prep`. */
+    prep?: number | null;
 }
 
 /** A single clip's root travel as a pair (for change and mark time clips). */
@@ -265,15 +372,37 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                       phaseStart: st.type === "attention" ? 0 : k - p,
                       root: null,
                   };
-        const transition = (pair: TurnedPair | ClipPair): Draft => ({
-            kind: "transition",
-            clip: pair.a,
-            clip2: pair.b && pair.weight > 0 ? pair.b : null,
-            weight: pair.b ? pair.weight : 0,
-            legYaw: "legYaw" in pair ? pair.legYaw : 0,
-            phaseStart: k,
-            root: pair,
-        });
+        /**
+         * A halt keeps the closing leg on its line: the residual turn that
+         * squares the legs waits until the foot has closed, the last fifth
+         * of the count, instead of easing through the clip's swing window.
+         */
+        const lateTurn = (pair: TurnedPair): TurnedPair =>
+            pair.kind === "stepoff"
+                ? pair
+                : {
+                      ...pair,
+                      window: [HALT_TURN_START, 1],
+                      legYaw: [
+                          pair.legYaw[0],
+                          pair.legYaw[1],
+                          HALT_TURN_START,
+                          1,
+                      ],
+                  };
+        const transition = (pair: TurnedPair | ClipPair): Draft => {
+            const turned: TurnedPair | ClipPair =
+                "legYaw" in pair ? lateTurn(pair) : pair;
+            return {
+                kind: "transition",
+                clip: turned.a,
+                clip2: turned.b && turned.weight > 0 ? turned.b : null,
+                weight: turned.b ? turned.weight : 0,
+                legYaw: "legYaw" in turned ? (turned as TurnedPair).legYaw : 0,
+                phaseStart: k,
+                root: turned,
+            };
+        };
         const change = (from: string, to: string): Draft | null => {
             const base = `${p === 0 ? "change" : "change2"}_${from}__${to}`;
             return has(base)
@@ -284,6 +413,48 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             st.type !== "move" || Math.abs(st.dir.legYaw) <= TURN_EPS;
         const baseOf = (st: State) =>
             st.type === "move" ? nearestBase(st.pick) : "marktime";
+        // the loop a state plays alone (its nearest size), for a crossfade
+        const soloLoop = (st: State) =>
+            st.type === "move"
+                ? st.pick.weight < 0.5
+                    ? st.pick.a
+                    : st.pick.b
+                : restBase(st) + sfx;
+        const yawOf = (st: State) => (st.type === "move" ? st.dir.legYaw : 0);
+        /**
+         * A change of move at this count. Centered on the boundary when the
+         * previous count is a plain loop of the old move: that draft becomes
+         * the fade's first count and this one continues it. Otherwise the fade
+         * covers this count alone.
+         */
+        const crossfade = (from: State, to: State): Draft => {
+            const a = soloLoop(from);
+            const b = soloLoop(to);
+            const last = drafts[k - 1];
+            const centered =
+                k > 0 &&
+                last !== undefined &&
+                last.kind === "loop" &&
+                !last.continued;
+            const fade: Draft = {
+                kind: "crossfade",
+                clip: a,
+                clip2: b === a ? null : b,
+                weight: 0,
+                legYaw: [yawOf(from), yawOf(to), 0, 1],
+                phaseStart: centered ? last.phaseStart : k - p,
+                root: null,
+                fadeStart: centered ? k - 0.5 : k,
+                fadeEnd: centered ? k + 0.5 : k + 1,
+                // the old move's last landing, at boundary k, is the prep step
+                prep: centered ? (((k - last.phaseStart) % 2) + 2) % 2 : null,
+            };
+            if (centered) {
+                drafts[k - 1] = fade;
+                return { ...fade, continued: true };
+            }
+            return fade;
+        };
 
         if (s.type === "move") {
             if (prev.type === "attention") {
@@ -297,8 +468,9 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                     prev.type === "move" &&
                     prev.family === s.family &&
                     Math.abs(prev.d - s.d) <= SIZE_JUMP;
-                if (sameMove) {
-                    const yaw = s.dir.legYaw;
+                const yaw = s.dir.legYaw;
+                if (sameMove && Math.abs(yaw - prevYaw) <= SHARP_TURN) {
+                    // the same move, drifting: ease the legs over half a loop
                     draft = loopOf(
                         s,
                         Math.abs(yaw - prevYaw) > 1e-6
@@ -306,10 +478,11 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                             : yaw,
                     );
                 } else {
+                    // from mark time, the hand-made change clip when it exists
                     draft =
-                        (unturned(prev) && unturned(s)
-                            ? change(baseOf(prev), baseOf(s))
-                            : null) ?? loopOf(s, s.dir.legYaw);
+                        (prev.type === "marktime" && unturned(s)
+                            ? change("marktime", baseOf(s))
+                            : null) ?? crossfade(prev, s);
                 }
                 prevYaw = s.dir.legYaw;
                 parity ^= 1;
@@ -328,7 +501,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
                 draft =
                     (unturned(prev)
                         ? change(nearestBase(prev.pick), "marktime")
-                        : null) ?? loopOf(s, 0);
+                        : null) ?? crossfade(prev, s);
                 parity ^= 1;
             }
         } else if (prev.type === "attention" && s.type === "marktime") {
@@ -364,9 +537,27 @@ export function planMarcher(input: PlanInput): MarcherPlan {
         prev = s;
     }
 
-    // 2. Anchors: boundaries next to a rest count (the body is on its dot),
-    // the ends, and at least every MAX_ANCHOR_SPAN counts inside long runs
-    // (between two loop counts, never across a transition).
+    // 2. Targets: where the body should be against the drill at each
+    // boundary. Foot on the dot: half the count's step behind the dot after
+    // a moving count (the ankle on the dot, the weight between the feet), on
+    // the dot after a rest. Body center: on the dot.
+    const dotMode: DotMode = input.dotMode ?? "foot";
+    const tx = new Float64Array(K + 1);
+    const tz = new Float64Array(K + 1);
+    if (dotMode === "foot")
+        for (let k = 1; k <= K; k++) {
+            if (states[k - 1].type !== "move") continue;
+            tx[k] = -0.5 * (positions[k * 2] - positions[(k - 1) * 2]);
+            tz[k] = -0.5 * (positions[k * 2 + 1] - positions[(k - 1) * 2 + 1]);
+        }
+
+    // 3. Anchors, where the correction pins the body to its target: the
+    // boundaries next to a rest count, the ends, and at least every
+    // MAX_ANCHOR_SPAN counts inside long runs (between two loop counts, never
+    // across a transition). Foot on the dot also pins both ends of a count
+    // whose target changes (a step-off, a close, a new direction or size), so
+    // the half step behind swings to the new direction from count 8 to
+    // count 1. Body center pins every boundary.
     const anchor = new Uint8Array(K + 1);
     anchor[0] = 1;
     anchor[K] = 1;
@@ -378,6 +569,22 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             (after.kind === "rest" && isRest(states[b]))
         )
             anchor[b] = 1;
+    }
+    for (let b = 1; b <= K; b++) {
+        if (dotMode === "body") {
+            anchor[b - 1] = anchor[b] = 1;
+            continue;
+        }
+        if (Math.hypot(tx[b] - tx[b - 1], tz[b] - tz[b - 1]) <= TARGET_EPS)
+            continue;
+        anchor[b - 1] = anchor[b] = 1;
+    }
+    // the correction at each boundary: raw offset minus target
+    const cx = new Float64Array(K + 1);
+    const cz = new Float64Array(K + 1);
+    for (let k = 0; k <= K; k++) {
+        cx[k] = ox[k] - tx[k];
+        cz[k] = oz[k] - tz[k];
     }
     let last = 0;
     for (let b = 1; b <= K; b++) {
@@ -395,7 +602,7 @@ export function planMarcher(input: PlanInput): MarcherPlan {
         }
     }
 
-    // 3. Events: one per transition count; consecutive loop or rest counts
+    // 4. Events: one per transition count; consecutive loop or rest counts
     // with the same clip state merge, within one anchor span.
     const events: PlanEvent[] = [];
     let a = 0;
@@ -412,7 +619,28 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             b = nextAnchor(b);
         }
         const d = drafts[k];
+        if (d.continued) {
+            // the second count of a centered fade: the same fade, but in its
+            // own correction span when an anchor splits the fade (the body
+            // swings to the new direction during count 1)
+            const fade = events[events.length - 1];
+            if (fade && fade.a !== a)
+                events.push({
+                    ...fade,
+                    count: k,
+                    baseX: ox[k],
+                    baseZ: oz[k],
+                    a,
+                    b,
+                    oaX: cx[a],
+                    oaZ: cz[a],
+                    obX: cx[b],
+                    obZ: cz[b],
+                });
+            continue;
+        }
         const isTransition = d.kind === "transition";
+        const oneCount = isTransition || d.kind === "crossfade";
         const lastEvent = events[events.length - 1];
         // The correction is constant across this count (the offset doesn't
         // change between its anchors): then a span change doesn't matter.
@@ -422,12 +650,12 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             (lastEvent.a === a ||
                 (lastEvent.b === a &&
                     flat(lastEvent) &&
-                    ox[a] === lastEvent.obX &&
-                    oz[a] === lastEvent.obZ &&
-                    ox[b] === ox[a] &&
-                    oz[b] === oz[a]));
+                    cx[a] === lastEvent.obX &&
+                    cz[a] === lastEvent.obZ &&
+                    cx[b] === cx[a] &&
+                    cz[b] === cz[a]));
         const mergeable =
-            !isTransition &&
+            !oneCount &&
             lastEvent &&
             lastEvent.kind === d.kind &&
             sameSpan &&
@@ -444,8 +672,8 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             if (lastEvent.a !== a) {
                 // extend the event's flat span
                 lastEvent.b = b;
-                lastEvent.obX = ox[b];
-                lastEvent.obZ = oz[b];
+                lastEvent.obX = cx[b];
+                lastEvent.obZ = cz[b];
             }
             continue;
         }
@@ -458,14 +686,17 @@ export function planMarcher(input: PlanInput): MarcherPlan {
             legYaw: d.legYaw,
             phaseStart: d.phaseStart,
             root: d.root,
+            prep: d.prep ?? null,
+            fadeStart: d.fadeStart ?? k,
+            fadeEnd: d.fadeEnd ?? k + 1,
             baseX: isTransition ? positions[k * 2] + ox[k] : ox[k],
             baseZ: isTransition ? positions[k * 2 + 1] + oz[k] : oz[k],
             a,
             b,
-            oaX: ox[a],
-            oaZ: oz[a],
-            obX: ox[b],
-            obZ: oz[b],
+            oaX: cx[a],
+            oaZ: cz[a],
+            obX: cx[b],
+            obZ: cz[b],
         });
     }
     return { events, counts: K + 1 };
@@ -528,13 +759,25 @@ export function bodyAt(
     }
 }
 
-/** Every clip a set of plans plays: what to bake. */
+/** The bake row of `clip` with a prep landing on the platform at loop time `landing`. */
+export function prepName(clip: string, landing: number): string {
+    return `${clip}~prep${landing}`;
+}
+
+/** The rows an event plays: its clips, as prep rows when it carries a prep step. */
+export function eventRows(e: PlanEvent): [string, string | null] {
+    const row = (c: string) => (e.prep === null ? c : prepName(c, e.prep));
+    return [row(e.clip), e.clip2 ? row(e.clip2) : null];
+}
+
+/** Every row a set of plans plays: what to bake. */
 export function plannedClips(plans: Iterable<MarcherPlan>): Set<string> {
     const out = new Set<string>();
     for (const p of plans)
         for (const e of p.events) {
-            out.add(e.clip);
-            if (e.clip2) out.add(e.clip2);
+            const [a, b] = eventRows(e);
+            out.add(a);
+            if (b) out.add(b);
         }
     return out;
 }

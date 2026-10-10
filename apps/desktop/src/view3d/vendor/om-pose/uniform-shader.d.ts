@@ -4,7 +4,10 @@ import type { MeshStandardMaterial } from "three";
 type Three = typeof import("three");
 
 export const PALETTE_SLOTS: string[];
-export const STYLES: Record<string, { id: number; label: string; about: string }>;
+export const STYLES: Record<
+    string,
+    { id: number; label: string; about: string }
+>;
 export const DEFAULT_OPTIONS: Record<string, unknown>;
 export const INSTRUMENTS: string[];
 export const HAT_TYPES: string[];

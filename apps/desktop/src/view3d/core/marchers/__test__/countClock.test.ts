@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCountClock, countAt } from "../countClock";
+import { buildCountClock, countAt, msAtCount } from "../countClock";
 
 // beat 0 has no duration (the first page's start), then 4 at 120 bpm and 2 at 60
 const beats = [
@@ -39,5 +39,18 @@ describe("count clock", () => {
     it("gives the same answer with any hint", () => {
         for (const hint of [0, 2, 5, 99, -3])
             expect(countAt(clock, 2500, hint)).toBeCloseTo(4.5, 12);
+    });
+});
+
+describe("show time at a count", () => {
+    it("inverts countAt across tempos", () => {
+        for (const c of [0, 0.5, 2.25, 4.5, 5.999])
+            expect(countAt(clock, msAtCount(clock, c))).toBeCloseTo(c, 9);
+        expect(msAtCount(clock, 4.5)).toBeCloseTo(2500, 9);
+    });
+
+    it("clamps to the show's start and end", () => {
+        expect(msAtCount(clock, -1)).toBe(0);
+        expect(msAtCount(clock, 99)).toBe(4000);
     });
 });

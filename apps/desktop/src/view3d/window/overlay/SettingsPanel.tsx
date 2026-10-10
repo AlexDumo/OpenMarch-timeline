@@ -18,6 +18,9 @@ import { Input, Switch } from "@openmarch/ui";
 import clsx from "clsx";
 import { useView3dSceneStore } from "../sceneStore";
 import { QUALITY_MODES } from "../qualityPreference";
+import { HOLD_STATES } from "../hornState";
+import { GUARD_EQUIPMENT } from "@/view3d/core/instruments/catalog";
+import type { GuardEquipment } from "../sceneStore";
 import { Segmented } from "./Panel";
 import { LightingControl, VenuePicker, useVenueRequest } from "./VenueControls";
 
@@ -78,6 +81,10 @@ export function SettingsPanel({
                     hint={t("view3d.settings.graphicsHint")}
                 >
                     <QualityRow />
+                    <PowerRows />
+                    <HornStateRow />
+                    <GuardEquipmentRow />
+                    <StepOffFootRow />
                 </Section>
                 <Section title={t("view3d.settings.keysSection")}>
                     <ShortcutList />
@@ -323,6 +330,118 @@ function QualityRow() {
                 data-testid="view3d-quality-hint"
             >
                 {hint}
+            </p>
+        </Row>
+    );
+}
+
+/** Battery savers: stop drawing when nothing moves, and cap the frame rate on battery. */
+function PowerRows() {
+    const { t } = useTranslate();
+    const prefs = useView3dSceneStore((s) => s.powerPrefs);
+    const setPrefs = useView3dSceneStore((s) => s.setPowerPrefs);
+    return (
+        <>
+            <Row label={t("view3d.settings.pauseWhenIdle")}>
+                <Switch
+                    checked={prefs.pauseWhenIdle}
+                    onCheckedChange={(pauseWhenIdle) =>
+                        setPrefs({ ...prefs, pauseWhenIdle })
+                    }
+                    aria-label={t("view3d.settings.pauseWhenIdle")}
+                    data-testid="view3d-pause-when-idle"
+                />
+            </Row>
+            <Row label={t("view3d.settings.saveOnBattery")}>
+                <Switch
+                    checked={prefs.saveOnBattery}
+                    onCheckedChange={(saveOnBattery) =>
+                        setPrefs({ ...prefs, saveOnBattery })
+                    }
+                    aria-label={t("view3d.settings.saveOnBattery")}
+                    data-testid="view3d-save-on-battery"
+                />
+            </Row>
+        </>
+    );
+}
+
+/** Which hold the brass plays: a test control until per-page horn states exist. */
+function HornStateRow() {
+    const { t } = useTranslate();
+    const state = useView3dSceneStore((s) => s.hornState);
+    const setState = useView3dSceneStore((s) => s.setHornState);
+    return (
+        <Row label={t("view3d.settings.hornState")} stacked>
+            <Segmented
+                value={state}
+                options={HOLD_STATES.map((value) => ({
+                    value,
+                    label: t(`view3d.settings.hornStateMode.${value}`),
+                }))}
+                onChange={setState}
+                label={t("view3d.settings.hornState")}
+                testId="view3d-horn-state-picker"
+            />
+            <p className="text-sub text-text/60">
+                {t("view3d.settings.hornStateHint")}
+            </p>
+        </Row>
+    );
+}
+
+const GUARD_CHOICES: readonly GuardEquipment[] = [
+    "section",
+    ...GUARD_EQUIPMENT,
+];
+
+/** What the guard carries: each section's own, or one piece for all, to see the others. */
+function GuardEquipmentRow() {
+    const { t } = useTranslate();
+    const equipment = useView3dSceneStore((s) => s.guardEquipment);
+    const setEquipment = useView3dSceneStore((s) => s.setGuardEquipment);
+    return (
+        <Row label={t("view3d.settings.guardEquipment")} stacked>
+            <Segmented
+                value={equipment}
+                options={GUARD_CHOICES.map((value) => ({
+                    value,
+                    label: t(`view3d.settings.guardEquipmentMode.${value}`),
+                }))}
+                onChange={setEquipment}
+                label={t("view3d.settings.guardEquipment")}
+                testId="view3d-guard-equipment-picker"
+                className="grid! grid-cols-3 [&>*]:justify-start"
+            />
+            <p className="text-sub text-text/60">
+                {t("view3d.settings.guardEquipmentHint")}
+            </p>
+        </Row>
+    );
+}
+
+/**
+ * Which foot the band steps off on, always the performer's own: a window
+ * setting until the show stores it.
+ */
+function StepOffFootRow() {
+    const { t } = useTranslate();
+    const foot = useView3dSceneStore((s) => s.stepOffFoot);
+    const setFoot = useView3dSceneStore((s) => s.setStepOffFoot);
+    return (
+        <Row label={t("view3d.settings.stepOffFoot")} stacked>
+            <Segmented
+                value={foot}
+                options={(["left", "right"] as const).map((value) => ({
+                    value,
+                    label: t(`view3d.settings.stepOffFootMode.${value}`),
+                }))}
+                onChange={setFoot}
+                label={t("view3d.settings.stepOffFoot")}
+                testId="view3d-step-off-foot-picker"
+            />
+            <p className="text-sub text-text/60">
+                {t("view3d.settings.stepOffFootHint")}
             </p>
         </Row>
     );

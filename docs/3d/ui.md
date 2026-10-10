@@ -44,9 +44,22 @@ replacing the first layout's venue and lighting bars and the wide camera bar.
 - **Selecting a camera** flies to it over 1.1 s, ease-in-out, with a small
   upward arc on long moves. With reduced motion, it jumps.
 - **Moving freely:**
-  - drag to orbit;
-  - right-drag or Shift+drag to pan;
-  - wheel or pinch to zoom.
+  - drag to orbit; a flung drag coasts to a stop;
+  - right-drag or Shift+drag to pan; the ground point under the pointer
+    stays under it;
+  - mouse wheel to zoom toward the cursor, eased over a few frames;
+  - on a trackpad: two-finger scroll orbits, Shift or Option plus scroll
+    pans, pinch zooms toward the cursor (owner, 2026-10-09: the controls
+    should feel good on a trackpad and a mouse alike);
+  - zooming works as in CAD tools (owner, 2026-10-09): the camera and the
+    orbit center scale about the point under the cursor (the nearest
+    performer, else the ground, else a point at the orbit's distance), so
+    that point stays put on screen and the view keeps its angle. It goes
+    right up to the point, stopping 0.3 m short, and the orbit center comes
+    along, so orbiting afterward turns about what you zoomed into. The near
+    plane follows the distance in, down to 5 cm, so a close-up isn't
+    clipped;
+  - double-click to move the orbit center to the clicked spot.
 
   The camera can't go below ground level. Moving manually deselects the camera
   chip.
