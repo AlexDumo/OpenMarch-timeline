@@ -66,8 +66,80 @@ export function movesFromSpans(spans: readonly SpanInfo[]): Row[] {
 const pageAt = (pages: readonly KeepPage[], beat: number): number =>
     pages.findIndex((p) => p.range && beat > p.range.start && beat <= p.flag);
 
+/** The first index in ascending `values` above `target` (or at least it, `orEqual`). */
+const firstAbove = (
+    values: readonly number[],
+    target: number,
+    orEqual = false,
+): number => {
+    let low = 0;
+    let high = values.length;
+    while (low < high) {
+        const mid = (low + high) >> 1;
+        const value = values[mid]!;
+        if (value < target || (!orEqual && value === target)) low = mid + 1;
+        else high = mid;
+    }
+    return low;
+};
+
 /**
- * The selection's keep state on every page box, in page order (home has none).
+ * `pageAt` by binary search over the page boxes (which don't overlap): the same answers in
+ * O(log pages) per lookup, for `pageKeepStates` over every box.
+ */
+const pageLookup = (pages: readonly KeepPage[]) => {
+    const boxed = pages.flatMap((p, index) =>
+        p.range ? [{ start: p.range.start, flag: p.flag, index }] : [],
+    );
+    boxed.sort((a, b) => a.start - b.start);
+    const starts = boxed.map((b) => b.start);
+    return (beat: number): number => {
+        // The last box starting before `beat`
+        const box = boxed[firstAbove(starts, beat, true) - 1];
+        return box && beat <= box.flag ? box.index : -1;
+    };
+};
+
+/**
+ * One marcher's moves indexed by end, so each box finds the moves over it and the last move
+ * before it by binary search (`pageKeepStates` over every box, pre-merge review): the same rows,
+ * in the same order, as filtering every move per box.
+ */
+const indexMoves = (rows: readonly Row[]) => {
+    // Stable: equal ends keep their order, so the first of them is the one `lastMoveBefore` keeps
+    const byEnd = rows
+        .map((row, order) => ({ row, order }))
+        .sort((a, b) => a.row.end - b.row.end);
+    const ends = byEnd.map((m) => m.row.end);
+    // The smallest start from each index on, so the scan over a box can stop early
+    const minStartFrom = new Array<number>(byEnd.length + 1).fill(Infinity);
+    for (let i = byEnd.length - 1; i >= 0; i--)
+        minStartFrom[i] = Math.min(byEnd[i]!.row.start, minStartFrom[i + 1]!);
+    return {
+        /** Its rows that cover any beat of `box`, in their original order */
+        over: (box: KeptPageBox): Row[] => {
+            const found: { row: Row; order: number }[] = [];
+            for (
+                let i = firstAbove(ends, box.start);
+                i < byEnd.length && minStartFrom[i]! < box.end;
+                i++
+            )
+                if (byEnd[i]!.row.start < box.end) found.push(byEnd[i]!);
+            return found.sort((a, b) => a.order - b.order).map((m) => m.row);
+        },
+        /** `lastMoveBefore(rows, box)` */
+        before: (box: KeptPageBox): Row | null => {
+            let i = firstAbove(ends, box.start) - 1;
+            if (i < 0) return null;
+            while (i > 0 && ends[i - 1] === ends[i]) i--;
+            return byEnd[i]!.row;
+        },
+    };
+};
+
+/**
+ * The selection's keep state on every page box, in page order (home has none). Each marcher's
+ * moves are indexed once, so it costs about O(boxes × marchers × log moves).
  *
  * @param spansOf a marcher's resolver spans (`resolverSpans`)
  * @param kept the kept assignments' ids
@@ -84,7 +156,10 @@ export function pageKeepStates({
     kept: ReadonlySet<number>;
 }): PageKeepState[] {
     const ids = [...new Set(marcherIds)].sort((a, b) => a - b);
-    const moves = new Map(ids.map((id) => [id, movesFromSpans(spansOf(id))]));
+    const moves = new Map(
+        ids.map((id) => [id, indexMoves(movesFromSpans(spansOf(id)))]),
+    );
+    const sourceOf = pageLookup(pages);
     const out: PageKeepState[] = [];
     for (const page of pages) {
         const box = page.range;
@@ -94,17 +169,13 @@ export function pageKeepStates({
         const keptHere: number[] = [];
         const fromPages = new Set<number>();
         for (const id of ids) {
-            const rows = moves.get(id)!;
-            const state = keptStateOf(
-                rows.filter((r) => r.start < box.end && r.end > box.start),
-                box,
-                kept,
-            );
+            const indexed = moves.get(id)!;
+            const state = keptStateOf(indexed.over(box), box, kept);
             if (state !== "follows" && state !== "kept") continue;
-            const before = lastMoveBefore(rows, box);
+            const before = indexed.before(box);
             (state === "follows" ? follows : keptHere).push(id);
             if (state === "follows" && !before) fromStart.push(id);
-            const source = before ? pageAt(pages, before.end) : -1;
+            const source = before ? sourceOf(before.end) : -1;
             if (source >= 0) fromPages.add(source);
         }
         out.push({

@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import type { Resolver } from "@openmarch/core";
 import { create } from "zustand";
 import type { DbConnection } from "@/db-functions/types";
 import { useTimelineDisplayStore } from "@/db-functions/timelineDisplay";
@@ -87,9 +88,82 @@ export const keepPagesOf = (pages: readonly NamedPage[]) =>
         range: f.range,
     }));
 
+/** What `sharedPageKeepStates` computes from */
+interface KeepStatesInput {
+    resolver: Resolver;
+    /** The resolver's version: a new one means new spans */
+    version: number;
+    kept: ReadonlySet<number>;
+    pages: readonly NamedPage[];
+    marcherIds: readonly number[];
+}
+
+/** The last few results, by input (the panel, the inspector and K usually ask the same) */
+const keepStatesCache: {
+    resolver: Resolver;
+    version: number;
+    kept: ReadonlySet<number>;
+    pagesKey: string;
+    idsKey: string;
+    states: PageKeepState[];
+}[] = [];
+const CACHE_SIZE = 4;
+let keepStatesComputed = 0;
+
+const sameSet = (a: ReadonlySet<number>, b: ReadonlySet<number>) =>
+    a === b || (a.size === b.size && [...a].every((id) => b.has(id)));
+
 /**
- * The selection's keep state on every page box (`pageKeepStates`), from the resolver's spans and
- * the kept markers. Empty without a selection or a resolver.
+ * The selection's keep state on every page box (`pageKeepStates`), computed once per resolver
+ * version, kept markers, selection and pages however many callers ask (the timeline panel, the
+ * inspector line and **K**; pre-merge review): later asks with equal inputs, even as other
+ * arrays, get the same result.
+ */
+export function sharedPageKeepStates({
+    resolver,
+    version,
+    kept,
+    pages,
+    marcherIds,
+}: KeepStatesInput): PageKeepState[] {
+    if (marcherIds.length === 0) return [];
+    const keepPages = keepPagesOf(pages);
+    const pagesKey = JSON.stringify(keepPages);
+    const idsKey = [...new Set(marcherIds)].sort((a, b) => a - b).join(",");
+    const hit = keepStatesCache.find(
+        (c) =>
+            c.resolver === resolver &&
+            c.version === version &&
+            c.pagesKey === pagesKey &&
+            c.idsKey === idsKey &&
+            sameSet(c.kept, kept),
+    );
+    if (hit) return hit.states;
+    keepStatesComputed++;
+    const states = pageKeepStates({
+        pages: keepPages,
+        marcherIds,
+        spansOf: (id) => resolverSpans(resolver, id),
+        kept,
+    });
+    keepStatesCache.unshift({
+        resolver,
+        version,
+        kept,
+        pagesKey,
+        idsKey,
+        states,
+    });
+    keepStatesCache.length = Math.min(keepStatesCache.length, CACHE_SIZE);
+    return states;
+}
+
+/** How many times `sharedPageKeepStates` computed rather than reused, for tests */
+export const keepStatesComputations = () => keepStatesComputed;
+
+/**
+ * The selection's keep state on every page box (`sharedPageKeepStates`), from the resolver's
+ * spans and the kept markers. Empty without a selection or a resolver.
  *
  * @param marcherIds the selected marchers; keep the array stable while the selection is
  */
@@ -101,13 +175,13 @@ export function usePageKeepStates(
     const version = useTimelineResolverStore((s) => s.version);
     const kept = useKeptAssignmentsStore((s) => s.ids);
     return useMemo(() => {
-        void version; // a new version means new spans
         if (!resolver || marcherIds.length === 0) return [];
-        return pageKeepStates({
-            pages: keepPagesOf(pages),
-            marcherIds,
-            spansOf: (id) => resolverSpans(resolver, id),
+        return sharedPageKeepStates({
+            resolver,
+            version,
             kept,
+            pages,
+            marcherIds,
         });
     }, [resolver, version, kept, pages, marcherIds]);
 }

@@ -500,3 +500,143 @@ describe("keptMarchersOnPage (UI-18 kept marchers on the field)", () => {
         );
     });
 });
+
+describe("pageKeepStates at scale (pre-merge review U4)", () => {
+    /** The straightforward version: every move filtered per box, as before indexing */
+    const reference = (
+        pages: readonly KeepPage[],
+        marcherIds: readonly number[],
+        spansOf: (id: number) => readonly SpanInfo[],
+        kept: ReadonlySet<number>,
+    ) =>
+        pages.flatMap((page) => {
+            const box = page.range;
+            if (!box) return [];
+            const follows: number[] = [];
+            const fromStart: number[] = [];
+            const keptHere: number[] = [];
+            const from = new Set<number>();
+            for (const id of [...new Set(marcherIds)].sort((a, b) => a - b)) {
+                const rows = spansOf(id)
+                    .filter((s) => s.kind !== "hold" && s.assignmentId !== null)
+                    .map((s) => ({ id: s.assignmentId!, ...s }));
+                const over = rows.filter(
+                    (r) => r.start < box.end && r.end > box.start,
+                );
+                let state = "follows";
+                if (over.some((r) => r.start < box.start || r.end > box.end))
+                    state = "midMove";
+                else if (over.length > 0)
+                    state =
+                        over.length === 1 &&
+                        kept.has(over[0]!.id) &&
+                        over[0]!.start === box.start &&
+                        over[0]!.end === box.end
+                            ? "kept"
+                            : "own";
+                if (state !== "follows" && state !== "kept") continue;
+                const before = rows
+                    .filter((r) => r.end <= box.start)
+                    .reduce<
+                        (typeof rows)[number] | null
+                    >((last, r) => (last && last.end >= r.end ? last : r), null);
+                (state === "follows" ? follows : keptHere).push(id);
+                if (state === "follows" && !before) fromStart.push(id);
+                const source = before
+                    ? pages.findIndex(
+                          (p) =>
+                              p.range &&
+                              before.end > p.range.start &&
+                              before.end <= p.flag,
+                      )
+                    : -1;
+                if (source >= 0) from.add(source);
+            }
+            return [
+                {
+                    pageId: page.id,
+                    pageName: page.name,
+                    box: { start: box.start, end: box.end },
+                    follows,
+                    fromStart,
+                    kept: keptHere,
+                    from: [...from]
+                        .sort((a, b) => a - b)
+                        .map((i) => pages[i]!.name),
+                    selected: new Set(marcherIds).size,
+                },
+            ];
+        });
+
+    /** `pageCount` pages of 8 counts after home, and each marcher's moves (some across flags) */
+    const bigShow = (
+        pageCount: number,
+        marchers: number,
+        movesEach: number,
+    ) => {
+        let seed = 7;
+        const random = () => {
+            seed = (seed * 16807) % 2147483647;
+            return seed / 2147483647;
+        };
+        const pages: KeepPage[] = [{ id: 0, name: "1", flag: 0, range: null }];
+        for (let i = 1; i <= pageCount; i++)
+            pages.push({
+                id: i,
+                name: String(i + 1),
+                flag: i * 8,
+                range: { start: (i - 1) * 8, end: i * 8 },
+            });
+        const spans = new Map<number, SpanInfo[]>();
+        const kept = new Set<number>();
+        let id = 1;
+        for (let m = 1; m <= marchers; m++) {
+            const list: SpanInfo[] = [];
+            let at = 0;
+            for (let k = 0; k < movesEach && at < pageCount * 8; k++) {
+                // Mostly whole pages, some partway or across a flag
+                const start = at + Math.floor(random() * 3) * 8;
+                const length =
+                    random() < 0.8 ? 8 : 1 + Math.floor(random() * 12);
+                const assignmentId = id++;
+                if (random() < 0.1) kept.add(assignmentId);
+                list.push(move(m, start, start + length, assignmentId));
+                at = start + length;
+            }
+            spans.set(m, list);
+        }
+        const ids = [...spans.keys()];
+        return { pages, ids, spansOf: (m: number) => spans.get(m) ?? [], kept };
+    };
+
+    it("gives the same states as filtering every move per box", () => {
+        const { pages, ids, spansOf, kept } = bigShow(30, 40, 20);
+        expect(
+            pageKeepStates({ pages, marcherIds: ids, spansOf, kept }),
+        ).toEqual(reference(pages, ids, spansOf, kept));
+        // Overlapping moves and equal ends too
+        const odd: Record<number, SpanInfo[]> = {
+            1: [move(1, 0, 16, 1), move(1, 4, 8, 2), move(1, 2, 8, 3)],
+            2: [move(2, 8, 16, 4), move(2, 8, 16, 5)],
+        };
+        const oddPages = pages.slice(0, 5);
+        const spansOdd = (m: number) => odd[m] ?? [];
+        expect(
+            pageKeepStates({
+                pages: oddPages,
+                marcherIds: [1, 2],
+                spansOf: spansOdd,
+                kept: new Set([4]),
+            }),
+        ).toEqual(reference(oddPages, [1, 2], spansOdd, new Set([4])));
+    });
+
+    it("150 marchers × 100 pages × 50 moves stays well under a frame budget", () => {
+        const { pages, ids, spansOf, kept } = bigShow(100, 150, 50);
+        pageKeepStates({ pages, marcherIds: ids, spansOf, kept });
+        const t = performance.now();
+        pageKeepStates({ pages, marcherIds: ids, spansOf, kept });
+        // The reviewer measured ~19 ms before indexing; a generous bound for slow machines
+        expect(performance.now() - t).toBeLessThan(100);
+    });
+});

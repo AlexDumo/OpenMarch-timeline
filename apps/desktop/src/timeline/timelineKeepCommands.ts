@@ -7,10 +7,14 @@ import {
 } from "@/db-functions/timelineKeepHere";
 import { readKeptAssignmentIds } from "@/db-functions/timelineKeptMarkers";
 import type { KeptPageBox } from "./timelineKept";
-import { keepToggle, pageKeepStates } from "./timelineKeepLater";
+import { keepToggle } from "./timelineKeepLater";
 import { toastTimelineError } from "./timelineErrorMessages";
-import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
-import { applyKeptChange, keepPagesOf } from "./useKeepLaterPages";
+import { useTimelineResolverStore } from "./timelineStore";
+import {
+    applyKeptChange,
+    keepPagesOf,
+    sharedPageKeepStates,
+} from "./useKeepLaterPages";
 
 /**
  * The keep later pages commands as the UI runs them (the chains, the inspector line, the page box
@@ -93,11 +97,13 @@ export async function toggleKeepOnPage({
         return null;
     }
     const toggle = keepToggle(
-        pageKeepStates({
-            pages: keepPages,
-            marcherIds,
-            spansOf: (id) => resolverSpans(resolver, id),
+        // The panel's and the inspector's result, when the file's markers match the renderer's
+        sharedPageKeepStates({
+            resolver,
+            version: useTimelineResolverStore.getState().version,
             kept,
+            pages,
+            marcherIds,
         }),
         currentPageId,
         keepPages[0]?.id ?? null,
