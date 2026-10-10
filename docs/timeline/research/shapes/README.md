@@ -98,20 +98,17 @@ pop-up.
 - **Extensibility check.** Adding "diamond" or "wedge" means one `ShapeKind` file and one palette
   entry. Nothing else changes.
 
-## Questions for the owner
+## Owner decisions (2026-10-10)
 
-1. **Re-editable shapes.** Bake plus recipe (recommended), bake only, or persistent spec shapes?
-2. **Parameter home.** Inspector only, inspector plus a primary-field pop-up, or a pop-up first?
-   This could be run as a simulated-user A/B.
-3. **Mid-move playhead.** "In place" writes to the move ending at the playhead. When the playhead
-   is inside a move, should the tool target that move's end (as canvas edits do now) or refuse?
-4. **Transforms.** Should rotate, scale, mirror and distribute join the system in v1?
-5. **Follow the leader.** Does it need a spec shape, and is it in v1 or later?
-6. **Snapping.** Legacy shapes use Shift to stop rounding, and the timeline uses Alt. Which one
-   rule should apply?
-7. **v1 spacing.** Are mixed intervals (`5x3,10x2`) and rise over run needed in v1?
-8. **Discussion #1009.** The "Shapes and transitions" slides deck couldn't be read. Does it already
-   settle any of the above?
+1. **Storage:** bake positions plus a re-editable recipe (option c). Agreed.
+2. **Parameter home:** undecided; the lead recommends starting inspector-only (see below) and testing a primary-field pop-up later.
+3. **Playhead mid-move:** no special rule. The shape tool uses the same write path as a drag (`planCanvasEdit` → `transformMarchersInSelection`), so UI-10 applies: marchers leave the start flag and arrive at the playhead; off a flag that creates a move ending at the playhead, and a move the window runs into partway catches up after it.
+4. **Transforms:** not built in v1. The contract must allow identity-order kinds with a chosen origin (#257) so they can be added later without redesign.
+5. **Follow the leader:** later. Shapes are only for placing marchers in place.
+6. **Snapping:** Alt turns snapping off, as in the rest of the timeline.
+7. **Mixed intervals** (`5x3,10x2`) are in v1.
+8. **Slides deck:** not needed; the brief above is enough.
+9. **Clean slate:** existing shape code (legacy page shapes, the timeline shape editor and overlay, `ShapeSelector`, the line tool) can be thrown out. This is a complete redesign, built from scratch.
 
 ## Suggested build order (after decisions)
 
