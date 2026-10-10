@@ -1659,10 +1659,18 @@ function RegisteredActionsHandler() {
                     shift: e.shiftKey,
                 });
                 const keyString = keyboardAction.toString();
-                if (keyboardShortcutDictionary.current[keyString]) {
-                    triggerAction(
-                        keyboardShortcutDictionary.current[keyString],
-                    );
+                const shortcutAction =
+                    keyboardShortcutDictionary.current[keyString];
+                if (shortcutAction) {
+                    // K toggles: a held key would flip it back and forth (pre-merge review)
+                    if (
+                        !(
+                            e.repeat &&
+                            shortcutAction ===
+                                RegisteredActionsEnum.toggleKeepOnPage
+                        )
+                    )
+                        triggerAction(shortcutAction);
                     e.preventDefault();
                 }
             } else if (e.key === "Escape") {

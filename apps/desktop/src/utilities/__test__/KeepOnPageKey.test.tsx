@@ -41,13 +41,14 @@ afterEach(() => {
     vi.mocked(toggleKeepOnPage).mockClear();
 });
 
-const press = (target: EventTarget = window) =>
+const press = (target: EventTarget = window, repeat = false) =>
     act(() => {
         target.dispatchEvent(
             new KeyboardEvent("keydown", {
                 code: "KeyK",
                 key: "k",
                 bubbles: true,
+                repeat,
             }),
         );
     });
@@ -104,6 +105,11 @@ describeDbTests(
                         marcherIds: ids,
                     }),
                 );
+                // Holding K repeats the key; it toggles once (pre-merge review U6)
+                press(window, true);
+                press(window, true);
+                await new Promise((r) => setTimeout(r, 100));
+                expect(toggleKeepOnPage).toHaveBeenCalledTimes(1);
             } else {
                 await new Promise((r) => setTimeout(r, 100));
                 expect(toggleKeepOnPage).not.toHaveBeenCalled();
