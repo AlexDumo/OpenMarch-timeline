@@ -13,11 +13,18 @@ import ShapeToolOverlay, {
     type ShapeToolOverlayColors,
 } from "./ShapeToolOverlay";
 import { marchersOnCanvas, shapeContextFor } from "./shapeCanvasContext";
+import {
+    marcherLooks,
+    originsAtStart,
+    setMarchersHidden,
+    shapePreviewStyle,
+} from "./previewContext";
 
 const colorsOf = (theme: FieldTheme): ShapeToolOverlayColors => ({
     shape: rgbaToString(theme.shape),
     travel: rgbaToString({ ...theme.shape, a: 0.35 }),
     ghost: rgbaToString({ ...theme.shape, a: 0.55 }),
+    label: rgbaToString(theme.defaultMarcher.label),
     issue: "#e5484d",
     handleFill: "#fff",
 });
@@ -42,6 +49,8 @@ export function useShapeToolCanvas({
     const dragging = useShapeToolStore((s) => s.dragging);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
     const lastHold = useRef<ReturnType<typeof holdFeedback>>(null);
+    /** Marchers whose own dots the result preview hides, to show again when it closes */
+    const hidden = useRef<number[]>([]);
 
     useEffect(() => {
         if (!canvas) return;
@@ -89,10 +98,21 @@ export function useShapeToolCanvas({
         if (!overlay || !canvas) return;
         if (!session) {
             overlay.clear();
+            setMarchersHidden(canvas, hidden.current, false);
+            hidden.current = [];
             return;
         }
         const preview = previewSession(session, shapeContextFor(canvas));
-        overlay.show(preview);
+        const ids = session.marchers.map((m) => m.id);
+        const style = shapePreviewStyle();
+        overlay.show(preview, {
+            style,
+            origins: originsAtStart(ids),
+            looks: marcherLooks(canvas, ids),
+        });
+        // The result preview stands in for the marchers' own dots, at their old spots
+        setMarchersHidden(canvas, ids, style === "result");
+        hidden.current = style === "result" ? ids : [];
         const hold = holdFeedback(session, preview, dragging, canvas);
         if (hold) {
             lastHold.current = hold;

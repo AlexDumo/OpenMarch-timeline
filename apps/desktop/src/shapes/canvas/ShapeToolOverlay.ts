@@ -3,6 +3,7 @@ import { FieldProperties } from "@openmarch/core";
 import { NoControls } from "@/components/canvas/CanvasConstants";
 import type { ShapePreview } from "../session";
 import type { HandleDef, HandleRole, XY } from "../types";
+import type { MarcherLook, ShapePreviewStyle } from "./previewContext";
 
 export interface ShapeToolOverlayColors {
     /** Outline, ghost spots and handle rims */
@@ -11,6 +12,8 @@ export interface ShapeToolOverlayColors {
     travel: string;
     /** The spots marchers will stand on */
     ghost: string;
+    /** Drill numbers in the result preview */
+    label: string;
     /** Spots with a warning or error */
     issue: string;
     handleFill: string;
@@ -19,6 +22,21 @@ export interface ShapeToolOverlayColors {
 /** A shape tool handle on the canvas. */
 export type ShapeToolHandleObject = fabric.Object & {
     shapeToolHandle: HandleDef;
+};
+
+/** What the preview draws beside the shape (see `previewContext.ts`) */
+export interface PreviewDecor {
+    readonly style: ShapePreviewStyle;
+    /** Where each marcher comes from in the move, by id (empty at Home) */
+    readonly origins: ReadonlyMap<number, XY>;
+    /** Each marcher's dot and drill number, by id, for the result style */
+    readonly looks: ReadonlyMap<number, MarcherLook>;
+}
+
+const DEFAULT_DECOR: PreviewDecor = {
+    style: "ghost",
+    origins: new Map(),
+    looks: new Map(),
 };
 
 export interface HandleDragEvents {
@@ -56,6 +74,9 @@ const toCanvas = (p: XY) => ({ x: p.x + offset, y: p.y + offset });
  */
 export default class ShapeToolOverlay {
     private outlines: fabric.Polyline[] = [];
+    /** Result preview: drill numbers over the new spots, faint rings where marchers come from */
+    private labels: fabric.Text[] = [];
+    private origins: fabric.Circle[] = [];
     /** While a lock holds a dragged handle back: a line to the cursor and a tag saying why */
     private holdLine: fabric.Line | null = null;
     private holdTag: fabric.Text | null = null;
@@ -293,7 +314,7 @@ export default class ShapeToolOverlay {
     /** Whether presses on the shape's line are the shape's (it takes new points) */
     private takesPoints = false;
 
-    show(preview: ShapePreview): void {
+    show(preview: ShapePreview, decor: PreviewDecor = DEFAULT_DECOR): void {
         this.takesPoints = preview.takesPoints;
         this.syncLines(this.guides, preview.guide, {
             stroke: this.colors.travel,
@@ -310,7 +331,7 @@ export default class ShapeToolOverlay {
             if (issue.level !== "info")
                 issue.slots?.forEach((i) => flagged.add(i));
         }
-        this.syncTargets(preview, flagged);
+        this.syncTargets(preview, flagged, decor);
         this.syncHandles(preview.handles);
         this.bringToFront();
         this.canvas.requestRenderAll();
@@ -321,6 +342,7 @@ export default class ShapeToolOverlay {
         for (const guide of this.guides) guide.bringToFront();
         for (const outline of this.outlines) outline.bringToFront();
         for (const ghost of this.ghosts) ghost.bringToFront();
+        for (const label of this.labels) label.bringToFront();
         for (const handle of this.handles) {
             if (handle.shapeToolHandle.role !== "move") handle.bringToFront();
         }
@@ -336,6 +358,8 @@ export default class ShapeToolOverlay {
             ...this.outlines,
             ...this.travel,
             ...this.ghosts,
+            ...this.labels,
+            ...this.origins,
             ...this.handles,
         ]) {
             this.canvas.remove(o);
@@ -344,6 +368,8 @@ export default class ShapeToolOverlay {
         this.outlines = [];
         this.travel = [];
         this.ghosts = [];
+        this.labels = [];
+        this.origins = [];
         this.handles = [];
         this.handleRoles = "";
         this.takesPoints = false;
@@ -392,49 +418,139 @@ export default class ShapeToolOverlay {
     private syncTargets(
         preview: ShapePreview,
         flagged: ReadonlySet<number>,
+        decor: PreviewDecor,
     ): void {
         const n = preview.targets.length;
-        while (this.travel.length > n) this.canvas.remove(this.travel.pop()!);
-        while (this.ghosts.length > n) this.canvas.remove(this.ghosts.pop()!);
+        const result = decor.style === "result";
+        const trim = <T extends fabric.Object>(pool: T[], size: number) => {
+            while (pool.length > size) this.canvas.remove(pool.pop()!);
+        };
+        trim(this.travel, n);
+        trim(this.ghosts, n);
+        trim(this.labels, result ? n : 0);
+        trim(this.origins, result ? n : 0);
         // `flagged` holds slot indexes; map them to targets through the slots' positions
         const flaggedSpots = new Set([...flagged].map((i) => preview.slots[i]));
         preview.targets.forEach((target, i) => {
-            const from = toCanvas(target.from);
+            // Travel starts where the marcher comes from in this move (the start flag), when known
+            const origin = decor.origins.get(target.id) ?? target.from;
+            const from = toCanvas(origin);
             const to = toCanvas(target.to);
-            const color = flaggedSpots.has(target.slot)
-                ? this.colors.issue
-                : this.colors.ghost;
-            const line = this.travel[i];
-            if (line) line.set({ x1: from.x, y1: from.y, x2: to.x, y2: to.y });
-            else {
-                const created = new fabric.Line([from.x, from.y, to.x, to.y], {
-                    stroke: this.colors.travel,
+            const issue = flaggedSpots.has(target.slot);
+            const look = decor.looks.get(target.id);
+            this.placeLine(i, from, to);
+            if (result) {
+                // The new shape, drawn as the marchers themselves
+                this.placeCircle(this.ghosts, i, to, {
+                    radius: look?.radius ?? GHOST_RADIUS,
+                    fill: issue
+                        ? this.colors.issue
+                        : (look?.fill ?? this.colors.shape),
+                    stroke: look?.stroke ?? this.colors.shape,
                     strokeWidth: 1,
-                    objectCaching: false,
-                    ...NoControls,
                 });
-                this.travel.push(created);
-                this.canvas.add(created);
-            }
-            const ghost = this.ghosts[i];
-            if (ghost) ghost.set({ left: to.x, top: to.y, fill: color });
-            else {
-                const created = new fabric.Circle({
-                    left: to.x,
-                    top: to.y,
+                this.placeLabel(
+                    i,
+                    to,
+                    look?.label ?? "",
+                    look?.radius ?? GHOST_RADIUS,
+                );
+                // Where they come from: faint
+                this.placeCircle(this.origins, i, from, {
+                    radius: look?.radius ?? GHOST_RADIUS,
+                    fill: "",
+                    stroke: this.colors.travel,
+                    strokeWidth: 1.5,
+                });
+            } else {
+                this.placeCircle(this.ghosts, i, to, {
                     radius: GHOST_RADIUS,
-                    originX: "center",
-                    originY: "center",
-                    fill: color,
+                    fill: issue ? this.colors.issue : this.colors.ghost,
+                    stroke: "",
                     strokeWidth: 0,
-                    objectCaching: false,
-                    ...NoControls,
                 });
-                this.ghosts.push(created);
-                this.canvas.add(created);
             }
         });
-        for (const o of [...this.travel, ...this.ghosts]) o.setCoords();
+        for (const o of [
+            ...this.travel,
+            ...this.ghosts,
+            ...this.labels,
+            ...this.origins,
+        ])
+            o.setCoords();
+    }
+
+    private placeLine(i: number, from: XY, to: XY): void {
+        const line = this.travel[i];
+        if (line) {
+            line.set({ x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+            return;
+        }
+        const created = new fabric.Line([from.x, from.y, to.x, to.y], {
+            stroke: this.colors.travel,
+            strokeWidth: 1,
+            objectCaching: false,
+            ...NoControls,
+        });
+        this.travel.push(created);
+        this.canvas.add(created);
+    }
+
+    private placeCircle(
+        pool: fabric.Circle[],
+        i: number,
+        at: XY,
+        style: {
+            radius: number;
+            fill: string;
+            stroke: string;
+            strokeWidth: number;
+        },
+    ): void {
+        const circle = pool[i];
+        if (circle) {
+            circle.set({ left: at.x, top: at.y, ...style });
+            return;
+        }
+        const created = new fabric.Circle({
+            left: at.x,
+            top: at.y,
+            originX: "center",
+            originY: "center",
+            objectCaching: false,
+            ...style,
+            ...NoControls,
+        });
+        pool.push(created);
+        this.canvas.add(created);
+    }
+
+    /** A drill number above a result dot, as on the marchers */
+    private placeLabel(i: number, at: XY, text: string, radius: number): void {
+        // Placed like the marchers' own labels
+        const props = {
+            left: at.x,
+            top: at.y - radius * 2.2,
+            text,
+        };
+        const label = this.labels[i];
+        if (label) {
+            label.set(props);
+            return;
+        }
+        const created = new fabric.Text(text, {
+            ...props,
+            originX: "center",
+            originY: "center",
+            fontSize: 14,
+            fontWeight: "bold",
+            fontFamily: "courier new",
+            fill: this.colors.label,
+            objectCaching: false,
+            ...NoControls,
+        });
+        this.labels.push(created);
+        this.canvas.add(created);
     }
 
     private syncHandles(defs: readonly HandleDef[]): void {

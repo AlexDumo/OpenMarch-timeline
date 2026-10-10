@@ -382,6 +382,7 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             // Back to the selection's own controls and movement locks, in place: selecting again
             // would clear the app's selection on the way (selection:cleared)
             active.set({
+                hasBorders: true,
                 lockScalingX: false,
                 lockScalingY: false,
                 hoverCursor: null as unknown as string,
@@ -401,6 +402,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         if (!object || !this._selectionLocked) return;
         object.set({
             hasControls: false,
+            // The tool draws the marchers where they're going; a box around where they stand
+            // now would frame nothing
+            hasBorders: false,
             lockMovementX: true,
             lockMovementY: true,
             lockRotation: true,
