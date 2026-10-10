@@ -43,6 +43,7 @@ import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
 import { useTimelineShapeCanvas } from "@/timeline/useTimelineShapeCanvas";
+import { useShapeToolCanvas } from "@/shapes/canvas/useShapeToolCanvas";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelineDimming } from "@/timeline/useTimelineDimming";
@@ -696,6 +697,13 @@ export default function Canvas({
     useTimelineShapeCanvas({
         canvas,
         enabled: drawFromResolver,
+        isPlaying,
+        theme: fieldProperties?.theme,
+    });
+
+    // The shape tool's preview and handles (docs/timeline/research/shapes/README.md)
+    useShapeToolCanvas({
+        canvas,
         isPlaying,
         theme: fieldProperties?.theme,
     });

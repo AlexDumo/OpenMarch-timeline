@@ -1,3 +1,4 @@
+import { LineSegmentIcon } from "@phosphor-icons/react";
 import { principalExtremes } from "../geometry/fit";
 import { makePath, type Path } from "../geometry/path";
 import { add, dist, mid, snapAngle, sub, xy } from "../geometry/vec";
@@ -18,7 +19,7 @@ export const lineKind: ShapeKind<LineParams> = {
     id: "line",
     version: 1,
     label: "Line",
-    icon: "LineSegment",
+    icon: LineSegmentIcon,
     family: "path",
     groups: [SPACING_GROUP],
 

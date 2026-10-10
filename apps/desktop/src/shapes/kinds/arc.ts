@@ -1,3 +1,4 @@
+import { CircleNotchIcon } from "@phosphor-icons/react";
 import { fitCircle, principalExtremes } from "../geometry/fit";
 import { makePath, type Path, type Segment } from "../geometry/path";
 import {
@@ -95,7 +96,7 @@ export const arcKind: ShapeKind<ArcParams> = {
     id: "arc",
     version: 1,
     label: "Arc",
-    icon: "CircleHalf",
+    icon: CircleNotchIcon,
     family: "path",
     groups: [SPACING_GROUP],
 

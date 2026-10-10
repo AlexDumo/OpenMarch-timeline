@@ -444,6 +444,31 @@ const STATIC_ACTIONS = {
         hiddenFromPalette: true,
     },
 
+    // Shape tool (docs/timeline/research/shapes): select marchers, pick a shape, Enter places
+    // them. Escape is cancelAlignmentUpdates, which the open tool takes over (useShapeToolActions).
+    shapeLine: {
+        labelKey: "actions.shape.line",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["L"],
+        args: { kind: "line" },
+    },
+    shapeArc: {
+        labelKey: "actions.shape.arc",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { kind: "arc" },
+    },
+    applyShape: {
+        labelKey: "actions.shape.apply",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["Enter"],
+    },
+
     // Cursor mode
     applyQuickShape: {
         labelKey: "actions.shape.applyQuick",
@@ -455,7 +480,8 @@ const STATIC_ACTIONS = {
         labelKey: "actions.shape.create",
         category: "cursor",
         scope: "canvas",
-        defaultBindings: ["Enter"],
+        // Enter places the shape tool's marchers now (applyShape)
+        defaultBindings: [],
     },
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
@@ -473,7 +499,8 @@ const STATIC_ACTIONS = {
         labelKey: "actions.cursor.lineMode",
         category: "cursor",
         scope: "canvas",
-        defaultBindings: ["L"],
+        // L is the shape tool's Line now
+        defaultBindings: [],
     },
 
     // Select

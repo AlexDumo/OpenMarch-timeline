@@ -14,6 +14,7 @@ import { renderObjectsFromCaches } from "./drawFromCache";
 import { CacheAtlas } from "./cacheAtlas";
 import type { FocusScene } from "@/timeline/timelineFocusScene";
 import type TimelineShapeOverlay from "./TimelineShapeOverlay";
+import type ShapeToolOverlay from "@/shapes/canvas/ShapeToolOverlay";
 import { FieldProperties } from "@openmarch/core";
 import CanvasListeners from "../../../components/canvas/listeners/CanvasListeners";
 import Marcher from "@/global/classes/Marcher";
@@ -141,6 +142,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     marcherShapes: MarcherShape[] = [];
     /** Timeline mode's picked spec shape, while one is drawn (P7.11, `useTimelineShapeCanvas`) */
     timelineShapeOverlay: TimelineShapeOverlay | null = null;
+    /** The shape tool's preview and handles, while the tool is open (`useShapeToolCanvas`) */
+    shapeToolOverlay: ShapeToolOverlay | null = null;
     /** The kept marks beside the dots in timeline mode (`renderTimelineKeptMarks`), if drawn */
     timelineKeptLayer: TimelineKeptLayer | null = null;
     /**
@@ -1127,6 +1130,7 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         }
         this.timelineKeptLayer?.bringToFront();
         this.timelineShapeOverlay?.bringToFront();
+        this.shapeToolOverlay?.bringToFront();
     }
 
     /**
@@ -2657,6 +2661,7 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         }
         this.timelineKeptLayer.bringToFront();
         this.timelineShapeOverlay?.bringToFront();
+        this.shapeToolOverlay?.bringToFront();
         this.requestRenderAll();
     }
 

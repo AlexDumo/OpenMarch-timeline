@@ -91,7 +91,11 @@
             "create": "Create shape",
             "createCircle": "Create circle",
             "delete": "Deletes the current selected shapes",
-            "noMarchersSelected": "No marchers selected"
+            "noMarchersSelected": "No marchers selected",
+            "line": "Shape: Line",
+            "arc": "Shape: Arc",
+            "apply": "Place marchers on the shape",
+            "keywords": "shape form formation set place"
         },
         "swap": {
             "error": "Could not swap marchers {marcher1} and {marcher2}",
@@ -923,6 +927,27 @@
                 "onTimeline": "{id} on {timeline}",
                 "plain": "{id}"
             }
+        },
+        "shapeTool": {
+            "title": "Shape",
+            "hint": "Select marchers, then pick a shape.",
+            "order": "Order",
+            "orderNearest": "Nearest",
+            "orderKeep": "Keep order",
+            "orderDrill": "Drill number",
+            "reverse": "Reverse",
+            "reassign": "Reassign",
+            "apply": "Place",
+            "cancel": "Cancel",
+            "spacingFit": "Fit",
+            "spacingInterval": "Interval",
+            "intervalPlaceholder": "2 or 5x3,2x4",
+            "anchor": "From",
+            "anchorStart": "Start",
+            "anchorCenter": "Center",
+            "anchorEnd": "End",
+            "marchers": "{count, plural, one {# marcher} other {# marchers}}",
+            "more": "More"
         },
         "title": "Inspector"
     },

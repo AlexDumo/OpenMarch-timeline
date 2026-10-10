@@ -12,6 +12,8 @@
  * converting with {@link ShapeContext.stepPx}.
  */
 
+import type { Icon } from "@phosphor-icons/react";
+
 export interface XY {
     readonly x: number;
     readonly y: number;
@@ -156,8 +158,7 @@ export interface ShapeKind<P> {
     /** Bump when `generate` gives different slots for the same params */
     readonly version: number;
     readonly label: string;
-    /** Phosphor icon name */
-    readonly icon: string;
+    readonly icon: Icon;
     readonly family: "path" | "fill";
     readonly groups: readonly ParamGroup<P>[];
 
