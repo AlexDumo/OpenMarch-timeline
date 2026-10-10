@@ -108,10 +108,26 @@ export function spacedLength(
     stepPx: number,
 ): number {
     if (spacing.mode === "fit") return path.length;
-    // `sampleAlong` lays n - 1 gaps, closed path or not
+    if (spacing.size === "follow")
+        return requiredLength(spacing.runs, n, path.closed, stepPx);
+    // `sampleAlong` lays n - 1 gaps along a drawn shape, closed or not
     return (
         gapsInSteps(spacing.runs, n - 1).reduce((sum, g) => sum + g, 0) * stepPx
     );
+}
+
+/**
+ * The path length `n` marchers need at these intervals: n − 1 gaps along an open path, n around
+ * a closed one (the last gap closes the loop).
+ */
+export function requiredLength(
+    runs: readonly IntervalRun[],
+    n: number,
+    closed: boolean,
+    stepPx: number,
+): number {
+    const gaps = closed ? n : n - 1;
+    return gapsInSteps(runs, gaps).reduce((sum, g) => sum + g, 0) * stepPx;
 }
 
 /**
@@ -139,8 +155,9 @@ export function sampleAlong(
     } else {
         const gaps = gapsInSteps(spacing.runs, n - 1).map((g) => g * stepPx);
         const total = gaps.reduce((sum, g) => sum + g, 0);
+        // A shape that follows the interval is already as long as the run: lay it from the start
         let s =
-            spacing.anchor === "start"
+            spacing.size === "follow" || spacing.anchor === "start"
                 ? 0
                 : spacing.anchor === "end"
                   ? path.length - total

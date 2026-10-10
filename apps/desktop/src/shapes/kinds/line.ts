@@ -5,10 +5,9 @@ import {
     add,
     dist,
     mid,
-    scale,
+    scaleAbout,
     snapAngle,
     sub,
-    unit,
     xy,
 } from "../geometry/vec";
 import {
@@ -39,20 +38,6 @@ export const lineKind: ShapeKind<LineParams> = {
     groups: [SPACING_GROUP],
     measures: [
         {
-            key: "length",
-            label: "Length",
-            unit: "length",
-            min: 0.25,
-            get: (p) => dist(p.a, p.b),
-            // From the start end, keeping the direction
-            set: (p, length) => ({
-                ...p,
-                b: add(p.a, scale(unit(sub(p.b, p.a)), length)),
-            }),
-            // With an interval the marchers set the length
-            visibleWhen: (p) => p.spacing.mode === "fit",
-        },
-        {
             key: "angle",
             label: "Angle",
             unit: "angle",
@@ -71,6 +56,13 @@ export const lineKind: ShapeKind<LineParams> = {
         },
     ],
 
+    path: linePath,
+    scale: (p, pivot, k) => ({
+        ...p,
+        a: scaleAbout(p.a, pivot, k),
+        b: scaleAbout(p.b, pivot, k),
+    }),
+
     fit({ current }, ctx) {
         const ends = principalExtremes(current);
         if (!ends) {
@@ -87,7 +79,7 @@ export const lineKind: ShapeKind<LineParams> = {
 
     handles: (p) => [
         { key: "a", role: "point", at: p.a, start: true },
-        { key: "b", role: "point", at: p.b },
+        { key: "b", role: "point", at: p.b, end: true },
         { key: "move", role: "move", at: mid(p.a, p.b) },
     ],
 

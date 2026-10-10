@@ -11,6 +11,8 @@ import type {
     XY,
 } from "./types";
 import { validateSlots } from "./validate";
+import { measuresOf, settle } from "./follow";
+import { followsInterval, type Spacing } from "./types";
 
 /**
  * One use of the shape tool: the marchers it places, the kind and its params, and who goes to
@@ -107,6 +109,7 @@ export function startSession({
             params,
         );
     }
+    params = settle(kind, params, marchers.length, ctx);
     return withAssignment(
         {
             kindId,
@@ -142,30 +145,46 @@ export function changeKind(
     });
 }
 
+/** New params, resized to keep a locked interval when `ctx` is given */
 export function changeParams(
     session: ShapeSession,
     params: unknown,
+    ctx?: ShapeContext,
 ): ShapeSession {
-    return { ...session, params };
+    if (!ctx) return { ...session, params };
+    return {
+        ...session,
+        params: settle(
+            kindOf(session.kindId),
+            params,
+            session.marchers.length,
+            ctx,
+        ),
+    };
 }
 
-/** The session with one of its kind's measures set to `value` (field units or radians) */
+/**
+ * The session with one of its kind's measures set to `value` (field units or radians). Typing
+ * the size while the shape follows a locked interval locks the size too: the run is then laid on
+ * the shape as typed.
+ */
 export function changeMeasure(
     session: ShapeSession,
     key: string,
     value: number,
     ctx: ShapeContext,
 ): ShapeSession {
-    const measure = kindOf(session.kindId).measures?.find((m) => m.key === key);
+    const kind = kindOf(session.kindId);
+    const measure = measuresOf(kind).find((m) => m.key === key);
     if (!measure) return session;
+    let params = session.params as { spacing?: Spacing };
+    if (measure.size && params.spacing && followsInterval(params.spacing)) {
+        params = { ...params, spacing: { ...params.spacing, size: "keep" } };
+    }
+    const n = session.marchers.length;
     return {
         ...session,
-        params: measure.set(
-            session.params,
-            value,
-            session.marchers.length,
-            ctx,
-        ),
+        params: settle(kind, measure.set(params, value, n, ctx), n, ctx),
     };
 }
 
@@ -198,17 +217,9 @@ export function dragHandle(
     ctx: ShapeContext,
 ): ShapeSession {
     const kind = kindOf(session.kindId);
-    return {
-        ...session,
-        params: kind.drag(
-            base,
-            key,
-            ctx.snapPoint(to),
-            { shift },
-            session.marchers.length,
-            ctx,
-        ),
-    };
+    const n = session.marchers.length;
+    const dragged = kind.drag(base, key, ctx.snapPoint(to), { shift }, n, ctx);
+    return { ...session, params: settle(kind, dragged, n, ctx, key) };
 }
 
 /**

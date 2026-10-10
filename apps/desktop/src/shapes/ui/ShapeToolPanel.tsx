@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { T, useTolgee } from "@tolgee/react";
-import { ArrowClockwiseIcon, ArrowsLeftRightIcon } from "@phosphor-icons/react";
+import {
+    ArrowClockwiseIcon,
+    ArrowsLeftRightIcon,
+    LockSimpleIcon,
+    LockSimpleOpenIcon,
+} from "@phosphor-icons/react";
 import {
     Button,
     Input,
@@ -23,13 +28,16 @@ import { SHAPE_KINDS, shapeKind } from "../registry";
 import { previewSession, type ShapeSession } from "../session";
 import { useShapeToolStore } from "../shapeToolStore";
 import { describeGaps, formatIntervals, parseIntervals } from "../spacing";
-import type {
-    AnyShapeKind,
-    Measure,
-    ParamField,
-    ShapeContext,
-    Spacing,
+import {
+    followsInterval,
+    type AnyShapeKind,
+    type IntervalRun,
+    type Measure,
+    type ParamField,
+    type ShapeContext,
+    type Spacing,
 } from "../types";
+import { measuresOf } from "../follow";
 import { SHAPE_KIND_ACTIONS } from "../useShapeToolActions";
 
 const FAMILIES: { family: AnyShapeKind["family"]; label: string }[] = [
@@ -154,9 +162,16 @@ function SessionControls({ session }: { session: ShapeSession }) {
     const n = session.marchers.length;
     const params = session.params as Record<string, unknown>;
     const setField = (key: string, value: unknown) =>
-        useShapeToolStore.getState().setParams({ ...params, [key]: value });
+        useShapeToolStore
+            .getState()
+            .setParams({ ...params, [key]: value }, ctx);
+    // The interval the shape gives in Fit, shown gray beside the Interval lock
+    const path = kind.path?.(session.params);
+    const derivedInterval = path
+        ? path.length / Math.max(path.closed ? n : n - 1, 1)
+        : undefined;
 
-    const measures = (kind.measures ?? []).filter(
+    const measures = measuresOf(kind).filter(
         (m) => !m.visibleWhen || m.visibleWhen(session.params),
     );
     const groups = kind.groups.filter(
@@ -179,6 +194,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
                     onChange={(v) => setField(field.key, v)}
                     n={n}
                     ctx={ctx}
+                    derivedInterval={derivedInterval}
                 />
             ))}
         </Section>
@@ -311,12 +327,19 @@ function MeasureField<P>({
     const raw = measure.get(session.params as P, n, ctx);
     const isLength = measure.unit === "length";
     const shown = isLength ? raw / ctx.stepPx : raw * RAD_TO_DEG;
+    // With a locked interval the size has a lock too: open, it follows the interval (derived);
+    // closed, the run is laid on the shape as sized
+    const spacing = (session.params as { spacing?: Spacing }).spacing;
+    const sizeLock =
+        measure.size && spacing?.mode === "interval" ? spacing : undefined;
+    const derived = sizeLock !== undefined && followsInterval(sizeLock);
     return (
         <Row label={measure.label}>
             <NumberInput
                 value={shown}
                 step={isLength ? 0.25 : 1}
                 min={measure.min}
+                derived={derived}
                 testId={`shape-measure-${measure.key}`}
                 onCommit={(v) =>
                     useShapeToolStore
@@ -331,7 +354,63 @@ function MeasureField<P>({
             <span className="text-sub text-text/60 w-[2.5rem]">
                 {isLength ? "steps" : "°"}
             </span>
+            {sizeLock && (
+                <LockButton
+                    locked={!derived}
+                    testId={`shape-lock-${measure.key}`}
+                    lockedHelp="inspector.shapeTool.sizeLocked"
+                    unlockedHelp="inspector.shapeTool.sizeFollows"
+                    onToggle={() =>
+                        useShapeToolStore.getState().setParams(
+                            {
+                                ...(session.params as object),
+                                spacing: {
+                                    ...sizeLock,
+                                    size: derived ? "keep" : "follow",
+                                },
+                            },
+                            ctx,
+                        )
+                    }
+                />
+            )}
         </Row>
+    );
+}
+
+/** A padlock: closed when the value is set by you, open when the tool works it out */
+function LockButton({
+    locked,
+    testId,
+    lockedHelp,
+    unlockedHelp,
+    onToggle,
+}: {
+    locked: boolean;
+    testId: string;
+    lockedHelp: string;
+    unlockedHelp: string;
+    onToggle: () => void;
+}) {
+    const { t } = useTolgee();
+    const help = t(locked ? lockedHelp : unlockedHelp);
+    return (
+        <Button
+            size="compact"
+            variant={locked ? "primary" : "secondary"}
+            content="icon"
+            aria-pressed={locked}
+            aria-label={help}
+            title={help}
+            onClick={onToggle}
+            data-testid={testId}
+        >
+            {locked ? (
+                <LockSimpleIcon size={14} />
+            ) : (
+                <LockSimpleOpenIcon size={14} />
+            )}
+        </Button>
     );
 }
 
@@ -344,6 +423,7 @@ function NumberInput({
     step,
     min,
     integer,
+    derived,
     testId,
     onCommit,
 }: {
@@ -351,6 +431,8 @@ function NumberInput({
     step: number;
     min?: number;
     integer?: boolean;
+    /** Worked out by the tool: gray, with "=", until you type over it */
+    derived?: boolean;
     testId?: string;
     onCommit: (value: number) => void;
 }) {
@@ -370,11 +452,14 @@ function NumberInput({
     return (
         <Input
             compact
-            className="w-[5rem] text-right"
+            className={`w-[5rem] text-right ${derived && draft === null ? "text-text/50" : ""}`}
             inputMode="decimal"
-            value={draft ?? text}
+            value={draft ?? (derived ? `= ${text}` : text)}
             data-testid={testId}
-            onFocus={(e) => e.currentTarget.select()}
+            onFocus={(e) => {
+                if (derived) setDraft(text);
+                e.currentTarget.select();
+            }}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
@@ -400,12 +485,15 @@ function FieldControl({
     onChange,
     n,
     ctx,
+    derivedInterval,
 }: {
     field: ParamField;
     value: unknown;
     onChange: (value: unknown) => void;
     n: number;
     ctx: ShapeContext;
+    /** Field units; the interval the drawn shape gives in Fit */
+    derivedInterval?: number;
 }) {
     switch (field.type) {
         case "spacing":
@@ -414,6 +502,8 @@ function FieldControl({
                     spacing={value as Spacing}
                     onChange={onChange}
                     n={n}
+                    ctx={ctx}
+                    derivedInterval={derivedInterval}
                 />
             );
         case "length":
@@ -486,142 +576,168 @@ function FieldControl({
 }
 
 /**
- * Fit or Interval. An interval is one value, a list of gaps or `steps x gaps` runs, laid from the
- * shape's start (the filled handle), its middle or its end. Shared by every path kind.
+ * Spacing, shared by every path kind: the Interval and its lock.
+ *
+ * - Unlocked (Fit): the marchers spread over the shape as drawn; the interval shows gray, worked
+ *   out from the shape.
+ * - Locked: the typed interval (one value, a list of gaps or `steps x gaps` runs) is kept. The
+ *   shape's size follows it unless the size is locked too (its lock is in the Size section), in
+ *   which case the run is laid on the shape from Start, Center or End.
+ *
+ * Typing an interval locks it, as in Pyware.
  */
 function SpacingControl({
     spacing,
     onChange,
     n,
+    ctx,
+    derivedInterval,
 }: {
     spacing: Spacing;
     onChange: (spacing: Spacing) => void;
     n: number;
+    ctx: ShapeContext;
+    derivedInterval?: number;
 }) {
     const { t } = useTolgee();
-    const runs = spacing.mode === "interval" ? spacing.runs : null;
-    const [draft, setDraft] = useState(runs ? formatIntervals(runs) : "2");
-    const parsed = parseIntervals(draft);
+    const locked = spacing.mode === "interval";
+    const [draft, setDraft] = useState<string | null>(null);
+    const lockedText = locked ? formatIntervals(spacing.runs) : "";
+    const derivedSteps =
+        derivedInterval !== undefined
+            ? Math.round((derivedInterval / ctx.stepPx) * 4) / 4
+            : 2;
+    const text = draft ?? (locked ? lockedText : `= ${derivedSteps}`);
+    const parsed = draft !== null ? parseIntervals(draft) : null;
     const setInputError = useShapeToolStore((s) => s.setInputError);
 
     // Place waits while the typed interval doesn't parse
-    const error =
-        spacing.mode === "interval" && !parsed.ok ? parsed.message : null;
+    const error = parsed && !parsed.ok ? parsed.message : null;
     useEffect(() => {
         setInputError(error);
         return () => setInputError(null);
     }, [error, setInputError]);
 
-    const setMode = (mode: string) => {
-        if (mode === "fit") onChange({ mode: "fit" });
-        else if (mode === "interval") {
-            onChange({
-                mode: "interval",
-                runs: parsed.ok ? parsed.runs : [{ steps: 2, count: 0 }],
-                anchor: "start",
-            });
-        }
-    };
-    const note =
-        spacing.mode === "interval" && parsed.ok
-            ? describeGaps(parsed.runs, n)
-            : undefined;
+    const lockAt = (runs: readonly IntervalRun[]) =>
+        onChange(
+            spacing.mode === "interval"
+                ? { ...spacing, runs }
+                : { mode: "interval", runs, anchor: "center", size: "follow" },
+        );
+    const note = locked ? describeGaps(spacing.runs, n) : undefined;
+    const follows = followsInterval(spacing);
 
     return (
         <>
-            <Row label="">
-                <ToggleGroup
-                    type="single"
-                    aria-label="Spacing"
-                    className="h-[1.625rem]"
-                    value={spacing.mode}
-                    onValueChange={setMode}
-                >
-                    <ToggleGroupItem
-                        value="fit"
-                        data-testid="shape-spacing-fit"
-                    >
-                        <T keyName="inspector.shapeTool.spacingFit" />
-                    </ToggleGroupItem>
-                    <ToggleGroupItem
-                        value="interval"
-                        data-testid="shape-spacing-interval"
-                    >
-                        <T keyName="inspector.shapeTool.spacingInterval" />
-                    </ToggleGroupItem>
-                </ToggleGroup>
+            <Row label={<T keyName="inspector.shapeTool.gaps" />}>
+                <Input
+                    compact
+                    className={`w-[8rem] font-mono ${locked || draft !== null ? "" : "text-text/50"}`}
+                    aria-label="Interval in steps"
+                    placeholder={t("inspector.shapeTool.intervalPlaceholder")}
+                    value={text}
+                    data-testid="shape-interval-input"
+                    onFocus={(e) => {
+                        if (!locked) setDraft(String(derivedSteps));
+                        e.currentTarget.select();
+                    }}
+                    onChange={(e) => {
+                        setDraft(e.target.value);
+                        const p = parseIntervals(e.target.value);
+                        if (p.ok) lockAt(p.runs);
+                    }}
+                    onBlur={() => setDraft(null)}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === "Escape") {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                        }
+                    }}
+                />
+                <span className="text-sub text-text/60 w-[2.5rem]">steps</span>
+                <LockButton
+                    locked={locked}
+                    testId="shape-lock-interval"
+                    lockedHelp="inspector.shapeTool.intervalLocked"
+                    unlockedHelp="inspector.shapeTool.intervalFits"
+                    onToggle={() => {
+                        setDraft(null);
+                        if (locked) onChange({ mode: "fit" });
+                        else lockAt([{ steps: derivedSteps, count: 0 }]);
+                    }}
+                />
             </Row>
-            {spacing.mode === "interval" && (
-                <>
-                    <Row label={<T keyName="inspector.shapeTool.gaps" />}>
-                        <Input
-                            compact
-                            className="w-[8rem] font-mono"
-                            aria-label="Interval in steps"
-                            placeholder={t(
-                                "inspector.shapeTool.intervalPlaceholder",
-                            )}
-                            value={draft}
-                            data-testid="shape-interval-input"
-                            onChange={(e) => {
-                                setDraft(e.target.value);
-                                const p = parseIntervals(e.target.value);
-                                if (p.ok)
-                                    onChange({ ...spacing, runs: p.runs });
-                            }}
-                        />
-                        <span className="text-sub text-text/60 w-[2.5rem]">
-                            steps
-                        </span>
-                    </Row>
-                    <p className="text-sub text-text/60">
-                        <T keyName="inspector.shapeTool.intervalHelp" />
-                    </p>
-                    {error && (
-                        <p
-                            className="text-sub text-red"
-                            data-testid="shape-interval-error"
-                        >
-                            {error}
-                        </p>
-                    )}
-                    {note && (
-                        <p
-                            className="text-sub text-yellow"
-                            data-testid="shape-interval-note"
-                        >
-                            {note}
-                        </p>
-                    )}
-                    <Row label={<T keyName="inspector.shapeTool.anchor" />}>
-                        <ToggleGroup
-                            type="single"
-                            aria-label="Lay the interval from"
-                            className="h-[1.625rem]"
-                            value={spacing.anchor}
-                            onValueChange={(anchor) =>
-                                anchor &&
-                                onChange({
-                                    ...spacing,
-                                    anchor: anchor as
-                                        | "start"
-                                        | "center"
-                                        | "end",
-                                })
+            <p
+                className="text-sub text-text/60"
+                data-testid="shape-spacing-state"
+            >
+                <T
+                    keyName={
+                        !locked
+                            ? "inspector.shapeTool.stateFit"
+                            : follows
+                              ? "inspector.shapeTool.stateFollow"
+                              : "inspector.shapeTool.stateKeep"
+                    }
+                />
+            </p>
+            {error && (
+                <p
+                    className="text-sub text-red"
+                    data-testid="shape-interval-error"
+                >
+                    {error}
+                </p>
+            )}
+            {draft !== null && !error && (
+                <p className="text-sub text-text/60">
+                    <T keyName="inspector.shapeTool.intervalHelp" />
+                </p>
+            )}
+            {note && (
+                <p
+                    className="text-sub text-yellow"
+                    data-testid="shape-interval-note"
+                >
+                    {note}
+                </p>
+            )}
+            {locked && (
+                <Row
+                    label={
+                        <T
+                            keyName={
+                                follows
+                                    ? "inspector.shapeTool.anchorKeep"
+                                    : "inspector.shapeTool.anchor"
                             }
-                        >
-                            <ToggleGroupItem value="start">
-                                <T keyName="inspector.shapeTool.anchorStart" />
-                            </ToggleGroupItem>
-                            <ToggleGroupItem value="center">
-                                <T keyName="inspector.shapeTool.anchorCenter" />
-                            </ToggleGroupItem>
-                            <ToggleGroupItem value="end">
-                                <T keyName="inspector.shapeTool.anchorEnd" />
-                            </ToggleGroupItem>
-                        </ToggleGroup>
-                    </Row>
-                </>
+                        />
+                    }
+                >
+                    <ToggleGroup
+                        type="single"
+                        aria-label="Anchor"
+                        className="h-[1.625rem]"
+                        value={spacing.anchor}
+                        onValueChange={(anchor) =>
+                            anchor &&
+                            onChange({
+                                ...spacing,
+                                anchor: anchor as "start" | "center" | "end",
+                            })
+                        }
+                    >
+                        <ToggleGroupItem value="start">
+                            <T keyName="inspector.shapeTool.anchorStart" />
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="center">
+                            <T keyName="inspector.shapeTool.anchorCenter" />
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="end">
+                            <T keyName="inspector.shapeTool.anchorEnd" />
+                        </ToggleGroupItem>
+                    </ToggleGroup>
+                </Row>
             )}
         </>
     );

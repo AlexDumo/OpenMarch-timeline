@@ -14,9 +14,16 @@ import {
     sub,
     unit,
     xy,
+    scaleAbout,
 } from "../geometry/vec";
 import { sampleAlong } from "../spacing";
-import type { ShapeContext, ShapeKind, Spacing, XY } from "../types";
+import {
+    followsInterval,
+    type ShapeContext,
+    type ShapeKind,
+    type Spacing,
+    type XY,
+} from "../types";
 import {
     FIT,
     pathReadouts,
@@ -64,6 +71,26 @@ export function arcSegment(p: ArcParams): Segment {
 }
 
 const arcPath = (p: ArcParams): Path => makePath([arcSegment(p)]);
+
+/**
+ * The arc with radius `r` and sweep `sweep` that keeps this one's middle point, chord direction
+ * and side: for typing a radius or sweep while the arc keeps a locked interval.
+ */
+function arcAround(p: ArcParams, r: number, sweep: number): ArcParams {
+    const theta = Math.min(Math.max(sweep, 1e-3), 2 * Math.PI - 1e-3);
+    const u = unit(sub(p.b, p.a));
+    const normal = perp(u);
+    const side = p.bulge < 0 ? -1 : 1;
+    const halfChord = r * Math.sin(theta / 2);
+    const sagitta = r * (1 - Math.cos(theta / 2));
+    const chordMiddle = sub(arcMiddle(p), scale(normal, side * sagitta));
+    return {
+        ...p,
+        a: sub(chordMiddle, scale(u, halfChord)),
+        b: add(chordMiddle, scale(u, halfChord)),
+        bulge: side * sagitta,
+    };
+}
 
 /** Arc params for the part of a circle the points cover: it skips the widest empty gap. */
 function arcThroughPoints(
@@ -127,6 +154,11 @@ export const arcKind: ShapeKind<ArcParams> = {
             // Same ends; the bulge that gives this radius, keeping the arc's side and whether it
             // is more or less than half a circle. A radius under half the chord is a half circle.
             set(p, r) {
+                // Keeping a locked interval: same length, so the sweep follows the radius
+                if (followsInterval(p.spacing)) {
+                    const length = arcPath(p).length;
+                    return arcAround(p, r, length / Math.max(r, 1e-9));
+                }
                 const h = dist(p.a, p.b) / 2;
                 const radius = Math.max(r, h);
                 const major = Math.abs(p.bulge) > h;
@@ -146,6 +178,10 @@ export const arcKind: ShapeKind<ArcParams> = {
             get: (p) => arcGeometry(p)?.sweep ?? 0,
             // The sagitta of an arc over chord 2h sweeping θ is h·tan(θ/4)
             set(p, sweep) {
+                if (followsInterval(p.spacing)) {
+                    const length = arcPath(p).length;
+                    return arcAround(p, length / Math.max(sweep, 1e-3), sweep);
+                }
                 const h = dist(p.a, p.b) / 2;
                 const clamped = Math.min(
                     Math.max(sweep, 1e-3),
@@ -156,6 +192,14 @@ export const arcKind: ShapeKind<ArcParams> = {
             },
         },
     ],
+
+    path: (p) => arcPath(p),
+    scale: (p, pivot, k) => ({
+        ...p,
+        a: scaleAbout(p.a, pivot, k),
+        b: scaleAbout(p.b, pivot, k),
+        bulge: p.bulge * k,
+    }),
 
     fit({ current }, ctx) {
         const fitted = arcThroughPoints(current, ctx);
@@ -174,7 +218,7 @@ export const arcKind: ShapeKind<ArcParams> = {
 
     handles: (p) => [
         { key: "a", role: "point", at: p.a, start: true },
-        { key: "b", role: "point", at: p.b },
+        { key: "b", role: "point", at: p.b, end: true },
         { key: "bulge", role: "bulge", at: arcMiddle(p) },
         { key: "move", role: "move", at: mid(p.a, p.b) },
     ],
