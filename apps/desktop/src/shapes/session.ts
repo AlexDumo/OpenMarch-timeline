@@ -10,7 +10,7 @@ import type {
     Slot,
     XY,
 } from "./types";
-import { validateSlots } from "./validate";
+import { validatePaths, validateSlots } from "./validate";
 import { holdSize, measuresOf, settle } from "./follow";
 import { setSizeLock, type Spacing } from "./types";
 
@@ -382,7 +382,7 @@ export function previewSession(
         const override = keep ? session.overrides?.[m.id] : undefined;
         return {
             id: m.id,
-            from: m.at,
+            from: m.from ?? m.at,
             // A marcher moved by hand keeps its offset from its spot
             to: override
                 ? { x: slot.x + override.x, y: slot.y + override.y }
@@ -393,6 +393,7 @@ export function previewSession(
     const issues = [
         ...(kind.validate?.(session.params, slots, ctx) ?? []),
         ...validateSlots(slots, ctx),
+        ...validatePaths(targets, session.assignment),
     ];
     return {
         slots,

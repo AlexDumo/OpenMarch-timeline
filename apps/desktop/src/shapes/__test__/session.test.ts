@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { xy } from "../geometry/vec";
+import { dist, xy } from "../geometry/vec";
 import type { LineParams } from "../kinds/line";
 import {
     changeKind,
@@ -227,5 +227,56 @@ describe("reopening a placed shape", () => {
         expect(
             openRecipe({ ...recipe, kind: "spiral3000" }, placedRow),
         ).toBeNull();
+    });
+});
+
+describe("from where marchers start the move", () => {
+    // Placed on a circle now, but they start this move on a straight line, OT1 at the left
+    const onCircle = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+        const angle = (i * 3 * Math.PI) / 8; // scrambled around the circle
+        return {
+            id: i + 1,
+            at: xy(100 + 40 * Math.cos(angle), 100 + 40 * Math.sin(angle)),
+            from: xy(i * 20, 0),
+            drillRank: i,
+        };
+    });
+
+    it("keeps the order they start in, so the move doesn't cross", () => {
+        const session = startSession({
+            kindId: "line",
+            marchers: onCircle,
+            ctx,
+        });
+        const preview = previewSession(session, ctx);
+        const xs = preview.targets.map((t) => t.to.x);
+        expect(xs).toEqual([...xs].sort((a, b) => a - b));
+        expect(preview.issues.some((i) => /cross/.test(i.message))).toBe(false);
+    });
+
+    it("warns when paths cross", () => {
+        const session = startSession({
+            kindId: "line",
+            marchers: onCircle,
+            ctx,
+        });
+        const crossed = changeOrder(session, "keep", true, ctx);
+        const issues = previewSession(crossed, ctx).issues;
+        expect(
+            issues.some(
+                (i) => i.level === "warning" && /cross/.test(i.message),
+            ),
+        ).toBe(true);
+    });
+
+    it("lays a line made from a circle level, at their usual spacing", () => {
+        const session = startSession({
+            kindId: "line",
+            marchers: onCircle,
+            ctx,
+        });
+        const p = session.params as LineParams;
+        expect(p.a.y).toBeCloseTo(p.b.y, 9);
+        expect(dist(p.a, p.b)).toBeGreaterThan(7 * 10);
     });
 });

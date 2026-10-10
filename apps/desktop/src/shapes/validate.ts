@@ -1,4 +1,5 @@
-import type { ShapeContext, ShapeIssue, Slot } from "./types";
+import { cross, sub } from "./geometry/vec";
+import type { ShapeContext, ShapeIssue, Slot, XY } from "./types";
 
 /** Checks every kind gets. Kind-specific ones come from `ShapeKind.validate`. */
 
@@ -68,4 +69,52 @@ export function validateSlots(
         });
     }
     return issues;
+}
+
+/**
+ * Marchers whose straight paths to their spots cross: they'd walk through each other. A warning,
+ * with the slots of the crossing marchers, so the preview can mark them and the designer can try
+ * another order.
+ *
+ * @param assignment each target's slot index, in `targets` order
+ */
+export function validatePaths(
+    targets: readonly { readonly from: XY; readonly to: XY }[],
+    assignment: readonly number[],
+): ShapeIssue[] {
+    const crossing = new Set<number>();
+    let pairs = 0;
+    for (let i = 0; i < targets.length; i++) {
+        for (let j = i + 1; j < targets.length; j++) {
+            if (segmentsCross(targets[i]!, targets[j]!)) {
+                pairs++;
+                crossing.add(assignment[i]!);
+                crossing.add(assignment[j]!);
+            }
+        }
+    }
+    if (pairs === 0) return [];
+    return [
+        {
+            level: "warning",
+            message: `${pairs} ${pairs === 1 ? "pair of paths crosses" : "pairs of paths cross"}: those marchers would walk through each other. Another order may untangle them.`,
+            slots: [...crossing],
+        },
+    ];
+}
+
+/** Whether two paths cross strictly inside both (touching at an end doesn't count) */
+function segmentsCross(
+    p: { readonly from: XY; readonly to: XY },
+    q: { readonly from: XY; readonly to: XY },
+): boolean {
+    const d1 = sub(p.to, p.from);
+    const d2 = sub(q.to, q.from);
+    const denom = cross(d1, d2);
+    if (Math.abs(denom) < 1e-12) return false;
+    const w = sub(q.from, p.from);
+    const t = cross(w, d2) / denom;
+    const u = cross(w, d1) / denom;
+    const inside = (v: number) => v > 1e-6 && v < 1 - 1e-6;
+    return inside(t) && inside(u);
 }

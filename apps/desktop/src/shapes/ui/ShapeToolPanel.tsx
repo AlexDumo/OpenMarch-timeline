@@ -87,6 +87,21 @@ export default function ShapeToolPanel() {
                 ref={ref}
                 className="flex flex-col gap-12"
                 data-testid="shape-tool-panel"
+                onKeyDown={(e) => {
+                    // Enter places the shape from a closed menu in the panel too (Tab out of a
+                    // field lands on one), instead of opening it
+                    const target = e.target as HTMLElement;
+                    if (
+                        session &&
+                        e.key === "Enter" &&
+                        target.getAttribute("role") === "combobox" &&
+                        target.getAttribute("aria-expanded") !== "true"
+                    ) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        runAction("applyShape");
+                    }
+                }}
             >
                 {session ? (
                     <SessionControls session={session} />

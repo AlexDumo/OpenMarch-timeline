@@ -3,6 +3,7 @@ import { compare as compareMarchers } from "@/global/classes/Marcher";
 import { getRoundCoordinates2 } from "@/utilities/CoordinateActions";
 import type { AssignMarcher } from "../assign";
 import type { ShapeContext } from "../types";
+import { originsAtStart } from "./previewContext";
 
 /** The canvas the shape tool reads; `window.canvas` while a show is open. */
 export function currentCanvas(): OpenMarchCanvas | undefined {
@@ -34,7 +35,8 @@ export function shapeContextFor(
 
 /**
  * The marchers with these ids where the canvas draws them now (the edit window's arrival in
- * timeline mode, the selected page in page mode), in `ids` order, ranked by drill number.
+ * timeline mode, the selected page in page mode), in `ids` order, ranked by drill number, with
+ * where each starts the move being edited when that's somewhere else.
  */
 export function marchersOnCanvas(
     canvas: OpenMarchCanvas,
@@ -49,9 +51,17 @@ export function marchersOnCanvas(
         compareMarchers(a.marcherObj, b.marcherObj),
     );
     const rank = new Map(ranked.map((m, i) => [m.id, i]));
-    return present.map((m) => ({
-        id: m.id,
-        at: m.getMarcherCoords(),
-        drillRank: rank.get(m.id)!,
-    }));
+    const origins = originsAtStart(present.map((m) => m.id));
+    return present.map((m) => {
+        const at = m.getMarcherCoords();
+        const from = origins.get(m.id);
+        return {
+            id: m.id,
+            at,
+            drillRank: rank.get(m.id)!,
+            ...(from && Math.hypot(from.x - at.x, from.y - at.y) > 1e-6
+                ? { from }
+                : {}),
+        };
+    });
 }

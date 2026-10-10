@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     previewSession,
     type ShapePreview,
@@ -178,6 +179,24 @@ function useShapeToolSelection(
             shapeContextFor(canvas),
         );
     }, [canvas, selectedMarchers, setSelectedMarchers]);
+
+    // The shape is about one moment: moving the edit window (a scrub, another set) closes it,
+    // rather than leave a preview of the old moment over marchers drawn at the new one
+    const windowKey = useTimelineSelectionStore((s) => {
+        const sel = s.selection;
+        const iso = s.isolation;
+        return [
+            sel.kind,
+            sel.kind === "range" ? `${sel.start}-${sel.end}` : "",
+            iso ? `${iso.timelineId}:${iso.start}-${iso.end}` : "",
+        ].join("|");
+    });
+    const firstWindow = useRef(windowKey);
+    useEffect(() => {
+        if (windowKey === firstWindow.current) return;
+        firstWindow.current = windowKey;
+        useShapeToolStore.getState().close();
+    }, [windowKey]);
 
     // The selection stays put while the tool is open; the handles move the shape
     useEffect(() => {
