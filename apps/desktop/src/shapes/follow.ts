@@ -3,6 +3,7 @@ import { chordOffsets, gapsInSteps } from "./spacing";
 import {
     followsInterval,
     type AnyShapeKind,
+    type HandleDef,
     type Measure,
     type ShapeContext,
     type Spacing,
@@ -78,6 +79,63 @@ export function scaleToFit(path: Path, gaps: readonly number[]): number {
     return 1 / t;
 }
 
+/**
+ * The point a resize keeps: a closed shape's center (its move handle); after dragging an end of
+ * an open one, the other end; otherwise the anchor ("Keep fixed"), the middle in Fit.
+ */
+export function pivotFor(
+    kind: AnyShapeKind,
+    params: unknown,
+    n: number,
+    ctx: ShapeContext,
+    dragged?: HandleDef,
+): XY {
+    const path = kind.path!(params);
+    const length = path.length;
+    // A closed shape has no far end: its start is just where marcher 1 stands
+    if (path.closed) {
+        const move = kind
+            .handles(params, n, ctx)
+            .find((h) => h.role === "move");
+        if (move) return move.at;
+    }
+    if (dragged?.start) return path.at(length);
+    if (dragged?.end) return path.at(0);
+    const spacing = (params as WithSpacing).spacing;
+    const anchor = spacing?.mode === "interval" ? spacing.anchor : "center";
+    if (anchor === "start") return path.at(0);
+    if (anchor === "end") return path.at(length);
+    return centerOf(path, length);
+}
+
+/**
+ * A closed size lock holds in Fit too: after a drag the shape is scaled back to the size it had
+ * when the drag started, so its handles only aim, turn or bend it. With a locked interval the
+ * size is already decided (`settle`).
+ */
+export function holdSize(
+    kind: AnyShapeKind,
+    base: unknown,
+    params: unknown,
+    n: number,
+    ctx: ShapeContext,
+    dragged?: HandleDef,
+): unknown {
+    const spacing = (params as WithSpacing).spacing;
+    if (spacing?.mode !== "fit" || !spacing.sizeLocked || !kind.scale)
+        return params;
+    const size = measuresOf(kind).find((m) => m.size);
+    if (!size || !kind.path) return params;
+    const want = size.get(base, n, ctx);
+    const now = size.get(params, n, ctx);
+    if (now <= 1e-9 || Math.abs(want - now) <= 1e-9) return params;
+    return kind.scale(
+        params,
+        pivotFor(kind, params, n, ctx, dragged),
+        want / now,
+    );
+}
+
 /** `params` resized to keep its locked interval; unchanged in any other state */
 export function settle(
     kind: AnyShapeKind,
@@ -103,17 +161,7 @@ export function settle(
     const current = path.length;
     const k = scaleToFit(path, gaps);
     if (current <= 1e-9 || Math.abs(k - 1) < 1e-12) return params;
-    const anchor = (params as WithSpacing).spacing;
-    const pivot = handle?.start
-        ? path.at(current)
-        : handle?.end
-          ? path.at(0)
-          : anchor?.mode === "interval" && anchor.anchor === "end"
-            ? path.at(current)
-            : anchor?.mode === "interval" && anchor.anchor === "center"
-              ? centerOf(path, current)
-              : path.at(0);
-    return kind.scale(params, pivot, k);
+    return kind.scale(params, pivotFor(kind, params, n, ctx, handle), k);
 }
 
 /**
@@ -130,10 +178,11 @@ function genericLength(kind: AnyShapeKind): Measure<unknown> | undefined {
         min: 0.25,
         size: true,
         get: (p) => path(p).length,
-        set: (p, value) => {
+        // About the anchor ("Keep fixed"), or the middle in Fit, like a typed interval
+        set: (p, value, n, ctx) => {
             const current = path(p);
             if (current.length <= 1e-9) return p;
-            return scale(p, current.at(0), value / current.length);
+            return scale(p, pivotFor(kind, p, n, ctx), value / current.length);
         },
     };
 }

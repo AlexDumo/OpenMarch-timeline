@@ -32,6 +32,18 @@ export interface CircleParams {
 
 const TAU = 2 * Math.PI;
 
+/** How much of the way around `center` the points go: a full turn less the widest gap */
+function coverage(points: readonly XY[], center: XY): number {
+    if (points.length < 2) return 0;
+    const angles = points
+        .map((q) => Math.atan2(q.y - center.y, q.x - center.x))
+        .sort((a, b) => a - b);
+    let widest = angles[0]! + TAU - angles.at(-1)!;
+    for (let i = 1; i < angles.length; i++)
+        widest = Math.max(widest, angles[i]! - angles[i - 1]!);
+    return TAU - widest;
+}
+
 const circlePath = (p: CircleParams): Path =>
     makePath(
         [
@@ -80,8 +92,15 @@ export const circleKind: ShapeKind<CircleParams> = {
 
     fit({ current }, ctx: ShapeContext) {
         const fitted = fitCircle(current);
-        // A nearly straight row fits a huge circle; start from the group's middle instead.
-        if (fitted && fitted.r <= 400 * ctx.stepPx && fitted.r > 0) {
+        // A nearly straight row fits a huge circle, and marchers on a shallow arc fit a circle
+        // centered far off: start around the group's middle instead unless they already go at
+        // least halfway round
+        if (
+            fitted &&
+            fitted.r <= 400 * ctx.stepPx &&
+            fitted.r > 0 &&
+            coverage(current, fitted.center) >= Math.PI
+        ) {
             const first = current[0]!;
             return {
                 center: fitted.center,
@@ -164,6 +183,14 @@ export const circleKind: ShapeKind<CircleParams> = {
                     level: "warning",
                     message:
                         "The intervals go all the way around the circle, so marchers overlap",
+                });
+            } else if (p.spacing.size !== "follow" && slots.length > 1) {
+                // Laid on a circle bigger than the run: say why part of it is empty
+                const steps = (v: number) =>
+                    Math.round((v / ctx.stepPx) * 100) / 100;
+                issues.push({
+                    level: "info",
+                    message: `${slots.length} marchers at this interval fill ${steps(run)} of the circle's ${steps(TAU * p.r)} steps. Open the size lock to make the circle close.`,
                 });
             }
         }

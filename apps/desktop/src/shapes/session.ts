@@ -11,7 +11,7 @@ import type {
     XY,
 } from "./types";
 import { validateSlots } from "./validate";
-import { measuresOf, settle } from "./follow";
+import { holdSize, measuresOf, settle } from "./follow";
 import { setSizeLock, type Spacing } from "./types";
 
 /**
@@ -222,7 +222,9 @@ export function dragHandle(
     const kind = kindOf(session.kindId);
     const n = session.marchers.length;
     const dragged = kind.drag(base, key, ctx.snapPoint(to), { shift }, n, ctx);
-    return { ...session, params: settle(kind, dragged, n, ctx, key) };
+    const handle = kind.handles(base, n, ctx).find((h) => h.key === key);
+    const held = holdSize(kind, base, dragged, n, ctx, handle);
+    return { ...session, params: settle(kind, held, n, ctx, key) };
 }
 
 /** A defining point added where the shape was double-clicked, if the kind takes one */
@@ -291,6 +293,8 @@ export interface ShapePreview {
     readonly issues: readonly ShapeIssue[];
     /** False when an error issue stops Apply */
     readonly canApply: boolean;
+    /** The shape takes new points where it is double-clicked (a curve) */
+    readonly takesPoints: boolean;
 }
 
 export function previewSession(
@@ -318,5 +322,6 @@ export function previewSession(
         readouts: kind.readouts?.(session.params, n, ctx) ?? [],
         issues,
         canApply: n > 0 && !issues.some((issue) => issue.level === "error"),
+        takesPoints: kind.insertPoint !== undefined,
     };
 }
