@@ -76,6 +76,25 @@ export interface HandleDef {
     readonly key: string;
     readonly role: HandleRole;
     readonly at: XY;
+    /** Where the shape starts: marked on the field so "Lay from Start" has a visible end */
+    readonly start?: boolean;
+}
+
+/**
+ * A size the panel shows as a typed field although the kind stores it some other way, such as a
+ * line's length (two end points) or an arc's radius (ends and bulge). `set` returns params that
+ * give the typed value.
+ */
+export interface Measure<P> {
+    readonly key: string;
+    readonly label: string;
+    /** Lengths are shown and typed in steps, angles in degrees */
+    readonly unit: "length" | "angle";
+    readonly min?: number;
+    get(params: P, n: number, ctx: ShapeContext): number;
+    set(params: P, value: number, n: number, ctx: ShapeContext): P;
+    /** Hidden unless this holds */
+    visibleWhen?(params: P): boolean;
 }
 
 export interface DragModifiers {
@@ -160,6 +179,11 @@ export interface ShapeKind<P> {
     readonly label: string;
     readonly icon: Icon;
     readonly family: "path" | "fill";
+    /**
+     * Who goes where when the tool opens: an open path keeps the marchers' order along it, a
+     * closed or filled shape has no natural start, so nearest spots usually read better
+     */
+    readonly defaultOrder?: "keep" | "nearest" | "drill";
     readonly groups: readonly ParamGroup<P>[];
 
     /** Params that make a first preview land on or near the marchers' current spots. Pure. */
@@ -174,8 +198,12 @@ export interface ShapeKind<P> {
         n: number,
         ctx: ShapeContext,
     ): P;
-    /** Guide lines to draw under the slots */
+    /** Lines to draw under the slots: the part of the shape the marchers stand on */
     outline(params: P, n: number, ctx: ShapeContext): readonly XY[][];
+    /** Fainter lines for the rest of the shape, such as a path longer than an interval run */
+    guide?(params: P, n: number, ctx: ShapeContext): readonly XY[][];
+    /** Sizes typed in the panel's Size section, before the kind's own groups */
+    readonly measures?: readonly Measure<P>[];
     /** The spots for `n` marchers, in the kind's natural order. Deterministic. */
     generate(params: P, n: number, ctx: ShapeContext): Slot[];
     /**

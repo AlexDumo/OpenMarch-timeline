@@ -29,10 +29,6 @@
             "setSelectedToPrevious": "前のページの位置をコピー（選択中）",
             "setSelectedToPreviousSuccess": "{count, plural, other {ページ {currentPage} 上の {count} マーカー座標を前のページ {previousPage} の座標に成功して設定しました}}"
         },
-        "cursor": {
-            "defaultMode": "選択モード",
-            "lineMode": "ラインを作成"
-        },
         "edit": {
             "noRedoAvailable": "やり直すアクションはありません",
             "noUndoAvailable": "元に戻すアクションはありません",
@@ -77,9 +73,6 @@
             "selectAll": "すべて選択"
         },
         "shape": {
-            "applyQuick": "図形にスナップ",
-            "create": "図形を作成",
-            "createCircle": "円を作成",
             "delete": "選択されている形状を削除",
             "noMarchersSelected": "行進者が選択されていません"
         },
@@ -580,14 +573,7 @@
         "valueMissing": "値を入力してください。"
     },
     "inspector": {
-        "alignment": {
-            "applyCoordinates": "座標 を 適用",
-            "cancelUpdates": "キャンセル",
-            "createShape": "形状 を 作成",
-            "drawLine": "線 を 描く"
-        },
         "marcher": {
-            "createLine": "ライン を作成",
             "drillNumber": "ドリル ナンバー",
             "errorLoadingCoords": "座標の読み込みエラー",
             "loading": "読み込み中 マーチャー",
@@ -640,11 +626,6 @@
             "ungroupShapeButton": "グループ解除",
             "ungroupShapeTooltip": "このページのこのシェイプを削除します。 マーチャーの現在の位置は移動されません",
             "viewTab": "ビュー"
-        },
-        "shapes": {
-            "moreShapesComingSoon": "近日公開、もっと多くの図形！",
-            "selectShape": "形状 選択",
-            "title": "形状"
         },
         "title": "インスペクター"
     },

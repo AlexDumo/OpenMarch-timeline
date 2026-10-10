@@ -7,6 +7,7 @@ import { arcKind, arcMiddle, arcSegment, type ArcParams } from "../kinds/arc";
 import { lineKind, type LineParams } from "../kinds/line";
 import { SHAPE_KINDS } from "../registry";
 import {
+    describeGaps,
     formatIntervals,
     gapsInSteps,
     parseIntervals,
@@ -47,15 +48,44 @@ describe("parseIntervals", () => {
     });
 
     it("refuses what it can't read, with a reason", () => {
-        for (const text of ["", "x3", "2x", "0", "2x0", "5x3,2", "abc"]) {
+        for (const text of ["", "x3", "2x", "0", "2x0", "abc", "4,,x"]) {
             const parsed = parseIntervals(text);
             expect(parsed.ok, text).toBe(false);
             if (!parsed.ok) expect(parsed.message.length).toBeGreaterThan(0);
         }
     });
 
+    it("reads a list as one gap each, mixed with runs", () => {
+        expect(parseIntervals("4,4,2")).toEqual({
+            ok: true,
+            runs: [
+                { steps: 4, count: 1 },
+                { steps: 4, count: 1 },
+                { steps: 2, count: 1 },
+            ],
+        });
+        const mixed = parseIntervals("4x3,2,2");
+        if (!mixed.ok) throw new Error(mixed.message);
+        expect(gapsInSteps(mixed.runs, 5)).toEqual([4, 4, 4, 2, 2]);
+    });
+
+    it("says when a list repeats or runs over", () => {
+        const runs = [
+            { steps: 5, count: 2 },
+            { steps: 2, count: 4 },
+        ];
+        expect(describeGaps(runs, 8)).toBe(
+            "7 gaps needed, 6 typed: repeating from the first",
+        );
+        expect(describeGaps(runs, 7)).toBeUndefined();
+        expect(describeGaps(runs, 5)).toBe(
+            "4 gaps needed, 6 typed: the last 2 unused",
+        );
+        expect(describeGaps([{ steps: 2, count: 0 }], 8)).toBeUndefined();
+    });
+
     it("round-trips through formatIntervals", () => {
-        for (const text of ["2", "5x3,2x4", "1.5x2,4x1"]) {
+        for (const text of ["2", "5x3,2x4", "1.5x2,4", "4,4,2", "4x3,2"]) {
             const parsed = parseIntervals(text);
             if (!parsed.ok) throw new Error(parsed.message);
             expect(formatIntervals(parsed.runs)).toBe(text);

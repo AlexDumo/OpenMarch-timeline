@@ -29,10 +29,6 @@
             "setSelectedToPrevious": "Copy positions from previous page (selected)",
             "setSelectedToPreviousSuccess": "{count, plural, other {Successfully set {count} marcher coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}"
         },
-        "cursor": {
-            "defaultMode": "Selection mode",
-            "lineMode": "Create line"
-        },
         "edit": {
             "noRedoAvailable": "No action to redo",
             "noUndoAvailable": "No action to undo",
@@ -87,9 +83,6 @@
             "selectAll": "Select all"
         },
         "shape": {
-            "applyQuick": "Snap to shape",
-            "create": "Create shape",
-            "createCircle": "Create circle",
             "delete": "Deletes the current selected shapes",
             "noMarchersSelected": "No marchers selected",
             "line": "Shape: Line",
@@ -610,15 +603,7 @@
         "valueMissing": "Please enter a value."
     },
     "inspector": {
-        "alignment": {
-            "applyCoordinates": "Apply coordinates",
-            "cancelUpdates": "Cancel",
-            "createShape": "Create Shape",
-            "createShapeTimeline": "Create Shape makes a page shape, which timeline mode doesn't use. Apply the coordinates to move these marchers onto the line, or draw a shape in the Shapes part of the Timeline section.",
-            "drawLine": "Draw a line."
-        },
         "marcher": {
-            "createLine": "Create Line",
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "loading": "Loading marcher",
@@ -696,11 +681,6 @@
             "ungroupShapeButton": "Un-group",
             "ungroupShapeTooltip": "Delete this shape for this page. Will not move marchers from their current position",
             "viewTab": "View"
-        },
-        "shapes": {
-            "moreShapesComingSoon": "More shapes coming soon!",
-            "selectShape": "Select Shape",
-            "title": "Shapes"
         },
         "timeline": {
             "assign": {
@@ -853,65 +833,6 @@
             "progress": {
                 "value": "{percent}%"
             },
-            "shapes": {
-                "title": "Shapes",
-                "help": "Shapes are formations in field coordinates, with no time. A transition moves its marchers into one. A new shape is drawn through the selected marchers where they stand at the selected page, or in the middle of the field when nobody is selected.",
-                "canvasHelp": "The picked shape is drawn on the field. Drag a round handle to reshape it, or the square handle to move it. Each drag is saved as one change when you let go.",
-                "dragDropped": "That drag wasn't saved, because another shape change was still being saved. Drag it again.",
-                "newKind": "Kind of new shape",
-                "create": "New shape",
-                "none": "No shapes yet.",
-                "pick": "Shape to edit",
-                "named": "{name} ({kind})",
-                "unnamed": "Shape {id} ({kind})",
-                "name": "Name",
-                "usedBy": "Used by transitions {list}.",
-                "unused": "No transition uses this shape.",
-                "usedHelp": "Changes move every marcher heading to this shape.",
-                "kindLabel": "Kind",
-                "kindHelp": "Changing the kind redraws the shape in the area the old one covered. A box or circle becomes an open freehand path along its outline, so its two ends are different places.",
-                "kindInUse": "Transitions {list} use this shape. Changing its kind spreads their slots over the new shape, so their marchers end in new places.",
-                "kindNoFtl": "It can't become a block: transition {list} follows the leader into it, and a trail can't end on a block.",
-                "kinds": {
-                    "line": "Line",
-                    "freehand": "Freehand",
-                    "circle": "Circle",
-                    "box": "Box",
-                    "block": "Block"
-                },
-                "points": "Points",
-                "pointsHelp": "Slots are spread evenly along the path, from the first point to the last.",
-                "pointX": "Point {n} x",
-                "pointY": "Point {n} y",
-                "pointUp": "Move point {n} up",
-                "pointDown": "Move point {n} down",
-                "pointRemove": "Remove point {n}",
-                "pointAdd": "Add point",
-                "pointsMin": "A freehand path needs at least two points.",
-                "lineStart": "Start",
-                "lineEnd": "End",
-                "x": "{what} x",
-                "y": "{what} y",
-                "center": "Center",
-                "radius": "Radius",
-                "startAngle": "Start angle (degrees)",
-                "direction": "Direction",
-                "counterclockwise": "Counterclockwise",
-                "clockwise": "Clockwise",
-                "circleHelp": "Slots are spread evenly around the circle from the start angle. Angles and directions are in field coordinates, measured from +x toward +y.",
-                "origin": "Origin",
-                "width": "Width",
-                "height": "Height",
-                "boxHelp": "Slots are spread evenly around the outline, starting at the origin.",
-                "rows": "Rows",
-                "cols": "Columns",
-                "spacing": "Spacing",
-                "cells": "{rows} × {cols} = {cells} places, filled row by row from the origin.",
-                "cellsNeeded": "Transition {list} has {slots} slots, so the block needs at least {slots} places.",
-                "noPositions": "None of the selected marchers is in the timeline yet, so there is nowhere to draw the shape through. Select marchers that are, or nobody to draw it in the middle of the field.",
-                "delete": "Delete shape",
-                "deleteInUse": "It can't be deleted while transitions {list} use it. Give them another destination first."
-            },
             "slot": {
                 "value": "{slot} of {count}"
             },
@@ -934,18 +855,26 @@
         "shapeTool": {
             "title": "Shape",
             "hint": "Select marchers, then pick a shape.",
+            "pick": "Pick a shape",
+            "spacing": "Spacing",
+            "gaps": "Interval",
+            "intervalHelp": "2 = every gap 2 steps · 4,4,2 = one gap each · 4x3 = 3 gaps of 4 steps",
             "order": "Order",
             "orderNearest": "Nearest",
+            "orderNearestHelp": "Each marcher goes to a spot near where they stand, with the least travel overall.",
             "orderKeep": "Keep order",
+            "orderKeepHelp": "Marchers keep their order along the shape.",
             "orderDrill": "Drill number",
+            "orderDrillHelp": "Marchers fill the shape by drill number, from its start.",
             "reverse": "Reverse",
             "reassign": "Reassign",
+            "reassignHelp": "Work out who goes where again for the shape as it is now",
             "apply": "Place",
             "cancel": "Cancel",
             "spacingFit": "Fit",
             "spacingInterval": "Interval",
-            "intervalPlaceholder": "2 or 5x3,2x4",
-            "anchor": "From",
+            "intervalPlaceholder": "2 or 4x3,2x4",
+            "anchor": "Lay from",
             "anchorStart": "Start",
             "anchorCenter": "Center",
             "anchorEnd": "End",

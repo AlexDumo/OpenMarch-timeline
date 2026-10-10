@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { AssignMarcher, OrderMode } from "./assign";
 import {
     changeKind,
+    changeMeasure,
     changeOrder,
     changeParams,
     dragHandle,
@@ -27,6 +28,10 @@ interface ShapeToolState {
     ): void;
     setKind(kindId: string, ctx: ShapeContext): void;
     setParams(params: unknown): void;
+    setMeasure(key: string, value: number, ctx: ShapeContext): void;
+    /** A panel field holds text that doesn't parse (an interval); Place waits until it does */
+    inputError: string | null;
+    setInputError(error: string | null): void;
     setOrder(order: OrderMode, reverse: boolean, ctx: ShapeContext): void;
     reassign(ctx: ShapeContext): void;
     /** Moves the whole shape by `delta` field units (the nudge keys while the tool is open) */
@@ -41,71 +46,73 @@ interface ShapeToolState {
     close(): void;
 }
 
-export const useShapeToolStore = create<ShapeToolState>((set, get) => ({
-    session: null,
-    last: null,
-    open(kindId, marchers, ctx) {
-        const { session, last } = get();
-        set({
-            session: startSession({
-                kindId,
-                marchers,
-                ctx,
-                previous: session ?? last,
-            }),
-        });
-    },
-    setKind(kindId, ctx) {
+export const useShapeToolStore = create<ShapeToolState>((set, get) => {
+    /** Applies `change` to the open session, if any */
+    const update = (change: (session: ShapeSession) => ShapeSession) => {
         const { session } = get();
-        if (session) set({ session: changeKind(session, kindId, ctx) });
-    },
-    setParams(params) {
-        const { session } = get();
-        if (session) set({ session: changeParams(session, params) });
-    },
-    setOrder(order, reverse, ctx) {
-        const { session } = get();
-        if (session)
-            set({ session: changeOrder(session, order, reverse, ctx) });
-    },
-    reassign(ctx) {
-        const { session } = get();
-        if (session) set({ session: reassign(session, ctx) });
-    },
-    nudge(delta, ctx) {
-        const { session, dragging } = get();
-        if (session && !dragging)
-            set({ session: translateSession(session, delta, ctx) });
-    },
-    dragging: null,
-    startDrag(key) {
-        const { session } = get();
-        if (session) set({ dragging: { key, base: session.params } });
-    },
-    drag(to, shift, ctx) {
-        const { session, dragging } = get();
-        if (!session || !dragging) return;
-        set({
-            session: dragHandle(
-                session,
-                dragging.base,
-                dragging.key,
-                to,
-                shift,
-                ctx,
-            ),
-        });
-    },
-    endDrag() {
-        if (get().dragging) set({ dragging: null });
-    },
-    cancelDrag() {
-        const { session, dragging } = get();
-        if (!session || !dragging) return;
-        set({ session: changeParams(session, dragging.base), dragging: null });
-    },
-    close() {
-        const { session } = get();
-        if (session) set({ session: null, last: session, dragging: null });
-    },
-}));
+        if (session) set({ session: change(session) });
+    };
+    return {
+        session: null,
+        last: null,
+        open(kindId, marchers, ctx) {
+            const { session, last } = get();
+            set({
+                session: startSession({
+                    kindId,
+                    marchers,
+                    ctx,
+                    previous: session ?? last,
+                }),
+                inputError: null,
+            });
+        },
+        setKind: (kindId, ctx) => update((s) => changeKind(s, kindId, ctx)),
+        setParams: (params) => update((s) => changeParams(s, params)),
+        setMeasure: (key, value, ctx) =>
+            update((s) => changeMeasure(s, key, value, ctx)),
+        inputError: null,
+        setInputError(inputError) {
+            if (get().inputError !== inputError) set({ inputError });
+        },
+        setOrder: (order, reverse, ctx) =>
+            update((s) => changeOrder(s, order, reverse, ctx)),
+        reassign: (ctx) => update((s) => reassign(s, ctx)),
+        nudge(delta, ctx) {
+            if (!get().dragging) update((s) => translateSession(s, delta, ctx));
+        },
+        dragging: null,
+        startDrag(key) {
+            const { session } = get();
+            if (session) set({ dragging: { key, base: session.params } });
+        },
+        drag(to, shift, ctx) {
+            const { dragging } = get();
+            if (dragging)
+                update((s) =>
+                    dragHandle(s, dragging.base, dragging.key, to, shift, ctx),
+                );
+        },
+        endDrag() {
+            if (get().dragging) set({ dragging: null });
+        },
+        cancelDrag() {
+            const { session, dragging } = get();
+            if (!session || !dragging) return;
+            set({
+                session: changeParams(session, dragging.base),
+                dragging: null,
+            });
+        },
+        close() {
+            const { session } = get();
+            if (session)
+                set({
+                    session: null,
+                    last: session,
+                    dragging: null,
+                    inputError: null,
+                });
+        },
+    };
+});

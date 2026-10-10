@@ -17,7 +17,13 @@ import {
 } from "../geometry/vec";
 import { sampleAlong } from "../spacing";
 import type { ShapeContext, ShapeKind, Spacing, XY } from "../types";
-import { FIT, pathReadouts, SPACING_GROUP } from "./pathKind";
+import {
+    FIT,
+    pathReadouts,
+    SPACING_GROUP,
+    pathGuide,
+    pathOutline,
+} from "./pathKind";
 
 /**
  * A part of a circle from `a` to `b`. `bulge` is the signed sagitta: how far the arc's middle
@@ -86,10 +92,23 @@ function arcThroughPoints(
     const b = polar(circle.center, circle.r, startAngle + sweep);
     const middle = polar(circle.center, circle.r, startAngle + sweep / 2);
     const params: ArcParams = { a, b, bulge: 0, spacing: FIT };
-    return {
+    const fitted = {
         ...params,
         bulge: dot(sub(middle, mid(a, b)), chordNormal(params)),
     };
+    // Start from the left end, as a line does, so "Lay from Start" means the same end. Swapping
+    // the ends flips the chord's normal, so the bulge changes sign to keep the same middle.
+    return a.x > b.x + 1e-9
+        ? { ...fitted, a: b, b: a, bulge: -fitted.bulge }
+        : fitted;
+}
+
+/** The arc's radius and sweep, when it isn't flat */
+function arcGeometry(p: ArcParams): { r: number; sweep: number } | null {
+    const segment = arcSegment(p);
+    return segment.type === "arc"
+        ? { r: segment.r, sweep: Math.abs(segment.sweep) }
+        : null;
 }
 
 export const arcKind: ShapeKind<ArcParams> = {
@@ -99,6 +118,44 @@ export const arcKind: ShapeKind<ArcParams> = {
     icon: CircleNotchIcon,
     family: "path",
     groups: [SPACING_GROUP],
+    measures: [
+        {
+            key: "radius",
+            label: "Radius",
+            unit: "length",
+            get: (p) => arcGeometry(p)?.r ?? 0,
+            // Same ends; the bulge that gives this radius, keeping the arc's side and whether it
+            // is more or less than half a circle. A radius under half the chord is a half circle.
+            set(p, r) {
+                const h = dist(p.a, p.b) / 2;
+                const radius = Math.max(r, h);
+                const major = Math.abs(p.bulge) > h;
+                const rise = Math.sqrt(radius * radius - h * h);
+                const sign = p.bulge < 0 ? -1 : 1;
+                return {
+                    ...p,
+                    bulge: sign * (major ? radius + rise : radius - rise),
+                };
+            },
+        },
+        {
+            key: "sweep",
+            label: "Sweep",
+            unit: "angle",
+            min: 1,
+            get: (p) => arcGeometry(p)?.sweep ?? 0,
+            // The sagitta of an arc over chord 2h sweeping θ is h·tan(θ/4)
+            set(p, sweep) {
+                const h = dist(p.a, p.b) / 2;
+                const clamped = Math.min(
+                    Math.max(sweep, 1e-3),
+                    2 * Math.PI - 1e-3,
+                );
+                const sign = p.bulge < 0 ? -1 : 1;
+                return { ...p, bulge: sign * h * Math.tan(clamped / 4) };
+            },
+        },
+    ],
 
     fit({ current }, ctx) {
         const fitted = arcThroughPoints(current, ctx);
@@ -116,7 +173,7 @@ export const arcKind: ShapeKind<ArcParams> = {
     },
 
     handles: (p) => [
-        { key: "a", role: "point", at: p.a },
+        { key: "a", role: "point", at: p.a, start: true },
         { key: "b", role: "point", at: p.b },
         { key: "bulge", role: "bulge", at: arcMiddle(p) },
         { key: "move", role: "move", at: mid(p.a, p.b) },
@@ -140,36 +197,15 @@ export const arcKind: ShapeKind<ArcParams> = {
         return { ...next, bulge: ratio * dist(next.a, next.b) };
     },
 
-    outline(p, n, ctx) {
-        const path = arcPath(p);
-        const slots = sampleAlong(path, p.spacing, n, ctx.stepPx);
-        const first = Math.min(0, slots[0]?.s ?? 0);
-        const last = Math.max(path.length, slots.at(-1)?.s ?? 0);
-        const count = Math.max(
-            2,
-            Math.ceil((last - first) / (ctx.stepPx / 2)) + 1,
-        );
-        const points: XY[] = [];
-        for (let i = 0; i < count; i++)
-            points.push(path.at(first + ((last - first) * i) / (count - 1)));
-        return [points];
-    },
+    outline: (p, n, ctx) => pathOutline(arcPath(p), p.spacing, n, ctx),
+
+    guide: (p, _n, ctx) => pathGuide(arcPath(p), p.spacing, ctx),
 
     generate: (p, n, ctx) => sampleAlong(arcPath(p), p.spacing, n, ctx.stepPx),
 
     orderKey: (p, point) => [arcPath(p).project(point)],
 
-    readouts(p, n, ctx) {
-        const readouts = pathReadouts(arcPath(p), p.spacing, n, ctx);
-        const segment = arcSegment(p);
-        if (segment.type === "arc") {
-            readouts.push({
-                label: "Radius",
-                value: `${Math.round((segment.r / ctx.stepPx) * 100) / 100} steps`,
-            });
-        }
-        return readouts;
-    },
+    readouts: (p, n, ctx) => pathReadouts(arcPath(p), p.spacing, n, ctx),
 
     validate(p) {
         if (dist(p.a, p.b) === 0) {

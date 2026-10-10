@@ -131,7 +131,7 @@ describe("CommandPalette", () => {
     it("opens with curated suggestions first", () => {
         handle("nextPage");
         handle("swapMarchers");
-        handle("createCircle");
+        handle("alignHorizontally");
         renderPalette();
         const suggested = screen.getByRole("group", { name: "Suggested" });
         expect(
@@ -139,14 +139,14 @@ describe("CommandPalette", () => {
                 .getAllByRole("option")
                 .map((o) => o.textContent),
         ).toEqual([
-            expect.stringMatching(/^Create circle/),
+            expect.stringMatching(/^Align horizontally/),
             expect.stringMatching(/^Swap two marchers/),
         ]);
         expect(optionLabels()[2]).toMatch(/^Next page/);
     });
 
     it("puts runnable suggestions before unavailable ones", () => {
-        handle("createCircle", false);
+        handle("alignHorizontally", false);
         handle("swapMarchers");
         renderPalette();
         const suggested = screen.getByRole("group", { name: "Suggested" });
@@ -172,7 +172,7 @@ describe("CommandPalette", () => {
 
     it("puts frequently used commands first", () => {
         handle("nextPage");
-        handle("createCircle");
+        handle("alignHorizontally");
         recordPaletteUsage("action:nextPage");
         recordPaletteUsage("action:nextPage");
         renderPalette();

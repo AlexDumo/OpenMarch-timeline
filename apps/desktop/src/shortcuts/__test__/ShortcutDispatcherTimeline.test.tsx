@@ -65,7 +65,7 @@ describe("ShortcutDispatcher on a timeline move control", () => {
     });
 
     it("leaves Enter and the plain nudge keys to the control", () => {
-        const create = handle("createMarcherShape");
+        const create = handle("applyShape");
         const up = handle("moveSelectedMarchersUp");
         const clip = renderOnMoveControl();
         expect(fireEvent.keyDown(clip, { key: "Enter", code: "Enter" })).toBe(

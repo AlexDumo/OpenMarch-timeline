@@ -3,7 +3,6 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     marcherPagesByPageQueryOptions,
     fieldPropertiesQueryOptions,
-    shapePageMarchersQueryByPageIdOptions,
     useUpdateSelectedMarchersOnSelectedPage,
     type MarcherCoordinate,
 } from "@/hooks/queries";
@@ -445,14 +444,6 @@ function MarcherEditor() {
         selectedMarchers.length === 1 ? selectedMarchers[0].id : -1,
         isolationEnd ?? (selectedPage ? pageEndBeat(selectedPage) : 0),
     );
-    // Timeline mode has no shape locks (P7.11): moving a marcher whose slot is in a shape-backed
-    // transition switches that transition to individual points (P7.2), and shape pages are
-    // frozen page-era rows. So the shape page marchers aren't read there.
-    const { data: spmsForThisPage } = useQuery(
-        shapePageMarchersQueryByPageIdOptions(
-            timelineMode ? null : (selectedPage?.id ?? null),
-        ),
-    );
     const editingDisabled = useMemo(() => {
         if (timelineMode) return false;
         return (
@@ -483,22 +474,6 @@ function MarcherEditor() {
         // const yardLine = form[yardLineId].value;
         // const fieldSide = form[fieldSideId].value;
     };
-
-    const createLineIsVisible = useCallback(() => {
-        // No shape locks in timeline mode (P7.11); the line tool applies positions (P7.2)
-        if (timelineMode) return true;
-        if (!spmsForThisPage) return false;
-        const marcherIdsWithShapes = new Set<number>(
-            spmsForThisPage.map((spm) => spm.marcher_id),
-        );
-        const selectedMarcherIds = selectedMarchers.map(
-            (marcher) => marcher.id,
-        );
-
-        return !selectedMarcherIds.some((marcherId) =>
-            marcherIdsWithShapes.has(marcherId),
-        );
-    }, [timelineMode, selectedMarchers, spmsForThisPage]);
 
     const rCoords = useMemo(() => {
         if (selectedMarchers.length !== 1) return undefined;
@@ -795,21 +770,6 @@ function MarcherEditor() {
                                     <T keyName="inspector.marcher.swapMarchers" />
                                 </ActionButton>
                             )}
-                            {selectedMarchers.length >= 3 &&
-                                createLineIsVisible() && (
-                                    <ActionButton
-                                        className={clsx(
-                                            getButtonClassName({
-                                                variant: "primary",
-                                                size: "compact",
-                                            }),
-                                            "enabled:hover:text-text-invert",
-                                        )}
-                                        action="alignmentEventLine"
-                                    >
-                                        <T keyName="inspector.marcher.createLine" />
-                                    </ActionButton>
-                                )}
 
                             {/* Alignment, distribution, and transformation buttons */}
                             <AlignmentButtons

@@ -29,10 +29,6 @@
             "setSelectedToPrevious": "Copiar posições da página anterior (seleção)",
             "setSelectedToPreviousSuccess": "{count, plural, other {\"'{count} coordenada{{count, plural, one {} other {s}}} dos marchadores na página {currentPage} foi definida com sucesso para as coordenadas da página anterior {previousPage}'\"}}"
         },
-        "cursor": {
-            "defaultMode": "Modo de seleção",
-            "lineMode": "Criar linha"
-        },
         "edit": {
             "noRedoAvailable": "Nenhuma ação para refazer",
             "noUndoAvailable": "Nenhuma ação para desfazer",
@@ -77,9 +73,6 @@
             "selectAll": "Selecionar tudo"
         },
         "shape": {
-            "applyQuick": "Ajustar à forma",
-            "create": "Criar forma",
-            "createCircle": "Criar círculo",
             "delete": "Exclui as formas selecionadas atualmente",
             "noMarchersSelected": "Nenhum marchador selecionado"
         },
@@ -580,14 +573,7 @@
         "valueMissing": "Por favor, insira um valor."
     },
     "inspector": {
-        "alignment": {
-            "applyCoordinates": "Aplicar coordenadas",
-            "cancelUpdates": "Cancelar",
-            "createShape": "Criar Forma",
-            "drawLine": "Desenhar uma linha."
-        },
         "marcher": {
-            "createLine": "Criar Linha",
             "drillNumber": "Número do Furo",
             "errorLoadingCoords": "Erro ao carregar coordenadas",
             "loading": "Carregando marchador",
@@ -640,11 +626,6 @@
             "ungroupShapeButton": "Desagrupar",
             "ungroupShapeTooltip": "Excluir esta forma desta página. Não moverá marchadores de sua posição atual",
             "viewTab": "Visualizar"
-        },
-        "shapes": {
-            "moreShapesComingSoon": "Mais formas em breve!",
-            "selectShape": "Selecionar Forma",
-            "title": "Formas"
         },
         "title": "Inspetor"
     },

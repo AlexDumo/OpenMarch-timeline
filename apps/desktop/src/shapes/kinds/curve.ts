@@ -14,7 +14,13 @@ import {
 } from "../geometry/vec";
 import { sampleAlong } from "../spacing";
 import type { ShapeKind, Spacing, XY } from "../types";
-import { FIT, pathReadouts, SPACING_GROUP } from "./pathKind";
+import {
+    FIT,
+    pathReadouts,
+    SPACING_GROUP,
+    pathGuide,
+    pathOutline,
+} from "./pathKind";
 
 /** A smooth curve through `points` (at least 2), in order. */
 export interface CurveParams {
@@ -131,6 +137,7 @@ export const curveKind: ShapeKind<CurveParams> = {
                 key: `p${i}`,
                 role: "point" as const,
                 at,
+                start: i === 0,
             })),
             { key: "move", role: "move", at: middleOf(curvePath(p)) },
         ];
@@ -155,20 +162,9 @@ export const curveKind: ShapeKind<CurveParams> = {
         };
     },
 
-    outline(p, n, ctx) {
-        const path = curvePath(p);
-        const slots = sampleAlong(path, p.spacing, n, ctx.stepPx);
-        const first = Math.min(0, slots[0]?.s ?? 0);
-        const last = Math.max(path.length, slots.at(-1)?.s ?? 0);
-        const count = Math.max(
-            2,
-            Math.min(4096, Math.ceil((last - first) / (ctx.stepPx / 2)) + 1),
-        );
-        const points: XY[] = [];
-        for (let i = 0; i < count; i++)
-            points.push(path.at(first + ((last - first) * i) / (count - 1)));
-        return [points];
-    },
+    outline: (p, n, ctx) => pathOutline(curvePath(p), p.spacing, n, ctx),
+
+    guide: (p, _n, ctx) => pathGuide(curvePath(p), p.spacing, ctx),
 
     generate: (p, n, ctx) =>
         sampleAlong(curvePath(p), p.spacing, n, ctx.stepPx),

@@ -15,8 +15,6 @@ import {
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import OpenMarchCanvas from "../../global/classes/canvasObjects/OpenMarchCanvas";
 import DefaultListeners from "./listeners/DefaultListeners";
-import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
-import LineListeners from "./listeners/LineListeners";
 import { CircleNotchIcon } from "@phosphor-icons/react";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import clsx from "clsx";
@@ -42,7 +40,6 @@ import { ShapePath } from "@/global/classes/canvasObjects/ShapePath";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
-import { useTimelineShapeCanvas } from "@/timeline/useTimelineShapeCanvas";
 import { useShapeToolCanvas } from "@/shapes/canvas/useShapeToolCanvas";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -142,12 +139,6 @@ export default function Canvas({
             showCollisions: s.uiSettings.showCollisions,
         })),
     );
-    const {
-        alignmentEvent,
-        alignmentEventMarchers,
-        setAlignmentEventMarchers,
-        setAlignmentEventNewMarcherPages,
-    } = useAlignmentEventStore()!;
     const { isFullscreen, perspective, setPerspective } = useFullscreenStore();
     const [canvas, setCanvas] = useState<OpenMarchCanvas | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -249,36 +240,12 @@ export default function Canvas({
     // Initiate listeners
     useEffect(() => {
         if (canvas) {
-            // Initiate listeners
-            switch (alignmentEvent) {
-                case "line":
-                    canvas.setListeners(new LineListeners({ canvas: canvas }));
-                    break;
-                default:
-                    canvas.setListeners(
-                        new DefaultListeners({ canvas: canvas }),
-                    );
-                    break;
-            }
-            canvas.eventMarchers = canvas.getCanvasMarchersByIds(
-                alignmentEventMarchers.map((marcher) => marcher.id),
-            );
+            canvas.setListeners(new DefaultListeners({ canvas: canvas }));
 
             // Center and fit canvas when it's first initialized
             centerAndFitCanvas();
-
-            // Cleanup
-            return () => {
-                canvas.eventMarchers = [];
-            };
         }
-    }, [
-        canvas,
-        alignmentEvent,
-        alignmentEventMarchers,
-        centerAndFitCanvas,
-        isFullscreen,
-    ]);
+    }, [canvas, centerAndFitCanvas, isFullscreen]);
 
     // Update section appearances
     useEffect(() => {
@@ -395,14 +362,6 @@ export default function Canvas({
         isPlaying,
         applyAt: applyTimelineAppearanceAt,
     });
-
-    // Setters for alignmentEvent state
-    useEffect(() => {
-        if (canvas) {
-            canvas.setGlobalEventMarchers = setAlignmentEventMarchers;
-            canvas.setGlobalNewMarcherPages = setAlignmentEventNewMarcherPages;
-        }
-    }, [canvas, setAlignmentEventMarchers, setAlignmentEventNewMarcherPages]);
 
     // Set the canvas UI settings to the global UI settings
     useCanvasUiSettings(canvas);
@@ -691,14 +650,6 @@ export default function Canvas({
         canvas,
         enabled: timelineMode,
         redrawKey: marcherVisuals,
-    });
-
-    // Timeline mode (P7.11): the spec shape picked in the inspector, with handles to drag
-    useTimelineShapeCanvas({
-        canvas,
-        enabled: drawFromResolver,
-        isPlaying,
-        theme: fieldProperties?.theme,
     });
 
     // The shape tool's preview and handles (docs/timeline/research/shapes/README.md)

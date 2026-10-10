@@ -10,7 +10,13 @@ import type {
     Spacing,
     XY,
 } from "../types";
-import { FIT, formatSteps, pathReadouts, SPACING_GROUP } from "./pathKind";
+import {
+    FIT,
+    pathReadouts,
+    SPACING_GROUP,
+    pathGuide,
+    pathOutline,
+} from "./pathKind";
 
 /**
  * A full circle. `start` (radians, canvas axes) is where the first marcher stands; marchers go
@@ -48,7 +54,18 @@ export const circleKind: ShapeKind<CircleParams> = {
     label: "Circle",
     icon: CircleIcon,
     family: "path",
+    defaultOrder: "nearest",
     groups: [SPACING_GROUP],
+    measures: [
+        {
+            key: "radius",
+            label: "Radius",
+            unit: "length",
+            min: 0.25,
+            get: (p) => p.r,
+            set: (p, r) => ({ ...p, r }),
+        },
+    ],
 
     fit({ current }, ctx: ShapeContext) {
         const fitted = fitCircle(current);
@@ -82,7 +99,7 @@ export const circleKind: ShapeKind<CircleParams> = {
 
     handles: (p) => [
         { key: "move", role: "move", at: p.center },
-        { key: "radius", role: "point", at: rimPoint(p) },
+        { key: "radius", role: "point", at: rimPoint(p), start: true },
     ],
 
     drag(p, key, to, { shift }) {
@@ -102,7 +119,9 @@ export const circleKind: ShapeKind<CircleParams> = {
         return p;
     },
 
-    outline: (p, _n, ctx) => [circlePath(p).polyline(ctx.stepPx / 2)],
+    outline: (p, n, ctx) => pathOutline(circlePath(p), p.spacing, n, ctx),
+
+    guide: (p, _n, ctx) => pathGuide(circlePath(p), p.spacing, ctx),
 
     generate: (p, n, ctx) =>
         sampleAlong(circlePath(p), p.spacing, n, ctx.stepPx),
@@ -114,7 +133,6 @@ export const circleKind: ShapeKind<CircleParams> = {
         if (p.spacing.mode === "fit" && readouts[0]) {
             readouts[0] = { ...readouts[0], label: "Circumference" };
         }
-        readouts.push({ label: "Radius", value: formatSteps(p.r, ctx) });
         return readouts;
     },
 

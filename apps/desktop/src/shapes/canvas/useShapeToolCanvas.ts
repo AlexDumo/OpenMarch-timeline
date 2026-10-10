@@ -12,6 +12,7 @@ import { marchersOnCanvas, shapeContextFor } from "./shapeCanvasContext";
 const colorsOf = (theme: FieldTheme): ShapeToolOverlayColors => ({
     shape: rgbaToString(theme.shape),
     travel: rgbaToString({ ...theme.shape, a: 0.35 }),
+    ghost: rgbaToString({ ...theme.shape, a: 0.55 }),
     issue: "#e5484d",
     handleFill: "#fff",
 });
