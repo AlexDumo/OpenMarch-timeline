@@ -10,7 +10,7 @@ import {
     type TimelineMarcherMove,
     type TimelineMoveResult,
 } from "@/db-functions/timelineMoves";
-import type { DbConnection } from "@/db-functions/types";
+import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import { keptTransitionIds } from "@/db-functions/timelineKeptMarkers";
 import {
     useTimelineSelectionStore,
@@ -288,11 +288,17 @@ export async function moveMarchersAndOfferFollowUp({
     target,
     moves,
     clearOwn,
+    afterWrite,
 }: {
     database?: DbConnection;
     target: TimelineEditTarget;
     moves: readonly TimelineMarcherMove[];
     clearOwn?: boolean;
+    /** App data written in the same edit (`moveMarchersInTarget`) */
+    afterWrite?: (
+        tx: DbTransaction,
+        timelineId: number | null,
+    ) => Promise<void>;
 }): Promise<TimelineMoveResult> {
     let start: EditStart | null = null;
     let owned: Set<number> = new Set();
@@ -302,6 +308,7 @@ export async function moveMarchersAndOfferFollowUp({
         target,
         moves,
         clearOwn,
+        afterWrite,
         onStart: () => {
             start = readEditStart(target, marcherIds);
             owned = ownMovers(target, marcherIds);

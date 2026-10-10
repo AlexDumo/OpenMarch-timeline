@@ -4,7 +4,9 @@ import type { LineParams } from "../kinds/line";
 import {
     changeKind,
     changeOrder,
+    changeParams,
     dragHandle,
+    openRecipe,
     previewSession,
     startSession,
 } from "../session";
@@ -159,5 +161,71 @@ describe("shape tool store", () => {
         expect(useShapeToolStore.getState().session).toBeNull();
         store.open("arc", row, ctx);
         expect(useShapeToolStore.getState().session!.order).toBe("nearest");
+    });
+});
+
+describe("reopening a placed shape", () => {
+    const placedRow = [0, 1, 2, 3].map((i) => ({
+        id: i + 1,
+        at: xy(i * 20, 0),
+        drillRank: i,
+    }));
+    const recipe = {
+        id: 7,
+        kind: "line",
+        params: {
+            a: xy(0, 0),
+            b: xy(60, 0),
+            spacing: { mode: "fit" },
+        } as LineParams,
+        orderMode: "drill",
+        reverse: false,
+        // Stored in reverse slot order, to check the slots win over the list order
+        members: [3, 2, 1, 0].map((i) => ({
+            marcherId: i + 1,
+            slot: i,
+            x: i * 20,
+            y: 0,
+        })),
+    };
+
+    it("opens as stored, without refitting, and moves no one", () => {
+        const session = openRecipe(recipe, placedRow)!;
+        expect(session.recipeId).toBe(7);
+        expect(session.kindId).toBe("line");
+        expect(session.order).toBe("drill");
+        expect(session.overrides).toEqual({});
+        const preview = previewSession(session, ctx);
+        for (const t of preview.targets) {
+            const from = placedRow.find((m) => m.id === t.id)!.at;
+            expect(t.to.x).toBeCloseTo(from.x, 9);
+            expect(t.to.y).toBeCloseTo(from.y, 9);
+        }
+    });
+
+    it("keeps a marcher moved by hand at its offset, unless reset", () => {
+        const moved = placedRow.map((m) =>
+            m.id === 2 ? { ...m, at: xy(m.at.x, m.at.y + 5) } : m,
+        );
+        const session = openRecipe(recipe, moved)!;
+        expect(session.overrides).toEqual({ 2: xy(0, 5) });
+        // Stretch the line: marcher 2 follows its new spot, still 5 above it
+        const stretched = changeParams(
+            session,
+            { ...(session.params as LineParams), b: xy(120, 0) },
+            ctx,
+        );
+        const target = (s: typeof session) =>
+            previewSession(s, ctx).targets.find((t) => t.id === 2)!;
+        expect(target(stretched).to.x).toBeCloseTo(40, 9);
+        expect(target(stretched).to.y).toBeCloseTo(5, 9);
+        const reset = { ...stretched, keepOverrides: false };
+        expect(target(reset).to.y).toBeCloseTo(0, 9);
+    });
+
+    it("isn't offered for a kind this app doesn't know", () => {
+        expect(
+            openRecipe({ ...recipe, kind: "spiral3000" }, placedRow),
+        ).toBeNull();
     });
 });

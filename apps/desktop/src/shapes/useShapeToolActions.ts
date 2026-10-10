@@ -1,5 +1,12 @@
 import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { db } from "@/global/database/db";
 import { useUpdateSelectedMarchersOnSelectedPage } from "@/hooks/queries";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { saveShapeRecipeInTransaction } from "@/db-functions/shapeRecipes";
+import { transformMarchersInSelection } from "@/timeline/timelineCoordinateWrites";
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { shapeKind } from "./registry";
 import {
     useActionHandler,
     useActionHandlerGroup,
@@ -28,9 +35,14 @@ const KIND_ACTION_IDS = Object.values(SHAPE_KIND_ACTIONS);
 /**
  * Places the session's marchers on its shape as one edit, through the same path as a canvas drag
  * (timeline mode: they leave the start flag and arrive at the playhead), then closes the tool.
+ *
+ * In timeline mode the shape's recipe is saved in the same edit (ADR 0004), so it can be reopened
+ * and one undo takes back both. A reopened shape replaces its recipe.
  */
 export function useApplyShape(): () => Promise<void> {
     const { mutateAsync } = useUpdateSelectedMarchersOnSelectedPage();
+    const timelineMode = useTimelineMode();
+    const queryClient = useQueryClient();
     return useCallback(async () => {
         const canvas = currentCanvas();
         const { session, close, inputError } = useShapeToolStore.getState();
@@ -38,16 +50,56 @@ export function useApplyShape(): () => Promise<void> {
         const preview = previewSession(session, shapeContextFor(canvas));
         if (!preview.canApply) return;
         const targets = new Map(preview.targets.map((t) => [t.id, t.to]));
-        await mutateAsync(({ currentCoordinates }) =>
-            currentCoordinates.flatMap((c) => {
+        const transform = (current: readonly { marcher_id: number }[]) =>
+            current.flatMap((c) => {
                 const to = targets.get(c.marcher_id);
                 return to
                     ? [{ marcher_id: c.marcher_id, x: to.x, y: to.y }]
                     : [];
-            }),
-        );
+            });
+        if (!timelineMode) {
+            await mutateAsync(({ currentCoordinates }) =>
+                transform(currentCoordinates),
+            );
+            close();
+            return;
+        }
+        const kind = shapeKind(session.kindId)!;
+        try {
+            await transformMarchersInSelection({
+                db,
+                marcherIds: session.marchers.map((m) => m.id),
+                transform,
+                afterWrite: async (tx, timelineId) => {
+                    await saveShapeRecipeInTransaction({
+                        tx,
+                        timelineId,
+                        recipe: {
+                            kind: kind.id,
+                            kindVersion: kind.version,
+                            params: session.params,
+                            orderMode: session.order,
+                            reverse: session.reverse,
+                        },
+                        members: preview.targets.map((t, i) => ({
+                            marcherId: t.id,
+                            slot: session.assignment[i]!,
+                            x: t.slot.x,
+                            y: t.slot.y,
+                        })),
+                        replaces: session.recipeId,
+                    });
+                },
+            });
+        } catch (e) {
+            toastTimelineError(e, "Error placing the shape");
+            return;
+        }
+        void queryClient.invalidateQueries({
+            queryKey: ["timeline_shape_recipes"],
+        });
         close();
-    }, [mutateAsync]);
+    }, [mutateAsync, timelineMode, queryClient]);
 }
 
 /** Opens, applies and closes the shape tool from shortcuts, buttons and the command palette. */

@@ -33,6 +33,76 @@ export interface ShapeSession {
     readonly orderChosen?: boolean;
     /** The slot index for each marcher, in `marchers` order */
     readonly assignment: readonly number[];
+    /** The stored recipe this session edits (ADR 0004); Place replaces it */
+    readonly recipeId?: number;
+    /**
+     * Marchers moved by hand since the recipe placed them: where each stands less where the
+     * recipe put it, by marcher id. Kept on Place unless `keepOverrides` is off.
+     */
+    readonly overrides?: Readonly<Record<number, XY>>;
+    readonly keepOverrides?: boolean;
+}
+
+/** A stored recipe as the tool reopens it (see `db-functions/shapeRecipes.ts`) */
+export interface RecipeToOpen {
+    readonly id: number;
+    readonly kind: string;
+    readonly params: unknown;
+    readonly orderMode: string;
+    readonly reverse: boolean;
+    readonly members: readonly {
+        readonly marcherId: number;
+        readonly slot: number;
+        readonly x: number;
+        readonly y: number;
+    }[];
+}
+
+/** Offsets smaller than this (field units) aren't overrides, just rounding */
+const OVERRIDE_EPSILON = 1e-6;
+
+/**
+ * Reopens a placed shape: its kind and parameters as stored, each marcher on its stored slot,
+ * and any marcher that now stands somewhere else than the recipe put it as an override. Nothing
+ * is refitted, so reopening and placing without changes moves no one.
+ *
+ * @param marchers where the recipe's marchers stand now; marchers the recipe doesn't have are
+ *   left out
+ */
+export function openRecipe(
+    recipe: RecipeToOpen,
+    marchers: readonly AssignMarcher[],
+): ShapeSession | null {
+    if (!shapeKind(recipe.kind)) return null;
+    const byId = new Map(marchers.map((m) => [m.id, m]));
+    const members = recipe.members.filter((m) => byId.has(m.marcherId));
+    if (members.length === 0) return null;
+    const overrides: Record<number, XY> = {};
+    for (const member of members) {
+        const at = byId.get(member.marcherId)!.at;
+        const dx = at.x - member.x;
+        const dy = at.y - member.y;
+        if (Math.hypot(dx, dy) > OVERRIDE_EPSILON)
+            overrides[member.marcherId] = { x: dx, y: dy };
+    }
+    // Slots renumbered in order, in case a member has since left the recipe
+    const ordered = [...members].sort((a, b) => a.slot - b.slot);
+    const slotOf = new Map(ordered.map((m, i) => [m.marcherId, i]));
+    const order = ["keep", "nearest", "drill"].includes(recipe.orderMode)
+        ? (recipe.orderMode as OrderMode)
+        : DEFAULT_ORDER;
+    return {
+        kindId: recipe.kind,
+        params: recipe.params,
+        marchers: ordered.map((m) => byId.get(m.marcherId)!),
+        order,
+        reverse: recipe.reverse,
+        orderChosen: true,
+        assignment: ordered.map((m) => slotOf.get(m.marcherId)!),
+        recipeId: recipe.id,
+        overrides,
+        keepOverrides: true,
+    };
 }
 
 export const DEFAULT_ORDER: OrderMode = "keep";
@@ -280,10 +350,12 @@ export function translateSession(
 export interface ShapePreview {
     readonly slots: readonly Slot[];
     /** Where each marcher goes, in `session.marchers` order */
+    /** Where each marcher goes (its slot plus any kept override), and its slot */
     readonly targets: readonly {
         readonly id: number;
         readonly from: XY;
         readonly to: XY;
+        readonly slot: Slot;
     }[];
     readonly outline: readonly XY[][];
     /** Fainter lines for the rest of the shape */
@@ -304,11 +376,20 @@ export function previewSession(
     const kind = kindOf(session.kindId);
     const n = session.marchers.length;
     const slots = kind.generate(session.params, n, ctx);
-    const targets = session.marchers.map((m, i) => ({
-        id: m.id,
-        from: m.at,
-        to: slots[session.assignment[i]!]!,
-    }));
+    const keep = session.keepOverrides !== false;
+    const targets = session.marchers.map((m, i) => {
+        const slot = slots[session.assignment[i]!]!;
+        const override = keep ? session.overrides?.[m.id] : undefined;
+        return {
+            id: m.id,
+            from: m.at,
+            // A marcher moved by hand keeps its offset from its spot
+            to: override
+                ? { x: slot.x + override.x, y: slot.y + override.y }
+                : slot,
+            slot,
+        };
+    });
     const issues = [
         ...(kind.validate?.(session.params, slots, ctx) ?? []),
         ...validateSlots(slots, ctx),

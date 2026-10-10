@@ -401,7 +401,7 @@ export default class ShapeToolOverlay {
         preview.targets.forEach((target, i) => {
             const from = toCanvas(target.from);
             const to = toCanvas(target.to);
-            const color = flaggedSpots.has(target.to)
+            const color = flaggedSpots.has(target.slot)
                 ? this.colors.issue
                 : this.colors.ghost;
             const line = this.travel[i];
