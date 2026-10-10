@@ -122,7 +122,7 @@ export default class ShapeToolOverlay {
     private nearOutline(e: MouseEvent): boolean {
         const reach = HIT_RADIUS_PX / (this.canvas.getZoom() || 1);
         const p = this.canvas.getPointer(e);
-        for (const line of this.outlines) {
+        for (const line of [...this.outlines, ...this.guides]) {
             const points = line.points ?? [];
             for (let i = 1; i < points.length; i++) {
                 const a = points[i - 1]!;
@@ -175,7 +175,15 @@ export default class ShapeToolOverlay {
     private readonly onPointerDown = (e: PointerEvent) => {
         if (e.button !== 0 || e.altKey) return;
         const handle = this.handleAt(e);
-        if (!handle) return;
+        if (!handle) {
+            // On a shape that takes points, a press on its line belongs to the shape, so the
+            // double-click that adds a point isn't taken by a marcher underneath
+            if (this.takesPoints && this.nearOutline(e)) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
         this.dragKey = handle.shapeToolHandle.key;
@@ -282,7 +290,11 @@ export default class ShapeToolOverlay {
         this.canvas.requestRenderAll();
     }
 
+    /** Whether presses on the shape's line are the shape's (it takes new points) */
+    private takesPoints = false;
+
     show(preview: ShapePreview): void {
+        this.takesPoints = preview.takesPoints;
         this.syncLines(this.guides, preview.guide, {
             stroke: this.colors.travel,
             strokeWidth: 1.5,
@@ -334,6 +346,7 @@ export default class ShapeToolOverlay {
         this.ghosts = [];
         this.handles = [];
         this.handleRoles = "";
+        this.takesPoints = false;
         this.canvas.requestRenderAll();
     }
 

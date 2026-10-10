@@ -292,3 +292,65 @@ describe("block intervals", () => {
         expect(next.files).toBe(5);
     });
 });
+
+describe("a closed size lock in Fit", () => {
+    it("keeps a circle's radius when its rim is dragged, only turning it", () => {
+        const fit = startSession({ kindId: "circle", marchers: row(8), ctx });
+        const session = changeParams(
+            fit,
+            {
+                ...(fit.params as object),
+                spacing: { mode: "fit", sizeLocked: true },
+            },
+            ctx,
+        );
+        const p = session.params as {
+            r: number;
+            center: { x: number; y: number };
+        };
+        const dragged = dragHandle(
+            session,
+            p,
+            "radius",
+            xy(p.center.x, p.center.y + 1000),
+            false,
+            ctx,
+        ).params as typeof p;
+        close(dragged.r, p.r, 1e-6);
+        expect(dragged.center).toEqual(p.center);
+    });
+
+    it("keeps a line's length about its middle when Length is typed", () => {
+        const session = startSession({ kindId: "line", marchers: row(5), ctx });
+        const p = session.params as LineParams;
+        const middle = (p.a.x + p.b.x) / 2;
+        const typed = changeMeasure(session, "length", 20 * STEP, ctx);
+        const q = typed.params as LineParams;
+        close((q.a.x + q.b.x) / 2, middle, 1e-6);
+        close(dist(q.a, q.b), 20 * STEP, 1e-6);
+        const spacing = q.spacing;
+        expect(spacing.mode === "fit" && spacing.sizeLocked).toBe(true);
+    });
+});
+
+describe("circle fit", () => {
+    it("centers on the marchers when they cover less than half a circle", () => {
+        const arcMarchers = [0, 1, 2, 3, 4].map((i) => {
+            const angle = Math.PI / 2 - 0.3 + i * 0.15;
+            return {
+                id: i + 1,
+                at: xy(100 * Math.cos(angle), 100 * Math.sin(angle)),
+                drillRank: i,
+            };
+        });
+        const session = startSession({
+            kindId: "circle",
+            marchers: arcMarchers,
+            ctx,
+        });
+        const center = (session.params as { center: { x: number; y: number } })
+            .center;
+        // The group's middle, near y = 98, not the arc's own center at the origin
+        expect(center.y).toBeGreaterThan(90);
+    });
+});

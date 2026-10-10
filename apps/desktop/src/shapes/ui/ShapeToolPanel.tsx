@@ -341,7 +341,9 @@ function MeasureField<P>({
     // sized. In Fit it decides what locking the interval will do. A shape that keeps its drawn
     // path has it closed for good.
     const spacing = (session.params as { spacing?: Spacing }).spacing;
-    const hasLock = measure.size === true && spacing !== undefined;
+    // A shape that keeps its drawn path has no size lock: its size is always yours
+    const hasLock =
+        measure.size === true && spacing !== undefined && !keepsPath;
     const sizeLocked =
         keepsPath || (spacing !== undefined && sizeIsLocked(spacing));
     const derived =

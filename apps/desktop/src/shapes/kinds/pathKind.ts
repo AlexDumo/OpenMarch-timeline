@@ -12,12 +12,10 @@ export const SPACING_GROUP: ParamGroup<{ spacing: Spacing }> = {
 /** Path kinds start by fitting the marchers' current extent: spacing derived, nothing moves far. */
 export const FIT: Spacing = { mode: "fit" };
 
-/** Steps to the nearest quarter, with ≈ when that rounds something off */
+/** Steps to the hundredth, the same precision the panel's fields show */
 export const formatSteps = (fieldUnits: number, ctx: ShapeContext): string => {
-    const steps = fieldUnits / ctx.stepPx;
-    const quarter = Math.round(steps * 4) / 4;
-    const approx = Math.abs(steps - quarter) > 0.01 ? "≈ " : "";
-    return `${approx}${quarter} ${Math.abs(quarter) === 1 ? "step" : "steps"}`;
+    const steps = Math.round((fieldUnits / ctx.stepPx) * 100) / 100;
+    return `${steps} ${Math.abs(steps) === 1 ? "step" : "steps"}`;
 };
 
 /** Points along `path` from `from` to `to`, about every half step */

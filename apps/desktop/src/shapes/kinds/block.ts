@@ -339,10 +339,20 @@ export const blockKind: ShapeKind<BlockParams> = {
         ];
     },
 
-    validate(p) {
+    validate(p, slots) {
         if (!(p.files >= 1)) {
             return [
                 { level: "error", message: "A block needs at least 1 file" },
+            ];
+        }
+        const files = filesOf(p);
+        const lastRank = slots.length % files;
+        if (slots.length > files && lastRank === 1) {
+            return [
+                {
+                    level: "info",
+                    message: `With ${files} files the last rank has 1 marcher`,
+                },
             ];
         }
         return [];

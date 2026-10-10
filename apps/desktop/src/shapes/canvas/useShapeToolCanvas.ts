@@ -41,6 +41,7 @@ export function useShapeToolCanvas({
     const session = useShapeToolStore((s) => s.session);
     const dragging = useShapeToolStore((s) => s.dragging);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
+    const lastHold = useRef<ReturnType<typeof holdFeedback>>(null);
 
     useEffect(() => {
         if (!canvas) return;
@@ -92,7 +93,26 @@ export function useShapeToolCanvas({
         }
         const preview = previewSession(session, shapeContextFor(canvas));
         overlay.show(preview);
-        overlay.showHold(holdFeedback(session, preview, dragging, canvas));
+        const hold = holdFeedback(session, preview, dragging, canvas);
+        if (hold) {
+            lastHold.current = hold;
+            overlay.showHold(hold);
+            return;
+        }
+        // Let go while a lock was holding the handle back: leave the reason on screen a moment,
+        // by the handle, so it doesn't vanish with the drag
+        const held = lastHold.current;
+        lastHold.current = null;
+        if (!dragging && held) {
+            overlay.showHold({
+                from: held.from,
+                to: held.from,
+                label: held.after,
+            });
+            const timer = window.setTimeout(() => overlay.showHold(null), 3000);
+            return () => window.clearTimeout(timer);
+        }
+        overlay.showHold(null);
     }, [canvas, session, dragging, theme]);
 }
 
@@ -167,11 +187,37 @@ function holdFeedback(
         spacing?: Spacing;
         keepIntervals?: boolean;
     };
-    const label =
-        params.spacing?.mode === "interval"
-            ? "Interval locked"
-            : params.keepIntervals
-              ? "Intervals kept"
-              : null;
-    return label ? { from: handle.at, to: dragging.cursor, label } : null;
+    const label = holdReason(params);
+    return label
+        ? {
+              from: handle.at,
+              to: dragging.cursor,
+              label: label.short,
+              after: label.long,
+          }
+        : null;
+}
+
+/** Which lock holds a handle back, in a short form for during the drag and a longer one after */
+function holdReason(params: {
+    spacing?: Spacing;
+    keepIntervals?: boolean;
+}): { short: string; long: string } | null {
+    const spacing = params.spacing;
+    if (spacing?.mode === "interval")
+        return {
+            short: "Interval locked",
+            long: "Interval locked: open its padlock to resize freely",
+        };
+    if (spacing?.mode === "fit" && spacing.sizeLocked)
+        return {
+            short: "Size locked",
+            long: "Size locked: open its padlock to resize",
+        };
+    if (params.keepIntervals)
+        return {
+            short: "Intervals locked",
+            long: "Intervals locked: open their padlock to stretch them",
+        };
+    return null;
 }
