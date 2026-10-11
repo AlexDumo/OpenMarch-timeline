@@ -188,7 +188,7 @@ describeDbTests("keep later pages: Only Page N after an edit", (it) => {
         const info = vi.spyOn(toast, "info").mockImplementation(() => 0);
         await stepOut(db, pages, marchers);
         expect(await toastsAfter(info)).toEqual([
-            `Pages ${pages[2]!.name}–${pages[3]!.name} changed too`,
+            `Pages ${pages[2]!.name}–${pages[3]!.name} held these spots, so they changed too`,
         ]);
         const { action } = onlyAction(info);
         expect(action.label).toBe(`Change only Page ${pages[1]!.name}`);

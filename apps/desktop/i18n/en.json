@@ -855,6 +855,26 @@
         },
         "shapeTool": {
             "title": "Shape",
+            "view": {
+                "auto": "Auto",
+                "autoIs": "Auto ({choice})",
+                "hide": "Hide",
+                "labels": "Labels",
+                "labelsNames": "Drill numbers",
+                "labelsNone": "Off",
+                "labelsNumbers": "Numbers only",
+                "legendNew": "Where each marcher goes",
+                "legendOld": "The shape being replaced",
+                "legendProblemWalks": "Walks with a problem (red)",
+                "legendStart": "Where they start this move",
+                "legendWalks": "Each marcher's walk (red: a problem)",
+                "oldShape": "Old shape",
+                "paths": "Walks",
+                "pathsAll": "All",
+                "pathsProblems": "Problems only",
+                "show": "Show",
+                "title": "View"
+            },
             "hint": "Select marchers, then pick a shape.",
             "hintPlaced": "These marchers were placed as a shape. Edit it, or pick a new shape.",
             "editPlaced": "Edit {kind}",
@@ -873,8 +893,6 @@
             "orderDrill": "Drill number",
             "orderDrillHelp": "Marchers fill the shape by drill number, from its start.",
             "reverse": "Reverse",
-            "reassign": "Reassign",
-            "reassignHelp": "Work out who goes where again for the shape as it is now",
             "apply": "Place",
             "cancel": "Cancel",
             "spacingFit": "Fit",
@@ -1516,9 +1534,9 @@
                 "keptEarlier": "Kept on Page {page} · won't follow earlier pages"
             },
             "followed": {
-                "onePage": "Page {page} changed too",
+                "onePage": "Page {page} held these spots, so it changed too",
                 "only": "Change only Page {page}",
-                "pages": "Pages {first}–{last} changed too"
+                "pages": "Pages {first}–{last} held these spots, so they changed too"
             },
             "names": {
                 "many": "{first}, {second} and {count} others",
@@ -1601,6 +1619,10 @@
         "view": {
             "gridLines": "Grid lines",
             "halfLines": "Half lines",
+            "labels": "Labels",
+            "labelsAuto": "Auto (numbers where crowded)",
+            "labelsNames": "Drill numbers",
+            "labelsNumbers": "Numbers only",
             "nextPaths": "Next paths",
             "previousPaths": "Previous paths",
             "stepSizeWarnings": "Step size warnings",

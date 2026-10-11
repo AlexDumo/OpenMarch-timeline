@@ -170,12 +170,12 @@ export function onlyThisPageMessage(
             first === last
                 ? translate(
                       "timeline.keep.followed.onePage",
-                      "Page {page} changed too",
+                      "Page {page} held these spots, so it changed too",
                       { page: first },
                   )
                 : translate(
                       "timeline.keep.followed.pages",
-                      "Pages {first}–{last} changed too",
+                      "Pages {first}–{last} held these spots, so they changed too",
                       { first, last },
                   ),
         actionLabel: translate(

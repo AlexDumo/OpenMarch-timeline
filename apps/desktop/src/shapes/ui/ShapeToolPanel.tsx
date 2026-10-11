@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { T, useTolgee } from "@tolgee/react";
 import {
-    ArrowClockwiseIcon,
     ArrowsLeftRightIcon,
     LockSimpleIcon,
     LockSimpleOpenIcon,
@@ -20,6 +19,7 @@ import {
 } from "@openmarch/ui";
 import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { useIsPlaying } from "@/context/IsPlayingContext";
 import ActionButton from "@/shortcuts/ActionButton";
 import { runAction } from "@/shortcuts/registry";
 import type { OrderMode } from "../assign";
@@ -46,6 +46,9 @@ import {
     type Spacing,
 } from "../types";
 import { measuresOf } from "../follow";
+import { resolveShapeView, tightSpacing } from "../canvas/previewView";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { ShapeViewSection } from "./ShapeViewSection";
 import { SHAPE_KIND_ACTIONS } from "../useShapeToolActions";
 import { useRecipeForSelection } from "../useRecipeForSelection";
 import type { StoredShapeRecipe } from "@/db-functions/shapeRecipes";
@@ -67,13 +70,15 @@ export default function ShapeToolPanel() {
     const recipe = useRecipeForSelection();
     const ref = useRef<HTMLDivElement>(null);
     const isOpen = session !== null;
+    const isPlaying = useIsPlaying()?.isPlaying ?? false;
 
     // Opening the tool brings its panel into view, wherever the inspector was scrolled
     useEffect(() => {
         if (isOpen) ref.current?.scrollIntoView({ block: "nearest" });
     }, [isOpen]);
 
-    if (!session && selectedCount === 0) return null;
+    // Playback closes the tool, and the selection's shape is about where playback started
+    if (isPlaying || (!session && selectedCount === 0)) return null;
 
     return (
         <InspectorCollapsible
@@ -220,6 +225,8 @@ function SessionControls({ session }: { session: ShapeSession }) {
     const ctx = useShapeContext();
     const kind = shapeKind(session.kindId)!;
     const inputError = useShapeToolStore((s) => s.inputError);
+    const edited = useShapeToolStore((s) => s.past.length > 0);
+    const storedView = useUiSettingsStore((s) => s.uiSettings.shapePreview);
     const [showMore, setShowMore] = useState(false);
     const preview = useMemo(
         () => (ctx ? previewSession(session, ctx) : null),
@@ -396,6 +403,14 @@ function SessionControls({ session }: { session: ShapeSession }) {
                     ))}
                 </ul>
             )}
+
+            <ShapeViewSection
+                resolved={resolveShapeView(storedView, {
+                    count: n,
+                    tight: tightSpacing(preview, ctx.stepPx),
+                    edited,
+                })}
+            />
         </>
     );
 }
@@ -953,19 +968,11 @@ function OrderRow({
                         <ArrowsLeftRightIcon size={16} />
                     </Button>
                 )}
-                <Button
-                    size="compact"
-                    variant="secondary"
-                    content="icon"
-                    aria-label={t("inspector.shapeTool.reassign")}
-                    title={t("inspector.shapeTool.reassignHelp")}
-                    onClick={() => useShapeToolStore.getState().reassign(ctx)}
-                    data-testid="shape-order-reassign"
-                >
-                    <ArrowClockwiseIcon size={16} />
-                </Button>
             </Row>
-            <p className="text-sub text-text/60">{t(current.help)}</p>
+            {/* Two lines kept for every order's help, so Place doesn't move (sims, round 6) */}
+            <p className="text-sub text-text/60 min-h-[2lh]">
+                {t(current.help)}
+            </p>
         </>
     );
 }

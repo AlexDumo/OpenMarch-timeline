@@ -53,11 +53,36 @@ export interface UiSettings {
         /** In steps, the offset from the center-front point to round to on the Y-axis */
         referencePointY?: number;
     };
+    /**
+     * Marcher labels on the field: full drill numbers, numbers only, or `auto` (numbers only
+     * when zoomed out so far that full ones at 2 steps apart would overlap)
+     */
+    marcherLabels?: MarcherLabelForm;
+    /** What the Shape tool's preview shows; see `ShapePreviewView` */
+    shapePreview?: Partial<ShapePreviewView>;
     /** Whether to enable Tolgee In-Context Translating */
     tolgeeDevTools?: boolean;
     /** Tolgee API Key for In-Context Translating */
     tolgeeApiKey?: string;
 }
+
+export type MarcherLabelForm = "auto" | "names" | "numbers";
+
+/** The Shape tool's view options. `auto` picks by the band's size and spacing */
+export interface ShapePreviewView {
+    /** Walks drawn: every one, or only those with a problem (always drawn) */
+    paths: "auto" | "all" | "problems";
+    /** Labels on the new spots and where marchers start */
+    labels: "auto" | "names" | "numbers" | "none";
+    /** The shape being replaced: `auto` shows it until the new one is edited */
+    oldShape: "auto" | "show" | "hide";
+}
+
+export const defaultShapePreviewView: ShapePreviewView = {
+    paths: "auto",
+    labels: "auto",
+    oldShape: "auto",
+};
 
 // Default settings that will be used if no localStorage data exists
 export const defaultSettings: UiSettings = {
@@ -89,6 +114,7 @@ export const defaultSettings: UiSettings = {
         nearestYSteps: 0,
         referencePointY: undefined,
     },
+    marcherLabels: "auto",
     tolgeeDevTools: false,
 };
 

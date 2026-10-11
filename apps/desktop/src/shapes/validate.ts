@@ -68,6 +68,27 @@ export function validateSlots(
             slots: [...tooClose],
         });
     }
+    // Off the field (sims, round 6: a locked interval grew an arc past the sideline unnoticed)
+    const field = ctx.field;
+    if (field) {
+        const off = slots.flatMap((slot, i) =>
+            slot.x < 0 ||
+            slot.y < 0 ||
+            slot.x > field.width ||
+            slot.y > field.height
+                ? [i]
+                : [],
+        );
+        if (off.length > 0)
+            issues.push({
+                level: "warning",
+                message:
+                    off.length === 1
+                        ? "1 marcher would stand off the field"
+                        : `${off.length} marchers would stand off the field`,
+                slots: off,
+            });
+    }
     return issues;
 }
 

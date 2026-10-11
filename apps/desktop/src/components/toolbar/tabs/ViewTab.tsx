@@ -3,6 +3,13 @@ import { useShallow } from "zustand/react/shallow";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import { T, useTolgee } from "@tolgee/react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTriggerCompact,
+} from "@openmarch/ui";
+import type { MarcherLabelForm } from "@/stores/UiSettingsStore";
 
 export default function ViewTab() {
     return (
@@ -24,6 +31,7 @@ function UiSettingsToolbar() {
             gridLines: s.uiSettings.gridLines,
             halfLines: s.uiSettings.halfLines,
             showCollisions: s.uiSettings.showCollisions,
+            marcherLabels: s.uiSettings.marcherLabels ?? "auto",
         })),
     );
 
@@ -112,6 +120,37 @@ function UiSettingsToolbar() {
                         <EyeSlashIcon size={24} />
                     )}
                 </button>
+            </ToolbarSection>
+            <ToolbarSection>
+                {/* Full drill numbers crowd at 2-step intervals (shape sims, round 6) */}
+                <label className="flex items-center gap-8">
+                    <T keyName="toolbar.view.labels" />
+                    <Select
+                        value={uiSettings.marcherLabels}
+                        onValueChange={(v) =>
+                            setUiSettings({
+                                ...useUiSettingsStore.getState().uiSettings,
+                                marcherLabels: v as MarcherLabelForm,
+                            })
+                        }
+                    >
+                        <SelectTriggerCompact
+                            label={t("toolbar.view.labels")}
+                            data-testid="view-marcher-labels"
+                        />
+                        <SelectContent>
+                            <SelectItem value="auto">
+                                {t("toolbar.view.labelsAuto")}
+                            </SelectItem>
+                            <SelectItem value="names">
+                                {t("toolbar.view.labelsNames")}
+                            </SelectItem>
+                            <SelectItem value="numbers">
+                                {t("toolbar.view.labelsNumbers")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </label>
             </ToolbarSection>
             {/* <ToolbarSection>
                 <button

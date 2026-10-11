@@ -29,6 +29,8 @@ export interface ShapeContext {
      * timeline's no-snap modifier).
      */
     readonly snapPoint: (p: XY) => XY;
+    /** The field's size in field units (from 0, 0), to warn about spots off it */
+    readonly field?: { readonly width: number; readonly height: number };
 }
 
 /** One run of a mixed interval: `count` gaps of `steps` steps each, written `steps x count`. */

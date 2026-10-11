@@ -1,3 +1,4 @@
+import { crowdedLabels } from "./labelForms";
 import { fabric } from "fabric";
 import CanvasMarcher from "./CanvasMarcher";
 import Endpoint from "./Endpoint";
@@ -96,6 +97,9 @@ interface TimelinePathSide {
     allowForceShow: boolean;
     color: RgbaColor;
 }
+
+/** Why the selection is locked in place (`OpenMarchCanvas.setSelectionLocked`) */
+export type SelectionLockReason = "shapeTool" | "playback";
 
 /**
  * A custom class to extend the fabric.js canvas for OpenMarch.
@@ -364,17 +368,28 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         this.fire("group:selection", { group: this._activeGroup });
     }
 
-    /** While the shape tool is open, the selected marchers can't be dragged, turned or scaled */
-    private _selectionLocked = false;
+    /** Who holds the selection lock; while anyone does, the selection can't be dragged, turned or scaled */
+    private _selectionLocks = new Set<SelectionLockReason>();
+
+    private get _selectionLocked(): boolean {
+        return this._selectionLocks.size > 0;
+    }
 
     /**
-     * Locks the active selection in place, or frees it again. The shape tool locks it while open:
-     * its handles move the shape, and a drag of the marchers themselves would move them under a
-     * preview that no longer matches.
+     * Locks the active selection in place, or frees it again, for `reason`; it stays locked
+     * while any reason holds it. The shape tool locks it while open: its handles move the shape,
+     * and a drag of the marchers themselves would move them under a preview that no longer
+     * matches. Playback locks it so its box, which doesn't follow the moving marchers, isn't drawn.
      */
-    setSelectionLocked(locked: boolean): void {
-        if (this._selectionLocked === locked) return;
-        this._selectionLocked = locked;
+    setSelectionLocked(
+        locked: boolean,
+        reason: SelectionLockReason = "shapeTool",
+    ): void {
+        const was = this._selectionLocked;
+        if (locked) this._selectionLocks.add(reason);
+        else this._selectionLocks.delete(reason);
+        if (this._selectionLocked === was) return;
+        locked = this._selectionLocked;
         const active = this.getActiveObject();
         if (!active) return;
         if (locked) this.applySelectionLock(active);
@@ -1270,6 +1285,7 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
         this.bringAllControlPointsTooFront();
+        this.refreshMarcherLabels();
         this.requestRenderAll();
     };
 
@@ -1324,6 +1340,7 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
         this.bringAllControlPointsTooFront();
+        this.refreshMarcherLabels();
         this.requestRenderAll();
     };
 
@@ -2736,6 +2753,40 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         return this.getActiveObjects().filter(Selectable.isSelectable);
     }
 
+    /**
+     * Writes each marcher's label in the form the View setting asks for: its full drill number,
+     * the number only, or (`auto`) the number only where the full label would touch a
+     * neighbor's. Run after each static render, not during playback.
+     */
+    refreshMarcherLabels(): void {
+        const setting = this._uiSettings.marcherLabels ?? "auto";
+        const marchers = this.getCanvasMarchers();
+        const fullOf = (m: CanvasMarcher) => m.marcherObj.drill_number;
+        const shortOf = (m: CanvasMarcher) => String(m.marcherObj.drill_order);
+        const crowded =
+            setting === "auto"
+                ? crowdedLabels(
+                      marchers.map((m) => {
+                          const fontSize = m.textLabel.fontSize ?? 14;
+                          return {
+                              x: m.textLabel.left ?? 0,
+                              y: m.textLabel.top ?? 0,
+                              // Courier is monospaced: 0.6 em a character
+                              width: fullOf(m).length * fontSize * 0.6,
+                              height: fontSize,
+                          };
+                      }),
+                  )
+                : [];
+        marchers.forEach((m, i) => {
+            const text =
+                setting === "numbers" || (setting === "auto" && crowded[i])
+                    ? shortOf(m)
+                    : fullOf(m);
+            if (m.textLabel.text !== text) m.textLabel.set({ text });
+        });
+    }
+
     /*********************** SETTERS ***********************/
     /** Set the UI settings and make all of the changes in this canvas that correspond to it */
     setUiSettings(uiSettings: UiSettings) {
@@ -2754,6 +2805,10 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             oldUiSettings.halfLines !== uiSettings.halfLines
         ) {
             this.renderFieldGrid();
+        }
+        if (oldUiSettings.marcherLabels !== uiSettings.marcherLabels) {
+            this.refreshMarcherLabels();
+            this.requestRenderAll();
         }
     }
 

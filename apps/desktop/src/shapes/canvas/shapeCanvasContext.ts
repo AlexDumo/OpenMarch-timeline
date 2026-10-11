@@ -21,6 +21,7 @@ export function shapeContextFor(
     const { fieldProperties, uiSettings } = canvas;
     return {
         stepPx: fieldProperties.pixelsPerStep,
+        field: { width: fieldProperties.width, height: fieldProperties.height },
         snapPoint: (p) => {
             if (!snap) return p;
             const rounded = getRoundCoordinates2({

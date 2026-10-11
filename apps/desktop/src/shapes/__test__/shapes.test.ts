@@ -507,3 +507,16 @@ describe("registry", () => {
         }
     });
 });
+
+describe("off the field", () => {
+    it("warns about spots off the field, naming them", () => {
+        const field = { width: 100, height: 50 };
+        const issues = validateSlots(
+            [xy(10, 10), xy(90, 10), xy(110, 10), xy(50, 60)],
+            { stepPx: 1, snapPoint: (p) => p, field },
+        );
+        const off = issues.find((i) => i.message.includes("off the field"));
+        expect(off?.message).toBe("2 marchers would stand off the field");
+        expect(off?.slots).toEqual([2, 3]);
+    });
+});

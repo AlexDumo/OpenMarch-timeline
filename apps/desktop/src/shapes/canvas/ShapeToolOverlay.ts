@@ -4,6 +4,7 @@ import { NoControls } from "@/components/canvas/CanvasConstants";
 import type { ShapePreview } from "../session";
 import type { HandleDef, HandleRole, XY } from "../types";
 import type { MarcherLook, ShapePreviewStyle } from "./previewContext";
+import type { ResolvedShapeView } from "./previewView";
 import { dist } from "../geometry/vec";
 
 export interface ShapeToolOverlayColors {
@@ -34,13 +35,16 @@ export interface PreviewDecor {
     readonly origins: ReadonlyMap<number, XY>;
     /** Each marcher's dot and drill number, by id, for the result style */
     readonly looks: ReadonlyMap<number, MarcherLook>;
-    /** Spots too tight for full drill numbers: show the number only */
-    readonly shortLabels?: boolean;
-    /** A big band: only paths with a problem, no start labels */
-    readonly dense?: boolean;
-    /** Don't show the shape being replaced (once this one has been edited) */
-    readonly hideReplaced?: boolean;
+    /** The view options (`resolveShapeView`); all shown when not given */
+    readonly view?: ResolvedShapeView;
 }
+
+const FULL_VIEW: ResolvedShapeView = {
+    paths: "all",
+    labels: "names",
+    startLabels: true,
+    oldShape: true,
+};
 
 const DEFAULT_DECOR: PreviewDecor = {
     style: "ghost",
@@ -529,6 +533,12 @@ export default class ShapeToolOverlay {
     ): void {
         const n = preview.targets.length;
         const result = decor.style === "result";
+        const view = decor.view ?? FULL_VIEW;
+        const labelOf = (look: MarcherLook | undefined) =>
+            view.labels === "none"
+                ? ""
+                : ((view.labels === "numbers" ? look?.short : look?.label) ??
+                  "");
         const trim = <T extends fabric.Object>(pool: T[], size: number) => {
             while (pool.length > size) this.canvas.remove(pool.pop()!);
         };
@@ -552,7 +562,11 @@ export default class ShapeToolOverlay {
                 i,
                 from,
                 to,
-                issue ? "issue" : decor.dense ? "hidden" : "plain",
+                issue
+                    ? "issue"
+                    : view.paths === "problems"
+                      ? "hidden"
+                      : "plain",
             );
             if (result) {
                 // The new shape, drawn as the marchers themselves
@@ -568,23 +582,20 @@ export default class ShapeToolOverlay {
                 this.placeLabel(
                     i,
                     to,
-                    (decor.shortLabels ? look?.short : look?.label) ?? "",
+                    labelOf(look),
                     look?.radius ?? GHOST_RADIUS,
                 );
                 // Where they come from: faint
                 this.placeOriginLabel(
                     i,
                     from,
-                    decor.dense
-                        ? ""
-                        : ((decor.shortLabels ? look?.short : look?.label) ??
-                              ""),
+                    view.startLabels ? labelOf(look) : "",
                     look?.radius ?? GHOST_RADIUS,
                 );
                 // The shape being replaced, when it isn't where they start: tiny faint dots,
                 // no labels or paths, so it reads as a reference without crowding the move
                 const replaced =
-                    !decor.hideReplaced &&
+                    view.oldShape &&
                     dist(target.now, origin) > SAME_SPOT &&
                     dist(target.now, target.to) > SAME_SPOT;
                 this.placeCircle(this.replaced, i, toCanvas(target.now), {

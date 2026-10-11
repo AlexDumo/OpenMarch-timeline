@@ -10,6 +10,8 @@ import {
 } from "../session";
 import type { Spacing, XY } from "../types";
 import { useShapeToolStore } from "../shapeToolStore";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { resolveShapeView, tightSpacing } from "./previewView";
 import ShapeToolOverlay, {
     type ShapeToolOverlayColors,
 } from "./ShapeToolOverlay";
@@ -51,6 +53,7 @@ export function useShapeToolCanvas({
     const dragging = useShapeToolStore((s) => s.dragging);
     // Once the shape is edited, the one it replaces has done its job (Marco, round 5)
     const edited = useShapeToolStore((s) => s.past.length > 0);
+    const view = useUiSettingsStore((s) => s.uiSettings.shapePreview);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
     const lastHold = useRef<ReturnType<typeof holdFeedback>>(null);
     /** Marchers whose own dots the result preview hides, to show again when it closes */
@@ -95,6 +98,12 @@ export function useShapeToolCanvas({
         if (isPlaying) useShapeToolStore.getState().close();
     }, [isPlaying]);
 
+    // The selection's box doesn't follow marchers as they play: hide it until playback stops
+    // (sims, round 6: "the box stayed circle-sized over the block")
+    useEffect(() => {
+        canvas?.setSelectionLocked(isPlaying, "playback");
+    }, [canvas, isPlaying]);
+
     useShapeToolSelection(canvas, session !== null);
 
     useEffect(() => {
@@ -113,12 +122,14 @@ export function useShapeToolCanvas({
             style,
             origins: originsAtStart(ids),
             looks: marcherLooks(canvas, ids),
-            shortLabels: tightSpacing(
-                preview,
-                canvas.fieldProperties.pixelsPerStep,
-            ),
-            dense: ids.length > DENSE_BAND,
-            hideReplaced: edited,
+            view: resolveShapeView(view, {
+                count: ids.length,
+                tight: tightSpacing(
+                    preview,
+                    canvas.fieldProperties.pixelsPerStep,
+                ),
+                edited,
+            }),
         });
         // The result preview stands in for the marchers' own dots, at their old spots
         setMarchersHidden(canvas, ids, style === "result");
@@ -143,7 +154,7 @@ export function useShapeToolCanvas({
             return () => window.clearTimeout(timer);
         }
         overlay.showHold(null);
-    }, [canvas, session, dragging, edited, theme]);
+    }, [canvas, session, dragging, edited, view, theme]);
 }
 
 /**
@@ -271,25 +282,3 @@ function holdReason(params: {
 }
 
 /** Above this many marchers the preview draws only the paths with a problem */
-const DENSE_BAND = 24;
-
-/**
- * Whether the new spots are too close for full drill numbers ("OT12") to stay apart: any two
- * nearer than three steps.
- */
-function tightSpacing(preview: ShapePreview, stepPx: number): boolean {
-    const near = 3 * stepPx;
-    const spots = preview.targets.map((t) => t.to);
-    for (let i = 0; i < spots.length; i++) {
-        for (let j = i + 1; j < spots.length; j++) {
-            if (
-                Math.hypot(
-                    spots[i]!.x - spots[j]!.x,
-                    spots[i]!.y - spots[j]!.y,
-                ) < near
-            )
-                return true;
-        }
-    }
-    return false;
-}
