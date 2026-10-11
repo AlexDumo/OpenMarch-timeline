@@ -41,6 +41,8 @@ export interface ShapeContext {
         readonly maxPerCount: number;
         /** A distance covered in the move, as drill writers say it: "6.2 to 5" */
         readonly describe: (distance: number) => string;
+        /** The limit itself, as drill writers say it: "4 to 5" */
+        readonly limit: string;
     };
 }
 

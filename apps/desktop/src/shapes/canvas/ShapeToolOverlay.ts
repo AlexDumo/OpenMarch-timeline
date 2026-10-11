@@ -51,8 +51,11 @@ const FULL_VIEW: ResolvedShapeView = {
     startLabels: true,
     oldShape: true,
     strongStarts: false,
+    noStarts: false,
     labelScale: 1,
+    labelBeside: false,
     showOnly: false,
+    handlesAway: "fade",
 };
 
 /**
@@ -74,6 +77,7 @@ function walkKind(w: {
         return w.highlighted ? (problem ?? "issue") : "hidden";
     if (w.hovered) return problem ?? "plain";
     if (w.paths === "none") return "hidden";
+    if (w.paths === "collisions") return w.issue ? "issue" : "hidden";
     if (problem) return problem;
     return w.paths === "all" ? "plain" : "hidden";
 }
@@ -146,8 +150,10 @@ export default class ShapeToolOverlay {
     private startColor = "";
     /** The field's label size, applied to the preview's labels */
     private labelScale = 1;
+    private labelBeside = false;
     /** The show look: only the marchers where they'll stand */
     private showOnly = false;
+    private handlesAway: ResolvedShapeView["handlesAway"] = "fade";
     /** An arrowhead at the end of each walk, so its direction reads without matching labels */
     private arrows: fabric.Triangle[] = [];
     private ghosts: fabric.Circle[] = [];
@@ -389,7 +395,13 @@ export default class ShapeToolOverlay {
 
     private applyFade(): void {
         // The show look hides the drawing aids altogether
-        const opacity = this.showOnly ? 0 : this.faded ? FADED_OPACITY : 1;
+        const away =
+            this.handlesAway === "hide"
+                ? 0
+                : this.handlesAway === "show"
+                  ? 1
+                  : FADED_OPACITY;
+        const opacity = this.showOnly ? 0 : this.faded ? away : 1;
         const faded: fabric.Object[] = [
             ...this.guides,
             ...this.outlines,
@@ -625,7 +637,9 @@ export default class ShapeToolOverlay {
         const result = decor.style === "result";
         const view = decor.view ?? FULL_VIEW;
         this.labelScale = view.labelScale;
+        this.labelBeside = view.labelBeside;
         this.showOnly = view.showOnly;
+        this.handlesAway = view.handlesAway;
         this.startColor = view.strongStarts
             ? this.colors.strongTravel
             : this.colors.travel;
@@ -715,7 +729,10 @@ export default class ShapeToolOverlay {
                 this.placeCircle(this.origins, i, from, {
                     radius: look?.radius ?? GHOST_RADIUS,
                     fill: "",
-                    stroke: view.showOnly ? "rgba(0,0,0,0)" : this.startColor,
+                    stroke:
+                        view.showOnly || view.noStarts
+                            ? "rgba(0,0,0,0)"
+                            : this.startColor,
                     strokeWidth: 1.5,
                 });
             } else {
@@ -866,8 +883,10 @@ export default class ShapeToolOverlay {
     private placeLabel(i: number, at: XY, text: string, radius: number): void {
         // Placed like the marchers' own labels
         const props = {
-            left: at.x,
-            top: at.y - radius * 2.2,
+            // Placed like the marchers' own labels: above the dot, or beside it
+            left: this.labelBeside ? at.x + radius * 1.6 : at.x,
+            top: this.labelBeside ? at.y : at.y - radius * 2.2,
+            originX: this.labelBeside ? "left" : "center",
             text,
             fontSize: 14 * this.labelScale,
         };
@@ -878,7 +897,6 @@ export default class ShapeToolOverlay {
         }
         const created = new fabric.Text(text, {
             ...props,
-            originX: "center",
             originY: "center",
             fontWeight: "bold",
             fontFamily: "courier new",

@@ -48,7 +48,7 @@ import {
 import { measuresOf } from "../follow";
 import { resolveShapeView, tightSpacing } from "../canvas/previewView";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { ShapeViewSection } from "./ShapeViewSection";
+import { blurSoon, ShapeViewSection } from "./ShapeViewSection";
 import { SHAPE_KIND_ACTIONS } from "../useShapeToolActions";
 import { useRecipeForSelection } from "../useRecipeForSelection";
 import type { StoredShapeRecipe } from "@/db-functions/shapeRecipes";
@@ -170,11 +170,12 @@ function KindPicker({ activeKind }: { activeKind: string | null }) {
     return (
         <Select
             value={activeKind ?? ""}
-            onValueChange={(kind) =>
+            onValueChange={(kind) => {
                 runAction(
                     SHAPE_KIND_ACTIONS[kind as keyof typeof SHAPE_KIND_ACTIONS],
-                )
-            }
+                );
+                blurSoon();
+            }}
         >
             <SelectTriggerCompact
                 label={t("inspector.shapeTool.pick")}
@@ -231,6 +232,9 @@ function SessionControls({ session }: { session: ShapeSession }) {
     const fieldLabels = useUiSettingsStore((s) => s.uiSettings.marcherLabels);
     const fieldLabelSize = useUiSettingsStore(
         (s) => s.uiSettings.marcherLabelSize,
+    );
+    const fieldLabelPosition = useUiSettingsStore(
+        (s) => s.uiSettings.marcherLabelPosition,
     );
     const [showMore, setShowMore] = useState(false);
     const preview = useMemo(
@@ -297,14 +301,23 @@ function SessionControls({ session }: { session: ShapeSession }) {
                 </p>
             </div>
 
-            <div className="flex gap-8">
+            {/* Stays in view while the panel scrolls (sims, round 10: scrolled to the legend and back,
+                the click missed Place) */}
+            <div className="bg-fg-1 sticky top-0 z-10 flex gap-8 py-4">
                 <ActionButton action="applyShape">
                     <Button
                         size="compact"
+                        variant={placeAsked === session ? "red" : "primary"}
                         disabled={!preview.canApply || inputError !== null}
                         data-testid="shape-tool-apply"
                     >
-                        <T keyName="inspector.shapeTool.apply" />
+                        <T
+                            keyName={
+                                placeAsked === session
+                                    ? "inspector.shapeTool.placeAnywayButton"
+                                    : "inspector.shapeTool.apply"
+                            }
+                        />
                         <Kbd>Enter</Kbd>
                     </Button>
                 </ActionButton>
@@ -453,6 +466,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
                     edited,
                     fieldLabels,
                     fieldLabelSize,
+                    fieldLabelPosition,
                 })}
             />
         </>
@@ -977,9 +991,10 @@ function OrderRow({
             <Row label={<T keyName="inspector.shapeTool.order" />}>
                 <Select
                     value={session.order}
-                    onValueChange={(v) =>
-                        setOrder(v as OrderMode, session.reverse)
-                    }
+                    onValueChange={(v) => {
+                        setOrder(v as OrderMode, session.reverse);
+                        blurSoon();
+                    }}
                 >
                     <SelectTriggerCompact
                         label={t("inspector.shapeTool.order")}

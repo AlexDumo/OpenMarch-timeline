@@ -527,6 +527,7 @@ describe("step sizes", () => {
             counts: 8,
             maxPerCount: 1,
             describe: (d: number) => `${d} units`,
+            limit: "8 units",
         };
         const walks = [
             { from: xy(0, 0), to: xy(8, 0) }, // 1 a count: fine
@@ -538,7 +539,7 @@ describe("step sizes", () => {
             steps,
         });
         expect(issue?.message).toBe(
-            "1 marcher needs steps bigger than the limit (16 units, drawn in orange)",
+            "1 marcher needs steps bigger than 8 units (16 units, drawn in orange). The limit is in Field settings.",
         );
         expect(issue?.slots).toEqual([4]);
         expect(

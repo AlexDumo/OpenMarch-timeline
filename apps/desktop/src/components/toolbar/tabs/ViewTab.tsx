@@ -36,6 +36,7 @@ function UiSettingsToolbar() {
             showCollisions: s.uiSettings.showCollisions,
             marcherLabels: s.uiSettings.marcherLabels ?? "auto",
             marcherLabelSize: s.uiSettings.marcherLabelSize ?? "normal",
+            marcherLabelPosition: s.uiSettings.marcherLabelPosition ?? "above",
         })),
     );
 
@@ -179,6 +180,31 @@ function UiSettingsToolbar() {
                             </SelectItem>
                             <SelectItem value="large">
                                 {t("toolbar.view.labelSizeLarge")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </label>
+                <label className="flex items-center gap-8">
+                    <T keyName="toolbar.view.labelPosition" />
+                    <Select
+                        value={uiSettings.marcherLabelPosition}
+                        onValueChange={(v) =>
+                            setUiSettings({
+                                ...useUiSettingsStore.getState().uiSettings,
+                                marcherLabelPosition: v as "above" | "beside",
+                            })
+                        }
+                    >
+                        <SelectTriggerCompact
+                            label={t("toolbar.view.labelPosition")}
+                            data-testid="view-marcher-label-position"
+                        />
+                        <SelectContent>
+                            <SelectItem value="above">
+                                {t("toolbar.view.labelPositionAbove")}
+                            </SelectItem>
+                            <SelectItem value="beside">
+                                {t("toolbar.view.labelPositionBeside")}
                             </SelectItem>
                         </SelectContent>
                     </Select>

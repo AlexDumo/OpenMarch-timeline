@@ -60,6 +60,8 @@ export interface UiSettings {
     marcherLabels?: MarcherLabelForm;
     /** Marcher labels' size on the field and in the Shape preview */
     marcherLabelSize?: MarcherLabelSize;
+    /** Marcher labels above their dots, or beside them (to the right) */
+    marcherLabelPosition?: "above" | "beside";
     /** What the Shape tool's preview shows; see `ShapePreviewView` */
     shapePreview?: Partial<ShapePreviewView>;
     /** Whether to enable Tolgee In-Context Translating */
@@ -81,15 +83,17 @@ export const LABEL_SIZE_SCALE: Record<MarcherLabelSize, number> = {
 /** The Shape tool's view options. `auto` picks by the band's size and spacing */
 export interface ShapePreviewView {
     /** Walks drawn: every one, only those with a problem, or none (pointing still shows one) */
-    paths: "auto" | "all" | "problems" | "none";
+    paths: "auto" | "all" | "problems" | "collisions" | "none";
     /** Labels on the new spots and where marchers start */
     labels: "auto" | "names" | "numbers" | "none";
     /** The shape being replaced: `auto` shows it until the new one is edited */
     oldShape: "auto" | "show" | "hide";
     /** Where marchers start, and their walks: faint, or drawn strongly (easier on the grid) */
-    starts: "auto" | "faint" | "strong";
+    starts: "auto" | "faint" | "strong" | "off";
     /** Working: every mark; Show: only the marchers where they'll stand, as the show will look */
     look: "working" | "show";
+    /** Handles away from the pointer: faded, hidden, or always shown */
+    handles: "fade" | "hide" | "show";
 }
 
 export const defaultShapePreviewView: ShapePreviewView = {
@@ -98,6 +102,7 @@ export const defaultShapePreviewView: ShapePreviewView = {
     oldShape: "auto",
     starts: "auto",
     look: "working",
+    handles: "fade",
 };
 
 // Default settings that will be used if no localStorage data exists

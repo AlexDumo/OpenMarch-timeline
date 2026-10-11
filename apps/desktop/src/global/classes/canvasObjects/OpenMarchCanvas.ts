@@ -2769,6 +2769,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         const fontSize =
             LABEL_FONT_SIZE *
             LABEL_SIZE_SCALE[this._uiSettings.marcherLabelSize ?? "normal"];
+        const beside = this._uiSettings.marcherLabelPosition === "beside";
+        const moved = CanvasMarcher.labelBeside !== beside;
+        CanvasMarcher.labelBeside = beside;
         const marchers = this.getCanvasMarchers();
         const fullOf = (m: CanvasMarcher) => m.marcherObj.drill_number;
         const shortOf = (m: CanvasMarcher) => String(m.marcherObj.drill_order);
@@ -2777,7 +2780,12 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             crowdedLabels(
                 marchers.map((m) => {
                     return {
-                        x: m.textLabel.left ?? 0,
+                        // The label's middle, wherever it's anchored
+                        x:
+                            (m.textLabel.left ?? 0) +
+                            (beside
+                                ? (fullOf(m).length * fontSize * 0.6) / 2
+                                : 0),
                         y: m.textLabel.top ?? 0,
                         // Courier is monospaced: 0.6 em a character
                         width: fullOf(m).length * fontSize * 0.6,
@@ -2790,6 +2798,10 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                 setting === "numbers" || crowded ? shortOf(m) : fullOf(m);
             if (m.textLabel.text !== text || m.textLabel.fontSize !== fontSize)
                 m.textLabel.set({ text, fontSize });
+            if (moved) {
+                m.textLabel.set({ originX: beside ? "left" : "center" });
+                m.updateTextLabelPosition();
+            }
         });
     }
 
@@ -2814,7 +2826,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         }
         if (
             oldUiSettings.marcherLabels !== uiSettings.marcherLabels ||
-            oldUiSettings.marcherLabelSize !== uiSettings.marcherLabelSize
+            oldUiSettings.marcherLabelSize !== uiSettings.marcherLabelSize ||
+            oldUiSettings.marcherLabelPosition !==
+                uiSettings.marcherLabelPosition
         ) {
             this.refreshMarcherLabels();
             this.requestRenderAll();

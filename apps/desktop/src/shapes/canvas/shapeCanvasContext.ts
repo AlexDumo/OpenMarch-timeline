@@ -85,6 +85,8 @@ function stepLimit(fieldProperties: FieldProperties): ShapeContext["steps"] {
         maxPerCount:
             ((threshold + 0.5) / fieldProperties.stepSizeInches) *
             fieldProperties.pixelsPerStep,
+        // Five yards over the inches a step may take
+        limit: `${Math.round((180 / threshold) * 10) / 10} to 5`,
         describe: (distance) =>
             StepSize.fromDistance({
                 marcher_id: -1,

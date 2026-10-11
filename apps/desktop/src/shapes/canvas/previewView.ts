@@ -12,17 +12,23 @@ export const DENSE_BAND = 24;
 
 /** What the preview draws, once each `auto` view option is decided */
 export interface ResolvedShapeView {
-    readonly paths: "all" | "problems" | "none";
+    readonly paths: "all" | "problems" | "collisions" | "none";
     readonly labels: "names" | "numbers" | "none";
     /** Labels where marchers start, as well as on the new spots */
     readonly startLabels: boolean;
     readonly oldShape: boolean;
     /** Start rings, their labels and the walks drawn strongly */
     readonly strongStarts: boolean;
+    /** Start marks hidden altogether */
+    readonly noStarts: boolean;
     /** The field's label size, as a scale */
     readonly labelScale: number;
+    /** Labels beside the dots rather than above, as on the field */
+    readonly labelBeside: boolean;
     /** Only the marchers where they'll stand: no outline, handles, walks or earlier marks */
     readonly showOnly: boolean;
+    /** How the outline and handles look while the pointer is away from the shape */
+    readonly handlesAway: "fade" | "hide" | "show";
 }
 
 /**
@@ -40,6 +46,7 @@ export function resolveShapeView(
         /** The field's own label setting (View tab), which Auto follows */
         fieldLabels?: MarcherLabelForm;
         fieldLabelSize?: MarcherLabelSize;
+        fieldLabelPosition?: "above" | "beside";
     },
 ): ResolvedShapeView {
     const v = { ...defaultShapePreviewView, ...view };
@@ -59,12 +66,16 @@ export function resolveShapeView(
         // Strong start marks carry their numbers even on a big band (sims, round 8)
         startLabels:
             labels !== "none" &&
+            v.starts !== "off" &&
             (v.labels !== "auto" || !dense || v.starts === "strong"),
         oldShape: v.oldShape !== "auto" ? v.oldShape === "show" : !band.edited,
         // Strong on a small band (sims, round 8: "darker start rings"), faint on a big one
         strongStarts: v.starts === "auto" ? !dense : v.starts === "strong",
+        noStarts: v.starts === "off",
         labelScale: LABEL_SIZE_SCALE[band.fieldLabelSize ?? "normal"],
+        labelBeside: band.fieldLabelPosition === "beside",
         showOnly: v.look === "show",
+        handlesAway: v.handles,
     };
 }
 

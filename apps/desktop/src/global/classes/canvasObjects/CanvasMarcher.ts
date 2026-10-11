@@ -66,6 +66,15 @@ export default class CanvasMarcher
 {
     // Styles
     static theme: FieldTheme = DEFAULT_FIELD_THEME;
+    /** Labels beside the dot (to its right) rather than above it: the View tab's label position */
+    static labelBeside = false;
+
+    /** Where a label's anchor sits from its dot's center */
+    static labelOffset(): { x: number; y: number } {
+        return CanvasMarcher.labelBeside
+            ? { x: CanvasMarcher.dotRadius * 1.6, y: 0 }
+            : { x: 0, y: -CanvasMarcher.dotRadius * 2.2 };
+    }
     private static readonly dotRadius = DEFAULT_DOT_RADIUS;
     private static readonly gridOffset = FieldProperties.GRID_STROKE_WIDTH / 2; // used to center the grid line
     readonly classString = Selectable.SelectableClasses.MARCHER;
@@ -260,9 +269,9 @@ export default class CanvasMarcher
         };
 
         this.textLabel = new fabric.Text(marcher.drill_number, {
-            left: coordinate.x,
-            top: coordinate.y - CanvasMarcher.dotRadius * 2.2,
-            originX: "center",
+            left: coordinate.x + CanvasMarcher.labelOffset().x,
+            top: coordinate.y + CanvasMarcher.labelOffset().y,
+            originX: CanvasMarcher.labelBeside ? "left" : "center",
             originY: "center",
             fontFamily: "courier new",
             fill: rgbaToString(CanvasMarcher.theme.defaultMarcher.label),
@@ -707,8 +716,8 @@ export default class CanvasMarcher
     updateTextLabelPosition() {
         const absoluteCoords = this.getAbsoluteCoords();
         this.textLabel.set({
-            left: absoluteCoords.x,
-            top: absoluteCoords.y - CanvasMarcher.dotRadius * 2.2,
+            left: absoluteCoords.x + CanvasMarcher.labelOffset().x,
+            top: absoluteCoords.y + CanvasMarcher.labelOffset().y,
         });
         this.textLabel.setCoords();
     }
@@ -829,13 +838,14 @@ export default class CanvasMarcher
         // setMarcherCoords and the end of playback do.
         if (!setTranslatedCoords(this)) super.setCoords(true);
         if (simple) {
-            this.textLabel.left = dotX;
-            this.textLabel.top = dotY - CanvasMarcher.dotRadius * 2.2;
+            this.textLabel.left = dotX + CanvasMarcher.labelOffset().x;
+            this.textLabel.top = dotY + CanvasMarcher.labelOffset().y;
         } else {
             const absoluteCoords = this.getAbsoluteCoords();
-            this.textLabel.left = absoluteCoords.x;
+            this.textLabel.left =
+                absoluteCoords.x + CanvasMarcher.labelOffset().x;
             this.textLabel.top =
-                absoluteCoords.y - CanvasMarcher.dotRadius * 2.2;
+                absoluteCoords.y + CanvasMarcher.labelOffset().y;
         }
         if (!setTranslatedCoords(this.textLabel))
             this.textLabel.setCoords(true);

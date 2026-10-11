@@ -61,6 +61,9 @@ export function useShapeToolCanvas({
     const fieldLabelSize = useUiSettingsStore(
         (s) => s.uiSettings.marcherLabelSize,
     );
+    const fieldLabelPosition = useUiSettingsStore(
+        (s) => s.uiSettings.marcherLabelPosition,
+    );
     const highlight = useShapeToolStore((s) => s.highlight);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
     const lastHold = useRef<ReturnType<typeof holdFeedback>>(null);
@@ -139,6 +142,7 @@ export function useShapeToolCanvas({
                 edited,
                 fieldLabels,
                 fieldLabelSize,
+                fieldLabelPosition,
             }),
             highlight: highlight ?? undefined,
         });

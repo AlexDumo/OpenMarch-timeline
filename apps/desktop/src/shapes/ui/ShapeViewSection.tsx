@@ -24,6 +24,10 @@ const PATHS: Option<"paths">[] = [
     { value: "auto", key: "inspector.shapeTool.view.auto" },
     { value: "all", key: "inspector.shapeTool.view.pathsAll" },
     { value: "problems", key: "inspector.shapeTool.view.pathsProblems" },
+    {
+        value: "collisions",
+        key: "inspector.shapeTool.view.pathsCollisions",
+    },
     { value: "none", key: "inspector.shapeTool.view.pathsNone" },
 ];
 const LABELS: Option<"labels">[] = [
@@ -36,10 +40,16 @@ const LOOK: Option<"look">[] = [
     { value: "working", key: "inspector.shapeTool.view.lookWorking" },
     { value: "show", key: "inspector.shapeTool.view.lookShow" },
 ];
+const HANDLES: Option<"handles">[] = [
+    { value: "fade", key: "inspector.shapeTool.view.handlesFade" },
+    { value: "hide", key: "inspector.shapeTool.view.handlesHide" },
+    { value: "show", key: "inspector.shapeTool.view.handlesShow" },
+];
 const STARTS: Option<"starts">[] = [
     { value: "auto", key: "inspector.shapeTool.view.auto" },
     { value: "faint", key: "inspector.shapeTool.view.faint" },
     { value: "strong", key: "inspector.shapeTool.view.strong" },
+    { value: "off", key: "inspector.shapeTool.view.off" },
 ];
 const OLD_SHAPE: Option<"oldShape">[] = [
     { value: "auto", key: "inspector.shapeTool.view.auto" },
@@ -83,6 +93,7 @@ export function ShapeViewSection({
     };
     const autoSays: Record<keyof ShapePreviewView, string> = {
         look: "",
+        handles: "",
         starts: t(
             resolved.strongStarts
                 ? "inspector.shapeTool.view.strong"
@@ -113,9 +124,12 @@ export function ShapeViewSection({
     ) => (
         <Select
             value={view[key]}
-            onValueChange={(v) =>
-                set({ [key]: v } as Partial<ShapePreviewView>)
-            }
+            onValueChange={(v) => {
+                set({ [key]: v } as Partial<ShapePreviewView>);
+                // Off the menu, so Enter places and Escape cancels, as the panel says (sims,
+                // round 10: Enter opened the menu again)
+                blurSoon();
+            }}
         >
             <SelectTriggerCompact
                 label={t(`inspector.shapeTool.view.${key}`)}
@@ -129,9 +143,12 @@ export function ShapeViewSection({
                         data-testid={`shape-view-${key}-${o.value}`}
                     >
                         {o.value === "auto"
-                            ? t("inspector.shapeTool.view.autoIs", {
-                                  choice: autoSays[key],
-                              })
+                            ? t(
+                                  key === "labels"
+                                      ? "inspector.shapeTool.view.labelsAuto"
+                                      : "inspector.shapeTool.view.autoIs",
+                                  { choice: autoSays[key] },
+                              )
                             : t(o.key)}
                     </SelectItem>
                 ))}
@@ -155,6 +172,9 @@ export function ShapeViewSection({
             </ViewRow>
             <ViewRow label={t("inspector.shapeTool.view.starts")}>
                 {picker("starts", STARTS)}
+            </ViewRow>
+            <ViewRow label={t("inspector.shapeTool.view.handles")}>
+                {picker("handles", HANDLES)}
             </ViewRow>
             <ViewRow label={t("inspector.shapeTool.view.oldShape")}>
                 {picker("oldShape", OLD_SHAPE)}
@@ -196,9 +216,21 @@ export function ShapeViewSection({
                         }
                     />
                 </LegendItem>
+                <LegendItem mark={<HandleMark kind="move" />}>
+                    <T keyName="inspector.shapeTool.view.legendHandles" />
+                </LegendItem>
             </ul>
         </section>
     );
+}
+
+/** Hands the keyboard back to the app once a menu choice is made */
+export function blurSoon(): void {
+    requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && active !== document.body)
+            active.blur();
+    });
 }
 
 function ViewRow({
@@ -249,6 +281,40 @@ function Dot({ filled, small }: { filled?: boolean; small?: boolean }) {
                     }
                 />
             )}
+        </svg>
+    );
+}
+
+/** The handles, drawn small: move square, size diamond, turn ring */
+function HandleMark({ kind }: { kind: "move" }) {
+    void kind;
+    return (
+        <svg width="36" height="12" viewBox="0 0 36 12" aria-hidden>
+            <rect
+                x="1"
+                y="2"
+                width="8"
+                height="8"
+                className="stroke-accent fill-none"
+                strokeWidth="1.5"
+            />
+            <rect
+                x="15"
+                y="2"
+                width="7"
+                height="7"
+                transform="rotate(45 18.5 5.5)"
+                className="stroke-accent fill-none"
+                strokeWidth="1.5"
+            />
+            <circle
+                cx="31"
+                cy="6"
+                r="4"
+                strokeDasharray="2 1.5"
+                className="stroke-accent fill-none"
+                strokeWidth="1.5"
+            />
         </svg>
     );
 }
