@@ -234,7 +234,6 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                       showPlans.plans,
                       marcherAssets.manifest,
                       marcherBodies,
-                      marcherHeading(),
                   )
                 : null,
         [marcherBodies, showPlans, marcherAssets],
@@ -444,7 +443,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             );
             if (marcherBodies) {
                 countRef.current = c;
-                motion?.update(c, xz, placed);
+                motion?.update(c, xz, placed, headings);
                 marcherBodies.writeFrame(xz, headings, placed, c, cam);
                 lod[0] = cam[0];
                 lod[1] = cam[1];

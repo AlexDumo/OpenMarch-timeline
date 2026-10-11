@@ -53,10 +53,11 @@ describe("planning the show", () => {
         expect(first.plans.every((p) => p !== null)).toBe(true);
     });
 
-    it("marks time for the marcher who holds while others move", () => {
+    // This used to expect automatic mark time while others move; stand is
+    // the hold default now (performer-behavior.md section 3).
+    it("stands still for the marcher who holds while others move", () => {
         const clips = first.plans[2]!.events.map((e) => e.clip);
-        expect(clips).toContain("stepoff_marktime");
-        expect(clips).toContain("marktime");
+        expect(clips).toEqual(["attention"]);
     });
 
     it("reuses the plans of marchers whose drill didn't change", () => {
@@ -77,8 +78,8 @@ describe("planning the show", () => {
         expect(next.plans[2]).toBe(first.plans[2]);
     });
 
-    it("plans everyone again when the band's rests change", () => {
-        // marcher 1 and 2 stop moving: nobody moves, so marcher 3 stands at attention
+    it("keeps a holding marcher's plan when the others stop moving", () => {
+        // no more band rests: a holder's plan doesn't depend on the others
         const still = [timeline(800, 500, 0), timeline(830, 500, 0), lines[2]];
         const next = planShow(
             ids,
@@ -90,8 +91,8 @@ describe("planning the show", () => {
             0,
             first,
         );
-        expect(next.replanned).toBe(3);
-        expect(next.plans[2]!.events.map((e) => e.clip)).toEqual(["attention"]);
+        expect(next.replanned).toBe(2);
+        expect(next.plans[2]).toBe(first.plans[2]);
     });
 
     it("plans everyone again when the tempo changes", () => {
@@ -133,7 +134,6 @@ describe("playing a crossfade", () => {
         heading: 0,
         positions,
         bpm: new Float64Array(9).fill(120),
-        bandMoving: Uint8Array.from([1, 1, 1, 1, 1, 1, 1, 1, 0]),
     });
     const fade = plan.events.find((e) => e.kind === "crossfade")!;
 
@@ -155,7 +155,7 @@ describe("playing a crossfade", () => {
                 writes.push({ slot, clip });
             },
         } as unknown as MarcherBodies;
-        const m = new MarcherMotion([plan], manifest, bodies, 0);
+        const m = new MarcherMotion([plan], manifest, bodies);
         const xz = new Float32Array(2);
         const placed = Uint8Array.from([1]);
         return { m, writes, xz, placed };
@@ -202,7 +202,6 @@ describe("playing a slot's rows", () => {
         positions,
         heading: 0,
         bpm: new Float64Array(5).fill(120),
-        bandMoving: Uint8Array.from([1, 1, 1, 1, 0]),
     });
     const rows: Record<
         string,
@@ -224,7 +223,7 @@ describe("playing a slot's rows", () => {
                 writes.push({ slot, clip });
             },
         } as unknown as MarcherBodies;
-        const m = new MarcherMotion([plan], manifest, bodies, 0);
+        const m = new MarcherMotion([plan], manifest, bodies);
         return {
             m,
             writes,
@@ -264,7 +263,6 @@ describe("landing each foot on its click", () => {
         positions,
         heading: 0,
         bpm: new Float64Array(8).fill(120),
-        bandMoving: Uint8Array.from([0, 1, 1, 1, 1, 0, 0, 0]),
     });
     const rows: Record<
         string,
@@ -284,7 +282,7 @@ describe("landing each foot on its click", () => {
                 writes.push({ slot, clip });
             },
         } as unknown as MarcherBodies;
-        const m = new MarcherMotion([plan], manifest, bodies, 0);
+        const m = new MarcherMotion([plan], manifest, bodies);
         return {
             m,
             writes,
