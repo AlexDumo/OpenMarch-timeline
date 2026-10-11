@@ -131,3 +131,5 @@ docs/3d/ref/
 **/view3d/vendor/
 # om-pose assets, byte-identical to their SOURCE.json hashes
 **/view3d/assets/om-pose/
+# baked instrument meshes, written by apps/desktop/scripts/view3d-assets/export-horn.py
+**/view3d/assets/instruments/*.json

@@ -34,6 +34,7 @@ export * from "./units";
 export * from "./random";
 export * from "./lighting";
 export * from "./sky";
+export * from "./envMap";
 export * from "./rig";
 export * from "./materials";
 export * from "./textures";

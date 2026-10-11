@@ -3,17 +3,19 @@ import fs from "node:fs";
 import path from "node:path";
 import {
     BODY_TYPES,
+    bassOptions,
     HEIGHT_CLASSES,
     SKIN_TONES,
     classSuffix,
     classTag,
     defaultPerformerBody,
     heightClassFor,
-    instrumentForSection,
+    PART,
     partVisible,
     sectionUniform,
     uniformKey,
 } from "../looks";
+import type { GuardModelId } from "../../instruments/model";
 
 const assets = path.resolve(__dirname, "../../../assets/om-pose");
 const manifest = JSON.parse(
@@ -106,28 +108,69 @@ describe("section uniforms", () => {
             expect(sectionUniform(b, null).options.hat).toBe(true);
     });
 
-    it("gives brass sections the instrument om-pose models", () => {
-        expect(instrumentForSection("Trumpet")).toBe("trumpet");
-        expect(instrumentForSection("Mellophone")).toBe("mellophone");
-        expect(instrumentForSection("Baritone")).toBe("baritone");
-        expect(instrumentForSection("Euphonium")).toBe("baritone");
-        expect(instrumentForSection("Snare")).toBe("none");
-        expect(instrumentForSection("Color Guard")).toBe("none");
+    it("puts the section's carry, gold lacquer and the hold in the look", () => {
+        const u = sectionUniform("Trumpet", null);
+        expect(u.options.carry).toEqual({ model: "trumpet", family: "brass" });
+        expect(u.options.finish).toBe("brass");
+        expect(u.options.hold).toBe("up");
+        expect(u.options.instrument).toBe("none");
+        expect(sectionUniform("Trumpet", null, "carry").options.hold).toBe(
+            "carry",
+        );
+        expect(sectionUniform("Drum Major", null).options.carry).toBeNull();
+    });
+
+    it("gives every guard section the chosen equipment, and no one else", () => {
+        const pick = (section: string, guard?: GuardModelId) =>
+            sectionUniform(section, null, "up", undefined, guard).options.carry;
+        expect(pick("Color Guard")).toEqual({ model: "flag6", family: "flag" });
+        expect(pick("Rifle")).toEqual({ model: "rifle", family: "rifle" });
+        expect(pick("Color Guard", "sabre")).toEqual({
+            model: "sabre",
+            family: "sabre",
+        });
+        expect(pick("Rifle", "doubleSwingFlag")).toEqual({
+            model: "doubleSwingFlag",
+            family: "doubleSwingFlag",
+        });
+        expect(pick("Dancer", "swingFlag")).toEqual({
+            model: "swingFlag",
+            family: "swingFlag",
+        });
+        expect(pick("Flag", "rifle")).toEqual({
+            model: "rifle",
+            family: "rifle",
+        });
+        expect(pick("Trumpet", "sabre")).toEqual({
+            model: "trumpet",
+            family: "brass",
+        });
+    });
+
+    it("never shows the placeholder instruments, for any section", () => {
+        for (const s of ["Trumpet", "Mellophone", "Baritone", "Flute"])
+            for (const part of PART.instruments)
+                expect(partVisible(sectionUniform(s, null), part)).toBe(false);
+    });
+
+    it("keys looks by carry, finish and hold", () => {
+        const a = uniformKey(sectionUniform("Trumpet", null, "up"));
+        const b = uniformKey(sectionUniform("Trumpet", null, "carry"));
+        expect(a).not.toBe(b);
     });
 
     it("uses the section's fill color for the jacket and hat", () => {
         const u = sectionUniform("Trumpet", { r: 200, g: 16, b: 46, a: 1 });
         expect(u.colors.primary).toBe(0xc8102e);
         expect(u.colors.hat).toBe(0xc8102e);
-        expect(u.options.instrument).toBe("trumpet");
     });
 
     it("shares one look between sections that only differ in name when the instrument matches", () => {
         const fill = { r: 10, g: 20, b: 30, a: 1 };
-        expect(uniformKey(sectionUniform("Flute", fill))).toBe(
-            uniformKey(sectionUniform("Clarinet", fill)),
+        expect(uniformKey(sectionUniform("Drum Major", fill))).toBe(
+            uniformKey(sectionUniform("Soloist", fill)),
         );
-        expect(uniformKey(sectionUniform("Flute", fill))).not.toBe(
+        expect(uniformKey(sectionUniform("Drum Major", fill))).not.toBe(
             uniformKey(sectionUniform("Trumpet", fill)),
         );
     });
@@ -137,13 +180,42 @@ describe("section uniforms", () => {
             Array.from({ length: 16 }, (_, p) => p).filter((p) =>
                 partVisible(sectionUniform(section, null), p),
             );
-        // body parts 0-6 always; shako 7-9; one instrument 13-15
-        expect(visible("Trumpet")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 13]);
-        expect(visible("Mellophone")).toEqual([
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14,
-        ]);
-        expect(visible("Baritone")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15]);
+        // body parts 0-6 always; shako 7-9; the placeholder instruments 13-15 never
+        expect(visible("Trumpet")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        expect(visible("Mellophone")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        expect(visible("Baritone")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         expect(visible("Flute")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         expect(visible("Color Guard")).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    });
+});
+
+describe("bass drum sizes", () => {
+    it("spreads the Bass Drum section over the sizes in marcher order", () => {
+        const ids = [5, 9, 2, 7, 11];
+        const sections = [
+            "Bass Drum",
+            "Trumpet",
+            "Bass Drum",
+            "Flub Drum",
+            "Bass Drum",
+        ];
+        const o = bassOptions(ids, sections);
+        expect(o[1]).toBeUndefined();
+        // four bass players: 18, 22, 28, 32 in id order 2, 5, 7, 11
+        expect(o[2]?.bassInches).toBe(18);
+        expect(o[0]?.bassInches).toBe(22);
+        expect(o[3]?.bassInches).toBe(28);
+        expect(o[4]?.bassInches).toBe(32);
+    });
+
+    it("gives a lone bass drum the middle size", () => {
+        expect(bassOptions([1], ["Bass Drum"])[0]?.bassInches).toBe(26);
+    });
+
+    it("carries the size into the look so sizes get their own meshes", () => {
+        const a = sectionUniform("Bass Drum", null, "up", { bassInches: 18 });
+        const b = sectionUniform("Bass Drum", null, "up", { bassInches: 32 });
+        expect(a.options.carry?.options?.bassInches).toBe(18);
+        expect(uniformKey(a)).not.toBe(uniformKey(b));
     });
 });

@@ -66,3 +66,13 @@ export function countAt(clock: CountClock, ms: number, hint = 0): number {
     }
     return k + (ms - b[k]) / (b[k + 1] - b[k]);
 }
+
+/** Show time (ms) at count clock `c`: the inverse of `countAt`, clamped to the show. */
+export function msAtCount(clock: CountClock, c: number): number {
+    const b = clock.boundariesMs;
+    const n = clock.counts;
+    if (n === 0 || !(c > 0)) return n === 0 ? 0 : b[0];
+    if (c >= n) return b[n];
+    const k = Math.floor(c);
+    return b[k] + (c - k) * (b[k + 1] - b[k]);
+}

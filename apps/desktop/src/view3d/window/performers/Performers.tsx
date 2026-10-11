@@ -17,6 +17,8 @@
  * Meshes and buffers are rebuilt only when the marcher set changes.
  */
 // cspell:ignore metalness
+import { registerPicker } from "../scenePick";
+import { pickMarchers } from "../camera/inputMath";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,16 +40,22 @@ import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppear
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
-import { buildCountClock, countAt } from "@/view3d/core/marchers/countClock";
-import { plannedClips } from "@/view3d/core/marchers/planner";
+import {
+    buildCountClock,
+    countAt,
+    msAtCount,
+} from "@/view3d/core/marchers/countClock";
+import { plannedClips, eventRows } from "@/view3d/core/marchers/planner";
 import {
     defaultPerformerBody,
+    bassOptions,
     sectionUniform,
 } from "@/view3d/core/marchers/looks";
 import { usePerformerTimelines } from "@/view3d/positions";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import type { View3dSelection } from "@/view3d/sync/protocol";
 import { useView3dSceneStore } from "../sceneStore";
+import { requestDraw } from "../drawWake";
 import {
     PERFORMER_HEIGHT,
     PERFORMER_RADIUS,
@@ -64,6 +72,7 @@ import type { MarcherSlotLook } from "./marchers/marcherBodies";
 import {
     MarcherMotion,
     planShow,
+    STEP_AHEAD,
     type ShowPlans,
 } from "./marchers/marcherMotion";
 import {
@@ -71,6 +80,7 @@ import {
     useMarcherAssets,
     useMarcherBodies,
 } from "./marchers/useMarcherBodies";
+import { clipsToLoad, rowKey, slotHoldId } from "./marchers/marcherBodies";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -84,6 +94,9 @@ interface PerformersProps {
 export default function Performers({ fieldProperties }: PerformersProps) {
     const queryClient = useQueryClient();
     const quality = useView3dSceneStore((s) => s.quality);
+    const hornState = useView3dSceneStore((s) => s.hornState);
+    const guardEquipment = useView3dSceneStore((s) => s.guardEquipment);
+    const stepOffFoot = useView3dSceneStore((s) => s.stepOffFoot);
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
     );
@@ -135,12 +148,22 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             string,
             Parameters<typeof sectionUniform>[1],
         ][];
-        return rows.map(([id, section, fill]) => ({
+        const options = bassOptions(
+            rows.map((r) => r[0]),
+            rows.map((r) => r[1]),
+        );
+        return rows.map(([id, section, fill], i) => ({
             // varied heights at high quality; one height (one bake class) at low
             body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
-            uniform: sectionUniform(section, fill),
+            uniform: sectionUniform(
+                section,
+                fill,
+                hornState,
+                options[i],
+                guardEquipment === "section" ? undefined : guardEquipment,
+            ),
         }));
-    }, [looksKey, quality]);
+    }, [looksKey, quality, hornState, guardEquipment]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
@@ -176,14 +199,34 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             (showPlans?.plans ?? []).filter((p) => p !== null),
         );
         for (const h of heightClasses) names.add(clipName("attention", h));
-        return [...names];
-    }, [showPlans, heightClasses]);
+        // on the right foot every row is baked from its mirrored partner
+        return clipsToLoad([...names], stepOffFoot);
+    }, [showPlans, heightClasses, stepOffFoot]);
+    // Only the rows some marcher plays: its planned clips in its own hold,
+    // and attention for its height class.
+    const bakeRows = useMemo(() => {
+        if (!marcherLooks) return undefined;
+        const out = new Set<string>();
+        marcherLooks.forEach((look, i) => {
+            const hold = slotHoldId(look.uniform);
+            out.add(rowKey(clipName("attention", look.body.heightClass), hold));
+            const plan = showPlans?.plans[i];
+            if (!plan) return;
+            for (const e of plan.events)
+                for (const c of eventRows(e)) if (c) out.add(rowKey(c, hold));
+        });
+        return [...out];
+    }, [marcherLooks, showPlans]);
     const marcherBodies = useMarcherBodies(
         marcherAssets,
         clipNames,
         marcherLooks,
         quality,
+        stepOffFoot,
+        bakeRows,
     );
+    // Meshes, bakes and plans land outside React's props: draw them.
+    useEffect(() => requestDraw(1000));
     const motion = useMemo(
         () =>
             marcherBodies && showPlans && marcherAssets
@@ -291,6 +334,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         [meshes],
     );
 
+    // The cursor can pick a performer to zoom toward (`scenePick.ts`).
+    useEffect(() => {
+        if (!meshes) return;
+        return registerPicker((origin, dir) =>
+            pickMarchers(origin, dir, meshes.xz, meshes.placed, count),
+        );
+    }, [meshes, count]);
+
     // Shadows follow the scene's quality.
     useEffect(() => {
         if (!meshes) return;
@@ -338,8 +389,16 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         selection: null as View3dSelection | null,
         selected: new Set<number>(),
     });
-    useFrame(() => {
+    // The camera for instrument detail, and where it was when last applied.
+    const cameraRef = useRef<[number, number, number]>([0, 0, 0]);
+    const lodCameraRef = useRef<[number, number, number]>([NaN, NaN, NaN]);
+    useFrame((state) => {
         if (!meshes) return;
+        const p = state.camera.position;
+        const cam = cameraRef.current;
+        cam[0] = p.x;
+        cam[1] = p.y;
+        cam[2] = p.z;
         const sync = useView3dSyncStore.getState();
         const ms = sync.showMs();
         const frame = frameRef.current;
@@ -349,23 +408,47 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             frame.selected = new Set(sync.selection.selectedMarcherIds);
         }
         const moved = dirtyRef.current || ms !== frame.lastMs;
-        if (!moved && !selectionChanged) return;
+        const lod = lodCameraRef.current;
+        const cameraMoved = !(
+            Math.hypot(cam[0] - lod[0], cam[1] - lod[1], cam[2] - lod[2]) < 0.5
+        );
+        if (!moved && !selectionChanged) {
+            // a still show: only the instruments' detail follows the camera
+            if (cameraMoved && marcherBodies) {
+                marcherBodies.writeFrame(
+                    meshes.xz,
+                    headings,
+                    meshes.placed,
+                    countRef.current,
+                    cam,
+                );
+                lod[0] = cam[0];
+                lod[1] = cam[1];
+                lod[2] = cam[2];
+            }
+            return;
+        }
 
         const { bodies, rings, visible, xz, placed } = meshes;
         if (moved) {
+            // the marchers run a count ahead of the clock (`STEP_AHEAD`), so
+            // they're placed from the drill a count later
+            const c = countAt(clock, ms, countRef.current);
             writePerformerPositions(
                 slots,
-                ms,
+                marcherBodies && motion ? msAtCount(clock, c + STEP_AHEAD) : ms,
                 fieldProperties,
                 visible,
                 xz,
                 placed,
             );
             if (marcherBodies) {
-                const c = countAt(clock, ms, countRef.current);
                 countRef.current = c;
                 motion?.update(c, xz, placed);
-                marcherBodies.writeFrame(xz, headings, placed, c);
+                marcherBodies.writeFrame(xz, headings, placed, c, cam);
+                lod[0] = cam[0];
+                lod[1] = cam[1];
+                lod[2] = cam[2];
             } else {
                 writePerformerMatrices(
                     count,

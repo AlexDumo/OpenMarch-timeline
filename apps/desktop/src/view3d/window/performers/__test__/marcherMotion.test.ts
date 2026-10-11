@@ -5,7 +5,8 @@ import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
 import type { MarcherTimeline } from "@/utilities/Keyframes";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { buildCountClock } from "@/view3d/core/marchers/countClock";
-import { MarcherMotion, planShow } from "../marchers/marcherMotion";
+import { eventRows } from "@/view3d/core/marchers/planner";
+import { MarcherMotion, planShow, STEP_AHEAD } from "../marchers/marcherMotion";
 import { planMarcher } from "@/view3d/core/marchers/planner";
 import type { MarcherBodies } from "../marchers/marcherBodies";
 import type { MarcherClip } from "@/view3d/vendor/om-pose/instanced-marchers.js";
@@ -143,11 +144,13 @@ describe("playing a crossfade", () => {
             { row: number; frames: number; counts: number }
         > = {};
         for (const e of plan.events) {
-            rows[e.clip] = { row: 0, frames: 60, counts: 2 };
-            if (e.clip2) rows[e.clip2] = { row: 1, frames: 60, counts: 2 };
+            const [a, b] = eventRows(e);
+            rows[a] = { row: 0, frames: 60, counts: 2 };
+            if (b) rows[b] = { row: 1, frames: 60, counts: 2 };
         }
         const bodies = {
             bake: { rows },
+            holdOf: () => "none",
             setClip(slot: number, clip: MarcherClip) {
                 writes.push({ slot, clip });
             },
@@ -161,10 +164,12 @@ describe("playing a crossfade", () => {
     it("ramps the blend weight and the leg turn over the fade window", () => {
         const { m, writes, xz, placed } = motion();
         const [y0, y1] = fade.legYaw as [number, number, number, number];
-        m.update(fade.fadeStart - 0.25, xz, placed); // before the window: the old loop as is
-        m.update(fade.fadeStart + 0.25, xz, placed);
-        m.update(fade.fadeStart + 0.5, xz, placed);
-        m.update(fade.fadeEnd + 0.6, xz, placed); // the next event: the new loop alone
+        // show counts: the plan runs STEP_AHEAD counts ahead of them
+        const at = (planCount: number) => planCount - STEP_AHEAD;
+        m.update(at(fade.fadeStart - 0.25), xz, placed); // before the window: the old loop as is
+        m.update(at(fade.fadeStart + 0.25), xz, placed);
+        m.update(at(fade.fadeStart + 0.5), xz, placed);
+        m.update(at(fade.fadeEnd + 0.6), xz, placed); // the next event: the new loop alone
         const ws = writes.map((w) => w.clip.weight);
         expect(ws[0]).toBe(0);
         expect(writes[0].clip.legYaw).toBeCloseTo(y0, 9);
@@ -177,9 +182,147 @@ describe("playing a crossfade", () => {
 
     it("writes a loop once, not every frame", () => {
         const { m, writes, xz, placed } = motion();
-        m.update(1.25, xz, placed);
-        m.update(1.5, xz, placed);
-        m.update(1.75, xz, placed);
+        m.update(1.25 - STEP_AHEAD, xz, placed);
+        m.update(1.5 - STEP_AHEAD, xz, placed);
+        m.update(1.75 - STEP_AHEAD, xz, placed);
         expect(writes.length).toBe(1);
+    });
+});
+
+describe("playing a slot's rows", () => {
+    // 4 counts of 8-to-5 forward, then a hold
+    const positions = new Float64Array(2 * 6);
+    for (let k = 0; k < 6; k++) {
+        positions[k * 2] = 0;
+        positions[k * 2 + 1] = -20 + Math.min(k, 4) * 0.5715;
+    }
+    const plan = planMarcher({
+        manifest,
+        heightClass: 1,
+        positions,
+        heading: 0,
+        bpm: new Float64Array(5).fill(120),
+        bandMoving: Uint8Array.from([1, 1, 1, 1, 0]),
+    });
+    const rows: Record<
+        string,
+        { row: number; frames: number; counts: number }
+    > = {};
+    let r = 0;
+    for (const e of plan.events) {
+        rows[`${e.clip}@brass:up`] = { row: r++, frames: 60, counts: 2 };
+        if (e.clip2)
+            rows[`${e.clip2}@brass:up`] = { row: r++, frames: 60, counts: 2 };
+    }
+
+    function motion() {
+        const writes: { slot: number; clip: MarcherClip }[] = [];
+        const bodies = {
+            bake: { rows },
+            holdOf: () => "brass:up",
+            setClip(slot: number, clip: MarcherClip) {
+                writes.push({ slot, clip });
+            },
+        } as unknown as MarcherBodies;
+        const m = new MarcherMotion([plan], manifest, bodies, 0);
+        return {
+            m,
+            writes,
+            xz: new Float32Array(2),
+            placed: Uint8Array.from([1]),
+        };
+    }
+
+    it("looks rows up by the slot's hold", () => {
+        const { m, writes, xz, placed } = motion();
+        m.update(0.5 - STEP_AHEAD, xz, placed);
+        expect(writes.length).toBe(1);
+        expect(writes[0].clip.row).toBe(
+            rows[`${plan.events[0].clip}@brass:up`],
+        );
+    });
+
+    it("writes a loop once, not every frame", () => {
+        const { m, writes, xz, placed } = motion();
+        m.update(1.25 - STEP_AHEAD, xz, placed);
+        m.update(1.5 - STEP_AHEAD, xz, placed);
+        m.update(1.75 - STEP_AHEAD, xz, placed);
+        expect(writes.length).toBe(1);
+    });
+});
+
+describe("landing each foot on its click", () => {
+    // a hold, 4 counts of 8-to-5 forward, then 3 holds: a step-off, loops, a halt
+    const positions = new Float64Array(2 * 9);
+    for (let k = 0; k < 9; k++) {
+        positions[k * 2] = 0;
+        positions[k * 2 + 1] = -20 + Math.min(Math.max(k - 1, 0), 4) * 0.5715;
+    }
+    const plan = planMarcher({
+        manifest,
+        heightClass: 1,
+        positions,
+        heading: 0,
+        bpm: new Float64Array(8).fill(120),
+        bandMoving: Uint8Array.from([0, 1, 1, 1, 1, 0, 0, 0]),
+    });
+    const rows: Record<
+        string,
+        { row: number; frames: number; counts: number }
+    > = {};
+    let r = 0;
+    for (const e of plan.events) {
+        rows[e.clip] = { row: r++, frames: 60, counts: 2 };
+        if (e.clip2) rows[e.clip2] = { row: r++, frames: 60, counts: 2 };
+    }
+    function motion() {
+        const writes: { slot: number; clip: MarcherClip }[] = [];
+        const bodies = {
+            bake: { rows },
+            holdOf: () => "none",
+            setClip(slot: number, clip: MarcherClip) {
+                writes.push({ slot, clip });
+            },
+        } as unknown as MarcherBodies;
+        const m = new MarcherMotion([plan], manifest, bodies, 0);
+        return {
+            m,
+            writes,
+            xz: new Float32Array(2),
+            placed: Uint8Array.from([1]),
+        };
+    }
+
+    it("steps off during the count before the move, so the first foot lands on count 1's click", () => {
+        // the move is counts 1..4 (drill boundary 1 to 5); the step-off is plan count 1
+        const stepoff = plan.events.find((e) => e.clip.startsWith("stepoff"))!;
+        expect(stepoff.count).toBe(1);
+        const { m, writes, xz, placed } = motion();
+        m.update(0.5, xz, placed); // show count 0, the hold's last count
+        expect(writes[0].clip.row).toBe(rows[stepoff.clip]);
+        // the shader plays clip time uCount + phase: plan time minus phaseStart
+        expect(writes[0].clip.phase).toBeCloseTo(
+            STEP_AHEAD - stepoff.phaseStart,
+            9,
+        );
+    });
+
+    it("plays the loop from its time 0 at count 1's click", () => {
+        const loop = plan.events.find((e) => e.kind === "loop")!;
+        const { m, writes, xz, placed } = motion();
+        m.update(1.01, xz, placed);
+        expect(writes[0].clip.row).toBe(rows[loop.clip]);
+        // clip time at the click: 1 + phase is a whole number of loops (time 0)
+        expect((1 + writes[0].clip.phase) % 2).toBeCloseTo(0, 9);
+    });
+
+    it("closes during the move's last count and stands still on the hold's click", () => {
+        const { m, writes, xz, placed } = motion();
+        m.update(4.5, xz, placed); // the move's last count: the close
+        expect(writes.at(-1)!.clip.row).toBe(
+            rows[plan.events.find((e) => e.clip.startsWith("halt"))!.clip],
+        );
+        m.update(5.01, xz, placed); // the hold's first count
+        expect(writes.at(-1)!.clip.row).toBe(rows["attention"]);
     });
 });

@@ -4,7 +4,9 @@ import path from "node:path";
 import type { Manifest } from "../../../vendor/om-pose/step-blend.js";
 import {
     bodyAt,
+    crossfadeWeight,
     eventIndexAt,
+    prepName,
     planMarcher,
     plannedClips,
     type MarcherPlan,
@@ -144,6 +146,27 @@ describe("a move from dot to dot", () => {
             expect(Math.hypot(b.x - prev.x, b.z - prev.z)).toBeLessThan(0.03);
             prev = b;
         }
+    });
+});
+
+describe("the close", () => {
+    it("keeps a turned leg on its line and turns it out only at the end of the halt", () => {
+        // a diagonal, then a halt: the halt clip is built at 45 and the
+        // residual turn must wait until the foot has closed
+        const s = STEP / Math.SQRT2;
+        const plan = planMarcher(
+            input([...repeat<Count>(4, [s * 1.2, s * 0.8]), "hold", "hold"]),
+        );
+        const halt = plan.events.find(
+            (e) => e.kind === "transition" && e.clip.startsWith("halt"),
+        )!;
+        const yaw = halt.legYaw as [number, number, number, number];
+        expect(Math.abs(yaw[0])).toBeGreaterThan(0.01); // there is a residual to undo
+        expect(yaw[1]).toBe(0);
+        expect(yaw[2]).toBeGreaterThanOrEqual(0.8);
+        expect(yaw[3]).toBe(1);
+        // the body placement uses the same window
+        expect((halt.root as { legYaw: number[] }).legYaw[2]).toBe(yaw[2]);
     });
 });
 
@@ -359,8 +382,13 @@ describe("moves back to back", () => {
         expect(fade.fadeStart).toBe(7.5);
         expect(fade.fadeEnd).toBe(8.5);
         expect([fade.clip, fade.clip2]).toEqual(["8to5", "slideL8to5"]);
-        // one event covers both counts
-        expect(eventIndexAt(plan, 7.1)).toBe(eventIndexAt(plan, 8.9));
+        // the same fade covers both counts (the second may carry its own
+        // body placement span, for the swing to the new direction)
+        const second = plan.events[eventIndexAt(plan, 8.9)];
+        expect(second.kind).toBe("crossfade");
+        expect([second.fadeStart, second.fadeEnd]).toEqual([7.5, 8.5]);
+        expect([second.clip, second.clip2]).toEqual(["8to5", "slideL8to5"]);
+        expect(second.phaseStart).toBe(fade.phaseStart);
         const clips = clipPerCount(plan);
         expect(clips[6]).toBe("8to5");
         expect(clips.slice(9, 16)).toEqual(repeat(7, "slideL8to5"));
@@ -416,9 +444,19 @@ describe("moves back to back", () => {
             ),
         );
         const clips = clipPerCount(plan);
-        const fade = plan.events[eventIndexAt(plan, 4.5)];
+        const fade = plan.events[eventIndexAt(plan, 3.5)];
         expect(fade.kind).toBe("crossfade");
         expect(fade.count).toBe(3);
+        const second = plan.events[eventIndexAt(plan, 4.5)];
+        expect([second.kind, second.clip, second.clip2]).toEqual([
+            "crossfade",
+            "12to5",
+            "slideR12to5",
+        ]);
+        expect([second.fadeStart, second.fadeEnd]).toEqual([
+            fade.fadeStart,
+            fade.fadeEnd,
+        ]);
         expect(fade.clip).toBe("12to5");
         expect(fade.clip2).toBe("slideR12to5");
         expect(clips[5]).toBe("slideR12to5");
@@ -625,5 +663,160 @@ describe("the bake set", () => {
                 "stepoff_8to5",
             ].sort(),
         );
+    });
+});
+
+/** Body minus drill at count boundary k. */
+function offsetAt(plan: MarcherPlan, inp: PlanInput, k: number) {
+    const b = body(plan, inp, k);
+    return { x: b.x - b.drillX, z: b.z - b.drillZ };
+}
+
+describe("foot on the dot (the default)", () => {
+    // 2 holds, 8 counts forward toward the audience, 4 holds
+    const inp = input([
+        ...repeat(2, "hold" as const),
+        ...repeat<Count>(8, [0, STEP]),
+        ...repeat(4, "hold" as const),
+    ]);
+    const plan = planMarcher(inp);
+
+    it("puts the ankle on the dot each count: the body half a step behind it", () => {
+        // boundaries 3..10 end counts 1..8 of the move
+        for (let k = 3; k <= 10; k++) {
+            const o = offsetAt(plan, inp, k);
+            expect(o.z).toBeCloseTo(-STEP / 2, 1);
+            expect(Math.abs(o.z + STEP / 2)).toBeLessThan(0.03);
+            expect(Math.abs(o.x)).toBeLessThan(0.1);
+        }
+    });
+
+    it("resolves onto the dot as the feet close, between count 8 and count 1 of the hold", () => {
+        const o = offsetAt(plan, inp, 11);
+        expect(o.x).toBeCloseTo(0, 9);
+        expect(o.z).toBeCloseTo(0, 9);
+        // still on the dot before the step-off
+        const s = offsetAt(plan, inp, 2);
+        expect(s.z).toBeCloseTo(0, 9);
+    });
+});
+
+describe("foot on the dot through a change of direction", () => {
+    // 2 holds, 8 forward, 8 toward side 1 (−x), 4 holds
+    const inp = input([
+        ...repeat(2, "hold" as const),
+        ...repeat<Count>(8, [0, STEP]),
+        ...repeat<Count>(8, [-STEP, 0]),
+        ...repeat(4, "hold" as const),
+    ]);
+    const plan = planMarcher(inp);
+
+    it("keeps the old direction's half step on count 8 and swings to the new one by count 1", () => {
+        // boundary 10 ends count 8 of the forward move
+        const c8 = offsetAt(plan, inp, 10);
+        expect(Math.abs(c8.z + STEP / 2)).toBeLessThan(0.03);
+        expect(Math.abs(c8.x)).toBeLessThan(0.1);
+        // boundary 11 ends count 1 of the new move: half a step behind toward +x
+        const c1 = offsetAt(plan, inp, 11);
+        expect(Math.abs(c1.x - STEP / 2)).toBeLessThan(0.03);
+        expect(Math.abs(c1.z)).toBeLessThan(0.03);
+        // and holds it to count 8 of the new move
+        const end = offsetAt(plan, inp, 18);
+        expect(Math.abs(end.x - STEP / 2)).toBeLessThan(0.03);
+        expect(Math.abs(end.z)).toBeLessThan(0.1);
+        // never jumps: at most a fast step's travel in a fiftieth of a count
+        let prev = body(plan, inp, 0);
+        for (let c = 0.02; c <= 22; c += 0.02) {
+            const b = body(plan, inp, c);
+            expect(Math.hypot(b.x - prev.x, b.z - prev.z)).toBeLessThan(0.04);
+            prev = b;
+        }
+        // then onto the dot
+        const hold = offsetAt(plan, inp, 19);
+        expect(hold.x).toBeCloseTo(0, 9);
+        expect(hold.z).toBeCloseTo(0, 9);
+    });
+});
+
+describe("body center (an option for later)", () => {
+    const counts: Count[] = [
+        ...repeat(2, "hold" as const),
+        ...repeat<Count>(8, [0, STEP]),
+        ...repeat<Count>(8, [-STEP, 0]),
+        ...repeat(4, "hold" as const),
+    ];
+    const inp = { ...input(counts), dotMode: "body" as const };
+    const plan = planMarcher(inp);
+
+    it("keeps the body's center over the dot on every count", () => {
+        for (let k = 0; k <= counts.length; k++) {
+            const o = offsetAt(plan, inp, k);
+            expect(Math.hypot(o.x, o.z)).toBeLessThan(1e-6);
+        }
+    });
+});
+
+describe("prep steps at the end of a move", () => {
+    /** 8 counts forward toward the audience, then 8 counts of `next`, then holds. */
+    const plan2 = (next: Count) => {
+        const inp = input(
+            [
+                ...repeat(2, "hold" as const),
+                ...repeat<Count>(8, [0, STEP]),
+                ...repeat<Count>(8, next),
+                ...repeat(4, "hold" as const),
+            ],
+            { x0: -10 },
+        );
+        return { inp, plan: planMarcher(inp) };
+    };
+    // the boundary between the moves: the last landing of the forward move
+    const B = 10;
+
+    it("lands the last step of the old move on the platform, at the loop time of that landing", () => {
+        const { plan } = plan2([STEP, 0]); // a slide toward the 50
+        const fade = plan.events[eventIndexAt(plan, B - 0.25)];
+        expect(fade.kind).toBe("crossfade");
+        expect(typeof fade.prep).toBe("number");
+        expect((((B - fade.phaseStart) % 2) + 2) % 2).toBe(fade.prep);
+        // the second count of the fade keeps it
+        expect(plan.events[eventIndexAt(plan, B + 0.75)].prep).toBe(fade.prep);
+        // loops away from the change carry none
+        expect(plan.events[eventIndexAt(plan, 5.5)].prep ?? null).toBeNull();
+    });
+
+    it("is halfway into the new direction on the prep landing", () => {
+        const { plan } = plan2([STEP, 0]);
+        const fade = plan.events[eventIndexAt(plan, B - 0.25)];
+        // the slide's leg turn lives in its clip: halfway is a 50-50 blend
+        // of the old gait and the new one, plus half of any residual leg turn
+        const u = (B - fade.fadeStart) / (fade.fadeEnd - fade.fadeStart);
+        expect(crossfadeWeight(u)).toBeCloseTo(0.5, 9);
+        const [y0, y1] = fade.legYaw as [number, number, number, number];
+        const yaw = y0 + (y1 - y0) * crossfadeWeight(u);
+        expect(yaw).toBeCloseTo((y0 + y1) / 2, 9);
+    });
+
+    it("preps a 15 degree change, but not one under 10 degrees", () => {
+        const turn = (deg: number): Count => {
+            const a = (deg * Math.PI) / 180;
+            return [STEP * Math.sin(a), STEP * Math.cos(a)];
+        };
+        const at15 = plan2(turn(15)).plan;
+        expect(typeof at15.events[eventIndexAt(at15, B - 0.25)].prep).toBe(
+            "number",
+        );
+        const at8 = plan2(turn(8)).plan;
+        expect(
+            at8.events.some((e) => e.prep !== null && e.prep !== undefined),
+        ).toBe(false);
+    });
+
+    it("bakes the prep landings as their own rows", () => {
+        const { plan } = plan2([STEP, 0]);
+        const fade = plan.events[eventIndexAt(plan, B - 0.25)];
+        const clips = plannedClips([plan]);
+        expect(clips.has(prepName(fade.clip, fade.prep!))).toBe(true);
+        expect(clips.has(prepName(fade.clip2!, fade.prep!))).toBe(true);
     });
 });
