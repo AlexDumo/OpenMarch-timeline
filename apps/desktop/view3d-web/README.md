@@ -1,10 +1,15 @@
-# 3D View web preview (temporary, do not merge to `main`)
+# 3D View web preview (temporary, fork only)
 
-> **Do not merge this folder, the demo `.dots` files, or the `view3d-web:*`
-> scripts in `apps/desktop/package.json` into OpenMarch's `main` branch.** They
+> **Remove this before the 3D View goes upstream.** This folder, the demo
+> `.dots` files and the `view3d-web:*` scripts in `apps/desktop/package.json`
 > exist only so other developers can try the 3D View in a browser while it is
-> in development. They live on the fork's `3d-async` branch. Before the 3D View
-> goes upstream, delete `apps/desktop/view3d-web/` and those scripts.
+> in development. They may live on the fork (`AlexDumo/OpenMarch-timeline`),
+> including its `main` branch, but must never reach `OpenMarch/OpenMarch`.
+> Before any PR to `OpenMarch/OpenMarch` that carries the 3D View, delete:
+>
+> - `apps/desktop/view3d-web/` (including `public/demos/`, which holds real shows)
+> - the `view3d-web:dev`, `view3d-web:build` and `view3d-web:deploy` scripts in
+>   `apps/desktop/package.json`
 
 A static site that runs the 3D View window in a browser, with no Electron. It
 shows a demo show, or any `.dots` file the viewer opens or drops on the page.

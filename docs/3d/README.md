@@ -28,8 +28,10 @@ MVP; don't build them yet.
 
 **Web preview, fork only.** `apps/desktop/view3d-web/` runs the 3D View in a
 browser so other developers can try it. Its README explains how. It is
-temporary: it and its demo `.dots` files must not be merged into `main`.
-Delete it, and the `view3d-web:*` scripts, before the 3D View goes upstream.
+temporary: it may stay on the fork, including the fork's `main`, but it and
+its demo `.dots` files must never reach `OpenMarch/OpenMarch`. Delete it, and
+the `view3d-web:*` scripts, before the 3D View goes upstream (see the
+checklist in its README).
 
 ## Status board
 
@@ -75,7 +77,9 @@ its use.
 - **Code branches:** `3d/p<phase>-<short-name>`, based on `<remote>/3d-async`.
 - **Going upstream:** merge `OpenMarch/OpenMarch` `main` into `3d-async` after
   each phase. At the MVP, open one PR from `3d-async` to upstream `main`, and
-  rewrite fork `(#n)` suffixes in commit titles.
+  rewrite fork `(#n)` suffixes in commit titles. Before opening it, delete the
+  web preview (`apps/desktop/view3d-web/` and the `view3d-web:*` scripts); its
+  README has the full list.
 
 ## Vocabulary
 

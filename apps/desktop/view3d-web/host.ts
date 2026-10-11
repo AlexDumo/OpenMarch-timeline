@@ -1,6 +1,7 @@
 /**
  * TEMPORARY: the web preview of the 3D View. Delete `view3d-web/` (and its
- * script in package.json) before the 3D View ships.
+ * `view3d-web:*` scripts in package.json) before the 3D View goes to
+ * `OpenMarch/OpenMarch`. See README.md.
  *
  * Stands in for the Electron side of the 3D View window: `window.view3d`
  * reads a `.dots` file held in memory by sql.js, and this host plays the

@@ -1,6 +1,7 @@
 /**
  * TEMPORARY (see host.ts). The shows the preview offers, from
- * `public/demos/`. They are real shows: never merge them into `main`.
+ * `public/demos/`. They are real shows: never merge them into
+ * `OpenMarch/OpenMarch`.
  */
 export interface Demo {
     id: string;
