@@ -99,4 +99,27 @@ describe("traceCue", () => {
             beaten: [],
         });
     });
+
+    it("says when the cue in effect is another channel's take-over", () => {
+        const kneeling = compileCues({
+            beats,
+            marchers: [trumpet],
+            cues: [
+                {
+                    id: 300,
+                    channel: "body",
+                    kind: "state",
+                    target: { kind: "band" },
+                    beatId: beatAt(4),
+                    value: "builtin:body.kneel",
+                },
+            ],
+        });
+
+        expect(traceCue(kneeling, 1, "feet", 6)).toEqual({
+            winner: 300,
+            takenOverFrom: "body",
+            beaten: [],
+        });
+    });
 });

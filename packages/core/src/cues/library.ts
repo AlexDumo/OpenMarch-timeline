@@ -4,7 +4,22 @@
  * The built-in cue library v1: metadata only (docs/3d/performer-behavior.md
  * section 4). The animation data lives with the 3D View.
  */
-import type { CueChannel, PerformerCarry, ShowPhraseAsset } from "./types";
+import type {
+    CueChannel,
+    CueShowDefaults,
+    PerformerCarry,
+    ShowPhraseAsset,
+} from "./types";
+
+/** One setting a value takes, with its default. */
+export type CueSettingField =
+    | {
+          key: string;
+          kind: "choice";
+          options: readonly string[];
+          default: string;
+      }
+    | { key: string; kind: "number"; default: number };
 
 export interface CueLibraryValue {
     id: string;
@@ -23,7 +38,28 @@ export interface CueLibraryValue {
     maxLength?: number;
     /** Only valid while the dot holds. */
     standingOnly?: boolean;
+    /** The settings it takes; a cue's missing settings get these defaults. */
+    settings?: readonly CueSettingField[];
 }
+
+const choice = (
+    key: string,
+    options: readonly string[],
+    fallback = options[0]!,
+): CueSettingField => ({ key, kind: "choice", options, default: fallback });
+
+const number = (key: string, fallback = 0): CueSettingField => ({
+    key,
+    kind: "number",
+    default: fallback,
+});
+
+const FEET_SETTINGS: readonly CueSettingField[] = [
+    choice("pace", ["single", "half", "double"]),
+    choice("moving", ["straightLeg", "bentLeg", "highStep"]),
+    choice("onHolds", ["stand", "markTime", "highMarkTime"]),
+    choice("stepOffFoot", ["left", "right"]),
+];
 
 /** Every carry: values that fit any performer. */
 export const ALL_CARRIES: readonly PerformerCarry[] = [
@@ -77,8 +113,12 @@ const phrase = (
 });
 
 export const CUE_LIBRARY: readonly CueLibraryValue[] = [
-    state("feet.step", "feet", "Step", "Step", ALL_CARRIES),
-    state("horn.up", "horn_equipment", "Horns up", "HU", ["winds"]),
+    state("feet.step", "feet", "Step", "Step", ALL_CARRIES, 1, {
+        settings: FEET_SETTINGS,
+    }),
+    state("horn.up", "horn_equipment", "Horns up", "HU", ["winds"], 1, {
+        settings: [choice("angle", ["box", "plus10"])],
+    }),
     state("horn.down", "horn_equipment", "Horns down", "HD", ["winds"]),
     state("horn.trail", "horn_equipment", "Trail", "Trail", ["winds"]),
     state("battery.playing", "horn_equipment", "Playing", "Play", ["battery"]),
@@ -157,8 +197,12 @@ export const CUE_LIBRARY: readonly CueLibraryValue[] = [
         ALL_CARRIES,
         2,
     ),
-    state("facing.angle", "facing", "Angle", "Angle", ALL_CARRIES, 2),
-    state("facing.point", "facing", "Toward a point", "Point", ALL_CARRIES, 2),
+    state("facing.angle", "facing", "Angle", "Angle", ALL_CARRIES, 2, {
+        settings: [number("degrees")],
+    }),
+    state("facing.point", "facing", "Toward a point", "Point", ALL_CARRIES, 2, {
+        settings: [number("x"), number("y")],
+    }),
     state("body.neutral", "body", "Neutral", "—", ALL_CARRIES),
     state("body.kneel", "body", "Kneel", "Kneel", ALL_CARRIES, 3, {
         takesOver: ["feet"],
@@ -166,6 +210,7 @@ export const CUE_LIBRARY: readonly CueLibraryValue[] = [
     }),
     phrase("body.choreo", "body", "Choreography", "Choreo", ALL_CARRIES, 8, 8, {
         takesOver: ["horn_equipment"],
+        settings: [choice("energy", ["low", "medium", "high"], "medium")],
     }),
 ];
 
@@ -184,7 +229,19 @@ export type CueValueLookup = (id: string) => CueLibraryValue | undefined;
  */
 export function cueValueLookup(
     phraseAssets: readonly ShowPhraseAsset[] = [],
+    showDefaults: CueShowDefaults = {},
 ): CueValueLookup {
+    const feet = BY_ID.get("builtin:feet.step")!;
+    const showFeet: CueLibraryValue = {
+        ...feet,
+        settings: feet.settings!.map((field) =>
+            field.kind === "choice" &&
+            field.key === "stepOffFoot" &&
+            showDefaults.stepOffFoot
+                ? { ...field, default: showDefaults.stepOffFoot }
+                : field,
+        ),
+    };
     const shown = new Map<string, CueLibraryValue>(
         phraseAssets.map((asset) => [
             `show:${asset.id}`,
@@ -200,7 +257,18 @@ export function cueValueLookup(
             },
         ]),
     );
-    return (id) => BY_ID.get(id) ?? shown.get(id);
+    return (id) =>
+        id === feet.id ? showFeet : (BY_ID.get(id) ?? shown.get(id));
+}
+
+/** A value's settings: its defaults, overridden by the cue's own. */
+export function cueSettings(
+    value: CueLibraryValue | undefined,
+    own: Readonly<Record<string, unknown>> = {},
+): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const field of value?.settings ?? []) out[field.key] = field.default;
+    return { ...out, ...own };
 }
 
 const DEFAULT_CARRY_VALUE: Record<PerformerCarry, string | null> = {

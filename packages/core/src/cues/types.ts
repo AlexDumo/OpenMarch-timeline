@@ -76,12 +76,18 @@ export interface ShowPhraseAsset {
     channels: readonly CueChannel[];
 }
 
+/** Show-wide defaults the cues fall back to (ADR 0004 D-4). */
+export interface CueShowDefaults {
+    stepOffFoot?: "left" | "right";
+}
+
 export interface CompileInput {
     /** The show's timed beats in order. */
     beats: readonly { id: number; duration: number }[];
     marchers: readonly CueMarcher[];
     cues: readonly CueInput[];
     phraseAssets?: readonly ShowPhraseAsset[];
+    showDefaults?: CueShowDefaults;
     /** Whether the marcher's dot travels during count `count`. */
     travels?: (marcherId: number, count: number) => boolean;
     /** The marcher's field position at a count's click (x toward side 2, y toward the front). */
@@ -110,7 +116,9 @@ export type CueFlagKind =
     | "clash"
     | "phrase_overlap"
     | "takeover_while_moving"
-    | "fits_nobody";
+    | "fits_nobody"
+    | "kind_not_allowed"
+    | "transition_cut";
 
 export interface CueFlag {
     kind: CueFlagKind;
@@ -121,6 +129,8 @@ export interface CueFlag {
 export interface CueTrace {
     /** The cue in effect, or null for the default. */
     winner: number | null;
+    /** Set when the winner is another channel's cue taking this one over. */
+    takenOverFrom?: CueChannel;
     /** Applicable cues it beat, latest and most specific first. */
     beaten: readonly number[];
 }

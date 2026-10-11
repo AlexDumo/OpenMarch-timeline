@@ -1,4 +1,4 @@
-// cspell:words choreo
+// cspell:words choreo recompiles
 import { describe, expect, it } from "vitest";
 import {
     compileCues,
@@ -590,6 +590,183 @@ describe("compileCues", () => {
                 .map((s) => s.label),
         ).toEqual(["½", "2×", "MT", "Step"]);
     });
+
+    it("settles same-count ties on the authored count when a cue ripples", () => {
+        const trumpets = [1, 2, 3].map((order) => ({
+            ...trumpet,
+            id: 40 + order,
+            drillOrder: order,
+        }));
+        const mello: CueMarcher = {
+            ...trumpet,
+            id: 44,
+            section: "Mellophone",
+            drillOrder: 4,
+        };
+        const out = compileCues(
+            show(
+                [
+                    hornCue(
+                        130,
+                        { kind: "section", section: "Trumpet" },
+                        4,
+                        "builtin:horn.trail",
+                    ),
+                    {
+                        ...hornCue(
+                            131,
+                            { kind: "band" },
+                            4,
+                            "builtin:horn.down",
+                        ),
+                        ripple: { span: 4, order: "drill" },
+                    },
+                ],
+                [...trumpets, mello],
+            ),
+        );
+
+        // The section cue is more specific on count 4, so every trumpet trails.
+        for (const m of trumpets)
+            expect(
+                out
+                    .segments(m.id, "horn_equipment")
+                    .filter((s) => s.kind === "state")
+                    .map((s) => s.cueId),
+            ).toEqual([130]);
+        // The mellophone, last in the ripple, still gets the band cue on 7.
+        expect(
+            out.segments(44, "horn_equipment").find((s) => s.kind === "state"),
+        ).toMatchObject({
+            from: 7,
+            cueId: 131,
+        });
+    });
+
+    it("fills each value's settings from its defaults and the show's", () => {
+        const out = compileCues(
+            show(
+                [
+                    hornCue(140, { kind: "band" }, 4, "builtin:horn.up"),
+                    {
+                        ...hornCue(141, { kind: "band" }, 8, "builtin:horn.up"),
+                        settings: { angle: "plus10" },
+                    },
+                ],
+                [trumpet],
+                { showDefaults: { stepOffFoot: "right" } },
+            ),
+        );
+
+        expect(
+            out
+                .segments(1, "horn_equipment")
+                .filter((s) => s.kind !== "transition")
+                .map((s) => s.settings),
+        ).toEqual([{ angle: "box" }, { angle: "box" }, { angle: "plus10" }]);
+        expect(out.segments(1, "feet")[0].settings).toEqual({
+            pace: "single",
+            moving: "straightLeg",
+            onHolds: "stand",
+            stepOffFoot: "right",
+        });
+        expect(out.segments(1, "body")[0].settings).toEqual({});
+    });
+
+    it("ignores and flags a phrase on a channel that takes states only", () => {
+        const out = compileCues(
+            show(
+                [
+                    {
+                        id: 150,
+                        channel: "facing",
+                        kind: "phrase",
+                        target: { kind: "band" },
+                        beatId: beatAt(4),
+                        value: "builtin:facing.back",
+                        length: 4,
+                    },
+                ],
+                [trumpet],
+            ),
+        );
+
+        expect(out.segments(1, "facing")).toHaveLength(1);
+        expect(out.flags).toEqual([
+            { kind: "kind_not_allowed", cueIds: [150], marcherIds: [1] },
+        ]);
+    });
+
+    it("flags a transition that would start before the cue it follows lands", () => {
+        // Down on 8, then trail on 9 taking 4 counts: it can't start before 8.
+        const out = compileCues(
+            show(
+                [
+                    hornCue(160, { kind: "band" }, 8, "builtin:horn.down"),
+                    {
+                        ...hornCue(
+                            161,
+                            { kind: "band" },
+                            9,
+                            "builtin:horn.trail",
+                        ),
+                        transitionLength: 4,
+                    },
+                ],
+                [trumpet],
+            ),
+        );
+
+        expect(out.flags).toEqual([
+            { kind: "transition_cut", cueIds: [160, 161], marcherIds: [1] },
+        ]);
+    });
+
+    it("recompiles only the channels an edit touched, matching a full compile", () => {
+        const body = bodyCue(170, "state", 6, "builtin:body.kneel");
+        const choreo = bodyCue(171, "phrase", 12, "builtin:body.choreo", {
+            length: 8,
+        });
+        const before = show([
+            body,
+            choreo,
+            hornCue(172, { kind: "band" }, 4, "builtin:horn.down"),
+        ]);
+        const after = show([
+            body,
+            choreo,
+            hornCue(172, { kind: "band" }, 10, "builtin:horn.down"),
+            hornCue(
+                173,
+                { kind: "section", section: "Color Guard" },
+                2,
+                "builtin:horn.trail",
+            ),
+        ]);
+
+        const previous = compileCues(before);
+        const partial = compileCues(after, {
+            previous,
+            channels: ["horn_equipment"],
+        });
+        const full = compileCues(after);
+
+        for (const m of after.marchers)
+            for (const channel of [
+                "feet",
+                "horn_equipment",
+                "facing",
+                "body",
+            ] as const)
+                expect(partial.segments(m.id, channel)).toEqual(
+                    full.segments(m.id, channel),
+                );
+        expect([...partial.flags].sort(byFlag)).toEqual(
+            [...full.flags].sort(byFlag),
+        );
+        // The body channel wasn't recompiled.
+        expect(partial.segments(1, "body")).toBe(previous.segments(1, "body"));
+    });
 });
 
 function hornCue(
@@ -642,4 +819,14 @@ function bodyCue(
         value,
         ...extra,
     };
+}
+
+function byFlag(
+    a: { kind: string; cueIds: readonly number[] },
+    b: typeof a,
+): number {
+    return (
+        a.kind.localeCompare(b.kind) ||
+        a.cueIds.join().localeCompare(b.cueIds.join())
+    );
 }

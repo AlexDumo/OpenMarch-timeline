@@ -1,4 +1,5 @@
 import {
+    cueSettings,
     cueValueLookup,
     defaultCueValue,
     type CueValueLookup,
@@ -20,10 +21,14 @@ import {
 const segmentKey = (marcherId: number, channel: CueChannel) =>
     `${marcherId}:${channel}`;
 
-/** A cue placed on its count. */
+/**
+ * A cue placed for one marcher: `count` is where it was authored (ties are
+ * settled there), `at` is where it lands for this marcher after a ripple.
+ */
 interface PlacedCue {
     cue: CueInput;
     count: number;
+    at: number;
 }
 
 /** A Feet state's label, from its settings ("½", "2×", "MT"). */
@@ -71,7 +76,7 @@ function segment(
         kind,
         value,
         label: labelOf(lookup, value, cue?.settings),
-        settings: cue?.settings ?? {},
+        settings: value ? cueSettings(lookup(value), cue?.settings) : {},
         cueId: cue?.id ?? null,
         ...extra,
     };
@@ -89,15 +94,19 @@ function stateTimeline(
     channel: CueChannel,
     states: readonly PlacedCue[],
     counts: number,
+    flags: FlagCollector,
 ): CueSegment[] {
     const defaultValue = defaultCueValue(channel, marcher.carries);
     const out: CueSegment[] = [];
     let current = segment(lookup, 0, counts, "default", defaultValue, null);
     let previousCount = 0;
+    let previous: CueInput | null = null;
 
-    for (const { cue, count } of states) {
+    for (const { cue, at: count } of states) {
         const length =
             cue.transitionLength ?? lookup(cue.value)?.defaultTransition ?? 1;
+        if (previous && count - length + 1 < previousCount)
+            flags.add("transition_cut", [previous.id, cue.id], marcher.id);
         const start = Math.max(count - length + 1, previousCount);
         if (start > current.from) out.push({ ...current, to: start });
         out.push(
@@ -109,10 +118,14 @@ function stateTimeline(
         );
         current = segment(lookup, count, counts, "state", cue.value, cue);
         previousCount = count;
+        previous = cue;
     }
     out.push(current);
     return out;
 }
+
+/** Channels that take states only (no Feet phrases in v1). */
+const STATES_ONLY: ReadonlySet<CueChannel> = new Set(["facing", "feet"]);
 
 const SPECIFICITY = { band: 0, section: 1, tag: 2, set: 3 } as const;
 
@@ -169,7 +182,7 @@ function winnersByCount(
             );
         winners.push(winner);
     }
-    return winners;
+    return winners.sort((a, b) => a.at - b.at || a.cue.id - b.cue.id);
 }
 
 /**
@@ -186,7 +199,7 @@ function phraseSpans(
     flags: FlagCollector,
 ): CueSegment[] {
     const out: CueSegment[] = [];
-    for (const { cue, count } of phrases) {
+    for (const { cue, at: count } of phrases) {
         const length = phraseLength(lookup, cue);
         const previous = out[out.length - 1];
         if (previous && previous.to > count) {
@@ -384,7 +397,7 @@ function rippleCounts(
     return out;
 }
 
-function targets(cue: CueInput, marcher: CueMarcher): boolean {
+function appliesTo(cue: CueInput, marcher: CueMarcher): boolean {
     const target = cue.target;
     switch (target.kind) {
         case "band":
@@ -431,16 +444,26 @@ function resolveChannel(
         flags,
     );
     return overlay(
-        stateTimeline(lookup, marcher, channel, states, counts),
+        stateTimeline(lookup, marcher, channel, states, counts, flags),
         phraseSpans(lookup, phrases, marcher.id, counts, flags),
     );
 }
 
-/** Each compile's applicable cues per marcher and channel, for tracing. */
-const applicableCues = new WeakMap<
-    CompiledCues,
-    Map<string, { placed: readonly PlacedCue[]; lookup: CueValueLookup }>
->();
+/** One marcher's channel before take-overs, kept for tracing and reuse. */
+interface ChannelResult {
+    placed: readonly PlacedCue[];
+    base: CueSegment[];
+}
+
+/** What a compile keeps beside its output. */
+interface CompileState {
+    lookup: CueValueLookup;
+    channels: Map<string, ChannelResult>;
+    /** Flags raised while resolving each channel (clashes, overlaps, cuts). */
+    channelFlags: Map<CueChannel, FlagCollector>;
+}
+
+const compileStates = new WeakMap<CompiledCues, CompileState>();
 
 /**
  * Why a marcher does what it does on a channel at a count: the cue in
@@ -456,56 +479,156 @@ export function traceCue(
     const segments = compiled.segments(marcherId, channel);
     const current = segments.find((s) => s.from <= count && count < s.to);
     const winner = current?.cueId ?? null;
-    const entry = applicableCues
-        .get(compiled)
-        ?.get(segmentKey(marcherId, channel));
-    if (!entry) return { winner, beaten: [] };
+    const state = compileStates.get(compiled);
+    const entry = state?.channels.get(segmentKey(marcherId, channel));
+    const takeover = current?.takenOverFrom
+        ? { takenOverFrom: current.takenOverFrom }
+        : {};
+    if (!state || !entry) return { winner, ...takeover, beaten: [] };
     const beaten = entry.placed
-        .filter(({ cue, count: at }) => {
+        .filter(({ cue, at }) => {
             if (cue.id === winner || at > count) return false;
             if (cue.kind === "state") return true;
-            const length = phraseLength(entry.lookup, cue);
+            const length = phraseLength(state.lookup, cue);
             return count < at + length;
         })
         .sort(
             (a, b) =>
-                b.count - a.count ||
+                b.at - a.at ||
                 specificity(b.cue) - specificity(a.cue) ||
                 b.cue.id - a.cue.id,
         )
         .map((p) => p.cue.id);
-    return { winner, beaten };
+    return { winner, ...takeover, beaten };
+}
+
+/** Options for recompiling after an edit. */
+export interface RecompileOptions {
+    /** The compile before the edit. */
+    previous: CompiledCues;
+    /**
+     * The channels whose cues changed. Every other channel is reused from
+     * `previous`, so nothing else may have changed: not the beats, the
+     * marchers, the phrase assets, positions or show defaults.
+     */
+    channels: readonly CueChannel[];
 }
 
 /**
  * Resolves the show's cues into each marcher's behavior per channel
- * (docs/3d/performer-behavior.md sections 2 and 6). Pure.
+ * (docs/3d/performer-behavior.md sections 2 and 6). Pure. With `recompile`,
+ * only the edited channels are resolved again; take-overs and the flags
+ * that cross channels are always redone.
  */
-export function compileCues(input: CompileInput): CompiledCues {
+export function compileCues(
+    input: CompileInput,
+    recompile?: RecompileOptions,
+): CompiledCues {
+    const counts = input.beats.length;
+    const byKey = new Map<string, CueSegment[]>();
+    const flags = new FlagCollector();
+    const lookup = cueValueLookup(input.phraseAssets, input.showDefaults);
+    const previous = recompile && compileStates.get(recompile.previous);
+    const reused = (channel: CueChannel) =>
+        previous !== undefined && !recompile!.channels.includes(channel);
+    const state: CompileState = {
+        lookup,
+        channels: new Map(),
+        channelFlags: new Map(
+            CUE_CHANNELS.map((channel) => [
+                channel,
+                reused(channel)
+                    ? previous!.channelFlags.get(channel)!
+                    : new FlagCollector(),
+            ]),
+        ),
+    };
+
+    const { placed, ripples, notAllowed } = placeCues(
+        input,
+        lookup,
+        flags,
+        reused,
+    );
+
+    for (const marcher of input.marchers) {
+        const channels = new Map<CueChannel, CueSegment[]>();
+        for (const channel of CUE_CHANNELS) {
+            const key = segmentKey(marcher.id, channel);
+            const kept = reused(channel)
+                ? previous!.channels.get(key)
+                : undefined;
+            const result =
+                kept ??
+                resolveMarcherChannel(
+                    lookup,
+                    marcher,
+                    channel,
+                    placed.filter(
+                        (p) =>
+                            p.cue.channel === channel &&
+                            !notAllowed.has(p.cue.id) &&
+                            appliesTo(p.cue, marcher) &&
+                            fits(lookup, p.cue, marcher),
+                    ),
+                    ripples,
+                    counts,
+                    state.channelFlags.get(channel)!,
+                );
+            state.channels.set(key, result);
+            channels.set(channel, result.base);
+        }
+        applyTakeovers(lookup, marcher.id, channels, input.travels, flags);
+        for (const [channel, segments] of channels)
+            byKey.set(segmentKey(marcher.id, channel), segments);
+    }
+
+    const compiled: CompiledCues = {
+        segments: (marcherId, channel) =>
+            byKey.get(segmentKey(marcherId, channel)) ?? [],
+        flags: [
+            ...flags.flags,
+            ...CUE_CHANNELS.flatMap((c) => state.channelFlags.get(c)!.flags),
+        ],
+    };
+    compileStates.set(compiled, state);
+    return compiled;
+}
+
+/**
+ * Puts each cue on its count, raises the flags that don't depend on one
+ * marcher's channel (fits nobody, a phrase on a states-only channel), and
+ * works out ripples for the channels being resolved.
+ */
+function placeCues(
+    input: CompileInput,
+    lookup: CueValueLookup,
+    flags: FlagCollector,
+    reused: (channel: CueChannel) => boolean,
+) {
     const counts = input.beats.length;
     const countOfBeat = new Map(input.beats.map((b, i) => [b.id, i]));
-    const byKey = new Map<string, CueSegment[]>();
-    const applicableByKey = new Map<
-        string,
-        { placed: readonly PlacedCue[]; lookup: CueValueLookup }
-    >();
-    const flags = new FlagCollector();
-    const lookup = cueValueLookup(input.phraseAssets);
-
     const placed: PlacedCue[] = [];
     for (const cue of input.cues) {
         const count = countOfBeat.get(cue.beatId);
-        if (count !== undefined) placed.push({ cue, count });
+        if (count !== undefined) placed.push({ cue, count, at: count });
     }
     placed.sort((a, b) => a.count - b.count || a.cue.id - b.cue.id);
 
     const time = new TimeMap(input.beats);
     const ripples = new Map<number, Map<number, number>>();
+    const notAllowed = new Set<number>();
     for (const { cue, count } of placed) {
-        const targeted = input.marchers.filter((m) => targets(cue, m));
+        const targeted = input.marchers.filter((m) => appliesTo(cue, m));
         const fitting = targeted.filter((m) => fits(lookup, cue, m));
         if (targeted.length > 0 && fitting.length === 0)
             for (const m of targeted) flags.add("fits_nobody", [cue.id], m.id);
+        if (cue.kind === "phrase" && STATES_ONLY.has(cue.channel)) {
+            for (const m of fitting)
+                flags.add("kind_not_allowed", [cue.id], m.id);
+            notAllowed.add(cue.id);
+        }
+        if (reused(cue.channel)) continue;
         const rippled = rippleCounts(
             cue,
             count,
@@ -516,48 +639,25 @@ export function compileCues(input: CompileInput): CompiledCues {
         );
         if (rippled) ripples.set(cue.id, rippled);
     }
+    return { placed, ripples, notAllowed };
+}
 
-    for (const marcher of input.marchers) {
-        const channels = new Map<CueChannel, CueSegment[]>();
-        for (const channel of CUE_CHANNELS) {
-            const applicable = placed
-                .filter(
-                    (p) =>
-                        p.cue.channel === channel &&
-                        targets(p.cue, marcher) &&
-                        fits(lookup, p.cue, marcher),
-                )
-                .map((p) => ({
-                    cue: p.cue,
-                    count: ripples.get(p.cue.id)?.get(marcher.id) ?? p.count,
-                }))
-                .sort((a, b) => a.count - b.count || a.cue.id - b.cue.id);
-            applicableByKey.set(segmentKey(marcher.id, channel), {
-                placed: applicable,
-                lookup,
-            });
-            channels.set(
-                channel,
-                resolveChannel(
-                    lookup,
-                    marcher,
-                    channel,
-                    applicable,
-                    counts,
-                    flags,
-                ),
-            );
-        }
-        applyTakeovers(lookup, marcher.id, channels, input.travels, flags);
-        for (const [channel, segments] of channels)
-            byKey.set(segmentKey(marcher.id, channel), segments);
-    }
-
-    const compiled: CompiledCues = {
-        segments: (marcherId, channel) =>
-            byKey.get(segmentKey(marcherId, channel)) ?? [],
-        flags: flags.flags,
+/** Places a marcher's applicable cues (after ripples) and resolves them. */
+function resolveMarcherChannel(
+    lookup: CueValueLookup,
+    marcher: CueMarcher,
+    channel: CueChannel,
+    applicable: readonly PlacedCue[],
+    ripples: ReadonlyMap<number, ReadonlyMap<number, number>>,
+    counts: number,
+    flags: FlagCollector,
+): ChannelResult {
+    const placed = applicable.map((p) => ({
+        ...p,
+        at: ripples.get(p.cue.id)?.get(marcher.id) ?? p.count,
+    }));
+    return {
+        placed,
+        base: resolveChannel(lookup, marcher, channel, placed, counts, flags),
     };
-    applicableCues.set(compiled, applicableByKey);
-    return compiled;
 }
