@@ -1,8 +1,8 @@
 # Web test build (temporary, do not merge to OpenMarch's `main`)
 
-> **Do not merge this folder, its demo `.dots` files, `tsconfig.web.json` or
-> the `web:*` scripts in `apps/desktop/package.json` into OpenMarch's `main`
-> branch.** They exist so testers can try features that are still in
+> **Do not merge this folder, its demo `.dots` files, `tsconfig.web.json`,
+> the `web:*` scripts in `apps/desktop/package.json`, `lab/` or
+> `.github/workflows/lab-deploy.yaml` into OpenMarch's `main` branch.** They exist so testers can try features that are still in
 > development, in a browser, and give feedback. They live on the fork.
 
 A static site that runs the whole editor in a browser, with no Electron. The
@@ -48,11 +48,20 @@ updates and recent files don't work here.
 
 ## Publishing to the lab
 
-A branch with `lab/experiment.md` (the test's title, intro and questions) is
-built and published to the OpenMarch lab on every push, by
-`.github/workflows/lab-deploy.yaml`. The lab adds its feedback widget to the
-page; nothing here knows about it. The manifest format and the lab itself are
-in the `OpenMarch/om-lab` repository.
+A test is a folder `lab/<id>/` with `experiment.md` (the test's title, intro
+and questions) and, optionally, an intro video or GIF. To publish one:
+
+1. Open a pull request on the fork that adds or changes exactly one
+   `lab/<id>/experiment.md`.
+2. Add the **`lab`** label.
+
+`.github/workflows/lab-deploy.yaml` builds this site and publishes it to the
+OpenMarch lab, with a link to the pull request and credit to its author, and
+comments on the pull request with the test's link. It publishes again on
+every push while the label is on. Removing the label or closing the pull
+request closes the test; its feedback stays. The lab adds its feedback widget
+to the page; nothing here knows about it. The manifest format and the lab
+itself are in the `OpenMarch/om-lab` repository.
 
 ## Demo shows
 
