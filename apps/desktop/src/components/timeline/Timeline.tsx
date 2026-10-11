@@ -114,6 +114,11 @@ export interface TimelinePlayback {
     readonly playNext?: "page";
     /** Shift+Space's once-through is playing (UI-17) */
     readonly playingOnce?: boolean;
+    /**
+     * Lab test playback-start, version B: Play plays from the start flag, and a second Play button
+     * (Shift+Space) plays from the playhead. Its presence turns version B on in the transport.
+     */
+    readonly onPlayFromPlayhead?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -688,6 +693,7 @@ export function Timeline(props: TimelineProps) {
         playLoops: playback.playLoops,
         playNext: playback.playNext,
         playingOnce: playback.playingOnce,
+        onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,

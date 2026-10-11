@@ -726,6 +726,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         playLoops={props.playLoops}
                         playNext={props.playNext}
                         playingOnce={props.playingOnce}
+                        onPlayFromPlayhead={props.onPlayFromPlayhead}
                         onNavigate={onNavigate}
                         onFit={
                             props.onPixelsPerBeatChange ? zoom.fit : undefined

@@ -217,6 +217,8 @@ export interface TimelineInteractionProps {
     readonly playNext?: "page";
     /** Shift+Space's once-through is playing (UI-17) */
     readonly playingOnce?: boolean;
+    /** Lab test playback-start, version B: the second Play button (from the playhead) */
+    readonly onPlayFromPlayhead?: () => void;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;

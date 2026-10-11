@@ -15,6 +15,7 @@ import {
 } from "./timelinePlayhead";
 import { timeAtBeat, type BeatTiming } from "./timeMap";
 import { restartLivePlaybackAt } from "@/components/timeline/audio/AudioPlayer";
+import { getLabVariant } from "@/lab/labVariant";
 
 /**
  * The timeline-mode transport (docs/timeline/ui.md UI-9; P8.11), shared by the timeline's
@@ -229,15 +230,24 @@ export const loopBounds = (
 };
 
 /**
- * Playing on (UI-17, Play with no pin): plays from the playhead to the end of the show, as UI-10's
- * Play did. Returns false when there's nothing after it.
+ * Lab test `playback-start` (fork-only; src/lab/labVariant.ts), version B: Space plays on from the
+ * yellow start flag, and Shift+Space (a second Play button) plays on from the playhead. Looping
+ * is unchanged.
+ */
+export const playsFromStartFlag = (): boolean =>
+    getLabVariant() === "from-flag";
+
+/**
+ * Playing on (UI-17, Play with no pin): plays from the playhead (or `from`) to the end of the
+ * show, as UI-10's Play did. Returns false when there's nothing after it.
  */
 export function startTimelinePlayOn(
     showEndBeat: number,
     setIsPlaying: (isPlaying: boolean) => void,
+    from?: number,
 ): boolean {
     const state = useTimelineSelectionStore.getState();
-    const start = state.cursorBeat ?? state.playheadBeat;
+    const start = from ?? state.cursorBeat ?? state.playheadBeat;
     if (!canPlayOn(start, showEndBeat)) return false;
     state.cue(start);
     state.setPlayback({ kind: "on" });
@@ -300,7 +310,12 @@ export function toggleTimelinePlayback({
     const state = useTimelineSelectionStore.getState();
     const bounds = loopBounds(state);
     if (!bounds) {
-        startTimelinePlayOn(showEndBeat, setIsPlaying);
+        // Lab version B: from the start flag S
+        startTimelinePlayOn(
+            showEndBeat,
+            setIsPlaying,
+            playsFromStartFlag() ? state.startBeat : undefined,
+        );
         return;
     }
     state.cue(bounds.from);
@@ -327,7 +342,10 @@ export function playTimelinePage({
         return;
     }
     const state = useTimelineSelectionStore.getState();
-    const bounds = loopBounds(state) ?? previewBounds(state);
+    // Lab version B: with looping off, Shift+Space plays on from the playhead
+    const bounds =
+        loopBounds(state) ??
+        (playsFromStartFlag() ? null : previewBounds(state));
     if (!bounds) {
         startTimelinePlayOn(showEndBeat, setIsPlaying);
         return;

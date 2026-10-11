@@ -7,11 +7,13 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
+import { useLabVariant } from "@/lab/labVariant";
 import {
     jumpTimelinePages,
     navigateTimelinePages,
     loopBounds,
     selectedPageBox,
+    playTimelinePage,
     seekTimeline,
     toggleTimelinePlayback,
 } from "@/timeline/timelineTransport";
@@ -34,7 +36,10 @@ interface PlaybackState {
 const playbackCommands = (
     latest: { readonly current: PlaybackState },
     liveBeat: () => number | null,
-): Pick<TimelinePlayback, "onSeek" | "onNavigate" | "onPlayingChange"> => ({
+): Pick<
+    TimelinePlayback,
+    "onSeek" | "onNavigate" | "onPlayingChange" | "onPlayFromPlayhead"
+> => ({
     // UI-12: while playing, a click or page button jumps playback there, and a scrub suspends it
     // until it ends (`seekTimeline`), which says where a scrub's seek landed
     onSeek: (beatIndex, options) => {
@@ -60,6 +65,15 @@ const playbackCommands = (
         const { beats, isPlaying, setIsPlaying } = latest.current;
         if (next === isPlaying) return;
         toggleTimelinePlayback({
+            isPlaying,
+            showEndBeat: beats.length,
+            setIsPlaying,
+        });
+    },
+    // Lab test playback-start, version B: the second Play button, as Shift+Space
+    onPlayFromPlayhead: () => {
+        const { beats, isPlaying, setIsPlaying } = latest.current;
+        playTimelinePage({
             isPlaying,
             showEndBeat: beats.length,
             setIsPlaying,
@@ -105,6 +119,8 @@ export function useTimelinePlayback({
     const playingOnce = useTimelineSelectionStore(
         (s) => s.playback?.kind === "preview" && s.playback.once === true,
     );
+    // Lab test playback-start: version B plays from the start flag, with a second Play button
+    const playFromFlag = useLabVariant() === "from-flag";
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -156,6 +172,9 @@ export function useTimelinePlayback({
             playNext,
             playingOnce,
             ...commands,
+            onPlayFromPlayhead: playFromFlag
+                ? commands.onPlayFromPlayhead
+                : undefined,
         }),
         [
             commands,
@@ -166,6 +185,7 @@ export function useTimelinePlayback({
             playLoops,
             playNext,
             playingOnce,
+            playFromFlag,
         ],
     );
 }

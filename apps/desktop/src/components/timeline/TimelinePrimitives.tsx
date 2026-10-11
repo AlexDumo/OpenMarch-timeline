@@ -139,6 +139,13 @@ const PLAY_FROM_FLAG_ICON = (
         <PlayIcon size={14} weight="fill" />
     </span>
 );
+/** Lab test playback-start, version B: Play from the playhead, a bar in the playhead's color */
+const PLAY_FROM_PLAYHEAD_ICON = (
+    <span className="flex items-center gap-2">
+        <span aria-hidden className="rounded-2 bg-accent h-14 w-[2.5px]" />
+        <PlayIcon size={14} weight="fill" />
+    </span>
+);
 
 /**
  * The transport's shortcuts as the tooltips show them (UI-17), as keycaps joined with " + ". They
@@ -222,6 +229,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     playLoops = false,
     playNext,
     playingOnce = false,
+    onPlayFromPlayhead,
     onNavigate,
     onFit,
     fitted = false,
@@ -243,6 +251,11 @@ export const TimelineTransport = memo(function TimelineTransport({
     playNext?: "page";
     /** Shift+Space's once-through is playing (UI-17) */
     playingOnce?: boolean;
+    /**
+     * Lab test playback-start, version B: Play plays from the start flag, and this second Play
+     * button (Shift+Space) plays from the playhead
+     */
+    onPlayFromPlayhead?: () => void;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -421,7 +434,9 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 ? "Stop"
                                 : playLoops
                                   ? "Play the loop"
-                                  : "Play"
+                                  : onPlayFromPlayhead
+                                    ? "Play from the start flag"
+                                    : "Play"
                         }
                         shortcut={TRANSPORT_SHORTCUTS.play}
                         hint={
@@ -431,9 +446,11 @@ export const TimelineTransport = memo(function TimelineTransport({
                                     : "Stops where it is"
                                 : playLoops
                                   ? "Loops the yellow bar, wherever the playhead is. C or Loop turns looping off"
-                                  : playNext === "page"
-                                    ? "Plays on from here. Shift+Space plays this page's move once; C loops it"
-                                    : "Plays on from here. C loops the page you're on"
+                                  : onPlayFromPlayhead
+                                    ? "Plays on from the yellow start flag. Shift+Space plays from the playhead; C loops the page"
+                                    : playNext === "page"
+                                      ? "Plays on from here. Shift+Space plays this page's move once; C loops it"
+                                      : "Plays on from here. C loops the page you're on"
                         }
                         testId="timeline-play"
                         pressed={isPlaying}
@@ -441,10 +458,33 @@ export const TimelineTransport = memo(function TimelineTransport({
                     >
                         {isPlaying
                             ? STOP_ICON
-                            : playLoops
+                            : playLoops || onPlayFromPlayhead
                               ? PLAY_FROM_FLAG_ICON
                               : PLAY_ICON}
                     </TransportButton>
+                    {onPlayFromPlayhead && (
+                        <TransportButton
+                            label={
+                                isPlaying
+                                    ? "Stop"
+                                    : playLoops
+                                      ? "Play the loop once"
+                                      : "Play from the playhead"
+                            }
+                            shortcut={TRANSPORT_SHORTCUTS.playPage}
+                            hint={
+                                isPlaying
+                                    ? undefined
+                                    : playLoops
+                                      ? "Plays the yellow bar once, then goes back"
+                                      : "Plays on from where the playhead is"
+                            }
+                            testId="timeline-play-from-playhead"
+                            onClick={onPlayFromPlayhead}
+                        >
+                            {isPlaying ? STOP_ICON : PLAY_FROM_PLAYHEAD_ICON}
+                        </TransportButton>
+                    )}
                     <TransportButton
                         label="Next page"
                         shortcut={TRANSPORT_SHORTCUTS.nextPage}
