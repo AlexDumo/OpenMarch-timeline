@@ -3,7 +3,7 @@
  * An instrument as rigid geometry on the right hand (docs/3d/instruments.md
  * §4), in the body's bind pose so om-pose's instanced skinning carries it
  * with the hand, colored per vertex in the look's finish, and the smooth
- * metallic material that draws it under the same bake.
+ * metallic material that draws it from the same composed bones.
  */
 import * as THREE from "three";
 import { BRASS_COLORS } from "@/view3d/core/instruments/brass";
@@ -21,10 +21,7 @@ import {
     PART_SILK,
     PART_WOOD,
 } from "@/view3d/core/instruments/mesh";
-import {
-    instancedSkinning,
-    type Bake,
-} from "@/view3d/render/instanced-marchers.js";
+import { composedSkinning, type Composer } from "@/view3d/render/composer";
 import type { ArmPose } from "./armPose";
 
 /** The metal's sRGB color per finish: gold lacquer, silver lacquer. */
@@ -214,11 +211,13 @@ export function matteShader(shader: {
 }
 
 /**
- * The instruments' material: smooth, metallic, colored per vertex, driven
- * by the same bake as the bodies, with the {@link MATTE_PARTS} matte. One
- * per marcher set.
+ * The instruments' material: smooth, metallic, colored per vertex, skinned
+ * from the same composed bones as the bodies, with the {@link MATTE_PARTS}
+ * matte. One per marcher set.
  */
-export function instrumentMaterial(bake: Bake): THREE.MeshStandardMaterial {
+export function instrumentMaterial(
+    composer: Composer,
+): THREE.MeshStandardMaterial {
     const material = new THREE.MeshStandardMaterial({
         color: 0xffffff,
         metalness: 1,
@@ -229,7 +228,7 @@ export function instrumentMaterial(bake: Bake): THREE.MeshStandardMaterial {
         // bells and tube ends are open surfaces: looking into a bell must show its inside
         side: THREE.DoubleSide,
     });
-    // instancedSkinning chains onto this, so it runs first
+    // composedSkinning chains onto this, so it runs first
     material.onBeforeCompile = matteShader;
-    return instancedSkinning(THREE, material, bake);
+    return composedSkinning(material, composer);
 }

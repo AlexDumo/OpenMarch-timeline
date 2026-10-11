@@ -20,6 +20,24 @@ The `.d.ts` files are hand-written for the `.js` files; keep them in step.
 
 - Moved from `src/view3d/vendor/om-pose/` (2026-10-11), with header comments
   and spelling ignores only. No behavior change.
+- `legTurnSetup` and `cloneRig` are exported for the per-channel bake.
+
+## Channel layering
+
+The window no longer skins from `instancedSkinning`'s per-vertex clip lerp.
+These modules, written here, replace it (performer-behavior.md section 8.3):
+
+| File              | What it does                                                                   |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `bakeLayout.ts`   | Where each channel's rows go: Feet, then Horn/Equipment, then Body             |
+| `channelBake.ts`  | Samples those rows, 24 bones a row (the skeleton's 23 and the prop bone)       |
+| `channelState.ts` | Each performer's channel state, a float texture written when a segment changes |
+| `composeMath.ts`  | Composes one performer's bones on the CPU: the reference and the fallback      |
+| `composer.ts`     | The once-a-frame GPU compose pass, and the skinning that reads its texture     |
+
+`bakeClips`, `instancedSkinning` and `writeMarcher` stay in
+`instanced-marchers.js` as the single-clip reference: tests compare the
+composed bones with them.
 
 ## Parity
 

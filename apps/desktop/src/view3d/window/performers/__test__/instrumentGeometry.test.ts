@@ -22,7 +22,8 @@ import {
     PART_SILK,
     PART_WOOD,
 } from "@/view3d/core/instruments/mesh";
-import { NO_HOLD, bakeForBodies } from "../marchers/marcherBodies";
+import { bakeForBodies } from "../marchers/marcherBodies";
+import { Composer } from "@/view3d/render/composer";
 
 async function body() {
     const b = fs.readFileSync(
@@ -206,7 +207,7 @@ describe("instrument color and material", () => {
         );
     });
 
-    it("builds a smooth metallic material under the instanced skinning", async () => {
+    it("builds a smooth metallic material skinned from the composed bones", async () => {
         const mesh = await body();
         const bake = bakeForBodies(
             new Map([
@@ -216,16 +217,15 @@ describe("instrument color and material", () => {
                 ],
             ]) as never,
             {},
-            [NO_HOLD],
         );
-        const m = instrumentMaterial(bake);
+        const m = instrumentMaterial(new Composer(bake, 1));
         expect(m.metalness).toBeGreaterThan(0.9);
         expect(m.roughness).toBeLessThan(0.4);
         expect(m.vertexColors).toBe(true);
         expect(m.flatShading).toBe(false);
         // bells and tube ends are open surfaces: their insides must draw too
         expect(m.side).toBe(THREE.DoubleSide);
-        expect(m.customProgramCacheKey()).toContain("baked-instances");
+        expect(m.customProgramCacheKey()).toContain("composed-instances");
     });
 
     it("draws the rifle's stock, silks and rubber matte, the metal shiny", () => {

@@ -225,7 +225,6 @@ describe("playing a crossfade", () => {
         }
         const bodies = {
             bake: { rows },
-            holdOf: () => "none",
             setClip(slot: number, clip: MarcherClip) {
                 writes.push({ slot, clip });
             },
@@ -284,16 +283,14 @@ describe("playing a slot's rows", () => {
     > = {};
     let r = 0;
     for (const e of plan.events) {
-        rows[`${e.clip}@brass:up`] = { row: r++, frames: 60, counts: 2 };
-        if (e.clip2)
-            rows[`${e.clip2}@brass:up`] = { row: r++, frames: 60, counts: 2 };
+        rows[e.clip] = { row: r++, frames: 60, counts: 2 };
+        if (e.clip2) rows[e.clip2] = { row: r++, frames: 60, counts: 2 };
     }
 
     function motion() {
         const writes: { slot: number; clip: MarcherClip }[] = [];
         const bodies = {
             bake: { rows },
-            holdOf: () => "brass:up",
             setClip(slot: number, clip: MarcherClip) {
                 writes.push({ slot, clip });
             },
@@ -307,13 +304,11 @@ describe("playing a slot's rows", () => {
         };
     }
 
-    it("looks rows up by the slot's hold", () => {
+    it("looks Feet rows up by clip, whatever the slot carries", () => {
         const { m, writes, xz, placed } = motion();
         m.update(0.5 - STEP_AHEAD, xz, placed);
         expect(writes.length).toBe(1);
-        expect(writes[0].clip.row).toBe(
-            rows[`${plan.events[0].clip}@brass:up`],
-        );
+        expect(writes[0].clip.row).toBe(rows[plan.events[0].clip]);
     });
 
     it("writes a loop once, not every frame", () => {
@@ -352,7 +347,6 @@ describe("landing each foot on its click", () => {
         const writes: { slot: number; clip: MarcherClip }[] = [];
         const bodies = {
             bake: { rows },
-            holdOf: () => "none",
             setClip(slot: number, clip: MarcherClip) {
                 writes.push({ slot, clip });
             },
