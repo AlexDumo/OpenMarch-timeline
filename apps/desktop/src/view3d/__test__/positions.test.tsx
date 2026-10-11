@@ -22,6 +22,11 @@ import {
     usePerformerTimelines,
 } from "../positions";
 import type { MarcherTimeline } from "@/utilities/Keyframes";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
+
+keepFixturesInPageMode(
+    "the 3D View reads positions from marcher_pages; reading timeline-mode shows from the resolver is a follow-up",
+);
 
 /** The editor animates with the selected page ±2 pages (useAnimation). */
 const EDITOR_PAGE_DELTA = 2;
