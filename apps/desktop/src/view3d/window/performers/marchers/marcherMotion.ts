@@ -156,6 +156,8 @@ export function planShow(
         sameArray(prev.bpm, clock.bpm) &&
         clock.counts + 1 === (prev.positions.find((p) => p)?.length ?? 0) / 2;
     const prevIndex = new Map((prev?.ids ?? []).map((id, i) => [id, i]));
+    const secondsPerCount = (k: number) =>
+        60 / (clock.bpm[Math.min(k, clock.bpm.length - 1)] || 120);
     let replanned = 0;
     const plans = sampled.map((positions, i) => {
         if (!positions) return null;
@@ -171,12 +173,13 @@ export function planShow(
             return previous!.plans[j];
         replanned++;
         const fromCues = cues
-            ? marcherCueInputs(cues, ids[i], positions)
+            ? marcherCueInputs(cues, ids[i], positions, { secondsPerCount })
             : null;
         return planMarcher({
             manifest,
             heightClass: h,
             heading: fromCues?.heading ?? 0,
+            turnSpan: fromCues?.turnSpan,
             feet: fromCues?.feet,
             positions,
             bpm: clock.bpm,
