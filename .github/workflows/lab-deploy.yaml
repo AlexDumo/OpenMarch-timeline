@@ -110,6 +110,9 @@ jobs:
 
       - name: Build the web test build
         if: steps.test.outputs.mode == 'publish'
+        env:
+          # The test's versions to compare, if it lists any (web/README.md)
+          LAB_MANIFEST: ${{ steps.test.outputs.manifest }}
         run: |
           pnpm turbo run build --filter="@openmarch/desktop^..."
           pnpm --filter @openmarch/desktop run web:build

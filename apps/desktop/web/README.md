@@ -1,6 +1,6 @@
 # Web test build (temporary, do not merge to OpenMarch's `main`)
 
-> **Do not merge this folder, its demo `.dots` files, `tsconfig.web.json`,
+> **Do not merge this folder, its demo `.dots` files, `tsconfig.web.json`, `src/lab/`,
 > the `web:*` scripts in `apps/desktop/package.json`, `lab/` or
 > `.github/workflows/lab-deploy.yaml` into OpenMarch's `main` branch.** They exist so testers can try features that are still in
 > development, in a browser, and give feedback. They live on the fork.
@@ -62,6 +62,41 @@ every push while the label is on. Removing the label or closing the pull
 request closes the test; its feedback stays. The lab adds its feedback widget
 to the page; nothing here knows about it. The manifest format and the lab
 itself are in the `OpenMarch/om-lab` repository.
+
+## Comparing versions
+
+A test can build two or more versions of a behavior into one build, so
+testers try them side by side on the same show instead of in two builds
+(reloading loses a show's edits). List them in the manifest's front matter;
+the first is the one testers start on:
+
+```yaml
+variants:
+  - id: play-on
+    label: A
+    description: What the app does now
+  - id: from-flag
+    label: B
+    description: Space plays from the start flag
+```
+
+The build then shows a **Version** switch in its toolbar. It sets the URL's
+`variant` parameter, so a reload keeps it and the feedback (which records the
+page's URL) says which version was on. App code reads the version with
+`useLabVariant()` or `getLabVariant()` from `src/lab/labVariant.ts`, which is
+`null` outside such a build, meaning the current behavior:
+
+```ts
+if (getLabVariant() === "from-flag") return playFromStartFlag();
+```
+
+Ask in the questions which version testers preferred and why. Keep these
+branches out of OpenMarch's `main`: once a version wins, build it without the
+switch.
+
+Locally, point the build at the manifest:
+`LAB_MANIFEST=lab/<id>/experiment.md pnpm run web:dev` (the path is from the
+repository root).
 
 ## Demo shows
 
