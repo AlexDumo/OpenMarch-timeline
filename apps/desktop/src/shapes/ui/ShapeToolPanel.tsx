@@ -351,28 +351,6 @@ function SessionControls({ session }: { session: ShapeSession }) {
                 </Row>
             )}
 
-            {preview.issues.length > 0 && (
-                <ul
-                    className="text-sub flex flex-col gap-2"
-                    data-testid="shape-tool-issues"
-                >
-                    {preview.issues.map((issue) => (
-                        <li
-                            key={issue.message}
-                            className={
-                                issue.level === "error"
-                                    ? "text-red"
-                                    : issue.level === "warning"
-                                      ? "text-yellow"
-                                      : "text-text/60"
-                            }
-                        >
-                            {issue.message}
-                        </li>
-                    ))}
-                </ul>
-            )}
-
             <div className="flex gap-8">
                 <ActionButton action="applyShape">
                     <Button
@@ -395,6 +373,29 @@ function SessionControls({ session }: { session: ShapeSession }) {
                     </Button>
                 </ActionButton>
             </div>
+
+            {/* Below Place, so a warning appearing doesn't move the button */}
+            {preview.issues.length > 0 && (
+                <ul
+                    className="text-sub flex flex-col gap-2"
+                    data-testid="shape-tool-issues"
+                >
+                    {preview.issues.map((issue) => (
+                        <li
+                            key={issue.message}
+                            className={
+                                issue.level === "error"
+                                    ? "text-red"
+                                    : issue.level === "warning"
+                                      ? "text-yellow"
+                                      : "text-text/60"
+                            }
+                        >
+                            {issue.message}
+                        </li>
+                    ))}
+                </ul>
+            )}
         </>
     );
 }

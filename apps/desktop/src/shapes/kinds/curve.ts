@@ -174,6 +174,7 @@ export const curveKind: ShapeKind<CurveParams> = {
                 at,
                 start: i === 0,
                 end: i === p.points.length - 1,
+                hint: "Point (double-click it to remove)",
             })),
             { key: "move", role: "move", at: middleOf(curvePath(p)) },
         ];

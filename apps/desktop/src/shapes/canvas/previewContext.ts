@@ -56,6 +56,8 @@ export function originsAtStart(ids: readonly number[]): Map<number, XY> {
 /** How each marcher looks on the canvas: its drill number and dot color, for the result preview */
 export interface MarcherLook {
     readonly label: string;
+    /** The drill number alone ("12" for OT12), for tight spacing */
+    readonly short: string;
     readonly fill: string;
     readonly stroke: string;
     readonly radius: number;
@@ -71,6 +73,7 @@ export function marcherLooks(
         if (!wanted.has(m.id)) continue;
         out.set(m.id, {
             label: m.marcherObj.drill_number,
+            short: String(m.marcherObj.drill_order),
             fill: String(m.dotObject.fill ?? "#e00"),
             stroke: String(m.dotObject.stroke ?? "#000"),
             radius: DEFAULT_DOT_RADIUS,

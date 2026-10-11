@@ -129,7 +129,13 @@ export const circleKind: ShapeKind<CircleParams> = {
 
     handles: (p) => [
         { key: "move", role: "move", at: p.center },
-        { key: "radius", role: "point", at: rimPoint(p), start: true },
+        {
+            key: "radius",
+            role: "point",
+            at: rimPoint(p),
+            start: true,
+            hint: "Radius, and where marcher 1 starts",
+        },
     ],
 
     drag(p, key, to, { shift }) {

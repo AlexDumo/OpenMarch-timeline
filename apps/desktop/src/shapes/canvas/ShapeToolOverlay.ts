@@ -15,6 +15,8 @@ export interface ShapeToolOverlayColors {
     ghost: string;
     /** Drill numbers in the result preview */
     label: string;
+    /** The shape being replaced: neutral, so it reads as "old", not as part of the move */
+    replaced: string;
     /** Spots with a warning or error */
     issue: string;
     handleFill: string;
@@ -32,6 +34,10 @@ export interface PreviewDecor {
     readonly origins: ReadonlyMap<number, XY>;
     /** Each marcher's dot and drill number, by id, for the result style */
     readonly looks: ReadonlyMap<number, MarcherLook>;
+    /** Spots too tight for full drill numbers: show the number only */
+    readonly shortLabels?: boolean;
+    /** A big band: only paths with a problem, no start labels */
+    readonly dense?: boolean;
 }
 
 const DEFAULT_DECOR: PreviewDecor = {
@@ -260,11 +266,48 @@ export default class ShapeToolOverlay {
         const handle = this.dragKey === null ? this.handleAt(event.e) : null;
         if (handle)
             this.canvas.setCursor(cursorFor(handle.shapeToolHandle.role));
+        this.showHint(handle?.shapeToolHandle ?? null);
     };
 
     setColors(colors: ShapeToolOverlayColors): void {
         this.colors = colors;
         this.clear();
+    }
+
+    private hintTag: fabric.Text | null = null;
+
+    /** Names the handle under the pointer, so handles explain themselves */
+    private showHint(def: HandleDef | null): void {
+        if (!def) {
+            if (this.hintTag) {
+                this.canvas.remove(this.hintTag);
+                this.hintTag = null;
+                this.canvas.requestRenderAll();
+            }
+            return;
+        }
+        const zoom = this.canvas.getZoom() || 1;
+        const at = toCanvas(def.at);
+        const props = {
+            left: at.x + 14 / zoom,
+            top: at.y - 14 / zoom,
+            fontSize: 12 / zoom,
+            text: def.hint ?? defaultHint(def),
+        };
+        if (this.hintTag) this.hintTag.set(props);
+        else {
+            this.hintTag = new fabric.Text(props.text, {
+                ...props,
+                fill: this.colors.shape,
+                backgroundColor: this.colors.handleFill,
+                fontFamily: "sans-serif",
+                objectCaching: false,
+                ...NoControls,
+            });
+            this.canvas.add(this.hintTag);
+        }
+        this.hintTag.bringToFront();
+        this.canvas.requestRenderAll();
     }
 
     /**
@@ -361,6 +404,7 @@ export default class ShapeToolOverlay {
 
     clear(): void {
         this.showHold(null);
+        this.showHint(null);
         for (const o of [
             ...this.guides,
             ...this.outlines,
@@ -452,7 +496,13 @@ export default class ShapeToolOverlay {
             const to = toCanvas(target.to);
             const issue = flaggedSpots.has(target.slot);
             const look = decor.looks.get(target.id);
-            this.placeLine(i, from, to);
+            // A path with a problem is drawn strongly; on a big band, only those are drawn
+            this.placeLine(
+                i,
+                from,
+                to,
+                issue ? "issue" : decor.dense ? "hidden" : "plain",
+            );
             if (result) {
                 // The new shape, drawn as the marchers themselves
                 this.placeCircle(this.ghosts, i, to, {
@@ -467,14 +517,17 @@ export default class ShapeToolOverlay {
                 this.placeLabel(
                     i,
                     to,
-                    look?.label ?? "",
+                    (decor.shortLabels ? look?.short : look?.label) ?? "",
                     look?.radius ?? GHOST_RADIUS,
                 );
                 // Where they come from: faint
                 this.placeOriginLabel(
                     i,
                     from,
-                    look?.label ?? "",
+                    decor.dense
+                        ? ""
+                        : ((decor.shortLabels ? look?.short : look?.label) ??
+                              ""),
                     look?.radius ?? GHOST_RADIUS,
                 );
                 // The shape being replaced, when it isn't where they start: tiny faint dots,
@@ -484,7 +537,7 @@ export default class ShapeToolOverlay {
                     dist(target.now, target.to) > SAME_SPOT;
                 this.placeCircle(this.replaced, i, toCanvas(target.now), {
                     radius: REPLACED_RADIUS,
-                    fill: replaced ? this.colors.travel : "rgba(0,0,0,0)",
+                    fill: replaced ? this.colors.replaced : "rgba(0,0,0,0)",
                     stroke: "",
                     strokeWidth: 0,
                 });
@@ -512,15 +565,24 @@ export default class ShapeToolOverlay {
             o.setCoords();
     }
 
-    private placeLine(i: number, from: XY, to: XY): void {
+    private placeLine(
+        i: number,
+        from: XY,
+        to: XY,
+        kind: "plain" | "issue" | "hidden",
+    ): void {
+        const style = {
+            stroke: kind === "issue" ? this.colors.issue : this.colors.travel,
+            strokeWidth: kind === "issue" ? 2 : 1,
+            visible: kind !== "hidden",
+        };
         const line = this.travel[i];
         if (line) {
-            line.set({ x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+            line.set({ x1: from.x, y1: from.y, x2: to.x, y2: to.y, ...style });
             return;
         }
         const created = new fabric.Line([from.x, from.y, to.x, to.y], {
-            stroke: this.colors.travel,
-            strokeWidth: 1,
+            ...style,
             objectCaching: false,
             ...NoControls,
         });
@@ -641,8 +703,8 @@ export default class ShapeToolOverlay {
             originY: "center",
             // Point handles are rings around the spot, so the marcher drawn there stays visible;
             // the start's ring is thicker, so "Lay from Start" has a visible end
-            fill:
-                def.role === "point" ? "rgba(0,0,0,0)" : this.colors.handleFill,
+            // Hollow, so a marcher drawn under a handle stays visible
+            fill: "rgba(0,0,0,0)",
             stroke: this.colors.shape,
             strokeWidth: def.start ? 4 : 2,
             // A dark halo keeps handles readable over grass, grid lines and marchers
@@ -677,4 +739,17 @@ export default class ShapeToolOverlay {
 
 function cursorFor(role: HandleRole): string {
     return role === "move" ? "move" : "grab";
+}
+
+function defaultHint(def: HandleDef): string {
+    switch (def.role) {
+        case "move":
+            return "Move";
+        case "rotate":
+            return "Turn";
+        case "bulge":
+            return "Size";
+        case "point":
+            return def.start ? "Start" : def.end ? "End" : "Point";
+    }
 }
