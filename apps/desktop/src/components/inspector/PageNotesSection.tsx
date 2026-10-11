@@ -6,12 +6,21 @@ import { updatePagesMutationOptions } from "../../hooks/queries";
 import { NotesRichTextEditor } from "../notes/NotesRichTextEditor";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useTimingObjects } from "@/hooks";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react";
+
+/** Whether notes HTML from the editor has any text in it */
+const hasText = (html: string) =>
+    new DOMParser().parseFromString(html, "text/html").body.textContent?.trim()
+        .length;
 
 export function PageNotesSection() {
     const { selectedPage } = useSelectedPage()!;
     const { isPlaying } = useIsPlaying()!;
     const { pages } = useTimingObjects()!;
     const { t } = useTranslate();
+    const { uiSettings, setUiSettings } = useUiSettingsStore();
+    const collapsed = uiSettings.pageNotesCollapsed;
     const queryClient = useQueryClient();
     const updatePagesMutation = useMutation(
         updatePagesMutationOptions(queryClient),
@@ -82,22 +91,48 @@ export function PageNotesSection() {
     return (
         <section aria-label={t("inspector.page.notes")}>
             <div className="border-stroke border-t pt-12">
-                <h3 className="text-h5 text-text mb-8">
-                    <T keyName="inspector.page.notes" />
-                </h3>
-                <div className="input-group">
-                    <NotesRichTextEditor
-                        value={notes}
-                        editable={!isPlaying}
-                        onChange={setNotes}
-                        onBlur={handleNotesBlur}
-                        onEditorFocus={() => {
-                            if (displayPage) {
-                                editingPageIdRef.current = displayPage.id;
-                            }
-                        }}
-                    />
-                </div>
+                <button
+                    type="button"
+                    aria-expanded={!collapsed}
+                    onClick={() =>
+                        setUiSettings({
+                            ...uiSettings,
+                            pageNotesCollapsed: !collapsed,
+                        })
+                    }
+                    className="focus-visible:text-accent text-text flex w-full items-center justify-between outline-hidden"
+                >
+                    <h3 className="text-h5 flex items-center gap-6">
+                        <T keyName="inspector.page.notes" />
+                        {/* Collapsed, a dot says this page has notes */}
+                        {collapsed && hasText(notes) ? (
+                            <span
+                                aria-hidden
+                                className="bg-accent size-6 rounded-full"
+                            />
+                        ) : null}
+                    </h3>
+                    {collapsed ? (
+                        <CaretUpIcon size={18} />
+                    ) : (
+                        <CaretDownIcon size={18} />
+                    )}
+                </button>
+                {collapsed ? null : (
+                    <div className="input-group mt-8">
+                        <NotesRichTextEditor
+                            value={notes}
+                            editable={!isPlaying}
+                            onChange={setNotes}
+                            onBlur={handleNotesBlur}
+                            onEditorFocus={() => {
+                                if (displayPage) {
+                                    editingPageIdRef.current = displayPage.id;
+                                }
+                            }}
+                        />
+                    </div>
+                )}
             </div>
         </section>
     );

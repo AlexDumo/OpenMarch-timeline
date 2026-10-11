@@ -32,6 +32,8 @@ export interface UiSettings {
     audioVolume: number;
     /** Whether all app audio is muted */
     audioMuted: boolean;
+    /** Whether the page notes at the bottom of the inspector are collapsed */
+    pageNotesCollapsed: boolean;
     /** The component that is currently focussed */
     focussedComponent: FocusableComponents;
     /** Mouse settings */
@@ -77,6 +79,7 @@ export const defaultSettings: UiSettings = {
     timelineZoomFitted: false,
     audioVolume: 100,
     audioMuted: false,
+    pageNotesCollapsed: false,
     focussedComponent: "canvas",
     mouseSettings: {
         trackpadMode: true,
