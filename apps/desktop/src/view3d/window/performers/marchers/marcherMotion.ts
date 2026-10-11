@@ -1,10 +1,16 @@
 /**
- * Drives the 3D View's marchers from the drill (ADR 0002 D-7): plans every
- * marcher's clips for the whole show once, then each frame switches clips
- * where a marcher's event changes and places its body. A crossfade rewrites
- * its blend weight and leg turn every frame; everything else is written once.
+ * Drives the 3D View's marchers from the drill (ADR 0002 D-7) and the
+ * compiled cues (performer-behavior.md section 8.2): plans every marcher's
+ * clips for the whole show once, then each frame switches clips where a
+ * marcher's event changes, places its body and turns it to its heading. A
+ * crossfade rewrites its blend weight and leg turn every frame; everything
+ * else is written once.
  */
-import type { FieldProperties } from "@openmarch/core";
+import {
+    compileCues,
+    type CompiledCues,
+    type FieldProperties,
+} from "@openmarch/core";
 import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
 import type { Bake } from "@/view3d/vendor/om-pose/instanced-marchers.js";
 import type { MarcherTimeline } from "@/utilities/Keyframes";
@@ -19,6 +25,8 @@ import {
 import type { MarcherPlan } from "@/view3d/core/marchers/planner";
 import { bodyAt, eventIndexAt } from "@/view3d/core/marchers/planner";
 import type { HeightClass } from "@/view3d/core/marchers/looks";
+import { marcherCueInputs } from "@/view3d/core/marchers/cueInputs";
+import type { Foot } from "@/view3d/core/marchers/planner";
 import { rowKey, type MarcherBodies } from "./marcherBodies";
 
 export interface ShowPlans {
@@ -34,7 +42,37 @@ export interface ShowPlans {
         heightClasses: readonly HeightClass[];
         bpm: Float64Array;
         ids: readonly number[];
+        cues: CompiledCues | null;
     };
+}
+
+/**
+ * Compiles the show's cues for the 3D View. There are no stored cues yet,
+ * so this is the defaults alone, built from the marchers and the timed
+ * beats (in the count clock's order); `stepOffFoot` is the window's preview
+ * override of the show default, never saved.
+ */
+export function compileWindowCues(
+    marchers: readonly { id: number; section: string }[],
+    beats: readonly { id: number; timestamp: number; duration: number }[],
+    stepOffFoot: Foot,
+): CompiledCues {
+    return compileCues({
+        beats: beats
+            .filter((b) => b.duration > 0)
+            .sort((a, b) => a.timestamp - b.timestamp)
+            .map((b) => ({ id: b.id, duration: b.duration })),
+        marchers: marchers.map((m, i) => ({
+            id: m.id,
+            section: m.section,
+            tagIds: [],
+            drillOrder: i,
+            // Feet and Facing fit everyone; nothing here reads the others
+            carries: "none",
+        })),
+        cues: [],
+        showDefaults: { stepOffFoot },
+    });
 }
 
 const sameArray = (
@@ -87,16 +125,18 @@ export function planShow(
     clock: CountClock,
     fieldProperties: FieldProperties,
     manifest: Manifest,
-    heading: number,
+    /** The compiled cues; null plays the defaults (front facing, stand). */
+    cues: CompiledCues | null,
     previous: ShowPlans | null = null,
 ): ShowPlans {
     const t0 = performance.now();
     const sampled = sampleDrill(timelines, clock, fieldProperties);
     // A drill edit usually moves a few marchers: reuse every plan whose
-    // inputs are unchanged (same marcher, drill samples and class).
+    // inputs are unchanged (same marcher, drill samples, class and cues).
     const prev = previous?.inputs;
     const reuseAll =
         !!prev &&
+        prev.cues === cues &&
         sameArray(prev.bpm, clock.bpm) &&
         clock.counts + 1 === (prev.positions.find((p) => p)?.length ?? 0) / 2;
     const prevIndex = new Map((prev?.ids ?? []).map((id, i) => [id, i]));
@@ -114,10 +154,14 @@ export function planShow(
         )
             return previous!.plans[j];
         replanned++;
+        const fromCues = cues
+            ? marcherCueInputs(cues, ids[i], positions)
+            : null;
         return planMarcher({
             manifest,
             heightClass: h,
-            heading,
+            heading: fromCues?.heading ?? 0,
+            feet: fromCues?.feet,
             positions,
             bpm: clock.bpm,
         });
@@ -131,6 +175,7 @@ export function planShow(
             heightClasses,
             bpm: clock.bpm,
             ids,
+            cues,
         },
     };
 }
@@ -143,7 +188,7 @@ export function planShow(
  * its click. The step-off plays during the count before a move, the left
  * foot lands on count 1, the right on count 8, and the close finishes on
  * the hold's count 1, as the 2D dot arrives. During a move the body runs
- * half a step ahead of the 2D dot.
+ * half a step ahead of the 2D dot. `CUE_LEAD` in `cueInputs.ts` must match.
  */
 export const STEP_AHEAD = 1;
 

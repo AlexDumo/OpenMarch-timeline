@@ -70,6 +70,7 @@ import {
 } from "./performerData";
 import type { MarcherSlotLook } from "./marchers/marcherBodies";
 import {
+    compileWindowCues,
     MarcherMotion,
     planShow,
     STEP_AHEAD,
@@ -172,9 +173,16 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // The count clock and every marcher's clip plan for the whole show.
     const { beats } = useTimingObjects();
     const clock = useMemo(() => buildCountClock(beats), [beats]);
+    // The cues compiled for every marcher. No cues are stored yet, so this
+    // is the defaults (stand on holds, face the front), with the window's
+    // step-off foot as an unsaved preview of the show default.
+    const cues = useMemo(() => {
+        if (!marchers) return null;
+        return compileWindowCues(marchers, beats, stepOffFoot);
+    }, [marchers, beats, stepOffFoot]);
     const previousPlans = useRef<ShowPlans | null>(null);
     const showPlans = useMemo(() => {
-        if (!marcherAssets || !marcherLooks) return null;
+        if (!marcherAssets || !marcherLooks || !cues) return null;
         const planned = planShow(
             slots.ids,
             slots.timelines,
@@ -182,7 +190,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             clock,
             fieldProperties,
             marcherAssets.manifest,
-            marcherHeading(),
+            cues,
             previousPlans.current,
         );
         previousPlans.current = planned;
@@ -193,15 +201,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 `${clock.counts} counts in ${planned.planMs.toFixed(0)} ms`,
         );
         return planned;
-    }, [marcherAssets, marcherLooks, slots, clock, fieldProperties]);
+    }, [marcherAssets, marcherLooks, slots, clock, fieldProperties, cues]);
     const clipNames = useMemo(() => {
         const names = plannedClips(
             (showPlans?.plans ?? []).filter((p) => p !== null),
         );
         for (const h of heightClasses) names.add(clipName("attention", h));
-        // on the right foot every row is baked from its mirrored partner
-        return clipsToLoad([...names], stepOffFoot);
-    }, [showPlans, heightClasses, stepOffFoot]);
+        // a right-foot move's rows are baked from their mirrored partners
+        return clipsToLoad([...names], "left");
+    }, [showPlans, heightClasses]);
     // Only the rows some marcher plays: its planned clips in its own hold,
     // and attention for its height class.
     const bakeRows = useMemo(() => {
@@ -222,7 +230,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         clipNames,
         marcherLooks,
         quality,
-        stepOffFoot,
+        "left",
         bakeRows,
     );
     // Meshes, bakes and plans land outside React's props: draw them.

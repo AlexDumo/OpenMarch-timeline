@@ -6,7 +6,13 @@ import type { MarcherTimeline } from "@/utilities/Keyframes";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { buildCountClock } from "@/view3d/core/marchers/countClock";
 import { eventRows } from "@/view3d/core/marchers/planner";
-import { MarcherMotion, planShow, STEP_AHEAD } from "../marchers/marcherMotion";
+import {
+    compileWindowCues,
+    MarcherMotion,
+    planShow,
+    STEP_AHEAD,
+} from "../marchers/marcherMotion";
+import { CUE_LEAD } from "@/view3d/core/marchers/cueInputs";
 import { planMarcher } from "@/view3d/core/marchers/planner";
 import type { MarcherBodies } from "../marchers/marcherBodies";
 import type { MarcherClip } from "@/view3d/vendor/om-pose/instanced-marchers.js";
@@ -46,7 +52,7 @@ describe("planning the show", () => {
         timeline(830, 500, 90),
         timeline(860, 500, 0),
     ];
-    const first = planShow(ids, lines, [1, 1, 1], clock, fp, manifest, 0);
+    const first = planShow(ids, lines, [1, 1, 1], clock, fp, manifest, null);
 
     it("plans every marcher the first time", () => {
         expect(first.replanned).toBe(3);
@@ -69,7 +75,7 @@ describe("planning the show", () => {
             clock,
             fp,
             manifest,
-            0,
+            null,
             first,
         );
         expect(next.replanned).toBe(1);
@@ -88,7 +94,7 @@ describe("planning the show", () => {
             clock,
             fp,
             manifest,
-            0,
+            null,
             first,
         );
         expect(next.replanned).toBe(2);
@@ -109,10 +115,79 @@ describe("planning the show", () => {
             faster,
             fp,
             manifest,
-            0,
+            null,
             first,
         );
         expect(next.replanned).toBe(3);
+    });
+});
+
+describe("planning from the window's cues", () => {
+    const ids = [1, 2];
+    const lines = [timeline(800, 500, 90), timeline(830, 500, 90)];
+    const beats = Array.from({ length: 16 }, (_, k) => ({
+        id: 50 + k,
+        timestamp: k * 0.5,
+        duration: 0.5,
+    }));
+    const marchers = ids.map((id) => ({ id, section: "Trumpet" }));
+
+    it("puts the cue counts and the plan clock one count apart, as the window plays them", () => {
+        expect(CUE_LEAD).toBe(STEP_AHEAD);
+    });
+
+    it("steps off on the window's foot, a preview of the show default", () => {
+        const right = planShow(
+            ids,
+            lines,
+            [1, 1],
+            clock,
+            fp,
+            manifest,
+            compileWindowCues(marchers, beats, "right"),
+        );
+        const moves = right.plans[0]!.events.filter((e) => e.kind !== "rest");
+        expect(moves.length).toBeGreaterThan(0);
+        expect(moves.every((e) => e.foot === "right")).toBe(true);
+        const left = planShow(
+            ids,
+            lines,
+            [1, 1],
+            clock,
+            fp,
+            manifest,
+            compileWindowCues(marchers, beats, "left"),
+        );
+        expect(left.plans[0]!.events.every((e) => e.foot === "left")).toBe(
+            true,
+        );
+    });
+
+    it("plans again when the cues change", () => {
+        const cues = compileWindowCues(marchers, beats, "left");
+        const first = planShow(ids, lines, [1, 1], clock, fp, manifest, cues);
+        const same = planShow(
+            ids,
+            lines,
+            [1, 1],
+            clock,
+            fp,
+            manifest,
+            cues,
+            first,
+        );
+        expect(same.replanned).toBe(0);
+        const next = planShow(
+            ids,
+            lines,
+            [1, 1],
+            clock,
+            fp,
+            manifest,
+            compileWindowCues(marchers, beats, "right"),
+            first,
+        );
+        expect(next.replanned).toBe(2);
     });
 });
 
