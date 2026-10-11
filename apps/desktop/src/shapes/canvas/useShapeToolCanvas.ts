@@ -176,6 +176,8 @@ export function useShapeToolCanvas({
         edited,
         view,
         fieldLabels,
+        fieldLabelSize,
+        fieldLabelPosition,
         highlight,
         theme,
     ]);

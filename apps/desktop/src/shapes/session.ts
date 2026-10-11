@@ -280,28 +280,39 @@ export function startSession({
     params = startingInterval(kind, params, marchers.length, ctx);
     params = settle(kind, params, marchers.length, ctx);
     params = ontoField(kind, params, marchers.length, ctx);
-    return withAssignment(
-        {
-            kindId,
-            params,
-            marchers,
-            ...(previous?.orderChosen
-                ? {
-                      order: previous.order,
-                      reverse: previous.reverse,
-                      orderChosen: true,
-                  }
-                : {
-                      // Marchers on a ring open in order around it by default: a peel, not a
-                      // scramble across the middle (sims, round 11)
-                      order: startOnRing(marchers)
-                          ? "keep"
-                          : (kind.defaultOrder ?? DEFAULT_ORDER),
-                      reverse: false,
-                  }),
-        },
+    const base = { kindId, params, marchers };
+    if (previous?.orderChosen)
+        return withAssignment(
+            {
+                ...base,
+                order: previous.order,
+                reverse: previous.reverse,
+                orderChosen: true,
+            },
+            ctx,
+        );
+    const nearest = withAssignment(
+        { ...base, order: kind.defaultOrder ?? DEFAULT_ORDER, reverse: false },
         ctx,
     );
+    // Marchers on a ring may open in order around it (a peel) rather than by nearest, for shapes
+    // laid along a path, when that walks into no more trouble than nearest does (sims, rounds
+    // 11-12: a peel into an arc, but not a ring dragged into a long line with 16 crossings)
+    if (kind.path && startOnRing(marchers)) {
+        const peel = withAssignment(
+            { ...base, order: "keep", reverse: false },
+            ctx,
+        );
+        if (collisions(peel, ctx) <= collisions(nearest, ctx)) return peel;
+    }
+    return nearest;
+}
+
+/** Pairs walking through or passing too close to each other */
+function collisions(session: ShapeSession, ctx: ShapeContext): number {
+    return previewSession(session, ctx)
+        .issues.filter((i) => i.mark === "collision" || i.mark === "close")
+        .reduce((sum, i) => sum + (i.slots?.length ?? 0), 0);
 }
 
 /** Another kind for the same marchers: fitted afresh, shared settings kept, reassigned. */

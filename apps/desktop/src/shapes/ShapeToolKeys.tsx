@@ -31,10 +31,11 @@ export function ShapeToolKeys(): null {
             store.cancelDrag();
             return;
         }
-        // An edited shape gets a way back, in case the Escape was meant for something else
-        const edited = store.past.length > 0 ? store.session : null;
+        // A way back, in case the Escape was meant for something else (sims, round 12: Escape
+        // closing a settings panel also dropped the shape)
+        const left = store.session;
         store.close();
-        if (edited) offerBringBack(edited);
+        if (left) offerBringBack(left);
     });
 
     // Undo and Redo step through the shape's edits while it's open; the show is untouched until

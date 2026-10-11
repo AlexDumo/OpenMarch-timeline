@@ -112,8 +112,10 @@ export default function ShapeToolPanel() {
                     <SessionControls session={session} />
                 ) : (
                     <>
-                        {recipe && <EditRecipe recipe={recipe} />}
+                        {/* The picker first, so it stays put when a placed shape adds Edit
+                            (sims, round 12: clicks meant for the picker hit Edit) */}
                         <KindPicker activeKind={null} />
+                        {recipe && <EditRecipe recipe={recipe} />}
                         <p className="text-sub text-text/60">
                             <T
                                 keyName={
@@ -666,12 +668,15 @@ function NumberInput({
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
-                // Enter takes the value and Escape drops the edit, without also placing the
-                // shape or closing the tool (the app's Enter and Escape shortcuts)
+                // Enter takes a typed value and Escape drops the edit, without also placing the
+                // shape or closing the tool. Enter with nothing typed places, as it does
+                // elsewhere (sims, round 12: Tab into a field, Enter, nothing happened)
                 if (e.key === "Enter") {
                     e.preventDefault();
+                    const typed = draft !== null && draft !== text;
                     commit();
                     e.currentTarget.blur();
+                    if (!typed) runAction("applyShape");
                 } else if (e.key === "Escape") {
                     e.preventDefault();
                     setDraft(null);
@@ -868,7 +873,11 @@ function SpacingControl({
                     onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === "Escape") {
                             e.preventDefault();
+                            const typed = draft !== null;
                             e.currentTarget.blur();
+                            // Enter with nothing typed places (see NumberInput)
+                            if (e.key === "Enter" && !typed)
+                                runAction("applyShape");
                         }
                     }}
                 />

@@ -53,7 +53,7 @@ export const arcMiddle = (p: ArcParams): XY =>
 
 const TAU = 2 * Math.PI;
 /** A ring made an arc opens to this sweep */
-const OPENED_RING_SWEEP = (300 * Math.PI) / 180;
+const OPENED_RING_SWEEP = (240 * Math.PI) / 180;
 const positiveAngle = (a: number) => ((a % TAU) + TAU) % TAU;
 
 /** The arc as a path segment; a straight line when the bulge is (nearly) zero */
@@ -177,7 +177,8 @@ function arcThroughPoints(
     }
     let startAngle = angles[(gapAfter + 1) % angles.length]!;
     let sweep = TAU - widest;
-    // Marchers most of the way round a circle: the circle opened at the back (-y on the canvas),
+    // Marchers most of the way round a circle: the circle opened at the back (-y on the canvas) to
+    // 240 degrees, so it reads as an arc, not a broken circle (sims, round 12),
     // keeping its center and size, so the ring peels open where it stands (sims, round 9: a
     // half circle of the same marchers at the same interval doubled the radius, off the field)
     if (sweep > (200 * Math.PI) / 180) {
