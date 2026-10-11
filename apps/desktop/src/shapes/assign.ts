@@ -1,4 +1,5 @@
 import { hungarianAlgorithm } from "@openmarch/core";
+import { fitCircle } from "./geometry/fit";
 import { walksCross } from "./geometry/segments";
 import type { AnyShapeKind, ShapeContext, Slot, XY } from "./types";
 
@@ -81,6 +82,20 @@ export function assignSlots<P>({
         return untangle(result, marchers, slots);
     }
 
+    if (mode === "keep") {
+        const around = ringOrder(marchers);
+        if (around)
+            return openRing(
+                around,
+                marchers,
+                slots,
+                kind,
+                params,
+                ctx,
+                reverse,
+            );
+    }
+
     const slotOrder = slots
         .map((slot, index) => ({
             index,
@@ -109,6 +124,92 @@ export function assignSlots<P>({
     marcherOrder.forEach((marcherIndex, i) => {
         result[marcherIndex] = slotOrder[i]!;
     });
+    return result;
+}
+
+/** How round a group must be (largest gap from its circle, over the radius) to count as a ring */
+const RING_TOLERANCE = 0.15;
+
+/**
+ * The marchers in order around the circle they stand on, when they do (5 or more, all near one
+ * circle), by index. Keep order then follows the ring rather than projecting the marchers onto
+ * the new shape, which scrambles a circle opened into an arc (sims, round 9: "151 crossings";
+ * a drill writer expects the circle to peel open in order).
+ */
+function ringOrder(marchers: readonly AssignMarcher[]): number[] | null {
+    if (marchers.length < 5) return null;
+    const points = marchers.map((m) => m.from ?? m.at);
+    const circle = fitCircle(points);
+    if (!circle || !(circle.r > 0)) return null;
+    const off = Math.max(
+        ...points.map((p) =>
+            Math.abs(
+                Math.hypot(p.x - circle.center.x, p.y - circle.center.y) -
+                    circle.r,
+            ),
+        ),
+    );
+    if (off > RING_TOLERANCE * circle.r) return null;
+    return points
+        .map((p, index) => ({
+            index,
+            angle: Math.atan2(p.y - circle.center.y, p.x - circle.center.x),
+        }))
+        .sort((a, b) => a.angle - b.angle)
+        .map((e) => e.index);
+}
+
+/**
+ * Lays a ring of marchers along the shape's slot order, keeping their order around the ring:
+ * the ring is opened where the least travel results, in whichever direction travels less
+ * (Reverse takes the other direction).
+ */
+function openRing<P>(
+    around: readonly number[],
+    marchers: readonly AssignMarcher[],
+    slots: readonly Slot[],
+    kind: AnyShapeKind,
+    params: P,
+    ctx: ShapeContext,
+    reverse: boolean,
+): number[] {
+    const n = marchers.length;
+    const slotOrder = slots
+        .map((slot, index) => ({
+            index,
+            key: kind.orderKey(params, slot, ctx, n),
+        }))
+        .sort((a, b) => compareKeys(a.key, b.key) || a.index - b.index)
+        .map((entry) => entry.index);
+    const at = marchers.map((m) => m.from ?? m.at);
+    const best = (direction: 1 | -1) => {
+        let bestStart = 0;
+        let bestCost = Infinity;
+        for (let start = 0; start < n; start++) {
+            let cost = 0;
+            for (let i = 0; i < n && cost < bestCost; i++) {
+                const m = at[around[(start + direction * i + n * n) % n]!]!;
+                const s = slots[slotOrder[i]!]!;
+                cost += (m.x - s.x) ** 2 + (m.y - s.y) ** 2;
+            }
+            if (cost < bestCost) {
+                bestCost = cost;
+                bestStart = start;
+            }
+        }
+        return { direction, start: bestStart, cost: bestCost };
+    };
+    const forward = best(1);
+    const backward = best(-1);
+    const [first, second] =
+        forward.cost <= backward.cost
+            ? [forward, backward]
+            : [backward, forward];
+    const pick = reverse ? second : first;
+    const result = new Array<number>(n);
+    for (let i = 0; i < n; i++)
+        result[around[(pick.start + pick.direction * i + n * n) % n]!] =
+            slotOrder[i]!;
     return result;
 }
 

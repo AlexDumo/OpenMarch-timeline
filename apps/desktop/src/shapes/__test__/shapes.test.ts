@@ -549,3 +549,36 @@ describe("step sizes", () => {
         ).toEqual([]);
     });
 });
+
+describe("keep order from a ring", () => {
+    it("opens a circle into an arc in order around it, without crossings", () => {
+        const n = 12;
+        const ring = Array.from({ length: n }, (_, i) => ({
+            id: i + 1,
+            at: polar(xy(0, 0), 100, (2 * Math.PI * i) / n),
+            drillRank: (i * 5) % n,
+        }));
+        const params: ArcParams = {
+            a: xy(-150, 120),
+            b: xy(150, 120),
+            bulge: 60,
+            spacing: { mode: "fit" },
+        } as ArcParams;
+        const slots = arcKind.generate(params, n, ctx);
+        const assignment = assignSlots({
+            kind: arcKind,
+            params,
+            slots,
+            marchers: ring,
+            mode: "keep",
+            ctx,
+        });
+        // Neighbors around the ring are neighbors along the arc
+        const along = ring
+            .map((_, i) => i)
+            .sort((a, b) => assignment[a]! - assignment[b]!);
+        const steps = along.slice(1).map((m, i) => (m - along[i]! + n) % n);
+        expect(steps.every((d) => d === steps[0])).toBe(true);
+        expect([1, n - 1]).toContain(steps[0]);
+    });
+});

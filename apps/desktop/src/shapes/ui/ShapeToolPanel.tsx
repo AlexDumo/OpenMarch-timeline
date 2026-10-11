@@ -225,6 +225,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
     const ctx = useShapeContext();
     const kind = shapeKind(session.kindId)!;
     const inputError = useShapeToolStore((s) => s.inputError);
+    const placeAsked = useShapeToolStore((s) => s.placeAsked);
     const edited = useShapeToolStore((s) => s.past.length > 0);
     const storedView = useUiSettingsStore((s) => s.uiSettings.shapePreview);
     const fieldLabels = useUiSettingsStore((s) => s.uiSettings.marcherLabels);
@@ -321,6 +322,14 @@ function SessionControls({ session }: { session: ShapeSession }) {
 
             {/* Place sits under the summary, above everything that grows or shrinks (sims, round 8:
                 locking the interval moved it under the cursor); warnings below it */}
+            {placeAsked === session && (
+                <p
+                    className="text-sub text-red"
+                    data-testid="shape-tool-place-asked"
+                >
+                    <T keyName="inspector.shapeTool.placeAnyway" />
+                </p>
+            )}
             {preview.issues.length > 0 && (
                 <ul
                     className="text-sub flex flex-col gap-2"
@@ -348,6 +357,23 @@ function SessionControls({ session }: { session: ShapeSession }) {
                             }
                         >
                             {issue.message}
+                            {/* The fix the warning names, as a button (sims, round 9) */}
+                            {issue.mark === "collision" &&
+                                session.order !== "nearest" && (
+                                    <Button
+                                        size="compact"
+                                        variant="secondary"
+                                        className="ml-6"
+                                        data-testid="shape-tool-use-nearest"
+                                        onClick={() =>
+                                            useShapeToolStore
+                                                .getState()
+                                                .setOrder("nearest", false, ctx)
+                                        }
+                                    >
+                                        <T keyName="inspector.shapeTool.useNearest" />
+                                    </Button>
+                                )}
                         </li>
                     ))}
                 </ul>

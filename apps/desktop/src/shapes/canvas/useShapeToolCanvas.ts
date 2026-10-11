@@ -246,9 +246,9 @@ function useShapeToolSelection(
             pendingRestore = null;
             return;
         }
-        // Only a shape that was worked on is worth a way back
-        const tool = useShapeToolStore.getState();
-        const left = tool.past.length > 0 ? tool.session : null;
+        // Any shape left open gets a way back: one just opened can look like work lost too
+        // (sims, round 9)
+        const left = useShapeToolStore.getState().session;
         const from = lastWindow.current;
         lastWindow.current = windowOf(useTimelineSelectionStore.getState());
         useShapeToolStore.getState().close();

@@ -184,8 +184,11 @@ export interface ShapeIssue {
     readonly message: string;
     /** Slot indexes the issue is about, for highlighting */
     readonly slots?: readonly number[];
-    /** Steps too big: their walks are drawn apart from crossings and close passes */
-    readonly mark?: "steps";
+    /**
+     * `steps`: steps too big, drawn apart from the rest. `collision`: walks that cross or pass
+     * too close, which Place asks about once before placing.
+     */
+    readonly mark?: "steps" | "collision";
 }
 
 /**

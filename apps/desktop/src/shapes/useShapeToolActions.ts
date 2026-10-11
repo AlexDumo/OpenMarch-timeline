@@ -1,3 +1,4 @@
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { historyKeys } from "@/hooks/queries/useHistory";
@@ -50,6 +51,16 @@ export function useApplyShape(): () => Promise<void> {
         if (!canvas || !session || inputError) return;
         const preview = previewSession(session, shapeContextFor(canvas));
         if (!preview.canApply) return;
+        // Walks that collide: the first Place asks, the second places
+        const store = useShapeToolStore.getState();
+        if (
+            preview.issues.some((i) => i.mark === "collision") &&
+            store.placeAsked !== session
+        ) {
+            store.askPlace(session);
+            return;
+        }
+        store.askPlace(null);
         const targets = new Map(preview.targets.map((t) => [t.id, t.to]));
         const transform = (current: readonly { marcher_id: number }[]) =>
             current.flatMap((c) => {
@@ -137,5 +148,21 @@ export function useShapeToolActions(): void {
             void apply();
         },
         { enabled: open && !dragging && !inputError },
+    );
+
+    useActionHandler(
+        "toggleShapeLook",
+        () => {
+            const settings = useUiSettingsStore.getState();
+            const view = settings.uiSettings.shapePreview;
+            settings.setUiSettings({
+                ...settings.uiSettings,
+                shapePreview: {
+                    ...view,
+                    look: view?.look === "show" ? "working" : "show",
+                },
+            });
+        },
+        { enabled: open },
     );
 }

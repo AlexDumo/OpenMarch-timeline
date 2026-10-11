@@ -492,6 +492,14 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Enter"],
     },
+    // Switches the Shape preview between every mark and just the marchers (sims, round 9)
+    toggleShapeLook: {
+        labelKey: "actions.shape.toggleLook",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["V"],
+        ignoreRepeat: true,
+    },
 
     // Cursor mode
     cancelAlignmentUpdates: {

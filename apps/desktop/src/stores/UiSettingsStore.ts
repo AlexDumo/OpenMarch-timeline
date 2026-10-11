@@ -88,6 +88,8 @@ export interface ShapePreviewView {
     oldShape: "auto" | "show" | "hide";
     /** Where marchers start, and their walks: faint, or drawn strongly (easier on the grid) */
     starts: "auto" | "faint" | "strong";
+    /** Working: every mark; Show: only the marchers where they'll stand, as the show will look */
+    look: "working" | "show";
 }
 
 export const defaultShapePreviewView: ShapePreviewView = {
@@ -95,6 +97,7 @@ export const defaultShapePreviewView: ShapePreviewView = {
     labels: "auto",
     oldShape: "auto",
     starts: "auto",
+    look: "working",
 };
 
 // Default settings that will be used if no localStorage data exists

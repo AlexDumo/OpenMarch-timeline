@@ -169,12 +169,24 @@ export function validatePaths(
             level: "warning",
             message: `${pairs(crossings)} of marchers would walk through each other (drawn in red).${untangled ? "" : " Order: Nearest untangles them."}`,
             slots: [...crossingSlots],
+            mark: "collision",
         });
     if (passes > 0)
         issues.push({
             level: "warning",
             message: `${pairs(passes)} of marchers pass closer than ${MIN_SPACING_STEPS} step mid-move (drawn in red).`,
             slots: [...closeSlots],
+            mark: "collision",
+        });
+    // Say so when the walks are clear, so a quiet preview reads as checked, not unchecked
+    // (sims, round 9: "the app gave me no sign either way")
+    const moving = targets.some(
+        (t) => Math.hypot(t.to.x - t.from.x, t.to.y - t.from.y) > 1e-6,
+    );
+    if (crossings === 0 && passes === 0 && moving && targets.length > 1)
+        issues.push({
+            level: "info",
+            message: `Walks checked: no one crosses or passes within ${MIN_SPACING_STEPS} step of anyone on the way.`,
         });
     return issues;
 }

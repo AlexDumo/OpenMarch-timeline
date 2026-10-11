@@ -32,6 +32,10 @@ const LABELS: Option<"labels">[] = [
     { value: "numbers", key: "inspector.shapeTool.view.labelsNumbers" },
     { value: "none", key: "inspector.shapeTool.view.labelsNone" },
 ];
+const LOOK: Option<"look">[] = [
+    { value: "working", key: "inspector.shapeTool.view.lookWorking" },
+    { value: "show", key: "inspector.shapeTool.view.lookShow" },
+];
 const STARTS: Option<"starts">[] = [
     { value: "auto", key: "inspector.shapeTool.view.auto" },
     { value: "faint", key: "inspector.shapeTool.view.faint" },
@@ -78,6 +82,7 @@ export function ShapeViewSection({
         });
     };
     const autoSays: Record<keyof ShapePreviewView, string> = {
+        look: "",
         starts: t(
             resolved.strongStarts
                 ? "inspector.shapeTool.view.strong"
@@ -139,6 +144,9 @@ export function ShapeViewSection({
             <h4 className="text-body text-text/80">
                 <T keyName="inspector.shapeTool.view.title" />
             </h4>
+            <ViewRow label={t("inspector.shapeTool.view.look")}>
+                {picker("look", LOOK)}
+            </ViewRow>
             <ViewRow label={t("inspector.shapeTool.view.paths")}>
                 {picker("paths", PATHS)}
             </ViewRow>
@@ -175,6 +183,9 @@ export function ShapeViewSection({
                 )}
                 <LegendItem mark={<Walk className="stroke-[#f59e0b]" />}>
                     <T keyName="inspector.shapeTool.view.legendBigSteps" />
+                </LegendItem>
+                <LegendItem mark={<Walk className="stroke-red" />}>
+                    <T keyName="inspector.shapeTool.view.legendCollisions" />
                 </LegendItem>
                 <LegendItem mark={<Walk />}>
                     <T

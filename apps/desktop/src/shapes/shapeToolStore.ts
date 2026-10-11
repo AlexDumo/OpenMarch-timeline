@@ -42,6 +42,12 @@ interface ShapeToolState {
     setInputError(error: string | null): void;
     setOrder(order: OrderMode, reverse: boolean, ctx: ShapeContext): void;
     reassign(ctx: ShapeContext): void;
+    /**
+     * The session Place was pressed on while walks collide: pressing Place again on the same
+     * session places it anyway (sims, round 9: Enter placed a form with a red warning)
+     */
+    placeAsked: ShapeSession | null;
+    askPlace(session: ShapeSession | null): void;
     /** Slots of the warning pointed at in the panel, whose walks alone the canvas draws */
     highlight: readonly number[] | null;
     setHighlight(slots: readonly number[] | null): void;
@@ -118,6 +124,10 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                 past: [],
                 future: [],
             });
+        },
+        placeAsked: null,
+        askPlace(placeAsked) {
+            if (get().placeAsked !== placeAsked) set({ placeAsked });
         },
         highlight: null,
         setHighlight(highlight) {

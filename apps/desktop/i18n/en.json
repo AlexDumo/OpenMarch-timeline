@@ -91,6 +91,7 @@
             "curve": "Shape: Curve",
             "block": "Shape: Block",
             "apply": "Place marchers on the shape",
+            "toggleLook": "Shape preview: switch between all marks and the show",
             "keywords": "shape form formation set place"
         },
         "swap": {
@@ -856,6 +857,8 @@
         "shapeTool": {
             "title": "Shape",
             "leftUnplaced": "The {kind} wasn't placed",
+            "placeAnyway": "Some walks cross or pass too close. Place again (Enter) to place anyway.",
+            "useNearest": "Use Nearest",
             "bringBack": "Bring it back",
             "view": {
                 "auto": "Auto",
@@ -867,12 +870,16 @@
                 "labelsNone": "Off",
                 "labelsNumbers": "Numbers only",
                 "legendBigSteps": "Walks needing steps over the limit (orange)",
+                "legendCollisions": "Walks that cross or pass too close (red)",
                 "legendNew": "Where each marcher goes",
                 "legendOld": "The shape being replaced",
-                "legendProblemWalks": "Walks with a problem (red); point at a marcher for its walk",
+                "legendProblemWalks": "Other walks: point at a marcher to see its walk",
                 "legendStart": "Where they start this move",
                 "legendStartAt": "Where they start this move: Page {page}",
-                "legendWalks": "Each marcher's walk (red: a problem)",
+                "legendWalks": "Each marcher's walk",
+                "look": "Look (V)",
+                "lookShow": "The show (dots only)",
+                "lookWorking": "Working (all marks)",
                 "oldShape": "Old shape",
                 "paths": "Walks",
                 "pathsAll": "All",

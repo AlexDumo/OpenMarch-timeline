@@ -21,6 +21,8 @@ export interface ResolvedShapeView {
     readonly strongStarts: boolean;
     /** The field's label size, as a scale */
     readonly labelScale: number;
+    /** Only the marchers where they'll stand: no outline, handles, walks or earlier marks */
+    readonly showOnly: boolean;
 }
 
 /**
@@ -62,6 +64,7 @@ export function resolveShapeView(
         // Strong on a small band (sims, round 8: "darker start rings"), faint on a big one
         strongStarts: v.starts === "auto" ? !dense : v.starts === "strong",
         labelScale: LABEL_SIZE_SCALE[band.fieldLabelSize ?? "normal"],
+        showOnly: v.look === "show",
     };
 }
 

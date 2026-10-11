@@ -52,6 +52,7 @@ const FULL_VIEW: ResolvedShapeView = {
     oldShape: true,
     strongStarts: false,
     labelScale: 1,
+    showOnly: false,
 };
 
 /**
@@ -60,12 +61,14 @@ const FULL_VIEW: ResolvedShapeView = {
  * plain, and the rest as the Walks view says.
  */
 function walkKind(w: {
+    showOnly: boolean;
     issue: boolean;
     bigStep: boolean;
     hovered: boolean;
     highlighted: boolean | undefined;
     paths: ResolvedShapeView["paths"];
 }): "plain" | "issue" | "steps" | "hidden" {
+    if (w.showOnly) return "hidden";
     const problem = w.issue ? "issue" : w.bigStep ? "steps" : null;
     if (w.highlighted !== undefined)
         return w.highlighted ? (problem ?? "issue") : "hidden";
@@ -143,6 +146,8 @@ export default class ShapeToolOverlay {
     private startColor = "";
     /** The field's label size, applied to the preview's labels */
     private labelScale = 1;
+    /** The show look: only the marchers where they'll stand */
+    private showOnly = false;
     /** An arrowhead at the end of each walk, so its direction reads without matching labels */
     private arrows: fabric.Triangle[] = [];
     private ghosts: fabric.Circle[] = [];
@@ -233,6 +238,7 @@ export default class ShapeToolOverlay {
     }
 
     private handleAt(e: MouseEvent): ShapeToolHandleObject | null {
+        if (this.showOnly) return null;
         const zoom = this.canvas.getZoom() || 1;
         const reach = HIT_RADIUS_PX / zoom;
         const p = this.canvas.getPointer(e);
@@ -382,7 +388,8 @@ export default class ShapeToolOverlay {
     }
 
     private applyFade(): void {
-        const opacity = this.faded ? FADED_OPACITY : 1;
+        // The show look hides the drawing aids altogether
+        const opacity = this.showOnly ? 0 : this.faded ? FADED_OPACITY : 1;
         const faded: fabric.Object[] = [
             ...this.guides,
             ...this.outlines,
@@ -618,6 +625,7 @@ export default class ShapeToolOverlay {
         const result = decor.style === "result";
         const view = decor.view ?? FULL_VIEW;
         this.labelScale = view.labelScale;
+        this.showOnly = view.showOnly;
         this.startColor = view.strongStarts
             ? this.colors.strongTravel
             : this.colors.travel;
@@ -658,6 +666,7 @@ export default class ShapeToolOverlay {
                 from,
                 to,
                 walkKind({
+                    showOnly: view.showOnly,
                     issue,
                     bigStep: bigStepSpots.has(target.slot),
                     hovered: target.id === this.hoveredId,
@@ -687,13 +696,14 @@ export default class ShapeToolOverlay {
                 this.placeOriginLabel(
                     i,
                     from,
-                    view.startLabels ? labelOf(look) : "",
+                    view.startLabels && !view.showOnly ? labelOf(look) : "",
                     look?.radius ?? GHOST_RADIUS,
                 );
                 // The shape being replaced, when it isn't where they start: tiny faint dots,
                 // no labels or paths, so it reads as a reference without crowding the move
                 const replaced =
                     view.oldShape &&
+                    !view.showOnly &&
                     dist(target.now, origin) > SAME_SPOT &&
                     dist(target.now, target.to) > SAME_SPOT;
                 this.placeCircle(this.replaced, i, toCanvas(target.now), {
@@ -705,7 +715,7 @@ export default class ShapeToolOverlay {
                 this.placeCircle(this.origins, i, from, {
                     radius: look?.radius ?? GHOST_RADIUS,
                     fill: "",
-                    stroke: this.startColor,
+                    stroke: view.showOnly ? "rgba(0,0,0,0)" : this.startColor,
                     strokeWidth: 1.5,
                 });
             } else {

@@ -52,6 +52,8 @@ export const arcMiddle = (p: ArcParams): XY =>
     add(mid(p.a, p.b), scale(chordNormal(p), p.bulge));
 
 const TAU = 2 * Math.PI;
+/** A ring made an arc opens to this sweep */
+const OPENED_RING_SWEEP = (300 * Math.PI) / 180;
 const positiveAngle = (a: number) => ((a % TAU) + TAU) % TAU;
 
 /** The arc as a path segment; a straight line when the bulge is (nearly) zero */
@@ -175,11 +177,12 @@ function arcThroughPoints(
     }
     let startAngle = angles[(gapAfter + 1) % angles.length]!;
     let sweep = TAU - widest;
-    // Marchers most of the way round a circle: an arc of them is the half facing the front
-    // (+y on the canvas), not the whole circle again
+    // Marchers most of the way round a circle: the circle opened at the back (-y on the canvas),
+    // keeping its center and size, so the ring peels open where it stands (sims, round 9: a
+    // half circle of the same marchers at the same interval doubled the radius, off the field)
     if (sweep > (200 * Math.PI) / 180) {
-        startAngle = 0;
-        sweep = Math.PI;
+        sweep = OPENED_RING_SWEEP;
+        startAngle = -Math.PI / 2 + (TAU - sweep) / 2;
     }
     const a = polar(circle.center, circle.r, startAngle);
     const b = polar(circle.center, circle.r, startAngle + sweep);
