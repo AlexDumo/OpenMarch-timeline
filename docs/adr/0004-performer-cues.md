@@ -145,8 +145,9 @@ a public package API; changing them needs an amendment here.
   compiled Feet channel (pace, techniques, stand on holds, step-off foot, dot
   mode per set). The window's horn state, guard equipment and step-off foot
   toggles stop being the source; at most they remain as unsaved preview
-  overrides. Channels are composed per bone in the instanced shader from
-  per-channel baked rows; props get virtual bones. The om-pose renderer moves
+  overrides. Channels are baked as per-channel rows and composed once per
+  frame, per performer and bone, in a GPU render-to-texture pass; skinning
+  then reads one matrix per influence. Props get virtual bones. The om-pose renderer moves
   into the repo as owned code.
 
 ## Consequences

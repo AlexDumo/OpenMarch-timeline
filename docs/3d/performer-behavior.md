@@ -1,6 +1,6 @@
 # Performer behavior: cues
 
-<!-- cspell:words retargeting Choreo recompiles rebakes rebaked playhead lerps texel -->
+<!-- cspell:words retargeting Choreo recompiles rebakes rebaked rebake playhead lerp lerps texel texels -->
 
 - Status: draft for owner review
 - Date: 2026-10-10
@@ -474,17 +474,30 @@ Facing default.
 
 ### 8.3 Layered animation
 
-From the runtime research: keep the baked-texture instanced renderer and
-compose channels per bone in the vertex shader. No per-marcher animation
-mixers.
+Keep the baked-texture instanced renderer, with no per-marcher animation
+mixers. Compose each performer's bones **once per frame in a GPU pre-pass**,
+not per vertex (measured 2026-10-11, findings.md).
 
 - **Bake per channel**, not per combination: feet clips, horn and equipment
   rows, body rows. Rows add up across channels instead of multiplying (today
   every clip is rebaked per hold). The hold's arm pose becomes the
-  Horn/Equipment default row.
-- **Compose per bone**: a per-bone channel id (the same mechanism as
-  `uTurnClass`). Upper-body chains are re-anchored to the torso the Feet or
-  Body channel is moving.
+  Horn/Equipment default row. Measured on the Fall Show: 828 of 4096 texels
+  wide (27.1 MB, Feet bake 0.23 s), against 3,864 wide (126.6 MB, 1.04 s)
+  today.
+- **Compose pass**: each frame, one render-to-texture pass (WebGL2 with
+  `EXT_color_buffer_float`) writes every performer's final skinning matrices
+  into a small float texture: 4 texels per bone, 24 bones (23 plus a prop
+  bone), one row per instance. Each fragment samples its bone's channel row
+  (with the time lerp and any blend) from a per-bone channel id, and
+  re-anchors upper-body chains to the torso the Feet or Body channel is
+  moving.
+- **Skinning reads one matrix per influence** from that texture, for bodies
+  and instruments alike. That is fewer fetches than today's two-row lerp, so
+  the frame gets cheaper: −0.8 to −1.2 ms at 300 marchers and −3.4 to −3.9 ms
+  at 600 on full quality (M1 Pro). Composing per vertex instead cost +5.8 to
+  +7.4 ms at 300, because every instrument vertex paid for it. Composing on
+  the CPU and uploading also fit, but its main-thread time grows with the
+  band (0.8 ms at 300, 1.5 ms at 600), so the GPU pass is the choice.
 - **Per-instance channel state** (row, phase, rate for each channel) moves to
   a small float data texture read by `gl_InstanceID`, written only when a
   segment changes. Vertex attribute slots (14 of 16 used) stay free.
@@ -496,7 +509,7 @@ mixers.
 - **Ripples** are per-instance phase offsets, so they cost nothing extra.
 - The one-marcher editor (shaping phrases, a later effort) can use three's
   `AnimationMixer` with track-filtered clips. A parity test compares that
-  with the shader composition.
+  with the compose pass.
 
 ### 8.4 om-pose (spec call)
 
@@ -510,28 +523,21 @@ change from today). A WebGPU move later rewrites the shader in TSL either way.
 
 ### 8.5 Performance budget (spec call)
 
-The plan's **first task** measures, before any channel code merges:
+Measured on 2026-10-10 and 2026-10-11 (findings.md), on an Apple M1 Pro
+with the high school kit:
 
-- the GPU cost of three channel fetches per vertex at 300 and 600 marchers,
-  on the low tier (block bodies) and the full tier, on an Apple M1 and an
-  Intel Iris Xe;
-- the bake texture size for the Fall Show (385 marchers) with per-channel
-  rows. Today's bake is already 94% of a 4096-texel width.
-
-Budgets to hold (proposed; the owner can move them):
-
-- design.md section 9 still holds: 60 fps at 1080p on an integrated GPU with
-  300 performers in `pro`.
-- Channel layering adds at most 1 ms of GPU frame time at 300 marchers on an
-  M1 at full quality.
-- The bake stays inside 4096 × 2048 per texture. If it doesn't, the
-  Horn/Equipment channel (9 bones plus props, not 23) gets its own narrower
-  texture.
-- A cue edit rebakes only the touched channel's rows, in under 100 ms. A
-  full show bake stays under 1.5 s.
-
-If the GPU budget fails, the fallback is fewer composed bones (Feet plus one
-upper-body channel), and the owner decides.
+- **Channel layering at most +1 ms at 300 marchers, full quality:** pass with
+  the compose pass (the frame is cheaper than today). Composing per vertex
+  failed (+5.8 to +7.4 ms), and so did its two-channel fallback.
+- **The bake inside 4096 × 2048:** pass (828 texels wide); Horn/Equipment
+  needs no texture of its own.
+- **Full show bake under 1.5 s:** pass (0.23 s for Feet). **A cue edit
+  rebakes only its channel in under 100 ms:** pass for Horn (under 1 ms);
+  Feet's partial rebake isn't built yet.
+- **60 fps at 1080p with 300 performers in `pro` on an integrated GPU**
+  (design.md section 9): not yet measured. A base M1, an Intel Iris Xe and
+  the `pro` kit still need numbers, and so does the compose pass's own GPU
+  time on its own. Measure them before step 6 merges.
 
 ## 9. Storage
 
@@ -549,8 +555,9 @@ branch off `3d-async`. The timeline comes in by merging `main` (once
 renumbers the 3D migration after the timeline's; no rebase of the 3D history.
 Items 1, 3 and 5 don't need the timeline; 2, 4, 8 and 9 wait for that merge.
 
-1. **Measure** (section 8.5). A throwaway shader spike; numbers into
-   findings.md.
+1. **Measure** (section 8.5). Done for the M1 Pro: per-vertex composition
+   failed, the compose pass passed (branches `3d/cue-layering-measure`,
+   `3d/cue-compose-pass`). A base M1, Iris Xe and `pro` remain.
 2. **Storage**: migration, schema, db-functions, query hooks, history and
    repair (ADR 0004). History tests.
 3. **Library catalog and compile** in `@openmarch/core`, with unit tests for
