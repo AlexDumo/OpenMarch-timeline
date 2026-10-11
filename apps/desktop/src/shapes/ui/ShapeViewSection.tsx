@@ -38,6 +38,7 @@ const LABELS: Option<"labels">[] = [
 ];
 const LOOK: Option<"look">[] = [
     { value: "working", key: "inspector.shapeTool.view.lookWorking" },
+    { value: "walks", key: "inspector.shapeTool.view.lookWalks" },
     { value: "show", key: "inspector.shapeTool.view.lookShow" },
 ];
 const HANDLES: Option<"handles">[] = [

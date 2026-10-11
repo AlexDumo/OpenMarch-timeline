@@ -131,7 +131,7 @@ describe("block kind", () => {
         shortRank: "start",
     };
 
-    it("fits a square-ish block, and a straight row as one rank", () => {
+    it("fits a square-ish block, and a straight row as two ranks", () => {
         const current = Array.from({ length: 9 }, (_, i) =>
             xy((i % 3) * 20 + 0.1 * i, Math.floor(i / 3) * 15),
         );
@@ -141,12 +141,12 @@ describe("block kind", () => {
         expect(blockKind.generate(p, 9, ctx)).toHaveLength(9);
         const row = [0, 1, 2, 3, 4].map((i) => xy(i * 20, 5));
         const rowFit = blockKind.fit({ current: row }, ctx);
-        expect(rowFit.files).toBe(5);
+        expect(rowFit.files).toBe(3);
         expect(rowFit.rotation).toBe(0);
         const column = [0, 1, 2, 3, 4].map((i) => xy(5, i * 20));
         const columnFit = blockKind.fit({ current: column }, ctx);
         close(Math.abs(columnFit.rotation), Math.PI / 2);
-        expect(columnFit.files).toBe(5);
+        expect(columnFit.files).toBe(3);
     });
 
     it("lays ranks back to front, files left to right", () => {

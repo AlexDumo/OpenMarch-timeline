@@ -91,7 +91,7 @@
             "curve": "Shape: Curve",
             "block": "Shape: Block",
             "apply": "Place marchers on the shape",
-            "toggleLook": "Shape preview: switch between all marks and the show",
+            "toggleLook": "Shape preview: switch between all marks, dots and walks, and the show",
             "keywords": "shape form formation set place"
         },
         "swap": {
@@ -889,6 +889,7 @@
                 "legendWalks": "Each marcher's walk",
                 "look": "Look (V)",
                 "lookShow": "The show (dots only)",
+                "lookWalks": "Dots and walks",
                 "lookWorking": "Working (all marks)",
                 "oldShape": "Old shape",
                 "paths": "Walks",

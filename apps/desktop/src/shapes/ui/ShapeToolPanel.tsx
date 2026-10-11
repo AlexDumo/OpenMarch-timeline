@@ -321,7 +321,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
 
             {/* Stays in view while the panel scrolls (sims, round 10: scrolled to the legend and back,
                 the click missed Place) */}
-            <div className="bg-fg-1 sticky top-0 z-10 flex gap-8 py-4">
+            <div className="bg-bg-1 sticky top-0 z-10 flex gap-8 py-4">
                 <ActionButton action="applyShape">
                     <Button
                         size="compact"

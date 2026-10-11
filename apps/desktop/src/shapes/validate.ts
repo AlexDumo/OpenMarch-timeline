@@ -142,6 +142,10 @@ export function validatePaths(
     const closeSlots = new Set<number>();
     let crossings = 0;
     let passes = 0;
+    // Lines that cross with the marchers there at different times: not a collision, but said, so
+    // a crossing seen on the field isn't a mystery (sims, round 15)
+    const apartSlots = new Set<number>();
+    let apart = 0;
     for (let i = 0; i < targets.length; i++) {
         for (let j = i + 1; j < targets.length; j++) {
             const a = targets[i]!;
@@ -151,7 +155,13 @@ export function validatePaths(
             // gate, not a collision (sims, round 11: a circle opened into an arc in order
             // showed 129 "walk through each other")
             const approach = closestApproach(a, b);
-            if (walksCross(a, b) && approach < close) {
+            const cross = walksCross(a, b);
+            if (cross && approach >= close) {
+                apart++;
+                apartSlots.add(assignment[i]!);
+                apartSlots.add(assignment[j]!);
+            }
+            if (cross && approach < close) {
                 crossings++;
                 crossingSlots.add(assignment[i]!);
                 crossingSlots.add(assignment[j]!);
@@ -182,6 +192,12 @@ export function validatePaths(
             message: `${pairs(passes)} of marchers pass closer than ${MIN_SPACING_STEPS} step mid-move (drawn in red).`,
             slots: [...closeSlots],
             mark: "close",
+        });
+    if (apart > 0)
+        issues.push({
+            level: "info",
+            message: `${pairs(apart)} of walks cross paths at different times: no collision, one marcher is past before the other arrives. Point here to see them.`,
+            slots: [...apartSlots],
         });
     // Say so when the walks are clear, so a quiet preview reads as checked, not unchecked
     // (sims, round 9: "the app gave me no sign either way")

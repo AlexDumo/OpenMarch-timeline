@@ -55,6 +55,7 @@ const FULL_VIEW: ResolvedShapeView = {
     labelScale: 1,
     labelBeside: false,
     showOnly: false,
+    walksOnly: false,
     handlesAway: "fade",
 };
 
@@ -153,6 +154,7 @@ export default class ShapeToolOverlay {
     private labelBeside = false;
     /** The show look: only the marchers where they'll stand */
     private showOnly = false;
+    private walksOnly = false;
     private handlesAway: ResolvedShapeView["handlesAway"] = "fade";
     /** An arrowhead at the end of each walk, so its direction reads without matching labels */
     private arrows: fabric.Triangle[] = [];
@@ -244,7 +246,7 @@ export default class ShapeToolOverlay {
     }
 
     private handleAt(e: MouseEvent): ShapeToolHandleObject | null {
-        if (this.showOnly) return null;
+        if (this.showOnly || this.walksOnly) return null;
         const zoom = this.canvas.getZoom() || 1;
         const reach = HIT_RADIUS_PX / zoom;
         const p = this.canvas.getPointer(e);
@@ -401,7 +403,8 @@ export default class ShapeToolOverlay {
                 : this.handlesAway === "show"
                   ? 1
                   : FADED_OPACITY;
-        const opacity = this.showOnly ? 0 : this.faded ? away : 1;
+        const opacity =
+            this.showOnly || this.walksOnly ? 0 : this.faded ? away : 1;
         const faded: fabric.Object[] = [
             ...this.guides,
             ...this.outlines,
@@ -639,6 +642,7 @@ export default class ShapeToolOverlay {
         this.labelScale = view.labelScale;
         this.labelBeside = view.labelBeside;
         this.showOnly = view.showOnly;
+        this.walksOnly = view.walksOnly;
         this.handlesAway = view.handlesAway;
         this.startColor = view.strongStarts
             ? this.colors.strongTravel
@@ -710,7 +714,9 @@ export default class ShapeToolOverlay {
                 this.placeOriginLabel(
                     i,
                     from,
-                    view.startLabels && !view.showOnly ? labelOf(look) : "",
+                    view.startLabels && !view.showOnly && !view.walksOnly
+                        ? labelOf(look)
+                        : "",
                     look?.radius ?? GHOST_RADIUS,
                 );
                 // The shape being replaced, when it isn't where they start: tiny faint dots,
@@ -718,6 +724,7 @@ export default class ShapeToolOverlay {
                 const replaced =
                     view.oldShape &&
                     !view.showOnly &&
+                    !view.walksOnly &&
                     dist(target.now, origin) > SAME_SPOT &&
                     dist(target.now, target.to) > SAME_SPOT;
                 this.placeCircle(this.replaced, i, toCanvas(target.now), {
@@ -730,7 +737,7 @@ export default class ShapeToolOverlay {
                     radius: look?.radius ?? GHOST_RADIUS,
                     fill: "",
                     stroke:
-                        view.showOnly || view.noStarts
+                        view.showOnly || view.walksOnly || view.noStarts
                             ? "rgba(0,0,0,0)"
                             : this.startColor,
                     strokeWidth: 1.5,

@@ -27,6 +27,8 @@ export interface ResolvedShapeView {
     readonly labelBeside: boolean;
     /** Only the marchers where they'll stand: no outline, handles, walks or earlier marks */
     readonly showOnly: boolean;
+    /** Only the marchers and their walks: no outline, handles, start marks or old shape */
+    readonly walksOnly: boolean;
     /** How the outline and handles look while the pointer is away from the shape */
     readonly handlesAway: "fade" | "hide" | "show";
 }
@@ -75,6 +77,7 @@ export function resolveShapeView(
         labelScale: LABEL_SIZE_SCALE[band.fieldLabelSize ?? "normal"],
         labelBeside: band.fieldLabelPosition === "beside",
         showOnly: v.look === "show",
+        walksOnly: v.look === "walks",
         handlesAway: v.handles,
     };
 }

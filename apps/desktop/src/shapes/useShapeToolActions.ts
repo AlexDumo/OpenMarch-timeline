@@ -159,7 +159,13 @@ export function useShapeToolActions(): void {
                 ...settings.uiSettings,
                 shapePreview: {
                     ...view,
-                    look: view?.look === "show" ? "working" : "show",
+                    // Working, then dots and walks, then the show, and round again
+                    look:
+                        view?.look === "show"
+                            ? "working"
+                            : view?.look === "walks"
+                              ? "show"
+                              : "walks",
                 },
             });
         },

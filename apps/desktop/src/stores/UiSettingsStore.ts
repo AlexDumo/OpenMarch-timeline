@@ -91,7 +91,7 @@ export interface ShapePreviewView {
     /** Where marchers start, and their walks: faint, or drawn strongly (easier on the grid) */
     starts: "auto" | "faint" | "strong" | "off";
     /** Working: every mark; Show: only the marchers where they'll stand, as the show will look */
-    look: "working" | "show";
+    look: "working" | "walks" | "show";
     /** Handles away from the pointer: faded, hidden, or always shown */
     handles: "fade" | "hide" | "show";
 }
