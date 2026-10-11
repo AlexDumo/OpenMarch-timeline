@@ -1,7 +1,8 @@
 /**
  * Drives the 3D View's marchers from the drill (ADR 0002 D-7): plans every
  * marcher's clips for the whole show once, then each frame switches clips
- * where a marcher's event changes and places its body.
+ * where a marcher's event changes and places its body. A crossfade rewrites
+ * its blend weight and leg turn every frame; everything else is written once.
  */
 import type { FieldProperties } from "@openmarch/core";
 import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
@@ -9,7 +10,11 @@ import type { Bake } from "@/view3d/vendor/om-pose/instanced-marchers.js";
 import type { MarcherTimeline } from "@/utilities/Keyframes";
 import { positionAtInto } from "@/view3d/positions";
 import type { CountClock } from "@/view3d/core/marchers/countClock";
-import { REST_EPS, planMarcher } from "@/view3d/core/marchers/planner";
+import {
+    REST_EPS,
+    crossfadeWeight,
+    planMarcher,
+} from "@/view3d/core/marchers/planner";
 import type { MarcherPlan } from "@/view3d/core/marchers/planner";
 import { bodyAt, eventIndexAt } from "@/view3d/core/marchers/planner";
 import type { HeightClass } from "@/view3d/core/marchers/looks";
@@ -168,18 +173,37 @@ export class MarcherMotion {
         this.cursor = new Int32Array(plans.length).fill(-1);
     }
 
-    private apply(slot: number, plan: MarcherPlan, index: number): void {
+    private apply(
+        slot: number,
+        plan: MarcherPlan,
+        index: number,
+        count: number,
+    ): void {
         const e = plan.events[index];
         const rows: Bake["rows"] = this.bodies.bake.rows;
         const row = rows[e.clip];
         if (!row) return; // not baked yet (the bake set is catching up)
+        const row2 = e.clip2 ? (rows[e.clip2] ?? null) : null;
+        let weight = e.weight;
+        let legYaw = e.legYaw;
+        if (e.kind === "crossfade") {
+            // the fade's progress, 0 before its window and 1 after
+            const u = Math.min(
+                Math.max((count - e.fadeStart) / (e.fadeEnd - e.fadeStart), 0),
+                1,
+            );
+            const t = crossfadeWeight(u);
+            weight = t;
+            if (Array.isArray(legYaw))
+                legYaw = legYaw[0] + (legYaw[1] - legYaw[0]) * t;
+        }
         this.bodies.setClip(slot, {
             row,
-            row2: e.clip2 ? (rows[e.clip2] ?? null) : null,
-            weight: e.clip2 && rows[e.clip2] ? e.weight : 0,
+            row2,
+            weight: row2 ? weight : 0,
             phase: -e.phaseStart,
             rate: 1,
-            legYaw: e.legYaw,
+            legYaw,
         });
     }
 
@@ -193,8 +217,11 @@ export class MarcherMotion {
             const plan = this.plans[i];
             if (!plan || plan.events.length === 0) continue;
             const index = eventIndexAt(plan, count, this.cursor[i]);
-            if (index !== this.cursor[i]) {
-                this.apply(i, plan, index);
+            if (
+                index !== this.cursor[i] ||
+                plan.events[index].kind === "crossfade"
+            ) {
+                this.apply(i, plan, index, count);
                 this.cursor[i] = index;
             }
             if (!placed[i]) continue;

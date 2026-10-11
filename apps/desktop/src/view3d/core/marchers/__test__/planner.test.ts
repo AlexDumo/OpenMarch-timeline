@@ -31,10 +31,17 @@ function input(
         bpm = 120,
         bandMoving,
         h = 1,
-    }: { bpm?: number; bandMoving?: number[]; h?: HeightClass } = {},
+        x0 = 0,
+    }: {
+        bpm?: number;
+        bandMoving?: number[];
+        h?: HeightClass;
+        /** Start x: 0 is the 50 yard line. */
+        x0?: number;
+    } = {},
 ): PlanInput {
     const positions = new Float64Array((counts.length + 1) * 2);
-    let x = 0;
+    let x = x0;
     let z = -20;
     positions[0] = x;
     positions[1] = z;
@@ -183,14 +190,23 @@ describe("direction", () => {
     });
 
     it("slides to the performer's left toward side 2 and right toward side 1", () => {
+        // both start 10 m off the 50 and slide toward it
         expect(
             clipPerCount(
-                planMarcher(input([...repeat<Count>(2, [STEP, 0]), "hold"])),
+                planMarcher(
+                    input([...repeat<Count>(2, [STEP, 0]), "hold"], {
+                        x0: -10,
+                    }),
+                ),
             ),
         ).toEqual(["stepoff_slideL8to5", "slideL8to5", "halt2_slideL8to5"]);
         expect(
             clipPerCount(
-                planMarcher(input([...repeat<Count>(2, [-STEP, 0]), "hold"])),
+                planMarcher(
+                    input([...repeat<Count>(2, [-STEP, 0]), "hold"], {
+                        x0: 10,
+                    }),
+                ),
             ),
         ).toEqual(["stepoff_slideR8to5", "slideR8to5", "halt2_slideR8to5"]);
     });
@@ -203,6 +219,85 @@ describe("direction", () => {
         expect(((loop.legYaw as number) * 180) / Math.PI).toBeCloseTo(45, 6);
         expect(clipPerCount(plan)[0]).toBe("stepoff_8to5_L45");
         expect(clipPerCount(plan)[4]).toBe("halt2_8to5_L45");
+    });
+});
+
+describe("slides and the 50", () => {
+    it("slides forward toward the 50 and backward away from it", () => {
+        const toward = planMarcher(
+            input([...repeat<Count>(4, [-STEP, 0]), "hold"], { x0: 10 }),
+        );
+        expect(clipPerCount(toward)).toEqual([
+            "stepoff_slideR8to5",
+            "slideR8to5",
+            "slideR8to5",
+            "slideR8to5",
+            "halt2_slideR8to5",
+        ]);
+        const away = planMarcher(
+            input([...repeat<Count>(4, [STEP, 0]), "hold"], { x0: 10 }),
+        );
+        // the legs face the 50 (the performer's right) while the body travels left
+        expect(clipPerCount(away)).toEqual([
+            "stepoff_back8to5_R45",
+            "back8to5",
+            "back8to5",
+            "back8to5",
+            "halt2_back8to5_R45",
+        ]);
+        const loop = away.events.find((e) => e.kind === "loop")!;
+        expect(((loop.legYaw as number) * 180) / Math.PI).toBeCloseTo(-90, 6);
+    });
+
+    it("keeps one gait through a slide that crosses the 50", () => {
+        // from 3 m on side 2 to 1.6 m on side 1: nearer the 50 at the end
+        const plan = planMarcher(
+            input([...repeat<Count>(8, [-STEP, 0]), "hold"], { x0: 3 }),
+        );
+        const clips = clipPerCount(plan);
+        expect(clips.slice(1, 8)).toEqual(repeat(7, "slideR8to5"));
+        expect(clips.some((c) => c.includes("back"))).toBe(false);
+    });
+
+    it("keeps the forward slide on the 50 or along it", () => {
+        // ends exactly as far from the 50 as it started: no answer, forward slide
+        const plan = planMarcher(
+            input([...repeat<Count>(4, [STEP, 0]), "hold"], { x0: -2 * STEP }),
+        );
+        expect(clipPerCount(plan)[1]).toBe("slideL8to5");
+    });
+
+    it("decides per run: a slide out and back changes gait where it turns", () => {
+        const plan = planMarcher(
+            input(
+                [
+                    ...repeat<Count>(4, [STEP, 0]),
+                    ...repeat<Count>(4, [-STEP, 0]),
+                    "hold",
+                ],
+                { x0: 10 },
+            ),
+        );
+        const clips = clipPerCount(plan);
+        expect(clips[1]).toBe("back8to5");
+        // the backward slide's legs are turned 90 degrees, so the unturned
+        // change clip doesn't fit: the gaits crossfade
+        const turn = plan.events[eventIndexAt(plan, 4.5)];
+        expect(turn.kind).toBe("crossfade");
+        expect([turn.clip, turn.clip2]).toEqual(["back8to5", "slideR8to5"]);
+        expect(clips[5]).toBe("slideR8to5");
+    });
+
+    it("leaves diagonals outside the band alone", () => {
+        // 60 degrees from the front, away from the 50: a forward march, legs turned
+        const dx = STEP * Math.sin(Math.PI / 3);
+        const dz = STEP * Math.cos(Math.PI / 3);
+        const plan = planMarcher(
+            input([...repeat<Count>(4, [dx, dz]), "hold"], { x0: 10 }),
+        );
+        const loop = plan.events.find((e) => e.kind === "loop")!;
+        expect(loop.clip).toBe("8to5");
+        expect(((loop.legYaw as number) * 180) / Math.PI).toBeCloseTo(60, 6);
     });
 });
 
@@ -245,66 +340,190 @@ describe("in-between step sizes", () => {
 });
 
 describe("moves back to back", () => {
-    it("plays the change clip on the count the move changes, by the loop's time", () => {
-        // 8 forward then 8 slide left: the loop is at 0.5 s on count 9
-        const clips = clipPerCount(
-            planMarcher(
-                input([
+    it("centers a move-to-move change on the page boundary", () => {
+        // 8 forward then 8 slide left toward the 50: the fade runs from the
+        // middle of count 7 (the last of the old move) to the middle of count 8
+        const plan = planMarcher(
+            input(
+                [
                     ...repeat<Count>(8, [0, STEP]),
                     ...repeat<Count>(8, [STEP, 0]),
                     "hold",
-                ]),
+                ],
+                { x0: -10 },
             ),
         );
-        expect(clips[8]).toBe("change2_8to5__slideL8to5");
+        const fade = plan.events[eventIndexAt(plan, 7.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect(fade.count).toBe(7);
+        expect(fade.fadeStart).toBe(7.5);
+        expect(fade.fadeEnd).toBe(8.5);
+        expect([fade.clip, fade.clip2]).toEqual(["8to5", "slideL8to5"]);
+        // one event covers both counts
+        expect(eventIndexAt(plan, 7.1)).toBe(eventIndexAt(plan, 8.9));
+        const clips = clipPerCount(plan);
+        expect(clips[6]).toBe("8to5");
         expect(clips.slice(9, 16)).toEqual(repeat(7, "slideL8to5"));
-        // 7 slide-loop counts after a change2_ (loop starts at time 0): halt2_ ... count 16
-        // is the 8th loop-phase count since the change -> back at time 0.5
-        expect(clips[16]).toMatch(/^halt2?_slideL8to5$/);
+        // the loops stay in phase across the fade
+        const fwd = plan.events.find(
+            (e) => e.kind === "loop" && e.clip === "8to5",
+        )!;
+        const side = plan.events.find(
+            (e) => e.kind === "loop" && e.clip === "slideL8to5",
+        )!;
+        expect(Math.abs(fwd.phaseStart - side.phaseStart) % 2).toBe(0);
+        expect(Math.abs(fwd.phaseStart - fade.phaseStart) % 2).toBe(0);
     });
 
-    it("uses change_ when the loop is at time 0 on the change count", () => {
-        const clips = clipPerCount(
-            planMarcher(
-                input([
-                    ...repeat<Count>(7, [0, STEP]),
-                    ...repeat<Count>(4, [STEP, 0]),
-                    "hold",
-                ]),
-            ),
+    it("falls back to a one-count fade when the change follows the step-off", () => {
+        const plan = planMarcher(
+            input([[0, STEP], ...repeat<Count>(4, [STEP, 0]), "hold"], {
+                x0: -10,
+            }),
         );
-        expect(clips[7]).toBe("change_8to5__slideL8to5");
+        expect(clipPerCount(plan)[0]).toBe("stepoff_8to5");
+        const fade = plan.events[eventIndexAt(plan, 1.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect(fade.count).toBe(1);
+        expect(fade.fadeStart).toBe(1);
+        expect(fade.fadeEnd).toBe(2);
     });
 
-    it("changes size with a change clip: 8-to-5 into 6-to-5", () => {
-        const clips = clipPerCount(
-            planMarcher(
-                input([
-                    ...repeat<Count>(4, [0, STEP]),
-                    ...repeat<Count>(4, [0, 0.762]),
-                    "hold",
-                ]),
-            ),
-        );
-        // 3 loop counts after the step-off: the loop is at 0.5 s on count 5
-        expect(clips[4]).toBe("change2_8to5__6to5");
-        expect(clips[5]).toBe("6to5");
-    });
-
-    it("cuts between loops when no change clip exists, keeping the loop time", () => {
-        // 12-to-5 forward into a slide: there is no change_12to5__slideL… clip
+    it("fades a size change the same way", () => {
         const plan = planMarcher(
             input([
-                ...repeat<Count>(4, [0, 4.572 / 12]),
-                ...repeat<Count>(4, [4.572 / 12, 0]),
+                ...repeat<Count>(4, [0, STEP]),
+                ...repeat<Count>(4, [0, 4.572 / 6]),
                 "hold",
             ]),
         );
+        const fade = plan.events[eventIndexAt(plan, 3.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect([fade.clip, fade.clip2]).toEqual(["8to5", "6to5"]);
+        expect(fade.fadeStart).toBe(3.5);
+    });
+
+    it("crossfades between loops when no change clip exists, keeping the loop time", () => {
+        // 12-to-5 forward into a slide toward the 50: there is no change_12to5__slideR… clip
+        const plan = planMarcher(
+            input(
+                [
+                    ...repeat<Count>(4, [0, 4.572 / 12]),
+                    ...repeat<Count>(4, [-4.572 / 12, 0]),
+                    "hold",
+                ],
+                { x0: 10 },
+            ),
+        );
         const clips = clipPerCount(plan);
-        expect(clips[4]).toBe("slideL12to5");
+        const fade = plan.events[eventIndexAt(plan, 4.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect(fade.count).toBe(3);
+        expect(fade.clip).toBe("12to5");
+        expect(fade.clip2).toBe("slideR12to5");
+        expect(clips[5]).toBe("slideR12to5");
         const fwd = plan.events.find((e) => e.clip === "12to5")!;
-        const side = plan.events.find((e) => e.clip === "slideL12to5")!;
+        const side = plan.events.find((e) => e.clip === "slideR12to5")!;
+        expect(Math.abs(fwd.phaseStart - fade.phaseStart) % 2).toBe(0);
         expect(Math.abs(fwd.phaseStart - side.phaseStart) % 2).toBe(0);
+    });
+
+    it("eases the legs from the old travel to the new one through the crossfade", () => {
+        // a 12-to-5 diagonal, forward and to the performer's right, into straight backward
+        const s = 4.572 / 12 / Math.SQRT2;
+        const plan = planMarcher(
+            input(
+                [
+                    ...repeat<Count>(4, [-s, s]),
+                    ...repeat<Count>(4, [0, -4.572 / 12]),
+                    "hold",
+                ],
+                { x0: 10 },
+            ),
+        );
+        const fade = plan.events[eventIndexAt(plan, 4.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect(fade.clip).toBe("12to5");
+        expect(fade.clip2).toBe("back12to5");
+        const [y0, y1, u0, u1] = fade.legYaw as [
+            number,
+            number,
+            number,
+            number,
+        ];
+        expect((y0 * 180) / Math.PI).toBeCloseTo(-45, 6);
+        expect(y1).toBeCloseTo(0, 9);
+        expect([u0, u1]).toEqual([0, 1]);
+        // the body stays on the drill through the fade
+        const inp = input(
+            [
+                ...repeat<Count>(4, [-s, s]),
+                ...repeat<Count>(4, [0, -4.572 / 12]),
+                "hold",
+            ],
+            { x0: 10 },
+        );
+        for (const c of [4, 4.5, 5]) {
+            const b = body(plan, inp, c);
+            expect(Math.hypot(b.x - b.drillX, b.z - b.drillZ)).toBeLessThan(
+                0.3,
+            );
+        }
+    });
+
+    it("widens the fade for a sharp turn within one family, with no second clip", () => {
+        const s = STEP / Math.SQRT2;
+        // forward and left 45°, then forward and right 45°: same loop, 90° of leg turn
+        const plan = planMarcher(
+            input([
+                ...repeat<Count>(4, [s, s]),
+                ...repeat<Count>(4, [-s, s]),
+                "hold",
+            ]),
+        );
+        const fade = plan.events[eventIndexAt(plan, 3.5)];
+        expect(fade.kind).toBe("crossfade");
+        expect(fade.clip).toBe("8to5");
+        expect(fade.clip2).toBeNull();
+        const [y0, y1] = fade.legYaw as [number, number, number, number];
+        expect((y0 * 180) / Math.PI).toBeCloseTo(45, 6);
+        expect((y1 * 180) / Math.PI).toBeCloseTo(-45, 6);
+        expect(fade.fadeStart).toBe(3.5);
+        expect(fade.fadeEnd).toBe(4.5);
+    });
+
+    it("keeps the hand-made change clips for mark time", () => {
+        const plan = planMarcher(
+            input(
+                [
+                    ...repeat<Count>(4, [0, STEP]),
+                    ...repeat<Count>(2, "hold"),
+                    "hold",
+                ],
+                { bandMoving: [1, 1, 1, 1, 1, 1, 0] },
+            ),
+        );
+        expect(clipPerCount(plan)[4]).toBe("change2_8to5__marktime");
+    });
+
+    it("crossfades into and out of mark time when no change clip exists", () => {
+        const plan = planMarcher(
+            input(
+                [
+                    ...repeat<Count>(4, [0, 4.572 / 12]),
+                    ...repeat<Count>(2, "hold"),
+                    ...repeat<Count>(4, [0, 4.572 / 12]),
+                    "hold",
+                ],
+                { bandMoving: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0] },
+            ),
+        );
+        const into = plan.events[eventIndexAt(plan, 4.5)];
+        expect(into.kind).toBe("crossfade");
+        expect([into.clip, into.clip2]).toEqual(["12to5", "marktime"]);
+        const out = plan.events[eventIndexAt(plan, 6.5)];
+        expect(out.kind).toBe("crossfade");
+        expect([out.clip, out.clip2]).toEqual(["marktime", "12to5"]);
     });
 
     it("lands on the dot after a continuous run of moves", () => {
