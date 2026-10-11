@@ -116,8 +116,8 @@ export function validateStepSizes(
             level: "warning",
             message:
                 over.length === 1
-                    ? `1 marcher needs steps bigger than ${steps.limit} (${steps.describe(longest)}, drawn in orange). The limit is in Field settings.`
-                    : `${over.length} marchers need steps bigger than ${steps.limit} (biggest ${steps.describe(longest)}, drawn in orange). The limit is in Field settings.`,
+                    ? `1 marcher needs steps bigger than ${steps.limit} (${steps.describe(longest)}, drawn in orange). The limit is in Field › Customize › General.`
+                    : `${over.length} marchers need steps bigger than ${steps.limit} (biggest ${steps.describe(longest)}, drawn in orange). The limit is in Field › Customize › General.`,
             slots: over,
             mark: "steps",
         },
@@ -146,7 +146,12 @@ export function validatePaths(
         for (let j = i + 1; j < targets.length; j++) {
             const a = targets[i]!;
             const b = targets[j]!;
-            if (walksCross(a, b)) {
+            // Walks whose lines cross only meet if both reach the crossing at about the same
+            // time; one passing where the other was, after it left, is follow-the-leader or a
+            // gate, not a collision (sims, round 11: a circle opened into an arc in order
+            // showed 129 "walk through each other")
+            const approach = closestApproach(a, b);
+            if (walksCross(a, b) && approach < close) {
                 crossings++;
                 crossingSlots.add(assignment[i]!);
                 crossingSlots.add(assignment[j]!);
@@ -154,7 +159,7 @@ export function validatePaths(
                 // Pairs that start or end that close are already flagged by the spots
                 Math.hypot(a.from.x - b.from.x, a.from.y - b.from.y) >= close &&
                 Math.hypot(a.to.x - b.to.x, a.to.y - b.to.y) >= close &&
-                closestApproach(a, b) < close
+                approach < close
             ) {
                 passes++;
                 closeSlots.add(assignment[i]!);
@@ -176,7 +181,7 @@ export function validatePaths(
             level: "warning",
             message: `${pairs(passes)} of marchers pass closer than ${MIN_SPACING_STEPS} step mid-move (drawn in red).`,
             slots: [...closeSlots],
-            mark: "collision",
+            mark: "close",
         });
     // Say so when the walks are clear, so a quiet preview reads as checked, not unchecked
     // (sims, round 9: "the app gave me no sign either way")

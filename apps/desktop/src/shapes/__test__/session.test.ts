@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { dist, xy } from "../geometry/vec";
+import { dist, polar, xy } from "../geometry/vec";
 import type { LineParams } from "../kinds/line";
 import {
     changeKind,
@@ -328,5 +328,31 @@ describe("Nearest untangles", () => {
         );
         const issues = previewSession(session, ctx).issues;
         expect(issues.some((i) => /walk through/.test(i.message))).toBe(false);
+    });
+});
+
+describe("a ring opened into an arc", () => {
+    it("keeps order around the ring by default and reports no collisions", () => {
+        const n = 64;
+        const ring = Array.from({ length: n }, (_, i) => ({
+            id: i + 1,
+            at: polar(xy(1000, 500), 245, (2 * Math.PI * i) / n),
+            drillRank: i,
+        }));
+        const onField: ShapeContext = {
+            ...ctx,
+            field: { width: 2000, height: 1000 },
+        };
+        const circle = startSession({
+            kindId: "circle",
+            marchers: ring,
+            ctx: onField,
+        });
+        expect(circle.order).toBe("keep");
+        const arc = changeKind(circle, "arc", onField);
+        // Neighbors pass where the one ahead stood after it left: follow-the-leader, no collision
+        const issues = previewSession(arc, onField).issues;
+        expect(issues.some((i) => i.mark === "collision")).toBe(false);
+        expect(issues.some((i) => i.mark === "close")).toBe(false);
     });
 });

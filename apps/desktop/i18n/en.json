@@ -857,7 +857,7 @@
         "shapeTool": {
             "title": "Shape",
             "leftUnplaced": "The {kind} wasn't placed",
-            "placeAnyway": "Some walks cross or pass too close. Place anyway, or change the shape.",
+            "placeAnyway": "Some marchers would walk through each other. Place anyway, or change the shape.",
             "placeAnywayButton": "Place anyway",
             "useNearest": "Use Nearest",
             "bringBack": "Bring it back",
@@ -1558,9 +1558,11 @@
                 "keptEarlier": "Kept on Page {page} · won't follow earlier pages"
             },
             "followed": {
-                "onePage": "Page {page} held these spots, so it changed too",
+                "keepOne": "Keep Page {page} as before",
+                "keepPages": "Keep Pages {first}–{last} as before",
+                "onePage": "Page {page} was a copy of this page, so it changed too",
                 "only": "Change only Page {page}",
-                "pages": "Pages {first}–{last} held these spots, so they changed too"
+                "pages": "Pages {first}–{last} were copies of this page, so they changed too"
             },
             "names": {
                 "many": "{first}, {second} and {count} others",

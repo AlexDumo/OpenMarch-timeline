@@ -1,4 +1,9 @@
-import { assignSlots, type AssignMarcher, type OrderMode } from "./assign";
+import {
+    assignSlots,
+    type AssignMarcher,
+    type OrderMode,
+    startOnRing,
+} from "./assign";
 import { shapeKind } from "./registry";
 import type {
     AnyShapeKind,
@@ -287,7 +292,11 @@ export function startSession({
                       orderChosen: true,
                   }
                 : {
-                      order: kind.defaultOrder ?? DEFAULT_ORDER,
+                      // Marchers on a ring open in order around it by default: a peel, not a
+                      // scramble across the middle (sims, round 11)
+                      order: startOnRing(marchers)
+                          ? "keep"
+                          : (kind.defaultOrder ?? DEFAULT_ORDER),
                       reverse: false,
                   }),
         },

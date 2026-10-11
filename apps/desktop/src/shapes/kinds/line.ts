@@ -21,6 +21,25 @@ import {
 import { sampleAlong } from "../spacing";
 import type { ShapeKind, Spacing, XY } from "../types";
 
+/**
+ * The move handle, a step and a half in front of the line's middle (+y side), so it doesn't sit
+ * on the middle marcher (sims, round 11)
+ */
+function moveHandleAt(p: LineParams, stepPx: number): XY {
+    const d = sub(p.b, p.a);
+    const length = Math.hypot(d.x, d.y);
+    if (length === 0) return mid(p.a, p.b);
+    let nx = -d.y / length;
+    let ny = d.x / length;
+    if (ny < 0 || (ny === 0 && nx < 0)) {
+        nx = -nx;
+        ny = -ny;
+    }
+    const out = 1.5 * stepPx;
+    const m = mid(p.a, p.b);
+    return xy(m.x + nx * out, m.y + ny * out);
+}
+
 /** Above this flatness (see `flatness`) the marchers aren't treated as a rough line */
 const LINE_LIKE = 0.35;
 
@@ -94,15 +113,15 @@ export const lineKind: ShapeKind<LineParams> = {
         return { a: ends[0], b: ends[1], spacing: FIT };
     },
 
-    handles: (p) => [
+    handles: (p, _n, ctx) => [
         { key: "a", role: "point", at: p.a, start: true },
         { key: "b", role: "point", at: p.b, end: true },
-        { key: "move", role: "move", at: mid(p.a, p.b) },
+        { key: "move", role: "move", at: moveHandleAt(p, ctx.stepPx) },
     ],
 
-    drag(p, key, to, { shift }) {
+    drag(p, key, to, { shift }, _n, ctx) {
         if (key === "move") {
-            const delta = sub(to, mid(p.a, p.b));
+            const delta = sub(to, moveHandleAt(p, ctx.stepPx));
             return { ...p, a: add(p.a, delta), b: add(p.b, delta) };
         }
         if (key === "a")

@@ -300,16 +300,23 @@ describe("line kind", () => {
             b: xy(10, 0),
             spacing: { mode: "fit" },
         };
+        // The handle stands 1.5 steps in front of the middle; dragging it 10 down moves the line 10
+        const handle = lineKind
+            .handles(params, 2, ctx)
+            .find((h) => h.key === "move")!;
+        expect(handle.at.y).toBeCloseTo(1.5 * STEP);
         const next = lineKind.drag(
             params,
             "move",
-            xy(5, 10),
+            xy(handle.at.x, handle.at.y + 10),
             { shift: false },
             2,
             ctx,
         );
-        expect(next.a).toEqual(xy(0, 10));
-        expect(next.b).toEqual(xy(10, 10));
+        expect(next.a.x).toBeCloseTo(0);
+        expect(next.a.y).toBeCloseTo(10);
+        expect(next.b.y).toBeCloseTo(10);
+        expect(next.b.x).toBeCloseTo(10);
     });
 
     it("reports the run, not the shape, when the run is laid on it", () => {
@@ -539,7 +546,7 @@ describe("step sizes", () => {
             steps,
         });
         expect(issue?.message).toBe(
-            "1 marcher needs steps bigger than 8 units (16 units, drawn in orange). The limit is in Field settings.",
+            "1 marcher needs steps bigger than 8 units (16 units, drawn in orange). The limit is in Field › Customize › General.",
         );
         expect(issue?.slots).toEqual([4]);
         expect(

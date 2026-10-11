@@ -210,7 +210,8 @@ export const blockKind: ShapeKind<BlockParams> = {
         const backRank = -((ranksOf(p, n) - 1) / 2) * p.deep;
         const reach = Math.max(Math.abs(p.deep), 1);
         return [
-            { key: "move", role: "move", at: p.center },
+            // In front of the front rank, off the marchers (sims, round 11)
+            { key: "move", role: "move", at: moveHandleAt(p, n, ctx) },
             {
                 key: "rotate",
                 role: "rotate",
@@ -239,7 +240,16 @@ export const blockKind: ShapeKind<BlockParams> = {
 
     drag(p, key, to, { shift }, n, ctx) {
         const out = handleOffset(ctx);
-        if (key === "move") return { ...p, center: to };
+        if (key === "move") {
+            const at = moveHandleAt(p, n, ctx);
+            return {
+                ...p,
+                center: {
+                    x: p.center.x + to.x - at.x,
+                    y: p.center.y + to.y - at.y,
+                },
+            };
+        }
         if (key === "rotate") {
             // The handle stands behind the block (local -y), a quarter turn from local +x.
             const d = sub(to, p.center);
@@ -355,4 +365,10 @@ export const blockKind: ShapeKind<BlockParams> = {
  */
 function handleOffset(ctx: ShapeContext): number {
     return 1.5 * ctx.stepPx;
+}
+
+/** The move handle: a step and a half in front of the block's front rank, at its middle */
+function moveHandleAt(p: BlockParams, n: number, ctx: ShapeContext): XY {
+    const frontRank = ((ranksOf(p, n) - 1) / 2) * p.deep;
+    return toField(p, 0, frontRank + handleOffset(ctx));
 }

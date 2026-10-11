@@ -187,10 +187,10 @@ export interface ShapeIssue {
     /** Slot indexes the issue is about, for highlighting */
     readonly slots?: readonly number[];
     /**
-     * `steps`: steps too big, drawn apart from the rest. `collision`: walks that cross or pass
-     * too close, which Place asks about once before placing.
+     * `steps`: steps too big, drawn apart from the rest. `collision`: walks that cross, which
+     * Place asks about once before placing. `close`: walks passing too close (drawn red too).
      */
-    readonly mark?: "steps" | "collision";
+    readonly mark?: "steps" | "collision" | "close";
 }
 
 /**

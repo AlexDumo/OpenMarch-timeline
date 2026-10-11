@@ -103,6 +103,8 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
             session: next,
             past: [...past.slice(-(HISTORY_LIMIT - 1)), session],
             future: [],
+            // A pointed-at warning may be gone now (its mouse leave never comes): draw all walks
+            highlight: null,
         });
     };
     return {
