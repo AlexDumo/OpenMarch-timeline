@@ -45,6 +45,26 @@ function placement(hold: Hold): THREE.Matrix4 {
         .setPosition(new THREE.Vector3(...hold.instrument.origin));
 }
 
+/**
+ * The right hand's grip on the instrument: the matrix that takes points in
+ * the instrument's own frame to the bind pose of a vertex skinned to the
+ * right hand, so that skinned with the hand posed by `hold` they land on the
+ * hold's placement. The prop bone is the hand's skinning matrix times this.
+ */
+export function gripMatrix(
+    skeleton: THREE.Skeleton,
+    pose: ArmPose,
+    hold: Hold,
+): THREE.Matrix4 {
+    const index = skeleton.bones.findIndex((b) => b.name === "DEF-handR");
+    if (index < 0) throw new Error("gripMatrix: no DEF-handR bone");
+    return skeleton.boneInverses[index]
+        .clone()
+        .invert()
+        .multiply(pose.handR.clone().invert())
+        .multiply(placement(hold));
+}
+
 const BONE_NAMES: Record<InstrumentBone, string> = {
     handR: "DEF-handR",
     handL: "DEF-handL",

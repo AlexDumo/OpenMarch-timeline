@@ -227,6 +227,12 @@ words:
   - Zingali
   - Zustand
   - 日本語
+  - lerp
+  - lerped
+  - slerp
+  - slerped
+  - texel
+  - texels
 ignorePaths:
   # Timeline spec and reference suite: external documents, kept verbatim
   - docs/timeline/spec.md

@@ -175,7 +175,7 @@ export function bakeClips(
 // on the pelvis, whose roll puts its column up to 7 mm off the turning axis, so turning the pelvis moves it by
 // (R(t) - 1) h. Classes: 1 turns by t, 2 (DEF-spine.002) by the waist angle about the column, 0 is carried.
 // With these the turn reproduces the shipped slides to 0.07 mm (scripts/direction_check.py).
-function legTurnSetup(THREE, bones, inv, bindInv) {
+export function legTurnSetup(THREE, bones, inv, bindInv) {
     const name = (b) => b.name.replace(/\./g, "");
     const find = (n) => bones.findIndex((b) => name(b) === n);
     const root = find("root"),
@@ -214,7 +214,7 @@ function legTurnSetup(THREE, bones, inv, bindInv) {
     };
 }
 
-function cloneRig(THREE, root) {
+export function cloneRig(THREE, root) {
     // a private copy of the hierarchy (bones re-linked), so baking never moves the caller's scene; at the
     // origin, so wherever the caller has placed or scaled its scene doesn't end up in the bake
     const clone = root.clone(true),
