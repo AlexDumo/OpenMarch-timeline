@@ -10,6 +10,14 @@
 /** Frame cap on battery power. */
 export const BATTERY_FPS = 30;
 
+/**
+ * Wake this much before the cap's next frame is due (ms). `invalidate()` draws
+ * on the next display frame, so a timer that fires right on time misses that
+ * frame and lands one later (50 ms apart at 60 Hz, 20 fps). Waking early lets
+ * the display frame line it up.
+ */
+export const FRAME_SLACK_MS = 6;
+
 /** The viewer's power choices, saved per computer like the render quality. */
 export interface PowerPrefs {
     /** Stop drawing when nothing moves. */
@@ -45,6 +53,11 @@ export function noteFrame(state: DrawState, now: number): void {
     state.lastFrameMs = now;
 }
 
+/** True while the battery frame cap holds the frame rate down. */
+export function frameCapped(onBattery: boolean, prefs: PowerPrefs): boolean {
+    return onBattery && prefs.saveOnBattery;
+}
+
 export interface DrawInputs {
     /** Something animates continuously: playback, a camera move. */
     moving: boolean;
@@ -65,11 +78,12 @@ export function nextFrameDelay(
         inputs.moving || now < state.awakeUntil || !inputs.prefs.pauseWhenIdle;
     if (!active) return null;
     if (
-        !(inputs.onBattery && inputs.prefs.saveOnBattery) ||
+        !frameCapped(inputs.onBattery, inputs.prefs) ||
         state.lastFrameMs === null
     )
         return 0;
-    const wait = 1000 / BATTERY_FPS - (now - state.lastFrameMs);
+    const wait =
+        1000 / BATTERY_FPS - (now - state.lastFrameMs) - FRAME_SLACK_MS;
     return wait > 0 ? wait : 0;
 }
 

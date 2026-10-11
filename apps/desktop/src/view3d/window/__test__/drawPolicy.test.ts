@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
     BATTERY_FPS,
+    FRAME_SLACK_MS,
+    frameCapped,
     SHADOW_REFRESH_MS,
     createDrawState,
     createShadowState,
@@ -54,10 +56,18 @@ describe("nextFrameDelay", () => {
             onBattery: true,
             prefs,
         })!;
-        expect(d).toBeCloseTo(1000 / BATTERY_FPS - 10, 6);
+        expect(d).toBeCloseTo(1000 / BATTERY_FPS - 10 - FRAME_SLACK_MS, 6);
         expect(
             nextFrameDelay(s, 1050, { moving: true, onBattery: true, prefs }),
         ).toBe(0);
+    });
+
+    it("names the cap as on only on battery with saving power on", () => {
+        expect(frameCapped(true, prefs)).toBe(true);
+        expect(frameCapped(false, prefs)).toBe(false);
+        expect(frameCapped(true, { ...prefs, saveOnBattery: false })).toBe(
+            false,
+        );
     });
 
     it("doesn't cap on battery when saving power is turned off", () => {

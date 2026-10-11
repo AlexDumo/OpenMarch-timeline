@@ -27,6 +27,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import DrawWhenNeeded from "./DrawWhenNeeded";
 import { requestDraw } from "./drawWake";
+import { frameCapped } from "./drawPolicy";
 import { useQuery } from "@tanstack/react-query";
 import { fieldFootprint, type FieldProperties } from "@openmarch/core";
 import {
@@ -322,16 +323,21 @@ function SceneContents({
     // Automatic fallback (design.md §9): 3 s below 30 fps switches to low
     // quality once. It never switches back on its own.
     // Only in `auto`. Choosing a mode in the settings panel, which also
-    // clears `autoLowered`, measures afresh.
+    // clears `autoLowered`, measures afresh. Not while the battery frame cap
+    // holds the rate down on purpose; it measures afresh when the cap lifts.
     const fallbackRef = useRef(createQualityFallbackState());
     const qualityMode = useView3dSceneStore((s) => s.qualityMode);
     const autoLowered = useView3dSceneStore((s) => s.autoLowered);
+    const capped = useView3dSceneStore((s) =>
+        frameCapped(s.onBattery, s.powerPrefs),
+    );
     useEffect(() => {
         fallbackRef.current = createQualityFallbackState();
-    }, [qualityMode, autoLowered]);
+    }, [qualityMode, autoLowered, capped]);
     useFrame((_, dt) => {
         const store = useView3dSceneStore.getState();
         if (store.qualityMode !== "auto" || store.quality !== "high") return;
+        if (frameCapped(store.onBattery, store.powerPrefs)) return;
         if (stepQualityFallback(fallbackRef.current, dt)) {
             // eslint-disable-next-line no-console -- design.md §9 asks for a log line
             console.info(FALLBACK_LOG_MESSAGE);
