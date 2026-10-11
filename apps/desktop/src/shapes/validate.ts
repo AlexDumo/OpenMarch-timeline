@@ -116,9 +116,10 @@ export function validateStepSizes(
             level: "warning",
             message:
                 over.length === 1
-                    ? `1 marcher needs steps bigger than the limit (${steps.describe(longest)})`
-                    : `${over.length} marchers need steps bigger than the limit (biggest ${steps.describe(longest)})`,
+                    ? `1 marcher needs steps bigger than the limit (${steps.describe(longest)}, drawn in orange)`
+                    : `${over.length} marchers need steps bigger than the limit (biggest ${steps.describe(longest)}, drawn in orange)`,
             slots: over,
+            mark: "steps",
         },
     ];
 }

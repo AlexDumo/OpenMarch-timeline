@@ -42,6 +42,11 @@ interface ShapeToolState {
     setInputError(error: string | null): void;
     setOrder(order: OrderMode, reverse: boolean, ctx: ShapeContext): void;
     reassign(ctx: ShapeContext): void;
+    /** Slots of the warning pointed at in the panel, whose walks alone the canvas draws */
+    highlight: readonly number[] | null;
+    setHighlight(slots: readonly number[] | null): void;
+    /** Opens a session again as it was (going back to a shape dropped by leaving its set) */
+    restore(session: ShapeSession): void;
     /** Double-click on the shape: add a defining point there (curves) */
     insertPoint(at: XY, ctx: ShapeContext): void;
     /** Double-click on a handle: remove that point, if the shape allows it */
@@ -114,6 +119,13 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                 future: [],
             });
         },
+        highlight: null,
+        setHighlight(highlight) {
+            if (get().highlight !== highlight) set({ highlight });
+        },
+        restore(session) {
+            set({ session, inputError: null, past: [], future: [] });
+        },
         openRecipe(recipe, marchers) {
             const session = openRecipeSession(recipe, marchers);
             if (session)
@@ -148,6 +160,7 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                     last: session,
                     dragging: null,
                     inputError: null,
+                    highlight: null,
                     past: [],
                     future: [],
                 });

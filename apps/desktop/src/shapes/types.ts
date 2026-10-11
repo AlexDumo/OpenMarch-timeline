@@ -184,6 +184,8 @@ export interface ShapeIssue {
     readonly message: string;
     /** Slot indexes the issue is about, for highlighting */
     readonly slots?: readonly number[];
+    /** Steps too big: their walks are drawn apart from crossings and close passes */
+    readonly mark?: "steps";
 }
 
 /**

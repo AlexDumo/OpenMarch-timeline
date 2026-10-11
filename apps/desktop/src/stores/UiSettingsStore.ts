@@ -58,6 +58,8 @@ export interface UiSettings {
      * when zoomed out so far that full ones at 2 steps apart would overlap)
      */
     marcherLabels?: MarcherLabelForm;
+    /** Marcher labels' size on the field and in the Shape preview */
+    marcherLabelSize?: MarcherLabelSize;
     /** What the Shape tool's preview shows; see `ShapePreviewView` */
     shapePreview?: Partial<ShapePreviewView>;
     /** Whether to enable Tolgee In-Context Translating */
@@ -67,24 +69,32 @@ export interface UiSettings {
 }
 
 export type MarcherLabelForm = "auto" | "names" | "numbers";
+export type MarcherLabelSize = "small" | "normal" | "large";
+
+/** How much each label size scales the labels' normal size */
+export const LABEL_SIZE_SCALE: Record<MarcherLabelSize, number> = {
+    small: 0.7,
+    normal: 1,
+    large: 1.4,
+};
 
 /** The Shape tool's view options. `auto` picks by the band's size and spacing */
 export interface ShapePreviewView {
-    /** Walks drawn: every one, or only those with a problem (always drawn) */
-    paths: "auto" | "all" | "problems";
+    /** Walks drawn: every one, only those with a problem, or none (pointing still shows one) */
+    paths: "auto" | "all" | "problems" | "none";
     /** Labels on the new spots and where marchers start */
     labels: "auto" | "names" | "numbers" | "none";
     /** The shape being replaced: `auto` shows it until the new one is edited */
     oldShape: "auto" | "show" | "hide";
     /** Where marchers start, and their walks: faint, or drawn strongly (easier on the grid) */
-    starts: "faint" | "strong";
+    starts: "auto" | "faint" | "strong";
 }
 
 export const defaultShapePreviewView: ShapePreviewView = {
     paths: "auto",
     labels: "auto",
     oldShape: "auto",
-    starts: "faint",
+    starts: "auto",
 };
 
 // Default settings that will be used if no localStorage data exists

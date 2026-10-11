@@ -374,3 +374,23 @@ describe("a new shape through a tight group", () => {
         expectGaps(session, 2);
     });
 });
+
+describe("a new shape near the edge", () => {
+    it("slides onto the field when it fits", () => {
+        const field = { width: 1000, height: 500 };
+        const onField = { ...ctx, field };
+        // Marchers in a row along the front edge: the circle through them hangs off it
+        const edge = Array.from({ length: 8 }, (_, i) => ({
+            id: i + 1,
+            at: xy(400 + i * 20, 495),
+            drillRank: i,
+        }));
+        const session = startSession({
+            kindId: "circle",
+            marchers: edge,
+            ctx: onField,
+        });
+        const ys = previewSession(session, onField).slots.map((s) => s.y);
+        expect(Math.max(...ys)).toBeLessThanOrEqual(field.height);
+    });
+});

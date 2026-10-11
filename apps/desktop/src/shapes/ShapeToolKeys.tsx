@@ -6,6 +6,7 @@ import {
 } from "@/shortcuts/useActionHandler";
 import { currentCanvas, shapeContextFor } from "./canvas/shapeCanvasContext";
 import { useShapeToolStore } from "./shapeToolStore";
+import { offerBringBack } from "./canvas/unplacedToast";
 
 const NUDGE_DELTA = {
     up: { x: 0, y: -1 },
@@ -26,8 +27,14 @@ const NUDGE_DELTA = {
 export function ShapeToolKeys(): null {
     useActionHandler("cancelAlignmentUpdates", () => {
         const store = useShapeToolStore.getState();
-        if (store.dragging) store.cancelDrag();
-        else store.close();
+        if (store.dragging) {
+            store.cancelDrag();
+            return;
+        }
+        // An edited shape gets a way back, in case the Escape was meant for something else
+        const edited = store.past.length > 0 ? store.session : null;
+        store.close();
+        if (edited) offerBringBack(edited);
     });
 
     // Undo and Redo step through the shape's edits while it's open; the show is untouched until

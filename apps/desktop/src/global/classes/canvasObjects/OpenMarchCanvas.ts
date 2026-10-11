@@ -1,4 +1,6 @@
 import { crowdedLabels } from "./labelForms";
+import { LABEL_SIZE_SCALE } from "@/stores/UiSettingsStore";
+
 import { fabric } from "fabric";
 import CanvasMarcher from "./CanvasMarcher";
 import Endpoint from "./Endpoint";
@@ -97,6 +99,9 @@ interface TimelinePathSide {
     allowForceShow: boolean;
     color: RgbaColor;
 }
+
+/** Marcher labels' normal font size (CanvasMarcher draws them at this size) */
+const LABEL_FONT_SIZE = 14;
 
 /** Why the selection is locked in place (`OpenMarchCanvas.setSelectionLocked`) */
 export type SelectionLockReason = "shapeTool" | "playback";
@@ -2761,6 +2766,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
      */
     refreshMarcherLabels(): void {
         const setting = this._uiSettings.marcherLabels ?? "auto";
+        const fontSize =
+            LABEL_FONT_SIZE *
+            LABEL_SIZE_SCALE[this._uiSettings.marcherLabelSize ?? "normal"];
         const marchers = this.getCanvasMarchers();
         const fullOf = (m: CanvasMarcher) => m.marcherObj.drill_number;
         const shortOf = (m: CanvasMarcher) => String(m.marcherObj.drill_order);
@@ -2768,7 +2776,6 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             setting === "auto" &&
             crowdedLabels(
                 marchers.map((m) => {
-                    const fontSize = m.textLabel.fontSize ?? 14;
                     return {
                         x: m.textLabel.left ?? 0,
                         y: m.textLabel.top ?? 0,
@@ -2781,7 +2788,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         marchers.forEach((m) => {
             const text =
                 setting === "numbers" || crowded ? shortOf(m) : fullOf(m);
-            if (m.textLabel.text !== text) m.textLabel.set({ text });
+            if (m.textLabel.text !== text || m.textLabel.fontSize !== fontSize)
+                m.textLabel.set({ text, fontSize });
         });
     }
 
@@ -2804,7 +2812,10 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         ) {
             this.renderFieldGrid();
         }
-        if (oldUiSettings.marcherLabels !== uiSettings.marcherLabels) {
+        if (
+            oldUiSettings.marcherLabels !== uiSettings.marcherLabels ||
+            oldUiSettings.marcherLabelSize !== uiSettings.marcherLabelSize
+        ) {
             this.refreshMarcherLabels();
             this.requestRenderAll();
         }

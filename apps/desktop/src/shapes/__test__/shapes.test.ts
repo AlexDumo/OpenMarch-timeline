@@ -538,7 +538,7 @@ describe("step sizes", () => {
             steps,
         });
         expect(issue?.message).toBe(
-            "1 marcher needs steps bigger than the limit (16 units)",
+            "1 marcher needs steps bigger than the limit (16 units, drawn in orange)",
         );
         expect(issue?.slots).toEqual([4]);
         expect(

@@ -855,6 +855,8 @@
         },
         "shapeTool": {
             "title": "Shape",
+            "leftUnplaced": "The {kind} wasn't placed",
+            "bringBack": "Bring it back",
             "view": {
                 "auto": "Auto",
                 "autoIs": "Auto ({choice})",
@@ -864,6 +866,7 @@
                 "labelsNames": "Drill numbers",
                 "labelsNone": "Off",
                 "labelsNumbers": "Numbers only",
+                "legendBigSteps": "Walks needing steps over the limit (orange)",
                 "legendNew": "Where each marcher goes",
                 "legendOld": "The shape being replaced",
                 "legendProblemWalks": "Walks with a problem (red); point at a marcher for its walk",
@@ -873,13 +876,14 @@
                 "oldShape": "Old shape",
                 "paths": "Walks",
                 "pathsAll": "All",
+                "pathsNone": "Off",
                 "pathsProblems": "Problems only",
                 "show": "Show",
                 "starts": "Start marks",
                 "strong": "Strong",
                 "title": "View"
             },
-            "hint": "Select marchers, then pick a shape.",
+            "hint": "Pick a shape for the selected marchers (L for a line, O for a circle).",
             "hintPlaced": "These marchers were placed as a shape. Edit it, or pick a new shape.",
             "editPlaced": "Edit {kind}",
             "movedByHand": "{count, plural, one {# moved by hand} other {# moved by hand}}",
@@ -1623,6 +1627,10 @@
         "view": {
             "gridLines": "Grid lines",
             "halfLines": "Half lines",
+            "labelSize": "Label size",
+            "labelSizeLarge": "Large",
+            "labelSizeNormal": "Normal",
+            "labelSizeSmall": "Small",
             "labels": "Labels",
             "labelsAuto": "Auto (numbers when crowded)",
             "labelsNames": "Drill numbers",

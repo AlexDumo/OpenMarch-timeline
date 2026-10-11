@@ -9,7 +9,10 @@ import {
     SelectItem,
     SelectTriggerCompact,
 } from "@openmarch/ui";
-import type { MarcherLabelForm } from "@/stores/UiSettingsStore";
+import type {
+    MarcherLabelForm,
+    MarcherLabelSize,
+} from "@/stores/UiSettingsStore";
 
 export default function ViewTab() {
     return (
@@ -32,6 +35,7 @@ function UiSettingsToolbar() {
             halfLines: s.uiSettings.halfLines,
             showCollisions: s.uiSettings.showCollisions,
             marcherLabels: s.uiSettings.marcherLabels ?? "auto",
+            marcherLabelSize: s.uiSettings.marcherLabelSize ?? "normal",
         })),
     );
 
@@ -147,6 +151,34 @@ function UiSettingsToolbar() {
                             </SelectItem>
                             <SelectItem value="numbers">
                                 {t("toolbar.view.labelsNumbers")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </label>
+                <label className="flex items-center gap-8">
+                    <T keyName="toolbar.view.labelSize" />
+                    <Select
+                        value={uiSettings.marcherLabelSize}
+                        onValueChange={(v) =>
+                            setUiSettings({
+                                ...useUiSettingsStore.getState().uiSettings,
+                                marcherLabelSize: v as MarcherLabelSize,
+                            })
+                        }
+                    >
+                        <SelectTriggerCompact
+                            label={t("toolbar.view.labelSize")}
+                            data-testid="view-marcher-label-size"
+                        />
+                        <SelectContent>
+                            <SelectItem value="small">
+                                {t("toolbar.view.labelSizeSmall")}
+                            </SelectItem>
+                            <SelectItem value="normal">
+                                {t("toolbar.view.labelSizeNormal")}
+                            </SelectItem>
+                            <SelectItem value="large">
+                                {t("toolbar.view.labelSizeLarge")}
                             </SelectItem>
                         </SelectContent>
                     </Select>

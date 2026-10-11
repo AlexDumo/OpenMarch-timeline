@@ -10,6 +10,7 @@ import {
 } from "../session";
 import type { Spacing, XY } from "../types";
 import { useShapeToolStore } from "../shapeToolStore";
+import { offerBringBack } from "./unplacedToast";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { resolveShapeView, tightSpacing } from "./previewView";
 import ShapeToolOverlay, {
@@ -31,6 +32,7 @@ const colorsOf = (theme: FieldTheme): ShapeToolOverlayColors => ({
     label: rgbaToString(theme.defaultMarcher.label),
     replaced: "rgba(120, 120, 120, 0.55)",
     issue: "#e5484d",
+    bigSteps: "#f59e0b",
     handleFill: "#fff",
 });
 
@@ -56,6 +58,10 @@ export function useShapeToolCanvas({
     const edited = useShapeToolStore((s) => s.past.length > 0);
     const view = useUiSettingsStore((s) => s.uiSettings.shapePreview);
     const fieldLabels = useUiSettingsStore((s) => s.uiSettings.marcherLabels);
+    const fieldLabelSize = useUiSettingsStore(
+        (s) => s.uiSettings.marcherLabelSize,
+    );
+    const highlight = useShapeToolStore((s) => s.highlight);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
     const lastHold = useRef<ReturnType<typeof holdFeedback>>(null);
     /** Marchers whose own dots the result preview hides, to show again when it closes */
@@ -132,7 +138,9 @@ export function useShapeToolCanvas({
                 ),
                 edited,
                 fieldLabels,
+                fieldLabelSize,
             }),
+            highlight: highlight ?? undefined,
         });
         // The result preview stands in for the marchers' own dots, at their old spots
         setMarchersHidden(canvas, ids, style === "result");
@@ -157,7 +165,16 @@ export function useShapeToolCanvas({
             return () => window.clearTimeout(timer);
         }
         overlay.showHold(null);
-    }, [canvas, session, dragging, edited, view, fieldLabels, theme]);
+    }, [
+        canvas,
+        session,
+        dragging,
+        edited,
+        view,
+        fieldLabels,
+        highlight,
+        theme,
+    ]);
 }
 
 /**
@@ -215,10 +232,27 @@ function useShapeToolSelection(
         ].join("|");
     });
     const firstWindow = useRef(windowKey);
+    // The window the open shape belongs to, to go back to if leaving it drops the shape
+    const lastWindow = useRef(windowOf(useTimelineSelectionStore.getState()));
     useEffect(() => {
-        if (windowKey === firstWindow.current) return;
+        if (windowKey === firstWindow.current) {
+            lastWindow.current = windowOf(useTimelineSelectionStore.getState());
+            return;
+        }
         firstWindow.current = windowKey;
+        if (pendingRestore?.key === windowKey) {
+            // Back where a dropped shape was: open it again as it was
+            useShapeToolStore.getState().restore(pendingRestore.session);
+            pendingRestore = null;
+            return;
+        }
+        // Only a shape that was worked on is worth a way back
+        const tool = useShapeToolStore.getState();
+        const left = tool.past.length > 0 ? tool.session : null;
+        const from = lastWindow.current;
+        lastWindow.current = windowOf(useTimelineSelectionStore.getState());
         useShapeToolStore.getState().close();
+        if (left && from) offerGoBack(left, from);
     }, [windowKey]);
 
     // The selection stays put while the tool is open; the handles move the shape
@@ -285,3 +319,45 @@ function holdReason(params: {
 }
 
 /** Above this many marchers the preview draws only the paths with a problem */
+
+/** An edit window to go back to: home, or a range of beats */
+type Window = { kind: "home" } | { kind: "range"; start: number; end: number };
+
+function windowOf(state: {
+    selection: { kind: string; start?: number; end?: number };
+    isolation: unknown;
+}): Window | null {
+    // An isolated move has no plain way back; nothing is offered there
+    if (state.isolation) return null;
+    const sel = state.selection;
+    if (sel.kind === "home") return { kind: "home" };
+    if (
+        sel.kind === "range" &&
+        sel.start !== undefined &&
+        sel.end !== undefined
+    )
+        return { kind: "range", start: sel.start, end: sel.end };
+    return null;
+}
+
+/** A shape to open again once the window it belongs to is back (see `offerGoBack`) */
+let pendingRestore: { key: string; session: ShapeSession } | null = null;
+
+/**
+ * Going to another set closes an unplaced shape; say so, with a way back to it (sims, round 8:
+ * "my circle was just gone, no warning").
+ */
+function offerGoBack(session: ShapeSession, from: Window): void {
+    offerBringBack(session, () => {
+        const store = useTimelineSelectionStore.getState();
+        pendingRestore = {
+            key:
+                from.kind === "home"
+                    ? "home||"
+                    : `range|${from.start}-${from.end}|`,
+            session,
+        };
+        if (from.kind === "home") store.selectHome();
+        else store.selectRange(from.start, from.end);
+    });
+}

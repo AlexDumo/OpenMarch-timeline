@@ -228,6 +228,9 @@ function SessionControls({ session }: { session: ShapeSession }) {
     const edited = useShapeToolStore((s) => s.past.length > 0);
     const storedView = useUiSettingsStore((s) => s.uiSettings.shapePreview);
     const fieldLabels = useUiSettingsStore((s) => s.uiSettings.marcherLabels);
+    const fieldLabelSize = useUiSettingsStore(
+        (s) => s.uiSettings.marcherLabelSize,
+    );
     const [showMore, setShowMore] = useState(false);
     const preview = useMemo(
         () => (ctx ? previewSession(session, ctx) : null),
@@ -285,12 +288,70 @@ function SessionControls({ session }: { session: ShapeSession }) {
             <div className="flex flex-col gap-4">
                 <KindPicker activeKind={session.kindId} />
                 <p
-                    className="text-sub text-text/70"
+                    className="text-sub text-text/70 truncate"
+                    title={summary}
                     data-testid="shape-tool-summary"
                 >
                     {summary}
                 </p>
             </div>
+
+            <div className="flex gap-8">
+                <ActionButton action="applyShape">
+                    <Button
+                        size="compact"
+                        disabled={!preview.canApply || inputError !== null}
+                        data-testid="shape-tool-apply"
+                    >
+                        <T keyName="inspector.shapeTool.apply" />
+                        <Kbd>Enter</Kbd>
+                    </Button>
+                </ActionButton>
+                <ActionButton action="cancelAlignmentUpdates">
+                    <Button
+                        size="compact"
+                        variant="secondary"
+                        data-testid="shape-tool-cancel"
+                    >
+                        <T keyName="inspector.shapeTool.cancel" />
+                        <Kbd>Esc</Kbd>
+                    </Button>
+                </ActionButton>
+            </div>
+
+            {/* Place sits under the summary, above everything that grows or shrinks (sims, round 8:
+                locking the interval moved it under the cursor); warnings below it */}
+            {preview.issues.length > 0 && (
+                <ul
+                    className="text-sub flex flex-col gap-2"
+                    data-testid="shape-tool-issues"
+                >
+                    {preview.issues.map((issue) => (
+                        // Pointing at a warning draws only its marchers' walks (sims, round 8:
+                        // "4 pairs pass closer" among 31 other red walks)
+                        <li
+                            key={issue.message}
+                            onMouseEnter={() =>
+                                useShapeToolStore
+                                    .getState()
+                                    .setHighlight(issue.slots ?? null)
+                            }
+                            onMouseLeave={() =>
+                                useShapeToolStore.getState().setHighlight(null)
+                            }
+                            className={
+                                issue.level === "error"
+                                    ? "text-red"
+                                    : issue.level === "warning"
+                                      ? "text-yellow"
+                                      : "text-text/60"
+                            }
+                        >
+                            {issue.message}
+                        </li>
+                    ))}
+                </ul>
+            )}
 
             {basic.map(renderGroup)}
             {measures.length > 0 && (
@@ -359,58 +420,13 @@ function SessionControls({ session }: { session: ShapeSession }) {
                 </Row>
             )}
 
-            <div className="flex gap-8">
-                <ActionButton action="applyShape">
-                    <Button
-                        size="compact"
-                        disabled={!preview.canApply || inputError !== null}
-                        data-testid="shape-tool-apply"
-                    >
-                        <T keyName="inspector.shapeTool.apply" />
-                        <Kbd>Enter</Kbd>
-                    </Button>
-                </ActionButton>
-                <ActionButton action="cancelAlignmentUpdates">
-                    <Button
-                        size="compact"
-                        variant="secondary"
-                        data-testid="shape-tool-cancel"
-                    >
-                        <T keyName="inspector.shapeTool.cancel" />
-                        <Kbd>Esc</Kbd>
-                    </Button>
-                </ActionButton>
-            </div>
-
-            {/* Below Place, so a warning appearing doesn't move the button */}
-            {preview.issues.length > 0 && (
-                <ul
-                    className="text-sub flex flex-col gap-2"
-                    data-testid="shape-tool-issues"
-                >
-                    {preview.issues.map((issue) => (
-                        <li
-                            key={issue.message}
-                            className={
-                                issue.level === "error"
-                                    ? "text-red"
-                                    : issue.level === "warning"
-                                      ? "text-yellow"
-                                      : "text-text/60"
-                            }
-                        >
-                            {issue.message}
-                        </li>
-                    ))}
-                </ul>
-            )}
-
             <ShapeViewSection
                 resolved={resolveShapeView(storedView, {
                     count: n,
                     tight: tightSpacing(preview, ctx.stepPx),
                     edited,
                     fieldLabels,
+                    fieldLabelSize,
                 })}
             />
         </>
@@ -829,8 +845,9 @@ function SpacingControl({
                     }}
                 />
             </Row>
+            {/* Two lines for each state, so Place doesn't move when the interval locks */}
             <p
-                className="text-sub text-text/60"
+                className="text-sub text-text/60 min-h-[2lh]"
                 data-testid="shape-spacing-state"
             >
                 <T

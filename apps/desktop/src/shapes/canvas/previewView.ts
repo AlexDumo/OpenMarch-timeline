@@ -1,7 +1,9 @@
 import type { ShapePreview } from "../session";
 import {
     defaultShapePreviewView,
+    LABEL_SIZE_SCALE,
     type MarcherLabelForm,
+    type MarcherLabelSize,
     type ShapePreviewView,
 } from "@/stores/UiSettingsStore";
 
@@ -10,13 +12,15 @@ export const DENSE_BAND = 24;
 
 /** What the preview draws, once each `auto` view option is decided */
 export interface ResolvedShapeView {
-    readonly paths: "all" | "problems";
+    readonly paths: "all" | "problems" | "none";
     readonly labels: "names" | "numbers" | "none";
     /** Labels where marchers start, as well as on the new spots */
     readonly startLabels: boolean;
     readonly oldShape: boolean;
     /** Start rings, their labels and the walks drawn strongly */
     readonly strongStarts: boolean;
+    /** The field's label size, as a scale */
+    readonly labelScale: number;
 }
 
 /**
@@ -33,6 +37,7 @@ export function resolveShapeView(
         edited: boolean;
         /** The field's own label setting (View tab), which Auto follows */
         fieldLabels?: MarcherLabelForm;
+        fieldLabelSize?: MarcherLabelSize;
     },
 ): ResolvedShapeView {
     const v = { ...defaultShapePreviewView, ...view };
@@ -49,9 +54,14 @@ export function resolveShapeView(
     return {
         paths: v.paths !== "auto" ? v.paths : dense ? "problems" : "all",
         labels,
-        startLabels: labels !== "none" && (v.labels !== "auto" || !dense),
+        // Strong start marks carry their numbers even on a big band (sims, round 8)
+        startLabels:
+            labels !== "none" &&
+            (v.labels !== "auto" || !dense || v.starts === "strong"),
         oldShape: v.oldShape !== "auto" ? v.oldShape === "show" : !band.edited,
-        strongStarts: v.starts === "strong",
+        // Strong on a small band (sims, round 8: "darker start rings"), faint on a big one
+        strongStarts: v.starts === "auto" ? !dense : v.starts === "strong",
+        labelScale: LABEL_SIZE_SCALE[band.fieldLabelSize ?? "normal"],
     };
 }
 

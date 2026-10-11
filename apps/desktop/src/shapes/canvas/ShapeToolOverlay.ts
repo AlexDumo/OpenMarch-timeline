@@ -14,6 +14,8 @@ export interface ShapeToolOverlayColors {
     travel: string;
     /** Start rings and walks when drawn strongly (View: Start marks) */
     strongTravel: string;
+    /** Walks needing steps bigger than the limit */
+    bigSteps: string;
     /** The spots marchers will stand on */
     ghost: string;
     /** Drill numbers in the result preview */
@@ -39,6 +41,8 @@ export interface PreviewDecor {
     readonly looks: ReadonlyMap<number, MarcherLook>;
     /** The view options (`resolveShapeView`); all shown when not given */
     readonly view?: ResolvedShapeView;
+    /** Slots of a warning pointed at in the panel: only their walks are drawn */
+    readonly highlight?: readonly number[];
 }
 
 const FULL_VIEW: ResolvedShapeView = {
@@ -47,7 +51,29 @@ const FULL_VIEW: ResolvedShapeView = {
     startLabels: true,
     oldShape: true,
     strongStarts: false,
+    labelScale: 1,
 };
+
+/**
+ * How a walk is drawn. A warning pointed at in the panel shows only its walks; otherwise a
+ * crossing or close pass is red, a step over the limit orange, the pointed-at marcher's walk
+ * plain, and the rest as the Walks view says.
+ */
+function walkKind(w: {
+    issue: boolean;
+    bigStep: boolean;
+    hovered: boolean;
+    highlighted: boolean | undefined;
+    paths: ResolvedShapeView["paths"];
+}): "plain" | "issue" | "steps" | "hidden" {
+    const problem = w.issue ? "issue" : w.bigStep ? "steps" : null;
+    if (w.highlighted !== undefined)
+        return w.highlighted ? (problem ?? "issue") : "hidden";
+    if (w.hovered) return problem ?? "plain";
+    if (w.paths === "none") return "hidden";
+    if (problem) return problem;
+    return w.paths === "all" ? "plain" : "hidden";
+}
 
 const DEFAULT_DECOR: PreviewDecor = {
     style: "ghost",
@@ -115,6 +141,8 @@ export default class ShapeToolOverlay {
     private travel: fabric.Line[] = [];
     /** Start rings, their labels and plain walks: faint, or strong (View: Start marks) */
     private startColor = "";
+    /** The field's label size, applied to the preview's labels */
+    private labelScale = 1;
     /** An arrowhead at the end of each walk, so its direction reads without matching labels */
     private arrows: fabric.Triangle[] = [];
     private ghosts: fabric.Circle[] = [];
@@ -320,7 +348,7 @@ export default class ShapeToolOverlay {
         if (id === this.hoveredId) return;
         this.hoveredId = id;
         const shown = this.shown;
-        if (shown && shown.decor.view?.paths === "problems")
+        if (shown && shown.decor.view && shown.decor.view.paths !== "all")
             this.show(shown.preview, shown.decor);
     }
 
@@ -478,11 +506,13 @@ export default class ShapeToolOverlay {
             strokeDashArray: [6, 4],
         });
         const flagged = new Set<number>();
+        const bigSteps = new Set<number>();
         for (const issue of preview.issues) {
-            if (issue.level !== "info")
-                issue.slots?.forEach((i) => flagged.add(i));
+            if (issue.level === "info") continue;
+            const into = issue.mark === "steps" ? bigSteps : flagged;
+            issue.slots?.forEach((i) => into.add(i));
         }
-        this.syncTargets(preview, flagged, decor);
+        this.syncTargets(preview, flagged, bigSteps, decor);
         this.syncHandles(preview.handles);
         this.applyFade();
         this.bringToFront();
@@ -580,11 +610,14 @@ export default class ShapeToolOverlay {
     private syncTargets(
         preview: ShapePreview,
         flagged: ReadonlySet<number>,
+        /** Slots of walks needing steps bigger than the limit: drawn orange, apart from the rest */
+        bigSteps: ReadonlySet<number>,
         decor: PreviewDecor,
     ): void {
         const n = preview.targets.length;
         const result = decor.style === "result";
         const view = decor.view ?? FULL_VIEW;
+        this.labelScale = view.labelScale;
         this.startColor = view.strongStarts
             ? this.colors.strongTravel
             : this.colors.travel;
@@ -605,6 +638,13 @@ export default class ShapeToolOverlay {
         trim(this.replaced, result ? n : 0);
         // `flagged` holds slot indexes; map them to targets through the slots' positions
         const flaggedSpots = new Set([...flagged].map((i) => preview.slots[i]));
+        const bigStepSpots = new Set(
+            [...bigSteps].map((i) => preview.slots[i]),
+        );
+        // A warning pointed at in the panel: only its marchers' walks
+        const highlightSpots = decor.highlight
+            ? new Set(decor.highlight.map((i) => preview.slots[i]))
+            : undefined;
         preview.targets.forEach((target, i) => {
             // Travel starts where the marcher comes from in this move (the start flag), when known
             const origin = decor.origins.get(target.id) ?? target.from;
@@ -617,11 +657,13 @@ export default class ShapeToolOverlay {
                 i,
                 from,
                 to,
-                issue
-                    ? "issue"
-                    : view.paths === "problems" && target.id !== this.hoveredId
-                      ? "hidden"
-                      : "plain",
+                walkKind({
+                    issue,
+                    bigStep: bigStepSpots.has(target.slot),
+                    hovered: target.id === this.hoveredId,
+                    highlighted: highlightSpots?.has(target.slot),
+                    paths: view.paths,
+                }),
                 result ? (look?.radius ?? GHOST_RADIUS) : GHOST_RADIUS,
             );
             if (result) {
@@ -689,14 +731,20 @@ export default class ShapeToolOverlay {
         i: number,
         from: XY,
         to: XY,
-        kind: "plain" | "issue" | "hidden",
+        kind: "plain" | "issue" | "steps" | "hidden",
         /** The radius of the dot at `to`: the arrowhead stops at its edge */
         endRadius: number,
     ): void {
-        const color = kind === "issue" ? this.colors.issue : this.startColor;
+        const color =
+            kind === "issue"
+                ? this.colors.issue
+                : kind === "steps"
+                  ? this.colors.bigSteps
+                  : this.startColor;
+        const strong = kind === "issue" || kind === "steps";
         const style = {
             stroke: color,
-            strokeWidth: kind === "issue" ? 2 : 1,
+            strokeWidth: strong ? 2 : 1,
             visible: kind !== "hidden",
         };
         const line = this.travel[i];
@@ -712,7 +760,7 @@ export default class ShapeToolOverlay {
             this.canvas.add(created);
         }
 
-        const size = kind === "issue" ? 8 : 6;
+        const size = strong ? 8 : 6;
         const length = Math.hypot(to.x - from.x, to.y - from.y);
         const ux = length > 0 ? (to.x - from.x) / length : 0;
         const uy = length > 0 ? (to.y - from.y) / length : 0;
@@ -784,6 +832,7 @@ export default class ShapeToolOverlay {
             top: at.y,
             text,
             fill: this.startColor,
+            fontSize: 10 * this.labelScale,
         };
         const label = this.originLabels[i];
         if (label) {
@@ -794,7 +843,6 @@ export default class ShapeToolOverlay {
             ...props,
             originX: "left",
             originY: "center",
-            fontSize: 10,
             fontFamily: "courier new",
             fill: this.colors.travel,
             objectCaching: false,
@@ -811,6 +859,7 @@ export default class ShapeToolOverlay {
             left: at.x,
             top: at.y - radius * 2.2,
             text,
+            fontSize: 14 * this.labelScale,
         };
         const label = this.labels[i];
         if (label) {
@@ -821,7 +870,6 @@ export default class ShapeToolOverlay {
             ...props,
             originX: "center",
             originY: "center",
-            fontSize: 14,
             fontWeight: "bold",
             fontFamily: "courier new",
             fill: this.colors.label,
@@ -888,7 +936,14 @@ export default class ShapeToolOverlay {
                         height: MOVE_HANDLE_SIZE - 2,
                         angle: 45,
                     })
-                  : new fabric.Circle({ ...common, radius: HANDLE_RADIUS })
+                  : def.role === "rotate"
+                    ? // Dashed and small, so it doesn't read as one more marcher (sims, round 8)
+                      new fabric.Circle({
+                          ...common,
+                          radius: HANDLE_RADIUS - 2,
+                          strokeDashArray: [3, 2],
+                      })
+                    : new fabric.Circle({ ...common, radius: HANDLE_RADIUS })
         ) as ShapeToolHandleObject;
         object.shapeToolHandle = def;
         return object;

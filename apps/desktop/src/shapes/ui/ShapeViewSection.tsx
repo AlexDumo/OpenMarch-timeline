@@ -24,6 +24,7 @@ const PATHS: Option<"paths">[] = [
     { value: "auto", key: "inspector.shapeTool.view.auto" },
     { value: "all", key: "inspector.shapeTool.view.pathsAll" },
     { value: "problems", key: "inspector.shapeTool.view.pathsProblems" },
+    { value: "none", key: "inspector.shapeTool.view.pathsNone" },
 ];
 const LABELS: Option<"labels">[] = [
     { value: "auto", key: "inspector.shapeTool.view.auto" },
@@ -32,6 +33,7 @@ const LABELS: Option<"labels">[] = [
     { value: "none", key: "inspector.shapeTool.view.labelsNone" },
 ];
 const STARTS: Option<"starts">[] = [
+    { value: "auto", key: "inspector.shapeTool.view.auto" },
     { value: "faint", key: "inspector.shapeTool.view.faint" },
     { value: "strong", key: "inspector.shapeTool.view.strong" },
 ];
@@ -76,7 +78,11 @@ export function ShapeViewSection({
         });
     };
     const autoSays: Record<keyof ShapePreviewView, string> = {
-        starts: "",
+        starts: t(
+            resolved.strongStarts
+                ? "inspector.shapeTool.view.strong"
+                : "inspector.shapeTool.view.faint",
+        ),
         paths: t(
             resolved.paths === "all"
                 ? "inspector.shapeTool.view.pathsAll"
@@ -167,6 +173,9 @@ export function ShapeViewSection({
                         <T keyName="inspector.shapeTool.view.legendOld" />
                     </LegendItem>
                 )}
+                <LegendItem mark={<Walk className="stroke-[#f59e0b]" />}>
+                    <T keyName="inspector.shapeTool.view.legendBigSteps" />
+                </LegendItem>
                 <LegendItem mark={<Walk />}>
                     <T
                         keyName={
@@ -233,7 +242,7 @@ function Dot({ filled, small }: { filled?: boolean; small?: boolean }) {
     );
 }
 
-function Walk() {
+function Walk({ className = "stroke-accent" }: { className?: string }) {
     return (
         <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden>
             <line
@@ -242,7 +251,7 @@ function Walk() {
                 x2="15"
                 y2="2"
                 strokeWidth="1.5"
-                className="stroke-accent"
+                className={className}
             />
         </svg>
     );

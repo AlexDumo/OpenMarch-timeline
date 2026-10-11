@@ -182,6 +182,54 @@ function startingInterval(
     };
 }
 
+/** Steps kept between a shape slid onto the field and the field's edge */
+const FIELD_MARGIN_STEPS = 2;
+
+/**
+ * A new shape that would stand partly off the field, but fits on it, slides just far enough to
+ * stand on it (sims, round 8: an arc at a 2-step interval hung off the front sideline). One
+ * that's bigger than the field stays put; the off-field warning says so.
+ */
+function ontoField(
+    kind: AnyShapeKind,
+    params: unknown,
+    n: number,
+    ctx: ShapeContext,
+): unknown {
+    const field = ctx.field;
+    if (!field || n === 0) return params;
+    const slots = kind.generate(params, n, ctx);
+    if (slots.length === 0) return params;
+    const margin = FIELD_MARGIN_STEPS * ctx.stepPx;
+    const xs = slots.map((p) => p.x);
+    const ys = slots.map((p) => p.y);
+    const shift = (lo: number, hi: number, size: number) => {
+        if (hi - lo > size - 2 * margin) return 0;
+        if (lo < margin) return margin - lo;
+        if (hi > size - margin) return size - margin - hi;
+        return 0;
+    };
+    const dx =
+        Math.min(...xs) < 0 || Math.max(...xs) > field.width
+            ? shift(Math.min(...xs), Math.max(...xs), field.width)
+            : 0;
+    const dy =
+        Math.min(...ys) < 0 || Math.max(...ys) > field.height
+            ? shift(Math.min(...ys), Math.max(...ys), field.height)
+            : 0;
+    if (dx === 0 && dy === 0) return params;
+    const handle = kind.handles(params, n, ctx).find((h) => h.role === "move");
+    if (!handle) return params;
+    return kind.drag(
+        params,
+        handle.key,
+        { x: handle.at.x + dx, y: handle.at.y + dy },
+        { shift: false },
+        n,
+        { ...ctx, snapPoint: (p) => p },
+    );
+}
+
 function withAssignment(
     session: Omit<ShapeSession, "assignment">,
     ctx: ShapeContext,
@@ -226,6 +274,7 @@ export function startSession({
     }
     params = startingInterval(kind, params, marchers.length, ctx);
     params = settle(kind, params, marchers.length, ctx);
+    params = ontoField(kind, params, marchers.length, ctx);
     return withAssignment(
         {
             kindId,
