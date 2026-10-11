@@ -52,7 +52,7 @@ A branch with `lab/experiment.md` (the test's title, intro and questions) is
 built and published to the OpenMarch lab on every push, by
 `.github/workflows/lab-deploy.yaml`. The lab adds its feedback widget to the
 page; nothing here knows about it. The manifest format and the lab itself are
-in the `OpenMarch/openmarch-lab` repository.
+in the `OpenMarch/om-lab` repository.
 
 ## Demo shows
 
