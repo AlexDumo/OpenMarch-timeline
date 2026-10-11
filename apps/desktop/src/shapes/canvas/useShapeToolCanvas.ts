@@ -26,6 +26,7 @@ import {
 const colorsOf = (theme: FieldTheme): ShapeToolOverlayColors => ({
     shape: rgbaToString(theme.shape),
     travel: rgbaToString({ ...theme.shape, a: 0.35 }),
+    strongTravel: rgbaToString({ ...theme.shape, a: 0.85 }),
     ghost: rgbaToString({ ...theme.shape, a: 0.55 }),
     label: rgbaToString(theme.defaultMarcher.label),
     replaced: "rgba(120, 120, 120, 0.55)",
@@ -54,6 +55,7 @@ export function useShapeToolCanvas({
     // Once the shape is edited, the one it replaces has done its job (Marco, round 5)
     const edited = useShapeToolStore((s) => s.past.length > 0);
     const view = useUiSettingsStore((s) => s.uiSettings.shapePreview);
+    const fieldLabels = useUiSettingsStore((s) => s.uiSettings.marcherLabels);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
     const lastHold = useRef<ReturnType<typeof holdFeedback>>(null);
     /** Marchers whose own dots the result preview hides, to show again when it closes */
@@ -129,6 +131,7 @@ export function useShapeToolCanvas({
                     canvas.fieldProperties.pixelsPerStep,
                 ),
                 edited,
+                fieldLabels,
             }),
         });
         // The result preview stands in for the marchers' own dots, at their old spots
@@ -154,7 +157,7 @@ export function useShapeToolCanvas({
             return () => window.clearTimeout(timer);
         }
         overlay.showHold(null);
-    }, [canvas, session, dragging, edited, view, theme]);
+    }, [canvas, session, dragging, edited, view, fieldLabels, theme]);
 }
 
 /**

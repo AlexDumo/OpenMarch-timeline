@@ -53,6 +53,17 @@ export function originsAtStart(ids: readonly number[]): Map<number, XY> {
     return out;
 }
 
+/** The length in counts of the move being edited (its start flag to the playhead), if any */
+export function moveCounts(): number | null {
+    const { selection, isolation } = useTimelineSelectionStore.getState();
+    const window = isolation
+        ? isolation
+        : selection.kind === "range"
+          ? selection
+          : null;
+    return window ? window.end - window.start : null;
+}
+
 /** How each marcher looks on the canvas: its drill number and dot color, for the result preview */
 export interface MarcherLook {
     readonly label: string;

@@ -11,6 +11,9 @@ import {
     type ShapePreviewView,
 } from "@/stores/UiSettingsStore";
 import type { ResolvedShapeView } from "../canvas/previewView";
+import { useTimingObjects } from "@/hooks/useTimingObjects";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { pageFlags } from "@/timeline/timelinePlayhead";
 
 type Option<K extends keyof ShapePreviewView> = {
     readonly value: ShapePreviewView[K];
@@ -27,6 +30,10 @@ const LABELS: Option<"labels">[] = [
     { value: "names", key: "inspector.shapeTool.view.labelsNames" },
     { value: "numbers", key: "inspector.shapeTool.view.labelsNumbers" },
     { value: "none", key: "inspector.shapeTool.view.labelsNone" },
+];
+const STARTS: Option<"starts">[] = [
+    { value: "faint", key: "inspector.shapeTool.view.faint" },
+    { value: "strong", key: "inspector.shapeTool.view.strong" },
 ];
 const OLD_SHAPE: Option<"oldShape">[] = [
     { value: "auto", key: "inspector.shapeTool.view.auto" },
@@ -46,6 +53,20 @@ export function ShapeViewSection({
 }) {
     const { t } = useTolgee();
     const stored = useUiSettingsStore((s) => s.uiSettings.shapePreview);
+    // The page whose positions the move starts from, named in the legend (sims, round 7: start
+    // rings on Page 1's circle were taken for the arc just placed on Page 2)
+    const { pages } = useTimingObjects();
+    const start = useTimelineSelectionStore((s) =>
+        s.isolation
+            ? s.isolation.start
+            : s.selection.kind === "range"
+              ? s.selection.start
+              : null,
+    );
+    const startPage =
+        start === null
+            ? undefined
+            : pageFlags(pages).find((f) => f.flag === start)?.page;
     const view = { ...defaultShapePreviewView, ...stored };
     const set = (change: Partial<ShapePreviewView>) => {
         const settings = useUiSettingsStore.getState();
@@ -54,7 +75,8 @@ export function ShapeViewSection({
             shapePreview: { ...settings.uiSettings.shapePreview, ...change },
         });
     };
-    const autoSays = {
+    const autoSays: Record<keyof ShapePreviewView, string> = {
+        starts: "",
         paths: t(
             resolved.paths === "all"
                 ? "inspector.shapeTool.view.pathsAll"
@@ -117,6 +139,9 @@ export function ShapeViewSection({
             <ViewRow label={t("inspector.shapeTool.view.labels")}>
                 {picker("labels", LABELS)}
             </ViewRow>
+            <ViewRow label={t("inspector.shapeTool.view.starts")}>
+                {picker("starts", STARTS)}
+            </ViewRow>
             <ViewRow label={t("inspector.shapeTool.view.oldShape")}>
                 {picker("oldShape", OLD_SHAPE)}
             </ViewRow>
@@ -128,7 +153,14 @@ export function ShapeViewSection({
                     <T keyName="inspector.shapeTool.view.legendNew" />
                 </LegendItem>
                 <LegendItem mark={<Dot />}>
-                    <T keyName="inspector.shapeTool.view.legendStart" />
+                    {startPage ? (
+                        <T
+                            keyName="inspector.shapeTool.view.legendStartAt"
+                            params={{ page: startPage.name }}
+                        />
+                    ) : (
+                        <T keyName="inspector.shapeTool.view.legendStart" />
+                    )}
                 </LegendItem>
                 {resolved.oldShape && (
                     <LegendItem mark={<Dot small />}>

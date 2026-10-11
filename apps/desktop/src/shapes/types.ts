@@ -31,6 +31,17 @@ export interface ShapeContext {
     readonly snapPoint: (p: XY) => XY;
     /** The field's size in field units (from 0, 0), to warn about spots off it */
     readonly field?: { readonly width: number; readonly height: number };
+    /**
+     * The move's length and the biggest step it allows, to warn about walks needing bigger steps
+     * than the field's step size warning (sims, round 7). Absent at Home or with no move.
+     */
+    readonly steps?: {
+        readonly counts: number;
+        /** Field units a marcher may cover in one count */
+        readonly maxPerCount: number;
+        /** A distance covered in the move, as drill writers say it: "6.2 to 5" */
+        readonly describe: (distance: number) => string;
+    };
 }
 
 /** One run of a mixed interval: `count` gaps of `steps` steps each, written `steps x count`. */

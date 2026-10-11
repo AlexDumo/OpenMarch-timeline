@@ -14,7 +14,7 @@ import {
     sampleAlong,
 } from "../spacing";
 import type { ShapeContext, Spacing } from "../types";
-import { validateSlots } from "../validate";
+import { validateSlots, validateStepSizes } from "../validate";
 
 const STEP = 10;
 const ctx: ShapeContext = { stepPx: STEP, snapPoint: (p) => p };
@@ -518,5 +518,34 @@ describe("off the field", () => {
         const off = issues.find((i) => i.message.includes("off the field"));
         expect(off?.message).toBe("2 marchers would stand off the field");
         expect(off?.slots).toEqual([2, 3]);
+    });
+});
+
+describe("step sizes", () => {
+    it("warns about walks needing steps bigger than the limit", () => {
+        const steps = {
+            counts: 8,
+            maxPerCount: 1,
+            describe: (d: number) => `${d} units`,
+        };
+        const walks = [
+            { from: xy(0, 0), to: xy(8, 0) }, // 1 a count: fine
+            { from: xy(0, 0), to: xy(16, 0) }, // 2 a count: too big
+        ];
+        const [issue] = validateStepSizes(walks, [3, 4], {
+            stepPx: 1,
+            snapPoint: (p) => p,
+            steps,
+        });
+        expect(issue?.message).toBe(
+            "1 marcher needs steps bigger than the limit (16 units)",
+        );
+        expect(issue?.slots).toEqual([4]);
+        expect(
+            validateStepSizes(walks, [3, 4], {
+                stepPx: 1,
+                snapPoint: (p) => p,
+            }),
+        ).toEqual([]);
     });
 });

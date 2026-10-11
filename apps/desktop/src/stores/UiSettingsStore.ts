@@ -76,12 +76,15 @@ export interface ShapePreviewView {
     labels: "auto" | "names" | "numbers" | "none";
     /** The shape being replaced: `auto` shows it until the new one is edited */
     oldShape: "auto" | "show" | "hide";
+    /** Where marchers start, and their walks: faint, or drawn strongly (easier on the grid) */
+    starts: "faint" | "strong";
 }
 
 export const defaultShapePreviewView: ShapePreviewView = {
     paths: "auto",
     labels: "auto",
     oldShape: "auto",
+    starts: "faint",
 };
 
 // Default settings that will be used if no localStorage data exists

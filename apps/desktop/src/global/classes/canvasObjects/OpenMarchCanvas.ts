@@ -2755,8 +2755,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
 
     /**
      * Writes each marcher's label in the form the View setting asks for: its full drill number,
-     * the number only, or (`auto`) the number only where the full label would touch a
-     * neighbor's. Run after each static render, not during playback.
+     * the number only, or (`auto`) numbers only for everyone when any full labels would touch.
+     * One form for the whole field, so "OT1" doesn't stand beside "3" (sims, round 7). Run after
+     * each static render, not during playback.
      */
     refreshMarcherLabels(): void {
         const setting = this._uiSettings.marcherLabels ?? "auto";
@@ -2764,25 +2765,22 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         const fullOf = (m: CanvasMarcher) => m.marcherObj.drill_number;
         const shortOf = (m: CanvasMarcher) => String(m.marcherObj.drill_order);
         const crowded =
-            setting === "auto"
-                ? crowdedLabels(
-                      marchers.map((m) => {
-                          const fontSize = m.textLabel.fontSize ?? 14;
-                          return {
-                              x: m.textLabel.left ?? 0,
-                              y: m.textLabel.top ?? 0,
-                              // Courier is monospaced: 0.6 em a character
-                              width: fullOf(m).length * fontSize * 0.6,
-                              height: fontSize,
-                          };
-                      }),
-                  )
-                : [];
-        marchers.forEach((m, i) => {
+            setting === "auto" &&
+            crowdedLabels(
+                marchers.map((m) => {
+                    const fontSize = m.textLabel.fontSize ?? 14;
+                    return {
+                        x: m.textLabel.left ?? 0,
+                        y: m.textLabel.top ?? 0,
+                        // Courier is monospaced: 0.6 em a character
+                        width: fullOf(m).length * fontSize * 0.6,
+                        height: fontSize,
+                    };
+                }),
+            ).some(Boolean);
+        marchers.forEach((m) => {
             const text =
-                setting === "numbers" || (setting === "auto" && crowded[i])
-                    ? shortOf(m)
-                    : fullOf(m);
+                setting === "numbers" || crowded ? shortOf(m) : fullOf(m);
             if (m.textLabel.text !== text) m.textLabel.set({ text });
         });
     }

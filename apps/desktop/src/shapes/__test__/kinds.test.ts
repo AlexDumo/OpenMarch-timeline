@@ -221,11 +221,13 @@ describe("block kind", () => {
     it("drags the across, deep and rotate handles", () => {
         const handles = blockKind.handles(base, 12, ctx);
         const across = handles.find((h) => h.key === "across")!;
-        closeXY(across.at, xy(30, 0));
+        // Size handles stand 1.5 steps outside the edge marchers
+        const out = 1.5 * ctx.stepPx;
+        closeXY(across.at, xy(30 + out, 0));
         const wider = blockKind.drag(
             base,
             "across",
-            xy(60, 7),
+            xy(60 + out, 7),
             noShift,
             12,
             ctx,
@@ -234,7 +236,7 @@ describe("block kind", () => {
         const deeper = blockKind.drag(
             base,
             "deep",
-            xy(3, -45),
+            xy(3, -45 - out),
             noShift,
             12,
             ctx,

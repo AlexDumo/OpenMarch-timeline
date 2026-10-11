@@ -6,7 +6,7 @@ import {
     shortcutStillRuns,
     skipsAppNudge,
 } from "@/components/timeline/timelineHotkeys";
-import { readShortcutContext } from "./context";
+import { layerIsOpen, readShortcutContext } from "./context";
 import {
     buildKeymap,
     compileKeymap,
@@ -32,7 +32,15 @@ export default function ShortcutDispatcher({
     );
 
     useEffect(() => {
+        // Read before anything handles the press: Escape closes an open menu or list (Radix),
+        // and by the time the press reaches this dispatcher the layer may be gone, so the same
+        // Escape would also cancel the shape tool (sims, round 7)
+        let layerOpenAtPress = false;
+        const onKeyDownCapture = (event: KeyboardEvent) => {
+            layerOpenAtPress = event.key === "Escape" && layerIsOpen();
+        };
         const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape" && layerOpenAtPress) return;
             if (
                 (event.defaultPrevented && !shortcutStillRuns(event)) ||
                 event.isComposing
@@ -63,8 +71,12 @@ export default function ShortcutDispatcher({
             if (event.repeat && entry.ignoreRepeat) return;
             runAction(entry.id);
         };
+        window.addEventListener("keydown", onKeyDownCapture, true);
         window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
+        return () => {
+            window.removeEventListener("keydown", onKeyDownCapture, true);
+            window.removeEventListener("keydown", onKeyDown);
+        };
     }, [compiled]);
 
     return null;

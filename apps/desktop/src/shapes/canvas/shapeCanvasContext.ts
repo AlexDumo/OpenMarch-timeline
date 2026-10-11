@@ -3,7 +3,9 @@ import { compare as compareMarchers } from "@/global/classes/Marcher";
 import { getRoundCoordinates2 } from "@/utilities/CoordinateActions";
 import type { AssignMarcher } from "../assign";
 import type { ShapeContext } from "../types";
-import { originsAtStart } from "./previewContext";
+import { moveCounts, originsAtStart } from "./previewContext";
+import type { FieldProperties } from "@openmarch/core";
+import { StepSize } from "@/global/classes/StepSize";
 
 /** The canvas the shape tool reads; `window.canvas` while a show is open. */
 export function currentCanvas(): OpenMarchCanvas | undefined {
@@ -22,6 +24,7 @@ export function shapeContextFor(
     return {
         stepPx: fieldProperties.pixelsPerStep,
         field: { width: fieldProperties.width, height: fieldProperties.height },
+        steps: stepLimit(fieldProperties),
         snapPoint: (p) => {
             if (!snap) return p;
             const rounded = getRoundCoordinates2({
@@ -65,4 +68,29 @@ export function marchersOnCanvas(
                 : {}),
         };
     });
+}
+
+/**
+ * The biggest step the move allows: the field's step size warning over the move's counts.
+ * None at Home, with no move, or with the warning off (a threshold of 0).
+ */
+function stepLimit(fieldProperties: FieldProperties): ShapeContext["steps"] {
+    const counts = moveCounts();
+    const threshold = fieldProperties.stepSizeWarningThresholdInches;
+    if (!counts || counts <= 0 || !(threshold > 0)) return undefined;
+    return {
+        counts,
+        // Inches per step over inches per 8-to-5 step, in field units; the 0.5 inch tolerance
+        // matches StepSize.exceedsThreshold
+        maxPerCount:
+            ((threshold + 0.5) / fieldProperties.stepSizeInches) *
+            fieldProperties.pixelsPerStep,
+        describe: (distance) =>
+            StepSize.fromDistance({
+                marcher_id: -1,
+                distance,
+                counts,
+                fieldProperties,
+            }).displayString(),
+    };
 }

@@ -12,6 +12,8 @@ export interface ShapeToolOverlayColors {
     shape: string;
     /** The thin lines from each marcher to its spot */
     travel: string;
+    /** Start rings and walks when drawn strongly (View: Start marks) */
+    strongTravel: string;
     /** The spots marchers will stand on */
     ghost: string;
     /** Drill numbers in the result preview */
@@ -44,6 +46,7 @@ const FULL_VIEW: ResolvedShapeView = {
     labels: "names",
     startLabels: true,
     oldShape: true,
+    strongStarts: false,
 };
 
 const DEFAULT_DECOR: PreviewDecor = {
@@ -68,8 +71,9 @@ export interface HandleDragEvents {
     doubleClick(at: XY, key?: string): void;
 }
 
-const HANDLE_RADIUS = 10;
-const MOVE_HANDLE_SIZE = 13;
+// Small enough not to bury the marchers they sit by (sims, round 7: "the giant ring")
+const HANDLE_RADIUS = 8;
+const MOVE_HANDLE_SIZE = 11;
 const GHOST_RADIUS = 4;
 /** The shape being replaced, in the result preview */
 const REPLACED_RADIUS = 2.5;
@@ -109,6 +113,10 @@ export default class ShapeToolOverlay {
     /** Fainter lines for the rest of the shape */
     private guides: fabric.Polyline[] = [];
     private travel: fabric.Line[] = [];
+    /** Start rings, their labels and plain walks: faint, or strong (View: Start marks) */
+    private startColor = "";
+    /** An arrowhead at the end of each walk, so its direction reads without matching labels */
+    private arrows: fabric.Triangle[] = [];
     private ghosts: fabric.Circle[] = [];
     private handles: ShapeToolHandleObject[] = [];
     private handleRoles: string = "";
@@ -282,9 +290,42 @@ export default class ShapeToolOverlay {
         if (handle)
             this.canvas.setCursor(cursorFor(handle.shapeToolHandle.role));
         this.showHint(handle?.shapeToolHandle ?? null);
+        this.hover(handle ? null : this.marcherAt(event.e));
     };
 
+    /** The marcher whose new spot or start is under the pointer, by id */
+    private marcherAt(e: MouseEvent): number | null {
+        const shown = this.shown;
+        if (!shown) return null;
+        const reach = HIT_RADIUS_PX / (this.canvas.getZoom() || 1);
+        const p = this.canvas.getPointer(e);
+        let best: number | null = null;
+        let bestD = Infinity;
+        for (const target of shown.preview.targets) {
+            const look = shown.decor.looks.get(target.id);
+            const origin = shown.decor.origins.get(target.id) ?? target.from;
+            for (const at of [target.to, origin]) {
+                const c = toCanvas(at);
+                const d = Math.hypot(c.x - p.x, c.y - p.y);
+                if (d <= reach + (look?.radius ?? GHOST_RADIUS) && d < bestD) {
+                    best = target.id;
+                    bestD = d;
+                }
+            }
+        }
+        return best;
+    }
+
+    private hover(id: number | null): void {
+        if (id === this.hoveredId) return;
+        this.hoveredId = id;
+        const shown = this.shown;
+        if (shown && shown.decor.view?.paths === "problems")
+            this.show(shown.preview, shown.decor);
+    }
+
     private readonly onLeave = () => {
+        this.hover(null);
         if (this.handles.length > 0 && this.dragKey === null)
             this.setFaded(true);
     };
@@ -418,7 +459,13 @@ export default class ShapeToolOverlay {
     /** Whether presses on the shape's line are the shape's (it takes new points) */
     private takesPoints = false;
 
+    /** What `show` last drew, to draw again when the hovered marcher changes */
+    private shown: { preview: ShapePreview; decor: PreviewDecor } | null = null;
+    /** The marcher under the pointer: with only problem walks drawn, its walk is drawn too */
+    private hoveredId: number | null = null;
+
     show(preview: ShapePreview, decor: PreviewDecor = DEFAULT_DECOR): void {
+        this.shown = { preview, decor };
         this.takesPoints = preview.takesPoints;
         this.syncLines(this.guides, preview.guide, {
             stroke: this.colors.travel,
@@ -463,6 +510,7 @@ export default class ShapeToolOverlay {
             ...this.guides,
             ...this.outlines,
             ...this.travel,
+            ...this.arrows,
             ...this.ghosts,
             ...this.labels,
             ...this.origins,
@@ -475,6 +523,7 @@ export default class ShapeToolOverlay {
         this.guides = [];
         this.outlines = [];
         this.travel = [];
+        this.arrows = [];
         this.ghosts = [];
         this.labels = [];
         this.origins = [];
@@ -483,6 +532,8 @@ export default class ShapeToolOverlay {
         this.handles = [];
         this.handleRoles = "";
         this.faded = false;
+        this.shown = null;
+        this.hoveredId = null;
         this.takesPoints = false;
         this.canvas.requestRenderAll();
     }
@@ -534,6 +585,9 @@ export default class ShapeToolOverlay {
         const n = preview.targets.length;
         const result = decor.style === "result";
         const view = decor.view ?? FULL_VIEW;
+        this.startColor = view.strongStarts
+            ? this.colors.strongTravel
+            : this.colors.travel;
         const labelOf = (look: MarcherLook | undefined) =>
             view.labels === "none"
                 ? ""
@@ -543,6 +597,7 @@ export default class ShapeToolOverlay {
             while (pool.length > size) this.canvas.remove(pool.pop()!);
         };
         trim(this.travel, n);
+        trim(this.arrows, n);
         trim(this.ghosts, n);
         trim(this.labels, result ? n : 0);
         trim(this.origins, result ? n : 0);
@@ -564,9 +619,10 @@ export default class ShapeToolOverlay {
                 to,
                 issue
                     ? "issue"
-                    : view.paths === "problems"
+                    : view.paths === "problems" && target.id !== this.hoveredId
                       ? "hidden"
                       : "plain",
+                result ? (look?.radius ?? GHOST_RADIUS) : GHOST_RADIUS,
             );
             if (result) {
                 // The new shape, drawn as the marchers themselves
@@ -607,7 +663,7 @@ export default class ShapeToolOverlay {
                 this.placeCircle(this.origins, i, from, {
                     radius: look?.radius ?? GHOST_RADIUS,
                     fill: "",
-                    stroke: this.colors.travel,
+                    stroke: this.startColor,
                     strokeWidth: 1.5,
                 });
             } else {
@@ -621,6 +677,7 @@ export default class ShapeToolOverlay {
         });
         for (const o of [
             ...this.travel,
+            ...this.arrows,
             ...this.ghosts,
             ...this.labels,
             ...this.origins,
@@ -633,24 +690,57 @@ export default class ShapeToolOverlay {
         from: XY,
         to: XY,
         kind: "plain" | "issue" | "hidden",
+        /** The radius of the dot at `to`: the arrowhead stops at its edge */
+        endRadius: number,
     ): void {
+        const color = kind === "issue" ? this.colors.issue : this.startColor;
         const style = {
-            stroke: kind === "issue" ? this.colors.issue : this.colors.travel,
+            stroke: color,
             strokeWidth: kind === "issue" ? 2 : 1,
             visible: kind !== "hidden",
         };
         const line = this.travel[i];
         if (line) {
             line.set({ x1: from.x, y1: from.y, x2: to.x, y2: to.y, ...style });
-            return;
+        } else {
+            const created = new fabric.Line([from.x, from.y, to.x, to.y], {
+                ...style,
+                objectCaching: false,
+                ...NoControls,
+            });
+            this.travel.push(created);
+            this.canvas.add(created);
         }
-        const created = new fabric.Line([from.x, from.y, to.x, to.y], {
-            ...style,
-            objectCaching: false,
-            ...NoControls,
-        });
-        this.travel.push(created);
-        this.canvas.add(created);
+
+        const size = kind === "issue" ? 8 : 6;
+        const length = Math.hypot(to.x - from.x, to.y - from.y);
+        const ux = length > 0 ? (to.x - from.x) / length : 0;
+        const uy = length > 0 ? (to.y - from.y) / length : 0;
+        const back = endRadius + size / 2;
+        const arrow = {
+            left: to.x - ux * back,
+            top: to.y - uy * back,
+            // A triangle points up; turn it along the walk
+            angle: (Math.atan2(uy, ux) * 180) / Math.PI + 90,
+            width: size,
+            height: size,
+            fill: color,
+            visible: style.visible && length > back + size,
+        };
+        const head = this.arrows[i];
+        if (head) head.set(arrow);
+        else {
+            const created = new fabric.Triangle({
+                ...arrow,
+                originX: "center",
+                originY: "center",
+                strokeWidth: 0,
+                objectCaching: false,
+                ...NoControls,
+            });
+            this.arrows.push(created);
+            this.canvas.add(created);
+        }
     }
 
     private placeCircle(
@@ -689,7 +779,12 @@ export default class ShapeToolOverlay {
         text: string,
         radius: number,
     ): void {
-        const props = { left: at.x + radius + 2, top: at.y, text };
+        const props = {
+            left: at.x + radius + 2,
+            top: at.y,
+            text,
+            fill: this.startColor,
+        };
         const label = this.originLabels[i];
         if (label) {
             label.set(props);

@@ -204,8 +204,9 @@ export const blockKind: ShapeKind<BlockParams> = {
         };
     },
 
-    handles(p, n) {
+    handles(p, n, ctx) {
         const half = halfSize(p, n);
+        const out = handleOffset(ctx);
         const backRank = -((ranksOf(p, n) - 1) / 2) * p.deep;
         const reach = Math.max(Math.abs(p.deep), 1);
         return [
@@ -219,7 +220,7 @@ export const blockKind: ShapeKind<BlockParams> = {
             {
                 key: "across",
                 role: "bulge",
-                at: toField(p, half.x, 0),
+                at: toField(p, half.x + out, 0),
                 hint: p.keepIntervals ? "Files" : "Interval across",
             },
             // With the intervals kept, the ranks follow the files, so depth has no handle
@@ -230,13 +231,14 @@ export const blockKind: ShapeKind<BlockParams> = {
                           key: "deep",
                           role: "bulge" as const,
                           hint: "Interval deep",
-                          at: toField(p, 0, half.y),
+                          at: toField(p, 0, half.y + out),
                       },
                   ]),
         ];
     },
 
-    drag(p, key, to, { shift }, n) {
+    drag(p, key, to, { shift }, n, ctx) {
+        const out = handleOffset(ctx);
         if (key === "move") return { ...p, center: to };
         if (key === "rotate") {
             // The handle stands behind the block (local -y), a quarter turn from local +x.
@@ -249,12 +251,12 @@ export const blockKind: ShapeKind<BlockParams> = {
             };
         }
         if (key === "across") {
-            const along = Math.abs(toLocal(p, to).x);
+            const along = Math.max(Math.abs(toLocal(p, to).x) - out, 0);
             if (p.keepIntervals) {
                 // Whole files at the kept interval, one per interval dragged, never more than
                 // there are marchers. The opposite side stays where it is.
                 const left = -((filesOf(p) - 1) / 2) * p.across;
-                const reach = toLocal(p, to).x - left;
+                const reach = toLocal(p, to).x - out - left;
                 const files = Math.min(
                     Math.max(
                         Math.round(reach / Math.max(p.across, 1e-9)) + 1,
@@ -268,7 +270,7 @@ export const blockKind: ShapeKind<BlockParams> = {
             return { ...p, across: (2 * along) / Math.max(filesOf(p) - 1, 1) };
         }
         if (key === "deep") {
-            const along = Math.abs(toLocal(p, to).y);
+            const along = Math.max(Math.abs(toLocal(p, to).y) - out, 0);
             return {
                 ...p,
                 deep: (2 * along) / Math.max(ranksOf(p, n) - 1, 1),
@@ -346,3 +348,11 @@ export const blockKind: ShapeKind<BlockParams> = {
         return [];
     },
 };
+
+/**
+ * How far the size handles stand outside the block's edge files and ranks, so they don't sit on
+ * the end marchers and hide their numbers (sims, round 7). Drags take it back off.
+ */
+function handleOffset(ctx: ShapeContext): number {
+    return 1.5 * ctx.stepPx;
+}

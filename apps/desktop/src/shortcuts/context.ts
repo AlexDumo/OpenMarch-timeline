@@ -17,6 +17,11 @@ const OPEN_MODAL_LAYER_SELECTOR = [
     '[role="listbox"][data-state="open"]',
 ].join(", ");
 
+/** Whether a menu, list or dialog is open now, however the page's pointer events are set */
+export function layerIsOpen(): boolean {
+    return document.querySelector(OPEN_MODAL_LAYER_SELECTOR) !== null;
+}
+
 export function readShortcutContext(
     baseScope: ShortcutContext["baseScope"],
 ): ShortcutContext {

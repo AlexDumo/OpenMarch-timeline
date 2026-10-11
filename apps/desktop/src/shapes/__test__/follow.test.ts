@@ -247,11 +247,12 @@ describe("block intervals", () => {
     };
 
     it("changes the files one at a time, the other side staying put", () => {
-        // 4 files 2 steps apart: the left file at -3 steps. To +7 steps is 5 intervals: 6 files
+        // 4 files 2 steps apart: the left file at -3 steps. The handle stands 1.5 steps out, so
+        // dragging it to +8.5 steps puts the edge at +7: 5 intervals, 6 files
         const next = blockKind.drag(
             base,
             "across",
-            xy(7 * STEP, 0),
+            xy(8.5 * STEP, 0),
             { shift: false },
             12,
             ctx,
@@ -271,7 +272,7 @@ describe("block intervals", () => {
         const next = blockKind.drag(
             free,
             "across",
-            xy(6 * STEP, 0),
+            xy(7.5 * STEP, 0),
             { shift: false },
             12,
             ctx,
@@ -352,5 +353,24 @@ describe("circle fit", () => {
             .center;
         // The group's middle, near y = 98, not the arc's own center at the origin
         expect(center.y).toBeGreaterThan(90);
+    });
+});
+
+describe("a new shape through a tight group", () => {
+    it("starts at a 2-step interval instead of under a step", () => {
+        // 16 marchers in a 4 x 4 block a step apart: a circle through them is cramped
+        const block = Array.from({ length: 16 }, (_, i) => ({
+            id: i + 1,
+            at: xy((i % 4) * STEP, Math.floor(i / 4) * STEP),
+            drillRank: i,
+        }));
+        const session = startSession({
+            kindId: "circle",
+            marchers: block,
+            ctx,
+        });
+        const spacing = (session.params as { spacing: Spacing }).spacing;
+        expect(spacing.mode).toBe("interval");
+        expectGaps(session, 2);
     });
 });

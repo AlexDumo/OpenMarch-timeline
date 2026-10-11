@@ -68,7 +68,7 @@ describe("shape sessions", () => {
         expect((dragged.params as LineParams).b).toEqual(xy(90, 0));
     });
 
-    it("carries the chosen order, not the spacing, to another kind", () => {
+    it("carries the chosen order and a locked interval to another kind", () => {
         let session = startSession({ kindId: "line", marchers: row, ctx });
         session = {
             ...session,
@@ -84,9 +84,12 @@ describe("shape sessions", () => {
         session = changeOrder(session, "drill", true, ctx);
         const arc = changeKind(session, "arc", ctx);
         expect(arc.kindId).toBe("arc");
-        // A new shape starts in Fit, through where the marchers stand
+        // The interval stays locked; the new shape's size follows it
         expect((arc.params as { spacing: unknown }).spacing).toEqual({
-            mode: "fit",
+            mode: "interval",
+            runs: [{ steps: 2, count: 0 }],
+            anchor: "start",
+            size: "follow",
         });
         expect(arc.order).toBe("drill");
         expect(arc.reverse).toBe(true);
@@ -127,7 +130,7 @@ describe("shape tool store", () => {
         const dragged = useShapeToolStore.getState().session!.params;
         store.setOrder("drill", false, ctx);
         store.undo();
-        expect(useShapeToolStore.getState().session!.order).toBe("keep");
+        expect(useShapeToolStore.getState().session!.order).toBe("nearest");
         store.undo();
         expect(useShapeToolStore.getState().session!.params).toEqual(opened);
         store.undo(); // nothing earlier: stays
@@ -180,11 +183,11 @@ describe("shape tool store", () => {
     it("remembers the last session's settings for the next one", () => {
         const store = useShapeToolStore.getState();
         store.open("line", row, ctx);
-        store.setOrder("nearest", false, ctx);
+        store.setOrder("drill", false, ctx);
         store.close();
         expect(useShapeToolStore.getState().session).toBeNull();
         store.open("arc", row, ctx);
-        expect(useShapeToolStore.getState().session!.order).toBe("nearest");
+        expect(useShapeToolStore.getState().session!.order).toBe("drill");
     });
 });
 

@@ -1,3 +1,4 @@
+import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
@@ -438,6 +439,7 @@ function MarcherEditor() {
     );
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const timelineMode = useTimelineMode();
+    const playing = (useIsPlaying()?.isPlaying ?? false) && timelineMode;
     // Isolation: the isolated move's plan at its end, where the canvas draws and edits it
     const isolationEnd = useTimelineSelectionStore((s) => s.isolation?.end);
     const timelinePosition = usePositionAt(
@@ -675,7 +677,14 @@ function MarcherEditor() {
     return (
         <>
             {selectedMarchers.length > 0 && fieldProperties && (
-                <div>
+                // Timeline playback doesn't update the selected page, so these figures are the
+                // page play started on: dimmed until it stops (shape sims, round 7)
+                <div
+                    className={clsx(
+                        playing && "pointer-events-none opacity-40",
+                    )}
+                    aria-hidden={playing || undefined}
+                >
                     {selectedMarchers.length > 1 ? (
                         // Multiple marchers selected
                         <InspectorCollapsible

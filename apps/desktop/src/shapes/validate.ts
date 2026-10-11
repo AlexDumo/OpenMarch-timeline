@@ -93,6 +93,37 @@ export function validateSlots(
 }
 
 /**
+ * Walks that need steps bigger than the field's step size warning allows, over the move's counts.
+ * A warning with the slots of those marchers, naming the biggest.
+ */
+export function validateStepSizes(
+    targets: readonly Walk[],
+    assignment: readonly number[],
+    ctx: ShapeContext,
+): ShapeIssue[] {
+    const steps = ctx.steps;
+    if (!steps || steps.counts <= 0) return [];
+    let longest = 0;
+    const over: number[] = [];
+    targets.forEach((t, i) => {
+        const d = Math.hypot(t.to.x - t.from.x, t.to.y - t.from.y);
+        if (d / steps.counts > steps.maxPerCount) over.push(assignment[i]!);
+        longest = Math.max(longest, d);
+    });
+    if (over.length === 0) return [];
+    return [
+        {
+            level: "warning",
+            message:
+                over.length === 1
+                    ? `1 marcher needs steps bigger than the limit (${steps.describe(longest)})`
+                    : `${over.length} marchers need steps bigger than the limit (biggest ${steps.describe(longest)})`,
+            slots: over,
+        },
+    ];
+}
+
+/**
  * Marchers whose walks to their spots cross, or pass closer than a step mid-move: they'd walk
  * through or into each other. Warnings, with the slots of the marchers involved, so the preview
  * can draw those paths and the designer can try another order.

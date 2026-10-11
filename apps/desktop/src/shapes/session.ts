@@ -10,9 +10,9 @@ import type {
     Slot,
     XY,
 } from "./types";
-import { validatePaths, validateSlots } from "./validate";
+import { validatePaths, validateSlots, validateStepSizes } from "./validate";
 import { holdSize, measuresOf, settle } from "./follow";
-import { setSizeLock, type Spacing } from "./types";
+import { lockInterval, setSizeLock, type Spacing } from "./types";
 
 /**
  * One use of the shape tool: the marchers it places, the kind and its params, and who goes to
@@ -105,7 +105,14 @@ export function openRecipe(
     };
 }
 
-export const DEFAULT_ORDER: OrderMode = "keep";
+/**
+ * Nearest by default: every simulated user switched to it to clear crossings (round 7). Keep
+ * order is a choice away for follow-the-leader forms.
+ */
+export const DEFAULT_ORDER: OrderMode = "nearest";
+
+/** The interval a new shape starts at when fitting through the marchers would be under a step */
+const STARTING_INTERVAL_STEPS = 2;
 
 function kindOf(id: string): AnyShapeKind {
     const kind = shapeKind(id);
@@ -119,7 +126,7 @@ function fieldsOf(kind: AnyShapeKind): ParamField[] {
 
 /**
  * `toParams` with the panel fields it shares with the other kind (same key and type) taken from
- * `fromParams`. Spacing doesn't carry over: a new shape fits through the marchers first.
+ * `fromParams`. A locked interval carries over too, with the size following it.
  */
 export function carryOverParams(
     fromKind: AnyShapeKind,
@@ -130,13 +137,49 @@ export function carryOverParams(
     const from = new Map(fieldsOf(fromKind).map((f) => [f.key, f.type]));
     const next = { ...(toParams as Record<string, unknown>) };
     for (const field of fieldsOf(toKind)) {
-        // A new shape starts in Fit, through where the marchers stand: locks don't carry over
-        if (field.type === "spacing") continue;
-        if (from.get(field.key) !== field.type) continue;
         const value = (fromParams as Record<string, unknown>)[field.key];
+        if (field.type === "spacing") {
+            // A locked interval carries over (sims, round 7: "keep my 2-step interval between
+            // shapes"); the size starts following it, so the new shape is drawn to fit the run
+            const spacing = value as Spacing | undefined;
+            if (
+                from.get(field.key) === "spacing" &&
+                spacing?.mode === "interval"
+            )
+                next[field.key] = { ...spacing, size: "follow" };
+            continue;
+        }
+        if (from.get(field.key) !== field.type) continue;
         if (value !== undefined) next[field.key] = value;
     }
     return next;
+}
+
+/**
+ * A shape fitted through a tight group (a block into a circle) can put its marchers under a step
+ * apart, which no one wants (sims, round 7: "0.64 steps"): it starts at a 2-step interval instead.
+ * Shapes already at an interval, and kinds without a path, are left alone.
+ */
+function startingInterval(
+    kind: AnyShapeKind,
+    params: unknown,
+    n: number,
+    ctx: ShapeContext,
+): unknown {
+    const field = fieldsOf(kind).find((f) => f.type === "spacing");
+    if (!field || !kind.path || n < 2) return params;
+    const record = params as Record<string, unknown>;
+    const spacing = record[field.key] as Spacing | undefined;
+    if (!spacing || spacing.mode !== "fit") return params;
+    const [a, b] = kind.generate(params, n, ctx);
+    if (!a || !b || Math.hypot(b.x - a.x, b.y - a.y) >= ctx.stepPx)
+        return params;
+    return {
+        ...record,
+        [field.key]: lockInterval(spacing, [
+            { steps: STARTING_INTERVAL_STEPS, count: 0 },
+        ]),
+    };
 }
 
 function withAssignment(
@@ -181,6 +224,7 @@ export function startSession({
             params,
         );
     }
+    params = startingInterval(kind, params, marchers.length, ctx);
     params = settle(kind, params, marchers.length, ctx);
     return withAssignment(
         {
@@ -403,6 +447,7 @@ export function previewSession(
             ctx,
             session.order === "nearest",
         ),
+        ...validateStepSizes(targets, session.assignment, ctx),
     ];
     return {
         slots,

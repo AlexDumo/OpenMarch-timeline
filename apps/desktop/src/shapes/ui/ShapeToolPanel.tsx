@@ -227,6 +227,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
     const inputError = useShapeToolStore((s) => s.inputError);
     const edited = useShapeToolStore((s) => s.past.length > 0);
     const storedView = useUiSettingsStore((s) => s.uiSettings.shapePreview);
+    const fieldLabels = useUiSettingsStore((s) => s.uiSettings.marcherLabels);
     const [showMore, setShowMore] = useState(false);
     const preview = useMemo(
         () => (ctx ? previewSession(session, ctx) : null),
@@ -409,6 +410,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
                     count: n,
                     tight: tightSpacing(preview, ctx.stepPx),
                     edited,
+                    fieldLabels,
                 })}
             />
         </>
