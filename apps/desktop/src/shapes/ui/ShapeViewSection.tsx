@@ -64,8 +64,14 @@ const OLD_SHAPE: Option<"oldShape">[] = [
  */
 export function ShapeViewSection({
     resolved,
+    generic = false,
 }: {
     resolved: ResolvedShapeView;
+    /**
+     * No shape open (the View tab): Auto doesn't say what it would pick, since that depends on the
+     * shape (sims, round 14: the View tab said "Auto (Strong)" where the panel said "Auto (Faint)")
+     */
+    generic?: boolean;
 }) {
     const { t } = useTolgee();
     const stored = useUiSettingsStore((s) => s.uiSettings.shapePreview);
@@ -142,14 +148,16 @@ export function ShapeViewSection({
                         value={o.value}
                         data-testid={`shape-view-${key}-${o.value}`}
                     >
-                        {o.value === "auto"
-                            ? t(
-                                  key === "labels"
-                                      ? "inspector.shapeTool.view.labelsAuto"
-                                      : "inspector.shapeTool.view.autoIs",
-                                  { choice: autoSays[key] },
-                              )
-                            : t(o.key)}
+                        {o.value === "auto" && generic
+                            ? t("inspector.shapeTool.view.autoByShape")
+                            : o.value === "auto"
+                              ? t(
+                                    key === "labels"
+                                        ? "inspector.shapeTool.view.labelsAuto"
+                                        : "inspector.shapeTool.view.autoIs",
+                                    { choice: autoSays[key] },
+                                )
+                              : t(o.key)}
                     </SelectItem>
                 ))}
             </SelectContent>

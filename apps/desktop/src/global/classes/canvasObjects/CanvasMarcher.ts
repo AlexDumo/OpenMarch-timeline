@@ -68,6 +68,13 @@ export default class CanvasMarcher
     static theme: FieldTheme = DEFAULT_FIELD_THEME;
     /** Labels beside the dot (to its right) rather than above it: the View tab's label position */
     static labelBeside = false;
+    /**
+     * The label form and size the field last chose (`OpenMarchCanvas.refreshMarcherLabels`), for
+     * marchers made between static renders, such as during playback (sims, round 14: labels
+     * went back to full drill numbers while playing)
+     */
+    static labelNumbersOnly = false;
+    static labelFontSize = 14;
 
     /** Where a label's anchor sits from its dot's center */
     static labelOffset(): { x: number; y: number } {
@@ -268,20 +275,25 @@ export default class CanvasMarcher
             equipment_state: equipmentState,
         };
 
-        this.textLabel = new fabric.Text(marcher.drill_number, {
-            left: coordinate.x + CanvasMarcher.labelOffset().x,
-            top: coordinate.y + CanvasMarcher.labelOffset().y,
-            originX: CanvasMarcher.labelBeside ? "left" : "center",
-            originY: "center",
-            fontFamily: "courier new",
-            fill: rgbaToString(CanvasMarcher.theme.defaultMarcher.label),
-            fontWeight: "bold",
-            fontSize: 14,
-            selectable: false,
-            hasControls: false,
-            hasBorders: false,
-            visible: labelVisible === true,
-        });
+        this.textLabel = new fabric.Text(
+            CanvasMarcher.labelNumbersOnly
+                ? String(marcher.drill_order)
+                : marcher.drill_number,
+            {
+                left: coordinate.x + CanvasMarcher.labelOffset().x,
+                top: coordinate.y + CanvasMarcher.labelOffset().y,
+                originX: CanvasMarcher.labelBeside ? "left" : "center",
+                originY: "center",
+                fontFamily: "courier new",
+                fill: rgbaToString(CanvasMarcher.theme.defaultMarcher.label),
+                fontWeight: "bold",
+                fontSize: CanvasMarcher.labelFontSize,
+                selectable: false,
+                hasControls: false,
+                hasBorders: false,
+                visible: labelVisible === true,
+            },
+        );
         (this.textLabel as unknown as TightCache)._limitCacheSize =
             limitCacheSizeTightly;
 

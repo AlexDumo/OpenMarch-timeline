@@ -2793,6 +2793,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                     };
                 }),
             ).some(Boolean);
+        CanvasMarcher.labelNumbersOnly = setting === "numbers" || crowded;
+        CanvasMarcher.labelFontSize = fontSize;
         marchers.forEach((m) => {
             const text =
                 setting === "numbers" || crowded ? shortOf(m) : fullOf(m);

@@ -47,6 +47,7 @@ function ShapePreviewPopover() {
             <Popover.Portal>
                 <Popover.Content className="bg-modal text-text rounded-6 shadow-modal backdrop-blur-32 border-stroke z-50 m-8 w-[20rem] border p-12">
                     <ShapeViewSection
+                        generic
                         resolved={resolveShapeView(stored, {
                             count: 0,
                             tight: false,

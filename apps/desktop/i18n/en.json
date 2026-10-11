@@ -863,6 +863,7 @@
             "bringBack": "Bring it back",
             "view": {
                 "auto": "Auto",
+                "autoByShape": "Auto (depends on the shape)",
                 "autoIs": "Auto ({choice})",
                 "faint": "Faint",
                 "handles": "Handles",
