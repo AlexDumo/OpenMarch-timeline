@@ -1,9 +1,10 @@
 // cspell:words metalnessmap roughnessmap
 /**
- * An instrument as rigid geometry on the right hand (docs/3d/instruments.md
- * §4), in the body's bind pose so om-pose's instanced skinning carries it
- * with the hand, colored per vertex in the look's finish, and the smooth
- * metallic material that draws it from the same composed bones.
+ * An instrument as rigid geometry (docs/3d/instruments.md §4), colored per
+ * vertex in the look's finish, and the smooth metallic material that draws
+ * it from the same composed bones as the bodies. Right-hand pieces skin to
+ * the prop bone (performer-behavior.md section 8.3), in the instrument's own
+ * frame; chest and left-hand pieces sit in their bone's bind pose.
  */
 import * as THREE from "three";
 import { BRASS_COLORS } from "@/view3d/core/instruments/brass";
@@ -88,19 +89,23 @@ export function instrumentGeometry(
     const frameOf = (bone: InstrumentBone) => {
         let f = frames.get(bone);
         if (f) return f;
+        if (bone === "handR") {
+            // the prop bone (after the skeleton's bones) is the right hand
+            // times the hold's grip (`gripMatrix`), baked into every Horn
+            // row: the piece stays in the instrument's own frame, and the
+            // same geometry follows any hold or transition the channel plays
+            f = { index: skeleton.bones.length, toBind: new THREE.Matrix4() };
+            frames.set(bone, f);
+            return f;
+        }
         const index = skeleton.bones.findIndex(
             (b) => b.name === BONE_NAMES[bone],
         );
         if (index < 0)
             throw new Error(`instrumentGeometry: no ${BONE_NAMES[bone]} bone`);
         const bind = skeleton.boneInverses[index].clone().invert();
-        // the hands move with the hold; the chest stays at bind
-        const posed =
-            bone === "handR"
-                ? pose.handR
-                : bone === "handL"
-                  ? pose.handL
-                  : bind;
+        // the left hand moves with the hold; the chest stays at bind
+        const posed = bone === "handL" ? pose.handL : bind;
         const toBind = bind
             .clone()
             .multiply(posed.clone().invert())

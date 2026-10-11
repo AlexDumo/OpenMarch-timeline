@@ -119,6 +119,42 @@ describe("bakeChannels", () => {
         ).toBeLessThan(1e-4);
     });
 
+    it("bakes a prop path in body space as the prop bone, in place of the hand and grip", async () => {
+        const f = await fixture();
+        const up = armHold(f.mesh.skeleton, "brass", "up");
+        // a prop rising 2 m over the row, in body space
+        const bake = bakeChannels(f.scene, {
+            feet: { attention: f.clips.get("attention")! },
+            horn: [
+                {
+                    name: "toss",
+                    from: up,
+                    frames: 4,
+                    propPath: (u) =>
+                        new THREE.Matrix4().makeTranslation(0, 2 * u, 0),
+                },
+            ],
+        });
+        const row = bake.rows.toss;
+        expect(row.frames).toBe(4);
+        const data = bake.texture.image.data as Float32Array;
+        for (const [i, y] of [
+            [0, 0],
+            [2, 1],
+            [4, 2],
+        ]) {
+            const m = boneAt(
+                data,
+                bake.layout.width,
+                bake.layout,
+                row.row + i,
+                bake.propBone,
+            );
+            expect(m.elements[13]).toBeCloseTo(y, 6);
+            expect(m.elements[12]).toBeCloseTo(0, 6);
+        }
+    });
+
     it("gives a Feet row's prop bone the right hand's matrix", async () => {
         const f = await fixture();
         const bake = bakeChannels(f.scene, {

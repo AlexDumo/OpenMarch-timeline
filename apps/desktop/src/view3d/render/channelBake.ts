@@ -48,6 +48,15 @@ export interface HornRowSpec {
     from: ArmHold;
     /** A transition's end; a hold row has none. */
     to?: ArmHold;
+    /** Samples in the row; a hold has 1, a transition {@link TRANSITION_FRAMES}. */
+    frames?: number;
+    /**
+     * A prop leaving the hand (a toss): the prop bone's matrix in body space
+     * at each point `u` (0 to 1) of the row, in place of the hand times the
+     * grip. Play the row with `propInBody` so the compose pass doesn't move
+     * it with the chest.
+     */
+    propPath?: (u: number) => THREE.Matrix4;
 }
 
 export interface ChannelBakeSpec {
@@ -108,7 +117,7 @@ export function bakeChannels(
         ...horn.map((h) => ({
             name: h.name,
             channel: "horn" as const,
-            frames: h.to ? TRANSITION_FRAMES : 1,
+            frames: h.frames ?? (h.to || h.propPath ? TRANSITION_FRAMES : 1),
         })),
         ...Object.entries(body).map(([name, clip]) => ({
             name,
@@ -133,8 +142,15 @@ export function bakeChannels(
         const [x, y] = rowTexel(layout, row, bone);
         data.set(mat.elements, (y * width + x) * 4); // a column per texel
     };
-    /** Every bone of the rig as it stands, and the prop bone at `gripAt`. */
-    const writeRow = (row: number, gripAt: THREE.Matrix4 | null) => {
+    /**
+     * Every bone of the rig as it stands, and the prop bone: the hand times
+     * `gripAt`, or `propAt` itself (body space) when given.
+     */
+    const writeRow = (
+        row: number,
+        gripAt: THREE.Matrix4 | null,
+        propAt: THREE.Matrix4 | null = null,
+    ) => {
         rig.updateMatrixWorld(true);
         for (let b = 0; b < nb; b++) {
             m.multiplyMatrices(bindInv, bones[b].matrixWorld)
@@ -143,7 +159,11 @@ export function bakeChannels(
             put(row, b, m);
             if (b === handR) hand.copy(m);
         }
-        put(row, prop, gripAt ? m.multiplyMatrices(hand, gripAt) : hand);
+        put(
+            row,
+            prop,
+            propAt ?? (gripAt ? m.multiplyMatrices(hand, gripAt) : hand),
+        );
     };
 
     const sampleClips = (
@@ -201,7 +221,7 @@ export function bakeChannels(
                     scl[0].clone().lerp(scl[1], e),
                 );
             else grip.copy(h.from.grip);
-            writeRow(r.row + i, grip);
+            writeRow(r.row + i, grip, h.propPath?.(i / r.frames) ?? null);
         }
     }
     bones.forEach((b, k) => {
