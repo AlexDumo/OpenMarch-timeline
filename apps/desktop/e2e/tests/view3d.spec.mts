@@ -353,7 +353,7 @@ test("3D View follows the editor and saves the venue", async ({
     await expectPausedInSync(editor, view3d);
 
     // Play: the window's clock runs with the editor's.
-    await editor.getByTitle(/^Play or pause/).click();
+    await editor.getByTitle(/^Play \/ stop/).click();
     await expect(view3d.getByTestId("view3d-sync-readout")).toHaveAttribute(
         "data-playing",
         "true",
@@ -392,7 +392,7 @@ test("3D View follows the editor and saves the venue", async ({
     );
 
     // Pause: the window holds where the editor holds.
-    await editor.getByTitle(/^Play or pause/).click();
+    await editor.getByTitle(/^Play \/ stop/).click();
     await expectPausedInSync(editor, view3d);
 
     // Seek again after playing.
