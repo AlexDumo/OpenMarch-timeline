@@ -4,6 +4,7 @@ import { NoControls } from "@/components/canvas/CanvasConstants";
 import type { ShapePreview } from "../session";
 import type { HandleDef, HandleRole, XY } from "../types";
 import type { MarcherLook, ShapePreviewStyle } from "./previewContext";
+import { dist } from "../geometry/vec";
 
 export interface ShapeToolOverlayColors {
     /** Outline, ghost spots and handle rims */
@@ -58,6 +59,10 @@ export interface HandleDragEvents {
 const HANDLE_RADIUS = 10;
 const MOVE_HANDLE_SIZE = 13;
 const GHOST_RADIUS = 4;
+/** The shape being replaced, in the result preview */
+const REPLACED_RADIUS = 2.5;
+/** Field units under which two spots are the same */
+const SAME_SPOT = 0.01;
 /** How far from a handle a press still takes it, in screen pixels */
 const HIT_RADIUS_PX = 10;
 const offset = FieldProperties.GRID_STROKE_WIDTH / 2;
@@ -77,6 +82,8 @@ export default class ShapeToolOverlay {
     /** Result preview: drill numbers over the new spots, faint rings where marchers come from */
     private labels: fabric.Text[] = [];
     private originLabels: fabric.Text[] = [];
+    /** Result preview: the shape being replaced, where it differs from the start */
+    private replaced: fabric.Circle[] = [];
     private origins: fabric.Circle[] = [];
     /** While a lock holds a dragged handle back: a line to the cursor and a tag saying why */
     private holdLine: fabric.Line | null = null;
@@ -362,6 +369,7 @@ export default class ShapeToolOverlay {
             ...this.labels,
             ...this.origins,
             ...this.originLabels,
+            ...this.replaced,
             ...this.handles,
         ]) {
             this.canvas.remove(o);
@@ -373,6 +381,7 @@ export default class ShapeToolOverlay {
         this.labels = [];
         this.origins = [];
         this.originLabels = [];
+        this.replaced = [];
         this.handles = [];
         this.handleRoles = "";
         this.takesPoints = false;
@@ -433,6 +442,7 @@ export default class ShapeToolOverlay {
         trim(this.labels, result ? n : 0);
         trim(this.origins, result ? n : 0);
         trim(this.originLabels, result ? n : 0);
+        trim(this.replaced, result ? n : 0);
         // `flagged` holds slot indexes; map them to targets through the slots' positions
         const flaggedSpots = new Set([...flagged].map((i) => preview.slots[i]));
         preview.targets.forEach((target, i) => {
@@ -467,6 +477,17 @@ export default class ShapeToolOverlay {
                     look?.label ?? "",
                     look?.radius ?? GHOST_RADIUS,
                 );
+                // The shape being replaced, when it isn't where they start: tiny faint dots,
+                // no labels or paths, so it reads as a reference without crowding the move
+                const replaced =
+                    dist(target.now, origin) > SAME_SPOT &&
+                    dist(target.now, target.to) > SAME_SPOT;
+                this.placeCircle(this.replaced, i, toCanvas(target.now), {
+                    radius: REPLACED_RADIUS,
+                    fill: replaced ? this.colors.travel : "rgba(0,0,0,0)",
+                    stroke: "",
+                    strokeWidth: 0,
+                });
                 this.placeCircle(this.origins, i, from, {
                     radius: look?.radius ?? GHOST_RADIUS,
                     fill: "",

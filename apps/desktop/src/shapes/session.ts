@@ -353,6 +353,9 @@ export interface ShapePreview {
     /** Where each marcher goes (its slot plus any kept override), and its slot */
     readonly targets: readonly {
         readonly id: number;
+        /** Where the marcher is drawn now, in the shape being replaced */
+        readonly now: XY;
+        /** Where it starts the move being edited */
         readonly from: XY;
         readonly to: XY;
         readonly slot: Slot;
@@ -382,6 +385,7 @@ export function previewSession(
         const override = keep ? session.overrides?.[m.id] : undefined;
         return {
             id: m.id,
+            now: m.at,
             from: m.from ?? m.at,
             // A marcher moved by hand keeps its offset from its spot
             to: override
