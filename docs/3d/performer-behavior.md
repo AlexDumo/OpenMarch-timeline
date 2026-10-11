@@ -83,7 +83,7 @@ and in ripples.
 
 ### 2.2 When a count happens
 
-**Owner-confirmed (2026-10-10; corrects the anchoring ticket's agent call):** a cue's instant
+**Owner-confirmed (2026-10-10; corrects an earlier call):** a cue's instant
 is the **click of its count**: the start of its beat row, the same moment the
 3D marchers' heel lands (technique.md, "Heel on the beat" and "Counts and
 clicks"; `STEP_AHEAD` in `marcherMotion.ts`). The anchoring decision had put
@@ -362,8 +362,8 @@ The Feet segments become the planner's new inputs (section 8.2).
 
 ## 7. Editor: Visuals mode
 
-Authoring follows the Light Designer on `origin/lighting`, as the prototype
-settled (branch `prototype/cue-lanes`, variant D, owner: "pretty close").
+Authoring follows the Light Designer on `origin/lighting`, as a throwaway
+prototype settled (its variant D, owner: "pretty close").
 Polish is for the build.
 
 ### 7.1 Layout
@@ -543,8 +543,11 @@ timeline's migrations.
 
 ## 10. Build order (for writing-plans)
 
-Each item is one or more PRs into AlexDumo `3d-async`, after the 3D branch
-rebases onto the merged timeline and renumbers its migrations.
+Each item is one or more PRs into AlexDumo `3d-async`, each on its own
+branch off `3d-async`. The timeline comes in by merging `main` (once
+`timeline-try-2` has landed there) into `3d-async`, in one commit that
+renumbers the 3D migration after the timeline's; no rebase of the 3D history.
+Items 1, 3 and 5 don't need the timeline; 2, 4, 8 and 9 wait for that merge.
 
 1. **Measure** (section 8.5). A throwaway shader spike; numbers into
    findings.md.
