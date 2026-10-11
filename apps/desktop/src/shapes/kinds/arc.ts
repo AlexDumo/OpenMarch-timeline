@@ -173,8 +173,14 @@ function arcThroughPoints(
             gapAfter = i;
         }
     }
-    const startAngle = angles[(gapAfter + 1) % angles.length]!;
-    const sweep = TAU - widest;
+    let startAngle = angles[(gapAfter + 1) % angles.length]!;
+    let sweep = TAU - widest;
+    // Marchers most of the way round a circle: an arc of them is the half facing the front
+    // (+y on the canvas), not the whole circle again
+    if (sweep > (200 * Math.PI) / 180) {
+        startAngle = 0;
+        sweep = Math.PI;
+    }
     const a = polar(circle.center, circle.r, startAngle);
     const b = polar(circle.center, circle.r, startAngle + sweep);
     const middle = polar(circle.center, circle.r, startAngle + sweep / 2);
@@ -223,15 +229,10 @@ export const arcKind: ShapeKind<ArcParams> = {
                         angleOfChords(gaps, Math.max(r, maxHalf(gaps))),
                     );
                 }
-                const h = dist(p.a, p.b) / 2;
-                const radius = Math.max(r, h);
-                const major = Math.abs(p.bulge) > h;
-                const rise = Math.sqrt(radius * radius - h * h);
-                const sign = p.bulge < 0 ? -1 : 1;
-                return {
-                    ...p,
-                    bulge: sign * (major ? radius + rise : radius - rise),
-                };
+                // Otherwise the sweep stays: a bigger radius is a bigger arc of the same bend
+                const now = arcGeometry(p);
+                if (!now) return p;
+                return arcAround(p, Math.max(r, 1e-6), now.sweep);
             },
         },
         {
@@ -246,13 +247,16 @@ export const arcKind: ShapeKind<ArcParams> = {
                     const gaps = runGaps(p, n, ctx);
                     return arcAround(p, radiusForChords(gaps, sweep), sweep);
                 }
-                const h = dist(p.a, p.b) / 2;
-                const clamped = Math.min(
+                // Otherwise the radius stays: a half circle at the same size, not a squashed one.
+                // A flat arc has no radius yet; it bends over its own chord.
+                const now = arcGeometry(p);
+                if (now) return arcAround(p, now.r, sweep);
+                const halfChord = dist(p.a, p.b) / 2;
+                const theta = Math.min(
                     Math.max(sweep, 1e-3),
                     2 * Math.PI - 1e-3,
                 );
-                const sign = p.bulge < 0 ? -1 : 1;
-                return { ...p, bulge: sign * h * Math.tan(clamped / 4) };
+                return arcAround(p, halfChord / Math.sin(theta / 2), theta);
             },
         },
     ],
@@ -284,7 +288,7 @@ export const arcKind: ShapeKind<ArcParams> = {
     handles: (p) => [
         { key: "a", role: "point", at: p.a, start: true },
         { key: "b", role: "point", at: p.b, end: true },
-        { key: "bulge", role: "bulge", at: arcMiddle(p) },
+        { key: "bulge", role: "bulge", at: arcMiddle(p), hint: "Bend" },
         { key: "move", role: "move", at: mid(p.a, p.b) },
     ],
 

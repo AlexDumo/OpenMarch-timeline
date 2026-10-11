@@ -1,5 +1,5 @@
 import { SquaresFourIcon } from "@phosphor-icons/react";
-import { principalExtremes, typicalSpacing } from "../geometry/fit";
+import { flatness, principalExtremes, typicalSpacing } from "../geometry/fit";
 import {
     add,
     centroid,
@@ -179,15 +179,16 @@ export const blockKind: ShapeKind<BlockParams> = {
         const ends = principalExtremes(current);
         let rotation = 0;
         let files = Math.max(1, Math.round(Math.sqrt(n)));
-        if (ends) {
+        // A rough row keeps its direction and stays one rank (a short one, at least); anything
+        // else starts square to the field
+        if (ends && flatness(current) <= 0.35) {
             const axis = unit(sub(ends[1], ends[0]));
             rotation = snapRotation(Math.atan2(axis.y, axis.x), Math.PI / 2);
-            // One straight row: keep it one rank deep.
             const straight = current.every(
                 (q) =>
                     Math.abs(cross(axis, sub(q, ends[0]))) <= 0.25 * ctx.stepPx,
             );
-            if (straight) files = n;
+            if (straight && n <= 16) files = n;
         }
         const spacing = typicalSpacing(current, ctx.stepPx);
         return {
@@ -212,9 +213,15 @@ export const blockKind: ShapeKind<BlockParams> = {
             {
                 key: "rotate",
                 role: "rotate",
+                hint: "Turn",
                 at: toField(p, 0, backRank - reach),
             },
-            { key: "across", role: "bulge", at: toField(p, half.x, 0) },
+            {
+                key: "across",
+                role: "bulge",
+                at: toField(p, half.x, 0),
+                hint: p.keepIntervals ? "Files" : "Interval across",
+            },
             // With the intervals kept, the ranks follow the files, so depth has no handle
             ...(p.keepIntervals
                 ? []
@@ -222,6 +229,7 @@ export const blockKind: ShapeKind<BlockParams> = {
                       {
                           key: "deep",
                           role: "bulge" as const,
+                          hint: "Interval deep",
                           at: toField(p, 0, half.y),
                       },
                   ]),

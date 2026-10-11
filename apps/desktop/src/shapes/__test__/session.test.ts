@@ -251,7 +251,9 @@ describe("from where marchers start the move", () => {
         const preview = previewSession(session, ctx);
         const xs = preview.targets.map((t) => t.to.x);
         expect(xs).toEqual([...xs].sort((a, b) => a - b));
-        expect(preview.issues.some((i) => /cross/.test(i.message))).toBe(false);
+        expect(preview.issues.some((i) => /walk through/.test(i.message))).toBe(
+            false,
+        );
     });
 
     it("warns when paths cross", () => {
@@ -264,7 +266,7 @@ describe("from where marchers start the move", () => {
         const issues = previewSession(crossed, ctx).issues;
         expect(
             issues.some(
-                (i) => i.level === "warning" && /cross/.test(i.message),
+                (i) => i.level === "warning" && /walk through/.test(i.message),
             ),
         ).toBe(true);
     });
@@ -278,5 +280,26 @@ describe("from where marchers start the move", () => {
         const p = session.params as LineParams;
         expect(p.a.y).toBeCloseTo(p.b.y, 9);
         expect(dist(p.a, p.b)).toBeGreaterThan(7 * 10);
+    });
+});
+
+describe("Nearest untangles", () => {
+    it("leaves no crossing walks, from a scrambled start onto a line", () => {
+        // 30 marchers scattered pseudo-randomly, going onto a long line
+        let seed = 7;
+        const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+        const marchers = Array.from({ length: 30 }, (_, i) => ({
+            id: i + 1,
+            at: xy(rand() * 400, rand() * 400),
+            drillRank: i,
+        }));
+        const session = changeOrder(
+            startSession({ kindId: "line", marchers, ctx }),
+            "nearest",
+            false,
+            ctx,
+        );
+        const issues = previewSession(session, ctx).issues;
+        expect(issues.some((i) => /walk through/.test(i.message))).toBe(false);
     });
 });

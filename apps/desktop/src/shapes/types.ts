@@ -133,6 +133,8 @@ export interface HandleDef {
     readonly start?: boolean;
     /** The far end of an open path; with `start`, the handles a resize keeps the other one of */
     readonly end?: boolean;
+    /** What dragging it does, shown on hover ("Bend", "Files"); a default by role otherwise */
+    readonly hint?: string;
 }
 
 /**

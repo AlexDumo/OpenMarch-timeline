@@ -397,7 +397,12 @@ export function previewSession(
     const issues = [
         ...(kind.validate?.(session.params, slots, ctx) ?? []),
         ...validateSlots(slots, ctx),
-        ...validatePaths(targets, session.assignment),
+        ...validatePaths(
+            targets,
+            session.assignment,
+            ctx,
+            session.order === "nearest",
+        ),
     ];
     return {
         slots,

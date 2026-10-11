@@ -1,4 +1,5 @@
 import { hungarianAlgorithm } from "@openmarch/core";
+import { walksCross } from "./geometry/segments";
 import type { AnyShapeKind, ShapeContext, Slot, XY } from "./types";
 
 /**
@@ -77,7 +78,7 @@ export function assignSlots<P>({
         const result = new Array<number>(n);
         for (let slot = 0; slot < n; slot++)
             result[assignment[slot + 1]! - 1] = slot;
-        return result;
+        return untangle(result, marchers, slots);
     }
 
     const slotOrder = slots
@@ -108,5 +109,36 @@ export function assignSlots<P>({
     marcherOrder.forEach((marcherIndex, i) => {
         result[marcherIndex] = slotOrder[i]!;
     });
+    return result;
+}
+
+/**
+ * Swaps the spots of any two marchers whose walks cross, until none do. Each swap shortens the
+ * pair's total walk (the two crossing segments are the diagonals of a quadrilateral, longer
+ * than either pair of its sides), so the total walk only shrinks and the loop ends with no
+ * crossings left. The least-squares match it starts from rarely needs many.
+ */
+function untangle(
+    result: number[],
+    marchers: readonly AssignMarcher[],
+    slots: readonly Slot[],
+): number[] {
+    const walk = (i: number) => ({
+        from: marchers[i]!.from ?? marchers[i]!.at,
+        to: slots[result[i]!]!,
+    });
+    const n = result.length;
+    for (let pass = 0; pass < 4 * n + 10; pass++) {
+        let swapped = false;
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                if (walksCross(walk(i), walk(j))) {
+                    [result[i], result[j]] = [result[j]!, result[i]!];
+                    swapped = true;
+                }
+            }
+        }
+        if (!swapped) break;
+    }
     return result;
 }

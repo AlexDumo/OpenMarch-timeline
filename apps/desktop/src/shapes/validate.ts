@@ -1,5 +1,5 @@
-import { cross, sub } from "./geometry/vec";
-import type { ShapeContext, ShapeIssue, Slot, XY } from "./types";
+import { closestApproach, walksCross, type Walk } from "./geometry/segments";
+import type { ShapeContext, ShapeIssue, Slot } from "./types";
 
 /** Checks every kind gets. Kind-specific ones come from `ShapeKind.validate`. */
 
@@ -72,49 +72,56 @@ export function validateSlots(
 }
 
 /**
- * Marchers whose straight paths to their spots cross: they'd walk through each other. A warning,
- * with the slots of the crossing marchers, so the preview can mark them and the designer can try
- * another order.
+ * Marchers whose walks to their spots cross, or pass closer than a step mid-move: they'd walk
+ * through or into each other. Warnings, with the slots of the marchers involved, so the preview
+ * can draw those paths and the designer can try another order.
  *
  * @param assignment each target's slot index, in `targets` order
  */
 export function validatePaths(
-    targets: readonly { readonly from: XY; readonly to: XY }[],
+    targets: readonly Walk[],
     assignment: readonly number[],
+    ctx: ShapeContext,
+    untangled: boolean,
 ): ShapeIssue[] {
-    const crossing = new Set<number>();
-    let pairs = 0;
+    const close = MIN_SPACING_STEPS * ctx.stepPx;
+    const crossingSlots = new Set<number>();
+    const closeSlots = new Set<number>();
+    let crossings = 0;
+    let passes = 0;
     for (let i = 0; i < targets.length; i++) {
         for (let j = i + 1; j < targets.length; j++) {
-            if (segmentsCross(targets[i]!, targets[j]!)) {
-                pairs++;
-                crossing.add(assignment[i]!);
-                crossing.add(assignment[j]!);
+            const a = targets[i]!;
+            const b = targets[j]!;
+            if (walksCross(a, b)) {
+                crossings++;
+                crossingSlots.add(assignment[i]!);
+                crossingSlots.add(assignment[j]!);
+            } else if (
+                // Pairs that start or end that close are already flagged by the spots
+                Math.hypot(a.from.x - b.from.x, a.from.y - b.from.y) >= close &&
+                Math.hypot(a.to.x - b.to.x, a.to.y - b.to.y) >= close &&
+                closestApproach(a, b) < close
+            ) {
+                passes++;
+                closeSlots.add(assignment[i]!);
+                closeSlots.add(assignment[j]!);
             }
         }
     }
-    if (pairs === 0) return [];
-    return [
-        {
+    const issues: ShapeIssue[] = [];
+    const pairs = (k: number) => `${k} ${k === 1 ? "pair" : "pairs"}`;
+    if (crossings > 0)
+        issues.push({
             level: "warning",
-            message: `${pairs} ${pairs === 1 ? "pair of paths crosses" : "pairs of paths cross"}: those marchers would walk through each other. Another order may untangle them.`,
-            slots: [...crossing],
-        },
-    ];
-}
-
-/** Whether two paths cross strictly inside both (touching at an end doesn't count) */
-function segmentsCross(
-    p: { readonly from: XY; readonly to: XY },
-    q: { readonly from: XY; readonly to: XY },
-): boolean {
-    const d1 = sub(p.to, p.from);
-    const d2 = sub(q.to, q.from);
-    const denom = cross(d1, d2);
-    if (Math.abs(denom) < 1e-12) return false;
-    const w = sub(q.from, p.from);
-    const t = cross(w, d2) / denom;
-    const u = cross(w, d1) / denom;
-    const inside = (v: number) => v > 1e-6 && v < 1 - 1e-6;
-    return inside(t) && inside(u);
+            message: `${pairs(crossings)} of marchers would walk through each other (drawn in red).${untangled ? "" : " Order: Nearest untangles them."}`,
+            slots: [...crossingSlots],
+        });
+    if (passes > 0)
+        issues.push({
+            level: "warning",
+            message: `${pairs(passes)} of marchers pass closer than ${MIN_SPACING_STEPS} step mid-move (drawn in red).`,
+            slots: [...closeSlots],
+        });
+    return issues;
 }

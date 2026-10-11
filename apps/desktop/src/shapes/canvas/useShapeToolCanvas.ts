@@ -26,6 +26,7 @@ const colorsOf = (theme: FieldTheme): ShapeToolOverlayColors => ({
     travel: rgbaToString({ ...theme.shape, a: 0.35 }),
     ghost: rgbaToString({ ...theme.shape, a: 0.55 }),
     label: rgbaToString(theme.defaultMarcher.label),
+    replaced: "rgba(120, 120, 120, 0.55)",
     issue: "#e5484d",
     handleFill: "#fff",
 });
@@ -110,6 +111,11 @@ export function useShapeToolCanvas({
             style,
             origins: originsAtStart(ids),
             looks: marcherLooks(canvas, ids),
+            shortLabels: tightSpacing(
+                preview,
+                canvas.fieldProperties.pixelsPerStep,
+            ),
+            dense: ids.length > DENSE_BAND,
         });
         // The result preview stands in for the marchers' own dots, at their old spots
         setMarchersHidden(canvas, ids, style === "result");
@@ -259,4 +265,28 @@ function holdReason(params: {
             long: "Intervals locked: open their padlock to stretch them",
         };
     return null;
+}
+
+/** Above this many marchers the preview draws only the paths with a problem */
+const DENSE_BAND = 24;
+
+/**
+ * Whether the new spots are too close for full drill numbers ("OT12") to stay apart: any two
+ * nearer than three steps.
+ */
+function tightSpacing(preview: ShapePreview, stepPx: number): boolean {
+    const near = 3 * stepPx;
+    const spots = preview.targets.map((t) => t.to);
+    for (let i = 0; i < spots.length; i++) {
+        for (let j = i + 1; j < spots.length; j++) {
+            if (
+                Math.hypot(
+                    spots[i]!.x - spots[j]!.x,
+                    spots[i]!.y - spots[j]!.y,
+                ) < near
+            )
+                return true;
+        }
+    }
+    return false;
 }
