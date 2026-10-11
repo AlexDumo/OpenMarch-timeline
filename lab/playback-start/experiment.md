@@ -13,10 +13,9 @@ variants:
     label: B
     description: "Version B: Space plays from the yellow start flag; Shift+Space (a second Play button) plays from the playhead"
 questions:
-  - Which version did you prefer, A or B? Why?
-  - In version B, did you use both Play buttons? When did you reach for each one?
-  - Was there a moment when Play started somewhere you didn't expect? Which version, and what were you doing?
-  - Did looping (C, or the Loop button) feel the same in both versions?
+  - Which version did you prefer and why?
+  - Did Space or Shift+Space ever act unexpectedly in either version?
+  - Which method seems more conducive to the designing flow?
 ---
 
 This build has **two versions of Play**. Switch between them any time with
