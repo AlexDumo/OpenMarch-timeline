@@ -502,10 +502,11 @@ const STATIC_ACTIONS = {
     },
 
     // Select
+    // Global so it works right after clicking a set on the timeline (shape sims)
     selectAllMarchers: {
         labelKey: "actions.select.selectAll",
         category: "select",
-        scope: "canvas",
+        scope: "global",
         defaultBindings: ["$mod+A", "Control+A"],
     },
 

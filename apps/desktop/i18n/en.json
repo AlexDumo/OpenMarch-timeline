@@ -653,6 +653,7 @@
             "split": {
                 "success": "Page split successfully"
             },
+            "playing": "Playing…",
             "subset": "Subset",
             "title": "Page {pageNumber}"
         },
@@ -1084,7 +1085,7 @@
     },
     "marcherPages": {
         "carryForward": {
-            "only": "Only Page {page}",
+            "only": "Change only Page {page}",
             "onlyEdited": "Only the edited pages",
             "onePage": "Page {page} followed (it was a copy)",
             "pages": "Pages {first}–{last} followed (they were copies)"
@@ -1515,9 +1516,9 @@
                 "keptEarlier": "Kept on Page {page} · won't follow earlier pages"
             },
             "followed": {
-                "onePage": "Page {page} followed",
-                "only": "Only Page {page}",
-                "pages": "Pages {first}–{last} followed"
+                "onePage": "Page {page} changed too",
+                "only": "Change only Page {page}",
+                "pages": "Pages {first}–{last} changed too"
             },
             "names": {
                 "many": "{first}, {second} and {count} others",

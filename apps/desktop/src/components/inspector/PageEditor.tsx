@@ -4,9 +4,12 @@ import { InspectorCollapsible } from "./InspectorCollapsible";
 import { Button, Switch } from "@openmarch/ui";
 import { measureRangeString } from "../../global/classes/Page";
 import { T } from "@tolgee/react";
+import clsx from "clsx";
 import { updatePagesMutationOptions } from "../../hooks/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useSplitPage } from "./PageEditorUtils";
+import { useIsPlaying } from "../../context/IsPlayingContext";
+import { useTimelineMode } from "../../hooks/queries/useWorkspaceSettings";
 
 // TODO: figure out how to make this work with the new music system
 function PageEditor() {
@@ -17,6 +20,11 @@ function PageEditor() {
     );
     const splitPage = useSplitPage().mutate;
     const isFirstPage = selectedPage?.previousPageId === null;
+    // Timeline mode doesn't follow pages while playing (useTimelinePageBridge), so the page
+    // shown would be the one play started on: say it's playing instead (shape sims)
+    const isPlaying = useIsPlaying()?.isPlaying ?? false;
+    const timelineMode = useTimelineMode();
+    const playing = isPlaying && timelineMode;
 
     const countsInputId = "page-counts";
     const subsetInputId = "page-subset";
@@ -36,14 +44,22 @@ function PageEditor() {
         return (
             <InspectorCollapsible
                 defaultOpen
-                translatableTitle={{
-                    keyName: "inspector.page.title",
-                    parameters: { pageNumber: selectedPage.name },
-                }}
+                translatableTitle={
+                    playing
+                        ? { keyName: "inspector.page.playing" }
+                        : {
+                              keyName: "inspector.page.title",
+                              parameters: { pageNumber: selectedPage.name },
+                          }
+                }
                 className="mt-12"
             >
                 <form
-                    className="edit-group flex w-full flex-col gap-16 px-6"
+                    className={clsx(
+                        "edit-group flex w-full flex-col gap-16 px-6",
+                        playing && "pointer-events-none opacity-40",
+                    )}
+                    aria-hidden={playing || undefined}
                     id={formId}
                     onSubmit={(e) => e.preventDefault()}
                 >

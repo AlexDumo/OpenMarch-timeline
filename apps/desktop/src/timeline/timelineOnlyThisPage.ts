@@ -170,17 +170,17 @@ export function onlyThisPageMessage(
             first === last
                 ? translate(
                       "timeline.keep.followed.onePage",
-                      "Page {page} followed",
+                      "Page {page} changed too",
                       { page: first },
                   )
                 : translate(
                       "timeline.keep.followed.pages",
-                      "Pages {first}–{last} followed",
+                      "Pages {first}–{last} changed too",
                       { first, last },
                   ),
         actionLabel: translate(
             "timeline.keep.followed.only",
-            "Only Page {page}",
+            "Change only Page {page}",
             {
                 page: edited,
             },

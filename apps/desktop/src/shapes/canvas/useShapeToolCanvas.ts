@@ -49,6 +49,8 @@ export function useShapeToolCanvas({
 }): void {
     const session = useShapeToolStore((s) => s.session);
     const dragging = useShapeToolStore((s) => s.dragging);
+    // Once the shape is edited, the one it replaces has done its job (Marco, round 5)
+    const edited = useShapeToolStore((s) => s.past.length > 0);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
     const lastHold = useRef<ReturnType<typeof holdFeedback>>(null);
     /** Marchers whose own dots the result preview hides, to show again when it closes */
@@ -116,6 +118,7 @@ export function useShapeToolCanvas({
                 canvas.fieldProperties.pixelsPerStep,
             ),
             dense: ids.length > DENSE_BAND,
+            hideReplaced: edited,
         });
         // The result preview stands in for the marchers' own dots, at their old spots
         setMarchersHidden(canvas, ids, style === "result");
@@ -140,7 +143,7 @@ export function useShapeToolCanvas({
             return () => window.clearTimeout(timer);
         }
         overlay.showHold(null);
-    }, [canvas, session, dragging, theme]);
+    }, [canvas, session, dragging, edited, theme]);
 }
 
 /**

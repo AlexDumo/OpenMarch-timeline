@@ -38,6 +38,8 @@ export interface PreviewDecor {
     readonly shortLabels?: boolean;
     /** A big band: only paths with a problem, no start labels */
     readonly dense?: boolean;
+    /** Don't show the shape being replaced (once this one has been edited) */
+    readonly hideReplaced?: boolean;
 }
 
 const DEFAULT_DECOR: PreviewDecor = {
@@ -71,6 +73,12 @@ const REPLACED_RADIUS = 2.5;
 const SAME_SPOT = 0.01;
 /** How far from a handle a press still takes it, in screen pixels */
 const HIT_RADIUS_PX = 10;
+/**
+ * Away from the shape, its outline and handles fade so the preview reads as the show, not a
+ * diagram (sims, round 5); within this many screen pixels, or while dragging, they're full
+ */
+const NEAR_PX = 60;
+const FADED_OPACITY = 0.3;
 const offset = FieldProperties.GRID_STROKE_WIDTH / 2;
 
 const toCanvas = (p: XY) => ({ x: p.x + offset, y: p.y + offset });
@@ -115,6 +123,7 @@ export default class ShapeToolOverlay {
         wrapper?.addEventListener("mousedown", this.swallowIfDragging, true);
         wrapper?.addEventListener("dblclick", this.onDoubleClick, true);
         canvas.on("mouse:move", this.onHover);
+        canvas.on("mouse:out", this.onLeave);
     }
 
     /** Removes everything drawn and every listener. */
@@ -126,6 +135,7 @@ export default class ShapeToolOverlay {
         wrapper?.removeEventListener("mousedown", this.swallowIfDragging, true);
         wrapper?.removeEventListener("dblclick", this.onDoubleClick, true);
         this.canvas.off("mouse:move", this.onHover as never);
+        this.canvas.off("mouse:out", this.onLeave as never);
     }
 
     private wrapper(): HTMLElement | null {
@@ -153,9 +163,9 @@ export default class ShapeToolOverlay {
         }
     };
 
-    /** Whether the pointer is within reach of the shape's solid outline */
-    private nearOutline(e: MouseEvent): boolean {
-        const reach = HIT_RADIUS_PX / (this.canvas.getZoom() || 1);
+    /** Whether the pointer is within `reachPx` screen pixels of the shape's solid outline */
+    private nearOutline(e: MouseEvent, reachPx = HIT_RADIUS_PX): boolean {
+        const reach = reachPx / (this.canvas.getZoom() || 1);
         const p = this.canvas.getPointer(e);
         for (const line of [...this.outlines, ...this.guides]) {
             const points = line.points ?? [];
@@ -263,11 +273,50 @@ export default class ShapeToolOverlay {
 
     private readonly onHover = (event: fabric.IEvent<MouseEvent>) => {
         if (this.handles.length === 0 || !event.e) return;
+        this.setFaded(this.dragKey === null && !this.near(event.e));
         const handle = this.dragKey === null ? this.handleAt(event.e) : null;
         if (handle)
             this.canvas.setCursor(cursorFor(handle.shapeToolHandle.role));
         this.showHint(handle?.shapeToolHandle ?? null);
     };
+
+    private readonly onLeave = () => {
+        if (this.handles.length > 0 && this.dragKey === null)
+            this.setFaded(true);
+    };
+
+    /** Whether the pointer is close enough to the shape to be working on it */
+    private near(e: MouseEvent): boolean {
+        const reach = NEAR_PX / (this.canvas.getZoom() || 1);
+        const p = this.canvas.getPointer(e);
+        return (
+            this.handles.some(
+                (h) =>
+                    Math.hypot((h.left ?? 0) - p.x, (h.top ?? 0) - p.y) <=
+                    reach,
+            ) || this.nearOutline(e, NEAR_PX)
+        );
+    }
+
+    /** Whether the outline and handles are faded (the pointer is away from the shape) */
+    private faded = false;
+
+    private setFaded(faded: boolean): void {
+        if (faded === this.faded) return;
+        this.faded = faded;
+        this.applyFade();
+        this.canvas.requestRenderAll();
+    }
+
+    private applyFade(): void {
+        const opacity = this.faded ? FADED_OPACITY : 1;
+        const faded: fabric.Object[] = [
+            ...this.guides,
+            ...this.outlines,
+            ...this.handles,
+        ];
+        for (const o of faded) o.set({ opacity });
+    }
 
     setColors(colors: ShapeToolOverlayColors): void {
         this.colors = colors;
@@ -384,6 +433,7 @@ export default class ShapeToolOverlay {
         }
         this.syncTargets(preview, flagged, decor);
         this.syncHandles(preview.handles);
+        this.applyFade();
         this.bringToFront();
         this.canvas.requestRenderAll();
     }
@@ -428,6 +478,7 @@ export default class ShapeToolOverlay {
         this.replaced = [];
         this.handles = [];
         this.handleRoles = "";
+        this.faded = false;
         this.takesPoints = false;
         this.canvas.requestRenderAll();
     }
@@ -533,6 +584,7 @@ export default class ShapeToolOverlay {
                 // The shape being replaced, when it isn't where they start: tiny faint dots,
                 // no labels or paths, so it reads as a reference without crowding the move
                 const replaced =
+                    !decor.hideReplaced &&
                     dist(target.now, origin) > SAME_SPOT &&
                     dist(target.now, target.to) > SAME_SPOT;
                 this.placeCircle(this.replaced, i, toCanvas(target.now), {
