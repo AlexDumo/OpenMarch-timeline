@@ -33,8 +33,6 @@ export default class LineListeners
         this.canvas.getCanvasMarchers().forEach((canvasMarcher) => {
             canvasMarcher.makeUnselectable();
         });
-
-        window.addEventListener("keydown", this.handleKeyDown);
     }
 
     initiateListeners = () => {
@@ -138,7 +136,7 @@ export default class LineListeners
 
                 this._isDrawing = false;
 
-                // Make canvasMarchers selectable again
+                // Make canvasMarchers selectable again (dimmed ones stay unselectable, UI-9)
                 this.canvas.getCanvasMarchers().forEach((canvasMarcher) => {
                     canvasMarcher.makeSelectable();
                 });
@@ -171,6 +169,9 @@ export default class LineListeners
             return {
                 ...canvasMarcher.coordinate,
                 ...canvasMarcher.getMarcherCoords(),
+                // In timeline mode `coordinate` can be a resolver position that never held a
+                // marcher_pages row, so it may have no marcher_id (P7.10)
+                marcher_id: canvasMarcher.marcherObj.id,
             } as MarcherPage;
         });
 
@@ -290,10 +291,6 @@ export default class LineListeners
         super.handleObjectModified(fabricEvent);
         this.drawNewMarcherPaths();
     }
-
-    handleKeyDown = (keyboardEvent: KeyboardEvent) => {
-        if (keyboardEvent.key === "Escape") this.clearLine();
-    };
 
     handleMouseUp(fabricEvent: fabric.IEvent<MouseEvent>): void {
         super.handleMouseUp(fabricEvent);

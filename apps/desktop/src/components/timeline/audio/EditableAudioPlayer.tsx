@@ -6,9 +6,15 @@ import {
     useRef,
     useState,
 } from "react";
+import {
+    useActionHandler,
+    useActionHandlerGroup,
+} from "@/shortcuts/useActionHandler";
+import { TAP_BEATS_ACTION_IDS } from "@/shortcuts/definitions";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
 import AudioFile from "@/global/classes/AudioFile";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useShallow } from "zustand/react/shallow";
 import { useTimingObjects } from "@/hooks";
 // @ts-ignore - Importing the regions plugin
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
@@ -44,7 +50,13 @@ import { normalizeVolume } from "./volume";
 // eslint-disable-next-line max-lines-per-function
 export default function EditableAudioPlayer() {
     const { theme } = useTheme();
-    const { uiSettings } = useUiSettingsStore();
+    const uiSettings = useUiSettingsStore(
+        useShallow((s) => ({
+            audioMuted: s.uiSettings.audioMuted,
+            audioVolume: s.uiSettings.audioVolume,
+            timelinePixelsPerSecond: s.uiSettings.timelinePixelsPerSecond,
+        })),
+    );
     const setCanvasFocussed = () =>
         useUiSettingsStore.setState((state) => ({
             uiSettings: { ...state.uiSettings, focussedComponent: "canvas" },
@@ -157,73 +169,48 @@ export default function EditableAudioPlayer() {
         }
     }, [audioFileUrl, uiSettings.audioMuted, uiSettings.audioVolume]);
 
-    // Then in the component:
-    const handleKeyDown = useCallback(
-        (event: KeyboardEvent) => {
+    useActionHandlerGroup(
+        TAP_BEATS_ACTION_IDS,
+        (_id, args) => {
+            if (!waveSurfer) return;
+            const eventNum = Number(args?.count);
             if (
-                !document.activeElement?.matches(
-                    "input, textarea, select, [contenteditable]",
-                )
+                !isNaN(eventNum) &&
+                beatsToDisplay === "temporary" &&
+                eventNum > 0
             ) {
-                event.preventDefault();
-                const eventNum = Number(event.key);
-                if (
-                    !isNaN(eventNum) &&
-                    beatsToDisplay === "temporary" &&
-                    eventNum > 0 &&
-                    waveSurfer
-                ) {
-                    const currentTime = waveSurfer.getCurrentTime();
-                    const totalDuration = waveSurfer.getDuration();
+                const currentTime = waveSurfer.getCurrentTime();
+                const totalDuration = waveSurfer.getDuration();
 
-                    const updatedBeats = createNewTemporaryBeats({
-                        currentTime,
-                        totalDuration,
-                        existingTemporaryBeats: temporaryBeats,
-                        numNewBeats: eventNum,
-                    });
+                const updatedBeats = createNewTemporaryBeats({
+                    currentTime,
+                    totalDuration,
+                    existingTemporaryBeats: temporaryBeats,
+                    numNewBeats: eventNum,
+                });
 
-                    if (updatedBeats.length > 0) {
-                        setTemporaryBeats(updatedBeats);
-                    }
-
-                    const updatedMeasures = createNewTemporaryMeasures({
-                        currentBeats: updatedBeats,
-                        currentMeasures: temporaryMeasures,
-                        newCounts: eventNum,
-                        currentTime,
-                    });
-                    console.debug("temporary measures", updatedMeasures);
-                    setTemporaryMeasures(updatedMeasures);
-
-                    timingMarkersPlugin.current?.updateTimingMarkers(
-                        updatedBeats,
-                        updatedMeasures,
-                    );
-                } else if (event.key === " ") {
-                    togglePlayPause();
+                if (updatedBeats.length > 0) {
+                    setTemporaryBeats(updatedBeats);
                 }
+
+                const updatedMeasures = createNewTemporaryMeasures({
+                    currentBeats: updatedBeats,
+                    currentMeasures: temporaryMeasures,
+                    newCounts: eventNum,
+                    currentTime,
+                });
+                console.debug("temporary measures", updatedMeasures);
+                setTemporaryMeasures(updatedMeasures);
+
+                timingMarkersPlugin.current?.updateTimingMarkers(
+                    updatedBeats,
+                    updatedMeasures,
+                );
             }
         },
-        [
-            beatsToDisplay,
-            waveSurfer,
-            temporaryBeats,
-            temporaryMeasures,
-            togglePlayPause,
-        ],
+        { enabled: beatsToDisplay === "temporary" && !!waveSurfer },
     );
-
-    // Add event listener for keyboard shortcuts
-    useEffect(() => {
-        // Add the event listener when the component mounts
-        window.addEventListener("keydown", handleKeyDown);
-
-        // Remove the event listener when the component unmounts
-        return () => {
-            window.removeEventListener("keydown", handleKeyDown);
-        };
-    }, [handleKeyDown]);
+    useActionHandler("timelinePlayPause", () => togglePlayPause());
 
     // Update measures and beats when they change
     useEffect(() => {

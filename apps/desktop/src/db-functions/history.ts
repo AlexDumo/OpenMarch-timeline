@@ -2,31 +2,37 @@ import {
     incrementHistoryGroupInTransaction,
     getCurrentHistoryGroup,
 } from "../global/classes/History";
-import { assert, mainProcessLog } from "../utilities/utils";
+import { assert } from "../utilities/assert";
+import { mainProcessLog } from "../utilities/mainProcessLog";
 import { DbConnection, DbTransaction } from "./types";
 import { asc, lt, max } from "drizzle-orm";
 import { DB, schema } from "../global/database/db";
 import { Constants } from "../global/Constants";
-import { getTableName, gt, sql, eq, desc, count } from "drizzle-orm";
+import { getTableName, gt, sql, eq, desc, count, inArray } from "drizzle-orm";
 import { tableNamesToQueryKeys } from "../hooks/queries/utils";
+import type { ChangeBatch } from "@openmarch/core";
+import {
+    checkAndDrainTimelineChangesInTransaction,
+    emitTimelineChange,
+    notifyTimelineBatch,
+} from "./timelineChanges";
+import { timelineHistoryFocus, timelineModeOn } from "./timelineHistoryFocus";
+import { isPageEraFrozenError } from "./pageEraFreezeMarker";
+import {
+    bumpTimelineDisplayVersion,
+    historyStatementTable,
+    touchesTimelineDisplayTables,
+    undoGroupTouchesDisplayTables,
+} from "./timelineDisplay";
+import { createTriggers, type HistoryType } from "./historyTriggers";
 
-const tablesWithHistory = [
-    schema.beats,
-    schema.pages,
-    schema.measures,
-    schema.marchers,
-    schema.marcher_pages,
-    schema.shapes,
-    schema.shape_pages,
-    schema.shape_page_marchers,
-    schema.field_properties,
-    schema.section_appearances,
-    schema.utility,
-    schema.tags,
-    schema.tag_appearances,
-    schema.marcher_tags,
-    schema.view3d_venue,
-];
+export {
+    buildHistoryTriggerSql,
+    createAllUndoTriggers,
+    createUndoTriggers,
+    dropAllUndoTriggers,
+    dropUndoTriggers,
+} from "./historyTriggers";
 
 let transactionWithHistoryTail = Promise.resolve<void>(undefined);
 
@@ -42,10 +48,48 @@ const withTransactionWithHistoryLock = async <T>(
 };
 
 /**
+ * Runs `operation` while no wrapped write (an edit, undo, redo or change-log reset) is running.
+ * Wrapped writes deliver their timeline batches before releasing this lock, so a read made under
+ * it sees exactly the state after every batch delivered so far, and no later one. The timeline
+ * resolver host reads its cold build this way. Never call it from inside a wrapped write: it
+ * would wait for itself.
+ */
+export const withTimelineWriteLock = <T>(
+    operation: () => Promise<T>,
+): Promise<T> => withTransactionWithHistoryLock(operation);
+
+const historyChangeListeners = new Set<() => void>();
+
+/**
+ * Calls `listener` after every committed undoable edit, undo and redo, until the returned function
+ * unsubscribes it. A toast whose action undoes one edit (UI-14's delete toast) closes on the next
+ * change, so its Undo can't undo something else.
+ */
+export function subscribeHistoryChanges(listener: () => void): () => void {
+    historyChangeListeners.add(listener);
+    return () => historyChangeListeners.delete(listener);
+}
+
+function notifyHistoryChange(): void {
+    for (const listener of [...historyChangeListeners]) {
+        try {
+            listener();
+        } catch (error) {
+            console.error("A history change listener failed", error);
+        }
+    }
+}
+
+/**
  * Runs a function in a transaction with undo/redo history tracking.
  *
  * This function will group all of the database actions performed inside of it into a single undo/redo group.
  * Using a regular transaction will cause each database action to be its own undo/redo event.
+ *
+ * It is also the spec §6 write wrapper for the timeline tables: after `func`, it rejects the whole
+ * edit if `timeline_commit_violations` returns any row, then drains `timeline_change_log` in the
+ * same transaction. Once the transaction commits, and before the next queued write starts, the
+ * drained batch goes to the `subscribeTimelineChanges` listeners. A failed edit delivers nothing.
  *
  * @param db - The database connection
  * @param funcName - The name of the function to run in the transaction. This is for  logging.
@@ -60,6 +104,9 @@ export const transactionWithHistory = async <T>(
 ): Promise<T> => {
     // eslint-disable-next-line max-lines-per-function
     async function runLockedTransactionWithHistory(): Promise<T> {
+        let drained: ChangeBatch | undefined;
+        let touchedDisplayTables = false;
+        // eslint-disable-next-line max-lines-per-function
         const output = await db.transaction(async (tx) => {
             const startMessage = `=========== start ${funcName} ============`;
             let result: T;
@@ -152,6 +199,15 @@ export const transactionWithHistory = async <T>(
                  *    - Are there triggers for the table that the function is performing actions on?
                  *    - Do the functions actually perform actions on the database?
                  */
+
+                // Spec §6: commit-time invariants, then drain the change log
+                drained = await checkAndDrainTimelineChangesInTransaction(tx);
+
+                // P7.15: edits the change log doesn't carry still refresh the views that read rows
+                touchedDisplayTables = await undoGroupTouchesDisplayTables(
+                    tx,
+                    groupBefore,
+                );
             } catch (err: any) {
                 // Remove the items from the history tables that were added by the transaction
                 error = err as Error;
@@ -164,13 +220,15 @@ export const transactionWithHistory = async <T>(
 
             return result!;
         });
+        // Only reached once the transaction has committed
+        notifyTimelineBatch(drained);
+        if (touchedDisplayTables) bumpTimelineDisplayVersion();
+        notifyHistoryChange();
         return output;
     }
 
     return withTransactionWithHistoryLock(runLockedTransactionWithHistory);
 };
-
-type HistoryType = "undo" | "redo";
 
 /**
  * Response from the history table after performing an undo or redo action.
@@ -192,6 +250,16 @@ export type HistoryResponse = {
      * The error that occurred when performing the action.
      */
     error?: { message: string; stack: string };
+    /**
+     * The timeline change batch the action committed (empty or absent when it changed no
+     * timeline rows).
+     */
+    timelineBatch?: ChangeBatch;
+    /**
+     * True when the page-era freeze (P9.5) refused the action's replay. The group can never be
+     * applied in timeline mode, so it was removed from its stack; nothing else changed.
+     */
+    skippedFrozenGroup?: boolean;
 };
 
 /**
@@ -248,35 +316,6 @@ export type HistoryTableRow = {
 };
 
 /**
- * Creates triggers for a table to record undo/redo history in the database.
- * These actions happen automatically when a row is inserted, updated, or deleted.
- *
- * @param db The database connection
- * @param tableName name of the table to create triggers for
- */
-export async function createUndoTriggers(
-    db: DbConnection | DB,
-    tableName: string,
-) {
-    await createTriggers(db, tableName, "undo", true);
-}
-
-/**
- * Creates triggers for all tables in the database that are not undo/redo history tables.
- *
- * @param db The database connection
- */
-export async function createAllUndoTriggers(db: DbConnection | DB) {
-    // await db.transaction(async (tx) => {
-    const promises: Promise<void>[] = [];
-    for (const table of tablesWithHistory) {
-        promises.push(createUndoTriggers(db, getTableName(table)));
-    }
-    await Promise.all(promises);
-    // });
-}
-
-/**
  * Increment the undo group in the database to create a new group for undo history.
  *
  * This will always return 1 + the max group number in the undo history table.
@@ -316,34 +355,6 @@ export async function performRedo(db: DbConnection | DB) {
 }
 
 /**
- * Drops the triggers for a table if they exist. I.e. disables undo tracking for the given table.
- *
- * @param db database connection
- * @param tableName name of the table to drop triggers for
- */
-export async function dropUndoTriggers(
-    db: DbConnection | DB,
-    tableName: string,
-) {
-    await db.run(sql.raw(`DROP TRIGGER IF EXISTS "${tableName}_it";`));
-    await db.run(sql.raw(`DROP TRIGGER IF EXISTS "${tableName}_ut";`));
-    await db.run(sql.raw(`DROP TRIGGER IF EXISTS "${tableName}_dt";`));
-}
-
-/**
- * Drops all undo triggers from all user tables in the database.
- * Excludes SQLite internal tables and history/undo/redo tables.
- *
- * @param db database connection
- */
-export async function dropAllUndoTriggers(db: DbConnection | DB) {
-    for (const table of tablesWithHistory) {
-        const name = getTableName(table);
-        await dropUndoTriggers(db, name);
-    }
-}
-
-/**
  * Increment the group number for either the undo or redo history table.
  *
  * This is done by getting the max group number from the respective history table and incrementing it by 1.
@@ -352,7 +363,10 @@ export async function dropAllUndoTriggers(db: DbConnection | DB) {
  * @param type "undo" or "redo"
  * @returns The new group number for the respective history table
  */
-async function incrementGroup(db: DbConnection, type: HistoryType) {
+async function incrementGroup(
+    db: DbConnection | DbTransaction,
+    type: HistoryType,
+) {
     const historyTable =
         type === "undo" ? schema.history_undo : schema.history_redo;
 
@@ -406,7 +420,7 @@ async function incrementGroup(db: DbConnection, type: HistoryType) {
  * @param db database connection
  * @param type "undo" or "redo"
  */
-async function refreshCurrentGroups(db: DbConnection) {
+async function refreshCurrentGroups(db: DbConnection | DbTransaction) {
     const refreshCurrentGroup = async (type: HistoryType) => {
         const tableName =
             type === "undo" ? schema.history_undo : schema.history_redo;
@@ -448,132 +462,19 @@ async function refreshCurrentGroups(db: DbConnection) {
 }
 
 /**
- * Creates triggers for a table to insert undo/redo history.
- *
- * @param db The database connection
- * @param tableName name of the table to create triggers for
- * @param type either "undo" or "redo"
- * @param deleteRedoRows True if the redo rows should be deleted when inserting new undo rows.
- * This is only used when switching to "undo" mode.
- * The default behavior of the application has this to true so that the redo history is cleared when a new undo action is inserted.
- * It should be false when a redo is being performed and there are triggers inserting into the undo table.
- */
-async function createTriggers(
-    db: DbConnection | DB,
-    tableName: string,
-    type: HistoryType,
-    deleteRedoRows: boolean = true,
-) {
-    const forbiddenTables = new Set<string>([
-        Constants.UndoHistoryTableName,
-        Constants.RedoHistoryTableName,
-        Constants.HistoryStatsTableName,
-    ]);
-
-    if (forbiddenTables.has(tableName))
-        throw new Error(
-            `Cannot create triggers for ${tableName} as it is a forbidden table`,
-        );
-
-    const columns = (await db.all(
-        sql`SELECT name FROM pragma_table_info(${tableName});`,
-    )) as { name: string }[];
-
-    const historyTableName =
-        type === "undo"
-            ? Constants.UndoHistoryTableName
-            : Constants.RedoHistoryTableName;
-    const groupColumn = type === "undo" ? "cur_undo_group" : "cur_redo_group";
-
-    // const currentGroupResult = db.query.history_stats.findFirst();
-
-    // const currentGroup = currentGroupResult?.[groupColumn];
-    // if (currentGroup == null) {
-    //     const column = type === "undo" ? "cur_undo_group" : "cur_redo_group";
-    //     db.insert(schema.history_stats)
-    //         .values({
-    //             [column]: 0,
-    //         } as HistoryStatsRow)
-    //         .run();
-    // }
-
-    // When the triggers are in undo mode, we need to delete all of the items from the redo table once an item is entered in the redo table
-    const sideEffect =
-        type === "undo" && deleteRedoRows
-            ? `DELETE FROM ${Constants.RedoHistoryTableName};
-            UPDATE ${Constants.HistoryStatsTableName} SET "cur_redo_group" = 0;`
-            : "";
-
-    // // Drop the triggers if they already exist
-    // dropUndoTriggers(db, tableName);
-
-    const columnNames = columns.map((c) => {
-        let columnName: string;
-        if (Array.isArray(c)) columnName = c[0];
-        else if (typeof c === "object") columnName = c.name;
-        else throw new Error(`Unknown column type: ${typeof c}`);
-        return columnName;
-    });
-
-    // INSERT trigger
-    let insertTrigger = `CREATE TRIGGER IF NOT EXISTS '${tableName}_it'
-        AFTER INSERT ON "${tableName}"
-        BEGIN
-            INSERT INTO ${historyTableName} ("sequence" , "history_group", "sql")
-            VALUES(
-                NULL,
-                (SELECT ${groupColumn} FROM history_stats),
-                'DELETE FROM "${tableName}" WHERE rowid=' || NEW.rowid
-            );
-            ${sideEffect}
-        END;`;
-    // This had to be done because using the drizzle proxy led to SQLITE syntax errors
-    // Likely, because drizzle tries to prepare the SQL statement and then execute it
-    const isViteTest = typeof process !== "undefined" && process.env.VITEST;
-    if (isViteTest) await db.run(sql.raw(insertTrigger));
-    else await window.electron.unsafeSqlProxy(insertTrigger);
-    // UPDATE trigger
-    const updateTrigger = `CREATE TRIGGER IF NOT EXISTS '${tableName}_ut' AFTER UPDATE ON "${tableName}"
-        BEGIN
-        INSERT INTO ${historyTableName} ("sequence" , "history_group", "sql")
-            VALUES(
-                NULL,
-                (SELECT ${groupColumn} FROM history_stats),
-                'UPDATE "${tableName}" SET ${columnNames
-                    .map((c) => `"${c}"='||quote(old."${c}")||'`)
-                    .join(",")} WHERE rowid='||old.rowid);
-        ${sideEffect}
-    END;`;
-    if (isViteTest) await db.run(sql.raw(updateTrigger));
-    else await window.electron.unsafeSqlProxy(updateTrigger);
-
-    // DELETE trigger
-    const deleteTrigger = `CREATE TRIGGER IF NOT EXISTS '${tableName}_dt' BEFORE DELETE ON "${tableName}"
-        BEGIN
-        INSERT INTO ${historyTableName} ("sequence" , "history_group", "sql")
-        VALUES(NULL, (
-            SELECT ${groupColumn} FROM history_stats),
-            'INSERT INTO "${tableName}" (${columnNames
-                .map((c) => `"${c}"`)
-                .join(",")}) VALUES (${columnNames
-                .map((c) => `'||quote(old."${c}")||'`)
-                .join(",")})');
-          ${sideEffect}
-      END;`;
-    if (isViteTest) await db.run(sql.raw(deleteTrigger));
-    else await window.electron.unsafeSqlProxy(deleteTrigger);
-}
-
-/**
  * Switch the triggers to either undo or redo mode.
  * This is so when performing an undo action, the redo history is updated and vice versa.
  *
- * @param db The database connection
+ * It runs inside the undo or redo's own transaction (`db` is the transaction), so the switch,
+ * the replay and the switch back commit together: one commit (one sync to disk) instead of one
+ * per trigger statement, and a failure part way rolls the switch back with everything else.
+ *
+ * @param db The transaction
  * @param mode The mode to switch to, either "undo" or "redo"
  * @param deleteRedoRows true if the redo rows should be deleted when inserting new undo rows.
  */
-const switchTriggerMode = async (
-    db: DbConnection | DB,
+const switchTriggerModeInTransaction = async (
+    db: DbTransaction,
     mode: HistoryType,
     deleteRedoRows: boolean,
     tableNames?: Set<string>,
@@ -634,12 +535,21 @@ const switchTriggerMode = async (
         await db.run(sql.raw(`DROP TRIGGER IF EXISTS ${trigger.name};`));
     }
     for (const table of tables) {
-        await createTriggers(db, table, mode, deleteRedoRows);
+        await createTriggers(db, table, mode, deleteRedoRows, true);
     }
     mainProcessLog(
         "info",
         `------ Done switching triggers to ${mode} mode ------`,
     );
+};
+
+/** An error's message followed by the messages of its causes (SQLite's reason is often a cause). */
+const messageWithCauses = (err: unknown): string => {
+    const messages: string[] = [];
+    for (let e: unknown = err; e instanceof Error; e = e.cause)
+        if (e.message) messages.push(e.message);
+    if (messages.length === 0 && err != null) messages.push(String(err));
+    return messages.join("\nCaused by: ");
 };
 
 /**
@@ -650,8 +560,19 @@ const switchTriggerMode = async (
  * @param db the database connection
  * @param type either "undo" or "redo"
  */
+function executeHistoryAction(
+    db: DbConnection,
+    type: HistoryType,
+): Promise<HistoryResponse> {
+    // Queue with wrapped edits, so batches reach listeners in commit order and no edit runs
+    // while the history triggers are switched to the other mode
+    return withTransactionWithHistoryLock(() =>
+        executeHistoryActionUnlocked(db, type),
+    );
+}
+
 // eslint-disable-next-line max-lines-per-function
-async function executeHistoryAction(
+async function executeHistoryActionUnlocked(
     db: DbConnection,
     type: HistoryType,
 ): Promise<HistoryResponse> {
@@ -716,56 +637,121 @@ async function executeHistoryAction(
 
         const tableNames = new Set<string>();
         for (const sql of sqlStatements) {
-            const tableName = sql.match(/"(.*?)"/)?.[0].replaceAll('"', "");
+            const tableName = historyStatementTable(sql);
             if (tableName) {
                 tableNames.add(tableName);
             }
         }
 
-        if (type === "undo") {
-            // Switch the triggers to redo mode so that the redo history is updated
-            await incrementGroup(db, "redo");
-            await switchTriggerMode(db, "redo", false, tableNames);
-        } else {
-            // Switch the triggers so that the redo table does not have its rows deleted
-            await switchTriggerMode(db, "undo", false, tableNames);
-        }
-
         let error: Error | undefined;
+        let committedBatch: ChangeBatch | undefined;
         try {
-            // Temporarily disable foreign key checks
+            // Temporarily disable foreign key checks (a no-op inside a transaction, so first)
             await db.run(sql.raw("PRAGMA foreign_keys = OFF;"));
 
-            /// Execute all of the SQL statements in the current history group
-            await db.transaction(async (tx) => {
+            // Every write of the action is in one transaction, so a rejected undo or redo rolls
+            // back and leaves the data, both stacks and the triggers unchanged (spec §6.1): the
+            // switch of the triggers to the other stack, the new redo group and its pruning, the
+            // replay, the removal of the replayed group, the group refresh and the switch back
+            const drained = await db.transaction(async (tx) => {
+                // Switch the triggers so that the replay's inverses go to the other stack. In
+                // undo mode, don't clear the redo table while redoing.
+                if (type === "undo")
+                    await switchTriggerModeInTransaction(
+                        tx,
+                        "redo",
+                        false,
+                        tableNames,
+                    );
+                else
+                    await switchTriggerModeInTransaction(
+                        tx,
+                        "undo",
+                        false,
+                        tableNames,
+                    );
+
+                // The redo triggers log the undo's inverses under this new group
+                if (type === "undo") await incrementGroup(tx, "redo");
+
+                // Execute all of the SQL statements in the current history group
                 for (const sqlStatement of sqlStatements)
                     await tx.run(sqlStatement);
+
+                // Delete all of the SQL statements in the current history group
+                await tx.run(
+                    sql.raw(
+                        `DELETE FROM ${tableName} WHERE "history_group"=${currentGroup};`,
+                    ),
+                );
+                // Refresh the current group number in the history stats table
+                await refreshCurrentGroups(tx);
+
+                // Undo and redo are edits (spec §6.1, C-6): the same commit-time check and
+                // change-log drain as `transactionWithHistory`
+                const batch =
+                    await checkAndDrainTimelineChangesInTransaction(tx);
+
+                // Switch the triggers back to undo mode, deleting the redo rows when new undo
+                // rows come in
+                await switchTriggerModeInTransaction(
+                    tx,
+                    "undo",
+                    true,
+                    tableNames,
+                );
+                return batch;
             });
+            committedBatch = drained;
         } catch (err: any) {
             error = err;
         } finally {
             // Re-enable foreign key checks
             await db.run(sql.raw("PRAGMA foreign_keys = ON;"));
-
-            // Switch the triggers back to undo mode and delete the redo rows when inputting new undo rows
-            await switchTriggerMode(db, "undo", true, tableNames);
         }
 
-        if (error) throw error;
+        if (error) {
+            // The page-era freeze (P9.5) refused the replay: a group that writes frozen page-era
+            // rows can never be applied in timeline mode. Drop it from its stack (the rolled-back
+            // transaction left no counterpart on the other stack), so it doesn't stay on top.
+            if (isPageEraFrozenError(error)) {
+                await db.transaction(async (tx) => {
+                    await tx.run(
+                        sql.raw(
+                            `DELETE FROM ${tableName} WHERE "history_group"=${currentGroup};`,
+                        ),
+                    );
+                    await refreshCurrentGroups(tx);
+                });
+                mainProcessLog(
+                    "warn",
+                    `Skipped ${type} group ${currentGroup}: it writes page-era rows, which are frozen in timeline mode`,
+                );
+                return {
+                    success: false,
+                    tableNames: new Set(),
+                    sqlStatements: [],
+                    skippedFrozenGroup: true,
+                    error: {
+                        message: messageWithCauses(error),
+                        stack: error.stack ?? "Failed to get stack",
+                    },
+                };
+            }
+            throw error;
+        }
 
-        // Delete all of the SQL statements in the current history group
-        await db.run(
-            sql.raw(`
-        DELETE FROM ${tableName} WHERE "history_group"=${currentGroup};
-    `),
-        );
-        // Refresh the current group number in the history stats table
-        await refreshCurrentGroups(db);
+        // The action has committed; deliver its batch
+        notifyTimelineBatch(committedBatch);
+        if (touchesTimelineDisplayTables(tableNames))
+            bumpTimelineDisplayVersion();
+        notifyHistoryChange();
 
         response = {
             success: true,
             tableNames,
             sqlStatements,
+            timelineBatch: committedBatch,
         };
     } catch (err: any) {
         console.error(err);
@@ -775,7 +761,7 @@ async function executeHistoryAction(
             tableNames: new Set(),
             sqlStatements: [],
             error: {
-                message: err?.message || "failed to get error",
+                message: messageWithCauses(err) || "failed to get error",
                 stack: err?.stack || "Failed to get stack",
             },
         };
@@ -787,6 +773,20 @@ async function executeHistoryAction(
     }
 
     return response;
+}
+
+/**
+ * Clears `timeline_change_log` and tells the listeners to cold-build (ADR 0001 §5). Call it when a
+ * file is opened, and after any write that bypasses the wrapper (migrations, repair, conversion),
+ * so rows those writes logged are never delivered as part of a later edit's batch.
+ *
+ * @param db database connection
+ */
+export async function resetTimelineChangeLog(db: DbConnection | DB) {
+    await withTransactionWithHistoryLock(async () => {
+        await db.delete(schema.timeline_change_log).run();
+        emitTimelineChange({ kind: "reset" });
+    });
 }
 
 /**
@@ -978,69 +978,155 @@ const sqlActionFromSql = (
     return "ERROR";
 };
 
-const rowIdFromSql = (sql: string): number => {
-    return parseInt(sql.match(/WHERE rowid=(\d+)/)?.[0] || "-1");
+/** The row id a history statement's `WHERE rowid=N` names, or -1 when it names none. */
+export const rowIdFromSql = (sql: string): number => {
+    return parseInt(sql.match(/WHERE rowid=(\d+)/)?.[1] ?? "-1");
 };
+
+/**
+ * The page with the lowest start beat among the given marcher page rows, and the marchers changed
+ * on it. One query per 500 rows rather than one per statement.
+ */
+async function earliestChangedPage(
+    db: DB | DbConnection,
+    marcherPageIds: number[],
+): Promise<{
+    pageIdToGoTo: number | undefined;
+    marcherIdsToSelect: Set<number> | undefined;
+}> {
+    let earliest: { pageId: number; position: number } | undefined;
+    const marchersByPage = new Map<number, Set<number>>();
+    for (let i = 0; i < marcherPageIds.length; i += 500) {
+        const rows = await (db as DbConnection)
+            .select({
+                page_id: schema.marcher_pages.page_id,
+                marcher_id: schema.marcher_pages.marcher_id,
+                position: schema.beats.position,
+            })
+            .from(schema.marcher_pages)
+            .innerJoin(
+                schema.pages,
+                eq(schema.pages.id, schema.marcher_pages.page_id),
+            )
+            .innerJoin(
+                schema.beats,
+                eq(schema.beats.id, schema.pages.start_beat),
+            )
+            .where(
+                inArray(
+                    schema.marcher_pages.id,
+                    marcherPageIds.slice(i, i + 500),
+                ),
+            )
+            .all();
+        for (const row of rows) {
+            const marchers = marchersByPage.get(row.page_id) ?? new Set();
+            marchers.add(row.marcher_id);
+            marchersByPage.set(row.page_id, marchers);
+            if (earliest === undefined || row.position < earliest.position)
+                earliest = { pageId: row.page_id, position: row.position };
+        }
+    }
+    return {
+        pageIdToGoTo: earliest?.pageId,
+        marcherIdsToSelect: earliest
+            ? marchersByPage.get(earliest.pageId)
+            : undefined,
+    };
+}
 
 type PerformHistoryActionResponse = {
     pageIdToGoTo: number | undefined;
     marcherIdsToSelect: Set<number> | undefined;
     queriesToInvalidate: string[][] | undefined;
+    /**
+     * Set when the action didn't apply: `page-era-frozen` when the freeze (P9.5) refused it and
+     * the group was dropped from its stack; `error` for any other failure, which leaves both
+     * stacks as they were.
+     */
+    failure?: { kind: "page-era-frozen" } | { kind: "error"; message: string };
 };
 
 /**
+ * Performs an undo or redo and works out what to show afterwards: the page to jump to and the
+ * marchers to select.
+ *
+ * In page mode they come from the `marcher_pages` statements the action replayed. In timeline mode
+ * (P7.13) those rows are frozen, so they come from the action's timeline change batch instead
+ * (`timelineHistoryFocus`).
  *
  * @param type The type of history action to perform, either "undo" or "redo"
  * @param db The database connection to use, or undefined to create a new connection
+ * @param options.currentPageId the selected page; timeline mode stays on it when the action
+ * changed it
  * @returns Response from the history action
  */
 export async function performHistoryAction(
     type: "undo" | "redo",
-    db: DB,
+    db: DB | DbConnection,
+    options: { currentPageId?: number } = {},
 ): Promise<PerformHistoryActionResponse> {
-    const dbToUse = db;
-    let response: HistoryResponse;
+    // The focus is read in the action's own lock turn, after it commits and delivers its batch, so
+    // a queued undo, redo or edit can't run in between (two quick undo actions would otherwise both read
+    // the state after the second)
+    const { response, timelineFocus } = await withTransactionWithHistoryLock(
+        async () => {
+            const response = await executeHistoryActionUnlocked(db, type);
+            const timelineFocus =
+                response.success && (await timelineModeOn(db))
+                    ? await timelineHistoryFocus(
+                          db,
+                          response.timelineBatch ?? { changes: [] },
+                          {
+                              currentPageId: options.currentPageId,
+                              beatsChanged: response.tableNames.has(
+                                  getTableName(schema.beats),
+                              ),
+                          },
+                      )
+                    : undefined;
+            return { response, timelineFocus };
+        },
+    );
 
-    if (type === "undo") response = await performUndo(dbToUse);
-    else response = await performRedo(dbToUse);
-
-    const modifiedPageIds: Set<number> = new Set();
-    const modifiedMarcherIdsForPage: Record<number, Set<number>> = {};
-
-    for (const sqlStatement of response.sqlStatements) {
-        const tableName = tableNameFromSql(sqlStatement);
-        if (
-            tableName === "marcher_pages" &&
-            sqlActionFromSql(sqlStatement) !== "DELETE"
-        ) {
-            const marcherPageId = rowIdFromSql(sqlStatement);
-            const marcherPage = await db.query.marcher_pages.findFirst({
-                where: (marcher_pages, { eq }) =>
-                    eq(marcher_pages.id, marcherPageId),
-            });
-            if (marcherPage) {
-                if (!modifiedMarcherIdsForPage[marcherPage.page_id]) {
-                    modifiedMarcherIdsForPage[marcherPage.page_id] = new Set();
-                }
-                modifiedMarcherIdsForPage[marcherPage.page_id].add(
-                    marcherPage.marcher_id,
-                );
-                modifiedPageIds.add(marcherPage.page_id);
-            }
-        }
-    }
+    if (!response.success)
+        return {
+            pageIdToGoTo: undefined,
+            marcherIdsToSelect: undefined,
+            queriesToInvalidate: undefined,
+            failure: response.skippedFrozenGroup
+                ? { kind: "page-era-frozen" }
+                : {
+                      kind: "error",
+                      message: response.error?.message ?? "unknown error",
+                  },
+        };
 
     const queriesToInvalidate: string[][] = tableNamesToQueryKeys(
         response.tableNames,
     );
 
-    const pageIdToGoTo =
-        modifiedPageIds.size > 0
-            ? Math.max(...Array.from(modifiedPageIds))
-            : undefined;
-    const marcherIdsToSelect = pageIdToGoTo
-        ? modifiedMarcherIdsForPage[pageIdToGoTo]
-        : undefined;
+    if (timelineFocus)
+        return {
+            pageIdToGoTo: timelineFocus.pageIdToGoTo,
+            marcherIdsToSelect: timelineFocus.marcherIdsToSelect,
+            queriesToInvalidate,
+        };
+
+    // Page mode: go to the earliest page the action changed, and select its changed marchers
+    const marcherPageIds = new Set<number>();
+    for (const sqlStatement of response.sqlStatements) {
+        if (
+            tableNameFromSql(sqlStatement) === "marcher_pages" &&
+            sqlActionFromSql(sqlStatement) !== "DELETE"
+        ) {
+            const marcherPageId = rowIdFromSql(sqlStatement);
+            if (marcherPageId >= 0) marcherPageIds.add(marcherPageId);
+        }
+    }
+    const { pageIdToGoTo, marcherIdsToSelect } = await earliestChangedPage(db, [
+        ...marcherPageIds,
+    ]);
 
     return { pageIdToGoTo, marcherIdsToSelect, queriesToInvalidate };
 }

@@ -3,54 +3,71 @@
         "alignment": {
             "alignHorizontally": "Align horizontally",
             "alignVertically": "Align vertically",
-            "cancelUpdates": "Cancel updates to marchers",
-            "distributeHorizontally": "Evenly distribute marchers horizontally",
-            "distributeVertically": "Evenly distribute marchers vertically",
-            "flipHorizontal": "Flip marchers horizontally",
-            "flipVertical": "Flip marchers vertically",
+            "cancelUpdates": "Cancel or deselect",
+            "distributeHorizontally": "Distribute horizontally",
+            "distributeVertically": "Distribute vertically",
+            "flipHorizontal": "Flip horizontally",
+            "flipVertical": "Flip vertically",
             "lockX": "Lock X axis",
-            "lockXOff": "Enable X movement",
+            "lockXOff": "Unlock X movement",
             "lockXOn": "Lock X movement",
             "lockY": "Lock Y axis",
-            "lockYOff": "Enable Y movement",
+            "lockYOff": "Unlock Y movement",
             "lockYOn": "Lock Y movement",
-            "snapToCustomFraction": "Apply snap",
+            "snapToCustomFraction": "Snap to grid",
             "snapToWhole": "Snap to nearest whole"
         },
         "batchEdit": {
             "noNextPage": "Cannot set marcher coordinates to next page. There is no next page",
             "noPreviousPage": "Cannot set marcher coordinates to previous page. There is no previous page",
-            "setAllToNext": "Set all marcher coordinates to next page",
+            "setAllToNext": "Copy positions from next page (all marchers)",
             "setAllToNextSuccess": "Successfully set all {count} marcher coordinates on page {currentPage} to the coordinates of the next page {nextPage}",
-            "setAllToPrevious": "Set all marcher coordinates to previous page",
+            "setAllToPrevious": "Copy positions from previous page (all marchers)",
             "setAllToPreviousSuccess": "Successfully set all {count} marcher coordinates on page {currentPage} to the coordinates of the previous page {previousPage}",
-            "setSelectedToNext": "Set selected marcher(s) coordinates to next page",
+            "setSelectedToNext": "Copy positions from next page (selected)",
             "setSelectedToNextSuccess": "{count, plural, one {Successfully set {count} marcher coordinate on page {currentPage} to the coordinates of the next page {nextPage}} other {Successfully set {count} marcher coordinates on page {currentPage} to the coordinates of the next page {nextPage}}}",
-            "setSelectedToPrevious": "Set selected marcher(s) coordinates to previous page",
+            "setSelectedToPrevious": "Copy positions from previous page (selected)",
             "setSelectedToPreviousSuccess": "{count, plural, other {Successfully set {count} marcher coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}"
         },
         "cursor": {
-            "defaultMode": "Set cursor mode to default",
-            "lineMode": "Create a line out of the selected marchers"
+            "defaultMode": "Selection mode",
+            "lineMode": "Create line"
         },
         "edit": {
             "noRedoAvailable": "No action to redo",
             "noUndoAvailable": "No action to undo",
-            "redo": "Perform redo",
-            "undo": "Perform undo"
+            "redo": "Redo",
+            "undo": "Undo"
         },
         "file": {
-            "importMusicXml": "Import MusicXML file to get measures",
-            "insertAudio": "Load new audio file into the show",
-            "loadDialogue": "Launch load file dialogue",
-            "newDialogue": "Launch new file dialogue",
-            "saveDialogue": "Launch save file dialogue"
+            "closeFile": "Close file",
+            "exportCoordinateSheets": "Export coordinate sheets…",
+            "exportCoordinateSheetsKeywords": "print pdf dot sheets",
+            "exportDrillCharts": "Export drill charts…",
+            "exportDrillChartsKeywords": "print pdf",
+            "exportToMobile": "Export to OpenMarch Mobile…",
+            "exportToMobileKeywords": "phone app upload",
+            "exportVideo": "Export video…",
+            "exportVideoKeywords": "mp4 movie render",
+            "importMusicXml": "Import MusicXML…",
+            "insertAudio": "Add audio file…",
+            "loadDialogue": "Open file…",
+            "newDialogue": "New file…",
+            "openExport": "Export…",
+            "saveDialogue": "Save a copy…"
         },
         "movement": {
-            "moveDown": "Move selected marcher(s) down",
-            "moveLeft": "Move selected marcher(s) left",
-            "moveRight": "Move selected marcher(s) right",
-            "moveUp": "Move selected marcher(s) up"
+            "moveDown": "Nudge down",
+            "moveLeft": "Nudge left",
+            "moveRight": "Nudge right",
+            "moveUp": "Nudge up",
+            "variants": {
+                "coarse": "4 steps",
+                "coarseFree": "4 steps, no snap",
+                "fine": "¼ step, no snap",
+                "free": "no snap",
+                "tenth": "⅒ step, no snap"
+            }
         },
         "navigation": {
             "firstPage": "First page",
@@ -61,14 +78,17 @@
         "playback": {
             "pause": "Pause",
             "play": "Play",
-            "playPause": "Play or pause"
+            "playPage": "Play page once",
+            "playPause": "Play / stop",
+            "toggleMetronome": "Toggle metronome",
+            "toggleLoop": "Loop on / off"
         },
         "select": {
-            "selectAll": "Select all marchers"
+            "selectAll": "Select all"
         },
         "shape": {
-            "applyQuick": "Snaps marchers to shape without creating an editable object",
-            "create": "Creates a new shape with lines or curves that can be edited across pages",
+            "applyQuick": "Snap to shape",
+            "create": "Create shape",
             "createCircle": "Create circle",
             "delete": "Deletes the current selected shapes",
             "noMarchersSelected": "No marchers selected"
@@ -77,17 +97,28 @@
             "error": "Could not swap marchers {marcher1} and {marcher2}",
             "mustSelectTwo": "Can only swap when 2 marchers are selected.",
             "success": "Swapped marchers {marcher1} and {marcher2}",
-            "swap": "Swap marchers"
+            "swap": "Swap two marchers"
+        },
+        "timeline": {
+            "nextPage": "Next page (timeline)",
+            "playPause": "Play / pause audio",
+            "previousPage": "Previous page (timeline)",
+            "tapBeats": "Add {count} temporary beats",
+            "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again"
         },
         "ui": {
-            "focusCanvas": "Focus the canvas",
-            "focusTimeline": "Focus the timeline",
-            "hideNextPaths": "Hide next page dots/paths",
-            "hidePreviousPaths": "Hide previous page dots/paths",
-            "showNextPaths": "Show next page dots/paths",
-            "showPreviousPaths": "Show previous page dots/paths",
-            "toggleNextPaths": "Toggle viewing next page paths",
-            "togglePreviousPaths": "Toggle viewing previous page paths"
+            "exitTimelineFocus": "Done editing timeline",
+            "focusCanvas": "Focus canvas",
+            "focusTimeline": "Edit timeline",
+            "hideNextPaths": "Hide next page paths",
+            "hidePreviousPaths": "Hide previous page paths",
+            "openCommandPalette": "Command palette",
+            "openSettings": "Settings…",
+            "showShortcuts": "Keyboard shortcuts",
+            "showNextPaths": "Show next page paths",
+            "showPreviousPaths": "Show previous page paths",
+            "toggleNextPaths": "Toggle next page paths",
+            "togglePreviousPaths": "Toggle previous page paths"
         }
     },
     "analyticsOptIn": {
@@ -178,6 +209,16 @@
         "discard": "Discard",
         "removeSetting": "Remove setting",
         "save": "Save"
+    },
+    "commandPalette": {
+        "close": "Close",
+        "empty": "No matching commands.",
+        "navigate": "Navigate",
+        "placeholder": "Search commands…",
+        "run": "Run",
+        "suggested": "Suggested",
+        "title": "Command palette",
+        "unavailable": "Not available right now"
     },
     "coordinateRoundingSettings": {
         "custom": "Custom",
@@ -282,7 +323,9 @@
         "individualChartsTooltipDescription": "If this is not checked, one overview drill chart PDF will be created.",
         "marcher": "Marcher: {status}",
         "marcherPagesNotLoaded": "Marcher pages not loaded",
+        "marcherPositionsMissing": "This marcher has no position on some pages, so its chart was skipped.",
         "marchersNotLoaded": "Marchers not loaded",
+        "marchersWithoutPositions": "No positions found for {drillNumbers}.",
         "measuresHeader": "Measure",
         "mobile": "Mobile",
         "mobilePreviewAlt": "OpenMarch mobile export preview",
@@ -303,6 +346,7 @@
         "roundingDenominator": "Coordinate rounding:",
         "sectionAppearancesNotLoaded": "Section appearances not loaded",
         "selectRoundingDenominator": "Select rounding",
+        "showChangedDuringExport": "The show changed during the export. Try again.",
         "sideToSideHeader": "Side to Side",
         "svgExportFailed": "SVG export for {drillNumber} failed with error: {error}",
         "svgGenerationFailed": "SVG Generation Failed: {error}",
@@ -528,6 +572,10 @@
         "server": {
             "description": "The server experienced an error while trying to open this file.",
             "title": "Internal server error"
+        },
+        "tooNew": {
+            "description": "This file was saved by a newer version of OpenMarch. Update OpenMarch to open it. The file has not been changed.",
+            "title": "Update OpenMarch to open this file"
         }
     },
     "fileTab": {
@@ -559,6 +607,7 @@
             "applyCoordinates": "Apply coordinates",
             "cancelUpdates": "Cancel",
             "createShape": "Create Shape",
+            "createShapeTimeline": "Create Shape makes a page shape, which timeline mode doesn't use. Apply the coordinates to move these marchers onto the line, or draw a shape in the Shapes part of the Timeline section.",
             "drawLine": "Draw a line."
         },
         "marcher": {
@@ -574,6 +623,30 @@
             "stepSize": "Step Size",
             "stepSizeWarning": "Step size exceeds threshold",
             "swapMarchers": "Swap marchers",
+            "timeline": {
+                "countOfSelected": "{count} of the {total} selected",
+                "followAgain": "Follow again",
+                "followAgainHint": "Let {who} follow Page {from} again, so editing Page {from} moves them here too",
+                "followAgainHintEarlier": "Let {who} follow earlier pages again",
+                "goToPage": "Go to Page {page}, where these marchers last moved",
+                "goToStart": "Go to the start",
+                "holdFrom": "Hold from Page {page}",
+                "holdFromStart": "Hold from the start",
+                "holdHere": "These marchers hold here",
+                "keepHere": "Keep here",
+                "keepHereHint": "Keep {who} on Page {page}, so editing Page {from} won't move them here",
+                "keepHereHintEarlier": "Keep {who} on Page {page}, so editing earlier pages won't move them here",
+                "keptOnThisPage": "Kept on this page",
+                "movesOnThisPage": "Moves on this page",
+                "namesOfSelected": "{names} ({count} of the {total} selected)",
+                "pageFollows": "Page {page} follows these marchers",
+                "pageFollowsSome": "Page {page} follows some of these marchers",
+                "pagesFollow": "Pages {first}–{last} follow these marchers",
+                "pagesFollowSome": "Pages {first}–{last} follow some of these marchers",
+                "someHoldHere": "Some of these marchers hold here",
+                "someKeptOnThisPage": "Some of these marchers are kept on this page",
+                "theseMarchers": "these marchers"
+            },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}"
         },
@@ -621,6 +694,235 @@
             "moreShapesComingSoon": "More shapes coming soon!",
             "selectShape": "Select Shape",
             "title": "Shapes"
+        },
+        "timeline": {
+            "assign": {
+                "cast": "Cast selected marchers",
+                "castAllCast": "Every selected marcher is already in this transition.",
+                "castHelp": "Puts the selected marchers who aren't in this transition yet ({count}) into the vacant slots nearest to where they stand when it starts, one layer above any other move they have at these beats, so this one wins.",
+                "castHelpFtl": "Puts the selected marchers who aren't in this transition yet ({count}) into the lowest vacant slots, one layer above any other move they have at these beats. Follow the leader places marchers by their order on the trail, not by slot, so the nearest slot means nothing here.",
+                "castNoVacancy": "Selected marchers who need a slot: {count}. Vacant slots: {vacant}. Raise the slot count first.",
+                "castNoneSelected": "Select marchers to cast them into this transition.",
+                "castStole": "Cast on a higher layer, so these marchers now leave their other moves for these beats: {list}",
+                "castStoleItem": "{marcher} (transition {transitions})",
+                "casting": "Casting",
+                "endFor": "End beat for {marcher}",
+                "filled": "{filled} of {count} slots filled",
+                "layerFor": "Layer for {marcher}",
+                "layerHelp": "Where a marcher's moves overlap, the one on the higher layer wins, and the others are stolen for those beats.",
+                "moreVacant": "{count} more vacant slots aren't listed.",
+                "noVacant": "No vacant slots.",
+                "notStolen": "Wins all of its beats.",
+                "recast": "Recast by nearest slot",
+                "recastFtl": "Follow the leader places marchers by their order on the trail, not by slot, so it can't be recast by nearest slot.",
+                "recastHelp": "Gives every marcher in this transition the slot nearest to where it starts, keeping its beats and layer. A later follow-the-leader move that inherits its order from this one will follow the new slot order.",
+                "recastNoMembers": "Nobody is in this transition yet.",
+                "remove": "Remove {marcher} from this transition",
+                "slotFor": "Slot for {marcher}",
+                "slotHelp": "Type a vacant slot to move a marcher there, or an occupied one to trade places with its marcher.",
+                "slotMember": "Slot {slot}: {marcher}",
+                "slots": "Slots",
+                "startFor": "First beat for {marcher}",
+                "stolen": "Stolen from beat {start} to {end} by a higher layer.",
+                "stolenBy": "Stolen from beat {start} to {end} by transition {transition} on a higher layer.",
+                "title": "Slots in transition {id}",
+                "tooManySlots": "Automatic casting handles up to {max} slots. Type each marcher's slot instead.",
+                "vacantList": "Vacant slots, where nobody goes ({count}): {slots}",
+                "vacantSlot": "Slot {slot}: vacant"
+            },
+            "beats": {
+                "range": "{start} to {end}",
+                "showEnd": "the end of the show",
+                "showStart": "the start of the show"
+            },
+            "destination": {
+                "points": "{count} individually placed points",
+                "shape": "{name} ({kind})",
+                "shapeUnnamed": "Shape {id} ({kind})"
+            },
+            "diagnostics": {
+                "dFtlEmpty": "Nobody founds this follow-the-leader move, so there's no trail: the marchers fill the shape from its far end.",
+                "dFtlNonFounding": "This marcher joined or resumed a follow-the-leader move partway, so it isn't part of the trail's order and heads to its target on its own.",
+                "dOrderFallback": "This move couldn't inherit an order from a single earlier move, so it uses slot order.",
+                "dRebase": "This marcher joined or resumed this move partway, so its path was rebased to start where it was.",
+                "dVacant": "Slot {slot} has no marcher assigned, so nobody goes to that place.",
+                "info": "Info",
+                "none": "No diagnostics.",
+                "showNone": "No diagnostics for the whole show.",
+                "showTitle": "Show diagnostics ({count})",
+                "title": "Diagnostics",
+                "transition": "Transition {id}",
+                "warning": "Warning"
+            },
+            "edit": {
+                "bulgeHelp": "From -0.5 to 0.5: 0 is straight and ±0.5 is a half circle. Larger arcs aren't supported, because they could carry a marcher farther from its target than where it started.",
+                "bulgeInput": "Bulge value",
+                "destinationIndividual": "Individual points",
+                "destinationShape": "Shape",
+                "ftlNeedsShape": "Follow the leader follows a path, so it needs a destination shape. Pick a shape first.",
+                "ftlNotBlock": "Follow the leader can't end in a block. Pick a line, freehand, circle or box shape first.",
+                "individualFtl": "Follow the leader needs a shape. Change the path style first to use individual points.",
+                "individualHelp": "Each slot has its own point. Switching from a shape puts each point where the shape put that slot.",
+                "noShapes": "There are no shapes yet. Draw one to use it as a destination.",
+                "noWaypoints": "No waypoints: the trail runs straight onto the shape.",
+                "orderInheritHelp": "Follow the leader keeps the order the marchers had in their previous move.",
+                "orderSlotHelp": "Follow the leader orders the trail by slot number.",
+                "pickShape": "Destination shape",
+                "range": "Beats {start} to {end}",
+                "shapeNoFtl": "{shape}: follow the leader can't end in a block",
+                "shapeTooSmall": "{shape}: holds only {capacity} of {slots} slots",
+                "slotCount": "Slots",
+                "slotCountMin": "At least {min}, because slot {slot} has a marcher assigned.",
+                "slotCountPoints": "New slots start at the last slot's point.",
+                "title": "Edit transition {id}",
+                "waypointAdd": "Add waypoint",
+                "waypointDown": "Move waypoint {n} down",
+                "waypointRemove": "Remove waypoint {n}",
+                "waypointUp": "Move waypoint {n} up",
+                "waypointX": "Waypoint {n} x",
+                "waypointY": "Waypoint {n} y",
+                "waypointsHelp": "Points the trail passes through before it reaches the shape, in field coordinates."
+            },
+            "ftl": {
+                "notMember": "Not a member of the trail (it didn't found this transition)",
+                "place": "Place {place} of {count} (1 is the tail)",
+                "sourceFallback": "Slot order (no single upstream order to inherit)",
+                "sourceInherit": "Inherited from transition {transition}",
+                "sourceSlot": "Slot order",
+                "target": "({x}, {y})"
+            },
+            "label": {
+                "beats": "Beats",
+                "bulge": "Bulge",
+                "destination": "Destination",
+                "layer": "Layer",
+                "memberOrder": "Member order",
+                "orderMode": "Order mode",
+                "orderSource": "Order source",
+                "origin": "Starts from",
+                "pathStyle": "Path style",
+                "progress": "Progress",
+                "slot": "Slot",
+                "span": "Span",
+                "target": "Target",
+                "transition": "Transition",
+                "waypoints": "Waypoints"
+            },
+            "marcherTitle": "{marcher} at beat {beat}",
+            "move": {
+                "counts": "Counts",
+                "delete": "Delete move",
+                "details": "Per-marcher details ({count})",
+                "detailsCapped": "Showing the first {shown} of {count} marchers. Select fewer to see the others.",
+                "endHelp": "To change where they end up, drag marchers on the field at the move's end.",
+                "goToEnd": "Go to end",
+                "marchers": "{count, plural, one {# marcher} other {# marchers}}",
+                "name": "Name",
+                "nameLimit": "{max} characters at most.",
+                "path": "Path",
+                "pathMixed": "Mixed",
+                "paused": "Pause to delete a move.",
+                "selectMarchers": "Select them",
+                "title": "Move"
+            },
+            "notInTimeline": "{marcher} isn't in the timeline yet.",
+            "omitted": "and {count} more selected marchers",
+            "orderMode": {
+                "inherit": "Inherit the upstream order",
+                "slot": "Slot order"
+            },
+            "origin": {
+                "home": "Home ({x}, {y})",
+                "spanFounding": "End of the previous founding span in transition {transition} ({x}, {y})",
+                "spanJoin": "End of the previous join span in transition {transition} ({x}, {y})",
+                "spanResume": "End of the previous resume span in transition {transition} ({x}, {y})",
+                "spanHold": "Where it was holding ({x}, {y})"
+            },
+            "pathStyle": {
+                "arc": "Arc",
+                "direct": "Direct",
+                "follow_the_leader": "Follow the leader"
+            },
+            "progress": {
+                "value": "{percent}%"
+            },
+            "shapes": {
+                "title": "Shapes",
+                "help": "Shapes are formations in field coordinates, with no time. A transition moves its marchers into one. A new shape is drawn through the selected marchers where they stand at the selected page, or in the middle of the field when nobody is selected.",
+                "canvasHelp": "The picked shape is drawn on the field. Drag a round handle to reshape it, or the square handle to move it. Each drag is saved as one change when you let go.",
+                "dragDropped": "That drag wasn't saved, because another shape change was still being saved. Drag it again.",
+                "newKind": "Kind of new shape",
+                "create": "New shape",
+                "none": "No shapes yet.",
+                "pick": "Shape to edit",
+                "named": "{name} ({kind})",
+                "unnamed": "Shape {id} ({kind})",
+                "name": "Name",
+                "usedBy": "Used by transitions {list}.",
+                "unused": "No transition uses this shape.",
+                "usedHelp": "Changes move every marcher heading to this shape.",
+                "kindLabel": "Kind",
+                "kindHelp": "Changing the kind redraws the shape in the area the old one covered. A box or circle becomes an open freehand path along its outline, so its two ends are different places.",
+                "kindInUse": "Transitions {list} use this shape. Changing its kind spreads their slots over the new shape, so their marchers end in new places.",
+                "kindNoFtl": "It can't become a block: transition {list} follows the leader into it, and a trail can't end on a block.",
+                "kinds": {
+                    "line": "Line",
+                    "freehand": "Freehand",
+                    "circle": "Circle",
+                    "box": "Box",
+                    "block": "Block"
+                },
+                "points": "Points",
+                "pointsHelp": "Slots are spread evenly along the path, from the first point to the last.",
+                "pointX": "Point {n} x",
+                "pointY": "Point {n} y",
+                "pointUp": "Move point {n} up",
+                "pointDown": "Move point {n} down",
+                "pointRemove": "Remove point {n}",
+                "pointAdd": "Add point",
+                "pointsMin": "A freehand path needs at least two points.",
+                "lineStart": "Start",
+                "lineEnd": "End",
+                "x": "{what} x",
+                "y": "{what} y",
+                "center": "Center",
+                "radius": "Radius",
+                "startAngle": "Start angle (degrees)",
+                "direction": "Direction",
+                "counterclockwise": "Counterclockwise",
+                "clockwise": "Clockwise",
+                "circleHelp": "Slots are spread evenly around the circle from the start angle. Angles and directions are in field coordinates, measured from +x toward +y.",
+                "origin": "Origin",
+                "width": "Width",
+                "height": "Height",
+                "boxHelp": "Slots are spread evenly around the outline, starting at the origin.",
+                "rows": "Rows",
+                "cols": "Columns",
+                "spacing": "Spacing",
+                "cells": "{rows} × {cols} = {cells} places, filled row by row from the origin.",
+                "cellsNeeded": "Transition {list} has {slots} slots, so the block needs at least {slots} places.",
+                "noPositions": "None of the selected marchers is in the timeline yet, so there is nowhere to draw the shape through. Select marchers that are, or nobody to draw it in the middle of the field.",
+                "delete": "Delete shape",
+                "deleteInUse": "It can't be deleted while transitions {list} use it. Give them another destination first."
+            },
+            "slot": {
+                "value": "{slot} of {count}"
+            },
+            "span": {
+                "founding": "Founding",
+                "foundingHelp": "In this transition from its start, so its path starts from the marcher's position at the start of the transition.",
+                "hold": "Hold",
+                "holdHelp": "Not moving: no move is active, so the marcher stays where it is.",
+                "join": "Join",
+                "joinHelp": "Joined this transition after it started, so its path starts from where the marcher was when it joined.",
+                "resume": "Resume",
+                "resumeHelp": "Back in this transition after another move took over, so its path starts from where the marcher was."
+            },
+            "title": "Timeline",
+            "transition": {
+                "onTimeline": "{id} on {timeline}",
+                "plain": "{id}"
+            }
         },
         "title": "Inspector"
     },
@@ -808,6 +1110,22 @@
         "title": "Marchers",
         "updateButton": "Update Marcher",
         "year": "Year"
+    },
+    "marcherPages": {
+        "carryForward": {
+            "only": "Only Page {page}",
+            "onlyEdited": "Only the edited pages",
+            "onePage": "Page {page} followed (it was a copy)",
+            "pages": "Pages {first}–{last} followed (they were copies)"
+        },
+        "moveThemToo": {
+            "action": "Move them too",
+            "laterMoves": "{names} have their own later moves, so they kept their spots",
+            "namesAndOthers": "{first}, {second} and {count} others",
+            "oneMarcher": "{names} has its own move on Page {page}, so it kept its spot",
+            "onePage": "{names} have their own move on Page {page}, so they kept their spot",
+            "withFollowed": "{followed}. {kept}"
+        }
     },
     "measures": {
         "createFailed": "Failed to create measures - {error}",
@@ -1032,24 +1350,34 @@
         }
     },
     "settings": {
+        "appearance": "Appearance",
+        "appearance.description": "How OpenMarch looks.",
         "database": "Database",
+        "database.description": "Repair the file of the show that's open.",
+        "database.noShowOpen": "Open a show to repair its file.",
         "developer": "Developer Settings",
+        "developer.description": "Tools for translating and debugging OpenMarch.",
         "developer.refreshNotice": "Please <a>reload the app</a> to update settings.",
         "general": "General",
         "general.appearance": "Appearance",
         "general.appearance.dark": "Dark",
         "general.appearance.light": "Light",
         "general.automaticUpdates": "Automatically download and install updates",
+        "general.description": "Language and other app-wide preferences.",
         "general.language": "Language",
         "general.openView3dWithShow": "Open 3D View when a show opens",
         "general.showFullDatabasePath": "Show full file path",
+        "general.showFullDatabasePath.description": "Show the full path of the open file in the title bar instead of just its name.",
         "mouse": "Mouse & Trackpad",
+        "mouse.description": "How the mouse and trackpad move around the field.",
         "mouse.panSensitivity": "Pan sensitivity",
         "mouse.trackpadMode": "Trackpad mode (recommended for macOS)",
         "mouse.trackpadPanSensitivity": "Trackpad pan sensitivity",
         "mouse.zoomSensitivity": "Zoom sensitivity",
+        "noResults": "No settings match.",
         "plugins": "Plugins",
         "plugins.community": "Community",
+        "plugins.description": "Add features made by the community.",
         "plugins.install": "Install",
         "plugins.installed": "Installed",
         "plugins.installFailed": "Install Failed",
@@ -1075,6 +1403,7 @@
         "privacy.analytics.enabled": "You're sharing usage analytics. Thank you for helping us improve OpenMarch for everyone.",
         "privacy.analytics.feedback.link": "submit feedback",
         "privacy.analytics.toggle": "Enable analytics",
+        "privacy.description": "Choose what OpenMarch shares to help improve the app.",
         "repairDotsFile": "Repair DOTS file",
         "repairDotsFile.cancel": "Cancel",
         "repairDotsFile.confirm": "Repair",
@@ -1083,6 +1412,33 @@
         "repairDotsFile.repairing": "Repairing...",
         "repairDotsFile.success": "Database repaired successfully. Reloading...",
         "repairDotsFile.title": "Repair DOTS file",
+        "search": "Search settings",
+        "shortcuts": "Keyboard shortcuts",
+        "shortcuts.add": "Add shortcut for {action}",
+        "shortcuts.cancel": "Cancel",
+        "shortcuts.clearSearch": "Clear search",
+        "shortcuts.category.alignment": "Alignment",
+        "shortcuts.category.batchEdit": "Batch editing",
+        "shortcuts.category.cursor": "Cursor mode",
+        "shortcuts.category.edit": "Edit",
+        "shortcuts.category.file": "File",
+        "shortcuts.category.movement": "Movement",
+        "shortcuts.category.navigation": "Navigation",
+        "shortcuts.category.playback": "Playback",
+        "shortcuts.category.select": "Selection",
+        "shortcuts.category.shape": "Shapes",
+        "shortcuts.category.timeline": "Timeline",
+        "shortcuts.category.ui": "Interface",
+        "shortcuts.conflict": "{binding} is already used by {actions}.",
+        "shortcuts.description": "Change the keys for any action. Changes apply right away.",
+        "shortcuts.noResults": "No shortcuts match your search.",
+        "shortcuts.reassign": "Reassign",
+        "shortcuts.recording": "Press keys… (Esc to cancel)",
+        "shortcuts.remove": "Remove {binding}",
+        "shortcuts.reset": "Reset {action} to default",
+        "shortcuts.resetAll": "Reset all",
+        "shortcuts.search": "Search shortcuts",
+        "shortcuts.tapBeats": "Tap beats",
         "title": "Settings",
         "tolgeeApiKeyPlaceholder": "Tolgee API Key",
         "tolgeeDevToolsToggle": "Tolgee In-Context Translating"
@@ -1110,8 +1466,102 @@
         "controls": {
             "label": "Playback Controls"
         },
+        "edit": {
+            "passThrough": {
+                "catchUp": "Now catches up to the set at the end of {caughtUp}",
+                "keepStops": {
+                    "many": "Keep Pages {first}–{last} as stops",
+                    "one": "Keep Page {page} as a stop",
+                    "unnamed": "Keep them as stops"
+                },
+                "noLongerStop": {
+                    "many": "Pages {first}–{last} are no longer stops",
+                    "one": "Page {page} is no longer a stop",
+                    "unnamed": "The sets inside this move are no longer stops"
+                },
+                "through": "Now moves straight through {through}",
+                "throughAndCatchUp": "Now moves straight through {through}, then catches up to the set at the end of {caughtUp}"
+            }
+        },
+        "errors": {
+            "assignmentDoesNotFit": "That marcher's move doesn't fit the transition: it must stay inside the transition's range, and use a slot the transition has.",
+            "assignmentOutsideTransition": "A marcher's move must stay inside its transition. Adjust the transition's range, or the move's.",
+            "assignmentOverlap": "That marcher already has a move on the same layer at those beats. Put one of them on a different layer, or move it.",
+            "blockTooSmall": "The block doesn't have enough places for every slot. Add rows or columns, or use fewer slots.",
+            "database": "The change couldn't be saved, so nothing was changed. Try again, and report it if it keeps happening.",
+            "destinationInvalid": "A destination isn't valid. Destinations must be finite points on the field.",
+            "destinationShapeUnsuitable": "That destination doesn't fit the transition. A follow-the-leader transition can't end on a block, and a block needs at least as many places as the transition has slots.",
+            "followLeaderBlock": "A follow-the-leader transition can't end on a block. Choose a line, curve, circle or box instead.",
+            "followLeaderNeedsShape": "A follow-the-leader transition needs a shape to follow.",
+            "legacyConvertedTimeline": "This file was converted to timelines by an earlier development build, which put several page moves in one timeline, so it can't be edited. Convert it again: open its backup (the file saved next to it before the conversion), or run convertPages('{ replace: true }') from the developer console.",
+            "notReady": "The timeline is still loading. Try again in a moment.",
+            "numberOutOfRange": "A number is out of range. Beats, layers, slot counts and positions must be whole or finite numbers within the allowed limits.",
+            "pathParamsInvalid": "That path setting isn't valid. An arc's bulge can be at most half the distance between its ends, and waypoints must be points on the field.",
+            "shapeInvalid": "That shape isn't valid. Its points must be on the field, a line needs two different end points, a freehand path needs some length, and a circle, box or block needs a positive size.",
+            "shapeOrDestinations": "A transition uses either a shape or one individual destination for every slot, never both and never fewer.",
+            "slotOutOfRange": "That slot doesn't exist. A transition's slots are numbered from 0 up to one less than its slot count.",
+            "transitionSpansTimeline": "A transition must span its whole timeline, starting and ending with it. Change the timeline's range instead, and its transitions move with it.",
+            "unknown": "The timeline couldn't make that change."
+        },
+        "holdMarks": {
+            "holds": "Selected marchers hold from Page {page}",
+            "holdsFromStart": "Selected marchers hold from the start",
+            "holdsFromStartHint": "They stand where they started",
+            "holdsHere": "Selected marchers hold on this page",
+            "holdsHereHint": "They stand where their last move left them",
+            "holdsHint": "They stand where Page {page} left them",
+            "kept": "Selected marchers are kept here",
+            "keptHint": "They stay here when earlier pages change",
+            "mixed": "Some selected marchers hold from Page {page}",
+            "mixedFromStart": "Some selected marchers hold from the start",
+            "mixedHere": "Some selected marchers hold on this page",
+            "mixedHint": "Some have their own move here",
+            "moves": "Selected marchers move on this page",
+            "movesHint": "They have their own move here"
+        },
+        "keep": {
+            "chain": {
+                "ariaLabel": "Page {page}: {label}. {hint}",
+                "followHint": "Click to follow Page {from} again",
+                "followHintEarlier": "Click to follow earlier pages again",
+                "keep": "Keep {count} marchers on Page {page}",
+                "keepHint": "They won't follow Page {from} any more",
+                "keepHintEarlier": "They won't follow earlier pages any more",
+                "keepHintOne": "It won't follow Page {from} any more",
+                "keepNamed": "Keep {names} on Page {page}",
+                "keepOne": "Keep 1 marcher on Page {page}",
+                "kept": "{count} marchers kept on Page {page}",
+                "keptNamed": "{names} kept on Page {page}",
+                "keptOne": "1 marcher kept on Page {page}",
+                "mixed": "{kept} of the {total} selected are kept on Page {page}",
+                "mixedHint": "Click to keep the other {count} too",
+                "mixedHintOne": "Click to keep the other one too",
+                "mixedNamed": "{kept} of the {total} selected are kept on Page {page} ({names})",
+                "mixedNamedOne": "1 of the {total} selected is kept on Page {page} ({names})",
+                "mixedOne": "1 of the {total} selected is kept on Page {page}"
+            },
+            "field": {
+                "kept": "Kept on Page {page} · won't follow Page {from}",
+                "keptEarlier": "Kept on Page {page} · won't follow earlier pages"
+            },
+            "followed": {
+                "onePage": "Page {page} followed",
+                "only": "Only Page {page}",
+                "pages": "Pages {first}–{last} followed"
+            },
+            "names": {
+                "many": "{first}, {second} and {count} others",
+                "three": "{first}, {second} and {third}",
+                "two": "{first} and {second}"
+            }
+        },
         "label": "Timeline",
         "masterVolume": "Master Volume",
+        "moveDeleted": {
+            "message": "Deleted {label}",
+            "withPage": "Deleted {label} · Page {pages} changed",
+            "withPages": "Deleted {label} · Pages {pages} changed"
+        },
         "music": {
             "add": "Add Music"
         },
@@ -1119,8 +1569,11 @@
             "contextMenu": {
                 "delete": "Delete",
                 "deleteInPlace": "In Place",
+                "deleteInPlaceTimelineTooltip": "Delete this page. Later pages keep their timing and look.",
                 "deleteInPlaceTooltip": "Delete this page and keep later pages where they are.",
                 "deletePage": "Delete",
+                "deleteWithMoves": "With Its Moves",
+                "deleteWithMovesTooltip": "Delete this page and its moves. Later pages that held its positions change.",
                 "deleteYank": "Yank",
                 "deleteYankTooltip": "Delete this page and pull later pages back by its length.",
                 "subsetToggle": "Subset",
@@ -1135,6 +1588,11 @@
         "pages": "Pages",
         "perspective": {
             "label": "Perspective"
+        },
+        "rangeMenu": {
+            "deleteWithMoves": "Delete page and its moves",
+            "followAgain": "Let selected marchers follow again",
+            "keepHere": "Keep selected marchers here"
         }
     },
     "titlebar": {

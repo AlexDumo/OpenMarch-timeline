@@ -14,6 +14,8 @@ node_modules
 dist
 dist-ssr
 dist-electron
+dist-browser
+dist-browser-host
 release
 *.local
 
@@ -60,3 +62,6 @@ packages/metronome/
 
 *.tmp.dots
 *.tmp.dots-journal
+
+# Claude Code work trees (claude --worktree, scripts/timeline)
+.claude/worktrees/

@@ -25,6 +25,7 @@ words:
   - toplevel
   - worktree
   - worktrees
+  - Ableton
   - acceelerandos
   - ADDME
   - aleksi
@@ -40,13 +41,14 @@ words:
   - barlines
   - bbox
   - behance
-  - Bézier
   - BFSL
   - Bilby
+  - Bitwig
   - blockmap
   - blockqoute
   - bostick
   - BRHS
+  - Bézier
   - canvas
   - Catmull
   - ccpa
@@ -56,14 +58,17 @@ words:
   - Cinnaminson
   - clsx
   - codegen
+  - contenteditable
   - colours
   - Configuración
   - cooldown
   - couldn
+  - Cubase
   - customizer
   - dbstat
   - DELME
   - Dhruva
+  - domcontentloaded
   - DMEA
   - dorico
   - dorny
@@ -89,11 +94,16 @@ words:
   - GLHF
   - hexdigest
   - Hipp
+  - Hoverable
   - idioma
   - importmap
   - Invalidators
+  - keycap
+  - keycaps
   - keyframed
+  - keymap
   - launchpage
+  - libsql
   - lightridge
   - localappdata
   - Loudoun
@@ -113,20 +123,22 @@ words:
   - musescore
   - musicxml
   - Nativewind
+  - noopener
   - notarytool
   - NSIS
   - nums
   - NURBS
   - oklch
+  - ONTHEMOVE
   - openmarch
   - openmarchdev
   - OTMDEMO
-  - ONTHEMOVE
   - overscan
   - pacman
   - pagewidth
   - paperplane
   - pfps
+  - playhead
   - PKCE
   - Português
   - posthog
@@ -135,8 +147,8 @@ words:
   - pwsh
   - Pyware
   - Rcoords
-  - rels
   - recents
+  - rels
   - rgba
   - ritardandos
   - rootfile
@@ -171,7 +183,10 @@ words:
   - toks
   - tolgee
   - Tolgee
+  - Tinykeys
+  - tinykeys
   - Topbar
+  - toplevel
   - trackpad
   - trackpads
   - Tribbiani
@@ -202,6 +217,8 @@ words:
   - Winterguard
   - Woodgrove
   - workerd
+  - worktree
+  - worktrees
   - xlink
   - XMLID
   - yeskunallumami
@@ -211,6 +228,9 @@ words:
   - Zustand
   - 日本語
 ignorePaths:
+  # Timeline spec and reference suite: external documents, kept verbatim
+  - docs/timeline/spec.md
+  - docs/timeline/ref/**
   - node_modules/**
   - docs/3d/ref/**
   - "**/view3d/vendor/**"
@@ -235,6 +255,9 @@ ignorePaths:
   - patches/canvas.patch
   - apps/desktop/e2e/Dockerfile
   - "**/dist-electron/**"
+  - "**/dist-browser/**"
+  - "**/dist-browser-host/**"
+  - apps/desktop/web/dist/**
   - "**/wasm/pkg/**"
   - "**/release/**"
   - "*.svg"

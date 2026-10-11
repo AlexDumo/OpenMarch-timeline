@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { T } from "@tolgee/react";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
+import { FILE_TOO_NEW_STATUS } from "@om-electron/database/fileVersion";
+import { OPEN_STOPPED_STATUS } from "@om-electron/database/convertOnOpenGate";
 
 const FILE_ERROR_GUIDE_URLS = {
     forbidden:
@@ -44,7 +46,8 @@ export function useLoadFileErrorHandler() {
     useEffect(() => {
         const unsubscribe = window.electron.onLoadFileResponse(
             (resCode: number) => {
-                if (resCode !== 200) {
+                // OPEN_STOPPED_STATUS: the main process already showed a dialog (convert on open).
+                if (resCode !== 200 && resCode !== OPEN_STOPPED_STATUS) {
                     switch (resCode) {
                         case 403:
                             setTitle("fileAccessDialogError.forbidden.title");
@@ -70,6 +73,12 @@ export function useLoadFileErrorHandler() {
                                         }
                                     />
                                 </>,
+                            );
+                            break;
+                        case FILE_TOO_NEW_STATUS:
+                            setTitle("fileAccessDialogError.tooNew.title");
+                            setContent(
+                                <T keyName="fileAccessDialogError.tooNew.description" />,
                             );
                             break;
                         case 500:

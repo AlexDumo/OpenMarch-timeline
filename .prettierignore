@@ -1,6 +1,8 @@
 # Build outputs
 **/dist/
 **/dist-electron/
+**/dist-browser/
+**/dist-browser-host/
 **/release/
 **/build/
 **/node_modules/
@@ -133,3 +135,6 @@ docs/3d/ref/
 **/view3d/assets/om-pose/
 # baked instrument meshes, written by apps/desktop/scripts/view3d-assets/export-horn.py
 **/view3d/assets/instruments/*.json
+# Timeline spec and reference suite: external documents, kept verbatim
+docs/timeline/spec.md
+docs/timeline/ref/

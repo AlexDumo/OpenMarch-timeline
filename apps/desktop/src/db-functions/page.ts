@@ -22,14 +22,20 @@ import {
     updateUtilityInTransaction,
 } from "@/db-functions";
 import { schema } from "@/global/database/db";
+import {
+    timelineModeInTransaction,
+    withTimelinePageRipple,
+} from "./timelineRipple";
 import { assert } from "@/utilities/utils";
 import { WorkspaceSettings } from "@/settings/workspaceSettings";
 import {
     _createFromTempoGroupInTransaction,
     tempoGroupFromWorkspaceSettings,
 } from "@/components/music/TempoGroup/TempoGroup";
+import { FIRST_PAGE_ID, realDatabasePageToDatabasePage } from "./rowMappers";
+import { moveTagAppearancesOffPagesInTransaction } from "./tagAppearancePageDelete";
 
-export const FIRST_PAGE_ID = 0;
+export { FIRST_PAGE_ID, realDatabasePageToDatabasePage };
 
 /** How a page is represented in the database */
 /** Represents a page in the database */
@@ -44,15 +50,6 @@ export interface DatabasePage {
     start_beat: number;
 }
 type RealDatabasePage = typeof schema.pages.$inferSelect;
-
-export const realDatabasePageToDatabasePage = (
-    page: RealDatabasePage,
-): DatabasePage => {
-    return {
-        ...page,
-        is_subset: page.is_subset === 1,
-    };
-};
 
 export interface NewPageArgs {
     start_beat: number;
@@ -219,6 +216,8 @@ const _createMarcherPages = async ({
                         ),
                     });
 
+                // A new page holds where the previous one ends. Its pathway isn't copied: that
+                // curve is the previous page's move, and sharing it would replay it here.
                 for (const marcherPage of previousPageMarcherPages)
                     newMarcherPages.push({
                         marcher_id: marcherPage.marcher_id,
@@ -226,9 +225,6 @@ const _createMarcherPages = async ({
                         x: marcherPage.x,
                         y: marcherPage.y,
                         notes: marcherPage.notes,
-                        path_data_id: marcherPage.path_data_id,
-                        path_start_position: marcherPage.path_start_position,
-                        path_end_position: marcherPage.path_end_position,
                     });
             } else {
                 for (const marcher of allMarchers) {
@@ -294,15 +290,19 @@ export const createPagesInTransaction = async ({
             pageBeatMap.get(a.id)!.position - pageBeatMap.get(b.id)!.position,
     );
 
-    const createdPageIds = createdPages.map((page) => page.id);
-    await tx
-        .delete(schema.marcher_pages)
-        .where(inArray(schema.marcher_pages.page_id, createdPageIds));
+    // Timeline mode: pages don't own positions and marcher pages are frozen (P9.5), so a new page
+    // gets no marcher pages. The timeline ripple (`withTimelinePageRipple`) handles the motion.
+    if (!(await timelineModeInTransaction(tx))) {
+        const createdPageIds = createdPages.map((page) => page.id);
+        await tx
+            .delete(schema.marcher_pages)
+            .where(inArray(schema.marcher_pages.page_id, createdPageIds));
 
-    await _createMarcherPages({
-        tx,
-        sortedNewPages,
-    });
+        await _createMarcherPages({
+            tx,
+            sortedNewPages,
+        });
+    }
 
     return createdPages.map(realDatabasePageToDatabasePage);
 };
@@ -327,12 +327,13 @@ export async function createPages({
     const transactionResult = await transactionWithHistory(
         db,
         "createPages",
-        async (tx) => {
-            return await createPagesInTransaction({
-                newPages,
-                tx,
-            });
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, async () => {
+                return await createPagesInTransaction({
+                    newPages,
+                    tx,
+                });
+            }),
     );
     return transactionResult;
 }
@@ -404,12 +405,13 @@ export async function updatePages({
     const transactionResult = await transactionWithHistory(
         db,
         "updatePages",
-        async (tx) => {
-            return await updatePagesInTransaction({
-                modifiedPages,
-                tx,
-            });
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, async () => {
+                return await updatePagesInTransaction({
+                    modifiedPages,
+                    tx,
+                });
+            }),
     );
     return transactionResult;
 }
@@ -541,14 +543,24 @@ export const deletePagesInTransaction = async ({
         "Last page before deletion not found",
     );
 
-    await tx
-        .delete(schema.marcher_pages)
-        .where(inArray(schema.marcher_pages.page_id, Array.from(pageIds)));
+    // Before the rows go: their tag appearances would cascade away with them
+    await moveTagAppearancesOffPagesInTransaction({ tx, pageIds });
+
+    const deleteMarcherPages = () =>
+        tx
+            .delete(schema.marcher_pages)
+            .where(inArray(schema.marcher_pages.page_id, Array.from(pageIds)));
+    // Timeline mode: marcher pages are frozen (P9.5), and the freeze triggers only let a row go
+    // once its page is gone. So the pages go first; their rows follow through the foreign-key
+    // cascade, or the delete after it where foreign keys are off.
+    const timelineMode = await timelineModeInTransaction(tx);
+    if (!timelineMode) await deleteMarcherPages();
 
     const deletedPages = await tx
         .delete(schema.pages)
         .where(inArray(schema.pages.id, Array.from(pageIds)))
         .returning();
+    if (timelineMode) await deleteMarcherPages();
 
     const lastPageAfterDeletion = await getLastPage({ tx });
     assert(lastPageAfterDeletion != null, "Last page after deletion not found");
@@ -614,28 +626,33 @@ export async function deletePages({
     const response = await transactionWithHistory(
         db,
         "deletePages",
-        async (tx) => {
-            const response = await deletePagesInTransaction({
-                pageIds,
-                tx,
-            });
-            await ensureSecondBeatHasPage({ tx });
-            return response;
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, async () => {
+                const response = await deletePagesInTransaction({
+                    pageIds,
+                    tx,
+                });
+                await ensureSecondBeatHasPage({ tx });
+                return response;
+            }),
     );
     return response;
 }
 
-export async function deletePageYank({
+/**
+ * Deletes a page and pulls every later page back by its length (Yank), inside a
+ * `transactionWithHistory`. In timeline mode the caller wraps it in `withTimelinePageRipple`.
+ */
+export async function deletePageYankInTransaction({
     pageId,
-    db,
+    tx,
 }: {
     pageId: number;
-    db: DbConnection;
+    tx: DbTransaction;
 }): Promise<DatabasePage[]> {
     if (pageId === FIRST_PAGE_ID) return [];
 
-    const pagesBeforeDeletion = await getPagesInOrder({ tx: db });
+    const pagesBeforeDeletion = await getPagesInOrder({ tx });
     const pageToDeleteIndex = pagesBeforeDeletion.findIndex(
         (p) => p.id === pageId,
     );
@@ -648,39 +665,51 @@ export async function deletePageYank({
         : 0;
     const laterPages = pagesBeforeDeletion.slice(pageToDeleteIndex + 1);
 
-    const response = await transactionWithHistory(
+    const response = await deletePagesInTransaction({
+        pageIds: new Set([pageId]),
+        tx,
+    });
+
+    if (yankLength > 0) {
+        for (const page of laterPages) {
+            const targetBeat = await tx.query.beats.findFirst({
+                where: eq(
+                    schema.beats.position,
+                    page.beatObject.position - yankLength,
+                ),
+            });
+            assert(
+                targetBeat != null,
+                `Could not find target beat for yanked page ${page.id}`,
+            );
+            await tx
+                .update(schema.pages)
+                .set({ start_beat: targetBeat.id })
+                .where(eq(schema.pages.id, page.id));
+        }
+    }
+
+    await ensureSecondBeatHasPage({ tx });
+    return response;
+}
+
+export async function deletePageYank({
+    pageId,
+    db,
+}: {
+    pageId: number;
+    db: DbConnection;
+}): Promise<DatabasePage[]> {
+    if (pageId === FIRST_PAGE_ID) return [];
+    return await transactionWithHistory(
         db,
         "deletePageYank",
-        async (tx) => {
-            const response = await deletePagesInTransaction({
-                pageIds: new Set([pageId]),
+        async (tx) =>
+            await withTimelinePageRipple(
                 tx,
-            });
-
-            if (yankLength > 0) {
-                for (const page of laterPages) {
-                    const targetBeat = await tx.query.beats.findFirst({
-                        where: eq(
-                            schema.beats.position,
-                            page.beatObject.position - yankLength,
-                        ),
-                    });
-                    assert(
-                        targetBeat != null,
-                        `Could not find target beat for yanked page ${page.id}`,
-                    );
-                    await tx
-                        .update(schema.pages)
-                        .set({ start_beat: targetBeat.id })
-                        .where(eq(schema.pages.id, page.id));
-                }
-            }
-
-            await ensureSecondBeatHasPage({ tx });
-            return response;
-        },
+                async () => await deletePageYankInTransaction({ pageId, tx }),
+            ),
     );
-    return response;
 }
 
 /**
@@ -703,13 +732,14 @@ export const createLastPage = async ({
     const transactionResult = await transactionWithHistory(
         db,
         "createLastPage",
-        async (tx) => {
-            return await createLastPageInTransaction({
-                tx,
-                newPageCounts,
-                createNewBeats,
-            });
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, async () => {
+                return await createLastPageInTransaction({
+                    tx,
+                    newPageCounts,
+                    createNewBeats,
+                });
+            }),
     );
     return transactionResult;
 };
@@ -1124,29 +1154,31 @@ export const createTempoGroupAndPageFromWorkspaceSettings = async ({
     const result = await transactionWithHistory(
         db,
         "createDefaultTempoGroupAndPage",
-        async (tx) => {
-            const lastBeat = await getLastBeat({ db });
-            assert(lastBeat != null, "Last beat not found");
-            await _createFromTempoGroupInTransaction({
-                tx,
-                tempoGroup,
-                endTempo: undefined,
-                startingPosition: lastBeat.position + 1,
-            });
-            const nextBeat = await getNextBeatToStartPageOn(tx);
-            if (!nextBeat) throw new Error("Next beat not found");
-            const createdPages = await createPagesInTransaction({
-                tx,
-                newPages: [{ start_beat: nextBeat.id, is_subset: false }],
-            });
-            await updateUtilityInTransaction({
-                tx,
-                args: {
-                    last_page_counts: workspaceSettings.defaultNewPageCounts,
-                },
-            });
-            return createdPages[0];
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, async () => {
+                const lastBeat = await getLastBeat({ db });
+                assert(lastBeat != null, "Last beat not found");
+                await _createFromTempoGroupInTransaction({
+                    tx,
+                    tempoGroup,
+                    endTempo: undefined,
+                    startingPosition: lastBeat.position + 1,
+                });
+                const nextBeat = await getNextBeatToStartPageOn(tx);
+                if (!nextBeat) throw new Error("Next beat not found");
+                const createdPages = await createPagesInTransaction({
+                    tx,
+                    newPages: [{ start_beat: nextBeat.id, is_subset: false }],
+                });
+                await updateUtilityInTransaction({
+                    tx,
+                    args: {
+                        last_page_counts:
+                            workspaceSettings.defaultNewPageCounts,
+                    },
+                });
+                return createdPages[0];
+            }),
     );
     return result;
 };

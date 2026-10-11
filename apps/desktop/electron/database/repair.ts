@@ -6,12 +6,20 @@ import * as path from "path";
 import { app } from "electron";
 import { getOrm } from "./db";
 import { DrizzleMigrationService } from "./services/DrizzleMigrationService";
+import { liftPageEraFreezeTriggers } from "./migrations/triggers";
+import {
+    applyFileVersionDecision,
+    fileTooNewMessage,
+    isSupportedUserVersion,
+    MAX_SUPPORTED_USER_VERSION,
+    readUserVersion,
+} from "./fileVersion";
 
 export const initializeAndMigrateDatabase = async (
     newDb: DatabaseSync,
 ): Promise<void> => {
-    // Set user version to 7 (indicates Drizzle migration system)
-    newDb.prepare("PRAGMA user_version = 7").run();
+    // A new, empty file: set its version (7, the Drizzle-era page model).
+    applyFileVersionDecision(newDb, true);
 
     const drizzleDb = getOrm(newDb);
     const migrator = new DrizzleMigrationService(drizzleDb, newDb);
@@ -27,6 +35,40 @@ export const initializeAndMigrateDatabase = async (
     await DrizzleMigrationService.initializeDatabase(drizzleDb, newDb);
 };
 
+/**
+ * Tables that must be copied in this order, after every other table. Foreign keys are off during
+ * the copy, but the timeline invariant triggers still run on each insert and read the parent rows:
+ * a transition must lie inside its timeline and use an existing shape, and destinations and
+ * assignments must fit their transition. Marchers come before the assignments that name them.
+ */
+const DEPENDENT_TABLE_COPY_ORDER = [
+    "marchers",
+    "timelines",
+    "timeline_shapes",
+    "timeline_transitions",
+    "timeline_slot_destinations",
+    "timeline_assignments",
+    // A kept marker after the assignment it marks
+    "timeline_kept_assignments",
+];
+
+/**
+ * Orders tables for copying: tables without a place in `DEPENDENT_TABLE_COPY_ORDER` keep their
+ * original order and come first, then the listed tables in their listed order.
+ */
+export const orderTablesForCopy = <T extends { name: string }>(
+    tables: readonly T[],
+): T[] => {
+    const rank = (name: string) => DEPENDENT_TABLE_COPY_ORDER.indexOf(name);
+    return tables
+        .map((table, index) => ({ table, index }))
+        .sort((a, b) => {
+            const byRank = rank(a.table.name) - rank(b.table.name);
+            return byRank !== 0 ? byRank : a.index - b.index;
+        })
+        .map(({ table }) => table);
+};
+
 export const copyDataFromOriginalDatabase = (
     originalDb: DatabaseSync,
     newDb: DatabaseSync,
@@ -37,6 +79,8 @@ export const copyDataFromOriginalDatabase = (
         "history_undo",
         "history_redo",
         "history_stats",
+        // Bookkeeping: the copy logs its own rows, which repairDatabase then clears
+        "timeline_change_log",
     ]);
 
     const singleRowTables = new Set([
@@ -52,6 +96,34 @@ export const copyDataFromOriginalDatabase = (
         )
         .all() as Array<{ name: string }>;
 
+    // The workspace settings are copied first, so a timeline-mode file's flag is on before its
+    // frozen page-era rows are copied. The freeze (P9.5) is lifted for the copy and put back
+    // whatever happens, even if detaching fails.
+    let restoreFreeze: (() => void) | undefined;
+    try {
+        restoreFreeze = liftPageEraFreezeTriggers(newDb);
+        copyTablesFromAttachedOriginal(
+            originalDb,
+            newDb,
+            originalDbPath,
+            tables,
+            excludedTables,
+            singleRowTables,
+        );
+    } finally {
+        restoreFreeze?.();
+    }
+};
+
+/** Attaches the original file to `newDb`, copies its tables, and always detaches it. */
+const copyTablesFromAttachedOriginal = (
+    originalDb: DatabaseSync,
+    newDb: DatabaseSync,
+    originalDbPath: string,
+    tables: Array<{ name: string }>,
+    excludedTables: Set<string>,
+    singleRowTables: Set<string>,
+): void => {
     // Attach the original database to the new database connection
     const attachName = "original_db";
     newDb.prepare(`ATTACH DATABASE ? AS ${attachName}`).run(originalDbPath);
@@ -65,7 +137,7 @@ export const copyDataFromOriginalDatabase = (
             );
         }
         // Copy data from each table
-        for (const { name: tableName } of tables) {
+        for (const { name: tableName } of orderTablesForCopy(tables)) {
             if (
                 excludedTables.has(tableName) ||
                 singleRowTables.has(tableName)
@@ -229,6 +301,15 @@ export const repairDatabase = async (originalDbPath: string) => {
         // Open the copied source database so repair does not hold the active file.
         originalDb = new DatabaseSync(sourceDbPath, { readOnly: true });
 
+        // Refuse a file from a newer release: its tables may not match this
+        // build's schema, and the repaired copy would otherwise be written at
+        // an older version (ADR 0001 §6). The original is never written to.
+        const sourceVersion = readUserVersion(originalDb);
+        if (sourceVersion > MAX_SUPPORTED_USER_VERSION) {
+            originalDb.close();
+            throw new Error(fileTooNewMessage(sourceVersion));
+        }
+
         // Create the new database at the temp path in the app data directory.
         newDb = new DatabaseSync(tempDbPath);
 
@@ -242,11 +323,24 @@ export const repairDatabase = async (originalDbPath: string) => {
             // Copy data from original database
             copyDataFromOriginalDatabase(originalDb, newDb, sourceDbPath);
 
+            // The copy went around the write wrapper, so drop what its triggers logged
+            // (ADR 0001 §5). The app also clears the log whenever it opens a file.
+            newDb.prepare("DELETE FROM timeline_change_log").run();
+
             // Turn foreign keys back on
             newDb.prepare("PRAGMA foreign_keys = ON").run();
 
             // Remove orphaned marcher_pages entries
             removeOrphanMarcherPages(newDb);
+
+            // Keep a supported version higher than a new file's (8, the
+            // timeline model), so repair never lowers a file's version.
+            if (
+                isSupportedUserVersion(sourceVersion) &&
+                sourceVersion > readUserVersion(newDb)
+            ) {
+                newDb.prepare(`PRAGMA user_version = ${sourceVersion}`).run();
+            }
         } finally {
             // Close both databases before moving or deleting temp files.
             originalDb?.close();

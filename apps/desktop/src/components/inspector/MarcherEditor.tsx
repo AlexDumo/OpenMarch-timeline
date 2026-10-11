@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     marcherPagesByPageQueryOptions,
     fieldPropertiesQueryOptions,
@@ -8,8 +9,7 @@ import {
 } from "@/hooks/queries";
 import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
-import RegisteredActionButton from "../RegisteredActionButton";
-import { RegisteredActionsObjects } from "@/utilities/RegisteredActionsHandler";
+import ActionButton from "@/shortcuts/ActionButton";
 import {
     Button,
     getButtonClassName,
@@ -28,6 +28,11 @@ import { clsx } from "clsx";
 import { T } from "@tolgee/react";
 import { useQuery } from "@tanstack/react-query";
 import type { FieldProperties } from "@openmarch/core";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { usePositionAt } from "@/timeline/timelineStore";
+import { pageEndBeat } from "@/timeline/timelineCanvas";
+import { useTimelineStepSizes } from "@/timeline/useTimelineStepSizes";
+import { useTimingObjects } from "@/hooks";
 import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
@@ -39,6 +44,8 @@ import {
 } from "@phosphor-icons/react";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
+import TimelineHoldLine from "./TimelineHoldLine";
+import { useMarcherNameOf } from "@/timeline/useKeepLaterPages";
 
 const DEFAULT_SORTING_THRESHOLD = 0.1;
 
@@ -252,8 +259,8 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
             {/* Align buttons */}
             <h5 className="text-h5">Align</h5>
             <div className="flex gap-8">
-                <RegisteredActionButton
-                    registeredAction={RegisteredActionsObjects.alignVertically}
+                <ActionButton
+                    action="alignVertically"
                     disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
@@ -264,11 +271,9 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                     )}
                 >
                     <AlignCenterVerticalSimpleIcon size={16} weight="bold" />
-                </RegisteredActionButton>
-                <RegisteredActionButton
-                    registeredAction={
-                        RegisteredActionsObjects.alignHorizontally
-                    }
+                </ActionButton>
+                <ActionButton
+                    action="alignHorizontally"
                     disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
@@ -279,10 +284,10 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                     )}
                 >
                     <AlignCenterHorizontalSimpleIcon size={16} weight="bold" />
-                </RegisteredActionButton>
+                </ActionButton>
 
-                <RegisteredActionButton
-                    registeredAction={RegisteredActionsObjects.flipHorizontal}
+                <ActionButton
+                    action="flipHorizontal"
                     disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
@@ -293,9 +298,9 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                     )}
                 >
                     <FlipHorizontalIcon size={16} weight="bold" />
-                </RegisteredActionButton>
-                <RegisteredActionButton
-                    registeredAction={RegisteredActionsObjects.flipVertical}
+                </ActionButton>
+                <ActionButton
+                    action="flipVertical"
                     disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
@@ -306,7 +311,7 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                     )}
                 >
                     <FlipVerticalIcon size={16} weight="bold" />
-                </RegisteredActionButton>
+                </ActionButton>
             </div>
 
             {/* Distribute buttons */}
@@ -398,22 +403,18 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                     </Dropdown.Trigger>
                     <Dropdown.Portal>
                         <Dropdown.Content className="bg-modal rounded-6 shadow-modal backdrop-blur-32 border-stroke flex flex-col items-start gap-0 border p-8">
-                            <RegisteredActionButton
-                                registeredAction={
-                                    RegisteredActionsObjects.setSelectedMarchersToPreviousPage
-                                }
+                            <ActionButton
+                                action="setSelectedMarchersToPreviousPage"
                                 className="text-text px-6 py-4"
                             >
                                 <T keyName="toolbar.alignment.toPreviousPagePositions" />
-                            </RegisteredActionButton>
-                            <RegisteredActionButton
-                                registeredAction={
-                                    RegisteredActionsObjects.setSelectedMarchersToNextPage
-                                }
+                            </ActionButton>
+                            <ActionButton
+                                action="setSelectedMarchersToNextPage"
                                 className="text-text px-6 py-4"
                             >
                                 <T keyName="toolbar.alignment.toNextPagePositions" />
-                            </RegisteredActionButton>
+                            </ActionButton>
                         </Dropdown.Content>
                     </Dropdown.Portal>
                 </Dropdown.Root>
@@ -437,10 +438,23 @@ function MarcherEditor() {
         marcherPagesByPageQueryOptions(selectedPage?.previousPageId!),
     );
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
+    const timelineMode = useTimelineMode();
+    // Isolation: the isolated move's plan at its end, where the canvas draws and edits it
+    const isolationEnd = useTimelineSelectionStore((s) => s.isolation?.end);
+    const timelinePosition = usePositionAt(
+        selectedMarchers.length === 1 ? selectedMarchers[0].id : -1,
+        isolationEnd ?? (selectedPage ? pageEndBeat(selectedPage) : 0),
+    );
+    // Timeline mode has no shape locks (P7.11): moving a marcher whose slot is in a shape-backed
+    // transition switches that transition to individual points (P7.2), and shape pages are
+    // frozen page-era rows. So the shape page marchers aren't read there.
     const { data: spmsForThisPage } = useQuery(
-        shapePageMarchersQueryByPageIdOptions(selectedPage?.id ?? null),
+        shapePageMarchersQueryByPageIdOptions(
+            timelineMode ? null : (selectedPage?.id ?? null),
+        ),
     );
     const editingDisabled = useMemo(() => {
+        if (timelineMode) return false;
         return (
             !marcherPagesLoaded ||
             Object.values(marcherPages).some(
@@ -449,7 +463,7 @@ function MarcherEditor() {
                     selectedMarcherIds.has(marcherPage.marcher_id),
             )
         );
-    }, [marcherPagesLoaded, marcherPages, selectedMarcherIds]);
+    }, [timelineMode, marcherPagesLoaded, marcherPages, selectedMarcherIds]);
 
     const coordsFormRef = useRef<HTMLFormElement>(null);
     const xInputRef = useRef<HTMLInputElement>(null);
@@ -471,6 +485,8 @@ function MarcherEditor() {
     };
 
     const createLineIsVisible = useCallback(() => {
+        // No shape locks in timeline mode (P7.11); the line tool applies positions (P7.2)
+        if (timelineMode) return true;
         if (!spmsForThisPage) return false;
         const marcherIdsWithShapes = new Set<number>(
             spmsForThisPage.map((spm) => spm.marcher_id),
@@ -482,11 +498,21 @@ function MarcherEditor() {
         return !selectedMarcherIds.some((marcherId) =>
             marcherIdsWithShapes.has(marcherId),
         );
-    }, [selectedMarchers, spmsForThisPage]);
+    }, [timelineMode, selectedMarchers, spmsForThisPage]);
 
     const rCoords = useMemo(() => {
-        if (selectedMarchers.length !== 1 || !marcherPagesLoaded)
-            return undefined;
+        if (selectedMarchers.length !== 1) return undefined;
+        // Timeline mode (P7.2): show where the canvas draws the marcher. Checked before the
+        // marcher page lookup: marchers and pages made after the conversion have no marcher
+        // pages, which are frozen (P9.5)
+        if (timelineMode)
+            return timelinePosition
+                ? ReadableCoords.fromMarcherPage({
+                      x: timelinePosition[0],
+                      y: timelinePosition[1],
+                  })
+                : undefined;
+        if (!marcherPagesLoaded) return undefined;
 
         const selectedMarcherPage = marcherPages[selectedMarchers[0].id];
         if (!selectedMarcherPage) {
@@ -497,9 +523,36 @@ function MarcherEditor() {
         }
         const newRcoords = ReadableCoords.fromMarcherPage(selectedMarcherPage);
         return newRcoords;
-    }, [selectedMarchers, marcherPagesLoaded, marcherPages]);
+    }, [
+        selectedMarchers,
+        marcherPagesLoaded,
+        marcherPages,
+        timelineMode,
+        timelinePosition,
+    ]);
+
+    // Timeline mode (P7.10): step sizes from the resolver between page end beats, along the path
+    const { pages } = useTimingObjects()!;
+    const selectedMarcherIdList = useMemo(
+        () => selectedMarchers.map((marcher) => marcher.id),
+        [selectedMarchers],
+    );
+    // UI-18 keep later pages: the keep tooltips name the selected marchers
+    const selectedNameOf = useMarcherNameOf(selectedMarchers);
+    const previousPage = useMemo(
+        () => pages.find((p) => p.id === selectedPage?.previousPageId) ?? null,
+        [pages, selectedPage?.previousPageId],
+    );
+    const timelineStepSizes = useTimelineStepSizes({
+        timelineMode,
+        marcherIds: selectedMarcherIdList,
+        page: selectedPage,
+        previousPage,
+        fieldProperties,
+    });
 
     const stepSize = useMemo(() => {
+        if (timelineStepSizes.active) return timelineStepSizes.stepSize;
         if (
             selectedMarchers.length !== 1 ||
             !marcherPagesLoaded ||
@@ -516,9 +569,12 @@ function MarcherEditor() {
 
         const selectedMarcherPage = marcherPages[selectedMarchers[0].id];
         if (!selectedMarcherPage) {
-            console.error(
-                `Selected marcher page not found for marcher ${selectedMarchers[0].id}`,
-            );
+            // Timeline mode before the resolver is ready: marchers and pages made after the
+            // conversion have no marcher pages (P9.5), so there is no page-mode fallback
+            if (!timelineMode)
+                console.error(
+                    `Selected marcher page not found for marcher ${selectedMarchers[0].id}`,
+                );
             return undefined;
         }
         return StepSize.createStepSizeForMarcher({
@@ -528,15 +584,19 @@ function MarcherEditor() {
             fieldProperties,
         });
     }, [
+        timelineStepSizes.active,
+        timelineStepSizes.stepSize,
         selectedMarchers,
         marcherPagesLoaded,
         previousMarcherPages,
         selectedPage,
         fieldProperties,
         marcherPages,
+        timelineMode,
     ]);
 
     const minMaxStepSize = useMemo(() => {
+        if (timelineStepSizes.active) return timelineStepSizes.minMax;
         if (
             selectedMarchers.length <= 1 ||
             !marcherPagesLoaded ||
@@ -554,6 +614,8 @@ function MarcherEditor() {
             fieldProperties,
         });
     }, [
+        timelineStepSizes.active,
+        timelineStepSizes.minMax,
         selectedMarchers,
         marcherPagesLoaded,
         previousMarcherPages,
@@ -714,11 +776,14 @@ function MarcherEditor() {
                                         </div>
                                     </div>
                                 )}
+                            {/* Under the step sizes: hold or move on this page (UI-18) */}
+                            <TimelineHoldLine
+                                marcherIds={selectedMarcherIdList}
+                                nameOf={selectedNameOf}
+                            />
                             {selectedMarchers.length === 2 && (
-                                <RegisteredActionButton
-                                    registeredAction={
-                                        RegisteredActionsObjects.swapMarchers
-                                    }
+                                <ActionButton
+                                    action="swapMarchers"
                                     className={clsx(
                                         getButtonClassName({
                                             variant: "primary",
@@ -728,11 +793,11 @@ function MarcherEditor() {
                                     )}
                                 >
                                     <T keyName="inspector.marcher.swapMarchers" />
-                                </RegisteredActionButton>
+                                </ActionButton>
                             )}
                             {selectedMarchers.length >= 3 &&
                                 createLineIsVisible() && (
-                                    <RegisteredActionButton
+                                    <ActionButton
                                         className={clsx(
                                             getButtonClassName({
                                                 variant: "primary",
@@ -740,12 +805,10 @@ function MarcherEditor() {
                                             }),
                                             "enabled:hover:text-text-invert",
                                         )}
-                                        registeredAction={
-                                            RegisteredActionsObjects.alignmentEventLine
-                                        }
+                                        action="alignmentEventLine"
                                     >
                                         <T keyName="inspector.marcher.createLine" />
-                                    </RegisteredActionButton>
+                                    </ActionButton>
                                 )}
 
                             {/* Alignment, distribution, and transformation buttons */}
@@ -945,25 +1008,32 @@ function MarcherEditor() {
                                             </Select>
                                         </div>
                                     </div>
-                                    {stepSize !== undefined && (
-                                        <div className="flex justify-between px-6">
-                                            <label className="text-body leading-none opacity-80">
-                                                <T keyName="inspector.marcher.stepSize" />
-                                            </label>
+                                    <div className="flex flex-col gap-12">
+                                        {stepSize !== undefined && (
+                                            <div className="flex justify-between px-6">
+                                                <label className="text-body leading-none opacity-80">
+                                                    <T keyName="inspector.marcher.stepSize" />
+                                                </label>
 
-                                            <p className="text-body flex items-center gap-4 bg-transparent leading-none">
-                                                <StepSizeWarningBadge
-                                                    over={
-                                                        !!fieldProperties &&
-                                                        stepSize.exceedsThreshold(
-                                                            fieldProperties.stepSizeWarningThresholdInches,
-                                                        )
-                                                    }
-                                                />
-                                                {stepSize.displayString()}
-                                            </p>
-                                        </div>
-                                    )}
+                                                <p className="text-body flex items-center gap-4 bg-transparent leading-none">
+                                                    <StepSizeWarningBadge
+                                                        over={
+                                                            !!fieldProperties &&
+                                                            stepSize.exceedsThreshold(
+                                                                fieldProperties.stepSizeWarningThresholdInches,
+                                                            )
+                                                        }
+                                                    />
+                                                    {stepSize.displayString()}
+                                                </p>
+                                            </div>
+                                        )}
+                                        {/* Under Step Size: hold or move on this page (UI-18) */}
+                                        <TimelineHoldLine
+                                            marcherIds={selectedMarcherIdList}
+                                            nameOf={selectedNameOf}
+                                        />
+                                    </div>
                                     {/* This is here so the form submits when enter is pressed, does NOT need to be translated */}
                                     <button
                                         type="submit"

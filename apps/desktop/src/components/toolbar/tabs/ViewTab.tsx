@@ -1,4 +1,5 @@
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useShallow } from "zustand/react/shallow";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { CubeIcon, EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import { T, useTolgee } from "@tolgee/react";
@@ -31,7 +32,18 @@ function View3dToolbar() {
 
 function UiSettingsToolbar() {
     const { t } = useTolgee();
-    const { uiSettings, setUiSettings } = useUiSettingsStore();
+    const setUiSettings = useUiSettingsStore((s) => s.setUiSettings);
+    // Only the fields shown here; a change writes over the latest settings at that moment
+    const uiSettings = useUiSettingsStore(
+        useShallow((s) => ({
+            previousPaths: s.uiSettings.previousPaths,
+            nextPaths: s.uiSettings.nextPaths,
+            stepSizeWarnings: s.uiSettings.stepSizeWarnings,
+            gridLines: s.uiSettings.gridLines,
+            halfLines: s.uiSettings.halfLines,
+            showCollisions: s.uiSettings.showCollisions,
+        })),
+    );
 
     return (
         <>
@@ -39,7 +51,7 @@ function UiSettingsToolbar() {
                 <button
                     onClick={() => {
                         setUiSettings({
-                            ...uiSettings,
+                            ...useUiSettingsStore.getState().uiSettings,
                             previousPaths: !uiSettings.previousPaths,
                         });
                     }}
@@ -55,7 +67,7 @@ function UiSettingsToolbar() {
                 <button
                     onClick={() => {
                         setUiSettings({
-                            ...uiSettings,
+                            ...useUiSettingsStore.getState().uiSettings,
                             nextPaths: !uiSettings.nextPaths,
                         });
                     }}
@@ -71,7 +83,7 @@ function UiSettingsToolbar() {
                 <button
                     onClick={() => {
                         setUiSettings({
-                            ...uiSettings,
+                            ...useUiSettingsStore.getState().uiSettings,
                             stepSizeWarnings: !uiSettings.stepSizeWarnings,
                         });
                     }}
@@ -89,7 +101,7 @@ function UiSettingsToolbar() {
                 <button
                     onClick={() => {
                         setUiSettings({
-                            ...uiSettings,
+                            ...useUiSettingsStore.getState().uiSettings,
                             gridLines: !uiSettings.gridLines,
                         });
                     }}
@@ -105,7 +117,7 @@ function UiSettingsToolbar() {
                 <button
                     onClick={() => {
                         setUiSettings({
-                            ...uiSettings,
+                            ...useUiSettingsStore.getState().uiSettings,
                             halfLines: !uiSettings.halfLines,
                         });
                     }}
@@ -123,7 +135,7 @@ function UiSettingsToolbar() {
                 <button
                     onClick={() => {
                         setUiSettings({
-                            ...uiSettings,
+                            ...useUiSettingsStore.getState().uiSettings,
                             showCollisions: !uiSettings.showCollisions,
                         });
                     }}

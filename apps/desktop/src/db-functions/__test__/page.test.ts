@@ -1,3 +1,7 @@
+import {
+    timelineFixtureMode,
+    timelineHistoryTables,
+} from "@/test/timelineMode";
 import { assert, describe, expect } from "vitest";
 import {
     createPages,
@@ -43,6 +47,14 @@ import { WorkspaceSettings } from "@/settings/workspaceSettings";
 import { getMeasures } from "../measures";
 import { DbTransaction } from "../types";
 
+/**
+ * How many pages have marcher pages after `createPages`, when `pageCount` pages exist: every page
+ * in page mode; in timeline mode only page 0, which the fixture loaded before converting, since
+ * new pages get no marcher pages there (P9.5).
+ */
+const pagesWithMarcherPages = (pageCount: number) =>
+    timelineFixtureMode() ? 1 : pageCount;
+
 const subsetBooleanToInteger = (page: any) => {
     return { ...page, is_subset: page.is_subset ? 1 : 0 };
 };
@@ -68,6 +80,7 @@ describeDbTests("pages", (it) => {
         schema.marchers,
         schema.marcher_pages,
         schema.utility,
+        ...timelineHistoryTables(),
     ]);
 
     describe("createPages", () => {
@@ -754,7 +767,7 @@ describeDbTests("pages", (it) => {
                             await db.query.marcher_pages.findMany();
                         const expectedNumberOfMarcherPages =
                             marchers.expectedMarchers.length *
-                            (newPagesArgs.length + 1);
+                            pagesWithMarcherPages(newPagesArgs.length + 1);
                         expect(afterMarcherPages).toHaveLength(
                             expectedNumberOfMarcherPages,
                         );
@@ -762,19 +775,22 @@ describeDbTests("pages", (it) => {
                         const allPages = await db.query.pages.findMany();
 
                         // Assert there is a marcherPage for every marcher and page combination
-                        for (const marcher of marchers.expectedMarchers) {
-                            for (const page of allPages) {
-                                const marcherPage = afterMarcherPages.find(
-                                    (marcherPage) =>
-                                        marcherPage.marcher_id === marcher.id &&
-                                        marcherPage.page_id === page.id,
-                                );
-                                expect(
-                                    marcherPage,
-                                    `marcherPage for marcher ${marcher.id} and page ${page.id} should be defined`,
-                                ).toBeDefined();
+                        // (page mode; timeline mode writes none, P9.5)
+                        if (!timelineFixtureMode())
+                            for (const marcher of marchers.expectedMarchers) {
+                                for (const page of allPages) {
+                                    const marcherPage = afterMarcherPages.find(
+                                        (marcherPage) =>
+                                            marcherPage.marcher_id ===
+                                                marcher.id &&
+                                            marcherPage.page_id === page.id,
+                                    );
+                                    expect(
+                                        marcherPage,
+                                        `marcherPage for marcher ${marcher.id} and page ${page.id} should be defined`,
+                                    ).toBeDefined();
+                                }
                             }
-                        }
                         await expectNumberOfChanges.test(db, 1);
                     },
                 );
@@ -876,7 +892,7 @@ describeDbTests("pages", (it) => {
                             await db.query.marcher_pages.findMany();
                         const expectedExistingMarcherPages =
                             marchers.expectedMarchers.length *
-                            (existingPagesArgs.length + 1);
+                            pagesWithMarcherPages(existingPagesArgs.length + 1);
                         expect(beforeMarcherPages).toHaveLength(
                             expectedExistingMarcherPages,
                         );
@@ -889,9 +905,11 @@ describeDbTests("pages", (it) => {
                             await db.query.marcher_pages.findMany();
                         const expectedTotalMarcherPages =
                             marchers.expectedMarchers.length *
-                            (existingPagesArgs.length +
-                                1 +
-                                newPagesArgs.length);
+                            pagesWithMarcherPages(
+                                existingPagesArgs.length +
+                                    1 +
+                                    newPagesArgs.length,
+                            );
                         expect(afterMarcherPages).toHaveLength(
                             expectedTotalMarcherPages,
                         );
@@ -899,19 +917,22 @@ describeDbTests("pages", (it) => {
                         const allPages = await db.query.pages.findMany();
 
                         // Assert there is a marcherPage for every marcher and page combination
-                        for (const marcher of marchers.expectedMarchers) {
-                            for (const page of allPages) {
-                                const marcherPage = afterMarcherPages.find(
-                                    (marcherPage) =>
-                                        marcherPage.marcher_id === marcher.id &&
-                                        marcherPage.page_id === page.id,
-                                );
-                                expect(
-                                    marcherPage,
-                                    `marcherPage for marcher ${marcher.id} and page ${page.id} should be defined`,
-                                ).toBeDefined();
+                        // (page mode; timeline mode writes none, P9.5)
+                        if (!timelineFixtureMode())
+                            for (const marcher of marchers.expectedMarchers) {
+                                for (const page of allPages) {
+                                    const marcherPage = afterMarcherPages.find(
+                                        (marcherPage) =>
+                                            marcherPage.marcher_id ===
+                                                marcher.id &&
+                                            marcherPage.page_id === page.id,
+                                    );
+                                    expect(
+                                        marcherPage,
+                                        `marcherPage for marcher ${marcher.id} and page ${page.id} should be defined`,
+                                    ).toBeDefined();
+                                }
                             }
-                        }
                         await expectNumberOfChanges.test(db, 2); // One for existing pages, one for new pages
                     },
                 );

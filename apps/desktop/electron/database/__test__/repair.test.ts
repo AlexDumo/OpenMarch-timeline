@@ -10,6 +10,7 @@ import {
     copyFieldPropertiesFromOriginalDatabase,
     repairDatabase,
     removeOrphanMarcherPages,
+    orderTablesForCopy,
 } from "../repair";
 import { getOrm } from "../db";
 import { DrizzleMigrationService } from "../services/DrizzleMigrationService";
@@ -963,6 +964,232 @@ describe("DatabaseSync Repair", () => {
             fixedDb.close();
             fs.unlinkSync(fixedPath);
             fs.unlinkSync(originalDbPath);
+        });
+
+        it("keeps a timeline-model file (user_version 8) at 8", async () => {
+            const originalDbPath = path.join(tempDir, "timeline.dots");
+            const originalDb =
+                await createNewDatabaseWithMigrations(originalDbPath);
+            originalDb.prepare("PRAGMA user_version = 8").run();
+            originalDb.close();
+
+            const fixedPath = await repairDatabase(originalDbPath);
+
+            const fixedDb = new DatabaseSync(fixedPath, { readOnly: true });
+            const userVersion = (
+                fixedDb.prepare("PRAGMA user_version").get() as {
+                    user_version: number;
+                }
+            ).user_version;
+            fixedDb.close();
+            expect(userVersion).toBe(8);
+        });
+
+        it("copies timeline rows parents first, so the invariant triggers accept them", async () => {
+            const originalDbPath = path.join(tempDir, "timeline-data.dots");
+            const originalDb =
+                await createNewDatabaseWithMigrations(originalDbPath);
+            originalDb.exec(`
+                INSERT INTO marchers (id, section, drill_prefix, drill_order, home_x, home_y)
+                    VALUES (1, 'Brass', 'B', 1, 4, -2), (2, 'Brass', 'B', 2, 0, 0);
+                INSERT INTO timelines (id, name, start_beat, end_beat)
+                    VALUES (1, 'Opener', 0, 16), (2, NULL, 16, 32);
+                INSERT INTO timeline_shapes (id, kind, geometry)
+                    VALUES (1, 'line', '{"points":[[0,0],[10,0]]}');
+                INSERT INTO timeline_transitions (id, timeline_id, dest_shape_id, slot_count, start_beat, end_beat)
+                    VALUES (1, 1, 1, 2, 0, 16), (2, 2, NULL, 2, 16, 32);
+                INSERT INTO timeline_slot_destinations (id, transition_id, slot_index, x, y)
+                    VALUES (1, 2, 0, 0, 0), (2, 2, 1, 2, 0);
+                INSERT INTO timeline_assignments (id, marcher_id, transition_id, slot_index, start_beat, end_beat)
+                    VALUES (1, 1, 1, 0, 0, 16), (2, 2, 1, 1, 0, 16), (3, 1, 2, 0, 16, 32);
+            `);
+            const timelineTables = [
+                "marchers",
+                "timelines",
+                "timeline_shapes",
+                "timeline_transitions",
+                "timeline_slot_destinations",
+                "timeline_assignments",
+            ];
+            const readTables = (db: DatabaseSync) =>
+                Object.fromEntries(
+                    timelineTables.map((table) => [
+                        table,
+                        db
+                            .prepare(`SELECT * FROM "${table}" ORDER BY id`)
+                            .all(),
+                    ]),
+                );
+            const expected = readTables(originalDb);
+            // The inserts above went around the write wrapper, so the log holds their rows
+            const logged = originalDb
+                .prepare("SELECT count(*) AS n FROM timeline_change_log")
+                .get() as { n: number };
+            expect(logged.n).toBeGreaterThan(0);
+            originalDb.close();
+
+            const fixedPath = await repairDatabase(originalDbPath);
+
+            const fixedDb = new DatabaseSync(fixedPath, { readOnly: true });
+            try {
+                expect(readTables(fixedDb)).toEqual(expected);
+                expect(
+                    fixedDb
+                        .prepare(
+                            "SELECT count(*) AS n FROM timeline_change_log",
+                        )
+                        .get(),
+                ).toEqual({ n: 0 });
+                expect(
+                    fixedDb
+                        .prepare("SELECT * FROM timeline_commit_violations")
+                        .all(),
+                ).toEqual([]);
+            } finally {
+                fixedDb.close();
+            }
+        });
+
+        it("copies a timeline-mode file's frozen page-era rows, and the freeze holds afterwards (P9.5)", async () => {
+            const originalDbPath = path.join(tempDir, "frozen.dots");
+            const originalDb =
+                await createNewDatabaseWithMigrations(originalDbPath);
+            originalDb.exec(`
+                INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Brass', 'B', 1);
+                INSERT INTO pathways (id, path_data) VALUES (1, '{}');
+                INSERT INTO marcher_pages (id, marcher_id, page_id, x, y, path_data_id) VALUES (1, 1, 0, 4, 2, 1);
+                INSERT INTO shapes (id, name) VALUES (1, 'line');
+                INSERT INTO shape_pages (id, shape_id, page_id, svg_path) VALUES (1, 1, 0, 'M 0 0 L 1 0');
+                INSERT INTO shape_page_marchers (id, shape_page_id, marcher_id, position_order) VALUES (1, 1, 1, 1);
+                UPDATE workspace_settings SET json_data = json_set(json_data, '$.timelineMode', json('true'));
+            `);
+            const frozen = [
+                "marcher_pages",
+                "pathways",
+                "shapes",
+                "shape_pages",
+                "shape_page_marchers",
+            ];
+            const readFrozen = (db: DatabaseSync) =>
+                Object.fromEntries(
+                    frozen.map((table) => [
+                        table,
+                        db
+                            .prepare(`SELECT * FROM "${table}" ORDER BY id`)
+                            .all(),
+                    ]),
+                );
+            const expected = readFrozen(originalDb);
+            expect(() =>
+                originalDb.exec("UPDATE marcher_pages SET x = 0"),
+            ).toThrow(/read-only in timeline mode/);
+            originalDb.close();
+
+            const fixedPath = await repairDatabase(originalDbPath);
+
+            const fixedDb = new DatabaseSync(fixedPath);
+            try {
+                expect(readFrozen(fixedDb)).toEqual(expected);
+                expect(() =>
+                    fixedDb.exec("UPDATE marcher_pages SET x = 0"),
+                ).toThrow(/read-only in timeline mode/);
+            } finally {
+                fixedDb.close();
+            }
+        });
+
+        it("puts the freeze back even when detaching the original fails (P9.5)", async () => {
+            const originalDbPath = path.join(tempDir, "detach-original.dots");
+            const originalDb =
+                await createNewDatabaseWithMigrations(originalDbPath);
+            const newDb = await createNewDatabaseWithMigrations(
+                path.join(tempDir, "detach-new.dots"),
+            );
+            const freezeTriggers = () =>
+                (
+                    newDb
+                        .prepare(
+                            "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'page_era_frozen_%' ORDER BY name",
+                        )
+                        .all() as { name: string }[]
+                ).map((r) => r.name);
+            const before = freezeTriggers();
+            expect(before).toHaveLength(18);
+            // A connection whose DETACH throws
+            const failingDetach = new Proxy(newDb, {
+                get(target, prop) {
+                    if (prop === "prepare")
+                        return (statement: string) => {
+                            if (statement.startsWith("DETACH"))
+                                throw new Error("detach failed");
+                            return target.prepare(statement);
+                        };
+                    const value = Reflect.get(target, prop) as unknown;
+                    return typeof value === "function"
+                        ? (value as (...a: unknown[]) => unknown).bind(target)
+                        : value;
+                },
+            });
+            try {
+                expect(() =>
+                    copyDataFromOriginalDatabase(
+                        originalDb,
+                        failingDetach,
+                        originalDbPath,
+                    ),
+                ).toThrow("detach failed");
+                expect(freezeTriggers()).toEqual(before);
+            } finally {
+                originalDb.close();
+                newDb.close();
+            }
+        });
+
+        it("orders dependent tables after the others, parents before children", () => {
+            const names = [
+                "timeline_assignments",
+                "beats",
+                "timeline_slot_destinations",
+                "timeline_transitions",
+                "pages",
+                "timeline_shapes",
+                "timelines",
+                "marchers",
+                "marcher_pages",
+            ];
+            expect(
+                orderTablesForCopy(names.map((name) => ({ name }))).map(
+                    (t) => t.name,
+                ),
+            ).toEqual([
+                "beats",
+                "pages",
+                "marcher_pages",
+                "marchers",
+                "timelines",
+                "timeline_shapes",
+                "timeline_transitions",
+                "timeline_slot_destinations",
+                "timeline_assignments",
+            ]);
+        });
+
+        it("refuses a file from a newer release and leaves it unchanged", async () => {
+            const originalDbPath = path.join(tempDir, "newer.dots");
+            const originalDb =
+                await createNewDatabaseWithMigrations(originalDbPath);
+            originalDb.prepare("PRAGMA user_version = 9").run();
+            originalDb.close();
+            const before = fs.readFileSync(originalDbPath);
+            const fixedPath = path.join(tempDir, "newer - FIXED.dots");
+
+            await expect(repairDatabase(originalDbPath)).rejects.toThrow(
+                /newer version of OpenMarch/,
+            );
+
+            expect(fs.readFileSync(originalDbPath).equals(before)).toBe(true);
+            expect(fs.existsSync(fixedPath)).toBe(false);
+            expect(getRepairTempEntries()).toEqual([]);
         });
 
         it("should use _blank.dots as the base database and migrate it", async () => {

@@ -10,13 +10,14 @@ import {
 import { defaultSettings, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useTimingObjects } from "@/hooks";
 import AudioPlayer from "./audio/AudioPlayer";
-import RegisteredActionButton from "../RegisteredActionButton";
-import { RegisteredActionsObjects } from "@/utilities/RegisteredActionsHandler";
+import ActionButton from "@/shortcuts/ActionButton";
 import EditableAudioPlayer from "./audio/EditableAudioPlayer";
 import TimelineControls from "./TimelineControls";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import PerspectiveSlider from "./PerspectiveSlider";
 import PageTimeline from "./PageTimeline";
+import TimelineModePanel from "./TimelineModePanel";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { T } from "@tolgee/react";
 import clsx from "clsx";
 
@@ -24,9 +25,12 @@ export default function TimelineContainer() {
     const { isPlaying } = useIsPlaying()!;
     const { measures } = useTimingObjects()!;
     const { selectedPage } = useSelectedPage()!;
-    const { uiSettings } = useUiSettingsStore();
+    const focussedComponent = useUiSettingsStore(
+        (s) => s.uiSettings.focussedComponent,
+    );
     const { isFullscreen } = useFullscreenStore();
     const timelineRef = useRef<HTMLDivElement>(null);
+    const timelineMode = useTimelineMode();
 
     useEffect(() => {
         if (!selectedPage) return;
@@ -72,11 +76,23 @@ export default function TimelineContainer() {
         // do nothing, just re-render
     }, [measures]);
 
+    // With the file's timeline dev flag on, the timeline replaces the page timeline and its controls.
+    // Editing beats (the focused timeline) still uses the page timeline. The audio player stays
+    // mounted, headless, because it runs playback and the timeline reads its clock. The timeline
+    // draws its own waveform lane, so the player builds no wavesurfer or markers here.
+    if (timelineMode && focussedComponent !== "timeline") {
+        return (
+            // UI-12: perspective and fullscreen live on the field's zoom widget in timeline mode
+            <div className="flex gap-8" data-testid="timeline-mode-container">
+                <TimelineModePanel />
+                <AudioPlayer headless />
+            </div>
+        );
+    }
+
     return (
         <div className="flex gap-8">
-            {uiSettings.focussedComponent !== "timeline" && (
-                <TimelineControls />
-            )}
+            {focussedComponent !== "timeline" && <TimelineControls />}
             {isFullscreen && <PerspectiveSlider />}
             <div
                 ref={timelineRef}
@@ -99,29 +115,25 @@ export default function TimelineContainer() {
                                 <p className="text-sub">
                                     <T keyName="timeline.audio" />
                                 </p>
-                                {uiSettings.focussedComponent !== "timeline" ? (
-                                    <RegisteredActionButton
-                                        registeredAction={
-                                            RegisteredActionsObjects.focusTimeline
-                                        }
+                                {focussedComponent !== "timeline" ? (
+                                    <ActionButton
+                                        action="focusTimeline"
                                         className="w-fit"
                                     >
                                         <PencilSimpleIcon />
-                                    </RegisteredActionButton>
+                                    </ActionButton>
                                 ) : (
-                                    <RegisteredActionButton
-                                        registeredAction={
-                                            RegisteredActionsObjects.focusCanvas
-                                        }
+                                    <ActionButton
+                                        action="focusCanvas"
                                         className="w-fit"
                                     >
                                         <XIcon />
-                                    </RegisteredActionButton>
+                                    </ActionButton>
                                 )}
                             </div>
                         )}
 
-                        {uiSettings.focussedComponent === "timeline" ? (
+                        {focussedComponent === "timeline" ? (
                             <EditableAudioPlayer />
                         ) : (
                             <div
@@ -145,9 +157,11 @@ const TIMELINE_MAX_PX_PER_SEC = 200;
 const TIMELINE_BASE_PX_PER_SEC = defaultSettings.timelinePixelsPerSecond;
 
 function TimelineZoomControls() {
-    const { uiSettings, setPixelsPerSecond } = useUiSettingsStore();
+    const setPixelsPerSecond = useUiSettingsStore((s) => s.setPixelsPerSecond);
+    const currentPixels = useUiSettingsStore(
+        (s) => s.uiSettings.timelinePixelsPerSecond,
+    );
     const { isFullscreen } = useFullscreenStore();
-    const currentPixels = uiSettings.timelinePixelsPerSecond;
     const zoomPercent = Math.round(
         (currentPixels / TIMELINE_BASE_PX_PER_SEC) * 100,
     );

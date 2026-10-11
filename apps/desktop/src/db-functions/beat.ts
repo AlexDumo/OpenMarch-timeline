@@ -6,6 +6,8 @@ import {
     transactionWithHistory,
 } from "@/db-functions";
 import { schema } from "@/global/database/db";
+import { withTimelinePageRipple } from "./timelineRipple";
+import { realDatabaseBeatToDatabaseBeat } from "./rowMappers";
 
 export const FIRST_BEAT_ID = 0;
 
@@ -27,16 +29,7 @@ export interface DatabaseBeat {
     updated_at: string;
 }
 
-type RealDatabaseBeat = typeof schema.beats.$inferSelect;
-
-export const realDatabaseBeatToDatabaseBeat = (
-    beat: RealDatabaseBeat,
-): DatabaseBeat => {
-    return {
-        ...beat,
-        include_in_measure: beat.include_in_measure === 1,
-    };
-};
+export { realDatabaseBeatToDatabaseBeat };
 
 export interface NewBeatArgs {
     duration: number;
@@ -194,13 +187,14 @@ export async function shiftBeats({
     const transactionResult = await transactionWithHistory(
         db,
         "shiftBeats",
-        async (tx) => {
-            return await shiftBeatsInTransaction({
-                tx,
-                startingPosition,
-                shiftAmount,
-            });
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, () =>
+                shiftBeatsInTransaction({
+                    tx,
+                    startingPosition,
+                    shiftAmount,
+                }),
+            ),
     );
     return transactionResult;
 }
@@ -264,9 +258,10 @@ export async function flattenOrder({
     const transactionResult = await transactionWithHistory(
         db,
         "flattenOrder",
-        async (tx) => {
-            return await flattenOrderInTransaction({ tx });
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, () =>
+                flattenOrderInTransaction({ tx }),
+            ),
     );
     return transactionResult;
 }
@@ -325,16 +320,17 @@ export async function createBeats({
     const transactionResult = await transactionWithHistory(
         db,
         "createBeats",
-        async (tx) => {
-            const createdBeats = await createBeatsInTransaction({
-                tx,
-                newBeats,
-                startingPosition,
-            });
-            await flattenOrderInTransaction({ tx });
-            await ensureSecondBeatHasPage({ tx });
-            return createdBeats;
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, async () => {
+                const createdBeats = await createBeatsInTransaction({
+                    tx,
+                    newBeats,
+                    startingPosition,
+                });
+                await flattenOrderInTransaction({ tx });
+                await ensureSecondBeatHasPage({ tx });
+                return createdBeats;
+            }),
     );
     return transactionResult;
 }
@@ -424,12 +420,13 @@ export async function updateBeats({
     const transactionResult = await transactionWithHistory(
         db,
         "updateBeats",
-        async (tx) => {
-            return await updateBeatsInTransaction({
-                tx,
-                modifiedBeats: filteredBeats,
-            });
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, () =>
+                updateBeatsInTransaction({
+                    tx,
+                    modifiedBeats: filteredBeats,
+                }),
+            ),
     );
     return transactionResult;
 }
@@ -488,14 +485,15 @@ export async function deleteBeats({
     const transactionResult = await transactionWithHistory(
         db,
         "deleteBeats",
-        async (tx) => {
-            const response = await deleteBeatsInTransaction({
-                tx,
-                beatIds,
-            });
-            await ensureSecondBeatHasPage({ tx });
-            return response;
-        },
+        async (tx) =>
+            await withTimelinePageRipple(tx, async () => {
+                const response = await deleteBeatsInTransaction({
+                    tx,
+                    beatIds,
+                });
+                await ensureSecondBeatHasPage({ tx });
+                return response;
+            }),
     );
     return transactionResult;
 }

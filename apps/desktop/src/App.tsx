@@ -7,9 +7,16 @@ import { SelectedMarchersProvider } from "@/context/SelectedMarchersContext";
 import { IsPlayingProvider } from "@/context/IsPlayingContext";
 import StateInitializer from "@/components/singletons/StateInitializer";
 import { View3dPublisher } from "@/view3d/sync/useView3dPublisher";
+import TimelineResolverHost from "@/timeline/TimelineResolverHost";
 import LaunchPage from "@/components/launchpage/LaunchPage";
 import { useEffect, useRef, useState } from "react";
-import RegisteredActionsHandler from "@/utilities/RegisteredActionsHandler";
+import CommandPalette from "@/shortcuts/palette/CommandPalette";
+import ExportCoordinatesModal from "@/components/exporting/ExportCoordinatesModal";
+import ShortcutDispatcher from "@/shortcuts/ShortcutDispatcher";
+import {
+    EditorActionHandlers,
+    FileActionHandlers,
+} from "@/shortcuts/ActionHandlers";
 import TimelineContainer from "@/components/timeline/TimelineContainer";
 import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
@@ -32,13 +39,14 @@ import {
     QueryClientProvider,
 } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { createAllUndoTriggers } from "./db-functions";
+import { createAllUndoTriggers, resetTimelineChangeLog } from "./db-functions";
 import { db } from "./global/database/db";
 import { historyKeys } from "./hooks/queries/useHistory";
 import tolgee from "./global/singletons/Tolgee";
 import { InContextTools } from "@tolgee/web/tools";
 import clsx from "clsx";
 import AlertModal from "./components/AlertModal";
+import ShortcutsDialog from "./components/ShortcutsDialog";
 import { useLoadFileErrorHandler } from "./hooks/useLoadFileErrorHandler";
 import { toast } from "sonner";
 import { version as currentVersion } from "../package.json";
@@ -68,10 +76,10 @@ function App() {
     const [analyticsConsent, setAnalyticsConsent] = useState<boolean | null>(
         null,
     );
-    const {
-        fetchUiSettings,
-        uiSettings: { focussedComponent },
-    } = useUiSettingsStore();
+    const fetchUiSettings = useUiSettingsStore((s) => s.fetchUiSettings);
+    const focussedComponent = useUiSettingsStore(
+        (s) => s.uiSettings.focussedComponent,
+    );
     const pluginsLoadedRef = useRef(false);
     const { isFullscreen } = useFullscreenStore();
 
@@ -204,6 +212,15 @@ function App() {
             });
     }, [databaseIsReady]);
 
+    useEffect(() => {
+        // A file was just opened (the window reloads on every open): drop change-log rows left by
+        // writes outside the wrapper, such as migrations or repair, and have listeners cold-build
+        if (databaseIsReady)
+            resetTimelineChangeLog(db).catch((error) => {
+                console.error("Error clearing the timeline change log:", error);
+            });
+    }, [databaseIsReady]);
+
     // Inject Tolgee API key
     useEffect(() => {
         async function injectTolgeeApiKey() {
@@ -248,10 +265,13 @@ function App() {
                         </div>
                     )}
                     <AlertModal />
+                    <ShortcutDispatcher />
+                    <CommandPalette />
+                    <ShortcutsDialog />
                     {/* Always show LaunchPage when no file is selected, regardless of database state */}
                     {!databaseIsReady ? (
                         <SelectedAudioFileProvider>
-                            <RegisteredActionsHandler />
+                            <FileActionHandlers />
                             <LaunchPage
                                 setDatabaseIsReady={setDatabaseIsReady}
                             />
@@ -266,8 +286,11 @@ function App() {
                                     <SelectedMarchersProvider>
                                         <SelectedAudioFileProvider>
                                             <StateInitializer />
+                                            <FileActionHandlers />
+                                            <EditorActionHandlers />
+                                            <ExportCoordinatesModal />
+                                            <TimelineResolverHost />
                                             <View3dPublisher />
-                                            <RegisteredActionsHandler />
                                             <SvgPreviewHandler />
                                             <TitleBar showControls />
                                             <FocusNotice />

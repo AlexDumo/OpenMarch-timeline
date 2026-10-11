@@ -5,10 +5,46 @@ import path from "path";
 import fs from "fs";
 import FieldPropertiesTemplates from "../../../src/global/classes/FieldProperties.templates";
 import { dropAllTriggers } from "../migrations/triggers";
-import { createAllTriggers } from "../migrations/triggers";
+import {
+    createAllTriggers,
+    recreateChangeLogTriggers,
+    recreatePageEraFreezeTriggers,
+} from "../migrations/triggers";
 import { sql } from "drizzle-orm";
 import { DB } from "../db";
 import { DatabaseSync } from "node:sqlite";
+import {
+    fileTooNewMessage,
+    isSupportedUserVersion,
+    MAX_SUPPORTED_USER_VERSION,
+    NEW_FILE_USER_VERSION,
+    readUserVersion,
+} from "../fileVersion";
+
+/**
+ * `created_at` of `0017_melted_sage`, the 3D View venue migration of the fork's `3d-async`
+ * branch before it merged into the timeline line, where the same table is `0019_gray_brood`.
+ * Drizzle only runs migrations dated after a file's newest recorded one, and this one is dated
+ * after `0017_powerful_edwin_jarvis`, so a file opened by a `3d-async` build would skip the
+ * timeline tables. Fork development files only; no released build ever wrote it.
+ */
+export const FORK_3D_VENUE_MIGRATION_MS = 1791099628919;
+
+/**
+ * Forgets the fork's old venue migration (see {@link FORK_3D_VENUE_MIGRATION_MS}), so every
+ * later migration runs. Its table stays; `0019` creates it only if it is missing.
+ */
+export function forgetFork3dVenueMigration(rawDb: DatabaseSync): void {
+    const hasMigrationsTable = rawDb
+        .prepare(
+            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = '__drizzle_migrations'",
+        )
+        .get();
+    if (!hasMigrationsTable) return;
+    rawDb
+        .prepare("DELETE FROM __drizzle_migrations WHERE created_at = ?")
+        .run(FORK_3D_VENUE_MIGRATION_MS);
+}
 
 /**
  * Service for handling Drizzle migrations at runtime
@@ -51,23 +87,20 @@ export class DrizzleMigrationService {
         return requestedFolder;
     }
 
-    // User version 7 is an artifact of the previous migration system
-    // but we will keep it at 7 to indicate we are on drizzle
-    private async canApplyMigrations(): Promise<boolean> {
-        const userVersion = (
-            this.rawDb.prepare("PRAGMA user_version").get() as {
-                user_version: number;
-            }
-        ).user_version;
-        return userVersion === 7;
-    }
-
     /**
      * Applies pending migrations from the migrations folder
      * This uses Drizzle's built-in migration functionality
+     *
+     * Runs only on files whose `user_version` this build supports (7, the page
+     * model, which is an artifact of the previous migration system, and 8, the
+     * timeline model). It never changes the version. See `../fileVersion.ts`.
      */
     async applyPendingMigrations(migrationsFolder?: string): Promise<void> {
-        if (!(await this.canApplyMigrations())) {
+        const userVersion = readUserVersion(this.rawDb);
+        if (userVersion > MAX_SUPPORTED_USER_VERSION) {
+            throw new Error(fileTooNewMessage(userVersion));
+        }
+        if (!isSupportedUserVersion(userVersion)) {
             throw new Error(
                 "Cannot apply migrations, user version is not 7. If you have a file from 0.0.9 or earlier, please open your file in 0.0.10, then open it again in the current version",
             );
@@ -83,6 +116,8 @@ export class DrizzleMigrationService {
         try {
             // console.log("Dropping history triggers...");
             // await dropAllUndoTriggers(this.db);
+
+            forgetFork3dVenueMigration(this.rawDb);
 
             console.log("Applying pending Drizzle migrations...");
 
@@ -106,6 +141,14 @@ export class DrizzleMigrationService {
                     migrationsTable: "__drizzle_migrations",
                 },
             );
+
+            // The callback above already rebuilds every trigger in the `triggers` map (drizzle
+            // calls it on every open, even with no migration pending); these checks make sure
+            // the change-log bodies are current without relying on that. They run after the
+            // file-version guard above, so they never write to a file this build refuses.
+            recreateChangeLogTriggers(this.rawDb);
+            // Likewise for the page-era freeze (P9.5), which files migrated before it lack
+            recreatePageEraFreezeTriggers(this.rawDb);
 
             console.log("Drizzle migrations applied successfully.");
         } catch (error) {
@@ -171,7 +214,8 @@ export class DrizzleMigrationService {
 
     /** Run any ts migrations that are not in drizzle */
     static async initializeDatabase(db: DB, rawDb: DatabaseSync) {
-        await db.run(sql`PRAGMA user_version = 7`);
+        // Only ever called on a file the app just created.
+        await db.run(sql.raw(`PRAGMA user_version = ${NEW_FILE_USER_VERSION}`));
 
         // Easier to do this here than in the migration
         await db.insert(schema.field_properties).values({

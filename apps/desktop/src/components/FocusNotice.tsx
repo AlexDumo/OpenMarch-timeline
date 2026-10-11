@@ -1,13 +1,12 @@
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { Button } from "@openmarch/ui";
-import RegisteredActionButton from "./RegisteredActionButton";
-import { RegisteredActionsObjects } from "@/utilities/RegisteredActionsHandler";
+import ActionButton from "@/shortcuts/ActionButton";
 import { InfoIcon } from "@phosphor-icons/react";
 
 export default function FocusNotice() {
-    const {
-        uiSettings: { focussedComponent },
-    } = useUiSettingsStore();
+    const focussedComponent = useUiSettingsStore(
+        (s) => s.uiSettings.focussedComponent,
+    );
 
     if (focussedComponent !== "timeline") {
         return null;
@@ -23,13 +22,11 @@ export default function FocusNotice() {
                     editor.
                 </span>
             </div>
-            <RegisteredActionButton
-                registeredAction={RegisteredActionsObjects.focusCanvas}
-            >
+            <ActionButton action="focusCanvas">
                 <Button size="compact" variant="secondary">
                     Exit Timeline Focus
                 </Button>
-            </RegisteredActionButton>
+            </ActionButton>
         </div>
     );
 }

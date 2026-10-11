@@ -4,6 +4,7 @@ import { drizzle as sqliteProxyDrizzle } from "drizzle-orm/sqlite-proxy";
 import { DatabaseSync, type StatementResultingChanges } from "node:sqlite";
 import initSqlJs from "sql.js";
 import fs from "fs-extra";
+import os from "os";
 import path from "path";
 import * as mockDataMarchersAndPages from "./mock-data/marchers-and-pages.mjs";
 import * as mockDataMarchers from "./mock-data/marchers.mjs";
@@ -16,6 +17,7 @@ import {
     handleSqlProxyWithDbBetterSqlite,
     handleSqlProxyWithDbSqlJs,
 } from "./sqlProxyTestUtil";
+import { applyTimelineModeToFile, timelineFixtureMode } from "./timelineMode";
 import { drizzle as drizzleSqliteProxy } from "drizzle-orm/sqlite-proxy";
 import { JSX } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -47,9 +49,17 @@ type DbConnection = BaseSQLiteDatabase<
     StatementResultingChanges | void | SqliteRemoteResult<unknown>,
     typeof schema
 >;
+/**
+ * Test databases go in the system temp folder, named by process. Task ids are
+ * only unique within one run, so two runs writing to the working directory
+ * (two agents, or a watch run beside a full run) used to share files.
+ */
+const tempDotsDir = path.join(os.tmpdir(), "openmarch-test");
+fs.ensureDirSync(tempDotsDir);
+
 const getTempDotsPath = (task: Readonly<{ id: string }>) => {
     const taskId = task.id.startsWith("-") ? task.id.slice(1) : task.id;
-    return path.resolve(`${taskId}.tmp.dots`);
+    return path.join(tempDotsDir, `${process.pid}-${taskId}.tmp.dots`);
 };
 
 const getTempDb = async (task: Readonly<{ id: string }>) => {
@@ -105,11 +115,19 @@ const loadSqlIntoDatabase = async (
 
     // drop all triggers
     await dropAllUndoTriggers(orm as unknown as any);
+    // In timeline test mode the blank file already has the flag on, and the page-era freeze
+    // (P9.5) would refuse the page show's rows. Load them in page mode; applyTimelineModeToFile
+    // below turns the flag back on after converting them.
+    if (timelineFixtureMode())
+        db.exec(
+            `UPDATE workspace_settings SET json_data = json_set(json_data, '$.timelineMode', json('false'))`,
+        );
     await db.exec(sql);
     await createAllUndoTriggers(orm as unknown as any);
     const updatedDbBuffer = db.export();
     fs.writeFileSync(dbPath, updatedDbBuffer);
     db.close();
+    if (timelineFixtureMode()) await applyTimelineModeToFile(dbPath);
 };
 
 /********* FIXTURES *********/
@@ -201,6 +219,11 @@ const baseFixture = baseTest.extend<BaseApi>({
 
                 fs.writeFileSync(tempDatabaseFile, updatedDbBuffer);
                 db.close();
+                // A blank file only gets the flag: a new timeline-mode file has no timeline rows
+                if (timelineFixtureMode())
+                    await applyTimelineModeToFile(tempDatabaseFile, {
+                        convert: false,
+                    });
                 await use();
             } catch (error) {
                 console.error("Error setting up database:", error);
@@ -442,6 +465,7 @@ const describeDbTests = (
 };
 
 export {
+    getTempDotsPath,
     sqlJsTest,
     betterSqliteTestWithProxy,
     describeDbTests,

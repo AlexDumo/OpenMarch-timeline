@@ -1,10 +1,6 @@
 /* eslint-disable no-control-regex */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ReactDOMServer from "react-dom/server";
-import MarcherCoordinateSheetPreview, {
-    StaticMarcherCoordinateSheet,
-    StaticQuarterMarcherSheet,
-} from "./MarcherCoordinateSheet";
+import MarcherCoordinateSheetPreview from "./MarcherCoordinateSheet";
 import {
     allMarcherPagesQueryOptions,
     allSectionAppearancesQueryOptions,
@@ -14,21 +10,20 @@ import {
     tagAppearanceByPageIdMapQueryOptions,
 } from "@/hooks/queries";
 import { buildMarcherAppearancesByPageId } from "./utils/exportAppearances";
-import { getByMarcherId } from "@/global/classes/MarcherPage";
+import { buildCoordinateSheets } from "./utils/coordinateSheets";
+import {
+    marchersWithoutPositions,
+    readExportPositions,
+    type PagePositionMap,
+} from "./utils/exportPagePositions";
 import {
     Dialog,
     DialogClose,
     DialogContent,
     DialogTitle,
-    DialogTrigger,
     TooltipClassName,
 } from "@openmarch/ui";
-import {
-    ArrowSquareOutIcon,
-    InfoIcon,
-    MoonIcon,
-    SunIcon,
-} from "@phosphor-icons/react";
+import { InfoIcon, MoonIcon, SunIcon } from "@phosphor-icons/react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import {
@@ -46,6 +41,7 @@ import { useTimingObjects } from "@/hooks";
 import individualDemoSVG from "@/assets/drill_chart_export_individual_demo.svg";
 import overviewDemoSVG from "@/assets/drill_chart_export_overview_demo.svg";
 import { Tabs, TabsList, TabContent, TabItem } from "@openmarch/ui";
+import { useAppDialogStore, type ExportTab } from "@/stores/AppDialogStore";
 import { coordinateRoundingOptions } from "../../config/exportOptions";
 import clsx from "clsx";
 import "../../styles/shimmer.css";
@@ -59,6 +55,7 @@ import {
     getFieldPropertiesImageElement,
 } from "./utils/svg-generator";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useShallow } from "zustand/react/shallow";
 import { notesHtmlToPlainText, truncateHtmlNotes } from "@/utilities/notesText";
 import Constants from "@/global/Constants";
 import { useQueryClient } from "@tanstack/react-query";
@@ -67,7 +64,17 @@ import {
     coordinateDataQueryOptions,
     useManyCoordinateData,
 } from "@/hooks/queries/useCoordinateData";
-import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    useTimelineMode,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
+import { db } from "@/global/database/db";
+import { showEndTime } from "@/timeline/timeMap";
+import {
+    acquireExportResolver,
+    ResolverFrameSampler,
+} from "@/timeline/timelineExport";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import AudioFile from "@/global/classes/AudioFile";
 import { exportVideo } from "./video/videoRenderer";
 import {
@@ -93,18 +100,34 @@ import { useTheme } from "@/context/ThemeContext";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { MobileExportModalContents } from "@/components/mobile/MobileExportModal";
 
+/** Error messages for `readExportPositions` (P7.7). */
+const exportPositionMessages = () => ({
+    notLoaded: tolgee.t("exportCoordinates.marcherPagesNotLoaded"),
+    showChanged: tolgee.t("exportCoordinates.showChangedDuringExport"),
+});
+
+/**
+ * Warns when a marcher has no positions at all: its quarter sheets are left out and its full
+ * sheet is empty (before P7.7 a quarter-sheet export aborted instead).
+ */
+function warnMarchersWithoutPositions(
+    marchers: readonly { id: number; drill_number: string }[],
+    positions: Pick<PagePositionMap, "marcherPagesByMarcher">,
+) {
+    const missing = marchersWithoutPositions(marchers, positions);
+    if (missing.length === 0) return;
+    const drillNumbers = missing.map((m) => m.drill_number).join(", ");
+    console.warn(`Coordinate sheets: no positions for ${drillNumbers}`);
+    toast.warning(
+        tolgee.t("exportCoordinates.marchersWithoutPositions", {
+            drillNumbers,
+        }),
+    );
+}
+
 const mobileExportScreenshotUrls = [2, 3, 4, 5].map(
     (index) => `https://assets.openmarch.com/desktop/mobile-wipe/${index}.webp`,
 );
-
-function chunkArray<T>(arr: T[], size: number): T[][] {
-    const result: T[][] = [];
-    for (let i = 0; i < arr.length; i += size) {
-        result.push(arr.slice(i, i + size));
-    }
-    return result;
-}
-const QUARTER_ROWS = 28; // Increased from 25 to fit more rows
 
 // eslint-disable-next-line max-lines-per-function
 function CoordinateSheetExport() {
@@ -118,7 +141,7 @@ function CoordinateSheetExport() {
         allMarchersQueryOptions(),
     );
     const { pages } = useTimingObjects();
-    const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
+    const { data: marcherPages } = useQuery(
         allMarcherPagesQueryOptions({
             pinkyPromiseThatYouKnowWhatYouAreDoing: true,
         }),
@@ -170,7 +193,7 @@ function CoordinateSheetExport() {
             return;
         }
 
-        if (!marcherPagesLoaded || !marchersLoaded) {
+        if (!marchersLoaded) {
             setIsLoading(true);
             return;
         }
@@ -179,6 +202,16 @@ function CoordinateSheetExport() {
             isCancelled.current = false;
             startPhraseRotation();
             setProgress(5);
+
+            // Read positions first, before the pauses below: page mode reads marcher_pages,
+            // timeline mode samples the resolver at each page's end beat and checks that
+            // `pages` and `marchers` match that snapshot (P7.7)
+            const positions = await readExportPositions({
+                db,
+                rendered: { pages, marchers },
+                pageModePositions: marcherPages,
+                messages: exportPositionMessages(),
+            });
 
             // Simulate more granular progress updates
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -214,9 +247,6 @@ function CoordinateSheetExport() {
                 throw new Error(t("exportCoordinates.cancelledByUser"));
             setProgress(25);
 
-            // More detailed progress for sheet generation
-            let groupedSheets: any[];
-
             // Check for cancellation
             if (isCancelled.current) {
                 throw new Error(t("exportCoordinates.cancelledByUser"));
@@ -228,109 +258,22 @@ function CoordinateSheetExport() {
             if (isCancelled.current)
                 throw new Error(t("exportCoordinates.cancelledByUser"));
 
-            const pageOrderById: Record<number, number> = {};
-            pages.forEach((page) => {
-                pageOrderById[page.id] = page.order;
+            warnMarchersWithoutPositions(processedMarchers, positions);
+
+            const groupedSheets = buildCoordinateSheets({
+                marchers: processedMarchers,
+                pages,
+                positions,
+                fieldProperties,
+                options: {
+                    quarterPages,
+                    terse: isTerse,
+                    includeMeasures,
+                    useXY,
+                    roundingDenominator,
+                },
+                t,
             });
-
-            // split to quarter sheets
-            if (quarterPages) {
-                // Create quarter sheets for each marcher, organized by performer number
-                groupedSheets = processedMarchers.flatMap((marcher) => {
-                    const marcherPagesForMarcher = Object.entries(
-                        marcherPages.marcherPagesByMarcher[marcher.id],
-                    )
-                        .sort(
-                            ([pageIdA], [pageIdB]) =>
-                                (pageOrderById[Number(pageIdA)] ?? 0) -
-                                (pageOrderById[Number(pageIdB)] ?? 0),
-                        )
-                        .map(([, mp]) => mp);
-
-                    const rowChunks = chunkArray(
-                        marcherPagesForMarcher,
-                        QUARTER_ROWS,
-                    );
-
-                    return rowChunks.map((rowChunk, chunkIdx) => {
-                        try {
-                            const renderedHtml = ReactDOMServer.renderToString(
-                                <StaticQuarterMarcherSheet
-                                    marcher={marcher}
-                                    pages={pages}
-                                    marcherPages={rowChunk}
-                                    fieldProperties={fieldProperties}
-                                    roundingDenominator={roundingDenominator}
-                                    terse={isTerse}
-                                    quarterPageNumber={chunkIdx + 1}
-                                    useXY={useXY}
-                                    includeMeasures={includeMeasures}
-                                />,
-                            );
-
-                            // Clean up the HTML to prevent URL encoding issues
-                            const cleanedHtml = renderedHtml
-                                .replace(/[\u0000-\u001F\u007F-\u009F]/g, "") // Remove control characters
-                                .replace(/\s+/g, " ") // Normalize whitespace
-                                .trim();
-
-                            return {
-                                name: marcher.name,
-                                drillNumber: marcher.drill_number,
-                                section:
-                                    marcher.section ||
-                                    t("exportCoordinates.unsortedSection"),
-                                renderedPage: cleanedHtml,
-                            };
-                        } catch (error) {
-                            console.error(
-                                `Error rendering quarter page for ${marcher.drill_number}:`,
-                                error,
-                            );
-                            return {
-                                name: marcher.name,
-                                drillNumber: marcher.drill_number,
-                                section:
-                                    marcher.section ||
-                                    t("exportCoordinates.unsortedSection"),
-                                renderedPage: `<div><h3>${t("exportCoordinates.errorRendering", { drillNumber: marcher.drill_number })}</h3><p>${error instanceof Error ? error.message : t("exportCoordinates.unknownError")}</p></div>`,
-                            };
-                        }
-                    });
-                });
-            } else {
-                // regular format
-                groupedSheets = processedMarchers.map((marcher) => {
-                    const marcherPagesForMarcher = getByMarcherId(
-                        marcherPages,
-                        marcher.id,
-                    ).sort((a, b) => {
-                        const pageA = pages.find((p) => p.id === a.page_id);
-                        const pageB = pages.find((p) => p.id === b.page_id);
-                        return (pageA?.order ?? 0) - (pageB?.order ?? 0);
-                    });
-
-                    return {
-                        name: marcher.name,
-                        drillNumber: marcher.drill_number,
-                        section:
-                            marcher.section ||
-                            t("exportCoordinates.unsortedSection"),
-                        renderedPage: ReactDOMServer.renderToString(
-                            <StaticMarcherCoordinateSheet
-                                marcher={marcher}
-                                pages={pages}
-                                marcherPages={marcherPagesForMarcher}
-                                fieldProperties={fieldProperties}
-                                includeMeasures={includeMeasures}
-                                terse={isTerse}
-                                useXY={useXY}
-                                roundingDenominator={roundingDenominator}
-                            />,
-                        ),
-                    };
-                });
-            }
 
             // Continue with fun phrases during PDF generation
             setProgress(85);
@@ -444,7 +387,6 @@ function CoordinateSheetExport() {
     }, [
         t,
         fieldProperties,
-        marcherPagesLoaded,
         marchersLoaded,
         marchers,
         pages,
@@ -702,8 +644,10 @@ function CoordinateSheetExport() {
 // eslint-disable-next-line max-lines-per-function
 function DrillChartExport() {
     const { pages } = useTimingObjects()!;
+    // Timeline mode drops the per-page appearance fields of marcher_pages (P7.14)
+    const timelineMode = useTimelineMode();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
-    const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
+    const { data: marcherPages } = useQuery(
         allMarcherPagesQueryOptions({
             pinkyPromiseThatYouKnowWhatYouAreDoing: true,
         }),
@@ -723,14 +667,19 @@ function DrillChartExport() {
     const { data: tagAppearanceIdsByPageId } = useQuery(
         tagAppearanceByPageIdMapQueryOptions(),
     );
-    const { uiSettings } = useUiSettingsStore();
+    const uiSettings = useUiSettingsStore(
+        useShallow((s) => ({
+            gridLines: s.uiSettings.gridLines,
+            halfLines: s.uiSettings.halfLines,
+        })),
+    );
 
     const marcherAppearancesByPageId = useMemo(() => {
         if (
             !fieldProperties ||
             !marchers?.length ||
             !sectionAppearances ||
-            !marcherPages ||
+            (!timelineMode && !marcherPages) ||
             !marcherIdsByTagId ||
             !allTagAppearances ||
             !tagAppearanceIdsByPageId
@@ -742,6 +691,7 @@ function DrillChartExport() {
             sortedPages: pages,
             marchers,
             marcherPagesMap: marcherPages,
+            timelineMode,
             sectionAppearances,
             marcherIdsByTagId,
             allTagAppearances,
@@ -749,6 +699,7 @@ function DrillChartExport() {
             fieldProperties,
         });
     }, [
+        timelineMode,
         fieldProperties,
         marchers,
         sectionAppearances,
@@ -819,6 +770,23 @@ function DrillChartExport() {
 
             // Generate PDFs for each marcher or MAIN if individual charts are not selected
             for (let marcher = 0; marcher < svgPages.length; marcher++) {
+                // Index i is always marchers[i]. A marcher missing a position on some page
+                // has no pages here: skip its PDF rather than draw an incomplete one
+                if (individualCharts && svgPages[marcher].length === 0) {
+                    const drillNumber = marchers[marcher]?.drill_number ?? "";
+                    console.warn(
+                        `Drill charts: no positions for ${drillNumber} on every page; skipped`,
+                    );
+                    toast.error(
+                        t("exportCoordinates.svgExportFailed", {
+                            drillNumber,
+                            error: t(
+                                "exportCoordinates.marcherPositionsMissing",
+                            ),
+                        }),
+                    );
+                    continue;
+                }
                 const result =
                     await window.electron.export.generateDocForMarcher({
                         svgPages: svgPages[marcher],
@@ -891,10 +859,6 @@ function DrillChartExport() {
         setIsLoading(true);
         setProgress(0);
 
-        assert(
-            marcherPagesLoaded,
-            t("exportCoordinates.marcherPagesNotLoaded"),
-        );
         assert(marchersLoaded, t("exportCoordinates.marchersNotLoaded"));
         assert(
             fieldProperties,
@@ -905,16 +869,24 @@ function DrillChartExport() {
             t("exportCoordinates.sectionAppearancesNotLoaded"),
         );
 
-        const backgroundImage = await getFieldPropertiesImageElement();
         // Generate SVGs from the canvas
         let SVGs: string[][] = [];
         let coords: string[][] | null = null;
         try {
+            // Page mode reads marcher_pages; timeline mode samples the resolver at each
+            // page's end beat and checks that `pages` and `marchers` match that snapshot (P7.7)
+            const positions = await readExportPositions({
+                db,
+                rendered: { pages, marchers },
+                pageModePositions: marcherPages,
+                messages: exportPositionMessages(),
+            });
+            const backgroundImage = await getFieldPropertiesImageElement();
             ({ SVGs, coords } = await generateDrillChartExportSVGs({
                 fieldProperties,
                 marchers,
                 sortedPages: pages,
-                marcherPagesMap: marcherPages,
+                marcherPagesMap: positions,
                 sectionAppearances: sectionAppearances,
                 marcherAppearancesByPageId,
                 backgroundImage,
@@ -1013,7 +985,6 @@ function DrillChartExport() {
             }, 1000);
         }
     }, [
-        marcherPagesLoaded,
         t,
         marchersLoaded,
         fieldProperties,
@@ -1251,7 +1222,12 @@ const VIDEO_FRAME_RATES = [30, 60] as const;
 
 // eslint-disable-next-line max-lines-per-function
 function VideoExport() {
-    const { pages, measures } = useTimingObjects()!;
+    const { pages, measures, beats } = useTimingObjects()!;
+    // Timeline mode: positions come from the resolver, appearances ignore page rows (P7.8)
+    const timelineMode = useTimelineMode();
+    const storeResolver = useTimelineResolverStore((s) => s.resolver);
+    // The store's resolver is updated in place; a new version redraws the preview
+    const resolverVersion = useTimelineResolverStore((s) => s.version);
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const { data: marchers, isSuccess: marchersLoaded } = useQuery(
         allMarchersQueryOptions(),
@@ -1283,7 +1259,12 @@ function VideoExport() {
                 (file) => file.selected,
             ) ?? null,
     });
-    const { uiSettings } = useUiSettingsStore();
+    const uiSettings = useUiSettingsStore(
+        useShallow((s) => ({
+            gridLines: s.uiSettings.gridLines,
+            halfLines: s.uiSettings.halfLines,
+        })),
+    );
     const { theme } = useTheme();
     const queryClient = useQueryClient();
 
@@ -1292,7 +1273,7 @@ function VideoExport() {
             !fieldProperties ||
             !marchers?.length ||
             !sectionAppearances ||
-            !marcherPages ||
+            (!timelineMode && !marcherPages) ||
             !marcherIdsByTagId ||
             !allTagAppearances ||
             !tagAppearanceIdsByPageId
@@ -1304,6 +1285,7 @@ function VideoExport() {
             sortedPages: pages,
             marchers,
             marcherPagesMap: marcherPages,
+            timelineMode,
             sectionAppearances,
             marcherIdsByTagId,
             allTagAppearances,
@@ -1311,6 +1293,7 @@ function VideoExport() {
             fieldProperties,
         });
     }, [
+        timelineMode,
         fieldProperties,
         marchers,
         sectionAppearances,
@@ -1347,13 +1330,24 @@ function VideoExport() {
     const t = tolgee.t;
 
     const { data: marcherTimelines, isPending: timelinesPending } =
-        useManyCoordinateData(pages);
+        useManyCoordinateData(timelineMode ? [] : pages);
+
+    // The preview's sampler; the export builds its own (it can cold-build a resolver)
+    const previewSampler = useMemo(
+        () =>
+            timelineMode && storeResolver
+                ? new ResolverFrameSampler(storeResolver, beats)
+                : null,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [timelineMode, storeResolver, resolverVersion, beats],
+    );
 
     const durationSeconds = useMemo(() => {
+        if (timelineMode) return showEndTime(beats);
         if (pages.length === 0) return 0;
         const lastPage = pages[pages.length - 1];
         return lastPage.timestamp + lastPage.duration;
-    }, [pages]);
+    }, [pages, timelineMode, beats]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1388,7 +1382,8 @@ function VideoExport() {
                 !fieldProperties ||
                 !marchers?.length ||
                 pages.length < 1 ||
-                timelinesPending
+                timelinesPending ||
+                (timelineMode && !previewSampler)
             ) {
                 return;
             }
@@ -1399,6 +1394,7 @@ function VideoExport() {
                     sortedPages: pages,
                     marchers,
                     marcherTimelines,
+                    frameSampler: previewSampler,
                     sectionAppearances,
                     marcherAppearancesByPageId,
                     backgroundImage,
@@ -1430,6 +1426,8 @@ function VideoExport() {
         pages,
         marcherTimelines,
         timelinesPending,
+        timelineMode,
+        previewSampler,
         sectionAppearances,
         marcherAppearancesByPageId,
         backgroundImage,
@@ -1516,7 +1514,8 @@ function VideoExport() {
             const [timelineMaps, audioFile, backgroundImage] =
                 await Promise.all([
                     Promise.all(
-                        pages.map((page) =>
+                        // Timeline mode samples the resolver instead (P7.8)
+                        (timelineMode ? [] : pages).map((page) =>
                             queryClient.fetchQuery(
                                 coordinateDataQueryOptions(page, queryClient),
                             ),
@@ -1526,12 +1525,20 @@ function VideoExport() {
                     getFieldPropertiesImageElement(),
                 ]);
             assert(audioFile.data, "Audio file has no data");
+            // The store's resolver when ready, else one cold-built for this export
+            const frameSampler = timelineMode
+                ? new ResolverFrameSampler(
+                      await acquireExportResolver(db),
+                      beats,
+                  )
+                : null;
 
             const result = await exportVideo({
                 fieldProperties,
                 marchers,
                 sortedPages: pages,
                 marcherTimelines: combineMarcherTimelines(timelineMaps),
+                frameSampler,
                 sectionAppearances,
                 marcherAppearancesByPageId,
                 backgroundImage,
@@ -1593,6 +1600,8 @@ function VideoExport() {
         }
     }, [
         t,
+        timelineMode,
+        beats,
         marchersLoaded,
         fieldProperties,
         resolution,
@@ -2001,8 +2010,13 @@ function ExportModalContents({
 }: {
     onMobileExportClick: () => void;
 }) {
+    const { exportTab, setExportTab } = useAppDialogStore();
     return (
-        <Tabs defaultValue="mobile" className="gap-12">
+        <Tabs
+            value={exportTab}
+            onValueChange={(tab) => setExportTab(tab as ExportTab)}
+            className="gap-12"
+        >
             <TabsList>
                 <TabItem value="mobile">
                     <T keyName="exportCoordinates.mobile" />
@@ -2037,31 +2051,22 @@ function ExportModalContents({
     );
 }
 
+/** The export dialog. Mount once; open it with the export actions. */
 export default function ExportCoordinatesModal() {
-    const [open, setOpen] = useState(false);
+    const { exportOpen: open, setExportOpen: setOpen } = useAppDialogStore();
     const { setContent, setOpen: setSidebarOpen } = useSidebarModalStore();
 
     const handleMobileExportClick = useCallback(() => {
         setOpen(false);
         setContent(<MobileExportModalContents />, "mobile-export");
         setSidebarOpen(true);
-    }, [setContent, setSidebarOpen]);
+    }, [setContent, setSidebarOpen, setOpen]);
 
     return (
         <>
             <style>{`.export-coordinates-dialog + [data-radix-popper-content-wrapper],
                 .export-coordinates-dialog ~ [data-radix-popper-content-wrapper]{z-index:10000 !important;}`}</style>
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger
-                    asChild
-                    className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
-                >
-                    <button type="button" className="flex items-center gap-8">
-                        <ArrowSquareOutIcon size={24} />
-                        <T keyName="exportCoordinates.exportButton" />
-                    </button>
-                </DialogTrigger>
-
                 {/* Dialog Setup */}
                 <DialogContent className="export-coordinates-dialog max-h-[80vh] w-[48rem] overflow-y-auto">
                     <DialogTitle>

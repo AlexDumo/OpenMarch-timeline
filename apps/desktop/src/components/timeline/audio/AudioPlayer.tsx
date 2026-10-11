@@ -16,8 +16,20 @@ import { createMetronomeWav, SAMPLE_RATE } from "@openmarch/metronome";
 import WaveformTimingOverlay from "./WaveformTimingOverlay";
 import { calculateMasterVolume } from "./volume";
 import { useQuery } from "@tanstack/react-query";
-import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    useTimelineMode,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
+import { timeAtBeat } from "@/timeline/timeMap";
 import AudioOffsetWorker from "@/workers/audioOffset.worker.ts?worker";
+import {
+    audioEnvelope,
+    useAudioEnvelopeStore,
+} from "@/timeline/timelineWaveform";
 import { CircleNotchIcon } from "@phosphor-icons/react";
 import type Page from "@/global/classes/Page";
 
@@ -25,6 +37,8 @@ export const waveColor = "rgb(180, 180, 180)";
 export const lightProgressColor = "rgb(100, 66, 255)";
 export const darkProgressColor = "rgb(150, 126, 255)";
 const PLAYBACK_DELAY = 0.1; // Delay in seconds to start playback
+// Stopping fades the sources out over this many seconds, so a stop or restart doesn't click
+const STOP_FADE = 0.008;
 const WAVEFORM_HEIGHT = 60;
 
 // Helper function to adjust volume based on percentage
@@ -82,16 +96,39 @@ export const getLivePlaybackPosition = (): number => {
 };
 
 /**
+ * Moves the live playback position to `seconds` now, without waiting for the audio to restart
+ * (timeline mode's loop, UI-9). The audio player restarts its sources from the playhead on the same
+ * seek and then replaces this start info with its own. Does nothing while nothing is playing.
+ */
+export const restartLivePlaybackAt = (seconds: number): void => {
+    if (!audioContextRef || !playbackStartInfoRef.current) return;
+    playbackStartInfoRef.current = {
+        playStartTime: audioContextRef.currentTime,
+        startTimestamp: seconds - PLAYBACK_DELAY - 0.01,
+        pageDuration: 0,
+    };
+};
+
+/**
  * The audio player handles playback via Web Audio API.
  * Metronome controls are managed by MetronomeModal.
+ *
+ * `headless` runs only the engine: the AudioContext, the music and metronome sources, the live
+ * playback clock and the timeline's waveform envelope. It renders nothing, so it builds no
+ * wavesurfer (no second decode of the song, no per-frame seeks) and no beat and measure markers.
+ * Timeline mode uses it, since the timeline draws its own waveform lane and playhead.
  */
 // eslint-disable-next-line max-lines-per-function
-export default function AudioPlayer() {
+export default function AudioPlayer({
+    headless = false,
+}: { headless?: boolean } = {}) {
     const { t } = useTolgee();
     const { theme } = useTheme();
-    const { uiSettings } = useUiSettingsStore();
-    const audioMuted = uiSettings.audioMuted;
-    const audioVolume = uiSettings.audioVolume;
+    const audioMuted = useUiSettingsStore((s) => s.uiSettings.audioMuted);
+    const audioVolume = useUiSettingsStore((s) => s.uiSettings.audioVolume);
+    const timelinePixelsPerSecond = useUiSettingsStore(
+        (s) => s.uiSettings.timelinePixelsPerSecond,
+    );
     const selectedPageContext = useSelectedPage();
     const isPlayingContext = useIsPlaying();
     const selectedAudioFileContext = useSelectedAudioFile();
@@ -139,6 +176,25 @@ export default function AudioPlayer() {
     // AudioContext state management
     const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
     const [playbackTimestamp, setPlaybackTimestamp] = useState<number>(0);
+    // Timeline mode (UI-9, UI-11): play starts at the playback cursor (or the playhead when there
+    // is none), not the selected page. Every cursor or playhead write restarts playback from it,
+    // which is how a preview loops back to its start.
+    const timelineMode = useTimelineMode();
+    // In timeline mode, mute silences the music only, so the metronome can count through it
+    // (UI-12); page mode's mute still silences both
+    const metroMuted = audioMuted && !timelineMode;
+    // Only read while playing (where playback starts, and each restart); paused, a scrub's seeks
+    // don't re-render the player
+    const playheadBeat = useTimelineSelectionStore((s) =>
+        isPlaying ? displayedBeat(s) : 0,
+    );
+    const playheadRevision = useTimelineSelectionStore((s) =>
+        isPlaying ? s.playheadRevision : -1,
+    );
+    const startSeconds = timelineMode
+        ? timeAtBeat(beats, playheadBeat)
+        : playbackTimestamp;
+    const restartKey = timelineMode ? playheadRevision : 0;
     const selectedPageRef = useRef(selectedPage);
     const audioDurationRef = useRef(audioDuration);
     const isPlayingRef = useRef(isPlaying);
@@ -211,6 +267,21 @@ export default function AudioPlayer() {
             largestMinimumDuration.current = cappedDuration;
         return largestMinimumDuration.current;
     }, [pages]);
+
+    // The timeline's waveform lane (UI-12) reads the offset audio's envelope; page mode has no
+    // lane, so it skips the work
+    useEffect(() => {
+        const { setEnvelope } = useAudioEnvelopeStore.getState();
+        setEnvelope(
+            timelineMode && audioBuffer && selectedAudioFile
+                ? audioEnvelope(audioBuffer)
+                : null,
+        );
+    }, [timelineMode, audioBuffer, selectedAudioFile]);
+    useEffect(
+        () => () => useAudioEnvelopeStore.getState().setEnvelope(null),
+        [],
+    );
 
     // Populate audio data when selectedAudioFile changes
     useEffect(() => {
@@ -310,6 +381,8 @@ export default function AudioPlayer() {
                             },
                             offsetSeconds: audioOffsetSeconds,
                             minimumDuration: minimumAudioDuration,
+                            // Only the wavesurfer view reads the WAV copy
+                            encodeWaveform: !headless,
                         },
                         transferList,
                     );
@@ -334,6 +407,7 @@ export default function AudioPlayer() {
         selectedAudioFile,
         audioOffsetSeconds,
         minimumAudioDuration,
+        headless,
         t,
     ]);
 
@@ -354,28 +428,40 @@ export default function AudioPlayer() {
         )
             return;
 
+        // Fades a source out and stops it, then disconnects it and its gain
+        const fadeOut = (
+            source: AudioBufferSourceNode,
+            gain: GainNode | null,
+        ) => {
+            const now = audioContext.currentTime;
+            if (gain) {
+                gain.gain.cancelScheduledValues(now);
+                gain.gain.setValueAtTime(gain.gain.value, now);
+                gain.gain.linearRampToValueAtTime(0, now + STOP_FADE);
+            }
+            try {
+                source.stop(now + STOP_FADE);
+            } catch (e) {
+                // Already stopped or not playing, ignore
+            }
+            setTimeout(
+                () => {
+                    source.disconnect();
+                    gain?.disconnect();
+                },
+                STOP_FADE * 1000 + 20,
+            );
+        };
+
         // Helper to stop playback
         const stopPlayback = () => {
             if (audioNode.current) {
-                try {
-                    audioNode.current.stop();
-                } catch (e) {
-                    // Audio already stopped or not playing, ignore
-                }
-                audioNode.current.disconnect();
+                fadeOut(audioNode.current, audioGainNode.current);
                 audioNode.current = null;
-            }
-            if (audioGainNode.current) {
-                audioGainNode.current.disconnect();
-                audioGainNode.current = null;
-            }
+            } else audioGainNode.current?.disconnect();
+            audioGainNode.current = null;
             if (metroNode.current) {
-                try {
-                    metroNode.current.stop();
-                } catch (e) {
-                    // Metronome already stopped or not playing, ignore
-                }
-                metroNode.current.disconnect();
+                fadeOut(metroNode.current, metroGainNode.current);
                 metroNode.current = null;
             }
         };
@@ -399,7 +485,8 @@ export default function AudioPlayer() {
 
             const metroSource = audioContext.createBufferSource();
             metroGainNode.current = audioContext.createGain();
-            const masterVolume = calculateMasterVolume(audioVolume, audioMuted);
+            // The volume scales both; mute reaches the metronome only in page mode (metroMuted)
+            const masterVolume = calculateMasterVolume(audioVolume, metroMuted);
             // Read metronome settings at playback start, live changes update gain below without restarting
             const { isMetronomeOn: metronomeOn, volume: metronomeVolume } =
                 useMetronomeStore.getState();
@@ -412,8 +499,8 @@ export default function AudioPlayer() {
                 .connect(metroGainNode.current)
                 .connect(audioContext.destination);
 
-            audioSource.start(startAt, playbackTimestamp);
-            metroSource.start(startAt, playbackTimestamp);
+            audioSource.start(startAt, startSeconds);
+            metroSource.start(startAt, startSeconds);
 
             // Only clear the ref if it still points at this source, a restart may have replaced it
             audioSource.onended = () => {
@@ -427,11 +514,17 @@ export default function AudioPlayer() {
             metroNode.current = metroSource;
 
             // Store playback tracking info for live position
-            playbackStartInfoRef.current = {
-                playStartTime: startAt,
-                startTimestamp: selectedPage?.timestamp ?? 0,
-                pageDuration: selectedPage?.duration ?? 0,
-            };
+            playbackStartInfoRef.current = timelineMode
+                ? {
+                      playStartTime: startAt,
+                      startTimestamp: startSeconds,
+                      pageDuration: 0,
+                  }
+                : {
+                      playStartTime: startAt,
+                      startTimestamp: selectedPage?.timestamp ?? 0,
+                      pageDuration: selectedPage?.duration ?? 0,
+                  };
         } else {
             // If not playing, stop any existing playback
             stopPlayback();
@@ -450,14 +543,17 @@ export default function AudioPlayer() {
         audioContext,
         isAudioProcessing,
         metronomeBuffer,
-        playbackTimestamp,
+        startSeconds,
+        restartKey,
+        timelineMode,
         audioVolume,
         audioMuted,
+        metroMuted,
     ]);
 
     // Initialize WaveSurfer and load waveform data
     useEffect(() => {
-        if (!waveformRef.current || !waveformBuffer) return;
+        if (headless || !waveformRef.current || !waveformBuffer) return;
 
         // Clean up previous instance
         if (waveSurfer) {
@@ -503,18 +599,18 @@ export default function AudioPlayer() {
             setWaveSurfer(null);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [waveformRef, waveformBuffer, theme]);
+    }, [waveformRef, waveformBuffer, theme, headless]);
 
     // Update metronome on/off state and volume
     useEffect(() => {
         if (metroGainNode.current) {
-            const masterVolume = calculateMasterVolume(audioVolume, audioMuted);
+            const masterVolume = calculateMasterVolume(audioVolume, metroMuted);
             metroGainNode.current.gain.value =
                 isMetronomeOn && masterVolume > 0
                     ? volumeAdjustment(volume) * masterVolume
                     : 0;
         }
-    }, [audioMuted, audioVolume, isMetronomeOn, volume]);
+    }, [audioVolume, metroMuted, isMetronomeOn, volume]);
 
     useEffect(() => {
         if (audioGainNode.current) {
@@ -570,23 +666,21 @@ export default function AudioPlayer() {
 
     const audioWaveformWidth = useMemo(() => {
         if (audioDuration <= 0) return 0;
-        return audioDuration * uiSettings.timelinePixelsPerSecond;
-    }, [audioDuration, uiSettings.timelinePixelsPerSecond]);
+        return audioDuration * timelinePixelsPerSecond;
+    }, [audioDuration, timelinePixelsPerSecond]);
 
     // Update WaveSurfer style if duration or zoom changes
     useEffect(() => {
         if (waveSurfer) {
             waveSurfer.setOptions({
-                minPxPerSec: uiSettings.timelinePixelsPerSecond,
+                minPxPerSec: timelinePixelsPerSecond,
                 width: audioWaveformWidth,
             });
         }
-    }, [waveSurfer, audioWaveformWidth, uiSettings.timelinePixelsPerSecond]);
+    }, [waveSurfer, audioWaveformWidth, timelinePixelsPerSecond]);
 
     const waveformWidth =
-        renderedDuration > 0
-            ? renderedDuration * uiSettings.timelinePixelsPerSecond
-            : 0;
+        renderedDuration > 0 ? renderedDuration * timelinePixelsPerSecond : 0;
 
     if (!contextsReady) {
         console.warn(
@@ -594,6 +688,8 @@ export default function AudioPlayer() {
         );
         return null;
     }
+
+    if (headless) return null;
 
     return (
         <div className="w-fit pl-[40px]">
@@ -637,7 +733,7 @@ export default function AudioPlayer() {
                     measures={measures}
                     beatIdsOnPages={beatIdsOnPages}
                     duration={renderedDuration}
-                    pixelsPerSecond={uiSettings.timelinePixelsPerSecond}
+                    pixelsPerSecond={timelinePixelsPerSecond}
                     height={WAVEFORM_HEIGHT}
                     width={waveformWidth}
                 />

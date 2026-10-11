@@ -4,6 +4,11 @@ import { DbConnection, DbTransaction } from "./types";
 import { schema } from "@/global/database/db";
 import { transactionWithHistory, createAllUndoTriggers } from "./history";
 import { ModifiedMarcherPageArgs } from "@/db-functions";
+import {
+    giveNewMarchersHomesInTransaction,
+    removeDeletedMarchersFromTimelinesInTransaction,
+} from "./timelineMarchers";
+import { timelineModeInTransaction } from "./timelineRipple";
 
 type DatabaseMarcher = typeof schema.marchers.$inferSelect;
 
@@ -154,6 +159,10 @@ export async function createMarchersInTransaction({
         throw new Error("Failed to create marchers");
     }
 
+    // Timeline mode: marcher pages are frozen page-era data (P9.5), so new marchers get none.
+    // Their positions come from their home and timeline slots (`createMarchers`).
+    if (await timelineModeInTransaction(tx)) return createdMarchers;
+
     // Create a marcherPage for each marcher and page
     const allPages = await tx.query.pages.findMany();
 
@@ -188,6 +197,11 @@ export async function createMarchersInTransaction({
  * THIS SHOULD ALWAYS BE CALLED RATHER THAN 'db.insert' DIRECTLY.
  *
  *
+ * In timeline mode (the file's flag, read inside the edit), the new marchers also get a home in
+ * the same edit and no moves, so they stand at home until moved
+ * (`giveNewMarchersHomesInTransaction`, P7.3 and UI-9), and no `marcher_pages` rows, which are
+ * frozen in timeline mode (P9.5).
+ *
  * @param newMarchers Array of NewMarcherArgs containing the marcher data to create
  * @param db The database connection
  * @returns Promise<DatabaseMarcher[]> Array of created marchers
@@ -204,10 +218,16 @@ export async function createMarchers({
         db,
         "createMarchers",
         async (tx) => {
-            return await createMarchersInTransaction({
+            const created = await createMarchersInTransaction({
                 newMarchers,
                 tx,
             });
+            if (await timelineModeInTransaction(tx))
+                await giveNewMarchersHomesInTransaction({
+                    tx,
+                    marcherIds: created.map((m) => m.id),
+                });
+            return created;
         },
     );
     return transactionResult;
@@ -290,6 +310,12 @@ const deleteMarchersInTransaction = async ({
  * Deletes the marchers with the given ids and all of their marcherPages.
  * CAUTION - This will also delete all of the marcherPages associated with the marchers.
  *
+ * In timeline mode (the file's flag, read inside the edit), the marchers' assignments are deleted
+ * first, with their own one-slot transitions (timelines stay, UI-9), and the slots they leave in
+ * shared transitions are compacted where that moves no one, in the same edit
+ * (`removeDeletedMarchersFromTimelinesInTransaction`, P7.3 and P8.14). In page mode the
+ * assignments go with the marcher through the foreign-key cascade, as before.
+ *
  * @param marcherIds Set of marcher IDs to delete
  * @param db The database connection
  * @returns Promise<DatabaseMarcher[]> Array of deleted marchers
@@ -306,6 +332,11 @@ export async function deleteMarchers({
         db,
         "deleteMarchers",
         async (tx) => {
+            if (await timelineModeInTransaction(tx))
+                await removeDeletedMarchersFromTimelinesInTransaction({
+                    tx,
+                    marcherIds: [...marcherIds],
+                });
             return await deleteMarchersInTransaction({
                 marcherIds,
                 tx,

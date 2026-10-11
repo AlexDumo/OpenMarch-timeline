@@ -3,6 +3,17 @@ import CanvasMarcher from "./CanvasMarcher";
 import Endpoint from "./Endpoint";
 import Pathway, { DEFAULT_PATHWAY_STROKE_WIDTH } from "./Pathway";
 import Midpoint from "./Midpoint";
+import TimelinePathway from "./TimelinePathway";
+import TimelineFocusLayer from "./TimelineFocusLayer";
+import TimelineKeptLayer, { type TimelineKeptMark } from "./TimelineKeptLayer";
+import {
+    cacheAtViewportResolution,
+    cacheFitsAtFullResolution,
+} from "./viewportRasterCache";
+import { renderObjectsFromCaches } from "./drawFromCache";
+import { CacheAtlas } from "./cacheAtlas";
+import type { FocusScene } from "@/timeline/timelineFocusScene";
+import type TimelineShapeOverlay from "./TimelineShapeOverlay";
 import { FieldProperties } from "@openmarch/core";
 import CanvasListeners from "../../../components/canvas/listeners/CanvasListeners";
 import Marcher from "@/global/classes/Marcher";
@@ -25,6 +36,8 @@ import { CoordinateLike } from "@/utilities/CoordinateActions";
 import { getFieldPropertiesImage } from "@/global/classes/FieldProperties";
 import { ModifiedMarcherPageArgs, ShapePage } from "@/db-functions";
 import { MarcherVisualMap } from "@/hooks/queries";
+import type { TimelinePositionBuffer } from "@/timeline/timelineCanvas";
+import type { TimelinePath } from "@/timeline/timelinePaths";
 import { RgbaColor } from "@uiw/react-color";
 import {
     evaluatePathWarning,
@@ -40,7 +53,8 @@ const STEP_SIZE_WARNING_STROKE = rgbaToString(STEP_SIZE_WARNING_COLOR);
 // Apply or clear the step-size warning style, skipping fabric mutations when the pathway already matches
 // Compares against the live fabric state so it stays correct even after the theme effect recolors paths
 function applyPathwayWarningStyle(
-    pathway: Pathway,
+    // A straight Pathway in page mode, a TimelinePathway in timeline mode (P7.10)
+    pathway: fabric.Object,
     midpoint: Midpoint,
     isWarning: boolean,
     normalColor: RgbaColor,
@@ -66,6 +80,21 @@ function applyPathwayWarningStyle(
     if (midpoint.stroke !== targetStroke) {
         midpoint.setColor(isWarning ? STEP_SIZE_WARNING_COLOR : normalColor);
     }
+}
+
+/** One side of a marcher's timeline path visuals (P7.10) and the objects that draw it. */
+interface TimelinePathSide {
+    path: TimelinePath | undefined;
+    /** Which end of the path the endpoint marks */
+    endpointAt: "start" | "end";
+    pathway: TimelinePathway;
+    /** The page-mode line this side replaces: hidden, and the curve is stacked at its place */
+    straightPathway: Pathway;
+    midpoint: Midpoint;
+    endpoint: Endpoint;
+    pathEnabled: boolean;
+    allowForceShow: boolean;
+    color: RgbaColor;
 }
 
 /**
@@ -110,6 +139,10 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     lastPosX = 0;
     lastPosY = 0;
     marcherShapes: MarcherShape[] = [];
+    /** Timeline mode's picked spec shape, while one is drawn (P7.11, `useTimelineShapeCanvas`) */
+    timelineShapeOverlay: TimelineShapeOverlay | null = null;
+    /** The kept marks beside the dots in timeline mode (`renderTimelineKeptMarks`), if drawn */
+    timelineKeptLayer: TimelineKeptLayer | null = null;
     /**
      * The reference to the grid (the lines on the field) object to use for caching
      * This is needed to disable object caching while zooming, which greatly improves responsiveness.
@@ -288,6 +321,12 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         if (!isGeneratingSVG) void this.refreshBackgroundImage();
 
         this.requestRenderAll();
+
+        const dropLiveMarchers = (e: fabric.IEvent) => {
+            if (e.target instanceof CanvasMarcher) this._liveMarchers = null;
+        };
+        this.on("object:added", dropLiveMarchers);
+        this.on("object:removed", dropLiveMarchers);
 
         this.on("selection:created", this.handleSelection);
         this.on("selection:updated", this.handleSelection);
@@ -479,24 +518,41 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         this.zoomToPoint(pointer, newZoom);
         this.checkCanvasBounds();
 
-        // set objectCaching to false after 100ms to improve performance after zooming
-        // This is why the grid is blurry but fast while zooming, and sharp while not.
-        // If it was always sharp (object caching on), it would be horrendously slow
+        // The grid uses Fabric's (size-capped, so blurry) cache while the zoom is in progress,
+        // which keeps zooming smooth. 75 ms after the last tick it goes back to its sharp
+        // viewport-sized bitmap, and objects too big for a full-resolution Fabric cache at the new
+        // zoom (long pathways) draw as vectors so they stay sharp too. Everything else keeps its
+        // cache: drawing every marcher as vectors each frame made playback slow after any zoom.
         clearTimeout(this._zoomTimeout);
         this._zoomTimeout = setTimeout(() => {
-            this.getObjects().forEach((obj) => {
-                if (
-                    !(
-                        obj instanceof fabric.Text ||
-                        obj instanceof fabric.IText ||
-                        obj instanceof fabric.Textbox
-                    )
-                ) {
-                    obj.objectCaching = false;
-                }
-            });
+            this.staticGridRef.objectCaching = false;
+            this.refreshCachingForZoom();
             this.requestRenderAll();
         }, 75);
+    }
+
+    /** Objects whose Fabric cache `refreshCachingForZoom` switched off */
+    private _uncachedForZoom = new WeakSet<fabric.Object>();
+
+    /**
+     * After a zoom, switches Fabric's object cache off for objects whose cache would be capped
+     * below the zoomed resolution (so they'd be blurry), and back on for those this turned off
+     * earlier that now fit again. Text and the grid are left alone.
+     */
+    private refreshCachingForZoom() {
+        for (const obj of this.getObjects()) {
+            if (obj === this.staticGridRef || obj instanceof fabric.Text)
+                continue;
+            if (this._uncachedForZoom.has(obj)) {
+                if (cacheFitsAtFullResolution(obj)) {
+                    obj.objectCaching = true;
+                    this._uncachedForZoom.delete(obj);
+                }
+            } else if (obj.objectCaching && !cacheFitsAtFullResolution(obj)) {
+                obj.objectCaching = false;
+                this._uncachedForZoom.add(obj);
+            }
+        }
     }
 
     public checkCanvasBounds() {
@@ -1069,12 +1125,22 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                 controlPoint.bringToFront();
             });
         }
+        this.timelineKeptLayer?.bringToFront();
+        this.timelineShapeOverlay?.bringToFront();
     }
 
+    /**
+     * Draws `shapePages` as `MarcherShape`s, replacing the ones drawn before.
+     *
+     * @param isCurrent checked after each await: once it returns false (a newer render started,
+     * or timeline mode turned on, P7.11), this render stops adding shapes
+     */
     renderMarcherShapes = async ({
         shapePages,
+        isCurrent = () => true,
     }: {
         shapePages: ShapePage[];
+        isCurrent?: () => boolean;
     }) => {
         const existingMarcherShapeMap = new Map(
             this.marcherShapes.map((mp) => [mp.shapePage.shape_id, mp]),
@@ -1096,9 +1162,11 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             const existingMarcherShape = existingMarcherShapeMap.get(
                 shapePage.shape_id,
             );
+            if (!isCurrent()) return;
             if (existingMarcherShape) {
                 existingMarcherShape.setShapePage(shapePage);
                 await existingMarcherShape.refreshMarchers();
+                if (!isCurrent()) return;
                 const index = this.marcherShapes.findIndex(
                     (ms) => ms.shapePage.shape_id === shapePage.shape_id,
                 );
@@ -1132,12 +1200,19 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         CanvasMarcher.theme = this.fieldProperties.theme;
 
         // update coordinate for every canvas marcher
+        const moved: CanvasMarcher[] = [];
         Object.values(marcherPages).forEach((marcherPage) => {
             const visual = marcherVisuals[marcherPage.marcher_id];
             if (!visual) return;
 
-            visual.getCanvasMarcher().setMarcherCoords(marcherPage);
+            const canvasMarcher = visual.getCanvasMarcher();
+            canvasMarcher.setMarcherCoords(marcherPage, true, undefined, {
+                bringToFront: false,
+            });
+            moved.push(canvasMarcher);
         });
+        this.bringObjectsToFront(moved);
+        this.fitActiveSelectionToMarchers();
 
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
@@ -1145,11 +1220,139 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         this.requestRenderAll();
     };
 
+    /**
+     * Timeline mode's static render (P5.5): like `renderMarchers`, but each marcher's position
+     * comes from a filled resolver buffer instead of marcher_pages. The position also becomes the
+     * marcher's `coordinate`, so `refreshMarchers` returns marchers to it. Marchers missing from
+     * the buffer stay where they are.
+     *
+     * A marcher the user is dragging (the target of Fabric's transform in progress, or one of its
+     * selection) isn't moved: only its `coordinate` is updated, so it stays under the pointer and
+     * a refused move still returns it to this render's position. A draw can land mid-drag, such
+     * as the full update 300 ms after an arrow-key run.
+     *
+     * @param pageId the page drawn, stamped on each `coordinate` so its `page_id` isn't left over
+     * from an earlier page render (P7.2). Timeline writes don't read it, but other canvas code may.
+     */
+    renderMarcherPositions = (
+        positions: TimelinePositionBuffer,
+        pageId?: number,
+    ) => {
+        CanvasMarcher.theme = this.fieldProperties.theme;
+
+        const held = this.heldObjects();
+        const moved: CanvasMarcher[] = [];
+        positions.forEachMarcher(
+            this.getCanvasMarchers(),
+            (canvasMarcher, x, y) => {
+                const coordinate = {
+                    ...canvasMarcher.coordinate,
+                    ...(pageId !== undefined ? { page_id: pageId } : {}),
+                    x,
+                    y,
+                    // Timeline mode has no shape locks (P7.11): a page-era lock from an
+                    // earlier marcher_pages render must not stop a drag that P7.2 can write
+                    isLocked: false,
+                    lockedReason: "",
+                };
+                if (held?.has(canvasMarcher)) {
+                    canvasMarcher.coordinate = coordinate;
+                    return;
+                }
+                canvasMarcher.setMarcherCoords(coordinate, true, undefined, {
+                    bringToFront: false,
+                });
+                moved.push(canvasMarcher);
+            },
+        );
+        this.bringObjectsToFront(moved);
+        this.fitActiveSelectionToMarchers();
+
+        if (this._listeners && this._listeners.refreshMarchers)
+            this._listeners?.refreshMarchers();
+        this.bringAllControlPointsTooFront();
+        this.requestRenderAll();
+    };
+
+    /**
+     * Fits a multi-marcher selection's box to where its marchers are now. Moving a selected
+     * marcher (`setMarcherCoords`) moves it inside the selection but leaves the box where it was,
+     * so after a render that moved selected marchers (an undo, **Only Page 2**, another page) an
+     * empty box would stay behind. Not during a drag or transform, which owns the box: then it
+     * fits once the transform ends (a refused or snapped-back drop refreshes the marchers from
+     * `object:modified`, while Fabric still holds the transform; pre-merge review).
+     */
+    fitActiveSelectionToMarchers = () => {
+        const active = this.getActiveObject();
+        if (!(active instanceof fabric.ActiveSelection)) return;
+        if (this.isTransforming()) {
+            this.fitAfterTransform();
+            return;
+        }
+        (active as fabric.Group).addWithUpdate();
+    };
+
+    private isTransforming = () =>
+        !!(this as unknown as { _currentTransform: unknown })._currentTransform;
+
+    private fitPending = false;
+
+    /**
+     * Fits the selection's box once the transform in progress ends: Fabric clears it at the end
+     * of its mouse up, after `object:modified` and `mouse:up`, so this checks again right after
+     * (a microtask), and after the next mouse up for a drag still going.
+     */
+    private fitAfterTransform() {
+        if (this.fitPending) return;
+        this.fitPending = true;
+        const check = () => {
+            if (this.isTransforming()) {
+                const onUp = () => {
+                    this.off("mouse:up", onUp);
+                    queueMicrotask(check);
+                };
+                this.on("mouse:up", onUp);
+                return;
+            }
+            this.fitPending = false;
+            this.fitActiveSelectionToMarchers();
+            this.requestRenderAll();
+        };
+        queueMicrotask(check);
+    }
+
+    /**
+     * The objects a drag, scale or rotate in progress holds: the transform's target, or each
+     * object of a held selection. Null when nothing is held.
+     */
+    private heldObjects(): ReadonlySet<fabric.Object> | null {
+        const target = (
+            this as unknown as {
+                _currentTransform?: { target?: fabric.Object } | null;
+            }
+        )._currentTransform?.target;
+        if (!target) return null;
+        return new Set(
+            target instanceof fabric.ActiveSelection
+                ? target.getObjects()
+                : [target],
+        );
+    }
+
     refreshMarchers = () => {
         const canvasMarchers = this.getCanvasMarchers();
         canvasMarchers.forEach((canvasMarcher) => {
-            canvasMarcher.setMarcherCoords(canvasMarcher.coordinate);
+            canvasMarcher.setMarcherCoords(
+                canvasMarcher.coordinate,
+                true,
+                undefined,
+                { bringToFront: false },
+            );
         });
+        this.bringObjectsToFront(canvasMarchers);
+        // The kept marks and shape handles stay above the marchers just raised
+        this.bringAllControlPointsTooFront();
+        this.fitActiveSelectionToMarchers();
         if (this._listeners && this._listeners.refreshMarchers)
             this._listeners?.refreshMarchers();
         this.requestRenderAll();
@@ -1191,12 +1394,33 @@ export default class OpenMarchCanvas extends fabric.Canvas {
      * Brings all of the canvasMarchers to the front of the canvas
      */
     sendCanvasMarchersToFront = () => {
-        const curCanvasMarchers: CanvasMarcher[] = this.getCanvasMarchers();
-        curCanvasMarchers.forEach((canvasMarcher) => {
-            this.bringToFront(canvasMarcher);
-        });
+        this.bringObjectsToFront(this.getCanvasMarchers());
         this.bringAllControlPointsTooFront();
     };
+
+    /**
+     * Moves `objects` to the top of the stacking order, in the order given, in one pass. The same
+     * order as calling `bringToFront` on each in turn, which walks every canvas object per call.
+     * Objects that aren't on this canvas are left out, as `setMarcherCoords` skips them.
+     */
+    bringObjectsToFront(objects: readonly fabric.Object[]): void {
+        if (objects.length === 0) return;
+        const raised = new Set<fabric.Object>();
+        for (const object of objects)
+            if (object.canvas === this) raised.add(object);
+        if (raised.size === 0) return;
+        const stack = this._objects;
+        const found = new Set<fabric.Object>();
+        let kept = 0;
+        for (const object of stack) {
+            if (raised.has(object)) found.add(object);
+            else stack[kept++] = object;
+        }
+        stack.length = kept;
+        // In the order given; anything not in the stack (already removed) stays out
+        for (const object of raised) if (found.has(object)) stack.push(object);
+        if (this.renderOnAddRemove) this.requestRenderAll();
+    }
 
     /**
      * Brings the specified canvasMarcher to the front of the canvas
@@ -1426,6 +1650,128 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         });
     };
 
+    /** One side (previous or next) of a marcher's timeline path visuals; see below. */
+    private drawTimelinePathSide(
+        {
+            path,
+            endpointAt,
+            pathway,
+            straightPathway,
+            midpoint,
+            endpoint,
+            pathEnabled,
+            allowForceShow,
+            color,
+        }: TimelinePathSide,
+        fieldProperties: FieldProperties,
+        warningsEnabled: boolean,
+    ) {
+        // Stack the curve where the straight line sits, under the midpoint and endpoint dots
+        if (!pathway.canvas) {
+            const index = this.getObjects().indexOf(straightPathway);
+            if (index >= 0) this.insertAt(pathway, index, false);
+            else this.add(pathway);
+        }
+        straightPathway.hide();
+        // The step size is the stride of the fastest stretch: its distance in one count
+        const { show, isWarning } = path
+            ? evaluatePathWarning({
+                  start: path.start,
+                  end: path.end,
+                  distance: path.stride,
+                  counts: 1,
+                  fieldProperties,
+                  pathEnabled,
+                  allowForceShow,
+                  warningsEnabled,
+              })
+            : { show: false, isWarning: false };
+        if (!path || !show) {
+            pathway.hide();
+            midpoint.hide();
+            endpoint.hide();
+            return;
+        }
+        // Style first: the stroke width changes the polyline's bounds, which updatePoints computes
+        applyPathwayWarningStyle(pathway, midpoint, isWarning, color);
+        pathway.updatePoints(path.points);
+        pathway.show();
+        midpoint.updateCoords(path.midpoint);
+        midpoint.show();
+        endpoint.updateCoords(path[endpointAt]);
+        endpoint.show();
+    }
+
+    /**
+     * Timeline mode's path visuals (P7.10): like `renderPathVisuals`, but each path is sampled from
+     * the resolver (`pathsIntoPage`), so it is drawn as a polyline that follows arcs and
+     * follow-the-leader moves, and the midpoint is the midset on that path. The step-size warning
+     * uses the path's stride (its fastest stretch per count). The straight page-mode lines are
+     * hidden. A marcher with no path on one side (the first or last page, a side that can't show,
+     * or a marcher unknown to the resolver) has that side hidden.
+     *
+     * @param previousPaths each marcher's move into the selected page (endpoint: where it starts)
+     * @param nextPaths each marcher's move into the next page (endpoint: where it ends)
+     */
+    renderTimelinePathVisuals = ({
+        marcherVisuals,
+        marcherIds,
+        previousPaths,
+        nextPaths,
+        previousPathsEnabled,
+        nextPathsEnabled,
+        stepSizeWarningsEnabled,
+        fieldProperties,
+    }: {
+        marcherVisuals: MarcherVisualMap;
+        marcherIds: readonly number[];
+        previousPaths: ReadonlyMap<number, TimelinePath>;
+        nextPaths: ReadonlyMap<number, TimelinePath>;
+        previousPathsEnabled: boolean;
+        nextPathsEnabled: boolean;
+        stepSizeWarningsEnabled: boolean;
+        fieldProperties: FieldProperties;
+    }) => {
+        if (!fieldProperties) return;
+
+        const drawSide = (side: TimelinePathSide) =>
+            this.drawTimelinePathSide(
+                side,
+                fieldProperties,
+                stepSizeWarningsEnabled,
+            );
+
+        marcherIds.forEach((marcherId: number) => {
+            const visual = marcherVisuals[marcherId];
+            if (!visual) return;
+
+            drawSide({
+                path: previousPaths.get(marcherId),
+                endpointAt: "start",
+                pathway: visual.getPreviousTimelinePathway(),
+                straightPathway: visual.getPreviousPathway(),
+                midpoint: visual.getPreviousMidpoint(),
+                endpoint: visual.getPreviousEndpoint(),
+                pathEnabled: previousPathsEnabled,
+                // previous paths stay hidden when toggled off, even over threshold
+                allowForceShow: false,
+                color: fieldProperties.theme.previousPath,
+            });
+            drawSide({
+                path: nextPaths.get(marcherId),
+                endpointAt: "end",
+                pathway: visual.getNextTimelinePathway(),
+                straightPathway: visual.getNextPathway(),
+                midpoint: visual.getNextMidpoint(),
+                endpoint: visual.getNextEndpoint(),
+                pathEnabled: nextPathsEnabled,
+                // next path is the current move, force-show it over threshold
+                allowForceShow: true,
+                color: fieldProperties.theme.nextPath,
+            });
+        });
+    };
+
     /**
      * Hides all pathway visuals for all marchers.
      *
@@ -1513,7 +1859,11 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             gridLines,
             halfLines,
         });
+        // Off so the grid draws from a canvas-sized bitmap that is redrawn only on zoom, pan,
+        // resize or a new grid (cacheAtViewportResolution), sharp at any zoom. Fabric's own object
+        // cache is switched on only while a wheel zoom is in progress (_applyZoom).
         this.staticGridRef.objectCaching = false;
+        cacheAtViewportResolution(this.staticGridRef, this);
 
         this.add(this.staticGridRef);
         this.sendToBack(this.staticGridRef);
@@ -2140,6 +2490,64 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             : this.getObjectsByType(CanvasMarcher);
     }
 
+    /** The canvas marchers for `getLiveCanvasMarchers`; null after one is added or removed */
+    private _liveMarchers: readonly CanvasMarcher[] | null = null;
+
+    /**
+     * Every CanvasMarcher on the canvas, kept between calls so the playback loop doesn't walk
+     * every canvas object each frame. Rebuilt after a marcher is added or removed. The order is
+     * not kept in step with z-order changes; use `getCanvasMarchers` where order matters.
+     */
+    getLiveCanvasMarchers(): readonly CanvasMarcher[] {
+        return (this._liveMarchers ??= this.getCanvasMarchers());
+    }
+
+    /** Set while `renderPlaybackFrame` draws */
+    private _drawingPlaybackFrame = false;
+    /** Copies of the object caches that playback frames draw from; freed by `endPlaybackFrames` */
+    private _playbackAtlas = new CacheAtlas();
+
+    /**
+     * `renderAll` for the playback loop: objects whose Fabric cache is still valid are drawn
+     * straight from it, without Fabric's per-object save, matrix and cache checks
+     * (`renderObjectsFromCaches`). The picture is the same as `renderAll`'s.
+     */
+    renderPlaybackFrame(): void {
+        this._drawingPlaybackFrame = true;
+        try {
+            this.renderAll();
+        } finally {
+            this._drawingPlaybackFrame = false;
+        }
+    }
+
+    /** Frees what `renderPlaybackFrame` kept for the next frame, once playback stops */
+    endPlaybackFrames(): void {
+        this._playbackAtlas.release();
+    }
+
+    /** Fabric's object loop, replaced for `renderPlaybackFrame` on the visible canvas */
+    _renderObjects(
+        ctx: CanvasRenderingContext2D,
+        objects: (fabric.Object | undefined)[],
+    ): void {
+        if (
+            this._drawingPlaybackFrame &&
+            ctx === (this as { contextContainer?: unknown }).contextContainer
+        ) {
+            renderObjectsFromCaches(this, ctx, objects, this._playbackAtlas);
+            return;
+        }
+        (
+            fabric.StaticCanvas.prototype as unknown as {
+                _renderObjects(
+                    ctx: CanvasRenderingContext2D,
+                    objects: (fabric.Object | undefined)[],
+                ): void;
+            }
+        )._renderObjects.call(this, ctx, objects);
+    }
+
     /**
      * Gets the CanvasMarcher objects with the given marcher ids
      *
@@ -2181,6 +2589,84 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         return active
             ? this.getActiveObjectsByType(Pathway)
             : this.getObjectsByType(Pathway);
+    }
+
+    /**
+     * Removes timeline mode's curved paths (P7.10) from the canvas. `renderTimelinePathVisuals`
+     * adds them back as it needs them. Does nothing in page mode, which never adds any.
+     */
+    removeTimelinePathways(): void {
+        const pathways = this.getObjectsByType(TimelinePathway);
+        if (pathways.length === 0) return;
+        for (const pathway of pathways) this.remove(pathway);
+        this.requestRenderAll();
+    }
+
+    /**
+     * Draws an isolated timeline's scene (docs/timeline/research/ownership/09-isolation.md) above
+     * the grid and below the marchers, replacing any scene drawn before.
+     */
+    renderTimelineFocus(
+        scene: FocusScene,
+        ghostColor: string,
+        emphasis: ReadonlySet<number> | null = null,
+    ): void {
+        const existing = this.getObjectsByType(TimelineFocusLayer)[0];
+        if (existing) existing.update(scene, ghostColor, emphasis);
+        else
+            this.add(
+                new TimelineFocusLayer({
+                    scene,
+                    ghostColor,
+                    emphasis,
+                    width: this._fieldProperties.width,
+                    height: this._fieldProperties.height,
+                }),
+            );
+        this.sendCanvasMarchersToFront();
+        this.requestRenderAll();
+    }
+
+    /** Removes the isolated timeline's scene, if one is drawn. */
+    clearTimelineFocus(): void {
+        const layers = this.getObjectsByType(TimelineFocusLayer);
+        if (layers.length === 0) return;
+        for (const layer of layers) this.remove(layer);
+        this.requestRenderAll();
+    }
+
+    /**
+     * Draws the broken chains beside the dots of the marchers kept on the current page
+     * (docs/timeline/ui.md UI-18, kept marchers on the field) above the marchers, replacing any
+     * drawn before. No marks removes the layer.
+     */
+    renderTimelineKeptMarks(marks: readonly TimelineKeptMark[]): void {
+        if (marks.length === 0) {
+            this.clearTimelineKeptMarks();
+            return;
+        }
+        if (this.timelineKeptLayer?.canvas === this)
+            this.timelineKeptLayer.update(marks);
+        else {
+            this.timelineKeptLayer = new TimelineKeptLayer({
+                marks,
+                width: this._fieldProperties.width,
+                height: this._fieldProperties.height,
+            });
+            this.add(this.timelineKeptLayer);
+        }
+        this.timelineKeptLayer.bringToFront();
+        this.timelineShapeOverlay?.bringToFront();
+        this.requestRenderAll();
+    }
+
+    /** Removes the kept marks, if drawn. */
+    clearTimelineKeptMarks(): void {
+        const layer = this.timelineKeptLayer;
+        this.timelineKeptLayer = null;
+        if (!layer || layer.canvas !== this) return;
+        this.remove(layer);
+        this.requestRenderAll();
     }
 
     /**

@@ -5,7 +5,7 @@ import {
     PluginTools,
     TolgeePlugin,
 } from "@tolgee/react";
-import { FormatIcu } from "@tolgee/format-icu";
+import { CachedFormatIcu } from "./cachedFormatIcu";
 
 const TOLGEE_API_URL = "https://app.tolgee.io";
 
@@ -39,7 +39,8 @@ const isUnitTestEnvironment = (): boolean => import.meta.env.VITEST === true;
 const isOfflineTolgeeEnvironment = (): boolean =>
     isPlaywrightSession() || isUnitTestEnvironment();
 
-const tolgeeBuilder = Tolgee().use(FormatSimple()).use(FormatIcu());
+// ICU formatting with its results cached (see cachedFormatIcu.ts)
+const tolgeeBuilder = Tolgee().use(FormatSimple()).use(CachedFormatIcu());
 
 if (isOfflineTolgeeEnvironment()) {
     tolgeeBuilder.use(RemoveInContextTools());
@@ -47,6 +48,7 @@ if (isOfflineTolgeeEnvironment()) {
 
 const tolgee = tolgeeBuilder.init({
     language: "en",
+    fallbackLanguage: "en",
     // Disable API URL in tests to prevent external network calls and dev-backend timers
     apiUrl: isOfflineTolgeeEnvironment() ? undefined : TOLGEE_API_URL,
     staticData: {

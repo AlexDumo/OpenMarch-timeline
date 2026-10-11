@@ -1,26 +1,25 @@
 import { describe, expect, it } from "vitest";
-import {
-    RegisteredActionsEnum,
-    RegisteredActionsObjects,
-} from "@/utilities/RegisteredActionsHandler";
+import { ACTION_IDS, getActionDefinition } from "@/shortcuts/definitions";
+import { parseBinding } from "@/shortcuts/bindings";
 import { VIEW3D_PLAYBACK_ACTIONS } from "@/view3d/sync/protocol";
 import { playbackActionForKey } from "../playback";
 
-/** The `code` the editor's key handler maps back to each shortcut key. */
+/** The `code` the window's key handler sees for a binding's key. */
 const codeForKey = (key: string) =>
-    key === " " ? "Space" : `Key${key.toUpperCase()}`;
+    key === "Space" ? "Space" : `Key${key.toUpperCase()}`;
 
 describe("3D View playback shortcuts", () => {
     it.each(VIEW3D_PLAYBACK_ACTIONS)(
-        "%s is an editor action with the same shortcut",
+        "%s is an editor action with the same default shortcut",
         (action) => {
-            expect(RegisteredActionsEnum[action]).toBe(action);
-            const shortcut = RegisteredActionsObjects[action].keyboardShortcut!;
-            expect(shortcut.control || shortcut.alt).toBe(false);
+            expect(ACTION_IDS).toContain(action);
+            const [binding] = getActionDefinition(action).defaultBindings;
+            const { modifiers, key } = parseBinding(binding);
+            expect(modifiers.filter((m) => m !== "Shift")).toEqual([]);
             expect(
                 playbackActionForKey({
-                    code: codeForKey(shortcut.key),
-                    shiftKey: shortcut.shift,
+                    code: codeForKey(key),
+                    shiftKey: modifiers.includes("Shift"),
                     ctrlKey: false,
                     metaKey: false,
                     altKey: false,

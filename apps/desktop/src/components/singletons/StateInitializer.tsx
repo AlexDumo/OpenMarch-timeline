@@ -6,6 +6,7 @@ import { useTimingObjects } from "@/hooks";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { coordinateDataQueryOptions } from "@/hooks/queries/useCoordinateData";
 import { useSelectionStore } from "@/stores/SelectionStore";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     marcherAppearancesQueryOptions,
     updateShapePagesMutationOptions,
@@ -14,6 +15,8 @@ import {
     MarcherShape,
     marcherShapeToShapePageArgs,
 } from "@/global/classes/canvasObjects/MarcherShape";
+import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { pageAtPlayhead } from "@/timeline/timelinePlayhead";
 
 /**
  * A component that initializes the state of the application.
@@ -36,53 +39,59 @@ function StateInitializer() {
     const { mutate: updateMarcherShape } = useMutation(
         updateShapePagesMutationOptions(queryClient),
     );
+    // Timeline mode plays and draws from the resolver, so it prefetches no page-mode keyframes
+    // (P7.13), and styles marchers by beat from show-wide appearance steps
+    // (`useMarcherAppearanceSteps`), so it prefetches no per-page appearances either
+    const timelineMode = useTimelineMode();
+    const prefetchPage = (
+        page: Parameters<typeof coordinateDataQueryOptions>[0],
+    ) => {
+        if (timelineMode) return;
+        void queryClient.prefetchQuery(
+            coordinateDataQueryOptions(page, queryClient),
+        );
+        void queryClient.prefetchQuery(
+            marcherAppearancesQueryOptions(page.id, queryClient),
+        );
+    };
 
     if (selectedPage) {
-        void queryClient.prefetchQuery(
-            coordinateDataQueryOptions(selectedPage, queryClient),
-        );
-        void queryClient.prefetchQuery(
-            marcherAppearancesQueryOptions(selectedPage.id, queryClient),
-        );
+        prefetchPage(selectedPage);
         if (selectedPage.nextPageId != null) {
             const nextPage = pages.find(
                 (page) => page.id === selectedPage.nextPageId,
             );
-            if (nextPage) {
-                void queryClient.prefetchQuery(
-                    coordinateDataQueryOptions(nextPage, queryClient),
-                );
-                void queryClient.prefetchQuery(
-                    marcherAppearancesQueryOptions(nextPage.id, queryClient),
-                );
-            }
+            if (nextPage) prefetchPage(nextPage);
         }
         if (selectedPage.previousPageId != null) {
             const previousPage = pages.find(
                 (page) => page.id === selectedPage.previousPageId,
             );
-            if (previousPage) {
-                void queryClient.prefetchQuery(
-                    coordinateDataQueryOptions(previousPage, queryClient),
-                );
-                void queryClient.prefetchQuery(
-                    marcherAppearancesQueryOptions(
-                        previousPage.id,
-                        queryClient,
-                    ),
-                );
-            }
+            if (previousPage) prefetchPage(previousPage);
         }
     }
 
     /*******************************************************************/
 
-    // Select page 0 (first page in show order) when none are selected (e.g. app load / refresh)
+    // Select page 0 (first page in show order) when none are selected (e.g. app load / refresh).
+    // In timeline mode, the page at the paused playhead: when the selected page is deleted, the
+    // page that took its box, rather than home, which would move the playhead there (defined-coordinates 08)
     useEffect(() => {
         if (selectedPage == null && pages.length > 0) {
-            setSelectedPage(pages[0]);
+            const atPlayhead = timelineMode
+                ? pageAtPlayhead(
+                      pages,
+                      useTimelineSelectionStore.getState().playheadBeat,
+                  )
+                : null;
+            setSelectedPage(atPlayhead ?? pages[0]);
         }
-    }, [pages, selectedPage, setSelectedPage]);
+    }, [pages, selectedPage, setSelectedPage, timelineMode]);
+
+    // Timeline mode (UI-9): opening a show selects home, with the playhead at beat 0
+    useEffect(() => {
+        useTimelineSelectionStore.getState().selectHome();
+    }, []);
 
     // Select the currently selected audio file
     useEffect(() => {

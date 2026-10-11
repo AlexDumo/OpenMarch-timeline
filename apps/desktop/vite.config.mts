@@ -73,6 +73,37 @@ export default defineConfig(({ command }) => {
                     },
                 },
                 {
+                    // The convert-on-open worker thread (P9.8). The main process starts it from
+                    // `dist-electron/worker/convertOnOpenWorker.js` (`convertWorkerHost.ts`).
+                    entry: "electron/database/convertOnOpenWorker.ts",
+                    onstart() {
+                        // Each conversion starts a fresh worker, so a rebuild needs no restart.
+                    },
+                    vite: {
+                        resolve: {
+                            alias: electronAlias,
+                        },
+                        build: {
+                            sourcemap,
+                            minify: isBuild,
+                            outDir: "dist-electron/worker",
+                            rollupOptions: {
+                                external: [
+                                    "electron",
+                                    "node",
+                                    "node:sqlite",
+                                ].concat(
+                                    Object.keys(
+                                        "dependencies" in pkg
+                                            ? pkg.dependencies
+                                            : {},
+                                    ),
+                                ),
+                            },
+                        },
+                    },
+                },
+                {
                     // The editor's preload, and the 3D View window's. The 3D
                     // View preload runs sandboxed, so it must import only
                     // `electron` and share no chunk with the editor's.

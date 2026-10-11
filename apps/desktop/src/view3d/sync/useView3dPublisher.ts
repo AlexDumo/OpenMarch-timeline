@@ -8,9 +8,8 @@
  * - `invalidate` for every query the editor invalidates (writes, undo, redo
  *   and rolled-back transactions all end in `invalidateQueries`).
  *
- * It answers the window's `hello` and handles its venue-change requests
- * (playback requests go to `RegisteredActionsHandler`, which owns the
- * actions). With no window open it does nothing, except that it opens the
+ * It answers the window's `hello` and handles its venue-change and playback
+ * requests (playback runs the editor's own actions). With no window open it does nothing, except that it opens the
  * window when the show opens if the app setting
  * `VIEW3D_AUTO_OPEN_SETTING` is on.
  */
@@ -31,11 +30,13 @@ import {
 import { updateVenueSettingsMutationOptions } from "@/hooks/queries/useVenueSettings";
 import { venueSettingsSchema } from "@/view3d/core/venueSettings";
 import type Page from "@/global/classes/Page";
+import { runAction } from "@/shortcuts/registry";
 import {
     VIEW3D_AUTO_OPEN_SETTING,
     VIEW3D_CLOCK_CHANNEL,
     VIEW3D_INVALIDATE_CHANNEL,
     VIEW3D_SELECTION_CHANNEL,
+    isView3dPlaybackAction,
     wallNowMs,
     type View3dClock,
     type View3dSelection,
@@ -231,7 +232,23 @@ export function useView3dPublisher() {
 }
 
 /** Mount point for `useView3dPublisher`; renders nothing. */
+/**
+ * Playback buttons and shortcuts in the 3D View window run the same actions
+ * as the editor's own (ADR 0002 D-4, `view3d:playback-request`). An action
+ * that is disabled right now does nothing, as in the editor.
+ */
+export function useView3dPlaybackRequests() {
+    useEffect(() => {
+        if (!window.electron?.onView3dPlaybackRequest) return;
+        return window.electron.onView3dPlaybackRequest((request) => {
+            if (isView3dPlaybackAction(request?.action))
+                runAction(request.action);
+        });
+    }, []);
+}
+
 export function View3dPublisher() {
     useView3dPublisher();
+    useView3dPlaybackRequests();
     return null;
 }

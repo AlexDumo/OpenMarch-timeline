@@ -4,6 +4,7 @@ import type Page from "@/global/classes/Page";
 import {
     contextBridge,
     ipcRenderer,
+    webFrame,
     type IpcRendererEvent,
     type SaveDialogOptions,
 } from "electron";
@@ -20,6 +21,7 @@ import type {
     AccessTokenResult,
 } from "@om-electron/main/auth/types";
 import { AUTH_IPC_CHANNELS } from "../../src/global/auth/constants";
+import { MENU_ACTION_CHANNEL } from "../../src/global/menuActions";
 import type { HistoryResponse } from "@/db-functions";
 // Types only, so this preload doesn't share a chunk with the sandboxed 3D
 // View preload.
@@ -143,7 +145,21 @@ const APP_API = {
     maximizeWindow: () => ipcRenderer.send("window:maximize"),
     closeWindow: () => ipcRenderer.send("window:close"),
     openMenu: () => ipcRenderer.send("menu:open"),
+    openSettingsWindow: () => ipcRenderer.invoke("settings:open"),
+    reloadMainWindow: () => ipcRenderer.send("main-window:reload"),
+    onSettingsChanged: (
+        callback: (change: Record<string, unknown>) => void,
+    ) => {
+        const listener = (
+            _event: Electron.IpcRendererEvent,
+            change: Record<string, unknown>,
+        ) => callback(change);
+        ipcRenderer.on("settings:changed", listener);
+        return () => ipcRenderer.removeListener("settings:changed", listener);
+    },
     isMacOS: process.platform === "darwin",
+    /** Page zoom (View → Zoom In/Out), so native-sized UI can undo it. */
+    getZoomFactor: () => webFrame.getZoomFactor(),
 
     // Environment
     getEnv: () => ipcRenderer.invoke("env:get"),
@@ -185,7 +201,11 @@ const APP_API = {
         ipcRenderer.invoke("getDefaultDocumentsPath") as Promise<string>,
     fileExists: (filePath: string) =>
         ipcRenderer.invoke("file:exists", filePath) as Promise<boolean>,
-    repairDatabase: (dbPath: string) =>
+    /**
+     * Repairs the file and opens the repaired copy. Resolves its path, or null when it didn't
+     * open and the main process already showed a dialog saying why (convert on open, P9.3).
+     */
+    repairDatabase: (dbPath: string): Promise<string | null> =>
         ipcRenderer.invoke("database:repair", dbPath),
     closeCurrentFile: () => ipcRenderer.invoke("closeCurrentFile"),
     onLoadFileResponse: (callback: (value: number) => void) => {
@@ -223,6 +243,14 @@ const APP_API = {
         ipcRenderer.invoke("newShow:getPending") as Promise<boolean>,
     clearPendingNewShowDialog: () =>
         ipcRenderer.invoke("newShow:clearPending") as Promise<void>,
+    /** An app menu item chose a renderer action (docs/adr/0003-menu-actions-ipc.md) */
+    onMenuAction: (callback: (action: unknown) => void) => {
+        const listener = (_event: unknown, action: unknown) => callback(action);
+        ipcRenderer.on(MENU_ACTION_CHANNEL, listener);
+        return () => {
+            ipcRenderer.removeListener(MENU_ACTION_CHANNEL, listener);
+        };
+    },
     onNewShowOpen: (callback: () => void) => {
         const listener = () => callback();
         ipcRenderer.on("new-show:open", listener);
