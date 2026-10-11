@@ -1,4 +1,4 @@
-// Types for the vendored instanced-marchers.js (om-pose). Hand-written; keep in step with the .js.
+// Types for instanced-marchers.js (om-pose). Hand-written; keep in step with the .js.
 import type {
     AnimationClip,
     BufferGeometry,

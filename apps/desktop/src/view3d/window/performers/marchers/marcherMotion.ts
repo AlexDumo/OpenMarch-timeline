@@ -11,8 +11,8 @@ import {
     type CompiledCues,
     type FieldProperties,
 } from "@openmarch/core";
-import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
-import type { Bake } from "@/view3d/vendor/om-pose/instanced-marchers.js";
+import type { Manifest } from "@/view3d/render/step-blend.js";
+import type { Bake } from "@/view3d/render/instanced-marchers.js";
 import type { MarcherTimeline } from "@/utilities/Keyframes";
 import { positionAtInto } from "@/view3d/positions";
 import type { CountClock } from "@/view3d/core/marchers/countClock";

@@ -15,7 +15,7 @@ import {
     writeMatrix,
     type Bake,
     type MarcherClip,
-} from "@/view3d/vendor/om-pose/instanced-marchers.js";
+} from "@/view3d/render/instanced-marchers.js";
 import { instrumentModel, type Detail } from "@/view3d/core/instruments";
 import { hold as holdFor } from "@/view3d/core/instruments/holds";
 import {

@@ -70,7 +70,7 @@ import {
     type ManifestClip,
     type Pick,
     type TurnedPair,
-} from "../../vendor/om-pose/step-blend.js";
+} from "../../render/step-blend.js";
 import { classSuffix, type HeightClass } from "./looks";
 import { isSlide, travelDirection, type SlideSense } from "./facing";
 

@@ -24,7 +24,7 @@ import {
 import {
     instancedSkinning,
     type Bake,
-} from "@/view3d/vendor/om-pose/instanced-marchers.js";
+} from "@/view3d/render/instanced-marchers.js";
 import type { ArmPose } from "./armPose";
 
 /** The metal's sRGB color per finish: gold lacquer, silver lacquer. */

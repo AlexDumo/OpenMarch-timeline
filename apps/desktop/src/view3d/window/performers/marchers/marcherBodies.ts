@@ -25,8 +25,8 @@ import {
     writeMatrix,
     type Bake,
     type MarcherClip,
-} from "@/view3d/vendor/om-pose/instanced-marchers.js";
-import { createUniformMaterial } from "@/view3d/vendor/om-pose/uniform-shader.js";
+} from "@/view3d/render/instanced-marchers.js";
+import { createUniformMaterial } from "@/view3d/render/uniform-shader.js";
 import {
     partVisible,
     uniformKey,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
+import type { Manifest } from "@/view3d/render/step-blend.js";
 import type { MarcherTimeline } from "@/utilities/Keyframes";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { buildCountClock } from "@/view3d/core/marchers/countClock";
@@ -15,7 +15,7 @@ import {
 import { CUE_LEAD } from "@/view3d/core/marchers/cueInputs";
 import { planMarcher } from "@/view3d/core/marchers/planner";
 import type { MarcherBodies } from "../marchers/marcherBodies";
-import type { MarcherClip } from "@/view3d/vendor/om-pose/instanced-marchers.js";
+import type { MarcherClip } from "@/view3d/render/instanced-marchers.js";
 
 const manifest = JSON.parse(
     fs.readFileSync(

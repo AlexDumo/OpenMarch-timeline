@@ -4,7 +4,7 @@ import path from "node:path";
 import { renderHook } from "@testing-library/react";
 import type { AnimationClip, SkinnedMesh } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import type { Manifest } from "@/view3d/vendor/om-pose/step-blend.js";
+import type { Manifest } from "@/view3d/render/step-blend.js";
 import {
     defaultPerformerBody,
     sectionUniform,
