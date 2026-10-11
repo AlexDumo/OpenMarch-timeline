@@ -46,6 +46,14 @@ Anything else the app asks the main process for rejects the way Electron
 does for an unregistered channel: PDF and video export, plugins, sign-in,
 updates and recent files don't work here.
 
+## Publishing to the lab
+
+A branch with `lab/experiment.md` (the test's title, intro and questions) is
+built and published to the OpenMarch lab on every push, by
+`.github/workflows/lab-deploy.yaml`. The lab adds its feedback widget to the
+page; nothing here knows about it. The manifest format and the lab itself are
+in the `OpenMarch/openmarch-lab` repository.
+
 ## Demo shows
 
 `public/demos/` holds the demo `.dots` files, listed in `demos.ts`. To add

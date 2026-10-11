@@ -1,0 +1,69 @@
+# Publishes this branch's web test build to the OpenMarch lab, where testers
+# try it and send feedback. Fork-only: don't merge into OpenMarch's main.
+#
+# Runs on branches that have lab/experiment.md (the test's title, intro and
+# questions; see apps/desktop/web/README.md). Needs, in the repository's
+# Actions settings: the variable LAB_URL (e.g. https://lab.openmarch.com) and
+# the secret LAB_DEPLOY_TOKEN (the lab Worker's DEPLOY_TOKEN).
+name: Lab test build
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: lab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      LAB_URL: ${{ vars.LAB_URL }}
+      LAB_DEPLOY_TOKEN: ${{ secrets.LAB_DEPLOY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for a test manifest
+        id: check
+        run: |
+          if [ ! -f lab/experiment.md ]; then
+            echo "No lab/experiment.md on this branch; nothing to publish."
+            exit 0
+          fi
+          if [ -z "$LAB_URL" ] || [ -z "$LAB_DEPLOY_TOKEN" ]; then
+            echo "::warning::Set the LAB_URL variable and LAB_DEPLOY_TOKEN secret to publish test builds."
+            exit 0
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        if: steps.check.outputs.publish == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        if: steps.check.outputs.publish == 'true'
+        uses: pnpm/action-setup@v4.1.0
+
+      - name: Install dependencies
+        if: steps.check.outputs.publish == 'true'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build the web test build
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          pnpm turbo run build --filter="@openmarch/desktop^..."
+          pnpm --filter @openmarch/desktop run web:build
+
+      - name: Publish to the lab
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          curl -fsSL "$LAB_URL/deploy-experiment.mjs" -o "$RUNNER_TEMP/deploy-experiment.mjs"
+          node "$RUNNER_TEMP/deploy-experiment.mjs" \
+            --lab "$LAB_URL" \
+            --manifest lab/experiment.md \
+            --build apps/desktop/web/dist \
+            --branch "${{ github.ref_name }}" \
+            --commit "${{ github.sha }}"
