@@ -172,7 +172,7 @@ export function onlyThisPageMessage(
         ? {
               message: translate(
                   "timeline.keep.followed.onePage",
-                  "Page {page} was a copy of this page, so it changed too",
+                  "Page {page} was holding this form, so it changed too",
                   { page: first },
               ),
               actionLabel: translate(
@@ -184,7 +184,7 @@ export function onlyThisPageMessage(
         : {
               message: translate(
                   "timeline.keep.followed.pages",
-                  "Pages {first}–{last} were copies of this page, so they changed too",
+                  "Pages {first}–{last} were holding this form, so they changed too",
                   { first, last },
               ),
               actionLabel: translate(

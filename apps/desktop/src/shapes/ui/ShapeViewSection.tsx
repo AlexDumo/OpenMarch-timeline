@@ -157,7 +157,11 @@ export function ShapeViewSection({
     );
 
     return (
-        <section className="flex flex-col gap-6" data-testid="shape-view">
+        <section
+            className="flex flex-col gap-6"
+            data-testid="shape-view"
+            id="shape-view"
+        >
             <h4 className="text-body text-text/80">
                 <T keyName="inspector.shapeTool.view.title" />
             </h4>
@@ -186,39 +190,49 @@ export function ShapeViewSection({
                 <LegendItem mark={<Dot filled />}>
                     <T keyName="inspector.shapeTool.view.legendNew" />
                 </LegendItem>
-                <LegendItem mark={<Dot />}>
-                    {startPage ? (
-                        <T
-                            keyName="inspector.shapeTool.view.legendStartAt"
-                            params={{ page: startPage.name }}
-                        />
-                    ) : (
-                        <T keyName="inspector.shapeTool.view.legendStart" />
-                    )}
-                </LegendItem>
-                {resolved.oldShape && (
-                    <LegendItem mark={<Dot small />}>
-                        <T keyName="inspector.shapeTool.view.legendOld" />
-                    </LegendItem>
+                {resolved.showOnly ? (
+                    <li className="text-text/60">
+                        <T keyName="inspector.shapeTool.view.legendShowOnly" />
+                    </li>
+                ) : (
+                    <>
+                        <LegendItem mark={<Dot />}>
+                            {startPage ? (
+                                <T
+                                    keyName="inspector.shapeTool.view.legendStartAt"
+                                    params={{ page: startPage.name }}
+                                />
+                            ) : (
+                                <T keyName="inspector.shapeTool.view.legendStart" />
+                            )}
+                        </LegendItem>
+                        {resolved.oldShape && (
+                            <LegendItem mark={<Dot small />}>
+                                <T keyName="inspector.shapeTool.view.legendOld" />
+                            </LegendItem>
+                        )}
+                        <LegendItem
+                            mark={<Walk className="stroke-[#f59e0b]" />}
+                        >
+                            <T keyName="inspector.shapeTool.view.legendBigSteps" />
+                        </LegendItem>
+                        <LegendItem mark={<Walk className="stroke-red" />}>
+                            <T keyName="inspector.shapeTool.view.legendCollisions" />
+                        </LegendItem>
+                        <LegendItem mark={<Walk />}>
+                            <T
+                                keyName={
+                                    resolved.paths === "all"
+                                        ? "inspector.shapeTool.view.legendWalks"
+                                        : "inspector.shapeTool.view.legendProblemWalks"
+                                }
+                            />
+                        </LegendItem>
+                        <LegendItem mark={<HandleMark kind="move" />}>
+                            <T keyName="inspector.shapeTool.view.legendHandles" />
+                        </LegendItem>
+                    </>
                 )}
-                <LegendItem mark={<Walk className="stroke-[#f59e0b]" />}>
-                    <T keyName="inspector.shapeTool.view.legendBigSteps" />
-                </LegendItem>
-                <LegendItem mark={<Walk className="stroke-red" />}>
-                    <T keyName="inspector.shapeTool.view.legendCollisions" />
-                </LegendItem>
-                <LegendItem mark={<Walk />}>
-                    <T
-                        keyName={
-                            resolved.paths === "all"
-                                ? "inspector.shapeTool.view.legendWalks"
-                                : "inspector.shapeTool.view.legendProblemWalks"
-                        }
-                    />
-                </LegendItem>
-                <LegendItem mark={<HandleMark kind="move" />}>
-                    <T keyName="inspector.shapeTool.view.legendHandles" />
-                </LegendItem>
             </ul>
         </section>
     );

@@ -882,6 +882,7 @@
                 "legendNew": "Where each marcher goes",
                 "legendOld": "The shape being replaced",
                 "legendProblemWalks": "Other walks: point at a marcher to see its walk",
+                "legendShowOnly": "The show look draws only where each marcher goes. V shows every mark.",
                 "legendStart": "Where they start this move",
                 "legendStartAt": "Where they start this move: Page {page}",
                 "legendWalks": "Each marcher's walk",
@@ -897,7 +898,8 @@
                 "show": "Show",
                 "starts": "Start marks",
                 "strong": "Strong",
-                "title": "View"
+                "title": "View",
+                "toLegend": "View and legend"
             },
             "hint": "Pick a shape for the selected marchers (L for a line, O for a circle).",
             "hintPlaced": "These marchers were placed as a shape. Edit it, or pick a new shape.",
@@ -1560,9 +1562,9 @@
             "followed": {
                 "keepOne": "Keep Page {page} as before",
                 "keepPages": "Keep Pages {first}–{last} as before",
-                "onePage": "Page {page} was a copy of this page, so it changed too",
+                "onePage": "Page {page} was holding this form, so it changed too",
                 "only": "Change only Page {page}",
-                "pages": "Pages {first}–{last} were copies of this page, so they changed too"
+                "pages": "Pages {first}–{last} were holding this form, so they changed too"
             },
             "names": {
                 "many": "{first}, {second} and {count} others",
@@ -1649,6 +1651,7 @@
             "labelPositionAbove": "Above the dot",
             "labelPositionBeside": "Beside the dot",
             "labelSize": "Label size",
+            "shapePreview": "Shape preview",
             "labelSizeLarge": "Large",
             "labelSizeNormal": "Normal",
             "labelSizeSmall": "Small",

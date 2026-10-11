@@ -31,6 +31,16 @@ export function ShapeToolKeys(): null {
             store.cancelDrag();
             return;
         }
+        // Escape in the toolbar's tabs (the View ribbon) leaves the toolbar, not the shape (sims,
+        // round 13: closing the View menu threw away the block)
+        const focused = document.activeElement;
+        if (
+            focused instanceof HTMLElement &&
+            focused.closest('[role="tablist"], [role="tabpanel"]')
+        ) {
+            focused.blur();
+            return;
+        }
         // A way back, in case the Escape was meant for something else (sims, round 12: Escape
         // closing a settings panel also dropped the shape)
         const left = store.session;

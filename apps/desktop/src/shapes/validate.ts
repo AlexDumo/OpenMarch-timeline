@@ -191,7 +191,9 @@ export function validatePaths(
     if (crossings === 0 && passes === 0 && moving && targets.length > 1)
         issues.push({
             level: "info",
-            message: `Walks checked: no one crosses or passes within ${MIN_SPACING_STEPS} step of anyone on the way.`,
+            // "At the same moment": a walk may cross a spot someone else has already left (sims,
+            // round 13: "5's arrow runs through 7's start circle, who do I believe?")
+            message: `Walks checked count by count: no two marchers come within ${MIN_SPACING_STEPS} step of each other at the same moment.`,
         });
     return issues;
 }

@@ -294,13 +294,29 @@ function SessionControls({ session }: { session: ShapeSession }) {
         <>
             <div className="flex flex-col gap-4">
                 <KindPicker activeKind={session.kindId} />
-                <p
-                    className="text-sub text-text/70 truncate"
-                    title={summary}
-                    data-testid="shape-tool-summary"
-                >
-                    {summary}
-                </p>
+                <div className="flex items-center gap-8">
+                    <p
+                        className="text-sub text-text/70 min-w-0 flex-1 truncate"
+                        title={summary}
+                        data-testid="shape-tool-summary"
+                    >
+                        {summary}
+                    </p>
+                    {/* The legend and view options sit low in the panel; a way there from the top
+                        (sims, round 13: "I only found the legend by scrolling") */}
+                    <button
+                        type="button"
+                        className="text-sub text-accent shrink-0 underline"
+                        data-testid="shape-tool-to-legend"
+                        onClick={() =>
+                            document
+                                .getElementById("shape-view")
+                                ?.scrollIntoView({ block: "start" })
+                        }
+                    >
+                        <T keyName="inspector.shapeTool.view.toLegend" />
+                    </button>
+                </div>
             </div>
 
             {/* Stays in view while the panel scrolls (sims, round 10: scrolled to the legend and back,
