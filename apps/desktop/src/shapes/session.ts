@@ -18,9 +18,9 @@ import { setSizeLock, type Spacing } from "./types";
  * One use of the shape tool: the marchers it places, the kind and its params, and who goes to
  * which slot. Pure functions; `shapeToolStore` holds the current session.
  *
- * The assignment is made when the session starts, and again only when the kind or the order
- * changes or the user asks (Reassign). Dragging handles or changing spacing keeps it, so marchers
- * don't swap spots under the cursor.
+ * The assignment is made when the session starts and again after every change (the store applies
+ * the order to each edit, and to a drag when it ends). During a drag it holds, so marchers don't
+ * swap spots under the cursor.
  */
 export interface ShapeSession {
     readonly kindId: string;

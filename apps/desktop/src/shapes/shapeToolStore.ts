@@ -49,7 +49,13 @@ interface ShapeToolState {
     /** Moves the whole shape by `delta` field units (the nudge keys while the tool is open) */
     nudge(delta: XY, ctx: ShapeContext): void;
     /** The handle being dragged and the params when its drag started */
-    dragging: { key: string; base: unknown; cursor?: XY } | null;
+    dragging: {
+        key: string;
+        base: unknown;
+        cursor?: XY;
+        /** The last move's context, to apply the order with when the drag ends */
+        ctx?: ShapeContext;
+    } | null;
     startDrag(key: string): void;
     drag(to: XY, shift: boolean, ctx: ShapeContext): void;
     endDrag(): void;
@@ -69,11 +75,18 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
     /**
      * Applies `change` to the open session, if any, as one step the tool's own Undo can take
      * back. Nothing is written to the show until Place, so the show's undo isn't involved.
+     * With `ctx`, the order is applied again to the changed shape, so the Order setting always
+     * says who goes where (sims, round 6: Nearest went stale after typing an interval).
      */
-    const update = (change: (session: ShapeSession) => ShapeSession) => {
+    const update = (
+        change: (session: ShapeSession) => ShapeSession,
+        ctx?: ShapeContext,
+    ) => {
         const { session, past } = get();
         if (!session) return;
-        const next = change(session);
+        const changed = change(session);
+        const next =
+            ctx && changed !== session ? reassign(changed, ctx) : changed;
         if (next === session) return;
         set({
             session: next,
@@ -109,9 +122,10 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
         setKeepOverrides: (keep) =>
             update((s) => ({ ...s, keepOverrides: keep })),
         setKind: (kindId, ctx) => update((s) => changeKind(s, kindId, ctx)),
-        setParams: (params, ctx) => update((s) => changeParams(s, params, ctx)),
+        setParams: (params, ctx) =>
+            update((s) => changeParams(s, params, ctx), ctx),
         setMeasure: (key, value, ctx) =>
-            update((s) => changeMeasure(s, key, value, ctx)),
+            update((s) => changeMeasure(s, key, value, ctx), ctx),
         inputError: null,
         setInputError(inputError) {
             if (get().inputError !== inputError) set({ inputError });
@@ -119,10 +133,11 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
         setOrder: (order, reverse, ctx) =>
             update((s) => changeOrder(s, order, reverse, ctx)),
         reassign: (ctx) => update((s) => reassign(s, ctx)),
-        insertPoint: (at, ctx) => update((s) => insertPoint(s, at, ctx)),
-        removePoint: (key, ctx) => update((s) => removePoint(s, key, ctx)),
+        insertPoint: (at, ctx) => update((s) => insertPoint(s, at, ctx), ctx),
+        removePoint: (key, ctx) => update((s) => removePoint(s, key, ctx), ctx),
         nudge(delta, ctx) {
-            if (!get().dragging) update((s) => translateSession(s, delta, ctx));
+            if (!get().dragging)
+                update((s) => translateSession(s, delta, ctx), ctx);
         },
         ...dragActions(get, set),
         close() {
@@ -196,7 +211,7 @@ function dragActions(
             const { session, dragging } = get();
             if (!session || !dragging) return;
             set({
-                dragging: { ...dragging, cursor: to },
+                dragging: { ...dragging, cursor: to, ctx },
                 session: dragHandle(
                     session,
                     dragging.base,
@@ -208,7 +223,17 @@ function dragActions(
             });
         },
         endDrag() {
-            if (get().dragging) set({ dragging: null });
+            const { session, dragging } = get();
+            if (!dragging) return;
+            // The order holds during the drag, so spots don't swap under the cursor, and is
+            // applied again when it ends
+            set({
+                dragging: null,
+                session:
+                    session && dragging.ctx
+                        ? reassign(session, dragging.ctx)
+                        : session,
+            });
         },
         cancelDrag() {
             const { session, dragging, past } = get();

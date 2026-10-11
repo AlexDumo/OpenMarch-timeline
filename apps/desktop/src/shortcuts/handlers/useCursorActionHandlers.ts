@@ -28,7 +28,12 @@ export function useCursorActionHandlers() {
                 return;
             }
 
-            canvas.setActiveObjects(canvas.getCanvasMarchers());
+            const marchers = canvas.getCanvasMarchers();
+            canvas.setActiveObjects(marchers);
+            // Then the app's selection, which the canvas follows. The canvas's own events can
+            // read a stale selection (the canvas still holding marchers the app had let go),
+            // and its deselect would win, leaving nothing selected (shape sims)
+            setSelectedMarchers(marchers.map((m) => m.marcherObj));
         },
         { enabled: ready },
     );

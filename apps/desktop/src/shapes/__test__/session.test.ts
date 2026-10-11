@@ -8,6 +8,7 @@ import {
     dragHandle,
     openRecipe,
     previewSession,
+    reassign,
     startSession,
 } from "../session";
 import { useShapeToolStore } from "../shapeToolStore";
@@ -151,6 +152,29 @@ describe("shape tool store", () => {
         // Moves after the cancel (the mouse is still down) change nothing
         store.drag(xy(900, 900), false, ctx);
         expect(useShapeToolStore.getState().session!.params).toEqual(before);
+    });
+
+    it("applies Nearest again after an edit and when a drag ends", () => {
+        const store = useShapeToolStore.getState();
+        store.open("line", row, ctx);
+        store.setOrder("nearest", false, ctx);
+        const p = useShapeToolStore.getState().session!.params as LineParams;
+        const current = () => useShapeToolStore.getState().session!;
+        const reassigned = () => reassign(current(), ctx).assignment;
+        // Flipping the line's ends: the first marcher keeps the end nearest it
+        store.setParams({ ...p, a: p.b, b: p.a }, ctx);
+        const first = previewSession(current(), ctx).targets[0]!;
+        expect(dist(first.to, row[0]!.at)).toBeLessThan(
+            dist(first.to, row[3]!.at),
+        );
+        expect(current().assignment).toEqual(reassigned());
+        // A drag holds the order while it lasts, and applies it when it ends
+        const before = current().assignment;
+        store.startDrag("a");
+        store.drag(xy(p.a.x, p.a.y + 300), false, ctx);
+        expect(current().assignment).toEqual(before);
+        store.endDrag();
+        expect(current().assignment).toEqual(reassigned());
     });
 
     it("remembers the last session's settings for the next one", () => {
