@@ -910,11 +910,12 @@ const TimelineSurface = memo(function TimelineSurface({
                             pixelsPerBeat={pixelsPerBeat}
                         />
                     )}
-                    {basic && props.basicPoints && (
+                    {props.basicPoints && (
                         <TimelineBasicPoints
                             points={props.basicPoints}
+                            // In the box bodies (Basic), else across the measure row
                             top={28}
-                            height={timelineHeight - 28}
+                            height={basic ? timelineHeight - 28 : railHeight}
                             pixelsPerBeat={pixelsPerBeat}
                             onSeek={props.onSeek}
                             onRemove={props.onRemoveBasicPoint}

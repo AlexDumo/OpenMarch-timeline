@@ -634,3 +634,60 @@ describeDbTests("Basic point writes on a converted show", (it) => {
         expect(await violations(db)).toEqual([]);
     });
 });
+
+describeDbTests(
+    "simple-defaults timeline: others edited over the window",
+    (it) => {
+        it("splits simple marchers and window-edits one with a cross-flag move, in one undo step", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await madeInTimelineMode(db);
+            await range(db, a, 9, 17, A);
+            // b's move crosses page 2's flag: not simple on page 2
+            await range(db, b, 13, 21, B);
+            const before = await snapshot(db);
+            const r0 = await resolverOf(db);
+            const aEnd = r0.positionAt(a, 17);
+            await moveMarchersInTarget({
+                db,
+                target: {
+                    kind: "point",
+                    beat: 15,
+                    box: PAGE2,
+                    others: "window",
+                },
+                moves: [
+                    { marcherId: a, x: C[0], y: C[1] },
+                    { marcherId: b, x: C[0], y: C[1] },
+                ],
+            });
+            const r = await resolverOf(db);
+            // a: split at 15, its page end kept
+            expect(await rowsOf(db, a)).toEqual([
+                [9, 15, 0],
+                [15, 17, 0],
+            ]);
+            expect(r.positionAt(a, 15)).toEqual(C);
+            expect(r.positionAt(a, 17)).toEqual(aEnd);
+            // b: arrives at C at 15 over the window [9, 15)
+            expect(r.positionAt(b, 15)).toEqual(C);
+            expect(await violations(db)).toEqual([]);
+            await oneUndoStep(db, before, await snapshot(db));
+        });
+
+        it("Basic (no others option) still refuses the cross-flag marcher", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await madeInTimelineMode(db);
+            await range(db, b, 13, 21, B);
+            await expect(
+                point(db, 15, [
+                    [a, C],
+                    [b, C],
+                ]),
+            ).rejects.toBeInstanceOf(TimelineEditRefusedError);
+        });
+    },
+);

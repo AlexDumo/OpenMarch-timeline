@@ -155,3 +155,37 @@ describe("withoutLockedMarchers", () => {
         expect(describePages(["4", "5", "9"])).toBe("Pages 4, 5 and 9");
     });
 });
+
+describe("planCanvasEdit with simple defaults (study flag)", () => {
+    const state = (start: number, end: number, startPinned = false) => ({
+        selection: { kind: "range" as const, start, end },
+        isolation: null,
+        pageBoxes: BOXES,
+        startPinned,
+    });
+
+    it("an unpinned edit mid-page is a point edit that windows the others", () => {
+        expect(planCanvasEdit(state(9, 13), false, true)).toEqual({
+            ok: true,
+            target: {
+                kind: "point",
+                beat: 13,
+                box: { start: 9, end: 17 },
+                others: "window",
+            },
+            beat: 13,
+        });
+    });
+
+    it("a pinned start flag keeps the window", () => {
+        expect(planCanvasEdit(state(5, 13, true), false, true)).toMatchObject({
+            target: { kind: "range", start: 5, end: 13 },
+        });
+    });
+
+    it("flag off: the window as before", () => {
+        expect(planCanvasEdit(state(9, 13), false, false)).toMatchObject({
+            target: { kind: "range", start: 9, end: 13 },
+        });
+    });
+});

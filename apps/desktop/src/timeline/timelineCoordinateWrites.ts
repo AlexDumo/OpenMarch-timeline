@@ -18,6 +18,7 @@ import { pageEndBeat } from "./timelineCanvas";
 import { TimelineEditRefusedError } from "./timelineEditRefusals";
 import { moveMarchersAndOfferFollowUp } from "./timelineMoveThemToo";
 import { isBasicMode } from "@/stores/EditorModeStore";
+import { simpleDefaultsOn } from "./simpleDefaults";
 import {
     timelineResolverSettled,
     useTimelineResolverStore,
@@ -90,9 +91,10 @@ export type CanvasEditPlan =
 export function planCanvasEdit(
     state: Pick<TimelineSelectionState, "selection" | "isolation"> &
         Partial<
-            Pick<TimelineSelectionState, "pageBoxes">
+            Pick<TimelineSelectionState, "pageBoxes" | "startPinned">
         > = useTimelineSelectionStore.getState(),
     basic: boolean = isBasicMode(),
+    simple: boolean = simpleDefaultsOn(),
 ): CanvasEditPlan {
     const { selection, isolation } = state;
     // Isolation always edits the isolated timeline's end (owner, 2026-10-04). Until its plan is
@@ -116,13 +118,25 @@ export function planCanvasEdit(
     if (selection.kind === "range") {
         // UI-19: Basic edits where each marcher is at the playhead, inside its page box
         // (docs/timeline/research/basic-mode, "How Basic writes")
-        const box = basic
-            ? basicPageBox({ pageBoxes: state.pageBoxes ?? [] }, selection.end)
-            : null;
-        if (box)
+        // The simple-defaults timeline does too while the start flag follows (study flag),
+        // editing marchers Basic would lock over the window instead
+        const simpleHere = !basic && simple && !state.startPinned;
+        const box =
+            basic || simpleHere
+                ? basicPageBox(
+                      { pageBoxes: state.pageBoxes ?? [] },
+                      selection.end,
+                  )
+                : null;
+        if (box && (basic || selection.start === box.start))
             return {
                 ok: true,
-                target: { kind: "point", beat: selection.end, box },
+                target: {
+                    kind: "point",
+                    beat: selection.end,
+                    box,
+                    ...(simpleHere ? { others: "window" as const } : {}),
+                },
                 beat: selection.end,
             };
         return {
@@ -356,6 +370,9 @@ export function neighborPageTarget(
     const box = { start: first.index, end: pageEndBeat(page) };
     // UI-19: Basic writes on the page's flag, and keeps every move inside the box
     if (basic) return { kind: "point", beat: box.end, box };
+    // So does the simple-defaults timeline (study flag), editing the others over the page
+    if (simpleDefaultsOn())
+        return { kind: "point", beat: box.end, box, others: "window" };
     return { kind: "range", ...box };
 }
 

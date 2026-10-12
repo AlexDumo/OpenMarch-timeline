@@ -75,6 +75,7 @@ import TimelineControls from "./TimelineControls";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useBasicLocksStore } from "@/timeline/basicLocks";
 import { useBasicPoints } from "./useBasicPoints";
+import { useSimpleDefaults } from "@/timeline/simpleDefaults";
 import type Page from "@/global/classes/Page";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
@@ -252,6 +253,28 @@ export default function TimelineModePanel() {
             }),
         [timelines, pages, storedTimelines, pageBoxes],
     );
+    // Simple defaults (study flag): a move inside one page is a tick, not a clip, unless one of
+    // its marchers is in an Expert move there (a cross-flag or overlapping one)
+    const simple = useSimpleDefaults() && !basic;
+    const lockedOn = useBasicLocksStore((s) => s.locked);
+    const lockBoxes = useBasicLocksStore((s) => s.boxes);
+    const shownClips = useMemo(() => {
+        if (!simple) return offPage;
+        return offPage.filter((clip) => {
+            const i = lockBoxes.findIndex(
+                (b) =>
+                    b.start <= clip.startBeatIndex &&
+                    clip.endBeatIndex <= b.end,
+            );
+            if (i < 0) return true;
+            const members = storedTimelines?.find(
+                (t) => String(t.id) === String(clip.linkId),
+            )?.marcherIds;
+            if (!members) return true;
+            const locked = lockedOn.get(i);
+            return [...members].some((m) => locked?.has(m));
+        });
+    }, [simple, offPage, lockBoxes, lockedOn, storedTimelines]);
     // The Move card says it too
     useEffect(() => {
         useMoveNotesStore.getState().setOverridden(overridden);
@@ -406,14 +429,22 @@ export default function TimelineModePanel() {
                     mode={basic ? "basic" : compact ? "collapsed" : "expanded"}
                     showTransport={!sideTransport}
                     basic={basic}
-                    {...(basic ? basicExtras : {})}
+                    {...(basic
+                        ? basicExtras
+                        : simple
+                          ? {
+                                basicPoints: basicExtras.basicPoints,
+                                onRemoveBasicPoint:
+                                    basicExtras.onRemoveBasicPoint,
+                            }
+                          : {})}
                     zoomFitted={zoomFitted}
                     onZoomFittedChange={setZoomFitted}
                     className="w-full"
                     beats={beats}
                     pages={pages}
                     measures={measures}
-                    timelines={basic ? NO_CLIPS : offPage}
+                    timelines={basic ? NO_CLIPS : shownClips}
                     transportAccessories={basic ? undefined : LOOP_BUTTON}
                     transportSecondary={SOUND_BUTTON}
                     transportViewControls={basic ? undefined : COMPACT_BUTTON}
