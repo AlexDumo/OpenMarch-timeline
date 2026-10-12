@@ -581,10 +581,15 @@ const TimelineSurface = memo(function TimelineSurface({
         (peaks) => peaks.length > 0,
     );
     // Basic (UI-19): under each box's header (the ruler) its body, the same height with or
-    // without audio: the waveform, then the count ticks along the bottom
-    const basicBodyHeight = 48;
-    const waveformHeight = basic ? basicBodyHeight - 14 : expanded ? 32 : 12;
-    const audioTop = basic ? 30 : 28 + railHeight + 2;
+    // without audio: the measure numbers, the waveform, then the count ticks along the bottom
+    const basicBodyHeight = 60;
+    const basicMeasureRow = 18;
+    const waveformHeight = basic
+        ? basicBodyHeight - basicMeasureRow - 12
+        : expanded
+          ? 32
+          : 12;
+    const audioTop = basic ? 28 + basicMeasureRow : 28 + railHeight + 2;
     const trackTop = showWaveform ? audioTop + waveformHeight + 4 : audioTop;
     const rowPitch = expanded ? 22 : 12;
     const trackHeight = expanded ? 14 : 6;
@@ -595,20 +600,6 @@ const TimelineSurface = memo(function TimelineSurface({
         ? 28 + basicBodyHeight
         : trackTop + trackBandHeight + (expanded ? 2 : 0);
     const selectionRange = getSelectionRange(selection);
-    // Basic (UI-19): the page box holding the playhead's end of the window, ringed
-    const basicSelectedBox = useMemo(() => {
-        if (!basic || !selectionRange) return null;
-        // A page marker is at its box's start; the box ends at the next page's start
-        const at = selectionRange.endBeatIndex;
-        const timed = model.pages.filter((page) => !page.isInitial);
-        for (let i = 0; i < timed.length; i++) {
-            const start = timed[i]!.atBeat;
-            const end = timed[i + 1]?.atBeat ?? model.beatCount;
-            if (start < at && at <= end)
-                return { startBeatIndex: start, endBeatIndex: end };
-        }
-        return null;
-    }, [basic, model.pages, selectionRange]);
     // A dragged start flag's range: only the window's count reads it (`TimelineSelectionActions`)
     const [selectionInteraction] = useState(() =>
         createLiveValue<TimelineSelectionInteraction | null>(
@@ -793,9 +784,6 @@ const TimelineSurface = memo(function TimelineSurface({
                             top={28}
                             height={timelineHeight - 28}
                             width={width}
-                            initialPageWidth={initialPageWidth}
-                            selectedRange={basicSelectedBox}
-                            pixelsPerBeat={pixelsPerBeat}
                         />
                     )}
                     <TimelineGridCanvas
@@ -825,7 +813,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         onSelectionChange={onSelectionChange}
                         onSeek={props.onSeek}
                         initialPageWidth={initialPageWidth}
-                        showMeasures={expanded && !basic}
+                        showMeasures={expanded}
                         seekSnapBeats={seekSnapBeats}
                         scrubLine={pointer.scrubLine}
                         pageFlagMove={

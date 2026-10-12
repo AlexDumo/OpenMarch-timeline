@@ -66,7 +66,7 @@ describe("the timeline's page boxes", () => {
         expect(box).not.toHaveAttribute("aria-describedby");
     });
 
-    it("draw a key where the selection moves and a bar where it holds, with the words on the box", () => {
+    it("show one status chip per box where the selection moves or holds, with the words on the box", () => {
         const holdMarks: LabeledHoldMarks = new Map([
             [
                 "page-2",
@@ -93,41 +93,44 @@ describe("the timeline's page boxes", () => {
                 },
             ],
         ]);
-        render(<ExpandedTimeline {...commonProps} holdMarks={holdMarks} />);
-        const markOf = (name: string) => {
-            const box = screen.getByRole("button", { name });
-            return {
-                box,
-                kind: box
-                    .querySelector('[data-testid="page-hold-mark"]')
-                    ?.getAttribute("data-hold-mark"),
-            };
-        };
-        // The accessible name stays the page's, so the box is found as before
-        expect(markOf("Page 1").kind).toBeUndefined();
-        const moves = markOf("Page 2");
-        expect(moves.kind).toBe("moves");
-        expect(moves.box).toHaveAccessibleDescription(
+        const { container } = render(
+            <ExpandedTimeline {...commonProps} holdMarks={holdMarks} />,
+        );
+        const chipOf = (pageId: string) =>
+            container
+                .querySelector(
+                    `[data-testid="page-status-chip"][data-page-id="${pageId}"]`,
+                )
+                ?.getAttribute("data-hold-mark");
+        expect(chipOf("page-1")).toBeUndefined();
+        expect(chipOf("page-2")).toBe("moves");
+        expect(chipOf("page-2a")).toBe("holds");
+        expect(chipOf("page-4")).toBe("mixed");
+        // No key at the flag or bar along the bottom any more (owner, 2026-10-12)
+        expect(
+            container.querySelector('[data-testid="page-hold-mark"]'),
+        ).toBeNull();
+        // The box keeps the words for screen readers, under its page's name
+        expect(
+            screen.getByRole("button", { name: "Page 2" }),
+        ).toHaveAccessibleDescription(
             "Selected marchers move on this page. They have their own move here",
         );
-        const holds = markOf("Page 2A");
-        expect(holds.kind).toBe("holds");
-        expect(holds.box).toHaveAccessibleDescription(
+        const held = screen.getByRole("button", { name: "Page 2A" });
+        expect(held).toHaveAccessibleDescription(
             "Selected marchers hold from Page 2. They stand where Page 2 left them",
         );
         // A real tooltip, not the native one
-        expect(holds.box).not.toHaveAttribute("title");
-        const mixed = markOf("Page 4");
-        expect(mixed.kind).toBe("mixed");
-        expect(mixed.box).toHaveAccessibleDescription(
+        expect(held).not.toHaveAttribute("title");
+        expect(
+            screen.getByRole("button", { name: "Page 4" }),
+        ).toHaveAccessibleDescription(
             "Some selected marchers hold from Page 2. Some have their own move here",
         );
         // The initial page (home) never has one
         expect(
-            screen
-                .getByTestId("timeline-initial-page")
-                .querySelector('[data-testid="page-hold-mark"]'),
-        ).toBeNull();
+            container.querySelectorAll('[data-testid="page-status-chip"]'),
+        ).toHaveLength(3);
     });
 });
 
@@ -159,10 +162,14 @@ const pastTheDelay = () =>
     act(() => new Promise((resolve) => setTimeout(resolve, 700)));
 
 describe("the hold mark's tooltip on the timeline's page boxes", () => {
-    it("shows the words and their hint above a held box after a hover", async () => {
-        render(<ExpandedTimeline {...commonProps} holdMarks={TOOLTIP_MARKS} />);
-        const box = screen.getByRole("button", { name: "Page 2A" });
-        fireEvent.pointerMove(box);
+    it("shows the words and their hint above a held box's chip after a hover", async () => {
+        const { container } = render(
+            <ExpandedTimeline {...commonProps} holdMarks={TOOLTIP_MARKS} />,
+        );
+        const chip = container.querySelector(
+            '[data-testid="page-status-chip"][data-page-id="page-2a"]',
+        )!;
+        fireEvent.pointerMove(chip);
         // Not straight away: a pass over the ruler doesn't flash one
         expect(tooltip()).not.toBeInTheDocument();
         const shown = await screen.findByRole("tooltip", {}, { timeout: 2000 });
@@ -173,23 +180,20 @@ describe("the hold mark's tooltip on the timeline's page boxes", () => {
             document.querySelector('[data-side="top"]'),
             "above the box",
         ).not.toBeNull();
-        fireEvent.pointerLeave(box);
+        fireEvent.pointerLeave(chip);
         await waitFor(() => expect(tooltip()).not.toBeInTheDocument());
     });
 
-    it("shows on keyboard focus, for a box the selection moves on", async () => {
+    it("hovering or focusing the box itself shows none; the box describes it to screen readers", async () => {
         render(<ExpandedTimeline {...commonProps} holdMarks={TOOLTIP_MARKS} />);
         const box = screen.getByRole("button", { name: "Page 2" });
+        fireEvent.pointerMove(box);
         act(() => box.focus());
-        expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            "Selected marchers move on this pageThey have their own move here",
-        );
-        // The screen reader's description stays the box's own
+        await pastTheDelay();
+        expect(tooltip()).not.toBeInTheDocument();
         expect(box).toHaveAccessibleDescription(
             "Selected marchers move on this page. They have their own move here",
         );
-        act(() => box.blur());
-        await waitFor(() => expect(tooltip()).not.toBeInTheDocument());
     });
 
     it("has none without a selection, or on a box without a mark", async () => {
@@ -209,7 +213,7 @@ describe("the hold mark's tooltip on the timeline's page boxes", () => {
         expect(tooltip()).not.toBeInTheDocument();
     });
 
-    it("closes on a press, and the press still selects the box", async () => {
+    it("a press on a marked box still selects it", () => {
         const onSelectionChange = vi.fn();
         render(
             <ExpandedTimeline
@@ -219,19 +223,12 @@ describe("the hold mark's tooltip on the timeline's page boxes", () => {
             />,
         );
         const box = screen.getByRole("button", { name: "Page 2A" });
-        fireEvent.pointerMove(box);
-        await screen.findByRole("tooltip", {}, { timeout: 2000 });
         press(box, "pointerdown", 130);
-        await waitFor(() => expect(tooltip()).not.toBeInTheDocument());
         press(box, "pointerup", 130);
         fireEvent.click(box, { detail: 1 });
         expect(onSelectionChange).toHaveBeenCalledWith(
             expect.objectContaining({ kind: "range" }),
         );
-        // Still over the box after the click: it stays closed until the pointer leaves
-        fireEvent.pointerMove(box);
-        await pastTheDelay();
-        expect(tooltip()).not.toBeInTheDocument();
     });
 
     it("never opens partway through a scrub that starts before the hover's delay", async () => {

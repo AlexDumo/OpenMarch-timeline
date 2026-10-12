@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { create } from "zustand";
 import { toast } from "sonner";
 import { useIsBasicMode, useEditorModeStore } from "@/stores/EditorModeStore";
@@ -64,37 +64,12 @@ export function useBasicLocksHost(enabled: boolean): void {
     // Basic locks with them; the simple-defaults timeline (study flag) reads them to tell a move
     // inside one page from an Expert one
     const simple = useSimpleDefaults();
-    const basic = useIsBasicMode() && enabled;
-    const on = (basic || simple) && enabled;
+    const on = (useIsBasicMode() || simple) && enabled;
     const { data: rows } = useBasicRows(on);
     const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
     useEffect(() => {
         useBasicLocksStore.getState().set(on ? (rows ?? null) : null, boxes);
     }, [on, rows, boxes]);
-    // Once per show opened (or Basic turned on): say which pages hold Expert moves
-    const told = useRef(false);
-    useEffect(() => {
-        // Only Basic locks, so only Basic says so
-        if (!basic) {
-            told.current = false;
-            return;
-        }
-        if (told.current || !rows || boxes.length === 0) return;
-        told.current = true;
-        const { locked } = useBasicLocksStore.getState();
-        const pages = boxes
-            .map((b, i) => ((locked.get(i)?.size ?? 0) > 0 ? b.name : null))
-            .filter((n): n is string => !!n);
-        if (pages.length === 0) return;
-        toast.info(
-            `${describePages(pages)} ${pages.length === 1 ? "uses" : "use"} Expert moves. You can see and play them here; switch to Expert to edit them.`,
-            {
-                id: "basic-expert-pages",
-                duration: 10000,
-                action: { label: "Switch to Expert", onClick: switchToExpert },
-            },
-        );
-    }, [basic, rows, boxes]);
 }
 
 /** "Page 4", "Pages 4 and 6", "Pages 4, 5 and 9" (names as the boxes have them) */

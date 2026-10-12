@@ -1,10 +1,7 @@
 import { useMemo } from "react";
 import { useTranslate } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
-import {
-    LinkSimpleHorizontalBreakIcon,
-    LinkSimpleHorizontalIcon,
-} from "@phosphor-icons/react";
+import { LinkBreakIcon, LinkSimpleIcon } from "@phosphor-icons/react";
 import {
     pageChainWords,
     type KeepToggle,
@@ -189,10 +186,7 @@ export function PageKeepChainButton({
     /** Where the chain goes in the ruler (px) */
     left: number;
 }) {
-    const Icon =
-        chain.kind === "kept"
-            ? LinkSimpleHorizontalBreakIcon
-            : LinkSimpleHorizontalIcon;
+    const Icon = chain.kind === "kept" ? LinkBreakIcon : LinkSimpleIcon;
     const stop = (event: { stopPropagation: () => void }) =>
         event.stopPropagation();
     return (
