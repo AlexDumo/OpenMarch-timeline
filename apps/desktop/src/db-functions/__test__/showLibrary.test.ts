@@ -13,6 +13,10 @@ import {
     type EmbedLibraryVersion,
 } from "../showLibrary";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
+import {
+    createShowBlobCache,
+    renderPartHash,
+} from "@/view3d/library/showBlobCache";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
@@ -198,6 +202,33 @@ describeDbTests("showLibrary", (it) => {
                 .run();
             const items = await getShowLibraryItems({ db });
             expect(items.map((i) => i.itemId)).toEqual([RIFLE]);
+        });
+
+        it("reads a model and an artwork back from the show alone", async ({
+            db,
+        }) => {
+            const r = await rifle();
+            const f = await flag();
+            await embedLibraryVersion({ db, version: r });
+            await embedLibraryVersion({ db, version: f });
+
+            // No local Library and no IPC: only the show file
+            const cache = createShowBlobCache({
+                read: (hash) => readLibraryBlob({ db, hash }),
+            });
+            const items = await getShowLibraryItems({ db });
+            const byId = new Map(items.map((i) => [i.itemId, i]));
+            const glb = await cache.get(
+                renderPartHash(byId.get(RIFLE)!, "glb")!,
+            );
+            const display = await cache.get(
+                renderPartHash(byId.get(FLAG)!, "display")!,
+            );
+            expect(Array.from(glb!)).toEqual(Array.from(r.parts.glb));
+            expect(Array.from(display!)).toEqual(Array.from(f.parts.display));
+            expect(() =>
+                renderPartHash(byId.get(FLAG)!, "original" as never),
+            ).toThrow();
         });
 
         it("reads a missing blob as undefined", async ({ db }) => {
