@@ -146,6 +146,52 @@ export function basicEditSpot(
     };
 }
 
+/**
+ * Where playing on stopped (UI-17): home, the page whose box holds the playhead (a page's flag is
+ * that page's, as Basic edits it), or past the last flag. `null` with nothing selected. A range is
+ * named by its end, which is the playhead.
+ */
+export type StoppedSpot =
+    | { readonly kind: "home" }
+    | { readonly kind: "page"; readonly name: string }
+    | { readonly kind: "after"; readonly lastPage: string };
+
+export function stoppedSpot(
+    selection: TimelineEditSelection,
+    pages: readonly (FlagPage & { readonly name: string })[],
+): StoppedSpot | null {
+    if (selection.kind === "home") return { kind: "home" };
+    if (selection.kind !== "range") return null;
+    const boxes = pageFlags(pages).filter((f) => f.range !== null);
+    const box = boxes.find(
+        (f) => f.range!.start < selection.end && selection.end <= f.range!.end,
+    );
+    if (box) return { kind: "page", name: box.page.name };
+    const last = boxes[boxes.length - 1];
+    return last && selection.end > last.range!.end
+        ? { kind: "after", lastPage: last.page.name }
+        : null;
+}
+
+/**
+ * The field line's note when playing on stops somewhere else (UI-17). It names where, because
+ * "Stopped on a new page" read as "the app made a page" (basic-past-flag study: all four users went
+ * to check). Past the last flag Basic can't edit, so `instead` replaces "Editing …" there.
+ */
+export function stoppedNote(
+    spot: StoppedSpot,
+    basic: boolean,
+): { note: string; instead: string | null } {
+    if (spot.kind === "home")
+        return { note: "Stopped at home positions", instead: null };
+    if (spot.kind === "page")
+        return { note: `Stopped on page ${spot.name}`, instead: null };
+    return {
+        note: "Stopped after the last page",
+        instead: basic ? "Add a page with + to edit here" : null,
+    };
+}
+
 /** "set 3", "sets 3 and 4", "sets 3, 4 and 5" (UI-17 follow-up: plainer than "page 3's set") */
 export const passedSets = (names: readonly string[]) =>
     names.length === 1
@@ -220,29 +266,44 @@ export function TimelineFromStartBadge() {
         ? basicSpot.count === null
         : isWholePageWindow(selection, pages);
     // UI-17: playing on that stops on another page says so loudly (round 3: all four testers
-    // missed the quiet line and edited the next page's set)
-    const [movedOn, setMovedOn] = useState(false);
-    const nameAtPlay = useRef<string | null>(null);
+    // missed the quiet line and edited the next page's set). Pages, not names, are compared, so
+    // stopping inside the page it started on stays quiet
+    const spot = stoppedSpot(selection, pages);
+    const spotKey =
+        spot === null
+            ? null
+            : spot.kind === "page"
+              ? `page ${spot.name}`
+              : spot.kind;
+    const [stoppedAt, setStoppedAt] = useState<string | null>(null);
+    const keyAtPlay = useRef<string | null | undefined>(undefined);
     useEffect(() => {
         if (playing) {
-            nameAtPlay.current ??= name;
-            setMovedOn(false);
+            if (keyAtPlay.current === undefined) keyAtPlay.current = spotKey;
+            setStoppedAt(null);
             return;
         }
-        const from = nameAtPlay.current;
-        nameAtPlay.current = null;
-        if (from === null || from === name) return;
-        setMovedOn(true);
-        const timeout = setTimeout(() => setMovedOn(false), 4000);
+        const from = keyAtPlay.current;
+        keyAtPlay.current = undefined;
+        if (from === undefined || spotKey === null || from === spotKey) return;
+        setStoppedAt(spotKey);
+        const timeout = setTimeout(() => setStoppedAt(null), 4000);
         return () => clearTimeout(timeout);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [playing]);
+    // Only while the playhead is still where it stopped: moving on clears the note
+    const stopped =
+        !playing && spot && stoppedAt !== null && stoppedAt === spotKey
+            ? stoppedNote(spot, basic)
+            : null;
+    const movedOn = stopped !== null;
+    const editing = stopped?.instead ?? `Editing ${name}`;
     const unusual =
         loopShown || pinShown || through.length > 0 || !wholePage || movedOn;
     const sentence =
         selection.kind === "none"
             ? ""
-            : `${movedOn ? "Stopped on a new page. " : ""}Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${loopShown ? `. Space loops ${loopName}` : ""}`;
+            : `${stopped ? `${stopped.note}. ` : ""}${editing}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${loopShown ? `. Space loops ${loopName}` : ""}`;
     // Flash when it turns prominent for a new reason: a pin, or crossing flags
     const flashKey = `${loopShown}|${pinShown}|${through.join(",")}`;
     const [fresh, setFresh] = useState(false);
@@ -298,12 +359,12 @@ export function TimelineFromStartBadge() {
                 className={clsx("shrink-0", START_INK.text)}
             />
             <span className="truncate" aria-hidden="true">
-                {movedOn && (
+                {stopped && (
                     <strong className={START_INK.strongText}>
-                        Stopped on a new page ·{" "}
+                        {stopped.note} ·{" "}
                     </strong>
                 )}
-                Editing {name}
+                {editing}
             </span>
             {through.length > 0 && (
                 <span

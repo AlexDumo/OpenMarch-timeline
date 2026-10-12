@@ -4,6 +4,8 @@ import {
     isolatedTimelineName,
     isWholePageWindow,
     passedSets,
+    stoppedNote,
+    stoppedSpot,
 } from "../TimelineIsolationBar";
 
 /** Page 1 ends at beat 9, page 2 at 17, page 3 at 25 (flags), as `useTimingObjects` gives them */
@@ -76,5 +78,66 @@ describe("the field line's quiet case (UI-12 review)", () => {
             isWholePageWindow({ kind: "range", start: 25, end: 29 }, PAGES),
         ).toBe(false);
         expect(isWholePageWindow({ kind: "none" }, PAGES)).toBe(false);
+    });
+});
+
+describe("the field line after playing on stops (UI-17)", () => {
+    it("names the page the playhead stopped on; a page's flag is that page's", () => {
+        expect(
+            stoppedSpot({ kind: "range", start: 9, end: 20 }, PAGES),
+        ).toEqual({
+            kind: "page",
+            name: "3",
+        });
+        expect(
+            stoppedSpot({ kind: "range", start: 9, end: 17 }, PAGES),
+        ).toEqual({
+            kind: "page",
+            name: "2",
+        });
+        // A window that starts on an earlier page is named by where it ends (the playhead)
+        expect(
+            stoppedSpot({ kind: "range", start: 5, end: 13 }, PAGES),
+        ).toEqual({
+            kind: "page",
+            name: "2",
+        });
+        expect(stoppedSpot({ kind: "home" }, PAGES)).toEqual({ kind: "home" });
+        expect(stoppedSpot({ kind: "none" }, PAGES)).toBeNull();
+    });
+
+    it("tells past the last flag apart from a page", () => {
+        expect(
+            stoppedSpot({ kind: "range", start: 25, end: 33 }, PAGES),
+        ).toEqual({
+            kind: "after",
+            lastPage: "3",
+        });
+    });
+
+    it("never reads as a page being made (basic-past-flag study: 4/4 went to check)", () => {
+        const notes = [
+            stoppedNote({ kind: "page", name: "3" }, false),
+            stoppedNote({ kind: "page", name: "3" }, true),
+            stoppedNote({ kind: "after", lastPage: "3" }, false),
+            stoppedNote({ kind: "after", lastPage: "3" }, true),
+            stoppedNote({ kind: "home" }, false),
+        ];
+        for (const { note, instead } of notes)
+            expect(`${note} ${instead ?? ""}`).not.toMatch(/new page/i);
+        expect(notes[0]).toEqual({ note: "Stopped on page 3", instead: null });
+        expect(notes[1]).toEqual({ note: "Stopped on page 3", instead: null });
+    });
+
+    it("says playback stopped after the last page, and in Basic how to edit there", () => {
+        expect(stoppedNote({ kind: "after", lastPage: "3" }, false)).toEqual({
+            note: "Stopped after the last page",
+            instead: null,
+        });
+        // Basic can't write past the last flag: the line says what to do instead of "Editing"
+        expect(stoppedNote({ kind: "after", lastPage: "3" }, true)).toEqual({
+            note: "Stopped after the last page",
+            instead: "Add a page with + to edit here",
+        });
     });
 });
