@@ -124,38 +124,65 @@ export function usePageKeepChains(
     }, [states, t, nameOf, k]);
 }
 
-/** The chain's size: a 20px target in the 28px ruler */
-export const CHAIN_SIZE = 20;
-/** How far in from the box's left edge: clear of the flag's grip, the start flag and the playhead */
-export const CHAIN_INSET = 22;
+/** How far in from the flag before its box a chain sits: clear of the flag's grip */
+export const CHAIN_INSET = 8;
+/** The chain's sizes (px): full where the box has room, then small */
+export const CHAIN_SIZES = [16, 12] as const;
+/** The page boxes' inner height, which the chain sits at the bottom of */
+const BOX_HEIGHT = 26;
+/** Room for a page box's label, as `pageLabelFits` counts it, and a gap before it */
+const labelRoom = (labelChars: number) => labelChars * 7 + 8 + 4;
+
+/** Where a chain goes in its page box: its size and how far in from the box's left edge (px). */
+export interface ChainFit {
+    readonly size: number;
+    readonly offset: number;
+}
 
 /**
- * Where a box's chain goes, from the box's left edge (px): in from the flag before it, so the
- * selected page's flag, the start flag and the playhead never cover it; centered in a box too
- * narrow for that and its label.
+ * Where a box's chain fits (owner, 2026-10-12: chains on narrow boxes covered the page numbers and
+ * each other): at the bottom left, on the start of the hold bar, just past the flag's grip, at the
+ * largest size that leaves the label clear. A box without a label shows the small chain centered
+ * when it can't fit in from the flag. Null where neither size fits: the box shows a dot instead.
+ *
+ * @param labelChars the box's label length, 0 when the box is too narrow to show it
  */
-export function chainOffset(boxWidth: number): number {
-    if (boxWidth >= CHAIN_INSET + CHAIN_SIZE + 28) return CHAIN_INSET;
-    return Math.max(0, Math.round((boxWidth - CHAIN_SIZE) / 2));
+export function chainFit(
+    boxWidth: number,
+    labelChars: number,
+): ChainFit | null {
+    const after = labelChars > 0 ? labelRoom(labelChars) : CHAIN_INSET;
+    const size = CHAIN_SIZES.find((s) => CHAIN_INSET + s + after <= boxWidth);
+    if (size !== undefined) return { size, offset: CHAIN_INSET };
+    const small = CHAIN_SIZES[CHAIN_SIZES.length - 1];
+    if (labelChars === 0 && boxWidth >= small + 2)
+        return { size: small, offset: Math.round((boxWidth - small) / 2) };
+    return null;
 }
 
 const BASE =
-    "focus-visible:ring-accent rounded-6 absolute top-[4px] z-30 flex items-center justify-center outline-hidden focus-visible:ring-2";
+    "focus-visible:ring-accent absolute z-30 flex items-center justify-center rounded-full outline-hidden focus-visible:ring-2";
 
 /**
- * Kept and linked are told apart at a glance (wp19, after the final study found purple and grey
- * too close): kept is a filled chip, linked only an outline, and a mix an outline in the accent
- * with a filled count.
+ * Kept and linked are told apart at a glance (wp19): kept is a filled chip, linked a quiet
+ * outline, and a mix a broken link outlined in the accent (simulated users read the accent
+ * outlined link as linked, 2026-10-12). A hovered link fills, so it can't be read as a mix.
  */
 const KIND_CLASS: Record<PageKeepChain["kind"], string> = {
-    // Linked: a quiet outline, the accent on hover
     follows:
-        "border border-text/30 text-text/70 hover:border-accent hover:bg-accent/15 hover:text-accent",
-    // Kept: broken, on a filled accent chip, so it can't be read as linked
+        "bg-fg-2 border border-text-subtitle/70 text-text-subtitle hover:border-accent hover:bg-accent hover:text-text-invert",
     kept: "bg-accent text-text-invert shadow-sm hover:opacity-85",
-    // Some kept: linked, outlined in the accent, with the kept count filled
-    mixed: "border border-accent text-accent hover:bg-accent/15",
+    mixed: "bg-fg-2 border border-accent text-accent hover:bg-accent/15",
 };
+
+/**
+ * A linked chain shows only on the selected page, the page **K** works on, and the box under the
+ * pointer (its own box, drawn just before it); everywhere else the
+ * hold bar says they hold, and the box's menu keeps them. Simulated users, 2026-10-12: a chain on
+ * every following page drowned out the kept ones; with none they couldn't find keep.
+ */
+const REVEAL_ON_HOVER =
+    "opacity-0 hover:opacity-100 focus-visible:opacity-100 [:hover+&]:opacity-100";
 
 const KIND_WEIGHT: Record<PageKeepChain["kind"], "regular" | "bold"> = {
     follows: "regular",
@@ -164,12 +191,12 @@ const KIND_WEIGHT: Record<PageKeepChain["kind"], "regular" | "bold"> = {
 };
 
 /**
- * A page box's chain (UI-18 keep later pages), a sibling drawn over the box's top left: an
- * outlined link where the selected marchers follow into the page, broken on a filled accent chip
- * where they were kept, and an accent outline with the kept count for a mix. Its tooltip names
- * whom a click changes, and (K) where **K** does the same. The press
- * never reaches the box, so it doesn't select, scrub or drag it; a right-click opens the box's
- * menu, which has the same commands.
+ * A page box's chain (UI-18 keep later pages), a sibling drawn right after the box, at its bottom
+ * left where the hold bar starts: an outlined link where the selected marchers follow into the
+ * page, broken on a filled accent chip where they were kept, and broken in an accent outline
+ * where some were. Its tooltip names whom a click changes, and (K) where **K** does the same.
+ * The press never reaches the box, so it doesn't select, scrub or drag it; a right-click opens
+ * the box's menu, which has the same commands.
  */
 export function PageKeepChainButton({
     chain,
@@ -177,6 +204,8 @@ export function PageKeepChainButton({
     pageLabel,
     range,
     left,
+    size,
+    always,
 }: {
     chain: PageKeepChain;
     pageId: string | number;
@@ -185,10 +214,15 @@ export function PageKeepChainButton({
     range: TimelineBeatRange;
     /** Where the chain goes in the ruler (px) */
     left: number;
+    /** The chain's size (`chainFit`) */
+    size: number;
+    /** A linked chain shows without hovering its box (the selected page, K's page) */
+    always: boolean;
 }) {
-    const Icon = chain.kind === "kept" ? LinkBreakIcon : LinkSimpleIcon;
+    const Icon = chain.kind === "follows" ? LinkSimpleIcon : LinkBreakIcon;
     const stop = (event: { stopPropagation: () => void }) =>
         event.stopPropagation();
+    const hidden = chain.kind === "follows" && !always;
     return (
         <ShortcutTooltip
             label={
@@ -205,6 +239,7 @@ export function PageKeepChainButton({
                 data-timeline-own-keys={OWN_KEYS_WITH_SPACE}
                 data-testid="page-keep-chain"
                 data-chain={chain.kind}
+                data-reveal={hidden ? "hover" : undefined}
                 {...timelineRangeTargetProps(range, undefined, pageId)}
                 aria-label={tolgee.t(
                     "timeline.keep.chain.ariaLabel",
@@ -212,8 +247,13 @@ export function PageKeepChainButton({
                     { page: pageLabel, label: chain.label, hint: chain.hint },
                 )}
                 aria-keyshortcuts={chain.withK ? KEEP_SHORTCUT : undefined}
-                className={`${BASE} ${KIND_CLASS[chain.kind]}`}
-                style={{ left, width: CHAIN_SIZE, height: CHAIN_SIZE }}
+                className={`${BASE} ${KIND_CLASS[chain.kind]}${hidden ? ` ${REVEAL_ON_HOVER}` : ""}`}
+                style={{
+                    left,
+                    top: BOX_HEIGHT - 2 - size,
+                    width: size,
+                    height: size,
+                }}
                 onPointerDown={stop}
                 onMouseDown={stop}
                 onDoubleClick={stop}
@@ -222,17 +262,48 @@ export function PageKeepChainButton({
                     chain.onToggle();
                 }}
             >
-                <Icon size={16} weight={KIND_WEIGHT[chain.kind]} aria-hidden />
-                {chain.kind === "mixed" && (
+                <Icon
+                    size={size - 4}
+                    weight={KIND_WEIGHT[chain.kind]}
+                    aria-hidden
+                />
+                {chain.kind === "mixed" && size >= CHAIN_SIZES[0] && (
                     <span
                         aria-hidden
                         data-testid="page-keep-chain-count"
-                        className="bg-accent text-text-invert absolute -top-[3px] -right-[5px] flex h-[12px] min-w-[12px] items-center justify-center rounded-full px-[2px] text-[9px] leading-none font-bold"
+                        className="bg-accent text-text-invert absolute -top-[4px] -right-[6px] flex h-[11px] min-w-[11px] items-center justify-center rounded-full px-[2px] text-[8px] leading-none font-bold"
                     >
                         {chain.keptCount}
                     </span>
                 )}
             </button>
         </ShortcutTooltip>
+    );
+}
+
+/**
+ * A kept or mixed chain in a box too narrow for it (`chainFit`): a dot on the hold bar, filled
+ * where kept, a ring where some are; at its start, clear of the label, or centered in a box too
+ * narrow for its label. The box's tooltip carries the chain's words.
+ */
+export function PageKeepDot({
+    kind,
+    beside,
+}: {
+    kind: PageKeepChain["kind"];
+    /** The box shows its label */
+    beside: boolean;
+}) {
+    return (
+        <span
+            aria-hidden
+            data-testid="page-keep-dot"
+            data-chain={kind}
+            className={`pointer-events-none absolute bottom-[2px] size-[8px] rounded-full ${
+                beside ? "left-[3px]" : "left-1/2 -translate-x-1/2"
+            } ${
+                kind === "kept" ? "bg-accent" : "border-accent bg-fg-2 border-2"
+            }`}
+        />
     );
 }
