@@ -45,6 +45,7 @@ import {
     getPlayheadReadout,
     getVisiblePageCounts,
     getPageRange,
+    pageLabelRoom,
     parseTimelineGoTo,
     getSelectionRange,
     getTrackRange,
@@ -87,6 +88,9 @@ import {
 } from "./PageHoldMark";
 import {
     chainFit,
+    KEEP_DOT_SIZE,
+    keepDotFit,
+    labelPaddingBeside,
     PageKeepChainButton,
     PageKeepDot,
     type PageKeepChain,
@@ -804,7 +808,8 @@ type RulerScrub = ReturnType<typeof useRulerScrub>;
  * A page box's name (UI-13), at its flag, sticking to the viewport's edge while the flag is
  * scrolled out of view, so a long page always shows its name. Set heavier than the counts and
  * measure numbers under it, so the box and the weight tell them apart. Hidden when the box is too
- * narrow to read it, when zoomed far out (UI-12).
+ * narrow to read it, when zoomed far out (UI-12). It slides no further left than its box's
+ * padding, which ends before a keep chain or dot (`labelPaddingBeside`).
  */
 const PageBoxLabel = memo(function PageBoxLabel({
     label,
@@ -820,7 +825,7 @@ const PageBoxLabel = memo(function PageBoxLabel({
 
 /** Whether a page box this wide has room for its name (`PageBoxLabel`) */
 const pageLabelFits = (label: string, width: number) =>
-    width >= label.length * 7 + 10;
+    width >= pageLabelRoom(label.length);
 
 /** The ruler's page boxes in show order, each with its range (UI-9: previous flag to its own) */
 const pageBoxesOf = (
@@ -1150,9 +1155,18 @@ const TimelinePageBox = memo(function TimelinePageBox({
     const boxLeft =
         initialPageWidth + beatToX(range.startBeatIndex, pixelsPerBeat);
     const labelShown = pageLabelFits(page.label, boxWidth);
-    const fit = chain
-        ? chainFit(boxWidth, labelShown ? page.label.length : 0)
-        : null;
+    const labelChars = labelShown ? page.label.length : 0;
+    const fit = chain ? chainFit(boxWidth, labelChars) : null;
+    const dot =
+        chain && !fit && chain.kind !== "follows"
+            ? keepDotFit(boxWidth, labelChars)
+            : null;
+    // The sticky label stops before the chain or dot (`labelPaddingBeside`)
+    const labelPadding = fit
+        ? labelPaddingBeside(fit.offset, fit.size)
+        : dot?.clear
+          ? labelPaddingBeside(dot.offset, KEEP_DOT_SIZE)
+          : undefined;
     // A chain with no room for its button: its words go on the box, which has its menu
     const words =
         chain && !fit && hold
@@ -1174,15 +1188,19 @@ const TimelinePageBox = memo(function TimelinePageBox({
                     if (!event.ctrlKey) onSelectPage(page, event.shiftKey);
                 }}
                 className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
-                style={{ left: boxLeft, width: boxWidth }}
+                style={{
+                    left: boxLeft,
+                    width: boxWidth,
+                    paddingLeft: labelShown ? labelPadding : undefined,
+                }}
             >
                 <PageBoxLabel label={page.label} shown={labelShown} />
                 <PageHoldMarkView
                     hold={words}
                     descriptionId={holdDescriptionId}
                 />
-                {chain && !fit && chain.kind !== "follows" && (
-                    <PageKeepDot kind={chain.kind} beside={labelShown} />
+                {chain && dot && (
+                    <PageKeepDot kind={chain.kind} left={dot.offset} />
                 )}
             </button>
         </HoldMarkTooltip>

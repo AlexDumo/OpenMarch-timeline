@@ -173,18 +173,19 @@ at the default zoom (top three: before, wp19 chips; bottom three: now). 2026-10-
 
 ![Before and after zoomed to fit 24 short pages: chips on almost every box, then only the kept pages marked](images/21-keep-chains-fit-before-after.png)
 
-_The same, zoomed to fit the 24 pages. Narrow kept boxes show the small chain centered (page 13) or
-a dot (a ring for page 10's mix)._
+_The same, zoomed to fit the 24 pages. Narrow kept boxes show a dot (a ring for page 10's mix); in
+this capture page 13, too narrow for its number, still had the small chain centered, which now
+gives way to a dot as well (review, 2026-10-12: it sat under the flags' handles)._
 
 - **When:** only with marchers selected (owner: nothing without a selection). Kept and mixed
   chains show on every box they apply to. A linked chain shows only on the selected page, on the
   page **K** works on, and while its box is hovered (V-211: a link on every following page
   drowned out the kept ones). Marchers that haven't moved yet get no linked chain (on every box it
   was noise), but a kept one still shows the kept chip.
-- **Where:** at the bottom left of the box, on the start of the hold bar, 8 px in from the flag
-  before it (clear of the flag's grip, the playhead and the start flag). 16 px where the page
-  number leaves room, 12 px where only that fits, and centered in a box too narrow to show its
-  number. It never covers the number (owner, 2026-10-12: the chips covered the numbers and each
+- **Where:** at the bottom left of the box, on the start of the hold bar, 14 px in from the flag
+  before it (clear of the flag's grip, the playhead and the start flag's pennant). 16 px where the
+  page number leaves room, 12 px where only that fits. It never covers the number, even when the
+  number slides left as the box runs off the right edge (owner, 2026-10-12: the chips covered the numbers and each
   other). Where neither size fits, a kept chain becomes an 8 px accent dot and a mixed one a ring;
   a linked one shows nothing. Such a box's tooltip then shows the chain's words, ending "Right-click
   the page to …", since a click on the box selects it (V-210).

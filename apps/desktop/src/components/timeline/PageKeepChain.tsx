@@ -18,6 +18,7 @@ import {
     type TimelineKeepHereMenu,
 } from "./TimelineRangeMenu";
 import type { TimelineBeatRange } from "./TimelineViewModel";
+import { pageLabelRoom } from "./TimelineGeometry";
 
 /** A page box's chain (`pageChainWords`), with what a click does. */
 export interface PageKeepChain extends PageChainWords {
@@ -124,14 +125,41 @@ export function usePageKeepChains(
     }, [states, t, nameOf, k]);
 }
 
-/** How far in from the flag before its box a chain sits: clear of the flag's grip */
-export const CHAIN_INSET = 8;
+/*
+ * What a page box's chain must stay clear of (measured 2026-10-12, all drawn above it and all
+ * taking the pointer): the playhead and the start flag (12px handles centered on their beat, the
+ * full ruler height), the flag's grip (`TimelinePageFlagGrips`, at most 12px, centered on the
+ * flag), and the start flag's pennant (a 14x14 handle from the flag rightward, the ruler's top 14px).
+ * The box starts 1px past its flag (the ruler's border). On the selected page the start flag sits
+ * on the box's left flag and the playhead on either flag, so both edges matter.
+ */
+
+/**
+ * How far in from its box's left edge a chain sits: past the start flag's pennant, which reaches
+ * 14px right of the flag (and so past the 6px of the grip, the playhead and the start flag) with
+ * 1px to spare. A 16px chain's top is 9px down, inside the pennant's 14px, so it can't sit nearer.
+ */
+export const CHAIN_INSET = 14;
+/**
+ * How far a chain stays from a label-less box's right edge: past the 6px the playhead and the
+ * grip reach in from the flag there
+ */
+const CHAIN_END_CLEARANCE = 8;
+/** The gap between a chain or dot and the page label */
+const LABEL_GAP = 2;
 /** The chain's sizes (px): full where the box has room, then small */
 export const CHAIN_SIZES = [16, 12] as const;
-/** The page boxes' inner height, which the chain sits at the bottom of */
-const BOX_HEIGHT = 26;
-/** Room for a page box's label, as `pageLabelFits` counts it, and a gap before it */
-const labelRoom = (labelChars: number) => labelChars * 7 + 8 + 4;
+/** The dot a kept or mixed chain becomes where it can't fit (`PageKeepDot`) */
+export const KEEP_DOT_SIZE = 8;
+/**
+ * The nearest a dot comes to a flag: clear of the flag's line and the grip's 3px hover bar, the
+ * only marks drawn there. It takes no pointer, so the handles above it lose nothing.
+ */
+const DOT_MIN_INSET = 3;
+
+/** How much of a box's right side its label (if shown) or right flag takes from a keep mark */
+const markEnd = (labelChars: number, noLabel: number) =>
+    labelChars > 0 ? pageLabelRoom(labelChars) + LABEL_GAP : noLabel;
 
 /** Where a chain goes in its page box: its size and how far in from the box's left edge (px). */
 export interface ChainFit {
@@ -141,9 +169,9 @@ export interface ChainFit {
 
 /**
  * Where a box's chain fits (owner, 2026-10-12: chains on narrow boxes covered the page numbers and
- * each other): at the bottom left, on the start of the hold bar, just past the flag's grip, at the
- * largest size that leaves the label clear. A box without a label shows the small chain centered
- * when it can't fit in from the flag. Null where neither size fits: the box shows a dot instead.
+ * each other): at the bottom left, on the start of the hold bar, `CHAIN_INSET` in from the flag
+ * before it, at the largest size that leaves the label and the box's right flag clear. Null where
+ * neither size fits, however narrow the box: it shows a dot instead (`keepDotFit`).
  *
  * @param labelChars the box's label length, 0 when the box is too narrow to show it
  */
@@ -151,14 +179,41 @@ export function chainFit(
     boxWidth: number,
     labelChars: number,
 ): ChainFit | null {
-    const after = labelChars > 0 ? labelRoom(labelChars) : CHAIN_INSET;
+    const after = markEnd(labelChars, CHAIN_END_CLEARANCE);
     const size = CHAIN_SIZES.find((s) => CHAIN_INSET + s + after <= boxWidth);
-    if (size !== undefined) return { size, offset: CHAIN_INSET };
-    const small = CHAIN_SIZES[CHAIN_SIZES.length - 1];
-    if (labelChars === 0 && boxWidth >= small + 2)
-        return { size: small, offset: Math.round((boxWidth - small) / 2) };
-    return null;
+    return size === undefined ? null : { size, offset: CHAIN_INSET };
 }
+
+/** Where a box's dot goes (`PageKeepDot`): how far in from its left edge, and if clear of the label */
+export interface KeepDotFit {
+    readonly offset: number;
+    readonly clear: boolean;
+}
+
+/**
+ * Where a box's dot goes: in from the flag as a chain would be (`CHAIN_INSET`), or as far in as
+ * the label leaves room for, but no nearer the flag than `DOT_MIN_INSET`. A box too narrow for its
+ * label centers it when that's nearer; a box whose label leaves no room puts it at the minimum,
+ * not clear of the label.
+ */
+export function keepDotFit(boxWidth: number, labelChars: number): KeepDotFit {
+    const room = boxWidth - markEnd(labelChars, DOT_MIN_INSET) - KEEP_DOT_SIZE;
+    if (room >= DOT_MIN_INSET)
+        return { offset: Math.min(CHAIN_INSET, room), clear: true };
+    if (labelChars > 0) return { offset: DOT_MIN_INSET, clear: false };
+    return {
+        offset: Math.max(0, Math.round((boxWidth - KEEP_DOT_SIZE) / 2)),
+        clear: true,
+    };
+}
+
+/**
+ * The left padding a box gives its label with a keep mark at `offset`, `size` wide: the label is
+ * sticky (it slides left when the box runs off the viewport's right edge), and a sticky label
+ * never leaves its box's padding, so it stops before the mark.
+ */
+export const labelPaddingBeside = (offset: number, size: number) =>
+    offset + size + LABEL_GAP;
 
 const BASE =
     "focus-visible:ring-accent absolute z-30 flex items-center justify-center rounded-full outline-hidden focus-visible:ring-2";
@@ -250,7 +305,7 @@ export function PageKeepChainButton({
                 className={`${BASE} ${KIND_CLASS[chain.kind]}${hidden ? ` ${REVEAL_ON_HOVER}` : ""}`}
                 style={{
                     left,
-                    top: BOX_HEIGHT - 2 - size,
+                    bottom: 2,
                     width: size,
                     height: size,
                 }}
@@ -283,16 +338,16 @@ export function PageKeepChainButton({
 
 /**
  * A kept or mixed chain in a box too narrow for it (`chainFit`): a dot on the hold bar, filled
- * where kept, a ring where some are; at its start, clear of the label, or centered in a box too
- * narrow for its label. The box's tooltip carries the chain's words.
+ * where kept, a ring where some are, where `keepDotFit` puts it. The box's tooltip carries the
+ * chain's words.
  */
 export function PageKeepDot({
     kind,
-    beside,
+    left,
 }: {
     kind: PageKeepChain["kind"];
-    /** The box shows its label */
-    beside: boolean;
+    /** How far in from the box's left edge (px, `keepDotFit`) */
+    left: number;
 }) {
     return (
         <span
@@ -300,10 +355,9 @@ export function PageKeepDot({
             data-testid="page-keep-dot"
             data-chain={kind}
             className={`pointer-events-none absolute bottom-[2px] size-[8px] rounded-full ${
-                beside ? "left-[3px]" : "left-1/2 -translate-x-1/2"
-            } ${
                 kind === "kept" ? "bg-accent" : "border-accent bg-fg-2 border-2"
             }`}
+            style={{ left }}
         />
     );
 }
