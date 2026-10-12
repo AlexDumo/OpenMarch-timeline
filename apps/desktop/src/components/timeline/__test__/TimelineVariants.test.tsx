@@ -1596,8 +1596,8 @@ describe("a calmer timeline (UI-12)", () => {
         ]);
     });
 
-    // Testers read ⏮ as "the start" and played one page (basic-past-flag study); the owner keeps
-    // the plain click on the previous page (UI-17), so its tooltip names the way to the start
+    // The plain click stays on the previous page (UI-17, ui.md); the tooltip names the ways to the
+    // start for those who read ⏮ as "the start" (basic-mode README, V-210)
     it("says Previous goes one page back and names the ways to the start", async () => {
         render(
             <ExpandedTimeline
@@ -1617,7 +1617,7 @@ describe("a calmer timeline (UI-12)", () => {
         const next = screen.getByRole("button", { name: /^Next page/ });
         act(() => next.focus());
         expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            "Next pageEOne page on. For the last page: Shift+click or Shift+E",
+            "Next pageEOne page forward. For the last page: Shift+click or Shift+E",
         );
         expect(screen.getByTestId("timeline-initial-page")).toHaveAttribute(
             "title",
