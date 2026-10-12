@@ -14,6 +14,7 @@ import {
     type TimelineEditSelection,
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
 
 /**
  * How the isolation bar names a timeline, in pages and counts as designers count them:
@@ -116,6 +117,24 @@ export function isWholePageWindow(
     );
 }
 
+/**
+ * Where a Basic edit at playhead `beat` lands (UI-19): a page (on its flag, `count` null), or a
+ * count inside a page, counted from the page's start. `null` past the last flag.
+ */
+export function basicEditSpot(
+    beat: number,
+    pages: readonly (FlagPage & { readonly name: string })[],
+): { pageName: string; count: number | null } | null {
+    const flag = pageFlags(pages).find(
+        (f) => f.range && f.range.start < beat && beat <= f.range.end,
+    );
+    if (!flag?.range) return null;
+    return {
+        pageName: flag.page.name,
+        count: beat === flag.range.end ? null : beat - flag.range.start,
+    };
+}
+
 /** "set 3", "sets 3 and 4", "sets 3, 4 and 5" (UI-17 follow-up: plainer than "page 3's set") */
 export const passedSets = (names: readonly string[]) =>
     names.length === 1
@@ -139,9 +158,11 @@ export function TimelineFromStartBadge() {
     const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
     const playing = useTimelineSelectionStore((s) => s.playback !== null);
     const { pages } = useTimingObjects()!;
+    const basic = useIsBasicMode();
     const range = selection.kind === "range" ? selection : null;
     // The pin only matters while it bounds the window (not when P is on or before it)
     const pinShown = pinned && range !== null && range.start === startBeat;
+    // (Basic never pins; see useBasicModeGuards)
     // UI-17: with looping on, the loop's name when it isn't the window being edited
     const loop = useTimelineSelectionStore((s) => s.loop);
     const loopName =
@@ -150,15 +171,23 @@ export function TimelineFromStartBadge() {
             : null;
     // Only when the loop is elsewhere: on the page being edited, the lit Loop button, the bar and
     // Play's icon say it (owner, 2026-10-09)
-    const loopShown = !isolated && loopName !== null;
-    const through = range ? flagsInside(range, pages) : [];
+    const loopShown = !basic && !isolated && loopName !== null;
+    // UI-19: Basic has no start flag or loop; it edits a page, or a count inside one
+    const basicSpot = basic && range ? basicEditSpot(range.end, pages) : null;
+    const through = range && !basic ? flagsInside(range, pages) : [];
     const name =
         selection.kind === "home"
             ? "home positions"
-            : range
-              ? isolatedTimelineName(range, pages)
-              : "";
-    const wholePage = isWholePageWindow(selection, pages);
+            : basicSpot
+              ? basicSpot.count === null
+                  ? `page ${basicSpot.pageName}`
+                  : `count ${basicSpot.count} of page ${basicSpot.pageName}`
+              : range
+                ? isolatedTimelineName(range, pages)
+                : "";
+    const wholePage = basicSpot
+        ? basicSpot.count === null
+        : isWholePageWindow(selection, pages);
     // UI-17: playing on that stops on another page says so loudly (round 3: all four testers
     // missed the quiet line and edited the next page's set)
     const [movedOn, setMovedOn] = useState(false);
