@@ -29,6 +29,7 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "./usePages";
 import { invalidateTagQueries } from "./tags/queries";
 import { isBasicMode } from "@/stores/EditorModeStore";
+import { simpleDefaultsOn } from "@/timeline/simpleDefaults";
 
 /**
  * Page flag writes in timeline mode (ui.md UI-9 **+** and Deleting a flag, P8.13). They change only
@@ -47,7 +48,11 @@ export const addPageFlagMutationOptions = (
 ) =>
     mutationOptions({
         mutationFn: (beat: number) =>
-            addPageFlag({ db, beat, splitMoves: isBasicMode() }),
+            addPageFlag({
+                db,
+                beat,
+                splitMoves: isBasicMode() || simpleDefaultsOn(),
+            }),
         onSuccess: (added) => {
             void invalidatePageQueries(qc);
             onAdded?.(added);
