@@ -220,6 +220,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     isPlaying,
     onPlayingChange,
     playLoops = false,
+    noLoop = false,
     playNext,
     playingOnce = false,
     onNavigate,
@@ -239,6 +240,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops and shows the loop's bar (UI-17) */
     playLoops?: boolean;
+    /** No loop here (UI-19 Basic): the hints don't offer C */
+    noLoop?: boolean;
     /** With no pin, a page is selected (UI-17): Play's tooltip names Shift+Space and C */
     playNext?: "page";
     /** Shift+Space's once-through is playing (UI-17) */
@@ -432,8 +435,12 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 : playLoops
                                   ? "Loops the yellow bar, wherever the playhead is. C or Loop turns looping off"
                                   : playNext === "page"
-                                    ? "Plays on from here. Shift+Space plays this page's move once; C loops it"
-                                    : "Plays on from here. C loops the page you're on"
+                                    ? noLoop
+                                        ? "Plays on from here. Shift+Space plays this page's move once"
+                                        : "Plays on from here. Shift+Space plays this page's move once; C loops it"
+                                    : noLoop
+                                      ? "Plays on from here"
+                                      : "Plays on from here. C loops the page you're on"
                         }
                         testId="timeline-play"
                         pressed={isPlaying}
