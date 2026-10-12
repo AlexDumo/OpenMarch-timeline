@@ -757,6 +757,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         isPlaying={props.isPlaying}
                         onPlayingChange={props.onPlayingChange}
                         playLoops={props.playLoops}
+                        noLoop={basic}
                         playNext={props.playNext}
                         playingOnce={props.playingOnce}
                         onNavigate={onNavigate}
