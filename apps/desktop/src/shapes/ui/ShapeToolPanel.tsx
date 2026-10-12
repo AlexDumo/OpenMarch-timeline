@@ -103,6 +103,7 @@ export default function ShapeToolPanel() {
                 ref={ref}
                 className="flex flex-col gap-12"
                 data-testid="shape-tool-panel"
+                data-shape-ui
                 onKeyDown={(e) => {
                     // Enter places the shape from a closed menu in the panel too (Tab out of a
                     // field lands on one), instead of opening it
@@ -716,7 +717,10 @@ export function ShapeFineTuneBox({
     isPlaying: boolean;
 }) {
     const session = useShapeToolStore((s) => s.session);
-    const drawing = useShapeToolStore((s) => s.drawing !== null);
+    // Out of the way while a stroke is drawn or points are clicked in
+    const drawing = useShapeToolStore(
+        (s) => s.drawing !== null || s.clicked !== null,
+    );
     const shapeUi = useUiSettingsStore((s) => s.uiSettings.shapeUi ?? "draw");
     const ctx = useMemo(
         () => (canvas ? shapeContextFor(canvas) : null),
@@ -728,7 +732,12 @@ export function ShapeFineTuneBox({
         () => (session && ctx ? previewSession(session, ctx) : null),
         [session, ctx],
     );
-    const spot = useBoxSpot(canvas, preview?.slots ?? null);
+    // Placed again when the shape opens, changes kind or is drawn anew; not while it's tuned
+    const strokes = useShapeToolStore((s) => s.strokes.length);
+    const anchor = session
+        ? `${session.kindId}|${strokes}|${session.marchers.map((m) => m.id).join(",")}`
+        : "";
+    const spot = useBoxSpot(canvas, preview?.slots ?? null, anchor);
     if (
         shapeUi !== "draw" ||
         isPlaying ||
@@ -748,6 +757,7 @@ export function ShapeFineTuneBox({
             className="rounded-6 border-stroke bg-modal shadow-modal backdrop-blur-32 text-body absolute z-20 flex w-[17rem] flex-col gap-8 border p-10"
             style={{ left: spot.left, top: spot.top }}
             data-testid="shape-fine-tune"
+            data-shape-ui
             onPointerDown={(e) => e.stopPropagation()}
         >
             <div className="flex items-center gap-6">
@@ -771,52 +781,45 @@ export function ShapeFineTuneBox({
     );
 }
 
-/** Where the box sits: beside the shape's spots, on whichever side has room */
+/**
+ * Where the box sits: beside the shape's spots, on whichever side has room. It's placed when the
+ * shape opens or a stroke ends, then stays put while the shape is tuned, so it never slides under
+ * the pointer (sims, draw round 1: a moving box took a click as Place).
+ */
 function useBoxSpot(
     canvas: OpenMarchCanvas | null,
     slots: readonly { x: number; y: number }[] | null,
+    anchor: string,
 ): { left: number; top: number } | null {
     const [spot, setSpot] = useState<{ left: number; top: number } | null>(
         null,
     );
+    const slotsRef = useRef(slots);
+    slotsRef.current = slots;
+    const hasSlots = slots !== null && slots.length > 0;
     useEffect(() => {
-        if (!canvas || !slots || slots.length === 0) {
+        const current = slotsRef.current;
+        if (!canvas || !current || current.length === 0) {
             setSpot(null);
             return;
         }
-        let frame = 0;
-        const measure = () => {
-            frame = 0;
-            const v = canvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
-            const xs = slots.map((p) => p.x * v[0]! + v[4]!);
-            const ys = slots.map((p) => p.y * v[3]! + v[5]!);
-            const right = Math.max(...xs);
-            const left = Math.min(...xs);
-            const width = canvas.getWidth();
-            const height = canvas.getHeight();
-            const boxLeft =
-                right + BOX_GAP_PX + BOX_WIDTH_PX <= width
-                    ? right + BOX_GAP_PX
-                    : Math.max(8, left - BOX_GAP_PX - BOX_WIDTH_PX);
-            const boxTop = Math.min(
-                Math.max(8, Math.min(...ys) - 20),
-                Math.max(8, height - BOX_HEIGHT_PX),
-            );
-            const next = { left: Math.round(boxLeft), top: Math.round(boxTop) };
-            setSpot((s) =>
-                s && s.left === next.left && s.top === next.top ? s : next,
-            );
-        };
-        const schedule = () => {
-            if (!frame) frame = requestAnimationFrame(measure);
-        };
-        canvas.on("after:render", schedule);
-        schedule();
-        return () => {
-            canvas.off("after:render", schedule as never);
-            if (frame) cancelAnimationFrame(frame);
-        };
-    }, [canvas, slots]);
+        const v = canvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
+        const xs = current.map((p) => p.x * v[0]! + v[4]!);
+        const ys = current.map((p) => p.y * v[3]! + v[5]!);
+        const right = Math.max(...xs);
+        const left = Math.min(...xs);
+        const width = canvas.getWidth();
+        const height = canvas.getHeight();
+        const boxLeft =
+            right + BOX_GAP_PX + BOX_WIDTH_PX <= width
+                ? right + BOX_GAP_PX
+                : Math.max(8, left - BOX_GAP_PX - BOX_WIDTH_PX);
+        const boxTop = Math.min(
+            Math.max(8, Math.min(...ys) - 20),
+            Math.max(8, height - BOX_HEIGHT_PX),
+        );
+        setSpot({ left: Math.round(boxLeft), top: Math.round(boxTop) });
+    }, [canvas, anchor, hasSlots]);
     return spot;
 }
 

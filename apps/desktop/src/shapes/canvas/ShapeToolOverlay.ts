@@ -43,6 +43,8 @@ export interface PreviewDecor {
     readonly view?: ResolvedShapeView;
     /** Slots of a warning pointed at in the panel: only their walks are drawn */
     readonly highlight?: readonly number[];
+    /** Points clicked so far while drawing by clicks, marked so each click shows */
+    readonly clicked?: readonly XY[];
 }
 
 const FULL_VIEW: ResolvedShapeView = {
@@ -115,12 +117,16 @@ export interface HandleDragEvents {
     drawClick(at: XY): void;
     /** A double-click while clicking points: the shape is done */
     drawFinish(): void;
+    /** Whether points are being clicked in (a curve being drawn) */
+    clicking(): boolean;
 }
 
 // Small enough not to bury the marchers they sit by (sims, round 7: "the giant ring")
 const HANDLE_RADIUS = 8;
 const MOVE_HANDLE_SIZE = 11;
 const GHOST_RADIUS = 4;
+/** The mark at each clicked point while drawing by clicks */
+const CLICK_MARK_RADIUS = 3.5;
 /** The shape being replaced, in the result preview */
 const REPLACED_RADIUS = 2.5;
 /** Field units under which two spots are the same */
@@ -218,7 +224,9 @@ export default class ShapeToolOverlay {
         const handle = this.handleAt(e);
         const at = this.fieldPoint(e);
         // Points being clicked in: a double-click ends the shape
-        if (!handle && !this.nearOutline(e)) {
+        if (this.events.clicking() || (!handle && !this.nearOutline(e))) {
+            e.preventDefault();
+            e.stopPropagation();
             this.events.drawFinish();
             return;
         }
@@ -292,11 +300,19 @@ export default class ShapeToolOverlay {
 
     private readonly onPointerDown = (e: PointerEvent) => {
         if (e.button !== 0) return;
-        const handle = e.altKey ? null : this.handleAt(e);
+        // While points are being clicked in, every click is one more, wherever it lands
+        // (sims, draw round 1: a click on the curve's own line was taken as a bend)
+        const clicking = this.handles.length > 0 && this.events.clicking();
+        const handle = e.altKey || clicking ? null : this.handleAt(e);
         if (!handle) {
             // On a shape that takes points, a press on its line belongs to the shape, so the
             // double-click that adds a point isn't taken by a marcher underneath
-            if (!e.altKey && this.takesPoints && this.nearOutline(e)) {
+            if (
+                !clicking &&
+                !e.altKey &&
+                this.takesPoints &&
+                this.nearOutline(e)
+            ) {
                 e.preventDefault();
                 e.stopPropagation();
                 return;
@@ -600,6 +616,7 @@ export default class ShapeToolOverlay {
         }
         this.syncTargets(preview, flagged, bigSteps, decor);
         this.syncHandles(preview.handles);
+        this.syncClicked(decor.clicked ?? []);
         this.applyFade();
         this.bringToFront();
         this.canvas.requestRenderAll();
@@ -645,6 +662,8 @@ export default class ShapeToolOverlay {
         this.origins = [];
         this.originLabels = [];
         this.replaced = [];
+        for (const mark of this.clickMarks) this.canvas.remove(mark);
+        this.clickMarks = [];
         this.handles = [];
         this.handleRoles = "";
         this.faded = false;
@@ -887,6 +906,23 @@ export default class ShapeToolOverlay {
             this.arrows.push(created);
             this.canvas.add(created);
         }
+    }
+
+    /** Small solid marks where points were clicked */
+    private clickMarks: fabric.Circle[] = [];
+
+    private syncClicked(points: readonly XY[]): void {
+        while (this.clickMarks.length > points.length)
+            this.canvas.remove(this.clickMarks.pop()!);
+        points.forEach((p, i) =>
+            this.placeCircle(this.clickMarks, i, toCanvas(p), {
+                radius: CLICK_MARK_RADIUS,
+                fill: this.colors.shape,
+                stroke: this.colors.handleFill,
+                strokeWidth: 1,
+            }),
+        );
+        for (const mark of this.clickMarks) mark.bringToFront();
     }
 
     private placeCircle(

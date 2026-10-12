@@ -191,6 +191,7 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                 drawing.from,
                 at,
                 base.marchers.length,
+                ctx.stepPx,
             );
             drawing.samples.push({
                 x: at.x,

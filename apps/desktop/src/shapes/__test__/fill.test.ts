@@ -79,8 +79,10 @@ describe("natural fill", () => {
         });
     });
 
-    it("puts a small band all on the edge", () => {
-        expect(autoEdgeCount(circle, 6)).toBe(6);
+    it("keeps some of a small band inside, so it fills rather than rings", () => {
+        // Six marchers: four on the edge, two inside
+        expect(autoEdgeCount(circle, 6)).toBe(4);
+        expect(autoEdgeCount(circle, 8)).toBe(6);
     });
 });
 

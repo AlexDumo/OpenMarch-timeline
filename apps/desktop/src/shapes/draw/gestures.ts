@@ -51,6 +51,8 @@ export function paramsFromDrag(
     from: XY,
     to: XY,
     n: number,
+    /** Field units per step: a drawn box's intervals round to half steps. None: as drawn */
+    stepPx?: number,
 ): unknown {
     if (dist(from, to) < 1e-6) return undefined;
     switch (kindId) {
@@ -77,7 +79,7 @@ export function paramsFromDrag(
             };
         }
         case "block":
-            return boxFromCorners(base as BlockParams, from, to, n);
+            return boxFromCorners(base as BlockParams, from, to, n, stepPx);
         case "fill": {
             const fill = base as FillParams;
             // A filled circle draws as a circle does, a filled box as a box
@@ -107,27 +109,23 @@ export function paramsFromClicks(
 }
 
 /**
- * A box from two opposite corners, square to the field. With the intervals kept, the width
- * decides how many files fit at the across interval; otherwise the ranks and files split the
- * marchers to suit the box's shape and the intervals stretch to fill it.
+ * A box from two opposite corners, square to the field: the ranks and files split the marchers to
+ * suit the box's shape and the intervals fill it.
  */
 function boxFromCorners(
     base: BlockParams,
     from: XY,
     to: XY,
     n: number,
+    stepPx?: number,
 ): BlockParams {
     const width = Math.abs(to.x - from.x);
     const depth = Math.abs(to.y - from.y);
     const count = Math.max(1, n);
     const center = mid(from, to);
-    if (base.keepIntervals) {
-        const files = Math.min(
-            count,
-            Math.max(1, Math.round(width / Math.max(base.across, 1e-9)) + 1),
-        );
-        return { ...base, center, rotation: 0, files };
-    }
+    // The box drawn is the box you get: its files suit its proportions and the intervals fill it
+    // (sims, draw round 1: keeping the last shape's interval gave 7 files at 4.75 steps).
+    // Whether the intervals are kept on later drags is left as it was.
     // Files for the box's proportions: files / ranks about width / depth
     const aspect = depth > 1e-9 ? width / depth : count;
     const files = Math.min(
@@ -135,13 +133,18 @@ function boxFromCorners(
         Math.max(1, Math.round(Math.sqrt(count * aspect))),
     );
     const ranks = Math.ceil(count / files);
+    // Half steps, as drill writers count them (sims, draw round 1: "2.75 steps, a weird number")
+    const round = (v: number) =>
+        stepPx
+            ? Math.max(stepPx / 2, Math.round(v / (stepPx / 2)) * (stepPx / 2))
+            : v;
     return {
         ...base,
         center,
         rotation: 0,
         files,
-        across: files > 1 ? width / (files - 1) : base.across,
-        deep: ranks > 1 ? depth / (ranks - 1) : base.deep,
+        across: files > 1 ? round(width / (files - 1)) : base.across,
+        deep: ranks > 1 ? round(depth / (ranks - 1)) : base.deep,
     };
 }
 

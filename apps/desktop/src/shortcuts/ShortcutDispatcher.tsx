@@ -41,6 +41,17 @@ export default function ShortcutDispatcher({
         };
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape" && layerOpenAtPress) return;
+            // Space on a Shape tool control reached by keyboard presses that control, not Play
+            // (sims, draw round 1: Shift+Tab to Natural, Space, and the show played). A clicked
+            // control keeps Space for Play.
+            const active = document.activeElement;
+            if (
+                event.key === " " &&
+                active instanceof HTMLElement &&
+                active.matches(":focus-visible") &&
+                active.closest("[data-shape-ui]")
+            )
+                return;
             if (
                 (event.defaultPrevented && !shortcutStillRuns(event)) ||
                 event.isComposing

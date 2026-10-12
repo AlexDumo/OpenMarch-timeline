@@ -113,7 +113,10 @@ export function autoEdgeCount(outline: FillOutline, n: number): number {
     const spacing = packedSpacing(outline.area, n);
     if (!(spacing > 0)) return n;
     const k = Math.round(outline.perimeter / spacing);
-    return Math.max(Math.min(3, n), Math.min(n, k));
+    // At least a quarter inside, so a small band still fills (sims, draw round 1: eight marchers
+    // all went to the rim, a ring, not a filled circle)
+    const most = n >= 4 ? n - Math.ceil(n / 4) : n;
+    return Math.max(Math.min(3, most), Math.min(most, k));
 }
 
 /** A small seeded random generator (mulberry32), so a layout repeats */

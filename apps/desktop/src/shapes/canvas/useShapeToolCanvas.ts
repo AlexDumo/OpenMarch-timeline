@@ -66,6 +66,7 @@ export function useShapeToolCanvas({
         (s) => s.uiSettings.marcherLabelPosition,
     );
     const highlight = useShapeToolStore((s) => s.highlight);
+    const clicked = useShapeToolStore((s) => s.clicked);
     const overlayRef = useRef<ShapeToolOverlay | null>(null);
     const lastHold = useRef<ReturnType<typeof holdFeedback>>(null);
     /** Marchers whose own dots the result preview hides, to show again when it closes */
@@ -115,6 +116,7 @@ export function useShapeToolCanvas({
                         .clickPoint(ctx.snapPoint(at), ctx);
                 },
                 drawFinish: () => useShapeToolStore.getState().finishClicks(),
+                clicking: () => useShapeToolStore.getState().clicked !== null,
                 doubleClick: (at, key) => {
                     const store = useShapeToolStore.getState();
                     const ctx = shapeContextFor(canvas);
@@ -178,6 +180,7 @@ export function useShapeToolCanvas({
                 fieldLabelPosition,
             }),
             highlight: highlight ?? undefined,
+            clicked: clicked ?? undefined,
         });
         // The result preview stands in for the marchers' own dots, at their old spots
         setMarchersHidden(canvas, ids, style === "result");
@@ -212,6 +215,7 @@ export function useShapeToolCanvas({
         fieldLabelSize,
         fieldLabelPosition,
         highlight,
+        clicked,
         theme,
     ]);
 }

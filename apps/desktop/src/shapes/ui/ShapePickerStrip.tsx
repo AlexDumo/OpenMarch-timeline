@@ -60,7 +60,8 @@ export function ShapePickerStrip({
                     <button
                         key={kind.id}
                         type="button"
-                        className={`rounded-4 hover:bg-fg-2 relative flex size-32 items-center justify-center ${
+                        // Named, not just an icon (sims, draw round 1: Curve was taken for Arc)
+                        className={`rounded-4 hover:bg-fg-2 relative flex h-40 min-w-40 flex-col items-center justify-center px-4 ${
                             active ? "bg-accent text-text-invert" : "text-text"
                         }`}
                         title={`${kind.label}${key ? ` (${key})` : ""}: ${how}`}
@@ -75,12 +76,15 @@ export function ShapePickerStrip({
                             )
                         }
                     >
-                        <Icon size={18} />
-                        {key && (
-                            <span className="text-sub absolute right-1 bottom-0 font-mono text-[9px] opacity-70">
-                                {key}
-                            </span>
-                        )}
+                        <Icon size={16} />
+                        <span className="text-[10px] leading-tight">
+                            {kind.label}
+                            {key && (
+                                <span className="ml-2 font-mono opacity-60">
+                                    {key}
+                                </span>
+                            )}
+                        </span>
                     </button>
                 );
             })}
@@ -124,4 +128,4 @@ function useSelectionSpot(canvas: OpenMarchCanvas | null): Spot | null {
 }
 
 /** How far above the selection the strip sits, in screen pixels */
-const STRIP_GAP_PX = 48;
+const STRIP_GAP_PX = 64;
