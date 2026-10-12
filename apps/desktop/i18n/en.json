@@ -1409,7 +1409,13 @@
         "general.appearance.dark": "Dark",
         "general.appearance.light": "Light",
         "general.automaticUpdates": "Automatically download and install updates",
-        "general.description": "Language and other app-wide preferences.",
+        "general.description": "Editor mode, language and other app-wide preferences.",
+        "general.editorMode": "Editor mode",
+        "general.editorMode.basic": "Basic",
+        "general.editorMode.basic.description": "Pages, like a drill chart. Set each page; marchers hold until you move them again. Positions in the middle of a page are allowed.",
+        "general.editorMode.expert": "Expert",
+        "general.editorMode.expert.description": "The full timeline: moves that cross pages, overlapping moves, the start flag and loops.",
+        "general.editorMode.note": "Switching keeps your show as it is. Anything made in Expert that Basic can't edit stays, plays and is shown as locked in Basic.",
         "general.language": "Language",
         "general.openView3dWithShow": "Open 3D View when a show opens",
         "general.showFullDatabasePath": "Show full file path",
@@ -1847,6 +1853,20 @@
     "welcome": {
         "description": "No files found. Create one, and make sure to check out the guides. Customize your theme and navigation in Settings.",
         "title": "Welcome to OpenMarch"
+    },
+    "welcomeFlow": {
+        "back": "Back",
+        "continue": "Continue",
+        "dialogLabel": "Set up OpenMarch",
+        "mode": {
+            "note": "You can change this any time in Settings.",
+            "title": "How do you want to work?"
+        },
+        "step": "Step {current} of {total}",
+        "welcome": {
+            "description": "Let's set things up. This takes a few seconds.",
+            "title": "Welcome to OpenMarch"
+        }
     },
     "workspaceSettings": {
         "audioOffsetSeconds": "Audio Offset",
