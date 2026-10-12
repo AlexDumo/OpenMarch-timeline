@@ -3,6 +3,7 @@ import {
     basicPageBox,
     neighborPageTarget,
     planCanvasEdit,
+    TimelineNotReadyError,
 } from "../timelineCoordinateWrites";
 import { basicEditSpot } from "@/components/timeline/TimelineIsolationBar";
 import { describePages, withoutLockedMarchers } from "../basicLocks";
@@ -67,10 +68,24 @@ describe("planCanvasEdit in Basic", () => {
         ).toMatchObject({ target: { kind: "home" } });
     });
 
-    it("falls back to the window before the boxes load", () => {
-        expect(
-            planCanvasEdit({ ...state(13), pageBoxes: [] }, true),
-        ).toMatchObject({ target: { kind: "range" } });
+    it("waits for the boxes to load instead of editing the window", () => {
+        const plan = planCanvasEdit({ ...state(13), pageBoxes: [] }, true);
+        expect(plan.ok).toBe(false);
+        expect(!plan.ok && plan.error).toBeInstanceOf(TimelineNotReadyError);
+    });
+
+    it("refuses past the last flag, where there is no page box", () => {
+        const plan = planCanvasEdit(state(20), true);
+        expect(plan.ok).toBe(false);
+        expect(!plan.ok && plan.error).toMatchObject({
+            refusal: "pastLastPage",
+        });
+    });
+
+    it("Expert still edits the window past the last flag", () => {
+        expect(planCanvasEdit(state(20), false)).toMatchObject({
+            target: { kind: "range", start: 9, end: 20 },
+        });
     });
 });
 
@@ -106,13 +121,40 @@ describe("neighborPageTarget in Basic", () => {
 });
 
 describe("the field line in Basic", () => {
+    const box = { start: 9, end: 17 };
     it("names the page on a flag, and the count inside a page", () => {
-        expect(basicEditSpot(17, PAGES)).toEqual({
+        expect(basicEditSpot({ beat: 17, box }, PAGES)).toEqual({
             pageName: "2",
             count: null,
         });
-        expect(basicEditSpot(13, PAGES)).toEqual({ pageName: "2", count: 4 });
-        expect(basicEditSpot(40, PAGES)).toBeNull();
+        expect(basicEditSpot({ beat: 13, box }, PAGES)).toEqual({
+            pageName: "2",
+            count: 4,
+        });
+        expect(
+            basicEditSpot({ beat: 40, box: { start: 17, end: 40 } }, PAGES),
+        ).toBeNull();
+    });
+
+    it("names what the writer plans: a count only for a point edit", () => {
+        // Simple defaults, unpinned: a window starting mid-page is a range edit, not a count
+        const spot = (start: number, end: number) => {
+            const plan = planCanvasEdit(
+                {
+                    selection: { kind: "range", start, end },
+                    isolation: null,
+                    pageBoxes: BOXES,
+                    startPinned: false,
+                },
+                false,
+                true,
+            );
+            return plan.ok && plan.target.kind === "point"
+                ? basicEditSpot(plan.target, PAGES)
+                : null;
+        };
+        expect(spot(9, 13)).toEqual({ pageName: "2", count: 4 });
+        expect(spot(10, 14)).toBeNull();
     });
 });
 

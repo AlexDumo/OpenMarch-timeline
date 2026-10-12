@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useBasicLocksStore, lockedOnBox } from "@/timeline/basicLocks";
@@ -48,13 +48,15 @@ export function useBasicPoints(): {
         return out.sort((a, b) => a.beat - b.beat);
     }, [rows, boxes, locked, idsKey]);
     const { mutate } = useMutation(removePositionAtBeatMutationOptions());
-    return {
-        points,
-        removePoint: (point) =>
+    // Stable, so the timeline's memoized layers don't rebuild on every render
+    const removePoint = useCallback(
+        (point: BasicPoint) =>
             mutate({
                 beat: point.beat,
                 box: point.box,
                 marcherIds: point.marcherIds,
             }),
-    };
+        [mutate],
+    );
+    return { points, removePoint };
 }
