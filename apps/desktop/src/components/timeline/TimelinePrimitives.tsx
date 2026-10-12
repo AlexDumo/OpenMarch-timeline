@@ -86,8 +86,9 @@ import {
     type LabeledHoldMarks,
 } from "./PageHoldMark";
 import {
-    chainOffset,
+    chainFit,
     PageKeepChainButton,
+    PageKeepDot,
     type PageKeepChain,
     type PageKeepChains,
 } from "./PageKeepChain";
@@ -1148,14 +1149,23 @@ const TimelinePageBox = memo(function TimelinePageBox({
         (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
     const boxLeft =
         initialPageWidth + beatToX(range.startBeatIndex, pixelsPerBeat);
+    const labelShown = pageLabelFits(page.label, boxWidth);
+    const fit = chain
+        ? chainFit(boxWidth, labelShown ? page.label.length : 0)
+        : null;
+    // A chain with no room for its button: its words go on the box, which has its menu
+    const words =
+        chain && !fit && hold
+            ? { ...hold, label: chain.label, hint: chain.menuHint }
+            : hold;
     const box = (
-        <HoldMarkTooltip hold={hold}>
+        <HoldMarkTooltip hold={words}>
             <button
                 type="button"
                 data-timeline-interactive="true"
                 {...timelineRangeTargetProps(range, undefined, page.id)}
                 aria-label={`Page ${page.label}`}
-                aria-describedby={hold ? holdDescriptionId : undefined}
+                aria-describedby={words ? holdDescriptionId : undefined}
                 aria-pressed={selected}
                 {...scrub.handlers}
                 onClick={(event) => {
@@ -1166,19 +1176,20 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
                 style={{ left: boxLeft, width: boxWidth }}
             >
-                <PageBoxLabel
-                    label={page.label}
-                    shown={pageLabelFits(page.label, boxWidth)}
-                />
+                <PageBoxLabel label={page.label} shown={labelShown} />
                 <PageHoldMarkView
-                    hold={hold}
+                    hold={words}
                     descriptionId={holdDescriptionId}
                 />
+                {chain && !fit && chain.kind !== "follows" && (
+                    <PageKeepDot kind={chain.kind} beside={labelShown} />
+                )}
             </button>
         </HoldMarkTooltip>
     );
-    if (!chain) return box;
-    // A sibling, not inside the box: a button can't hold a button
+    if (!chain || !fit) return box;
+    // A sibling right after the box, not inside it: a button can't hold a button, and hovering
+    // the box shows a linked chain (`PageKeepChainButton`)
     return (
         <>
             {box}
@@ -1187,7 +1198,9 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 pageId={page.id}
                 pageLabel={page.label}
                 range={range}
-                left={boxLeft + chainOffset(boxWidth)}
+                left={boxLeft + fit.offset}
+                size={fit.size}
+                always={selected || !!chain.withK}
             />
         </>
     );

@@ -192,6 +192,8 @@ describe("pageChainWords", () => {
             kind: "follows",
             label: "2 marchers hold where earlier pages left them",
             hint: "Changes to earlier pages carry onto Page 4. Click to keep them here instead",
+            menuHint:
+                "Changes to earlier pages carry onto Page 4. Right-click the page to keep them here instead",
             action: "keep",
             marcherIds: [1, 2],
         });
@@ -199,6 +201,8 @@ describe("pageChainWords", () => {
         expect(pageChainWords(one!)).toMatchObject({
             label: "1 marcher holds where Page 2 left it",
             hint: "Changes to Page 2 carry onto Page 3. Click to keep it here instead",
+            menuHint:
+                "Changes to Page 2 carry onto Page 3. Right-click the page to keep it here instead",
         });
         const [, two] = states([1, 3]);
         expect(pageChainWords(two!)).toMatchObject({
@@ -213,6 +217,8 @@ describe("pageChainWords", () => {
             kind: "kept",
             label: "1 marcher kept on Page 3",
             hint: "Changes to Page 2 stop here. Click to follow Page 2 again",
+            menuHint:
+                "Changes to Page 2 stop here. Right-click the page to follow Page 2 again",
             action: "follow",
             marcherIds: [2],
             keptCount: 1,
@@ -225,6 +231,8 @@ describe("pageChainWords", () => {
             kind: "mixed",
             label: "1 of the 3 selected is kept on Page 3",
             hint: "The other 2 follow earlier pages. Click to keep them here too",
+            menuHint:
+                "The other 2 follow earlier pages. Right-click the page to keep them here too",
             action: "keep",
             marcherIds: [1, 3],
             keptCount: 1,
@@ -232,6 +240,9 @@ describe("pageChainWords", () => {
         const [, pair] = states([1, 2]);
         expect(pageChainWords(pair!)?.hint).toBe(
             "The other one follows earlier pages. Click to keep it here too",
+        );
+        expect(pageChainWords(pair!)?.menuHint).toBe(
+            "The other one follows earlier pages. Right-click the page to keep it here too",
         );
     });
 

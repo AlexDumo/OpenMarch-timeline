@@ -6,9 +6,10 @@ import { Timeline } from "../Timeline";
 import { isTimelineOwnKey } from "../timelineHotkeys";
 import type { TimelineSelection } from "../TimelineViewModel";
 import type { TimelineKeepHereMenu } from "../TimelineRangeMenu";
+import type { LabeledHoldMarks } from "../PageHoldMark";
 import {
     CHAIN_INSET,
-    chainOffset,
+    chainFit,
     keepHereMenu,
     type PageKeepChain,
     type PageKeepChains,
@@ -18,7 +19,8 @@ import {
  * UI-18 keep later pages: the chains on the page boxes for the selected marchers (linked, kept,
  * or a count for a mix), with tooltips that name whom a click changes; a click runs the command
  * and never selects, scrubs or drags the box; the page box menu has the same commands, enabled by
- * state.
+ * state. A chain sits at the bottom left of its box, clear of the page number, and gives way to a
+ * dot (kept, mixed) or nothing (linked) where the box is too narrow.
  */
 
 afterEach(cleanup);
@@ -80,6 +82,7 @@ const chain = (
             : kind === "kept"
               ? "Click to follow Page 2 again"
               : "Click to keep the other 6 too",
+    menuHint: "Right-click the page to change this",
     action: kind === "kept" ? "follow" : "keep",
     marcherIds: [1, 2],
     keptCount: kind === "follows" ? 0 : 2,
@@ -92,11 +95,16 @@ const show = ({
     keepHere,
     selection = null,
     onSelectionChange = vi.fn(),
+    pixelsPerBeat = 16,
+    holdMarks,
 }: {
+    holdMarks?: LabeledHoldMarks;
     keepChains?: PageKeepChains;
     keepHere?: TimelineKeepHereMenu;
     selection?: TimelineSelection;
     onSelectionChange?: (selection: TimelineSelection) => void;
+    /** 16: 128px boxes; 3: 24px, the label and no room for a chain; 1.5: 12px, nothing fits */
+    pixelsPerBeat?: number;
 }) =>
     render(
         <Timeline
@@ -110,6 +118,8 @@ const show = ({
             onSelectionChange={onSelectionChange}
             keepChains={keepChains}
             keepHere={keepHere}
+            pixelsPerBeat={pixelsPerBeat}
+            holdMarks={holdMarks}
         />,
     );
 
@@ -130,9 +140,9 @@ describe("the chains on the page boxes", () => {
         expect(button).toHaveAccessibleName(
             "Page 3: Keep 2 marchers on Page 3. They won't follow Page 2 any more",
         );
-        // Big enough to hit
-        expect(button!.style.width).toBe("20px");
-        expect(button!.style.height).toBe("20px");
+        // Full size in a wide box
+        expect(button!.style.width).toBe("16px");
+        expect(button!.style.height).toBe("16px");
         // A sibling of the box, not inside it
         const box = screen.getByRole("button", { name: "Page 3" });
         expect(box.contains(button!)).toBe(false);
@@ -204,7 +214,7 @@ describe("the chains on the page boxes", () => {
         );
     });
 
-    it("the selected page keeps its chain, clear of its flags", () => {
+    it("a linked chain shows on the selected page; elsewhere only while its box is hovered", () => {
         // Page 3 selected: its box from beat 9 to 17
         show({
             keepChains: new Map([
@@ -216,18 +226,115 @@ describe("the chains on the page boxes", () => {
                 range: { startBeatIndex: 9, endBeatIndex: 17 },
             },
         });
-        expect(chains()).toHaveLength(2);
-        const box = screen.getByRole("button", { name: "Page 3" });
-        expect(box).toHaveAttribute("aria-pressed", "true");
-        const chainLeft = parseFloat(chains()[0]!.style.left);
-        const boxLeft = parseFloat(box.style.left);
-        expect(chainLeft - boxLeft).toBe(CHAIN_INSET);
+        const [here, next] = chains();
+        expect(here).not.toHaveAttribute("data-reveal");
+        expect(here!.className).not.toMatch(/\bopacity-0\b/);
+        // Hidden until its box (just before it) or itself is hovered, or it has focus
+        expect(next).toHaveAttribute("data-reveal", "hover");
+        expect(next!.className).toMatch(/\bopacity-0\b/);
+        expect(next!.className).toContain("[:hover+&]:opacity-100");
+        expect(next!.previousElementSibling).toBe(
+            screen.getByRole("button", { name: "Page 4" }),
+        );
     });
 
-    it("sits in from the flag before it, or centered in a narrow box", () => {
-        expect(chainOffset(200)).toBe(CHAIN_INSET);
-        expect(chainOffset(40)).toBe(10);
-        expect(chainOffset(10)).toBe(0);
+    it("K's page shows its linked chain, and kept and mixed chains always show", () => {
+        show({
+            keepChains: new Map([
+                [2, chain("follows", { withK: true })],
+                [3, chain("kept")],
+                [4, chain("mixed")],
+            ]),
+        });
+        for (const button of chains())
+            expect(button).not.toHaveAttribute("data-reveal");
+    });
+
+    it("sits at the bottom left, in from the flag before it, clear of the flag's grip", () => {
+        show({ keepChains: new Map([[3, chain("kept")]]) });
+        const [button] = chains();
+        const box = screen.getByRole("button", { name: "Page 3" });
+        expect(
+            parseFloat(button!.style.left) - parseFloat(box.style.left),
+        ).toBe(CHAIN_INSET);
+        // On the hold bar: its bottom 2px above the box's
+        expect(
+            parseFloat(button!.style.top) + parseFloat(button!.style.height),
+        ).toBe(24);
+    });
+
+    it("fits beside the label at the largest size that leaves it clear, or centered without one", () => {
+        // 16px where there's room, 12px where only that fits beside a one-digit label
+        expect(chainFit(128, 1)).toEqual({ size: 16, offset: CHAIN_INSET });
+        expect(chainFit(43, 1)).toEqual({ size: 16, offset: CHAIN_INSET });
+        expect(chainFit(42, 1)).toEqual({ size: 12, offset: CHAIN_INSET });
+        expect(chainFit(39, 1)).toEqual({ size: 12, offset: CHAIN_INSET });
+        // A longer label needs more room
+        expect(chainFit(42, 2)).toBeNull();
+        // No label: in from the flag, or the small one centered
+        expect(chainFit(32, 0)).toEqual({ size: 16, offset: CHAIN_INSET });
+        expect(chainFit(21, 0)).toEqual({ size: 12, offset: 5 });
+        expect(chainFit(13, 0)).toBeNull();
+    });
+
+    it("never covers the page number: a narrow box shows a dot for kept or mixed, nothing for linked", () => {
+        show({
+            keepChains: new Map([
+                [2, chain("follows")],
+                [3, chain("kept")],
+                [4, chain("mixed")],
+            ]),
+            pixelsPerBeat: 3,
+        });
+        expect(chains()).toEqual([]);
+        const dots = screen.getAllByTestId("page-keep-dot");
+        expect(dots.map((dot) => dot.getAttribute("data-chain"))).toEqual([
+            "kept",
+            "mixed",
+        ]);
+        // Beside the label, at the start of the bar
+        expect(dots[0]!.className).toMatch(/left-\[3px\]/);
+        // Inside the box, which still selects on a click
+        const box = screen.getByRole("button", { name: "Page 3" });
+        expect(box.contains(dots[0]!)).toBe(true);
+    });
+
+    it("a narrow box takes on its chain's words, with the menu doing what the chain's click would", () => {
+        const holds = {
+            mark: { kind: "holds", from: "2", kept: true },
+            label: "Selected marchers are kept here",
+            hint: "They stand where you kept them",
+        } as const;
+        show({
+            keepChains: new Map([[3, chain("kept")]]),
+            holdMarks: new Map([
+                [3, holds],
+                [4, holds],
+            ]) as LabeledHoldMarks,
+            pixelsPerBeat: 3,
+        });
+        expect(
+            screen.getByRole("button", { name: "Page 3" }),
+        ).toHaveAccessibleDescription(
+            "2 marchers kept on Page 3. Right-click the page to change this",
+        );
+        // A box without a chain keeps its hold mark's words
+        expect(
+            screen.getByRole("button", { name: "Page 4" }),
+        ).toHaveAccessibleDescription(
+            "Selected marchers are kept here. They stand where you kept them",
+        );
+    });
+
+    it("a box too narrow for its label centers the small chain, or its dot", () => {
+        show({
+            keepChains: new Map([[3, chain("kept")]]),
+            pixelsPerBeat: 1.5,
+        });
+        expect(chains()).toEqual([]);
+        expect(screen.getByTestId("page-keep-dot").className).toMatch(
+            /left-1\/2/,
+        );
     });
 });
 

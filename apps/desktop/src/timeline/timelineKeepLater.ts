@@ -411,6 +411,11 @@ export interface PageChainWords {
     readonly kind: PageChainKind;
     readonly label: string;
     readonly hint: string;
+    /**
+     * The hint for a box too narrow for its chain: the same, but the page's menu does what a
+     * click on the chain would (a click on the box selects it)
+     */
+    readonly menuHint: string;
     /** A click keeps these marchers (follows, mixed) or lets them follow again (kept) */
     readonly action: "keep" | "follow";
     readonly marcherIds: readonly number[];
@@ -429,7 +434,7 @@ const followsWords = (
     fromPage: string | null,
     t: KeepTranslate,
     nameOf: MarcherNameOf | undefined,
-): Pick<PageChainWords, "label" | "hint"> => {
+): Pick<PageChainWords, "label" | "hint" | "menuHint"> => {
     const one = follows.length === 1;
     const names = marcherNamesText(follows, nameOf, t);
     const where = fromPage
@@ -476,6 +481,17 @@ const followsWords = (
                   "{changes} carry onto Page {page}. Click to keep them here instead",
                   { changes, page },
               ),
+        menuHint: one
+            ? t(
+                  "timeline.keep.chain.followsMenuHintOne",
+                  "{changes} carry onto Page {page}. Right-click the page to keep it here instead",
+                  { changes, page },
+              )
+            : t(
+                  "timeline.keep.chain.followsMenuHint",
+                  "{changes} carry onto Page {page}. Right-click the page to keep them here instead",
+                  { changes, page },
+              ),
     };
 };
 
@@ -486,7 +502,7 @@ const keptWords = (
     fromPage: string | null,
     t: KeepTranslate,
     nameOf: MarcherNameOf | undefined,
-): Pick<PageChainWords, "label" | "hint"> => {
+): Pick<PageChainWords, "label" | "hint" | "menuHint"> => {
     const names = marcherNamesText(kept, nameOf, t);
     return {
         label: names
@@ -519,6 +535,16 @@ const keptWords = (
                   "timeline.keep.chain.keptHintEarlier",
                   "Changes to earlier pages stop here. Click to follow them again",
               ),
+        menuHint: fromPage
+            ? t(
+                  "timeline.keep.chain.keptMenuHint",
+                  "Changes to Page {from} stop here. Right-click the page to follow Page {from} again",
+                  { from: fromPage },
+              )
+            : t(
+                  "timeline.keep.chain.keptMenuHintEarlier",
+                  "Changes to earlier pages stop here. Right-click the page to follow them again",
+              ),
     };
 };
 
@@ -532,7 +558,7 @@ const mixedWords = (
     page: string,
     t: KeepTranslate,
     nameOf: MarcherNameOf | undefined,
-): Pick<PageChainWords, "label" | "hint"> => {
+): Pick<PageChainWords, "label" | "hint" | "menuHint"> => {
     const counts = {
         page,
         kept: String(kept.length),
@@ -574,6 +600,17 @@ const mixedWords = (
                 : t(
                       "timeline.keep.chain.mixedRestHint",
                       "The other {count} follow earlier pages. Click to keep them here too",
+                      { count: String(follows.length) },
+                  ),
+        menuHint:
+            follows.length === 1
+                ? t(
+                      "timeline.keep.chain.mixedRestMenuHintOne",
+                      "The other one follows earlier pages. Right-click the page to keep it here too",
+                  )
+                : t(
+                      "timeline.keep.chain.mixedRestMenuHint",
+                      "The other {count} follow earlier pages. Right-click the page to keep them here too",
                       { count: String(follows.length) },
                   ),
     };

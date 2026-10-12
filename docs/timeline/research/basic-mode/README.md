@@ -80,6 +80,11 @@ of page boxes sized by duration, with the music inside them.
   Page 2 carry onto Page 3. Click to keep them here instead"); icons LinkSimple and LinkBreak. A
   status chip replacing the hold marks was tried and dropped: the owner prefers the key at the
   flag and the bar along the bottom.
+- **Keep chains on narrow boxes, both modes** (_owner, 2026-10-12_: the chains covered the page
+  numbers and each other): the chain moved to the bottom left of the box, on the start of the
+  hold bar, at 16 or 12 px, or a dot where it can't fit; a linked one only on the selected page,
+  K's page and the hovered box (V-210 to V-212; simulated A/B of three looks in
+  `~/ux-sim/keep-chain/`).
 - Rehearsal marks show in Basic's measure row, as in Expert.
 - **+ after the playhead** adds a page there, as in Expert. In Basic, adding a page (and the
   inspector's **Split page**) also splits each marcher's move at the new flag, keeping its
