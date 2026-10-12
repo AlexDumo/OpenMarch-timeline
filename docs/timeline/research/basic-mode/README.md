@@ -50,26 +50,38 @@ makes switching modes free: no conversion, the same file.
 
 ## Basic's panel
 
-The page-mode bar's layout (controls, the "Pages" row of page boxes sized by duration, the audio
-row with its waveform), driven by the timeline stores:
+_Owner, 2026-10-12 (replacing the first build, which reused the page-mode bar's DOM):_ Basic's
+panel is a **simplified version of the new timeline, inspired by the original bar**. It uses the
+new timeline's drawing, zoom, playhead, scrubbing and transport, laid out as the original: one row
+of page boxes sized by duration, with the music inside them.
 
-- **Clicking a page box** puts the playhead on its flag (its end), so edits land on the page, as
-  in page mode.
-- _Owner:_ **free playhead.** Clicking or dragging inside a box puts the playhead on that count.
-  A playhead line is drawn across the boxes. The field line says "Editing count 5 of page 3" when
-  P is inside a box, and "Editing page 3" on a flag.
-- **Mid-page positions show as ticks** in the page box (for the selected marchers, like the hold
-  marks). Right-click a tick: **Remove this count's position** merges the two moves back into one.
-- Kept: hold marks and their tooltip (UI-18), page delete options, add page, resize a page (its
-  counts), subset toggle, Keep here/Follow again.
-- Not in Basic: the start flag and pinning, the loop region, clips (moves off flags), isolation,
-  resize-a-move and drag-a-flag grips, the moves inspector card's range editing, pass-through
-  windows.
+- **One row of page boxes.** Each box has a header strip (its number at the right, as the
+  original) and a body. The **waveform and the count ticks are inside the box body**, not in lanes
+  under the counts as in Expert. No "Pages", "Audio" or "Counts" titles, and no separate counts
+  row.
+- _Owner:_ **dragging on the body (the audio or the counts) scrubs**, and a click there seeks.
+  **Clicking the header selects the page**: the playhead goes to its flag, so edits land on the
+  page, as in page mode.
+- _Owner:_ **scrubs snap to every count** (Expert snaps to downbeats and page lines), since a
+  mid-page edit happens at a count.
+- _Owner:_ **without audio the boxes keep their height** and show only the count ticks, so nothing
+  jumps when audio loads.
+- **Transport:** _owner leaning to Expert's transport bar_ ("no real reason to keep the
+  original"), open to either. A simulated-user A/B compares it with the original's control block
+  on the left (study: `~/ux-sim/basic-transport/`).
+- On or in the boxes: hold marks, keep chains, the Expert mark, mid-page ticks (right-click
+  **Remove this count's position**), the page menu (delete, subset), and dragging a flag to
+  change a page's length (UI-16).
+- **+ after the playhead** adds a page there, as in Expert. In Basic, adding a page (and the
+  inspector's **Split page**) also splits each marcher's move at the new flag, keeping its
+  position there, so no move crosses the new flag (otherwise every split would lock).
+- Not in Basic: clips (moves off flags), the start flag and pinning, the loop bar, isolation,
+  clip resize, the measure row.
+- Play, Space and Shift+Space use the timeline playback driver. Space plays on from the playhead;
+  Shift+Space plays the selected page once (UI-17).
 - The inspector hides the move card (path style, range, Delete move) and the Timeline section
   (timeline shapes, diagnostics): each makes moves Basic can't edit. **Open:** shapes in Basic
   (a shape move inside one page could count as simple), to decide with the shape-draw redesign.
-- Play, Space and Shift+Space use the timeline playback driver. Space plays on from the playhead;
-  Shift+Space plays the selected page once (UI-17).
 
 ## How Basic writes
 
