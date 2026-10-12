@@ -53,6 +53,7 @@ import { GESTURES } from "../draw/gestures";
 import { SHAPE_KIND_ACTIONS } from "../useShapeToolActions";
 import { useRecipeForSelection } from "../useRecipeForSelection";
 import type { StoredShapeRecipe } from "@/db-functions/shapeRecipes";
+import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 
 const FAMILIES: { family: AnyShapeKind["family"]; label: string }[] = [
     { family: "path", label: "Paths" },
@@ -262,13 +263,9 @@ function SessionControls({ session }: { session: ShapeSession }) {
             ? Math.hypot(second.x - first.x, second.y - first.y)
             : undefined;
 
-    const measures = measuresOf(kind).filter(
-        (m) => !m.visibleWhen || m.visibleWhen(session.params),
-    );
     const groups = kind.groups.filter(
         (g) => !g.visibleWhen || g.visibleWhen(params),
     );
-    const basic = groups.filter((g) => !g.advanced);
     const advanced = groups.filter((g) => g.advanced);
     const summary = [
         `${n} ${n === 1 ? "marcher" : "marchers"}`,
@@ -337,37 +334,17 @@ function SessionControls({ session }: { session: ShapeSession }) {
                 </p>
             )}
 
-            {/* Stays in view while the panel scrolls (sims, round 10: scrolled to the legend and back,
-                the click missed Place) */}
-            <div className="bg-bg-1 sticky top-0 z-10 flex gap-8 py-4">
-                <ActionButton action="applyShape">
-                    <Button
-                        size="compact"
-                        variant={placeAsked === session ? "red" : "primary"}
-                        disabled={!preview.canApply || inputError !== null}
-                        data-testid="shape-tool-apply"
-                    >
-                        <T
-                            keyName={
-                                placeAsked === session
-                                    ? "inspector.shapeTool.placeAnywayButton"
-                                    : "inspector.shapeTool.apply"
-                            }
-                        />
-                        <Kbd>Enter</Kbd>
-                    </Button>
-                </ActionButton>
-                <ActionButton action="cancelAlignmentUpdates">
-                    <Button
-                        size="compact"
-                        variant="secondary"
-                        data-testid="shape-tool-cancel"
-                    >
-                        <T keyName="inspector.shapeTool.cancel" />
-                        <Kbd>Esc</Kbd>
-                    </Button>
-                </ActionButton>
-            </div>
+            {/* In the draw tool, Place and the size fields sit in the box beside the shape */}
+            {shapeUi !== "draw" && (
+                // Stays in view while the panel scrolls (sims, round 10: scrolled to the legend
+                // and back, the click missed Place)
+                <div className="bg-bg-1 sticky top-0 z-10 py-4">
+                    <PlaceButtons
+                        session={session}
+                        canApply={preview.canApply}
+                    />
+                </div>
+            )}
 
             {/* Place sits under the summary, above everything that grows or shrinks (sims, round 8:
                 locking the interval moved it under the cursor); warnings below it */}
@@ -428,19 +405,12 @@ function SessionControls({ session }: { session: ShapeSession }) {
                 </ul>
             )}
 
-            {basic.map(renderGroup)}
-            {measures.length > 0 && (
-                <Section label="Size">
-                    {measures.map((measure) => (
-                        <MeasureField
-                            key={measure.key}
-                            measure={measure}
-                            session={session}
-                            ctx={ctx}
-                            keepsPath={kind.keepsPath === true}
-                        />
-                    ))}
-                </Section>
+            {shapeUi === "draw" ? (
+                <p className="text-sub text-text/60">
+                    <T keyName="inspector.shapeTool.draw.sizeInBox" />
+                </p>
+            ) : (
+                <ShapeSizeFields session={session} ctx={ctx} />
             )}
 
             {advanced.length > 0 && (
@@ -508,6 +478,232 @@ function SessionControls({ session }: { session: ShapeSession }) {
         </>
     );
 }
+
+/** Place and Cancel, with the keys that do the same */
+function PlaceButtons({
+    session,
+    canApply,
+}: {
+    session: ShapeSession;
+    canApply: boolean;
+}) {
+    const inputError = useShapeToolStore((s) => s.inputError);
+    const placeAsked = useShapeToolStore((s) => s.placeAsked);
+    return (
+        <div className="flex gap-8">
+            <ActionButton action="applyShape">
+                <Button
+                    size="compact"
+                    variant={placeAsked === session ? "red" : "primary"}
+                    disabled={!canApply || inputError !== null}
+                    data-testid="shape-tool-apply"
+                >
+                    <T
+                        keyName={
+                            placeAsked === session
+                                ? "inspector.shapeTool.placeAnywayButton"
+                                : "inspector.shapeTool.apply"
+                        }
+                    />
+                    <Kbd>Enter</Kbd>
+                </Button>
+            </ActionButton>
+            <ActionButton action="cancelAlignmentUpdates">
+                <Button
+                    size="compact"
+                    variant="secondary"
+                    data-testid="shape-tool-cancel"
+                >
+                    <T keyName="inspector.shapeTool.cancel" />
+                    <Kbd>Esc</Kbd>
+                </Button>
+            </ActionButton>
+        </div>
+    );
+}
+
+/** The kind's everyday settings (spacing, its basic fields) and its sizes */
+function ShapeSizeFields({
+    session,
+    ctx,
+}: {
+    session: ShapeSession;
+    ctx: ShapeContext;
+}) {
+    const kind = shapeKind(session.kindId)!;
+    const preview = useMemo(() => previewSession(session, ctx), [session, ctx]);
+    const n = session.marchers.length;
+    const params = session.params as Record<string, unknown>;
+    const setField = (key: string, value: unknown) =>
+        useShapeToolStore
+            .getState()
+            .setParams({ ...params, [key]: value }, ctx);
+    const [first, second] = preview.slots;
+    const derivedInterval =
+        kind.path && first && second
+            ? Math.hypot(second.x - first.x, second.y - first.y)
+            : undefined;
+    const measures = measuresOf(kind).filter(
+        (m) => !m.visibleWhen || m.visibleWhen(session.params),
+    );
+    const basic = kind.groups.filter(
+        (g) => !g.advanced && (!g.visibleWhen || g.visibleWhen(params)),
+    );
+    return (
+        <>
+            {basic.map((group) => (
+                <Section key={group.label} label={group.label}>
+                    {group.fields.map((field) => (
+                        <FieldControl
+                            key={field.key}
+                            field={field}
+                            value={params[field.key]}
+                            onChange={(v) => setField(field.key, v)}
+                            n={n}
+                            ctx={ctx}
+                            derivedInterval={derivedInterval}
+                            closed={kind.path?.(session.params).closed === true}
+                        />
+                    ))}
+                </Section>
+            ))}
+            {measures.length > 0 && (
+                <Section label="Size">
+                    {measures.map((measure) => (
+                        <MeasureField
+                            key={measure.key}
+                            measure={measure}
+                            session={session}
+                            ctx={ctx}
+                            keepsPath={kind.keepsPath === true}
+                        />
+                    ))}
+                </Section>
+            )}
+        </>
+    );
+}
+
+/**
+ * The draw tool's box beside the shape (owner decisions, 2026-10-11): the everyday numbers and
+ * Place, where your eyes are. The side panel keeps order, view options and the legend.
+ */
+export function ShapeFineTuneBox({
+    canvas,
+    isPlaying,
+}: {
+    canvas: OpenMarchCanvas | null;
+    isPlaying: boolean;
+}) {
+    const session = useShapeToolStore((s) => s.session);
+    const drawing = useShapeToolStore((s) => s.drawing !== null);
+    const shapeUi = useUiSettingsStore((s) => s.uiSettings.shapeUi ?? "draw");
+    const ctx = useMemo(
+        () => (canvas ? shapeContextFor(canvas) : null),
+        // A new context when the session changes picks up zoom and snapping changes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [canvas, session],
+    );
+    const preview = useMemo(
+        () => (session && ctx ? previewSession(session, ctx) : null),
+        [session, ctx],
+    );
+    const spot = useBoxSpot(canvas, preview?.slots ?? null);
+    if (
+        shapeUi !== "draw" ||
+        isPlaying ||
+        !session ||
+        !ctx ||
+        !preview ||
+        !spot ||
+        // Out of the way while a stroke is being drawn
+        drawing
+    )
+        return null;
+    const kind = shapeKind(session.kindId)!;
+    const Icon = kind.icon;
+    const warnings = preview.issues.filter((i) => i.level !== "info").length;
+    return (
+        <div
+            className="rounded-6 border-stroke bg-modal shadow-modal backdrop-blur-32 text-body absolute z-20 flex w-[17rem] flex-col gap-8 border p-10"
+            style={{ left: spot.left, top: spot.top }}
+            data-testid="shape-fine-tune"
+            onPointerDown={(e) => e.stopPropagation()}
+        >
+            <div className="flex items-center gap-6">
+                <Icon size={16} />
+                <span className="text-text/80">{kind.label}</span>
+                {warnings > 0 && (
+                    <span
+                        className="text-sub text-yellow ml-auto"
+                        title={preview.issues.map((i) => i.message).join("\n")}
+                    >
+                        <T
+                            keyName="inspector.shapeTool.draw.warnings"
+                            params={{ count: warnings }}
+                        />
+                    </span>
+                )}
+            </div>
+            <ShapeSizeFields session={session} ctx={ctx} />
+            <PlaceButtons session={session} canApply={preview.canApply} />
+        </div>
+    );
+}
+
+/** Where the box sits: beside the shape's spots, on whichever side has room */
+function useBoxSpot(
+    canvas: OpenMarchCanvas | null,
+    slots: readonly { x: number; y: number }[] | null,
+): { left: number; top: number } | null {
+    const [spot, setSpot] = useState<{ left: number; top: number } | null>(
+        null,
+    );
+    useEffect(() => {
+        if (!canvas || !slots || slots.length === 0) {
+            setSpot(null);
+            return;
+        }
+        let frame = 0;
+        const measure = () => {
+            frame = 0;
+            const v = canvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
+            const xs = slots.map((p) => p.x * v[0]! + v[4]!);
+            const ys = slots.map((p) => p.y * v[3]! + v[5]!);
+            const right = Math.max(...xs);
+            const left = Math.min(...xs);
+            const width = canvas.getWidth();
+            const height = canvas.getHeight();
+            const boxLeft =
+                right + BOX_GAP_PX + BOX_WIDTH_PX <= width
+                    ? right + BOX_GAP_PX
+                    : Math.max(8, left - BOX_GAP_PX - BOX_WIDTH_PX);
+            const boxTop = Math.min(
+                Math.max(8, Math.min(...ys) - 20),
+                Math.max(8, height - BOX_HEIGHT_PX),
+            );
+            const next = { left: Math.round(boxLeft), top: Math.round(boxTop) };
+            setSpot((s) =>
+                s && s.left === next.left && s.top === next.top ? s : next,
+            );
+        };
+        const schedule = () => {
+            if (!frame) frame = requestAnimationFrame(measure);
+        };
+        canvas.on("after:render", schedule);
+        schedule();
+        return () => {
+            canvas.off("after:render", schedule as never);
+            if (frame) cancelAnimationFrame(frame);
+        };
+    }, [canvas, slots]);
+    return spot;
+}
+
+/** The box's size and distance from the shape, in screen pixels, for placing it */
+const BOX_WIDTH_PX = 272;
+const BOX_HEIGHT_PX = 320;
+const BOX_GAP_PX = 32;
 
 function Kbd({ children }: { children: ReactNode }) {
     return <kbd className="text-sub ml-6 font-mono opacity-70">{children}</kbd>;
