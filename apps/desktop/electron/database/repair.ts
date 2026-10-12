@@ -13,11 +13,13 @@ import {
     NEW_FILE_USER_VERSION,
     PAGE_MODEL_USER_VERSION,
     readUserVersion,
+    TIMELINE_MODEL_USER_VERSION,
 } from "./fileVersion";
 
 /**
- * Sets up the repaired file at `version`: the version of the file it repairs, so a page-era file
- * (7) stays one, with the page-era tables to copy into, and is converted when it opens.
+ * Sets up the repaired file at `version`: 7 for a file whose motion is still in page-era tables
+ * (see `shouldRepairAsPageEra`), so it has those tables to copy into and is converted when it
+ * opens, and 8 otherwise.
  */
 export const initializeAndMigrateDatabase = async (
     newDb: DatabaseSync,
@@ -268,6 +270,39 @@ export const removeOrphanMarcherPages = (db: DatabaseSync): void => {
     ).run();
 };
 
+/** Tables only a page-era file has: `0020_drop_page_era` drops them when a file is converted. */
+const PAGE_ERA_TABLES = [
+    "marcher_pages",
+    "pathways",
+    "midsets",
+    "shapes",
+    "shape_pages",
+    "shape_page_marchers",
+];
+
+/**
+ * True when the file being repaired must be repaired as a page-era file (7), so its positions are
+ * copied into page-era tables and converted, after the person confirms, when it opens.
+ *
+ * A timeline file (8) never is. A page-model file (7) always is. Any other version, such as 0 from
+ * a damaged header or 1 to 6 from 0.0.9 or earlier, is judged by what the file holds: page-era
+ * tables mean its motion is still in the page model.
+ */
+export const shouldRepairAsPageEra = (
+    sourceVersion: number,
+    sourceDb: DatabaseSync,
+): boolean => {
+    if (sourceVersion === TIMELINE_MODEL_USER_VERSION) return false;
+    if (sourceVersion === PAGE_MODEL_USER_VERSION) return true;
+    const placeholders = PAGE_ERA_TABLES.map(() => "?").join(", ");
+    const found = sourceDb
+        .prepare(
+            `SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN (${placeholders})`,
+        )
+        .get(...PAGE_ERA_TABLES) as { n: number };
+    return found.n > 0;
+};
+
 export const repairDatabase = async (originalDbPath: string) => {
     // 1. Create paths for temp and final database files
     const originalPathObj = path.parse(originalDbPath);
@@ -311,7 +346,7 @@ export const repairDatabase = async (originalDbPath: string) => {
 
         // A page-era file is repaired as one, so its positions are copied and then converted
         // when it opens; anything else becomes a timeline file.
-        const pageEra = sourceVersion === PAGE_MODEL_USER_VERSION;
+        const pageEra = shouldRepairAsPageEra(sourceVersion, originalDb);
 
         try {
             // Initialize and run migrations on the new database
