@@ -867,6 +867,15 @@
                 "toolDraw": "Draw",
                 "toolPanel": "Panel only (earlier)"
             },
+            "fill": {
+                "box": "Box",
+                "circle": "Circle",
+                "filled": "Filled",
+                "grid": "Grid",
+                "natural": "Natural",
+                "outline": "Outline",
+                "staggered": "Staggered"
+            },
             "leftUnplaced": "The {kind} wasn't placed",
             "placeAnyway": "Some marchers would walk through each other. Place anyway, or change the shape.",
             "placeAnywayButton": "Place anyway",

@@ -269,6 +269,8 @@ export interface ShapeKind<P> {
     readonly label: string;
     readonly icon: Icon;
     readonly family: "path" | "fill";
+    /** Not offered in the shape pickers: reached another way (a filled shape, by its switch) */
+    readonly unlisted?: boolean;
     /**
      * Who goes where when the tool opens: an open path keeps the marchers' order along it, a
      * closed or filled shape has no natural start, so nearest spots usually read better

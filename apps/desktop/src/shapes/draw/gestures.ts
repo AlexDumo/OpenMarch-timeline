@@ -3,6 +3,7 @@ import type { ArcParams } from "../kinds/arc";
 import type { BlockParams } from "../kinds/block";
 import type { CircleParams } from "../kinds/circle";
 import type { CurveParams } from "../kinds/curve";
+import type { FillParams } from "../kinds/fill";
 import type { LineParams } from "../kinds/line";
 import type { XY } from "../types";
 
@@ -28,6 +29,7 @@ export const GESTURES: Readonly<Record<string, GestureKind>> = {
     circle: "drag",
     block: "drag",
     curve: "clicks",
+    fill: "drag",
 };
 
 /** The handle that plays the dragged end, so a locked interval keeps the start where it was put */
@@ -76,6 +78,19 @@ export function paramsFromDrag(
         }
         case "block":
             return boxFromCorners(base as BlockParams, from, to, n);
+        case "fill": {
+            const fill = base as FillParams;
+            // A filled circle draws as a circle does, a filled box as a box
+            return fill.outline === "circle"
+                ? { ...fill, center: from, r: dist(from, to) }
+                : {
+                      ...fill,
+                      center: mid(from, to),
+                      rotation: 0,
+                      width: Math.abs(to.x - from.x),
+                      height: Math.abs(to.y - from.y),
+                  };
+        }
         default:
             return undefined;
     }

@@ -28,7 +28,7 @@ import {
     marchersOnCanvas,
     shapeContextFor,
 } from "../canvas/shapeCanvasContext";
-import { SHAPE_KINDS, shapeKind } from "../registry";
+import { LISTED_SHAPE_KINDS, pickerKindOf, shapeKind } from "../registry";
 import { previewSession, type ShapeSession } from "../session";
 import { useShapeToolStore } from "../shapeToolStore";
 import { describeGaps, formatIntervals, parseIntervals } from "../spacing";
@@ -54,6 +54,15 @@ import { SHAPE_KIND_ACTIONS } from "../useShapeToolActions";
 import { useRecipeForSelection } from "../useRecipeForSelection";
 import type { StoredShapeRecipe } from "@/db-functions/shapeRecipes";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
+import type { FillParams } from "../kinds/fill";
+import type { CircleParams } from "../kinds/circle";
+import type { BlockParams } from "../kinds/block";
+import {
+    blockToFill,
+    circleToFill,
+    fillToBlock,
+    fillToCircle,
+} from "../draw/convert";
 
 const FAMILIES: { family: AnyShapeKind["family"]; label: string }[] = [
     { family: "path", label: "Paths" },
@@ -188,7 +197,7 @@ function KindPicker({ activeKind }: { activeKind: string | null }) {
             />
             <SelectContent>
                 {FAMILIES.map(({ family, label }) => {
-                    const kinds = SHAPE_KINDS.filter(
+                    const kinds = LISTED_SHAPE_KINDS.filter(
                         (k) => k.family === family,
                     );
                     if (kinds.length === 0) return null;
@@ -292,7 +301,9 @@ function SessionControls({ session }: { session: ShapeSession }) {
     return (
         <>
             <div className="flex flex-col gap-4">
-                <KindPicker activeKind={session.kindId} />
+                <KindPicker
+                    activeKind={pickerKindOf(session.kindId, session.params)}
+                />
                 <div className="flex items-center gap-8">
                     <p
                         className="text-sub text-text/70 min-w-0 flex-1 truncate"
@@ -522,6 +533,114 @@ function PlaceButtons({
     );
 }
 
+/**
+ * Outline or Filled for a circle; Grid, Staggered or Natural for a box (owner decisions,
+ * 2026-10-11). Each switch keeps where the shape is and its size.
+ */
+function FillSwitch({
+    session,
+    ctx,
+}: {
+    session: ShapeSession;
+    ctx: ShapeContext;
+}) {
+    const { t } = useTolgee();
+    const n = session.marchers.length;
+    const convert = (kindId: string, params: unknown) => {
+        useShapeToolStore.getState().convert(kindId, params, ctx);
+        blurSoon();
+    };
+    const fill =
+        session.kindId === "fill" ? (session.params as FillParams) : null;
+    const isCircle = session.kindId === "circle" || fill?.outline === "circle";
+    const isBox = session.kindId === "block" || fill?.outline === "box";
+    if (isCircle) {
+        const value = fill ? "filled" : "outline";
+        return (
+            <Row label={<T keyName="inspector.shapeTool.fill.circle" />}>
+                <ToggleGroup
+                    type="single"
+                    aria-label={t("inspector.shapeTool.fill.circle")}
+                    className="h-[1.625rem]"
+                    value={value}
+                    onValueChange={(v) => {
+                        if (!v || v === value) return;
+                        if (v === "filled")
+                            convert(
+                                "fill",
+                                circleToFill(session.params as CircleParams),
+                            );
+                        else convert("circle", fillToCircle(fill!));
+                    }}
+                >
+                    <ToggleGroupItem
+                        value="outline"
+                        data-testid="shape-fill-outline"
+                    >
+                        <T keyName="inspector.shapeTool.fill.outline" />
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                        value="filled"
+                        data-testid="shape-fill-filled"
+                    >
+                        <T keyName="inspector.shapeTool.fill.filled" />
+                    </ToggleGroupItem>
+                </ToggleGroup>
+            </Row>
+        );
+    }
+    if (isBox) {
+        const block = fill ? null : (session.params as BlockParams);
+        const value = fill
+            ? "natural"
+            : block!.pattern === "offset"
+              ? "staggered"
+              : "grid";
+        return (
+            <Row label={<T keyName="inspector.shapeTool.fill.box" />}>
+                <ToggleGroup
+                    type="single"
+                    aria-label={t("inspector.shapeTool.fill.box")}
+                    className="h-[1.625rem]"
+                    value={value}
+                    onValueChange={(v) => {
+                        if (!v || v === value) return;
+                        if (v === "natural")
+                            convert("fill", blockToFill(block!, n, ctx.stepPx));
+                        else {
+                            const pattern =
+                                v === "staggered" ? "offset" : "grid";
+                            convert(
+                                "block",
+                                block
+                                    ? { ...block, pattern }
+                                    : fillToBlock(fill!, n, pattern),
+                            );
+                        }
+                    }}
+                >
+                    <ToggleGroupItem value="grid" data-testid="shape-fill-grid">
+                        <T keyName="inspector.shapeTool.fill.grid" />
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                        value="staggered"
+                        data-testid="shape-fill-staggered"
+                    >
+                        <T keyName="inspector.shapeTool.fill.staggered" />
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                        value="natural"
+                        data-testid="shape-fill-natural"
+                    >
+                        <T keyName="inspector.shapeTool.fill.natural" />
+                    </ToggleGroupItem>
+                </ToggleGroup>
+            </Row>
+        );
+    }
+    return null;
+}
+
 /** The kind's everyday settings (spacing, its basic fields) and its sizes */
 function ShapeSizeFields({
     session,
@@ -551,6 +670,7 @@ function ShapeSizeFields({
     );
     return (
         <>
+            <FillSwitch session={session} ctx={ctx} />
             {basic.map((group) => (
                 <Section key={group.label} label={group.label}>
                     {group.fields.map((field) => (

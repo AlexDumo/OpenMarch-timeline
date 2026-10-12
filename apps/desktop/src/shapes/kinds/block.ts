@@ -122,7 +122,7 @@ const trim = (v: number) => String(Math.round(v * 100) / 100);
 export const blockKind: ShapeKind<BlockParams> = {
     id: "block",
     version: 1,
-    label: "Block",
+    label: "Box",
     icon: SquaresFourIcon,
     family: "fill",
     groups: [

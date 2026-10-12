@@ -74,6 +74,8 @@ interface ShapeToolState {
     /** Recent finished strokes, kept for recognizing drawn shapes later */
     strokes: { kindId: string; samples: StrokeSample[] }[];
     beginDraw(at: XY): boolean;
+    /** The open shape as another kind, keeping where it is (a switch such as Outline / Filled) */
+    convert(kindId: string, params: unknown, ctx: ShapeContext): void;
     drawTo(at: XY, ctx: ShapeContext): void;
     endDraw(): void;
     clickPoint(at: XY, ctx: ShapeContext): void;
@@ -159,6 +161,8 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
         drawing: null,
         clicked: null,
         strokes: [],
+        convert: (kindId, params, ctx) =>
+            update((s) => ({ ...s, kindId, params }), ctx),
         beginDraw(at) {
             const { session, past, dragging } = get();
             if (!session || dragging || GESTURES[session.kindId] !== "drag")

@@ -4,7 +4,7 @@ import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { runAction } from "@/shortcuts/registry";
-import { SHAPE_KINDS } from "../registry";
+import { LISTED_SHAPE_KINDS, pickerKindOf } from "../registry";
 import { useShapeToolStore } from "../shapeToolStore";
 import { SHAPE_KIND_ACTIONS } from "../useShapeToolActions";
 import { GESTURES } from "../draw/gestures";
@@ -46,9 +46,11 @@ export function ShapePickerStrip({
             // The field's own handlers mustn't see presses on the strip
             onPointerDown={(e) => e.stopPropagation()}
         >
-            {SHAPE_KINDS.map((kind) => {
+            {LISTED_SHAPE_KINDS.map((kind) => {
                 const Icon = kind.icon;
-                const active = session?.kindId === kind.id;
+                const active =
+                    session !== null &&
+                    pickerKindOf(session.kindId, session.params) === kind.id;
                 const key = KIND_KEYS[kind.id];
                 const how =
                     GESTURES[kind.id] === "clicks"
