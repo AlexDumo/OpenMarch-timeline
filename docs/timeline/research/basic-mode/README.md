@@ -69,9 +69,19 @@ of page boxes sized by duration, with the music inside them.
 - **Transport:** _owner leaning to Expert's transport bar_ ("no real reason to keep the
   original"), open to either. A simulated-user A/B compares it with the original's control block
   on the left (study: `~/ux-sim/basic-transport/`).
-- On or in the boxes: hold marks, keep chains, the Expert mark, mid-page ticks (right-click
+- On or in the boxes: the status chip, the Expert mark, mid-page ticks (right-click
   **Remove this count's position**), the page menu (delete, subset), and dragging a flag to
   change a page's length (UI-16).
+- _Owner feedback, 2026-10-12:_ no notice when a show with Expert moves opens (the Expert marks
+  say it); no grey box under home; no ring around the selected page's audio (the header shows the
+  selection); measure numbers in the box bodies, above the waveform.
+- **One status chip per page box, both modes** (_owner, 2026-10-12_: the key at the flag and the
+  bar along the bottom sat in odd places, and the chain's tooltip said only what a click would
+  do). At the box's top left: the keep chain (LinkSimple, kept: LinkBreak) where the selected
+  marchers follow a page or were kept, else a walking figure where they move and a dash where
+  they hold. Tooltips say what is true now, then what a click does ("OT1 and OT2 hold where
+  Page 2 left them / Changes to Page 2 carry onto Page 3. Click to keep them here instead").
+  Page mode's page strip keeps its marks.
 - **+ after the playhead** adds a page there, as in Expert. In Basic, adding a page (and the
   inspector's **Split page**) also splits each marcher's move at the new flag, keeping its
   position there, so no move crosses the new flag (otherwise every split would lock).

@@ -5,7 +5,6 @@ import { TooltipClassName } from "@openmarch/ui";
 import { beatToX } from "./TimelineGeometry";
 import type {
     TimelineBasicPoint,
-    TimelineBeatRange,
     TimelinePageMarker,
 } from "./TimelineViewModel";
 
@@ -15,65 +14,28 @@ import type {
  * waveform and the count ticks are drawn inside the bodies by the timeline itself.
  */
 
-/** The page box bodies under the ruler: one frame, and the selected page's box ringed. */
+/**
+ * The page box bodies under the ruler: one frame from the first page to the end of the show.
+ * Home has no counts, so nothing is drawn under its house.
+ */
 export const TimelineBasicBodies = memo(function TimelineBasicBodies({
     top,
     height,
     width,
-    initialPageWidth,
-    selectedRange,
-    pixelsPerBeat,
 }: {
     /** Where the bodies start: under the ruler */
     top: number;
     height: number;
     /** The show's width, without home's box */
     width: number;
-    initialPageWidth: number;
-    /** The selected page's box, view beats; `null` when no whole page is selected */
-    selectedRange: TimelineBeatRange | null;
-    pixelsPerBeat: number;
 }) {
     return (
         <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0"
-        >
-            <div
-                data-testid="timeline-basic-bodies"
-                className="border-stroke bg-fg-2/40 rounded-b-6 absolute border border-t-0"
-                style={{
-                    top,
-                    height,
-                    left: -initialPageWidth,
-                    width: width + initialPageWidth,
-                }}
-            >
-                {/* Home's body, under its house: a page with no counts */}
-                <div
-                    className="border-stroke bg-fg-2 absolute inset-y-0 left-0 border-r"
-                    style={{ width: initialPageWidth }}
-                />
-            </div>
-            {selectedRange && (
-                <div
-                    data-testid="timeline-basic-selected-body"
-                    className="absolute ring-1 ring-[var(--color-accent)] ring-inset"
-                    style={{
-                        top,
-                        height,
-                        left: beatToX(
-                            selectedRange.startBeatIndex,
-                            pixelsPerBeat,
-                        ),
-                        width:
-                            (selectedRange.endBeatIndex -
-                                selectedRange.startBeatIndex) *
-                            pixelsPerBeat,
-                    }}
-                />
-            )}
-        </div>
+            data-testid="timeline-basic-bodies"
+            className="border-stroke bg-fg-2/40 rounded-b-6 pointer-events-none absolute left-0 border border-t-0"
+            style={{ top, height, width }}
+        />
     );
 });
 

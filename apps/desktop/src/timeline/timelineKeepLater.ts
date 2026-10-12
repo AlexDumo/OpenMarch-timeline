@@ -418,7 +418,11 @@ export interface PageChainWords {
     readonly keptCount: number;
 }
 
-/** A linked chain's words: whom a click keeps, and the page they stop following. */
+/**
+ * A linked chain's words: what is true now (they hold where a page left them, so changes to that
+ * page carry here), then what a click does (keeps them here). Owner, 2026-10-12: say what happens
+ * now first, not only what a click would do.
+ */
 const followsWords = (
     follows: readonly number[],
     page: string,
@@ -428,48 +432,54 @@ const followsWords = (
 ): Pick<PageChainWords, "label" | "hint"> => {
     const one = follows.length === 1;
     const names = marcherNamesText(follows, nameOf, t);
-    const label = names
-        ? t("timeline.keep.chain.keepNamed", "Keep {names} on Page {page}", {
-              names,
-              page,
+    const where = fromPage
+        ? t("timeline.keep.chain.wherePage", "where Page {from} left", {
+              from: fromPage,
           })
+        : t("timeline.keep.chain.whereEarlier", "where earlier pages left");
+    const label = names
+        ? one
+            ? t(
+                  "timeline.keep.chain.followsNamedOne",
+                  "{names} holds {where} it",
+                  { names, where },
+              )
+            : t(
+                  "timeline.keep.chain.followsNamed",
+                  "{names} hold {where} them",
+                  { names, where },
+              )
         : one
-          ? t("timeline.keep.chain.keepOne", "Keep 1 marcher on Page {page}", {
-                page,
+          ? t("timeline.keep.chain.followsOne", "1 marcher holds {where} it", {
+                where,
             })
           : t(
-                "timeline.keep.chain.keep",
-                "Keep {count} marchers on Page {page}",
-                {
-                    page,
-                    count: String(follows.length),
-                },
+                "timeline.keep.chain.follows",
+                "{count} marchers hold {where} them",
+                { count: String(follows.length), where },
             );
-    if (!fromPage)
-        return {
-            label,
-            hint: t(
-                "timeline.keep.chain.keepHintEarlier",
-                "They won't follow earlier pages any more",
-            ),
-        };
+    const changes = fromPage
+        ? t("timeline.keep.chain.changesPage", "Changes to Page {from}", {
+              from: fromPage,
+          })
+        : t("timeline.keep.chain.changesEarlier", "Changes to earlier pages");
     return {
         label,
         hint: one
             ? t(
-                  "timeline.keep.chain.keepHintOne",
-                  "It won't follow Page {from} any more",
-                  { from: fromPage },
+                  "timeline.keep.chain.followsHintOne",
+                  "{changes} carry onto Page {page}. Click to keep it here instead",
+                  { changes, page },
               )
             : t(
-                  "timeline.keep.chain.keepHint",
-                  "They won't follow Page {from} any more",
-                  { from: fromPage },
+                  "timeline.keep.chain.followsHint",
+                  "{changes} carry onto Page {page}. Click to keep them here instead",
+                  { changes, page },
               ),
     };
 };
 
-/** A kept chain's words: who was kept, and the page a click follows again. */
+/** A kept chain's words: who is kept (now), then that a click lets them follow again. */
 const keptWords = (
     kept: readonly number[],
     page: string,
@@ -501,20 +511,20 @@ const keptWords = (
                 ),
         hint: fromPage
             ? t(
-                  "timeline.keep.chain.followHint",
-                  "Click to follow Page {from} again",
+                  "timeline.keep.chain.keptHint",
+                  "Changes to Page {from} stop here. Click to follow Page {from} again",
                   { from: fromPage },
               )
             : t(
-                  "timeline.keep.chain.followHintEarlier",
-                  "Click to follow earlier pages again",
+                  "timeline.keep.chain.keptHintEarlier",
+                  "Changes to earlier pages stop here. Click to follow them again",
               ),
     };
 };
 
 /**
- * A mixed chain's words: how many of the selection were kept, by name, and the rest a click
- * keeps. Counts the selected marchers only (the chain shows nothing for the others).
+ * A mixed chain's words: how many of the selection are kept, by name, and that the rest follow;
+ * then what a click does (keeps the rest). Counts the selected marchers only.
  */
 const mixedWords = (
     follows: readonly number[],
@@ -558,12 +568,12 @@ const mixedWords = (
         hint:
             follows.length === 1
                 ? t(
-                      "timeline.keep.chain.mixedHintOne",
-                      "Click to keep the other one too",
+                      "timeline.keep.chain.mixedRestHintOne",
+                      "The other one follows earlier pages. Click to keep it here too",
                   )
                 : t(
-                      "timeline.keep.chain.mixedHint",
-                      "Click to keep the other {count} too",
+                      "timeline.keep.chain.mixedRestHint",
+                      "The other {count} follow earlier pages. Click to keep them here too",
                       { count: String(follows.length) },
                   ),
     };
