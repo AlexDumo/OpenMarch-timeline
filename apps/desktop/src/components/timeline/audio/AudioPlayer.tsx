@@ -621,12 +621,40 @@ export default function AudioPlayer({
         }
     }, [audioMuted, audioVolume]);
 
-    // Snap WaveSurfer to correct position when paused
+    // Snap WaveSurfer to correct position when paused. In timeline mode (Basic's page bar, UI-19)
+    // that is the displayed playhead, followed without re-rendering the player on every scrub
     useEffect(() => {
         if (!waveSurfer || !audioBuffer || isPlaying) return;
-
-        seekWaveSurferToPausedPosition(waveSurfer, selectedPage, audioDuration);
-    }, [waveSurfer, audioBuffer, audioDuration, selectedPage, isPlaying]);
+        if (!timelineMode) {
+            seekWaveSurferToPausedPosition(
+                waveSurfer,
+                selectedPage,
+                audioDuration,
+            );
+            return;
+        }
+        if (audioDuration <= 0) return;
+        const seekToPlayhead = (state = useTimelineSelectionStore.getState()) =>
+            waveSurfer.seekTo(
+                Math.max(
+                    0,
+                    Math.min(
+                        1,
+                        timeAtBeat(beats, displayedBeat(state)) / audioDuration,
+                    ),
+                ),
+            );
+        seekToPlayhead();
+        return useTimelineSelectionStore.subscribe((s) => seekToPlayhead(s));
+    }, [
+        waveSurfer,
+        audioBuffer,
+        audioDuration,
+        selectedPage,
+        isPlaying,
+        timelineMode,
+        beats,
+    ]);
 
     // Animate WaveSurfer progress bar when playing
     useEffect(() => {

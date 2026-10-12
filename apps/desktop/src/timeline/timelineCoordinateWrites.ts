@@ -16,6 +16,7 @@ import {
 import type { CoordinateRecord } from "@/utilities/CoordinateActions";
 import { pageEndBeat } from "./timelineCanvas";
 import { moveMarchersAndOfferFollowUp } from "./timelineMoveThemToo";
+import { isBasicMode } from "@/stores/EditorModeStore";
 import {
     timelineResolverSettled,
     useTimelineResolverStore,
@@ -107,8 +108,9 @@ export type CanvasEditPlan =
 export function planCanvasEdit(
     state: Pick<
         TimelineSelectionState,
-        "selection" | "isolation"
+        "selection" | "isolation" | "pageBoxes"
     > = useTimelineSelectionStore.getState(),
+    basic: boolean = isBasicMode(),
 ): CanvasEditPlan {
     const { selection, isolation } = state;
     // Isolation always edits the isolated timeline's end (owner, 2026-10-04). Until its plan is
@@ -129,7 +131,16 @@ export function planCanvasEdit(
             beat: isolation.end,
         };
     }
-    if (selection.kind === "range")
+    if (selection.kind === "range") {
+        // UI-19: Basic edits where each marcher is at the playhead, inside its page box
+        // (docs/timeline/research/basic-mode, "How Basic writes")
+        const box = basic ? basicPageBox(state, selection.end) : null;
+        if (box)
+            return {
+                ok: true,
+                target: { kind: "point", beat: selection.end, box },
+                beat: selection.end,
+            };
         return {
             ok: true,
             target: {
@@ -139,9 +150,22 @@ export function planCanvasEdit(
             },
             beat: selection.end,
         };
+    }
     if (selection.kind === "home")
         return { ok: true, target: { kind: "home" }, beat: 0 };
     return { ok: false, error: new TimelineEditRefusedError("noTimeline") };
+}
+
+/**
+ * The page box Basic edits at playhead `beat`: the box holding it, or ending on it (a page's flag
+ * edits that page). `null` before the boxes load or past the last flag.
+ */
+export function basicPageBox(
+    state: Pick<TimelineSelectionState, "pageBoxes">,
+    beat: number,
+): { start: number; end: number } | null {
+    const box = state.pageBoxes.find((b) => b.start < beat && beat <= b.end);
+    return box ? { start: box.start, end: box.end } : null;
 }
 
 /**
@@ -337,11 +361,17 @@ export function copyPagePositions({
  *
  * @throws Error for a page with no beats
  */
-export function neighborPageTarget(page: TimelineMovePage): TimelineEditTarget {
+export function neighborPageTarget(
+    page: TimelineMovePage,
+    basic: boolean = isBasicMode(),
+): TimelineEditTarget {
     if (page.previousPageId === null) return { kind: "home" };
     const first = page.beats[0];
     if (!first) throw new Error("This page has no beats, so it has no box.");
-    return { kind: "range", start: first.index, end: pageEndBeat(page) };
+    const box = { start: first.index, end: pageEndBeat(page) };
+    // UI-19: Basic writes on the page's flag, and keeps every move inside the box
+    if (basic) return { kind: "point", beat: box.end, box };
+    return { kind: "range", ...box };
 }
 
 /** The timeline move for each changed coordinate. Any `page_id` on them is ignored. */

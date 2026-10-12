@@ -42,7 +42,12 @@ import {
     deletePagesWithMovesMutationOptions,
 } from "@/hooks/queries/usePageFlags";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { usePageModeHoldMarks } from "@/timeline/usePageHoldMarks";
+import {
+    usePageModeHoldMarks,
+    useTimelineHoldMarks,
+} from "@/timeline/usePageHoldMarks";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { pageEndBeat } from "@/timeline/pageEndBeat";
 import {
     HoldMarkTooltip,
     PageHoldMarkView,
@@ -97,9 +102,30 @@ export default function PageTimeline() {
         [selectedIdsKey],
     );
     const holdMarkId = useId();
-    const holdMarks = useLabeledHoldMarks(
-        usePageModeHoldMarks(pages, selectedIds, !timelineMode),
+    const pageModeHoldMarks = usePageModeHoldMarks(
+        pages,
+        selectedIds,
+        !timelineMode,
     );
+    const timelineHoldMarks = useTimelineHoldMarks(
+        pages,
+        timelineMode ? selectedIds : [],
+    );
+    const holdMarks = useLabeledHoldMarks(
+        timelineMode ? timelineHoldMarks : pageModeHoldMarks,
+    );
+    /**
+     * Selects a page. In timeline mode the playhead goes to the page's flag (UI-19: a page box
+     * click edits the page), even when the page is already selected because the playhead is
+     * inside it; the page bridge then selects it.
+     */
+    const selectPage = (page: Page) => {
+        setSelectedPage(page);
+        if (timelineMode)
+            useTimelineSelectionStore
+                .getState()
+                .seek(page.id === pages[0]?.id ? 0 : pageEndBeat(page));
+    };
 
     // Page clicking and dragging
     const resizingPage = useRef<Page | null>(null);
@@ -375,7 +401,8 @@ export default function PageTimeline() {
                                       ],
                             )}
                             onClick={() => {
-                                setSelectedPage(pages[0]);
+                                if (isPlaying) return;
+                                selectPage(pages[0]);
                                 setSelectedShapePageIds([]);
                             }}
                             title={t("timeline.page.firstPage")}
@@ -479,7 +506,7 @@ export default function PageTimeline() {
                                                 )}
                                                 onClick={() => {
                                                     if (!isPlaying)
-                                                        setSelectedPage(page);
+                                                        selectPage(page);
                                                     setSelectedShapePageIds([]);
                                                 }}
                                             >
@@ -495,7 +522,9 @@ export default function PageTimeline() {
                                                     (selectedIndex === 0 &&
                                                         index ===
                                                             pages.length)) &&
-                                                    isPlaying && (
+                                                    isPlaying &&
+                                                    // A timeline's playhead line shows progress
+                                                    !timelineMode && (
                                                         <div
                                                             className={clsx(
                                                                 "absolute top-0 left-0 z-0 h-full w-full",
