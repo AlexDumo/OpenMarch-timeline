@@ -17,6 +17,10 @@ import {
     renderPartHash,
 } from "@/view3d/library/showBlobCache";
 import type { LibraryKeep } from "@/view3d/library/showLibraryPrune";
+import { versionToEmbed } from "@/view3d/library/showLibraryEmbed";
+import { buildAddFromShowRequest } from "@/view3d/library/showLibraryUpdates";
+import { AddFromShowRequestSchema } from "@/view3d/library/protocol";
+import type { LibraryItem } from "@om-electron/main/library/types";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
@@ -245,6 +249,67 @@ describeDbTests("showLibrary", (it) => {
             expect(() =>
                 renderPartHash(byId.get(FLAG)!, "original" as never),
             ).toThrow();
+        });
+
+        it("holds an Artwork's original, so another person can add it to their Library", async ({
+            db,
+        }) => {
+            const f = await flag();
+            const item: LibraryItem = {
+                schemaVersion: 1,
+                id: FLAG,
+                kind: "artwork",
+                name: "Flag",
+                tags: metadata.tags,
+                createdAt: metadata.createdAt,
+                updatedAt: metadata.updatedAt,
+                originalFilename: "flag.png",
+                derivedFrom: null,
+                license: metadata.license,
+                licenseText: null,
+                author: metadata.author,
+                sourceUrl: null,
+                attribution: null,
+                modified: false,
+                builtIn: false,
+                versions: [
+                    {
+                        hash: f.versionHash,
+                        createdAt: metadata.createdAt,
+                        parts: await hashParts(f.parts),
+                        source: null,
+                    },
+                ],
+            };
+            await embedLibraryVersion({
+                db,
+                version: await versionToEmbed({
+                    item,
+                    versionHash: f.versionHash,
+                    readParts: async ({ roles }) => ({
+                        ok: true,
+                        value: Object.fromEntries(
+                            roles.map((r) => [r, f.parts[r]]),
+                        ),
+                    }),
+                }),
+            });
+
+            // On the other machine: only the show file
+            const [embedded] = await getShowLibraryItems({ db });
+            const request = await buildAddFromShowRequest({
+                item: embedded,
+                readBlob: (hash) => readLibraryBlob({ db, hash }),
+            });
+            expect(AddFromShowRequestSchema.safeParse(request).success).toBe(
+                true,
+            );
+            expect(Array.from(request.parts.original)).toEqual(
+                Array.from(f.parts.original),
+            );
+            expect(await versionHashOf(await hashParts(request.parts))).toBe(
+                f.versionHash,
+            );
         });
 
         it("reads a missing blob as undefined", async ({ db }) => {
