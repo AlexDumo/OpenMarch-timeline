@@ -36,6 +36,8 @@ import {
     clearKeptMarkersInTransaction,
     keptAmong,
 } from "./timelineKeptMarkers";
+// A cycle (it imports helpers from here), safe because neither module uses the other at load time
+import { setPositionsAtBeatInTransaction } from "./timelinePointMoves";
 
 /**
  * "Move a marcher on page N" in timeline mode (docs/timeline/phases/07-page-parity.md P7.2, spec
@@ -185,7 +187,7 @@ const sampleShape = (
  * How refusal messages name a marcher: its drill number (`drill_prefix` + `drill_order`), as the
  * rest of the UI shows it, or its id if the row can't be read.
  */
-const marcherLabel = async (
+export const marcherLabel = async (
     tx: DbTransaction,
     marcherId: number,
 ): Promise<string> => {
@@ -201,7 +203,9 @@ const marcherLabel = async (
 };
 
 /** Refuses a batch that names a marcher twice. */
-const refuseDuplicateMarchers = (moves: readonly TimelineMarcherMove[]) => {
+export const refuseDuplicateMarchers = (
+    moves: readonly TimelineMarcherMove[],
+) => {
     const seen = new Set<number>();
     for (const { marcherId } of moves) {
         if (seen.has(marcherId))
@@ -470,7 +474,17 @@ export type TimelineEditTarget =
            */
           readonly ghosts?: boolean;
       }
-    | { readonly kind: "range"; readonly start: number; readonly end: number };
+    | { readonly kind: "range"; readonly start: number; readonly end: number }
+    /**
+     * Basic mode (UI-19): the marchers' positions at `beat` on the page box `box` holding it
+     * (`box.start < beat <= box.end`), splitting their moves there as needed
+     * (`setPositionsAtBeatInTransaction`)
+     */
+    | {
+          readonly kind: "point";
+          readonly beat: number;
+          readonly box: { readonly start: number; readonly end: number };
+      };
 
 /**
  * UI-9 Editing: sets the **ending** of each moved marcher's transition in timeline `timelineId`,
@@ -1075,9 +1089,10 @@ const wroteSomething = (r: TimelineMoveResult): boolean =>
 /**
  * A canvas move as one undoable edit (UI-9 Editing, Home; UI-10): the homes for `{kind: "home"}`,
  * the endings in the timeline for `{kind: "timeline"}` (`moveMarchersInTimelineInTransaction`),
- * and the window's timeline, joined as needed, for `{kind: "range"}`
- * (`moveMarchersInRangeInTransaction`, which `clearOwn` is passed to). Nothing to move, or a range
- * move that moves nobody, opens no edit.
+ * the window's timeline, joined as needed, for `{kind: "range"}`
+ * (`moveMarchersInRangeInTransaction`, which `clearOwn` is passed to), and Basic's positions at a
+ * beat for `{kind: "point"}` (`setPositionsAtBeatInTransaction`, `clearOwn` too). Nothing to move,
+ * or a range or point move that moves nobody, opens no edit.
  */
 export const moveMarchersInTarget = async ({
     db,
@@ -1089,7 +1104,10 @@ export const moveMarchersInTarget = async ({
     db: DbConnection;
     target: TimelineEditTarget;
     moves: readonly TimelineMarcherMove[];
-    /** Range moves only: delete the marchers' own moves over the page box (set to previous page) */
+    /**
+     * Range and point moves only: delete the marchers' own moves over the page box (set to
+     * previous page; a point move only when its beat is the box's flag)
+     */
     clearOwn?: boolean;
     /**
      * Called inside the edit before it writes, when every earlier write has reached the resolver,
@@ -1109,13 +1127,22 @@ export const moveMarchersInTarget = async ({
                     moves,
                     ghosts: target.ghosts ?? false,
                 });
-            if (target.kind === "range") {
-                const result = await moveMarchersInRangeInTransaction({
-                    tx,
-                    range: { start: target.start, end: target.end },
-                    moves,
-                    clearOwn,
-                });
+            if (target.kind === "range" || target.kind === "point") {
+                const result =
+                    target.kind === "range"
+                        ? await moveMarchersInRangeInTransaction({
+                              tx,
+                              range: { start: target.start, end: target.end },
+                              moves,
+                              clearOwn,
+                          })
+                        : await setPositionsAtBeatInTransaction({
+                              tx,
+                              beat: target.beat,
+                              box: target.box,
+                              moves,
+                              clearOwn,
+                          });
                 // An edit that writes nothing can't be an undo step
                 if (!wroteSomething(result)) throw new NothingWritten(result);
                 return result;
