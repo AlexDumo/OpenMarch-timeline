@@ -152,6 +152,24 @@ launch page; there the choice comes from the URL (`?mode=basic`) or defaults to 
 Screenshots: captured from the real app with the headless harness (`/validate`), stored as webp
 in `apps/desktop/src/assets/editor-mode/`, and used by both the welcome flow and Settings.
 
+## Alternative: one timeline, simple by default (study, 2026-10-12)
+
+_Owner, 2026-10-12:_ "Should we have two different views, or make the advanced bar simple to
+reason about? Implement both, test and simulate them with users." The two-view design is the rest
+of this file. The alternative is built behind a temporary study flag (localStorage
+`openmarch.simpleDefaults` = `on`, `src/timeline/simpleDefaults.ts`), on the full timeline:
+
+- **Mid-page edits split** while the start flag follows (unpinned): the point writer, as Basic.
+  Marchers whose moves there already cross a flag or overlap get today's window edit over
+  `[page start, playhead)` instead, in the same undo step (`others: "window"` on the point
+  target), so nothing is ever locked.
+- **Moves inside one page are ticks, not clips.** Clips are for moves that cross a flag or
+  overlap. The field line says "Editing count 4 of page 2" as Basic.
+- Expert gestures are unchanged: pin the start flag, Ctrl+drag a range, drag clips.
+- No mode setting, no locks, no Expert marks.
+
+Simulated comparison: `~/ux-sim/basic-vs-simple/` (Version 1 = this, Version 2 = Basic).
+
 ## Work packages
 
 | ID  | What                                                                                                                                                                                                                        | Depends on         |
