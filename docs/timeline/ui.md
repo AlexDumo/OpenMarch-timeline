@@ -829,9 +829,10 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Playing on stops where it is**, and when that is another page the field line says so with a
     ring ("Stopped on page 4 · Editing Page 4…") for a few seconds (owner; the quiet line was missed
     by every tester who then edited the wrong set). Pages are compared, not the line's words, so
-    stopping inside the page it started on stays quiet. Past the last flag it reads "Stopped after
-    the last page · Editing After page 5…", and in Basic, which can't edit there, "Stopped after
-    the last page · Add a page with + to edit here". It first said "Stopped on a new page", which
+    stopping inside the page it started on stays quiet, and leaving that page drops the note. Past
+    the last flag it reads "Stopped after the last page · Editing After page 5…". Basic can't edit
+    there, so its line says "Add a page with + to edit here" instead of "Editing …" whenever the
+    playhead is past the last flag, stopped there or not. It first said "Stopped on a new page", which
     all four users of the Basic past-the-last-flag study read as "the app made a page" and went to
     check.
   - **⏮ is the previous page; Shift+click (or Shift+Q) goes to the start of the show**, as before
