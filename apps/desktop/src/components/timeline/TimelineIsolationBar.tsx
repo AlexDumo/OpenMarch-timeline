@@ -11,12 +11,18 @@ import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import {
     isolatedTimeline,
     useTimelineSelectionStore,
+    type PageBox,
     type TimelineEditSelection,
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useSimpleDefaults } from "@/timeline/simpleDefaults";
-import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
+import {
+    basicPageBox,
+    planCanvasEdit,
+    TimelineEditRefusedError,
+    type CanvasEditPlan,
+} from "@/timeline/timelineCoordinateWrites";
 
 /**
  * How the isolation bar names a timeline, in pages and counts as designers count them:
@@ -147,49 +153,59 @@ export function basicEditSpot(
 }
 
 /**
- * Where playing on stopped (UI-17): home, the page whose box holds the playhead (a page's flag is
- * that page's, as Basic edits it), or past the last flag. `null` with nothing selected. A range is
- * named by its end, which is the playhead.
+ * Where playing on stopped (UI-17): home, the page Basic would edit at the playhead (its box holds
+ * the playhead, or ends on it), or past the last flag. `null` with nothing selected or before the
+ * boxes load. A range is placed by its end, which is the playhead.
  */
 export type StoppedSpot =
     | { readonly kind: "home" }
     | { readonly kind: "page"; readonly name: string }
-    | { readonly kind: "after"; readonly lastPage: string };
+    | { readonly kind: "after" };
 
 export function stoppedSpot(
     selection: TimelineEditSelection,
-    pages: readonly (FlagPage & { readonly name: string })[],
+    pageBoxes: readonly PageBox[],
 ): StoppedSpot | null {
     if (selection.kind === "home") return { kind: "home" };
     if (selection.kind !== "range") return null;
-    const boxes = pageFlags(pages).filter((f) => f.range !== null);
-    const box = boxes.find(
-        (f) => f.range!.start < selection.end && selection.end <= f.range!.end,
-    );
-    if (box) return { kind: "page", name: box.page.name };
-    const last = boxes[boxes.length - 1];
-    return last && selection.end > last.range!.end
-        ? { kind: "after", lastPage: last.page.name }
-        : null;
+    const box = basicPageBox({ pageBoxes }, selection.end);
+    if (box) {
+        const name = pageBoxes.find(
+            (b) => b.start === box.start && b.end === box.end,
+        )?.name;
+        return name === undefined ? null : { kind: "page", name };
+    }
+    const last = pageBoxes[pageBoxes.length - 1];
+    return last && selection.end > last.end ? { kind: "after" } : null;
 }
 
 /**
- * The field line's note when playing on stops somewhere else (UI-17). It names where, because
+ * The field line's note when playing on stops on another page (UI-17). It names where, because
  * "Stopped on a new page" read as "the app made a page" (basic-past-flag study: all four users went
- * to check). Past the last flag Basic can't edit, so `instead` replaces "Editing …" there.
+ * to check). Never home: playing on only moves the playhead forward.
  */
 export function stoppedNote(
-    spot: StoppedSpot,
-    basic: boolean,
-): { note: string; instead: string | null } {
-    if (spot.kind === "home")
-        return { note: "Stopped at home positions", instead: null };
-    if (spot.kind === "page")
-        return { note: `Stopped on page ${spot.name}`, instead: null };
-    return {
-        note: "Stopped after the last page",
-        instead: basic ? "Add a page with + to edit here" : null,
-    };
+    spot: Exclude<StoppedSpot, { kind: "home" }>,
+): string {
+    return spot.kind === "page"
+        ? `Stopped on page ${spot.name}`
+        : "Stopped after the last page";
+}
+
+/**
+ * What the field line says a drop edits: "Editing …", or, when Basic refuses the edit because the
+ * playhead is past the last flag, how to make a page there (the line names what a drop writes).
+ */
+export function editingWords(
+    plan: CanvasEditPlan | null,
+    name: string,
+): string {
+    return plan &&
+        !plan.ok &&
+        plan.error instanceof TimelineEditRefusedError &&
+        plan.error.refusal === "pastLastPage"
+        ? "Add a page with + to edit here"
+        : `Editing ${name}`;
 }
 
 /** "set 3", "sets 3 and 4", "sets 3, 4 and 5" (UI-17 follow-up: plainer than "page 3's set") */
@@ -268,7 +284,7 @@ export function TimelineFromStartBadge() {
     // UI-17: playing on that stops on another page says so loudly (round 3: all four testers
     // missed the quiet line and edited the next page's set). Pages, not names, are compared, so
     // stopping inside the page it started on stays quiet
-    const spot = stoppedSpot(selection, pages);
+    const spot = stoppedSpot(selection, pageBoxes);
     const spotKey =
         spot === null
             ? null
@@ -291,19 +307,22 @@ export function TimelineFromStartBadge() {
         return () => clearTimeout(timeout);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [playing]);
-    // Only while the playhead is still where it stopped: moving on clears the note
+    // Leaving the page it stopped on drops the note for good (coming back doesn't bring it back)
+    useEffect(() => {
+        setStoppedAt((at) => (at !== null && at !== spotKey ? null : at));
+    }, [spotKey]);
     const stopped =
-        !playing && spot && stoppedAt !== null && stoppedAt === spotKey
-            ? stoppedNote(spot, basic)
+        !playing && spot && spot.kind !== "home" && stoppedAt === spotKey
+            ? stoppedNote(spot)
             : null;
     const movedOn = stopped !== null;
-    const editing = stopped?.instead ?? `Editing ${name}`;
+    const editing = editingWords(basic ? plan : null, name);
     const unusual =
         loopShown || pinShown || through.length > 0 || !wholePage || movedOn;
     const sentence =
         selection.kind === "none"
             ? ""
-            : `${stopped ? `${stopped.note}. ` : ""}${editing}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${loopShown ? `. Space loops ${loopName}` : ""}`;
+            : `${stopped ? `${stopped}. ` : ""}${editing}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${loopShown ? `. Space loops ${loopName}` : ""}`;
     // Flash when it turns prominent for a new reason: a pin, or crossing flags
     const flashKey = `${loopShown}|${pinShown}|${through.join(",")}`;
     const [fresh, setFresh] = useState(false);
@@ -361,7 +380,7 @@ export function TimelineFromStartBadge() {
             <span className="truncate" aria-hidden="true">
                 {stopped && (
                     <strong className={START_INK.strongText}>
-                        {stopped.note} ·{" "}
+                        {stopped} ·{" "}
                     </strong>
                 )}
                 {editing}
