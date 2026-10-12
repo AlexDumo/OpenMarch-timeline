@@ -602,7 +602,7 @@ describe("Silk", () => {
 });
 
 describe("items", () => {
-    it("are never reached by band or section targets", () => {
+    it("are never reached by any target", () => {
         const out = compileCues(
             show(
                 [
@@ -631,6 +631,60 @@ describe("items", () => {
             ),
         ).toEqual([4, 7]);
         expect(out.flags).toEqual([]);
+    });
+
+    it("are skipped by tag and set targets that also name performers", () => {
+        const tagged = (m: CueMarcher): CueMarcher => ({ ...m, tagIds: [7] });
+        const out = compileCues(
+            show(
+                [
+                    cue(133, "uniform", 4, GALA, {
+                        target: { kind: "tag", tagId: 7 },
+                    }),
+                    cue(134, "facing", 8, "builtin:facing.back", {
+                        target: { kind: "set", marcherIds: [2, 9] },
+                    }),
+                ],
+                [tagged(flag), tagged(prop)],
+            ),
+        );
+
+        for (const channel of CUE_CHANNELS)
+            expect(
+                out.segments(9, channel).every((s) => s.kind === "default"),
+            ).toBe(true);
+        expect(out.segments(2, "uniform").some((s) => s.kind === "state")).toBe(
+            true,
+        );
+        expect(out.segments(2, "facing").some((s) => s.kind === "state")).toBe(
+            true,
+        );
+        expect(out.flags).toEqual([]);
+    });
+
+    it("make a tag or set cue naming only items fit nobody", () => {
+        const out = compileCues(
+            show(
+                [
+                    cue(135, "uniform", 4, GALA, {
+                        target: { kind: "tag", tagId: 7 },
+                    }),
+                    cue(136, "facing", 8, "builtin:facing.back", {
+                        target: { kind: "set", marcherIds: [9] },
+                    }),
+                ],
+                [flag, { ...prop, tagIds: [7] }],
+            ),
+        );
+
+        for (const channel of CUE_CHANNELS)
+            expect(
+                out.segments(9, channel).every((s) => s.kind === "default"),
+            ).toBe(true);
+        expect(out.flags).toEqual([
+            { kind: "fits_nobody", cueIds: [135], marcherIds: [9] },
+            { kind: "fits_nobody", cueIds: [136], marcherIds: [9] },
+        ]);
     });
 
     it("don't make a section cue fit nobody", () => {

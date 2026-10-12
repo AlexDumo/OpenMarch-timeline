@@ -476,18 +476,24 @@ function rippleCounts(
     return out;
 }
 
-function appliesTo(cue: CueInput, marcher: CueMarcher): boolean {
+/** Whether the cue's target names the marcher, items included. */
+function names(cue: CueInput, marcher: CueMarcher): boolean {
     const target = cue.target;
     switch (target.kind) {
         case "band":
-            return !isItem(marcher);
+            return true;
         case "section":
-            return !isItem(marcher) && target.section === marcher.section;
+            return target.section === marcher.section;
         case "tag":
             return marcher.tagIds.includes(target.tagId);
         case "set":
             return target.marcherIds.includes(marcher.id);
     }
+}
+
+/** No target reaches an item, whatever names it. */
+function appliesTo(cue: CueInput, marcher: CueMarcher): boolean {
+    return !isItem(marcher) && names(cue, marcher);
 }
 
 /**
@@ -1034,6 +1040,13 @@ function checkCues(
         const fitting = targeted.filter((m) => fitsAt(cue, m, count));
         if (targeted.length > 0 && fitting.length === 0)
             for (const m of targeted) flags.add("fits_nobody", [cue.id], m.id);
+        // A tag or hand-picked set naming only items reaches nobody.
+        if (
+            targeted.length === 0 &&
+            (cue.target.kind === "tag" || cue.target.kind === "set")
+        )
+            for (const m of input.marchers)
+                if (names(cue, m)) flags.add("fits_nobody", [cue.id], m.id);
         if (looksOf)
             for (const m of targeted) {
                 if (fitting.includes(m)) continue;
