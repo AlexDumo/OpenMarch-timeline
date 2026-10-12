@@ -6,9 +6,7 @@ import {
     type PageHoldMark,
 } from "@/timeline/pageHoldMarks";
 import type { PageHoldMarks } from "@/timeline/usePageHoldMarks";
-import { MinusIcon, PersonSimpleWalkIcon } from "@phosphor-icons/react";
 import { ShortcutTooltip } from "./ShortcutTooltip";
-import { CHAIN_SIZE } from "./PageKeepChain";
 
 /** A page box's mark with its words: the tooltip's label and its hint line. */
 export type LabeledHoldMark = {
@@ -127,44 +125,4 @@ export function useLabeledHoldMarks(marks: PageHoldMarks): LabeledHoldMarks {
             ]),
         );
     }, [marks, t]);
-}
-
-/**
- * A page box's status for the selected marchers on the timeline's ruler (owner, 2026-10-12: the
- * key at the flag and the bar along the bottom sat in odd places): one chip at the box's top
- * left, where the keep chain goes, so a box says its state in one place. A walking figure where
- * they move on the page, a dash where they hold. Where they follow a page or were kept, the keep
- * chain takes this spot instead and says it. Its tooltip says what is true now.
- */
-export function PageStatusChip({
-    hold,
-    pageId,
-    left,
-}: {
-    hold: LabeledHoldMark;
-    pageId: string | number;
-    /** Where the chip goes in the ruler (px), as the chain */
-    left: number;
-}) {
-    const { mark, label, hint } = hold;
-    const Icon = mark.kind === "holds" ? MinusIcon : PersonSimpleWalkIcon;
-    return (
-        <ShortcutTooltip label={label} hint={hint} side="top">
-            <span
-                data-testid="page-status-chip"
-                data-page-id={pageId}
-                data-hold-mark={mark.kind}
-                data-timeline-interactive="true"
-                aria-hidden="true"
-                className={`rounded-6 text-text/70 absolute top-[4px] z-30 flex items-center justify-center border ${
-                    mark.kind === "mixed"
-                        ? "border-text/30 border-dashed"
-                        : "border-text/30"
-                }`}
-                style={{ left, width: CHAIN_SIZE, height: CHAIN_SIZE }}
-            >
-                <Icon size={14} aria-hidden />
-            </span>
-        </ShortcutTooltip>
-    );
 }

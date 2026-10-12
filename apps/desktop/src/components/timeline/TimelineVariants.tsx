@@ -882,15 +882,14 @@ const TimelineSurface = memo(function TimelineSurface({
                             scrubLine={pointer.scrubLine}
                         />
                     )}
-                    {!basic && (
-                        <TimelineRehearsalMarkers
-                            model={model}
-                            pixelsPerBeat={pixelsPerBeat}
-                            top={expanded ? 30 : 29}
-                            compact={!expanded}
-                            onSeek={props.onSeek}
-                        />
-                    )}
+                    <TimelineRehearsalMarkers
+                        model={model}
+                        pixelsPerBeat={pixelsPerBeat}
+                        // Basic's measure row is at the top of the box bodies, as expanded's
+                        top={expanded ? 30 : 29}
+                        compact={!expanded}
+                        onSeek={props.onSeek}
+                    />
                     {basic && props.expertMarks && (
                         <TimelineBasicExpertMarks
                             pages={model.pages}
