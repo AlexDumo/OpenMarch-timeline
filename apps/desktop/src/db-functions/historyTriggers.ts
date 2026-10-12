@@ -40,6 +40,11 @@ export const tablesWithHistory = [
     schema.timeline_slot_destinations,
     // App data beside them: which assignments are kept spots (ADR 0001 amendment 2026-10-09)
     schema.timeline_kept_assignments,
+    // Performer cues (ADR 0004 D-5)
+    schema.phrase_assets,
+    schema.cues,
+    schema.cue_marchers,
+    schema.page_performer_settings,
 ];
 
 /**
