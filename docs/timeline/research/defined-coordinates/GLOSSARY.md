@@ -171,6 +171,11 @@ _The screenshots above are from wp19, when the chain was a 20 px chip at the top
 _Pages 6 and 13 kept, OT1 to OT4 kept on page 10, page 3 selected; Expert, Expert compact and Basic
 at the default zoom (top three: before, wp19 chips; bottom three: now). 2026-10-12._
 
+![Before and after zoomed to fit 24 short pages: chips on almost every box, then only the kept pages marked](images/21-keep-chains-fit-before-after.png)
+
+_The same, zoomed to fit the 24 pages. Narrow kept boxes show the small chain centered (page 13) or
+a dot (a ring for page 10's mix)._
+
 - **When:** only with marchers selected (owner: nothing without a selection). Kept and mixed
   chains show on every box they apply to. A linked chain shows only on the selected page, on the
   page **K** works on, and while its box is hovered (V-211: a link on every following page
