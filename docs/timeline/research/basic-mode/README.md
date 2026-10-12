@@ -65,6 +65,9 @@ row with its waveform), driven by the timeline stores:
 - Not in Basic: the start flag and pinning, the loop region, clips (moves off flags), isolation,
   resize-a-move and drag-a-flag grips, the moves inspector card's range editing, pass-through
   windows.
+- The inspector hides the move card (path style, range, Delete move) and the Timeline section
+  (timeline shapes, diagnostics): each makes moves Basic can't edit. **Open:** shapes in Basic
+  (a shape move inside one page could count as simple), to decide with the shape-draw redesign.
 - Play, Space and Shift+Space use the timeline playback driver. Space plays on from the playhead;
   Shift+Space plays the selected page once (UI-17).
 

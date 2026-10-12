@@ -68,7 +68,7 @@ export default function EditorModeCards({
                             src={editorModeImages[mode]}
                             alt=""
                             draggable={false}
-                            className="rounded-4 aspect-[16/9] w-full object-cover"
+                            className="rounded-4 border-stroke aspect-[14/3] w-full border object-cover object-left"
                         />
                         <span className="flex items-center gap-6">
                             {checked ? (
