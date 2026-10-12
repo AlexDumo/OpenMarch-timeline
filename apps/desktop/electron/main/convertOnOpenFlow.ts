@@ -14,19 +14,24 @@ import {
     type ConvertOnOpenHooks,
     type ConvertOnOpenResult,
     type ConvertProgress,
+    type ConvertRequest,
+    type OlderReleaseChoice,
+    type OlderReleaseInfo,
 } from "../database/convertOnOpen";
 
 /** What the step shows the person. `convertOnOpenDialogs.ts` implements it. */
 export interface ConvertOnOpenDialogs {
     /**
-     * The file was converted, then saved by an older release. Resolves `open`
-     * to open it as it is, or `stop` to open nothing. Offering the backup, or
-     * saying none was found (`backupPath` undefined), is the dialog's job.
+     * The file was converted, then reset to version 7 by an older release.
+     * Resolves what the person chose: convert it again from the older
+     * release's page-era tables (only when `info.canConvertAgain`), keep its
+     * timelines, or open nothing. The dialog says that either of the first two
+     * backs the file up to `info.backupPath` first.
      */
     warnOlderRelease(
         fileName: string,
-        backupPath: string | undefined,
-    ): Promise<"open" | "stop">;
+        info: OlderReleaseInfo,
+    ): Promise<OlderReleaseChoice>;
     /**
      * Runs `work` while the renderer shows the conversion's progress, and
      * passes `work` a function that reports it there.
@@ -62,17 +67,21 @@ export async function convertOnOpenInMain(
     dialogs: ConvertOnOpenDialogs,
     {
         confirmed,
+        backupPath,
         migrationsFolder,
         hooks,
         convert,
     }: {
         /** The person agreed to convert this file. */
         confirmed: boolean;
+        /** The backup path the person was shown when they agreed. */
+        backupPath?: string;
         migrationsFolder: string;
         hooks?: ConvertOnOpenHooks;
         /** Backs up and converts the file elsewhere (the worker); see `runConvertOnOpen`. */
         convert?: (
             onProgress: (progress: ConvertProgress) => void,
+            request: ConvertRequest,
         ) => Promise<ConvertOnOpenResult>;
     },
 ): Promise<ConvertOnOpenNext> {
@@ -82,11 +91,16 @@ export async function convertOnOpenInMain(
         filePath,
         db,
         {
-            warnOlderRelease: (backupPath) =>
-                dialogs.warnOlderRelease(fileName, backupPath),
+            warnOlderRelease: async (info) => {
+                const choice = await dialogs.warnOlderRelease(fileName, info);
+                console.log(
+                    `convert on open: ${filePath} was converted, then reset to version 7 by an older release; ${choice}`,
+                );
+                return choice;
+            },
             whilePreparing: (work) => dialogs.whilePreparing(work),
         },
-        { confirmed, migrationsFolder, hooks, convert },
+        { confirmed, backupPath, migrationsFolder, hooks, convert },
     );
     switch (outcome.kind) {
         case "none":
@@ -94,10 +108,7 @@ export async function convertOnOpenInMain(
         case "needs-confirmation":
             return { next: "ask", backupPath: outcome.backupPath };
         case "older-release":
-            console.log(
-                `convert on open: ${filePath} was converted, then saved at version 7; ${outcome.choice}`,
-            );
-            return { next: outcome.choice === "open" ? "continue" : "stop" };
+            return { next: "stop" };
         case "conversion":
             break;
     }

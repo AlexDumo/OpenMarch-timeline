@@ -18,7 +18,6 @@ import { initializeNewFileAsTimeline } from "@om-electron/database/convertOnOpen
 import {
     checkConvertOnOpen,
     convertFileOnOpen,
-    reopenConvertedFile,
 } from "@om-electron/database/convertOnOpen";
 import { ipcMain } from "./shims/electron";
 import { MIGRATIONS_FOLDER } from "./shims/fs";
@@ -244,21 +243,26 @@ export async function openShow(bytes: Uint8Array | null): Promise<OpenResult> {
         }
 
         const check = checkConvertOnOpen(db, SHOW_PATH);
-        if (check.action !== "convert") {
-            if (check.action === "warn-older-release")
-                await reopenConvertedFile(db, MIGRATIONS_FOLDER);
-            else
-                await new DrizzleMigrationService(
-                    orm,
-                    db,
-                ).applyPendingMigrations(MIGRATIONS_FOLDER);
+        if (check.action === "none") {
+            await new DrizzleMigrationService(orm, db).applyPendingMigrations(
+                MIGRATIONS_FOLDER,
+            );
             return { ok: true, converted: false };
         }
-        // A page-era demo converts without asking: it only lives in this page.
+        // A page-era demo converts without asking: it only lives in this page. One an older
+        // release reset to 7 converts again from its page-era tables when it still has them.
+        const source =
+            check.action === "convert" || check.canConvertAgain
+                ? "pages"
+                : "timelines";
         const result = await withMainProcessBridge(db, () =>
-            convertFileOnOpen(SHOW_PATH, db, MIGRATIONS_FOLDER, {
-                backup: () => ({ ok: true, backupPath: "" }) as never,
-            }),
+            convertFileOnOpen(
+                SHOW_PATH,
+                db,
+                MIGRATIONS_FOLDER,
+                { backupPath: check.backupPath, source },
+                { backup: () => ({ ok: true, backupPath: "" }) as never },
+            ),
         );
         if (result.status === "conversion-failed") {
             console.error(result.error);

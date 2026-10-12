@@ -179,6 +179,34 @@ describe("backupBeforeConversion", () => {
         expect(fs.readFileSync(taken, "utf8")).toBe("not a database");
     });
 
+    it("with a target, writes exactly there", () => {
+        const target = nextBackupPath(showPath);
+
+        const result = backupBeforeConversion(showPath, { target });
+
+        expect(result).toMatchObject({ ok: true, backupPath: target });
+        const copy = new DatabaseSync(target, { readOnly: true });
+        expect(readUserVersion(copy)).toBe(7);
+        copy.close();
+    });
+
+    it.each(["file", "dangling symlink"] as const)(
+        "with a target taken by a %s, fails without touching it or picking another name",
+        (kind) => {
+            const target = path.join(dir, `My Show.${BACKUP_NAME_SUFFIX}.dots`);
+            if (kind === "file") fs.writeFileSync(target, "not a database");
+            else fs.symlinkSync(path.join(dir, "nowhere"), target);
+            const before = fs.readdirSync(dir).sort();
+
+            const result = backupBeforeConversion(showPath, { target });
+
+            expect(result).toMatchObject({ ok: false, code: "name-taken" });
+            expect(fs.readdirSync(dir).sort()).toEqual(before);
+            if (kind === "file")
+                expect(fs.readFileSync(target, "utf8")).toBe("not a database");
+        },
+    );
+
     it("nextBackupPath keeps the extension and picks the first free name", () => {
         const names = new Set([
             "/x/a.pre-conversion.dots",

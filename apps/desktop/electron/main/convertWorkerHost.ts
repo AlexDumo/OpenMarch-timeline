@@ -25,6 +25,7 @@ import {
 import {
     deserializeError,
     type ConvertProgress,
+    type ConvertRequest,
     type ConvertWorkerMessage,
     type ConvertWorkerRequest,
     type ConvertWorkerTestHooks,
@@ -36,7 +37,7 @@ export const CONVERT_WORKER_FILE = "convertOnOpenWorker.js";
 export const defaultConvertWorkerPath = (mainDir: string) =>
     path.join(mainDir, "../worker", CONVERT_WORKER_FILE);
 
-export interface ConvertInWorkerOptions {
+export interface ConvertInWorkerOptions extends ConvertRequest {
     /** The built worker script. */
     workerPath: string;
     /** The app's migrations folder. */
@@ -146,6 +147,8 @@ export function convertInWorker(
             migrationsFolder: options.migrationsFolder,
             busyTimeoutMs: options.busyTimeoutMs,
             convertedAt,
+            backupPath: options.backupPath,
+            source: options.source,
             test: options.test,
         };
         let worker: Worker;

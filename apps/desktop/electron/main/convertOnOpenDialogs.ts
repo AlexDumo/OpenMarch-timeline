@@ -36,28 +36,45 @@ export function electronConvertOnOpenDialogs(
             }
         },
 
-        async warnOlderRelease(fileName, backupPath) {
-            const buttons = backupPath
-                ? ["Open Without Converting", "Show Backup", "Cancel"]
-                : ["Open Without Converting", "Cancel"];
+        async warnOlderRelease(
+            fileName,
+            { backupPath, latestBackup, canConvertAgain },
+        ) {
+            const choices: {
+                label: string;
+                choice: "convert-again" | "keep-timelines" | "show-backup";
+            }[] = canConvertAgain
+                ? [
+                      { label: "Convert Again", choice: "convert-again" },
+                      { label: "Keep Timelines", choice: "keep-timelines" },
+                  ]
+                : [{ label: "Open", choice: "keep-timelines" }];
+            if (latestBackup)
+                choices.push({ label: "Show Backup", choice: "show-backup" });
+            const buttons = [...choices.map((c) => c.label), "Cancel"];
             const cancelId = buttons.length - 1;
+            const explanation = canConvertAgain
+                ? "Changes made in the older version are not in its timelines. Convert Again rebuilds the timelines from the older version's changes. Keep Timelines opens the timelines as they were before, without those changes."
+                : "Changes made in the older version are not in its timelines. Open sets it back to the timeline format, as it is.";
             const { response } = await messageBox(win, {
                 type: "warning",
                 title: "Saved by an older version",
-                message: `"${fileName}" was saved by an older version of OpenMarch after it was converted to timelines.`,
+                message: `"${fileName}" was opened in an older version of OpenMarch after it was converted to timelines.`,
                 detail:
-                    "Changes made in the older version are not in its timelines. It won't be converted again." +
-                    (backupPath
-                        ? `\n\nA backup from before the conversion is at:\n${backupPath}`
-                        : "\n\nNo backup from before the conversion was found next to it."),
+                    `${explanation}\n\nFirst, the file as it is now is saved next to it as:\n${backupPath}` +
+                    (latestBackup
+                        ? `\n\nThe backup from before the conversion is at:\n${latestBackup}`
+                        : ""),
                 buttons,
                 defaultId: cancelId,
                 cancelId,
                 noLink: true,
             });
-            if (response === 0) return "open";
-            if (backupPath && response === 1)
-                shell.showItemInFolder(backupPath);
+            const picked = choices[response]?.choice;
+            if (picked === "show-backup" && latestBackup)
+                shell.showItemInFolder(latestBackup);
+            if (picked === "convert-again" || picked === "keep-timelines")
+                return picked;
             return "stop";
         },
 
@@ -80,7 +97,7 @@ export function electronConvertOnOpenDialogs(
                 type: "error",
                 title: "Couldn't convert your file",
                 message: `"${fileName}" wasn't opened, because converting it to timelines failed.`,
-                detail: `${error.message}\n\nYour file wasn't converted. A copy of it from before is at:\n${backupPath}`,
+                detail: `${error.message}\n\nYour file wasn't converted, and wasn't changed. A copy of it from before is at:\n${backupPath}`,
                 buttons: ["OK"],
             });
         },

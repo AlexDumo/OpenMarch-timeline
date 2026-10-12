@@ -382,6 +382,7 @@ async function confirmPendingConversion(): Promise<number> {
     pendingConversion = null;
     const resCode = await setActiveDb(pending.filePath, false, {
         conversionConfirmed: true,
+        conversionBackupPath: pending.backupPath,
     });
     if (resCode === 200) addRecentFile(pending.filePath);
     sendLoadFileResponse(resCode);

@@ -107,9 +107,13 @@ export async function pageEraBlankPath(): Promise<string> {
 export async function convertFixtureFile(dbPath: string): Promise<void> {
     const db = new DatabaseSync(dbPath);
     try {
-        const result = await convertFileOnOpen(dbPath, db, migrationsFolder, {
-            backup: () => ({ ok: true, backupPath: "", userVersion: 7 }),
-        });
+        const result = await convertFileOnOpen(
+            dbPath,
+            db,
+            migrationsFolder,
+            { backupPath: "", source: "pages" },
+            { backup: () => ({ ok: true, backupPath: "", userVersion: 7 }) },
+        );
         if (result.status === "conversion-failed") throw result.error;
         if (result.status !== "converted")
             throw new Error(`Fixture conversion: ${result.status}`);

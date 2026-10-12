@@ -155,6 +155,39 @@ export function applyTimelineMigrationsInTransaction(
 }
 
 /**
+ * Applies a page-model file's pending page-era migrations (the ones before
+ * `FIRST_TIMELINE_MIGRATION_TAG`) on `rawDb`, which must be inside the conversion's transaction,
+ * so a failed conversion rolls them back too and leaves the file as an older release wrote it.
+ * Does what `applyPendingMigrations` does for a version-7 file, triggers included.
+ *
+ * The caller turns foreign keys off before the transaction begins (the pragma is a no-op inside
+ * one): a migration that rebuilds a parent table drops it, and with foreign keys on that drop
+ * would delete the rows of every `ON DELETE CASCADE` child.
+ */
+export function applyPageMigrationsInTransaction(
+    rawDb: DatabaseSync,
+    migrationsFolder: string,
+): void {
+    const foreignKeys = rawDb.prepare("PRAGMA foreign_keys").get() as {
+        foreign_keys: number;
+    };
+    if (foreignKeys.foreign_keys !== 0)
+        throw new Error(
+            "applyPageMigrationsInTransaction needs foreign keys off: a table rebuild would cascade",
+        );
+    forgetFork3dVenueMigration(rawDb);
+    const queries = pendingMigrationQueries(
+        rawDb,
+        resolveMigrationsFolder(migrationsFolder),
+        "page",
+    );
+    dropAllTriggers(rawDb);
+    for (const query of queries) rawDb.exec(query);
+    createAllTriggers(rawDb);
+    recreateChangeLogTriggers(rawDb);
+}
+
+/**
  * `created_at` of `0017_melted_sage`, the 3D View venue migration of the fork's `3d-async`
  * branch before it merged into the timeline line, where the same table is `0019_gray_brood`.
  * Drizzle only runs migrations dated after a file's newest recorded one, and this one is dated

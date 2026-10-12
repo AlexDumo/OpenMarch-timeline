@@ -100,6 +100,12 @@ export interface OpenShowDeps {
 export interface OpenShowOptions {
     /** The person agreed to convert the file if it is a page-era file. */
     conversionConfirmed?: boolean;
+    /**
+     * The backup path the person was shown when they agreed
+     * (`NEEDS_CONVERSION_STATUS`'s `backupPath`). The backup gets exactly this
+     * name, or fails if it was taken meanwhile.
+     */
+    conversionBackupPath?: string;
 }
 
 export interface OpenShowResult {
@@ -198,15 +204,17 @@ async function openWithSuspension(
                       await import("./convertOnOpenFlow")
                   ).convertOnOpenInMain(filePath, checkDb, deps.dialogs(), {
                       confirmed: options.conversionConfirmed === true,
+                      backupPath: options.conversionBackupPath,
                       migrationsFolder: deps.migrationsFolder,
                       hooks: deps.hooks,
                       convert: worker
-                          ? async (onProgress) => {
+                          ? async (onProgress, request) => {
                                 // The worker needs the file to itself: this connection holds no
                                 // transaction, but close it anyway so nothing of ours can lock it.
                                 checkDb.close();
                                 isOpen = false;
                                 return convertInWorker(filePath, {
+                                    ...request,
                                     workerPath: worker.workerPath,
                                     migrationsFolder: deps.migrationsFolder,
                                     busyTimeoutMs: CONVERSION_BUSY_TIMEOUT_MS,

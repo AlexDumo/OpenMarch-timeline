@@ -10,6 +10,7 @@ import { DatabaseSync } from "node:sqlite";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { nextBackupPath } from "@om-electron/database/backup";
 import {
     afterAll,
     afterEach,
@@ -118,6 +119,9 @@ describe("the conversion worker", () => {
         workerPath: worker.workerPath,
         migrationsFolder,
         busyTimeoutMs: 5000,
+        // The name the person would be shown now, as the open flow passes it.
+        backupPath: nextBackupPath(showPath),
+        source: "pages",
         ...extra,
     });
 

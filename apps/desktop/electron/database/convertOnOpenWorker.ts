@@ -51,6 +51,8 @@ export async function runConvertWorker(
         migrationsFolder,
         busyTimeoutMs,
         convertedAt,
+        backupPath,
+        source,
         test = {},
     } = request;
     const db = new DatabaseSync(filePath);
@@ -59,33 +61,40 @@ export async function runConvertWorker(
         db.exec(
             `PRAGMA busy_timeout = ${Math.max(0, Math.floor(busyTimeoutMs))}`,
         );
-        result = await convertFileOnOpen(filePath, db, migrationsFolder, {
-            onProgress: (progress) => {
-                post({ type: "progress", progress });
-                if (progress.phase === "convert" && test.blockPerPageMs)
-                    blockFor(test.blockPerPageMs);
-            },
-            backup: (path) => {
-                const backup =
-                    test.backupFailure ?? backupBeforeConversion(path);
-                if (backup.ok) {
-                    post({
-                        type: "backup-done",
-                        backupPath: backup.backupPath,
-                    });
-                    if (test.crashAfterBackup)
+        result = await convertFileOnOpen(
+            filePath,
+            db,
+            migrationsFolder,
+            { backupPath, source },
+            {
+                onProgress: (progress) => {
+                    post({ type: "progress", progress });
+                    if (progress.phase === "convert" && test.blockPerPageMs)
+                        blockFor(test.blockPerPageMs);
+                },
+                backup: (path, target) => {
+                    const backup =
+                        test.backupFailure ??
+                        backupBeforeConversion(path, { target });
+                    if (backup.ok) {
+                        post({
+                            type: "backup-done",
+                            backupPath: backup.backupPath,
+                        });
+                        if (test.crashAfterBackup)
+                            process.exit(TEST_CRASH_EXIT_CODE);
+                    }
+                    return backup;
+                },
+                afterStep: (step) => {
+                    if (step === test.crashAfterStep)
                         process.exit(TEST_CRASH_EXIT_CODE);
-                }
-                return backup;
+                    if (step === test.failAfterStep)
+                        throw new Error(`disk vanished after ${step}`);
+                },
+                now: () => new Date(convertedAt),
             },
-            afterStep: (step) => {
-                if (step === test.crashAfterStep)
-                    process.exit(TEST_CRASH_EXIT_CODE);
-                if (step === test.failAfterStep)
-                    throw new Error(`disk vanished after ${step}`);
-            },
-            now: () => new Date(convertedAt),
-        });
+        );
     } finally {
         db.close();
     }

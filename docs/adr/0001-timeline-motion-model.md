@@ -421,6 +421,35 @@ the person confirms.** There is no environment variable or flag.
   (main → renderer). The native "preparing" window and "converted" dialog are
   gone; backup and conversion failures still use native dialogs.
 
+**Amendment (2026-10-12, review of fork PR #136): a version-7 file's page-era
+tables are its latest data, and nothing is dropped without a backup.** This
+replaces the "warns and offers the backup, rather than converting again" and
+"keeping its rows" rules above.
+
+- A version-7 file counts as converted before when it has the marker, when its
+  page-era tables are already gone, or when it has timeline rows and a
+  `.pre-conversion` backup next to it (an older release that rewrites the
+  workspace settings loses the marker). The app warns that an older version
+  opened it, names the backup it will write, and offers **Convert Again**
+  (only while the page-era tables are there: convert them, replacing the
+  timeline rows), **Keep Timelines** (or **Open** when there is nothing to
+  convert again: keep the timeline rows) and Cancel, which writes nothing.
+  Both of the first two back the file up first and then run the same
+  transaction as a first conversion. There is no "open without converting"
+  that drops the page-era tables without a backup.
+- Every other version-7 file is converted from its page-era tables, replacing
+  any timeline rows (a file made with the retired dev flag keeps its old rows
+  only in the backup).
+- The backup gets exactly the name the person was shown
+  (`conversion:confirm` passes the pending conversion's `backupPath` to the
+  open); if that name was taken meanwhile, the backup fails and nothing is
+  written. A backup never replaces an existing file.
+- The pending page-era migrations run inside the conversion transaction, with
+  foreign keys off for the whole transaction (as every migration runs, so a
+  table rebuild can't cascade) and a check before the commit that the
+  conversion added no foreign-key violation. A failed conversion leaves the
+  file byte for byte as it was.
+
 ### 7. Decisions still owed by the spec's authors
 
 C-1, C-2, C-3 and C-8 go to the spec's authors as proposed amendments (P0.5).

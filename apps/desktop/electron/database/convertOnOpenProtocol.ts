@@ -11,7 +11,7 @@ import type { BackupResult } from "./backup";
 
 /** The writes of the conversion transaction, in order. */
 export const CONVERSION_STEPS = [
-    // The page-era migrations, before the transaction
+    // The page-era migrations
     "migrate",
     "drop-undo-triggers",
     "convert",
@@ -24,6 +24,20 @@ export const CONVERSION_STEPS = [
     "user-version",
 ] as const;
 export type ConversionStep = (typeof CONVERSION_STEPS)[number];
+
+/**
+ * Where a conversion's timelines come from: the page-era tables (replacing any
+ * timeline rows), or the timeline rows already in the file (a converted file
+ * an older release reset to 7, when the person keeps its timelines).
+ */
+export type ConversionSource = "pages" | "timelines";
+
+/** What a conversion was agreed to: the backup's exact path, and what it converts from. */
+export interface ConvertRequest {
+    /** The backup's path, as the person was shown it. Never replaced if taken. */
+    backupPath: string;
+    source: ConversionSource;
+}
 
 /** How far the backup and conversion have got. */
 export type ConvertProgress =
@@ -53,7 +67,7 @@ export interface ConvertWorkerTestHooks {
 }
 
 /** What the worker is started with (`workerData`). */
-export interface ConvertWorkerRequest {
+export interface ConvertWorkerRequest extends ConvertRequest {
     filePath: string;
     /** The app's migrations folder: the conversion applies the file's pending migrations. */
     migrationsFolder: string;

@@ -24,7 +24,10 @@ import {
     NEEDS_CONVERSION_STATUS,
     OPEN_STOPPED_STATUS,
 } from "@om-electron/database/convertOnOpenGate";
-import type { ConvertOnOpenHooks } from "@om-electron/database/convertOnOpen";
+import type {
+    ConvertOnOpenHooks,
+    OlderReleaseChoice,
+} from "@om-electron/database/convertOnOpen";
 import type {
     ConvertProgress,
     ConvertWorkerTestHooks,
@@ -59,7 +62,7 @@ function fakeDialogs({
     preparing,
     onProgress,
 }: {
-    olderRelease?: "open" | "stop";
+    olderRelease?: OlderReleaseChoice;
     /** Runs inside the preparing state, before the work. */
     preparing?: () => Promise<void>;
     /** Receives the progress the work reports. */
@@ -236,7 +239,7 @@ describe("opening a show with convert on open", () => {
 
     it.each([
         ["stop", OPEN_STOPPED_STATUS],
-        ["open", 200],
+        ["keep-timelines", 200],
     ] as const)(
         "older release, the person chooses %s: status %i",
         async (choice, status) => {
@@ -247,16 +250,45 @@ describe("opening a show with convert on open", () => {
             const result = await open(showPath, { dialogs });
 
             expect(result.status).toBe(status);
-            expect(calls).toEqual(["warn show.dots"]);
             expect(DatabaseServices.getDbPath()).toBe(
-                choice === "open" ? showPath : "",
+                choice === "stop" ? "" : showPath,
             );
-            // Opening it as it is sets it back to 8; stopping writes nothing.
-            expect(stateOf(showPath).userVersion).toBe(
-                choice === "open" ? 8 : 7,
-            );
+            // Keeping the timelines backs the file up, then sets it back to 8; stopping writes
+            // nothing.
+            if (choice === "stop") {
+                expect(calls).toEqual(["warn show.dots"]);
+                expect(stateOf(showPath).userVersion).toBe(7);
+                expect(backupsIn(tempDir)).toHaveLength(1);
+            } else {
+                expect(calls).toEqual(["warn show.dots", "preparing"]);
+                expect(stateOf(showPath).userVersion).toBe(8);
+                expect(backupsIn(tempDir)).toHaveLength(2);
+            }
         },
     );
+
+    it("confirmed: the backup gets the name the person was shown, and a name taken since stops the open", async () => {
+        const asked = await open(showPath, { confirmed: false });
+        expect(asked.status).toBe(NEEDS_CONVERSION_STATUS);
+        const shown = asked.backupPath!;
+        fs.writeFileSync(shown, "someone else's file");
+        const { dialogs, calls } = fakeDialogs();
+
+        const result = await openShowFile(
+            showPath,
+            false,
+            { migrationsFolder, dialogs: () => dialogs },
+            { conversionConfirmed: true, conversionBackupPath: shown },
+        );
+        if (result.sqlSuspension !== undefined)
+            DatabaseServices.resumeSqlProxy(result.sqlSuspension);
+
+        expect(result.status).toBe(OPEN_STOPPED_STATUS);
+        expect(calls).toEqual(["preparing", "backup failed show.dots"]);
+        expect(fs.readFileSync(shown, "utf8")).toBe("someone else's file");
+        expect(backupsIn(tempDir)).toEqual([path.basename(shown)]);
+        expect(stateOf(showPath).userVersion).toBe(7);
+    });
 
     it("two opens of the same file at once: converted once, both open quietly", async () => {
         const first = fakeDialogs();
@@ -429,8 +461,8 @@ describe("opening a show with convert on open", () => {
     it("a second open of a file that is waiting on a dialog returns the first open's result", async () => {
         await open(showPath);
         withDb(showPath, (db) => db.exec("PRAGMA user_version = 7"));
-        let answer!: (choice: "open" | "stop") => void;
-        const answered = new Promise<"open" | "stop">((r) => (answer = r));
+        let answer!: (choice: OlderReleaseChoice) => void;
+        const answered = new Promise<OlderReleaseChoice>((r) => (answer = r));
         let warnings = 0;
         const dialogs: ConvertOnOpenDialogs = {
             ...fakeDialogs().dialogs,
