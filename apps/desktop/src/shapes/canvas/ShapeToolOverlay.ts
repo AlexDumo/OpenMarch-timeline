@@ -103,6 +103,18 @@ export interface HandleDragEvents {
      * shape's outline, to add one at `at`
      */
     doubleClick(at: XY, key?: string): void;
+    /**
+     * A press on empty field while a shape is open, to draw it there: `drag` when its kind is
+     * drawn by dragging (the move and release follow), `clicks` when it takes clicked points,
+     * null when drawing isn't on
+     */
+    drawStart(at: XY): "drag" | "clicks" | null;
+    drawMove(at: XY, modifiers: { shift: boolean; alt: boolean }): void;
+    drawEnd(): void;
+    /** A click (no drag) on empty field for a kind drawn by clicks: one more point */
+    drawClick(at: XY): void;
+    /** A double-click while clicking points: the shape is done */
+    drawFinish(): void;
 }
 
 // Small enough not to bury the marchers they sit by (sims, round 7: "the giant ring")
@@ -115,6 +127,8 @@ const REPLACED_RADIUS = 2.5;
 const SAME_SPOT = 0.01;
 /** How far from a handle a press still takes it, in screen pixels */
 const HIT_RADIUS_PX = 10;
+/** A press and release closer than this, in screen pixels, is a click, not a drag */
+const CLICK_SLOP_PX = 4;
 /**
  * Away from the shape, its outline and handles fade so the preview reads as the show, not a
  * diagram (sims, round 5); within this many screen pixels, or while dragging, they're full
@@ -203,6 +217,11 @@ export default class ShapeToolOverlay {
         if (this.handles.length === 0) return;
         const handle = this.handleAt(e);
         const at = this.fieldPoint(e);
+        // Points being clicked in: a double-click ends the shape
+        if (!handle && !this.nearOutline(e)) {
+            this.events.drawFinish();
+            return;
+        }
         if (handle) {
             e.preventDefault();
             e.stopPropagation();
@@ -272,15 +291,26 @@ export default class ShapeToolOverlay {
     }
 
     private readonly onPointerDown = (e: PointerEvent) => {
-        if (e.button !== 0 || e.altKey) return;
-        const handle = this.handleAt(e);
+        if (e.button !== 0) return;
+        const handle = e.altKey ? null : this.handleAt(e);
         if (!handle) {
             // On a shape that takes points, a press on its line belongs to the shape, so the
             // double-click that adds a point isn't taken by a marcher underneath
-            if (this.takesPoints && this.nearOutline(e)) {
+            if (!e.altKey && this.takesPoints && this.nearOutline(e)) {
                 e.preventDefault();
                 e.stopPropagation();
+                return;
             }
+            // Anywhere else on the field, with a shape open: draw it there (Alt: no snapping)
+            if (this.handles.length === 0) return;
+            const mode = this.events.drawStart(this.fieldPoint(e));
+            if (!mode) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this.drawMode = mode;
+            this.drawDown = { x: e.clientX, y: e.clientY };
+            window.addEventListener("pointermove", this.onPointerMove, true);
+            window.addEventListener("pointerup", this.onPointerUp, true);
             return;
         }
         e.preventDefault();
@@ -293,14 +323,27 @@ export default class ShapeToolOverlay {
         window.addEventListener("pointerup", this.onPointerUp, true);
     };
 
+    /** A drawing gesture in progress: how the kind is drawn, and where the press was (screen) */
+    private drawMode: "drag" | "clicks" | null = null;
+    private drawDown: { x: number; y: number } | null = null;
+
     /** The mousedown that follows a handle's pointerdown mustn't reach fabric either */
     private readonly swallowIfDragging = (e: MouseEvent) => {
-        if (this.dragKey === null) return;
+        if (this.dragKey === null && this.drawMode === null) return;
         e.preventDefault();
         e.stopPropagation();
     };
 
     private readonly onPointerMove = (e: PointerEvent) => {
+        if (this.drawMode === "drag") {
+            e.preventDefault();
+            e.stopPropagation();
+            this.events.drawMove(this.fieldPoint(e), {
+                shift: e.shiftKey,
+                alt: e.altKey,
+            });
+            return;
+        }
         if (this.dragKey === null) return;
         e.preventDefault();
         e.stopPropagation();
@@ -311,6 +354,25 @@ export default class ShapeToolOverlay {
     };
 
     private readonly onPointerUp = (e: PointerEvent) => {
+        if (this.drawMode !== null) {
+            e.preventDefault();
+            e.stopPropagation();
+            const mode = this.drawMode;
+            const down = this.drawDown;
+            this.drawMode = null;
+            this.drawDown = null;
+            window.removeEventListener("pointermove", this.onPointerMove, true);
+            window.removeEventListener("pointerup", this.onPointerUp, true);
+            if (mode === "drag") this.events.drawEnd();
+            // A click, not a drag: one more point for a kind drawn by clicks
+            else if (
+                down &&
+                Math.hypot(e.clientX - down.x, e.clientY - down.y) <
+                    CLICK_SLOP_PX
+            )
+                this.events.drawClick(this.fieldPoint(e));
+            return;
+        }
         if (this.dragKey === null) return;
         e.preventDefault();
         e.stopPropagation();
@@ -331,6 +393,8 @@ export default class ShapeToolOverlay {
         const handle = this.dragKey === null ? this.handleAt(event.e) : null;
         if (handle)
             this.canvas.setCursor(cursorFor(handle.shapeToolHandle.role));
+        // Elsewhere on the field a press draws the shape
+        else if (this.dragKey === null) this.canvas.setCursor("crosshair");
         this.showHint(handle?.shapeToolHandle ?? null);
         this.hover(handle ? null : this.marcherAt(event.e));
     };

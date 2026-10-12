@@ -49,6 +49,7 @@ import { measuresOf } from "../follow";
 import { resolveShapeView, tightSpacing } from "../canvas/previewView";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { blurSoon, ShapeViewSection } from "./ShapeViewSection";
+import { GESTURES } from "../draw/gestures";
 import { SHAPE_KIND_ACTIONS } from "../useShapeToolActions";
 import { useRecipeForSelection } from "../useRecipeForSelection";
 import type { StoredShapeRecipe } from "@/db-functions/shapeRecipes";
@@ -229,6 +230,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
     const kind = shapeKind(session.kindId)!;
     const inputError = useShapeToolStore((s) => s.inputError);
     const placeAsked = useShapeToolStore((s) => s.placeAsked);
+    const shapeUi = useUiSettingsStore((s) => s.uiSettings.shapeUi ?? "draw");
     const edited = useShapeToolStore((s) => s.past.length > 0);
     const storedView = useUiSettingsStore((s) => s.uiSettings.shapePreview);
     const fieldLabels = useUiSettingsStore((s) => s.uiSettings.marcherLabels);
@@ -318,6 +320,22 @@ function SessionControls({ session }: { session: ShapeSession }) {
                     </button>
                 </div>
             </div>
+
+            {shapeUi === "draw" && (
+                <p
+                    className="text-sub text-text/60"
+                    data-testid="shape-tool-draw-hint"
+                >
+                    <T
+                        keyName={
+                            GESTURES[session.kindId] === "clicks"
+                                ? "inspector.shapeTool.draw.hintClicks"
+                                : "inspector.shapeTool.draw.hint"
+                        }
+                        params={{ kind: kind.label.toLowerCase() }}
+                    />
+                </p>
+            )}
 
             {/* Stays in view while the panel scrolls (sims, round 10: scrolled to the legend and back,
                 the click missed Place) */}

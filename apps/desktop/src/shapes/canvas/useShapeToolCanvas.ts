@@ -11,6 +11,7 @@ import {
 import type { Spacing, XY } from "../types";
 import { useShapeToolStore } from "../shapeToolStore";
 import { offerBringBack } from "./unplacedToast";
+import { GESTURES } from "../draw/gestures";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { resolveShapeView, tightSpacing } from "./previewView";
 import ShapeToolOverlay, {
@@ -82,6 +83,38 @@ export function useShapeToolCanvas({
                         .getState()
                         .drag(to, shift, shapeContextFor(canvas, !alt)),
                 end: () => useShapeToolStore.getState().endDrag(),
+                drawStart: (at) => {
+                    // The earlier panel-only tool doesn't draw
+                    if (
+                        useUiSettingsStore.getState().uiSettings.shapeUi ===
+                        "panel"
+                    )
+                        return null;
+                    const store = useShapeToolStore.getState();
+                    const kind = store.session?.kindId;
+                    const gesture = kind ? GESTURES[kind] : undefined;
+                    if (!gesture) return null;
+                    const ctx = shapeContextFor(canvas);
+                    const point = ctx.snapPoint(at);
+                    if (gesture === "drag")
+                        return store.beginDraw(point) ? "drag" : null;
+                    return "clicks";
+                },
+                drawMove: (at, { alt }) =>
+                    useShapeToolStore
+                        .getState()
+                        .drawTo(
+                            shapeContextFor(canvas, !alt).snapPoint(at),
+                            shapeContextFor(canvas, !alt),
+                        ),
+                drawEnd: () => useShapeToolStore.getState().endDraw(),
+                drawClick: (at) => {
+                    const ctx = shapeContextFor(canvas);
+                    useShapeToolStore
+                        .getState()
+                        .clickPoint(ctx.snapPoint(at), ctx);
+                },
+                drawFinish: () => useShapeToolStore.getState().finishClicks(),
                 doubleClick: (at, key) => {
                     const store = useShapeToolStore.getState();
                     const ctx = shapeContextFor(canvas);

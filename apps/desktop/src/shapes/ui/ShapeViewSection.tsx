@@ -76,6 +76,7 @@ export function ShapeViewSection({
 }) {
     const { t } = useTolgee();
     const stored = useUiSettingsStore((s) => s.uiSettings.shapePreview);
+    const shapeUi = useUiSettingsStore((s) => s.uiSettings.shapeUi ?? "draw");
     // The page whose positions the move starts from, named in the legend (sims, round 7: start
     // rings on Page 1's circle were taken for the arc just placed on Page 2)
     const { pages } = useTimingObjects();
@@ -174,6 +175,32 @@ export function ShapeViewSection({
             <h4 className="text-body text-text/80">
                 <T keyName="inspector.shapeTool.view.title" />
             </h4>
+            <ViewRow label={t("inspector.shapeTool.draw.tool")}>
+                <Select
+                    value={shapeUi}
+                    onValueChange={(v) => {
+                        const settings = useUiSettingsStore.getState();
+                        settings.setUiSettings({
+                            ...settings.uiSettings,
+                            shapeUi: v as "draw" | "panel",
+                        });
+                        blurSoon();
+                    }}
+                >
+                    <SelectTriggerCompact
+                        label={t("inspector.shapeTool.draw.tool")}
+                        data-testid="shape-view-tool"
+                    />
+                    <SelectContent>
+                        <SelectItem value="draw">
+                            {t("inspector.shapeTool.draw.toolDraw")}
+                        </SelectItem>
+                        <SelectItem value="panel">
+                            {t("inspector.shapeTool.draw.toolPanel")}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            </ViewRow>
             <ViewRow label={t("inspector.shapeTool.view.look")}>
                 {picker("look", LOOK)}
             </ViewRow>

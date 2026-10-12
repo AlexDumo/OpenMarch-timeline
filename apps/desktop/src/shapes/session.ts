@@ -410,6 +410,21 @@ export function dragHandle(
     return { ...session, params: settle(kind, held, n, ctx, key) };
 }
 
+/**
+ * The session with the shape redrawn (a drawing gesture's params), settled to a locked interval
+ * as a drag of `dragged` would be, so the gesture's start stays put and the run follows from it.
+ */
+export function drawShape(
+    session: ShapeSession,
+    params: unknown,
+    dragged: string | undefined,
+    ctx: ShapeContext,
+): ShapeSession {
+    const kind = kindOf(session.kindId);
+    const n = session.marchers.length;
+    return { ...session, params: settle(kind, params, n, ctx, dragged) };
+}
+
 /** A defining point added where the shape was double-clicked, if the kind takes one */
 export function insertPoint(
     session: ShapeSession,

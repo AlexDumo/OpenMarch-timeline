@@ -6,6 +6,7 @@ import {
     changeOrder,
     changeParams,
     dragHandle,
+    drawShape,
     insertPoint,
     openRecipe as openRecipeSession,
     type RecipeToOpen,
@@ -16,6 +17,13 @@ import {
     type ShapeSession,
 } from "./session";
 import type { ShapeContext, XY } from "./types";
+import {
+    DRAGGED_HANDLE,
+    GESTURES,
+    paramsFromClicks,
+    paramsFromDrag,
+    type StrokeSample,
+} from "./draw/gestures";
 
 /**
  * The shape tool's state: the open session, if any. Nothing here writes the show; Apply goes
@@ -51,6 +59,25 @@ interface ShapeToolState {
     /** Slots of the warning pointed at in the panel, whose walks alone the canvas draws */
     highlight: readonly number[] | null;
     setHighlight(slots: readonly number[] | null): void;
+    /**
+     * A drawing gesture in progress (owner decisions, 2026-10-11: draw the shape on the field):
+     * where it began, the session as it was, and the pointer samples so far
+     */
+    drawing: {
+        from: XY;
+        base: ShapeSession;
+        samples: StrokeSample[];
+        t0: number;
+    } | null;
+    /** Points clicked so far for a kind drawn by clicks (a curve) */
+    clicked: XY[] | null;
+    /** Recent finished strokes, kept for recognizing drawn shapes later */
+    strokes: { kindId: string; samples: StrokeSample[] }[];
+    beginDraw(at: XY): boolean;
+    drawTo(at: XY, ctx: ShapeContext): void;
+    endDraw(): void;
+    clickPoint(at: XY, ctx: ShapeContext): void;
+    finishClicks(): void;
     /** Opens a session again as it was (going back to a shape dropped by leaving its set) */
     restore(session: ShapeSession): void;
     /** Double-click on the shape: add a defining point there (curves) */
@@ -81,6 +108,8 @@ interface ShapeToolState {
 }
 
 const HISTORY_LIMIT = 100;
+/** Finished strokes kept for recognizing drawn shapes later */
+const STROKES_KEPT = 50;
 
 export const useShapeToolStore = create<ShapeToolState>((set, get) => {
     /**
@@ -126,6 +155,81 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                 past: [],
                 future: [],
             });
+        },
+        drawing: null,
+        clicked: null,
+        strokes: [],
+        beginDraw(at) {
+            const { session, past, dragging } = get();
+            if (!session || dragging || GESTURES[session.kindId] !== "drag")
+                return false;
+            set({
+                drawing: {
+                    from: at,
+                    base: session,
+                    samples: [{ x: at.x, y: at.y, t: 0 }],
+                    t0: performance.now(),
+                },
+                // The whole gesture is one step back
+                past: [...past.slice(-(HISTORY_LIMIT - 1)), session],
+                future: [],
+                highlight: null,
+            });
+            return true;
+        },
+        drawTo(at, ctx) {
+            const { drawing } = get();
+            if (!drawing) return;
+            const { base } = drawing;
+            const params = paramsFromDrag(
+                base.kindId,
+                base.params,
+                drawing.from,
+                at,
+                base.marchers.length,
+            );
+            drawing.samples.push({
+                x: at.x,
+                y: at.y,
+                t: performance.now() - drawing.t0,
+            });
+            if (params === undefined) return;
+            set({
+                session: reassign(
+                    drawShape(base, params, DRAGGED_HANDLE[base.kindId], ctx),
+                    ctx,
+                ),
+            });
+        },
+        endDraw() {
+            const { drawing, session, past, strokes } = get();
+            if (!drawing) return;
+            const moved = session !== drawing.base;
+            set({
+                drawing: null,
+                strokes: [
+                    ...strokes.slice(-(STROKES_KEPT - 1)),
+                    { kindId: drawing.base.kindId, samples: drawing.samples },
+                ],
+                // A press without a drag leaves nothing to undo
+                ...(moved ? {} : { past: past.slice(0, -1) }),
+            });
+        },
+        clickPoint(at, ctx) {
+            const { session, clicked } = get();
+            if (!session || GESTURES[session.kindId] !== "clicks") return;
+            const points = [...(clicked ?? []), at];
+            set({ clicked: points });
+            const params = paramsFromClicks(
+                session.kindId,
+                session.params,
+                points,
+            );
+            if (params !== undefined)
+                update((s) => drawShape(s, params, undefined, ctx), ctx);
+        },
+        finishClicks() {
+            if (get().clicked) set({ clicked: null });
         },
         placeAsked: null,
         askPlace(placeAsked) {
@@ -173,6 +277,8 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                     dragging: null,
                     inputError: null,
                     highlight: null,
+                    drawing: null,
+                    clicked: null,
                     past: [],
                     future: [],
                 });

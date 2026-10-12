@@ -856,6 +856,15 @@
         },
         "shapeTool": {
             "title": "Shape",
+            "draw": {
+                "byClicks": "click its points on the field, double-click to finish",
+                "byDrag": "drag on the field to draw it",
+                "hint": "Drag on the field to draw the {kind}, or tune it here.",
+                "hintClicks": "Click points on the field to draw the {kind}; double-click to finish.",
+                "tool": "Shape tool",
+                "toolDraw": "Draw",
+                "toolPanel": "Panel only (earlier)"
+            },
             "leftUnplaced": "The {kind} wasn't placed",
             "placeAnyway": "Some marchers would walk through each other. Place anyway, or change the shape.",
             "placeAnywayButton": "Place anyway",

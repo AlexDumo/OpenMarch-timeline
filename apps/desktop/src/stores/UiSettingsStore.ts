@@ -62,6 +62,11 @@ export interface UiSettings {
     marcherLabelSize?: MarcherLabelSize;
     /** Marcher labels above their dots, or beside them (to the right) */
     marcherLabelPosition?: "above" | "beside";
+    /**
+     * How shapes are made: `draw` (the default) puts a shape picker beside the selection and lets
+     * you draw the shape on the field; `panel` is the earlier panel-only tool, kept to compare
+     */
+    shapeUi?: "draw" | "panel";
     /** What the Shape tool's preview shows; see `ShapePreviewView` */
     shapePreview?: Partial<ShapePreviewView>;
     /** Whether to enable Tolgee In-Context Translating */
