@@ -168,7 +168,11 @@ of this file. The alternative is built behind a temporary study flag (localStora
 - Expert gestures are unchanged: pin the start flag, Ctrl+drag a range, drag clips.
 - No mode setting, no locks, no Expert marks.
 
-Simulated comparison: `~/ux-sim/basic-vs-simple/` (Version 1 = this, Version 2 = Basic).
+Simulated comparison: `~/ux-sim/basic-vs-simple/` (Version 1 = this, Version 2 = Basic;
+`FINDINGS.md` there). Four personas, 2026-10-12: one timeline 6, 6, 6, 8 (mean 6.5) against Basic
+5, 7, 4, 7 (mean 5.75); three of four would hand the one timeline to a new colleague, for its move
+card. Shared gaps in both: a move across a page line (0 of 4 found a way), the unlabelled **+**
+(V-208), removing one marcher's mid-page point, undo leaving everyone selected, Play from a page.
 
 ## Work packages
 
