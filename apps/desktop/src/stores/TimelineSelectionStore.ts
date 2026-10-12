@@ -154,6 +154,12 @@ export interface TimelineSelectionState {
     readonly scrubbing: boolean;
     /** The start flag or the playhead being dragged by its line (UI-21), from where it began */
     readonly lineDrag: TimelineLineDrag | null;
+    /**
+     * The Align view (E7, Tempo lab `alignView`): the timeline in seconds, where a page flag drag
+     * retimes counts. Only the user turns it on or off (A, or its button); opening a show turns it
+     * off, since it changes what a flag drag does.
+     */
+    readonly alignView: boolean;
 
     /**
      * Isolates the stored timeline `timelineId`: the window becomes its range with the playhead at
@@ -262,7 +268,9 @@ export interface TimelineSelectionState {
     readonly setLoop: (loop: TimelineLoop | null) => void;
     /** Used by `useTimelinePlaybackDriver` only. */
     readonly setShowEndBeat: (showEndBeat: number | null) => void;
-    /** Opening a show: home, playhead at 0, nothing loaded. */
+    /** Turns the Align view on or off (`!alignView` without an argument). */
+    readonly setAlignView: (on?: boolean) => void;
+    /** Opening a show: home, playhead at 0, nothing loaded, Align off. */
     readonly reset: () => void;
 }
 
@@ -621,6 +629,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             playback: null,
             scrubbing: false,
             lineDrag: null,
+            alignView: false,
             isolate: (timelineId, restore) =>
                 set((s) => {
                     if (s.isolation?.timelineId === timelineId) return {};
@@ -1104,6 +1113,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                           },
                 ),
             setShowEndBeat: (showEndBeat) => set({ showEndBeat }),
+            setAlignView: (on) =>
+                set((s) => ({ alignView: on ?? !s.alignView })),
             reset: () =>
                 set((s) => ({
                     ...windowFields(0, false, 0, s.pageBoxes),
@@ -1115,6 +1126,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     loop: null,
                     scrubbing: false,
                     lineDrag: null,
+                    alignView: false,
                 })),
         };
     },

@@ -26,6 +26,7 @@ import {
     updateWorkspaceSettingsMutationOptions,
 } from "@/hooks/queries/useWorkspaceSettings";
 import { StaticFormField } from "../ui/FormField";
+import { audioOffsetHint, formatAudioOffset } from "./audioOffset";
 
 export default function MusicModal({
     label = <MusicNotesIcon size={24} />,
@@ -190,7 +191,7 @@ function AudioOffsetInput() {
     // Update local state when settings change
     useEffect(() => {
         if (settings) {
-            setAudioOffsetValue(settings.audioOffsetSeconds.toString());
+            setAudioOffsetValue(formatAudioOffset(settings.audioOffsetSeconds));
         }
     }, [settings]);
 
@@ -202,7 +203,7 @@ function AudioOffsetInput() {
             if (!isNaN(parsedValue) && settings) {
                 updateSettings({
                     ...settings,
-                    audioOffsetSeconds: parsedValue,
+                    audioOffsetSeconds: Number(formatAudioOffset(parsedValue)),
                 });
             } else if (e.target.value === "" && settings) {
                 // If empty, set to 0
@@ -233,19 +234,30 @@ function AudioOffsetInput() {
         [],
     );
 
+    const hint = audioOffsetHint(settings?.audioOffsetSeconds ?? 0);
     return (
-        <StaticFormField label={t("workspaceSettings.audioOffsetSeconds")}>
-            <UnitInput
-                type="text"
-                inputMode="numeric"
-                pattern="-?[0-9]*.?[0-9]*"
-                containerClassName="col-span-6 self-center"
-                unit={t("workspaceSettings.units.seconds")}
-                onBlur={handleBlur}
-                onChange={handleChange}
-                onKeyDown={blurOnEnter}
-                value={audioOffsetValue}
-            />
-        </StaticFormField>
+        <div className="flex flex-col gap-4">
+            <StaticFormField label={t("workspaceSettings.audioOffsetSeconds")}>
+                <UnitInput
+                    type="text"
+                    inputMode="numeric"
+                    pattern="-?[0-9]*.?[0-9]*"
+                    containerClassName="col-span-6 self-center"
+                    unit={t("workspaceSettings.units.seconds")}
+                    onBlur={handleBlur}
+                    onChange={handleChange}
+                    onKeyDown={blurOnEnter}
+                    value={audioOffsetValue}
+                    aria-describedby="audio-offset-hint"
+                />
+            </StaticFormField>
+            <p
+                id="audio-offset-hint"
+                data-testid="audio-offset-hint"
+                className="text-sub text-text-subtitle px-12"
+            >
+                {t(hint.key, hint.params)}
+            </p>
+        </div>
     );
 }

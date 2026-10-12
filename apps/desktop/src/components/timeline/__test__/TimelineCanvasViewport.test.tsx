@@ -2,6 +2,10 @@ import { act, cleanup, render } from "@testing-library/react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TimelineGridCanvas } from "../TimelineCanvas";
+import { countsAxis } from "../timelineAxis";
+
+/** 1000 beats at 20 px each: the layer below, 20 000 px wide */
+const AXIS = countsAxis(20, 1000);
 
 /** A scroller `width` CSS pixels wide; `width.value` can change later */
 const makeViewport = (initial: number) => {
@@ -76,7 +80,7 @@ const grid = (ref: { current: HTMLElement }) => (
     <TimelineGridCanvas
         width={20_000}
         height={20}
-        pixelsPerBeat={20}
+        axis={AXIS}
         viewportRef={ref}
         measures={[]}
     />
