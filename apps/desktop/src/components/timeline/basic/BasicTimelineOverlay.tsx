@@ -52,6 +52,9 @@ export function useBasicTimeAxis(
     pages: readonly Page[],
 ): BasicTimeAxis | null {
     const [axis, setAxis] = useState<BasicTimeAxis | null>(null);
+    // After every render on purpose (layout moves without a prop changing); the state only
+    // changes when the axis does, so it settles
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useLayoutEffect(() => {
         const container = containerRef.current;
         const first = pages[1];
@@ -178,6 +181,8 @@ export function BasicCountsStrip({
     const { isPlaying } = useIsPlaying()!;
     // The strip's left edge on the axis' scale, measured after layout
     const [stripLeft, setStripLeft] = useState(0);
+    // As `useBasicTimeAxis`: every render, settling once the edge stops moving
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useLayoutEffect(() => {
         const strip = stripRef.current;
         const container = strip?.offsetParent;
@@ -230,7 +235,12 @@ export function BasicCountsStrip({
             className="relative h-16 cursor-col-resize touch-none select-none"
             style={{ width }}
             onPointerDown={(e) => {
-                if (e.button !== 0) return;
+                // React bubbles events from portals (a tick's menu) through here; only the strip's own
+                if (
+                    e.button !== 0 ||
+                    !e.currentTarget.contains(e.target as Node)
+                )
+                    return;
                 const beat = beatAtClientX(e.clientX);
                 if (beat === null) return;
                 e.currentTarget.setPointerCapture(e.pointerId);

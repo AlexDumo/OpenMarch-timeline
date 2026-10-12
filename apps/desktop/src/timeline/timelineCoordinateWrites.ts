@@ -18,7 +18,6 @@ import { pageEndBeat } from "./timelineCanvas";
 import { TimelineEditRefusedError } from "./timelineEditRefusals";
 import { moveMarchersAndOfferFollowUp } from "./timelineMoveThemToo";
 import { isBasicMode } from "@/stores/EditorModeStore";
-import { toastLockedMarchers, withoutLockedMarchers } from "./basicLocks";
 import {
     timelineResolverSettled,
     useTimelineResolverStore,
@@ -263,28 +262,14 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
     snapIsolatedPlayheadToEnd();
-    // UI-19: Basic leaves marchers it can't edit on this page alone, and says so
-    const editable = withoutLockedMarchers(
-        plan.target,
-        marcherIds.map((marcherId) => ({ marcherId })),
-    );
-    if (editable.moves.length === 0)
-        throw new TimelineEditRefusedError("notSimple", {
-            marcherIds: editable.locked,
-        });
-    const next = transform(
-        timelineCoordinateRecords(
-            plan.beat,
-            editable.moves.map((m) => m.marcherId),
-        ),
-    );
+    const next = transform(timelineCoordinateRecords(plan.beat, marcherIds));
     const moves = toTimelineMoves(next);
+    // Basic's locked marchers are dropped there (UI-19)
     await moveMarchersAndOfferFollowUp({
         database: db,
         target: plan.target,
         moves,
     });
-    toastLockedMarchers(editable.locked.length, true);
     return next;
 }
 
@@ -432,21 +417,9 @@ export function canvasCoordinateWriter<A extends MarcherXY>({
         }
         // A drop is where the marcher was dragged at the playhead; isolation writes the move's
         // end, so carry the drag over as an offset from where the plan has it there
-        // UI-19: Basic drops marchers it can't edit on this page; they snap back
-        const editable = withoutLockedMarchers(
-            current.target,
-            toTimelineMoves(atIsolatedEnd(changes)),
-        );
-        if (editable.moves.length === 0) {
-            onRefused(
-                new TimelineEditRefusedError("notSimple", {
-                    marcherIds: editable.locked,
-                }),
-            );
-            return;
-        }
+        const moves = toTimelineMoves(atIsolatedEnd(changes));
         snapIsolatedPlayheadToEnd();
-        writeTimeline({ target: current.target, moves: editable.moves });
-        toastLockedMarchers(editable.locked.length, true);
+        // Basic's locked marchers are dropped by the write (UI-19); a refusal snaps them back
+        writeTimeline({ target: current.target, moves });
     };
 }

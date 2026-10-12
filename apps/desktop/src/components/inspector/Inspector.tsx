@@ -7,8 +7,12 @@ import { PageNotesSection } from "./PageNotesSection";
 import { TimelineInspectorSection } from "./TimelineInspectorSection";
 import { TimelineMoveCardSlot } from "./TimelineMoveCard";
 import { T } from "@tolgee/react";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
 
 function Inspector() {
+    // UI-19: Basic has no move cards (path style, range, delete move) or timeline shapes; both
+    // make moves Basic can't edit
+    const basic = useIsBasicMode();
     return (
         <div className="rounded-6 border-stroke bg-fg-1 flex h-full w-xs min-w-0 flex-col border p-12">
             <p className="text-body text-text/60">
@@ -19,13 +23,13 @@ function Inspector() {
             {/* relative so Radix's visually-hidden native selects are contained here instead of escaping to the document */}
             <div className="relative mt-8 flex min-h-0 flex-1 flex-col gap-48 overflow-y-auto">
                 {/* UI-14 review: a selected move's card comes first */}
-                <TimelineMoveCardSlot />
+                {!basic && <TimelineMoveCardSlot />}
                 <PageEditor />
                 <MarcherEditor />
                 <ShapeEditor />
                 <AlignmentEditor />
                 <ShapeSelector />
-                <TimelineInspectorSection />
+                {!basic && <TimelineInspectorSection />}
             </div>
 
             {/* Fixed notes footer at the bottom of the inspector */}
