@@ -36,8 +36,16 @@ export function blockToFill(
     stepPx: number,
 ): FillParams {
     const files = Math.max(1, Math.round(p.files));
-    const width = Math.max(stepPx, (files - 1) * p.across);
-    const height = Math.max(stepPx, (ranksOf(p, n) - 1) * p.deep);
+    let width = Math.max(stepPx, (files - 1) * p.across);
+    let height = Math.max(stepPx, (ranksOf(p, n) - 1) * p.deep);
+    // Room for the spread at about the block's own intervals: a natural spread over just the
+    // block's outer files and ranks is far tighter than the block (sims, draw round 1: 1.2 steps)
+    const needed = (Math.sqrt(3) / 2) * Math.max(1, n) * p.across * p.deep;
+    if (width * height < needed) {
+        const k = Math.sqrt(needed / (width * height));
+        width *= k;
+        height *= k;
+    }
     return {
         outline: "box",
         center: p.center,
@@ -47,6 +55,7 @@ export function blockToFill(
         rotation: p.rotation,
         edge: 0,
         layout: 1,
+        block: p,
     };
 }
 
@@ -56,6 +65,8 @@ export function fillToBlock(
     n: number,
     pattern: BlockParams["pattern"],
 ): BlockParams {
+    // Back to the ranks and files it came from, where it now stands
+    if (p.block) return { ...p.block, center: p.center, pattern };
     const count = Math.max(1, n);
     const aspect = p.height > 1e-9 ? p.width / p.height : count;
     const files = Math.min(

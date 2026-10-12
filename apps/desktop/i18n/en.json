@@ -860,6 +860,7 @@
                 "byClicks": "click its points on the field, double-click to finish",
                 "byDrag": "drag on the field to draw it",
                 "hint": "Drag on the field to draw the {kind}, or tune it here.",
+                "moveBox": "Drag to move this box",
                 "sizeInBox": "Spacing, size and Place are in the box beside the shape.",
                 "warnings": "{count, plural, one {# warning} other {# warnings}}",
                 "hintClicks": "Click points on the field to draw the {kind}; double-click to finish.",

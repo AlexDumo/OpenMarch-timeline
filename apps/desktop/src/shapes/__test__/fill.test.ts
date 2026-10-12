@@ -10,7 +10,7 @@ import {
 import { fillKind, type FillParams } from "../kinds/fill";
 import { previewSession } from "../session";
 import { useShapeToolStore } from "../shapeToolStore";
-import { circleToFill, fillToBlock } from "../draw/convert";
+import { blockToFill, circleToFill, fillToBlock } from "../draw/convert";
 import type { ShapeContext } from "../types";
 
 const STEP = 10;
@@ -142,5 +142,35 @@ describe("the filled shape", () => {
         expect(previewSession(filled, ctx).slots).toHaveLength(12);
         useShapeToolStore.getState().undo();
         expect(useShapeToolStore.getState().session!.kindId).toBe("circle");
+    });
+});
+
+describe("switching a box between ranks and a natural spread", () => {
+    const block = {
+        center: xy(0, 0),
+        rotation: 0,
+        files: 4,
+        across: 20,
+        deep: 20,
+        pattern: "grid" as const,
+        shortRank: "start" as const,
+        keepIntervals: true,
+    };
+
+    it("gives the same block back after Natural, where it now stands", () => {
+        const natural = blockToFill(block, 8, STEP);
+        const back = fillToBlock({ ...natural, center: xy(50, 0) }, 8, "grid");
+        expect(back).toEqual({ ...block, center: xy(50, 0) });
+    });
+
+    it("makes room for the spread at about the block's own intervals", () => {
+        const natural = blockToFill(block, 8, STEP);
+        const spots = naturalFill(
+            boxOutline(natural.center, natural.width, natural.height, 0),
+            8,
+            undefined,
+            1,
+        );
+        expect(typicalNeighborDistance(spots)).toBeGreaterThan(0.8 * 20);
     });
 });

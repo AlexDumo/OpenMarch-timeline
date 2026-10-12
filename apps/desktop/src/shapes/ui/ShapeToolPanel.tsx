@@ -29,7 +29,13 @@ import {
     shapeContextFor,
 } from "../canvas/shapeCanvasContext";
 import { LISTED_SHAPE_KINDS, pickerKindOf, shapeKind } from "../registry";
-import { previewSession, type ShapeSession } from "../session";
+import {
+    changeOrder,
+    previewSession,
+    type ShapePreview,
+    type ShapeSession,
+} from "../session";
+
 import { useShapeToolStore } from "../shapeToolStore";
 import { describeGaps, formatIntervals, parseIntervals } from "../spacing";
 import {
@@ -63,6 +69,12 @@ import {
     fillToBlock,
     fillToCircle,
 } from "../draw/convert";
+
+/** Marchers in a crossing or a close pass */
+const marchersInTrouble = (preview: ShapePreview) =>
+    preview.issues
+        .filter((i) => i.mark === "collision" || i.mark === "close")
+        .reduce((sum, i) => sum + (i.slots?.length ?? 0), 0);
 
 const FAMILIES: { family: AnyShapeKind["family"]; label: string }[] = [
     { family: "path", label: "Paths" },
@@ -256,6 +268,17 @@ function SessionControls({ session }: { session: ShapeSession }) {
         () => (ctx ? previewSession(session, ctx) : null),
         [session, ctx],
     );
+    // "Use Nearest" is offered only where Nearest has fewer marchers in trouble
+    const nearestHelps = useMemo(() => {
+        if (!ctx || !preview || session.order === "nearest") return false;
+        const now = marchersInTrouble(preview);
+        if (now === 0) return false;
+        const nearest = previewSession(
+            changeOrder(session, "nearest", false, ctx),
+            ctx,
+        );
+        return marchersInTrouble(nearest) < now;
+    }, [session, ctx, preview]);
     if (!ctx || !preview) return null;
 
     const n = session.marchers.length;
@@ -396,22 +419,21 @@ function SessionControls({ session }: { session: ShapeSession }) {
                         >
                             {issue.message}
                             {/* The fix the warning names, as a button (sims, round 9) */}
-                            {issue.mark === "collision" &&
-                                session.order !== "nearest" && (
-                                    <Button
-                                        size="compact"
-                                        variant="secondary"
-                                        className="ml-6"
-                                        data-testid="shape-tool-use-nearest"
-                                        onClick={() =>
-                                            useShapeToolStore
-                                                .getState()
-                                                .setOrder("nearest", false, ctx)
-                                        }
-                                    >
-                                        <T keyName="inspector.shapeTool.useNearest" />
-                                    </Button>
-                                )}
+                            {issue.mark === "collision" && nearestHelps && (
+                                <Button
+                                    size="compact"
+                                    variant="secondary"
+                                    className="ml-6"
+                                    data-testid="shape-tool-use-nearest"
+                                    onClick={() =>
+                                        useShapeToolStore
+                                            .getState()
+                                            .setOrder("nearest", false, ctx)
+                                    }
+                                >
+                                    <T keyName="inspector.shapeTool.useNearest" />
+                                </Button>
+                            )}
                         </li>
                     ))}
                 </ul>
@@ -716,6 +738,7 @@ export function ShapeFineTuneBox({
     canvas: OpenMarchCanvas | null;
     isPlaying: boolean;
 }) {
+    const { t } = useTolgee();
     const session = useShapeToolStore((s) => s.session);
     // Out of the way while a stroke is drawn or points are clicked in
     const drawing = useShapeToolStore(
@@ -738,6 +761,24 @@ export function ShapeFineTuneBox({
         ? `${session.kindId}|${strokes}|${session.marchers.map((m) => m.id).join(",")}`
         : "";
     const spot = useBoxSpot(canvas, preview?.slots ?? null, anchor);
+    // Dragged by its title out of the way; placed afresh when the shape is
+    const [moved, setMoved] = useState({ dx: 0, dy: 0, anchor });
+    const offset = moved.anchor === anchor ? moved : { dx: 0, dy: 0, anchor };
+    const startMove = (e: React.PointerEvent) => {
+        const from = { x: e.clientX - offset.dx, y: e.clientY - offset.dy };
+        const move = (m: PointerEvent) =>
+            setMoved({
+                dx: m.clientX - from.x,
+                dy: m.clientY - from.y,
+                anchor,
+            });
+        const up = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+    };
     if (
         shapeUi !== "draw" ||
         isPlaying ||
@@ -749,18 +790,26 @@ export function ShapeFineTuneBox({
         drawing
     )
         return null;
-    const kind = shapeKind(session.kindId)!;
+    const kind = shapeKind(pickerKindOf(session.kindId, session.params))!;
     const Icon = kind.icon;
     const warnings = preview.issues.filter((i) => i.level !== "info").length;
     return (
         <div
             className="rounded-6 border-stroke bg-modal shadow-modal backdrop-blur-32 text-body absolute z-20 flex w-[17rem] flex-col gap-8 border p-10"
-            style={{ left: spot.left, top: spot.top }}
+            style={{
+                left: spot.left + offset.dx,
+                top: spot.top + offset.dy,
+            }}
             data-testid="shape-fine-tune"
             data-shape-ui
             onPointerDown={(e) => e.stopPropagation()}
         >
-            <div className="flex items-center gap-6">
+            <div
+                className="flex cursor-move items-center gap-6 select-none"
+                title={t("inspector.shapeTool.draw.moveBox")}
+                onPointerDown={startMove}
+                data-testid="shape-fine-tune-title"
+            >
                 <Icon size={16} />
                 <span className="text-text/80">{kind.label}</span>
                 {warnings > 0 && (

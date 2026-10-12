@@ -182,7 +182,9 @@ export function validatePaths(
     if (crossings > 0)
         issues.push({
             level: "warning",
-            message: `${pairs(crossings)} of marchers would walk through each other (drawn in red).${untangled ? "" : " Order: Nearest untangles them."}`,
+            // The fix, when there is one, is offered beside the warning (sims, draw round 1:
+            // "Nearest untangles them" was promised even where Nearest made it worse)
+            message: `${pairs(crossings)} of marchers would walk through each other (drawn in red).`,
             slots: [...crossingSlots],
             mark: "collision",
         });

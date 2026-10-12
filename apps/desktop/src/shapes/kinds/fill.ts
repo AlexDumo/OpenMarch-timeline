@@ -9,6 +9,7 @@ import {
     type FillOutline,
 } from "../geometry/naturalFill";
 import type { ShapeContext, ShapeKind, Slot, XY } from "../types";
+import type { BlockParams } from "./block";
 
 /**
  * A filled shape with a natural spread (owner decisions, 2026-10-11): marchers spread evenly but
@@ -31,6 +32,8 @@ export interface FillParams {
     readonly edge: number;
     /** Which spread (1, 2, 3, ...); the same number gives the same spread */
     readonly layout: number;
+    /** The ranks and files this came from, so switching back to Grid gives them back */
+    readonly block?: BlockParams;
 }
 
 export function fillOutline(p: FillParams): FillOutline {
