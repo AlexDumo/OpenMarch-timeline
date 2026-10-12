@@ -1596,6 +1596,35 @@ describe("a calmer timeline (UI-12)", () => {
         ]);
     });
 
+    // Testers read ⏮ as "the start" and played one page (basic-past-flag study); the owner keeps
+    // the plain click on the previous page (UI-17), so its tooltip names the way to the start
+    it("says Previous goes one page back and names the ways to the start", async () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onNavigate={vi.fn()}
+            />,
+        );
+        const previous = screen.getByRole("button", {
+            name: /^Previous page/,
+        });
+        act(() => previous.focus());
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            "Previous pageQOne page back. For the start of the show: Shift+click, Shift+Q or the house",
+        );
+        act(() => previous.blur());
+        const next = screen.getByRole("button", { name: /^Next page/ });
+        act(() => next.focus());
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            "Next pageEOne page on. For the last page: Shift+click or Shift+E",
+        );
+        expect(screen.getByTestId("timeline-initial-page")).toHaveAttribute(
+            "title",
+            "Home: the start of the show (page 0's set)",
+        );
+    });
+
     it("keeps page navigation live while playing, where it jumps playback", () => {
         const onNavigate = vi.fn();
         render(

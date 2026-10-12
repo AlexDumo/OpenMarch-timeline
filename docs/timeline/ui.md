@@ -831,7 +831,10 @@ from it. The spec still wins on the model; this file decides presentation.
     by every tester who then edited the wrong set).
   - **⏮ is the previous page; Shift+click (or Shift+Q) goes to the start of the show**, as before
     (owner, 2026-10-09: briefly swapped after testers read ⏮ as "start"; the owner wants the
-    common step on the plain click). The tooltip says Shift+click goes to the start.
+    common step on the plain click). The tooltip says "One page back" and names the ways to the
+    start: Shift+click, Shift+Q or the house, whose own tooltip says it's the start of the show
+    (2026-10-12, after Basic testers pressed ⏮ then Play and saw one page; the plain click is
+    unchanged).
   - **A click on a beat seeks to that count** (UI-12); the page box row selects the page (owner,
     2026-10-09, after briefly making any click select the page).
   - **Home while playing jumps playback to the start**; transport buttons don't take keyboard focus

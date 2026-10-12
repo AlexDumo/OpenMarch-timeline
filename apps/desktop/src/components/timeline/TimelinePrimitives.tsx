@@ -413,7 +413,9 @@ export const TimelineTransport = memo(function TimelineTransport({
                     <TransportButton
                         label="Previous page"
                         shortcut={TRANSPORT_SHORTCUTS.previousPage}
-                        hint="Shift+click or Shift+Q: the start of the show"
+                        // ⏮ reads as "the start" to many (basic-past-flag study), but the plain
+                        // click is the common step (owner, UI-17), so the hint names the start's ways
+                        hint="One page back. For the start of the show: Shift+click, Shift+Q or the house"
                         onClick={onNavigate ? previousPage : undefined}
                     >
                         {SKIP_BACK_ICON}
@@ -455,7 +457,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                     <TransportButton
                         label="Next page"
                         shortcut={TRANSPORT_SHORTCUTS.nextPage}
-                        hint="Shift+click or Shift+E: last page"
+                        hint="One page on. For the last page: Shift+click or Shift+E"
                         onClick={onNavigate ? nextPage : undefined}
                     >
                         {SKIP_FORWARD_ICON}
@@ -1082,7 +1084,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
                         data-timeline-interactive="true"
                         data-testid="timeline-initial-page"
                         aria-label={`Page ${initialPage.label}`}
-                        title={`Home: page ${initialPage.label}'s set`}
+                        title={`Home: the start of the show (page ${initialPage.label}'s set)`}
                         aria-pressed={homeSelected}
                         {...scrub.handlers}
                         onClick={(event) => {
