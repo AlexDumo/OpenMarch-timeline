@@ -224,14 +224,31 @@ const APP_API = {
             "conversion:getPending",
         ) as Promise<PendingConversion | null>,
     /**
-     * Backs up, converts and opens the pending file. Resolves the open's status (200 when it
-     * opened); the window reloads either way, and the main process explains failures.
+     * Closes the show that is open, then backs up, converts and opens the pending file. Resolves
+     * the open's status (200 when it opened); the window reloads either way, and the main
+     * process explains failures.
      */
     confirmConversion: () =>
         ipcRenderer.invoke("conversion:confirm") as Promise<number>,
-    /** Forgets the pending file without writing to it. */
+    /** Forgets the pending file without writing to it; the show that is open stays open. */
     cancelConversion: () =>
         ipcRenderer.invoke("conversion:cancel") as Promise<void>,
+    /**
+     * Calls `callback` when the main process asks about another file, or forgets the question
+     * (null) because another file opened or the show closed. Returns an unsubscribe.
+     */
+    onPendingConversion: (
+        callback: (pending: PendingConversion | null) => void,
+    ) => {
+        const listener = (
+            _event: Electron.IpcRendererEvent,
+            pending: PendingConversion | null,
+        ) => callback(pending);
+        ipcRenderer.on("conversion:pending", listener);
+        return () => {
+            ipcRenderer.removeListener("conversion:pending", listener);
+        };
+    },
     /** Calls `callback` with the conversion's progress while it runs. Returns an unsubscribe. */
     onConversionProgress: (callback: (progress: ConvertProgress) => void) => {
         const listener = (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Title as RadixAlertDialogTitle } from "@radix-ui/react-alert-dialog";
 import {
     AlertDialog,
@@ -56,17 +56,28 @@ function ProgressLine({ progress }: { progress: ConvertProgress | null }) {
 /**
  * Asks the person before a page-era show is converted to timelines (ADR 0001 §6). The main
  * process holds the file as the pending conversion and opens nothing until the person confirms;
- * this dialog reads it after the window loads. Confirm backs the show up as
+ * this dialog reads it when the window loads and follows its changes, so it asks over the show
+ * that is open (or the launch page). Confirm closes that show, backs the file up as
  * `<name>.pre-conversion.dots` next to it, converts it and opens it; the window reloads when the
- * open ends. Cancel forgets the file without writing to it.
+ * open ends. Cancel forgets the file without writing to it and leaves the open show as it was.
+ * Opening another file or closing the show forgets the question, and the dialog closes.
  */
 export default function ConvertShowDialog() {
     const [pending, setPending] = useState<PendingConversion | null>(null);
     const [converting, setConverting] = useState(false);
     const [progress, setProgress] = useState<ConvertProgress | null>(null);
+    const convertingRef = useRef(false);
+    convertingRef.current = converting;
 
     useEffect(() => {
         let cancelled = false;
+        // Asked (or forgotten) while the window is up. The dialog's own Confirm sends no notice;
+        // while it converts, it stays to show the progress.
+        const unsubscribe = window.electron.onPendingConversion((next) => {
+            // Newer than the first read, which must not overwrite it.
+            cancelled = true;
+            if (!convertingRef.current) setPending(next);
+        });
         window.electron
             .getPendingConversion()
             .then((next) => {
@@ -75,6 +86,7 @@ export default function ConvertShowDialog() {
             .catch(() => undefined);
         return () => {
             cancelled = true;
+            unsubscribe();
         };
     }, []);
 

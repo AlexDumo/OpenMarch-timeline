@@ -12,7 +12,8 @@ import fs from "fs-extra";
  * Opening a page-era (version 7) show: the app asks before converting it
  * (`ConvertShowDialog`). Confirm writes a backup, `<name>.pre-conversion.dots`,
  * next to the show, converts the show to timelines and opens it. Cancel
- * leaves the file as it was and writes nothing.
+ * leaves the file as it was and writes nothing. Asking about a file while a
+ * show is open leaves that show open; opening another file forgets the question.
  *
  * `e2e/mock-databases/blank.dots` is a version-7 file from before the
  * timeline model, kept as that old file.
@@ -145,4 +146,71 @@ test("Cancel leaves an old show as it was", async ({}, testInfo) => {
     );
     expect(written).toEqual(["old-show.dots"]);
     expect((await fs.readFile(showPath)).equals(original)).toBe(true);
+});
+
+test("Asking about another old show leaves the open show as it was; opening another file forgets the question", async ({}, testInfo) => {
+    const { app, page, showPath } = await openOldShow(testInfo.outputDir);
+    const otherPath = path.join(path.dirname(showPath), "other-old-show.dots");
+    await fs.copyFile(pageEraShow, otherPath);
+    const otherBefore = await fs.readFile(otherPath);
+    const dialog = page.getByTestId("convert-show-dialog");
+    const title = () =>
+        app.evaluate(({ BrowserWindow }) =>
+            BrowserWindow.getAllWindows()[0].getTitle(),
+        );
+    try {
+        // Open (and so convert) the first show.
+        await expect(dialog).toBeVisible({ timeout: 20_000 });
+        await page.getByTestId("convert-show-confirm").click();
+        await expect(page.locator("canvas").first()).toBeVisible({
+            timeout: 30_000,
+        });
+        await expect(dialog).toBeHidden();
+        expect(await title()).toContain(showPath);
+
+        // Another old show: asked over the open one, which stays open.
+        void page.evaluate(
+            (file) => window.electron.openRecentFile(file),
+            otherPath,
+        );
+        await expect(dialog).toBeVisible({ timeout: 20_000 });
+        await expect(page.locator("canvas").first()).toBeVisible();
+        expect(await title()).toContain(showPath);
+
+        // Cancel: back to exactly that show.
+        await page.getByTestId("convert-show-cancel").click();
+        await expect(dialog).toBeHidden();
+        await expect(page.locator("canvas").first()).toBeVisible();
+        expect(await title()).toContain(showPath);
+
+        // Asked again, then the person opens the first show instead: the question is gone,
+        // also after the window reloads.
+        void page.evaluate(
+            (file) => window.electron.openRecentFile(file),
+            otherPath,
+        );
+        await expect(dialog).toBeVisible({ timeout: 20_000 });
+        await page.evaluate(
+            (file) => window.electron.openRecentFile(file),
+            showPath,
+        );
+        await expect(page.locator("canvas").first()).toBeVisible({
+            timeout: 30_000,
+        });
+        await expect(dialog).toBeHidden();
+        expect(await title()).toContain(showPath);
+    } finally {
+        await app.close();
+    }
+
+    // The other show was never written to, and has no backup.
+    expect((await fs.readFile(otherPath)).equals(otherBefore)).toBe(true);
+    expect(
+        fs.existsSync(
+            path.join(
+                path.dirname(showPath),
+                "other-old-show.pre-conversion.dots",
+            ),
+        ),
+    ).toBe(false);
 });

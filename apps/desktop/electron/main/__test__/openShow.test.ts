@@ -173,6 +173,32 @@ describe("opening a show with convert on open", () => {
         expect(stateOf(showPath)).toEqual(before);
         expect(backupsIn(tempDir)).toEqual([]);
         expect(DatabaseServices.getDbPath()).toBe("");
+        expect(result.sqlSuspension).toBeUndefined();
+    });
+
+    it("asking leaves the show that is open alone: still active, its SQL never held off, the other file byte for byte as it was", async () => {
+        // A timeline show is open.
+        const openPath = path.join(tempDir, "open.dots");
+        await createPageShow(openPath);
+        expect((await open(openPath)).status).toBe(200);
+        expect(DatabaseServices.getDbPath()).toBe(openPath);
+        const pageEraHash = sha256(showPath);
+
+        // Opening a page-era file only asks.
+        const { dialogs, calls } = fakeDialogs();
+        const result = await open(showPath, {
+            confirmed: false,
+            dialogs,
+            resume: false,
+        });
+
+        expect(result.status).toBe(NEEDS_CONVERSION_STATUS);
+        expect(result.sqlSuspension).toBeUndefined();
+        expect(calls).toEqual([]);
+        expect(DatabaseServices.getDbPath()).toBe(openPath);
+        expect(await sqlProxyWorks()).toBe(true);
+        expect(sha256(showPath)).toBe(pageEraHash);
+        expect(backupsIn(tempDir)).toHaveLength(1); // only the open show's
     });
 
     it("converts, says so, and holds the renderer's SQL off while it does", async () => {

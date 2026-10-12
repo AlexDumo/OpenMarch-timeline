@@ -5,13 +5,15 @@
  * existing one. It has no Electron dependency, so tests drive it directly.
  *
  * A page-era file opens only once the person has agreed to convert it: until
- * then the open writes nothing and returns `NEEDS_CONVERSION_STATUS`. The
+ * then the open writes nothing, leaves the show that is open (the active path,
+ * the renderer's SQL) alone, and returns `NEEDS_CONVERSION_STATUS`. The
  * backup and the conversion run in a worker thread when `deps.convertWorker`
  * names the built worker, as the app does. The open's own connection is closed
  * while the worker has the file, and reopened after.
  */
+import * as fs from "fs";
 import * as path from "path";
-import type { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import * as DatabaseServices from "../database/database.services";
 import { getOrm } from "../database/db";
 import { DrizzleMigrationService } from "../database/services/DrizzleMigrationService";
@@ -137,6 +139,12 @@ export async function openShowDatabase(
     deps: OpenShowDeps,
     options: OpenShowOptions = {},
 ): Promise<OpenShowResult> {
+    if (!isNewFile && options.conversionConfirmed !== true) {
+        // Asking must not disturb the show that is open: decide before anything below closes it.
+        const backupPath = await conversionToAskAbout(filePath);
+        if (backupPath !== undefined)
+            return { status: NEEDS_CONVERSION_STATUS, backupPath };
+    }
     // An existing file may be converted: from here until the window has reloaded, the page
     // showing the previous file must not reach this one.
     const sqlSuspension = !isNewFile
@@ -254,6 +262,33 @@ async function openWithSuspension(
         return { status: 200, db, sqlSuspension };
     } finally {
         if (!keepOpen && isOpen) db.close();
+    }
+}
+
+/**
+ * Where the backup of `filePath` would go when it is a page-era file to ask about (version 7,
+ * never converted), or undefined. Reads only, on its own read-only connection, so the active
+ * file stays as it is. Undefined as well when the file can't be read and written: the open then
+ * refuses it the usual way.
+ */
+async function conversionToAskAbout(
+    filePath: string,
+): Promise<string | undefined> {
+    let db: DatabaseSync | undefined;
+    try {
+        fs.accessSync(filePath, fs.constants.R_OK | fs.constants.W_OK);
+        db = new DatabaseSync(filePath, { readOnly: true });
+        db.exec(`PRAGMA busy_timeout = ${CONVERSION_BUSY_TIMEOUT_MS}`);
+        if (readUserVersion(db) !== PAGE_MODEL_USER_VERSION) return undefined;
+        // Only a version-7 file loads the converter (kept out of the startup bundle).
+        const { checkConvertOnOpen } =
+            await import("../database/convertOnOpen");
+        const check = checkConvertOnOpen(db, filePath);
+        return check.action === "convert" ? check.backupPath : undefined;
+    } catch {
+        return undefined;
+    } finally {
+        db?.close();
     }
 }
 

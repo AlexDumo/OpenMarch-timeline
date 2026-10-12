@@ -42,8 +42,12 @@ import { repairDatabase } from "../database/repair";
 import {
     NEEDS_CONVERSION_STATUS,
     OPEN_STOPPED_STATUS,
-    type PendingConversion,
 } from "../database/convertOnOpenGate";
+import {
+    createConversionQuestion,
+    PENDING_CONVERSION_CHANNEL,
+    pendingConversionFor,
+} from "./conversionQuestion";
 import { electronConvertOnOpenDialogs } from "./convertOnOpenDialogs";
 import {
     conversionWorkersStopped,
@@ -369,17 +373,21 @@ function sendLoadFileResponse(resCode: number) {
 }
 
 /**
- * The page-era file waiting for the person to agree to convert it, or null. Set when an open
- * returns `NEEDS_CONVERSION_STATUS`; the renderer's `ConvertShowDialog` reads it after the window
- * reloads (or loads, at startup) and answers with `conversion:confirm` or `conversion:cancel`.
+ * The page-era file waiting for the person to agree to convert it. Asked when an open returns
+ * `NEEDS_CONVERSION_STATUS`; the renderer's `ConvertShowDialog` reads it when the window loads
+ * and hears of each change, shows it over the show that is open (or the launch page), and
+ * answers with `conversion:confirm` or `conversion:cancel`. Any other open, a new show or a
+ * close forgets it.
  */
-let pendingConversion: PendingConversion | null = null;
+const conversionQuestion = createConversionQuestion((pending) => {
+    if (win && !win.isDestroyed())
+        win.webContents.send(PENDING_CONVERSION_CHANNEL, pending);
+});
 
-/** Converts and opens the pending file, now that the person agreed. */
+/** Closes the show that is open, then converts and opens the pending file: the person agreed. */
 async function confirmPendingConversion(): Promise<number> {
-    const pending = pendingConversion;
+    const pending = conversionQuestion.take();
     if (!pending) return -1;
-    pendingConversion = null;
     const resCode = await setActiveDb(pending.filePath, false, {
         conversionConfirmed: true,
         conversionBackupPath: pending.backupPath,
@@ -390,7 +398,8 @@ async function confirmPendingConversion(): Promise<number> {
 }
 
 async function openRecentFile(filePath: string) {
-    store.set("databasePath", filePath);
+    // setActiveDb saves the path once the file opens; a page-era file only asks first, and the
+    // show that is open stays the one to reopen.
     addRecentFile(filePath);
 
     const resCode = await setActiveDb(filePath);
@@ -464,13 +473,12 @@ function initDatabaseIpcHandlers() {
         }
     });
     ipcMain.handle("audio:insert", async () => insertAudioFile());
-    ipcMain.handle("conversion:getPending", () => pendingConversion);
+    ipcMain.handle("conversion:getPending", () => conversionQuestion.current());
     ipcMain.handle("conversion:confirm", async () =>
         confirmPendingConversion(),
     );
-    ipcMain.handle("conversion:cancel", () => {
-        pendingConversion = null;
-    });
+    // The show that is open (if any) was never touched, so the person is back where they were.
+    ipcMain.handle("conversion:cancel", () => conversionQuestion.forget());
 }
 
 function initRecentFilesIpcHandlers() {
@@ -890,6 +898,7 @@ async function openDatabaseAtPathWithoutReload(
 
         store.set("databasePath", filePath);
         win?.setTitle("OpenMarch - " + filePath);
+        conversionQuestion.forget();
         return 200;
     } catch (error) {
         captureException(error);
@@ -1241,7 +1250,7 @@ export async function loadDatabaseFile() {
         .then(async (path) => {
             if (path.canceled) return -1;
 
-            store.set("databasePath", path.filePaths[0]); // Save the path for next time
+            // setActiveDb saves the path once the file opens; a page-era file only asks first.
             // Add to recent files
             addRecentFile(path.filePaths[0]);
 
@@ -1308,6 +1317,8 @@ async function closeCurrentFileNow(isAppQuitting: boolean) {
     if (!win) return -1;
 
     closeView3dWindow();
+    // A question about converting another file is stale once the person closes the show.
+    conversionQuestion.forget();
 
     if (currentNewShowDraftPath) {
         await discardNewShowDraft();
@@ -1518,9 +1529,12 @@ async function setActiveDbNow(
     isNewFile: boolean,
     options: OpenShowOptions,
 ) {
+    // This open supersedes any question about converting another file (Confirm already took
+    // its file); a page-era file asks again below.
+    conversionQuestion.forget();
     try {
-        // The 3D View shows one show; close it when the editor switches shows.
-        closeView3dWindow();
+        // The 3D View shows one show; a confirmed conversion is about to replace it.
+        if (options.conversionConfirmed) closeView3dWindow();
 
         const result = await openShowDatabase(
             path,
@@ -1533,20 +1547,24 @@ async function setActiveDbNow(
 
         if (result.status === NEEDS_CONVERSION_STATUS && result.backupPath) {
             if (token !== undefined) DatabaseServices.resumeSqlProxy(token);
-            // A page-era file: nothing was written. Show no file, and let the renderer ask the
-            // person whether to convert it (`ConvertShowDialog` reads this after the reload).
-            pendingConversion = {
-                filePath: resolve(path),
-                fileName: basename(path),
-                backupPath: result.backupPath,
-                backupFileName: basename(result.backupPath),
-                folder: dirname(resolve(path)),
-            };
-            store.delete("databasePath");
-            win?.setTitle("OpenMarch");
-            win?.webContents.reload();
+            // A page-era file: nothing was written, and the show that is open stays open and
+            // saved as the one to reopen. The renderer asks the person over it whether to
+            // convert the file; only Confirm closes it.
+            conversionQuestion.ask(
+                pendingConversionFor(path, result.backupPath),
+            );
+            if (!DatabaseServices.getDbPath()) {
+                // No show is open (at launch, or an open that got as far as closing it): ask
+                // over the launch page.
+                store.delete("databasePath");
+                win?.setTitle("OpenMarch");
+                if (token !== undefined) win?.webContents.reload();
+            }
             return result.status;
         }
+
+        // Any other answer may close the show that is open; the 3D View shows one show.
+        closeView3dWindow();
 
         if (result.status !== 200) {
             if (token !== undefined) DatabaseServices.resumeSqlProxy(token);
