@@ -28,6 +28,7 @@ import { subscribeHistoryChanges } from "@/db-functions/history";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "./usePages";
 import { invalidateTagQueries } from "./tags/queries";
+import { isBasicMode } from "@/stores/EditorModeStore";
 
 /**
  * Page flag writes in timeline mode (ui.md UI-9 **+** and Deleting a flag, P8.13). They change only
@@ -37,14 +38,16 @@ import { invalidateTagQueries } from "./tags/queries";
 
 /**
  * **+** at a beat. Resolves to the new page and its range `[startBeat, endBeat)`, the page timeline
- * the UI selects next (`onAdded`).
+ * the UI selects next (`onAdded`). In Basic it also splits each marcher's move at the new flag
+ * (`splitMoves`); those rows reach the resolver through the database's change events.
  */
 export const addPageFlagMutationOptions = (
     qc: QueryClient,
     onAdded?: (added: AddedPageFlag) => void,
 ) =>
     mutationOptions({
-        mutationFn: (beat: number) => addPageFlag({ db, beat }),
+        mutationFn: (beat: number) =>
+            addPageFlag({ db, beat, splitMoves: isBasicMode() }),
         onSuccess: (added) => {
             void invalidatePageQueries(qc);
             onAdded?.(added);
