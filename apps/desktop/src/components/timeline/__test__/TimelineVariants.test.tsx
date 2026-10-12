@@ -1692,6 +1692,20 @@ describe("the transport's go-to box (UI-12)", () => {
         fireEvent.keyDown(window, { key: "g" });
         expect(screen.getByTestId("timeline-go-to")).toBeInTheDocument();
     });
+
+    it("opens with Control+G and leaves Command+G alone", () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onSeek={vi.fn()}
+            />,
+        );
+        fireEvent.keyDown(window, { key: "g", metaKey: true });
+        expect(screen.queryByTestId("timeline-go-to")).toBeNull();
+        fireEvent.keyDown(window, { key: "g", ctrlKey: true });
+        expect(screen.getByTestId("timeline-go-to")).toBeInTheDocument();
+    });
 });
 
 describe("Fit (UI-12 review)", () => {
