@@ -914,9 +914,9 @@ from it. The spec still wins on the model; this file decides presentation.
       count. Linked and kept are meant to differ at a glance (wp19). Nothing shows without a
       selection (owner). Kept and mixed chains always show; a linked one only on the selected page,
       the page **K** works on, and while its box is hovered (V-211). The chain sits at the bottom
-      left of its box, on the start of the hold bar, 8 px in from the flag before it: 16 px where the
-      page number leaves room, else 12 px, centered in a box too narrow for its number. It never
-      covers the number (owner, 2026-10-12). Where it can't fit, a kept chain becomes a dot (a ring
+      left of its box, on the start of the hold bar, 14 px in from the flag before it (past the start
+      flag's pennant): 16 px where the page number leaves room, else 12 px. It never covers the
+      number (owner, 2026-10-12). Where it can't fit, a kept chain becomes a dot (a ring
       for a mix) and the box's tooltip takes its words, ending "Right-click the page to …" (V-210). Its tooltip names the marchers a click changes, up
       to three ("OT1, OT2 and 4 others" past that): "Keep OT1 and OT8 on Page 3 · They won't follow
       Page 2 any more", "OT1 and OT8 kept on Page 3 · Click to follow Page 2 again", or "2 of the 8

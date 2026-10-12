@@ -10,6 +10,7 @@ import type { LabeledHoldMarks } from "../PageHoldMark";
 import {
     CHAIN_INSET,
     chainFit,
+    keepDotFit,
     keepHereMenu,
     type PageKeepChain,
     type PageKeepChains,
@@ -103,7 +104,10 @@ const show = ({
     keepHere?: TimelineKeepHereMenu;
     selection?: TimelineSelection;
     onSelectionChange?: (selection: TimelineSelection) => void;
-    /** 16: 128px boxes; 3: 24px, the label and no room for a chain; 1.5: 12px, nothing fits */
+    /**
+     * 16: 128px boxes; 5: 40px, the label and no room for a chain but room for a dot; 3: 24px, the
+     * label and no room for either; 2: 16px, no label; 1.5: 12px
+     */
     pixelsPerBeat?: number;
 }) =>
     render(
@@ -250,31 +254,107 @@ describe("the chains on the page boxes", () => {
             expect(button).not.toHaveAttribute("data-reveal");
     });
 
-    it("sits at the bottom left, in from the flag before it, clear of the flag's grip", () => {
+    it("sits at the bottom left, in from the flag before it", () => {
         show({ keepChains: new Map([[3, chain("kept")]]) });
         const [button] = chains();
         const box = screen.getByRole("button", { name: "Page 3" });
         expect(
             parseFloat(button!.style.left) - parseFloat(box.style.left),
         ).toBe(CHAIN_INSET);
-        // On the hold bar: its bottom 2px above the box's
-        expect(
-            parseFloat(button!.style.top) + parseFloat(button!.style.height),
-        ).toBe(24);
+        // On the hold bar: its bottom 2px above the box's, as the dot's
+        expect(button!.style.bottom).toBe("2px");
+        expect(button!.style.top).toBe("");
     });
 
-    it("fits beside the label at the largest size that leaves it clear, or centered without one", () => {
+    it("on the selected page, is clear of the start flag's pennant, the playhead and the flag's grip", () => {
+        // Page 3 selected: its box from beat 9 to 17, the start flag on beat 9
+        show({
+            keepChains: new Map([[3, chain("follows")]]),
+            selection: {
+                kind: "range",
+                range: { startBeatIndex: 9, endBeatIndex: 17 },
+            },
+        });
+        const [button] = chains();
+        const ruler = screen.getByTestId("timeline-page-ruler");
+        const pennant = screen.getByTestId("timeline-start-pennant");
+        // The flag's x in the layer the pennant and the playhead are drawn in
+        const flagX = parseFloat(pennant.style.left);
+        const box = screen.getByRole("button", { name: "Page 3" });
+        // The box starts on that flag
+        expect(parseFloat(ruler.style.left) + parseFloat(box.style.left)).toBe(
+            flagX,
+        );
+        // The chain's x in that layer: the ruler starts `initialPageWidth` left, inside its 1px border
+        const chainX =
+            parseFloat(ruler.style.left) + 1 + parseFloat(button!.style.left);
+        // The pennant's handle is 14px wide from the flag, and the 16px chain reaches up into its
+        // 14px height, so the chain must start past it
+        expect(pennant.className).toMatch(/\bw-14\b/);
+        expect(pennant.className).toMatch(/\bh-14\b/);
+        expect(chainX).toBeGreaterThan(flagX + 14);
+        // The playhead's handle (and the start flag's, and the grip at most) is 12px centered on
+        // its beat: 6px into the box
+        const playhead = screen.getByTestId("timeline-playhead");
+        expect(playhead.className).toMatch(/\bw-12\b/);
+        expect(playhead.className).toMatch(/-translate-x-1\/2/);
+        expect(chainX).toBeGreaterThan(flagX + 6);
+        // And clear of the playhead on the box's own flag, at its right
+        expect(chainX + 16).toBeLessThan(
+            flagX + parseFloat(box.style.width) - 6,
+        );
+    });
+
+    it("keeps the label from sliding onto it: the box's padding ends past the chain", () => {
+        // The label is sticky to the viewport's right edge; a sticky element never leaves its
+        // box's padding, so with the box running off the right edge it stops before the chain
+        show({ keepChains: new Map([[3, chain("kept")]]) });
+        const [button] = chains();
+        const box = screen.getByRole("button", { name: "Page 3" });
+        const label = box.querySelector(".sticky")!;
+        expect(label.textContent).toBe("3");
+        expect(parseFloat(box.style.paddingLeft)).toBeGreaterThanOrEqual(
+            parseFloat(button!.style.left) -
+                parseFloat(box.style.left) +
+                parseFloat(button!.style.width),
+        );
+        // A box without a chain keeps its usual padding
+        expect(
+            screen.getByRole("button", { name: "Page 2" }).style.paddingLeft,
+        ).toBe("");
+    });
+
+    it("fits beside the label at the largest size that leaves it clear, else not at all", () => {
         // 16px where there's room, 12px where only that fits beside a one-digit label
         expect(chainFit(128, 1)).toEqual({ size: 16, offset: CHAIN_INSET });
-        expect(chainFit(43, 1)).toEqual({ size: 16, offset: CHAIN_INSET });
-        expect(chainFit(42, 1)).toEqual({ size: 12, offset: CHAIN_INSET });
-        expect(chainFit(39, 1)).toEqual({ size: 12, offset: CHAIN_INSET });
+        expect(chainFit(49, 1)).toEqual({ size: 16, offset: CHAIN_INSET });
+        expect(chainFit(48, 1)).toEqual({ size: 12, offset: CHAIN_INSET });
+        expect(chainFit(45, 1)).toEqual({ size: 12, offset: CHAIN_INSET });
+        expect(chainFit(44, 1)).toBeNull();
         // A longer label needs more room
-        expect(chainFit(42, 2)).toBeNull();
-        // No label: in from the flag, or the small one centered
-        expect(chainFit(32, 0)).toEqual({ size: 16, offset: CHAIN_INSET });
-        expect(chainFit(21, 0)).toEqual({ size: 12, offset: 5 });
-        expect(chainFit(13, 0)).toBeNull();
+        expect(chainFit(48, 2)).toBeNull();
+        // No label: in from the flag and clear of the flag at the right, or not at all; never
+        // centered over the flags' handles, however narrow the box
+        expect(chainFit(38, 0)).toEqual({ size: 16, offset: CHAIN_INSET });
+        expect(chainFit(34, 0)).toEqual({ size: 12, offset: CHAIN_INSET });
+        for (const width of [14, 16, 21, 30, 33])
+            expect(chainFit(width, 0)).toBeNull();
+    });
+
+    it("puts a dot as far in as a chain where the label leaves room, never nearer the flag than 3px", () => {
+        // As a chain would sit, clear of the label
+        expect(keepDotFit(128, 1)).toEqual({
+            offset: CHAIN_INSET,
+            clear: true,
+        });
+        // Nearer the flag where the label needs the room
+        expect(keepDotFit(40, 1)).toEqual({ offset: 13, clear: true });
+        // No room beside the label: at the minimum
+        expect(keepDotFit(24, 1)).toEqual({ offset: 3, clear: false });
+        // No label: in from the flag, or centered in a box too narrow for that
+        expect(keepDotFit(30, 0)).toEqual({ offset: 14, clear: true });
+        expect(keepDotFit(16, 0)).toEqual({ offset: 5, clear: true });
+        expect(keepDotFit(12, 0)).toEqual({ offset: 2, clear: true });
     });
 
     it("never covers the page number: a narrow box shows a dot for kept or mixed, nothing for linked", () => {
@@ -293,7 +373,7 @@ describe("the chains on the page boxes", () => {
             "mixed",
         ]);
         // Beside the label, at the start of the bar
-        expect(dots[0]!.className).toMatch(/left-\[3px\]/);
+        expect(dots[0]!.style.left).toBe("3px");
         // Inside the box, which still selects on a click
         const box = screen.getByRole("button", { name: "Page 3" });
         expect(box.contains(dots[0]!)).toBe(true);
@@ -326,15 +406,32 @@ describe("the chains on the page boxes", () => {
         );
     });
 
-    it("a box too narrow for its label centers the small chain, or its dot", () => {
+    it("a dot sits in from the flag where the label leaves room, and the label stops before it", () => {
         show({
             keepChains: new Map([[3, chain("kept")]]),
-            pixelsPerBeat: 1.5,
+            pixelsPerBeat: 5,
         });
         expect(chains()).toEqual([]);
-        expect(screen.getByTestId("page-keep-dot").className).toMatch(
-            /left-1\/2/,
-        );
+        const dot = screen.getByTestId("page-keep-dot");
+        expect(dot.style.left).toBe("13px");
+        expect(
+            screen.getByRole("button", { name: "Page 3" }).style.paddingLeft,
+        ).toBe("23px");
+    });
+
+    it("a box too narrow for its label shows a dot, not a chain over the flags' handles", () => {
+        // 16px: before, a 12px chain was centered here, under the flags' handles
+        show({
+            keepChains: new Map([
+                [3, chain("kept")],
+                [4, chain("follows")],
+            ]),
+            pixelsPerBeat: 2,
+        });
+        expect(chains()).toEqual([]);
+        const dots = screen.getAllByTestId("page-keep-dot");
+        expect(dots).toHaveLength(1);
+        expect(dots[0]!.style.left).toBe("5px");
     });
 });
 
