@@ -971,6 +971,14 @@ from it. The spec still wins on the model; this file decides presentation.
   - Deferred: a stored "lock here" for every later page (an Eos-style block), look-preserving
     ripple delete, live return links, hold marks and chains without a selection, and
     "Hold" on coordinate sheets. Marchers are never "pinned": the start flag owns that word.
+- **UI-19: Basic and Expert modes (project owner, 2026-10-11).** The page-box timeline becomes a
+  first-class **Basic** mode beside the full timeline (**Expert**). Basic is a UI over timeline data,
+  not page mode: same file, same resolver, a different bottom panel and a narrower set of edits. Basic
+  holds across pages (UI-18), never writes a move across a page flag or overlapping another move, and
+  splits a marcher's move at a mid-page count so the page's end position is kept. Expert data that
+  Basic can't express stays, plays, and is locked per marcher in Basic. The mode is an app setting
+  asked in a first-launch welcome flow. Design and work packages: `research/basic-mode/README.md`;
+  feel defaults are V-200 to V-206.
 
 ## Mapping the spec onto the view model
 
