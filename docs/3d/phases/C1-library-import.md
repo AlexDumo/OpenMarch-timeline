@@ -240,8 +240,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C1.11: Show embedding and `library_blobs`
 
-- Owner: none
-- Status: open
+- Owner: trevor (3d/c1-show-embedding)
+- Status: in-progress
 - PR: none
 - Parallel: yes
 - Depends on: C1.3, C1.6
