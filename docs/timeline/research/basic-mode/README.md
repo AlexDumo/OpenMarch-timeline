@@ -116,6 +116,10 @@ shapeless moves on one layer, ordered, not overlapping; see "Simple"):
   (the two moves merge), like UI-18's "back onto the start clears the move" (lead default).
 - **Remove this count's position** merges `[s, P)` and `[P, e)` into `[s, e)` with the second
   move's destination.
+- A merge that goes nowhere (its destination is where `s` is) is deleted instead, by both of
+  those: a point set in a hold and removed again leaves the hold as it was, with no tick at the
+  hold's end, and a page the marcher held through follows earlier pages again (lead default). A
+  kept spot is merged as usual.
 - Timelines stay one per range (C-12). Marchers split at different counts get different timelines.
   The page timeline `[a, b)` stays for marchers that don't split.
 
