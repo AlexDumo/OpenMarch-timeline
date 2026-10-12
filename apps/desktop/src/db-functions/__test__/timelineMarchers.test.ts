@@ -2,10 +2,8 @@ import { afterEach, describe, expect } from "vitest";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import type Page from "@/global/classes/Page";
-import {
-    convertPagesToTimeline,
-    readShowTiming,
-} from "@/timeline/convert/writePageConversion";
+import { convertPagesToTimeline } from "@/test/convertPages";
+import { readShowTiming } from "@/timeline/showTiming";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
 import {
     startTimelineResolver,
@@ -23,14 +21,11 @@ import {
     createTimelineTransitionsInTransaction,
     setTimelineTransitionDestinationInTransaction,
 } from "../timelineTransitions";
-import {
-    keepFixturesInPageMode,
-    setTimelineModeFlag,
-} from "@/test/timelineMode";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
 
 // P7.17: these tests set up timeline mode themselves
 keepFixturesInPageMode(
-    "its tests convert the show or write timeline rows, and set the flag, themselves",
+    "its tests convert the show or write timeline rows themselves",
 );
 
 /**
@@ -44,7 +39,6 @@ afterEach(() => stopTimelineResolver());
 
 const TABLES = [
     schema.marchers,
-    schema.marcher_pages,
     schema.timelines,
     schema.timeline_shapes,
     schema.timeline_transitions,
@@ -65,13 +59,9 @@ const resolver = () => {
     return r!;
 };
 
-/**
- * Converts the show, sets the file's timeline flag (on unless `flag` is false), starts the store
- * on it, and returns the pages in order.
- */
-const setUp = async (db: DbConnection, flag = true): Promise<Page[]> => {
+/** Converts the show, starts the store on it, and returns the pages in order. */
+const setUp = async (db: DbConnection): Promise<Page[]> => {
     await convertPagesToTimeline(db);
-    await setTimelineModeFlag(db, flag);
     await startTimelineResolver(db);
     const { pages } = await readShowTiming(db);
     return [...pages].sort((a, b) => a.order - b.order);
@@ -313,7 +303,6 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             db,
             marchersAndPages: _,
         }) => {
-            await setTimelineModeFlag(db, true);
             await startTimelineResolver(db);
             // Stored timelines, all of them empty: [0, 8) holds [2, 6); [6, 12) only partly
             // overlaps [0, 8); [12, 16) is after both
@@ -650,55 +639,6 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             expect(vacancies().length).toBe(ts.length);
             expect(await violations(db)).toEqual([]);
             await roundTrip(db, before, await snapshot(db));
-        });
-    });
-
-    describe("flag off", () => {
-        it("creates and deletes marchers as page mode always has", async ({
-            db,
-            marchersAndPages,
-        }) => {
-            await setUp(db, false);
-            const before = await snapshot(db);
-            const [created] = await createMarchers({
-                db,
-                newMarchers: [NEW_MARCHER],
-            });
-            const afterCreate = await snapshot(db);
-            // No timeline row changed, the home is the column default, and page rows were added
-            for (const name of [
-                "timelines",
-                "timeline_shapes",
-                "timeline_transitions",
-                "timeline_assignments",
-                "timeline_slot_destinations",
-            ])
-                expect(afterCreate[name], name).toEqual(before[name]);
-            const marcher = await db
-                .select()
-                .from(schema.marchers)
-                .where(eq(schema.marchers.id, created!.id))
-                .get();
-            expect([marcher!.home_x, marcher!.home_y]).toEqual([0, 0]);
-            expect(afterCreate.marcher_pages!.length).toBeGreaterThan(
-                before.marcher_pages!.length,
-            );
-
-            // Delete: the assignments go through the cascade, slot counts stay
-            const victim = marchersAndPages.expectedMarchers[0]!.id;
-            await deleteMarchers({ db, marcherIds: new Set([victim]) });
-            const afterDelete = await snapshot(db);
-            expect(afterDelete.timeline_transitions).toEqual(
-                before.timeline_transitions,
-            );
-            expect(afterDelete.timeline_slot_destinations).toEqual(
-                before.timeline_slot_destinations,
-            );
-            expect(
-                (
-                    afterDelete.timeline_assignments as { marcher_id: number }[]
-                ).some((r) => r.marcher_id === victim),
-            ).toBe(false);
         });
     });
 });

@@ -6,20 +6,24 @@ import * as path from "path";
 import { app } from "electron";
 import { getOrm } from "./db";
 import { DrizzleMigrationService } from "./services/DrizzleMigrationService";
-import { liftPageEraFreezeTriggers } from "./migrations/triggers";
 import {
-    applyFileVersionDecision,
     fileTooNewMessage,
     isSupportedUserVersion,
     MAX_SUPPORTED_USER_VERSION,
+    NEW_FILE_USER_VERSION,
+    PAGE_MODEL_USER_VERSION,
     readUserVersion,
 } from "./fileVersion";
 
+/**
+ * Sets up the repaired file at `version`: the version of the file it repairs, so a page-era file
+ * (7) stays one, with the page-era tables to copy into, and is converted when it opens.
+ */
 export const initializeAndMigrateDatabase = async (
     newDb: DatabaseSync,
+    version: number = NEW_FILE_USER_VERSION,
 ): Promise<void> => {
-    // A new, empty file: set its version (7, the Drizzle-era page model).
-    applyFileVersionDecision(newDb, true);
+    newDb.exec(`PRAGMA user_version = ${version}`);
 
     const drizzleDb = getOrm(newDb);
     const migrator = new DrizzleMigrationService(drizzleDb, newDb);
@@ -96,23 +100,14 @@ export const copyDataFromOriginalDatabase = (
         )
         .all() as Array<{ name: string }>;
 
-    // The workspace settings are copied first, so a timeline-mode file's flag is on before its
-    // frozen page-era rows are copied. The freeze (P9.5) is lifted for the copy and put back
-    // whatever happens, even if detaching fails.
-    let restoreFreeze: (() => void) | undefined;
-    try {
-        restoreFreeze = liftPageEraFreezeTriggers(newDb);
-        copyTablesFromAttachedOriginal(
-            originalDb,
-            newDb,
-            originalDbPath,
-            tables,
-            excludedTables,
-            singleRowTables,
-        );
-    } finally {
-        restoreFreeze?.();
-    }
+    copyTablesFromAttachedOriginal(
+        originalDb,
+        newDb,
+        originalDbPath,
+        tables,
+        excludedTables,
+        singleRowTables,
+    );
 };
 
 /** Attaches the original file to `newDb`, copies its tables, and always detaches it. */
@@ -263,6 +258,7 @@ export const copyFieldPropertiesFromOriginalDatabase = (
     updateStmt.run(...values);
 };
 
+/** Removes `marcher_pages` rows whose marcher or page is gone. Page-era files only. */
 export const removeOrphanMarcherPages = (db: DatabaseSync): void => {
     db.prepare(
         `DELETE FROM marcher_pages WHERE marcher_id NOT IN (SELECT id FROM marchers)`,
@@ -313,9 +309,16 @@ export const repairDatabase = async (originalDbPath: string) => {
         // Create the new database at the temp path in the app data directory.
         newDb = new DatabaseSync(tempDbPath);
 
+        // A page-era file is repaired as one, so its positions are copied and then converted
+        // when it opens; anything else becomes a timeline file.
+        const pageEra = sourceVersion === PAGE_MODEL_USER_VERSION;
+
         try {
             // Initialize and run migrations on the new database
-            await initializeAndMigrateDatabase(newDb);
+            await initializeAndMigrateDatabase(
+                newDb,
+                pageEra ? PAGE_MODEL_USER_VERSION : NEW_FILE_USER_VERSION,
+            );
 
             // Turn off foreign keys for data copying
             newDb.prepare("PRAGMA foreign_keys = OFF").run();
@@ -331,10 +334,10 @@ export const repairDatabase = async (originalDbPath: string) => {
             newDb.prepare("PRAGMA foreign_keys = ON").run();
 
             // Remove orphaned marcher_pages entries
-            removeOrphanMarcherPages(newDb);
+            if (pageEra) removeOrphanMarcherPages(newDb);
 
-            // Keep a supported version higher than a new file's (8, the
-            // timeline model), so repair never lowers a file's version.
+            // Keep a supported version higher than the repaired file's, so repair never lowers
+            // a file's version.
             if (
                 isSupportedUserVersion(sourceVersion) &&
                 sourceVersion > readUserVersion(newDb)

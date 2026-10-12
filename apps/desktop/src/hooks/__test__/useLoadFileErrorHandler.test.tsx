@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useLoadFileErrorHandler } from "../useLoadFileErrorHandler";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
-import { OPEN_STOPPED_STATUS } from "@om-electron/database/convertOnOpenGate";
+import {
+    NEEDS_CONVERSION_STATUS,
+    OPEN_STOPPED_STATUS,
+} from "@om-electron/database/convertOnOpenGate";
 import { FILE_TOO_NEW_STATUS } from "@om-electron/database/fileVersion";
 
 describe("useLoadFileErrorHandler", () => {
@@ -28,6 +31,8 @@ describe("useLoadFileErrorHandler", () => {
         [200, false],
         // Convert on open (P9.3): the main process already showed a dialog.
         [OPEN_STOPPED_STATUS, false],
+        // A page-era file: ConvertShowDialog asks instead.
+        [NEEDS_CONVERSION_STATUS, false],
         [404, true],
         [FILE_TOO_NEW_STATUS, true],
         [-1, true],

@@ -26,6 +26,7 @@ import {
 } from "@om-electron/database/convertOnOpenProtocol";
 import {
     backupsIn,
+    migrationsFolder,
     createLargePageShow,
     createPageShow,
     stateOf,
@@ -115,6 +116,7 @@ describe("the conversion worker", () => {
         extra: Partial<ConvertInWorkerOptions> = {},
     ): ConvertInWorkerOptions => ({
         workerPath: worker.workerPath,
+        migrationsFolder,
         busyTimeoutMs: 5000,
         ...extra,
     });
@@ -174,7 +176,7 @@ describe("the conversion worker", () => {
             expect(fs.existsSync(result.backupPath)).toBe(true);
         expect(stateOf(showPath)).toMatchObject({
             userVersion: 8,
-            timelineMode: true,
+            pageEraTables: [],
         });
     });
 

@@ -39,7 +39,11 @@ import {
     startAutomaticUpdates,
 } from "./update";
 import { repairDatabase } from "../database/repair";
-import { OPEN_STOPPED_STATUS } from "../database/convertOnOpenGate";
+import {
+    NEEDS_CONVERSION_STATUS,
+    OPEN_STOPPED_STATUS,
+    type PendingConversion,
+} from "../database/convertOnOpenGate";
 import { electronConvertOnOpenDialogs } from "./convertOnOpenDialogs";
 import {
     conversionWorkersStopped,
@@ -53,6 +57,7 @@ import {
     resumeSqlProxyAfterReload,
     withOpenLock,
     type OpenShowDeps,
+    type OpenShowOptions,
 } from "./openShow";
 import { choosePreviousDotsFile } from "./services/previous-dots-import-service";
 import { closeView3dWindow, initView3dWindow } from "./view3dWindow";
@@ -354,11 +359,33 @@ async function showSaveDialogHandler(options: Electron.SaveDialogOptions) {
 
 /**
  * Lets the renderer explain a refused file (for example one from a newer release). Skips an open
- * that a main-process dialog already explained (convert on open), so no second dialog shows.
+ * that a main-process dialog already explained (convert on open), and a page-era file waiting for
+ * the person to agree to convert it (the renderer asks), so no second dialog shows.
  */
 function sendLoadFileResponse(resCode: number) {
-    if (resCode === OPEN_STOPPED_STATUS) return;
+    if (resCode === OPEN_STOPPED_STATUS || resCode === NEEDS_CONVERSION_STATUS)
+        return;
     win?.webContents.send("load-file-response", resCode);
+}
+
+/**
+ * The page-era file waiting for the person to agree to convert it, or null. Set when an open
+ * returns `NEEDS_CONVERSION_STATUS`; the renderer's `ConvertShowDialog` reads it after the window
+ * reloads (or loads, at startup) and answers with `conversion:confirm` or `conversion:cancel`.
+ */
+let pendingConversion: PendingConversion | null = null;
+
+/** Converts and opens the pending file, now that the person agreed. */
+async function confirmPendingConversion(): Promise<number> {
+    const pending = pendingConversion;
+    if (!pending) return -1;
+    pendingConversion = null;
+    const resCode = await setActiveDb(pending.filePath, false, {
+        conversionConfirmed: true,
+    });
+    if (resCode === 200) addRecentFile(pending.filePath);
+    sendLoadFileResponse(resCode);
+    return resCode;
 }
 
 async function openRecentFile(filePath: string) {
@@ -420,8 +447,13 @@ function initDatabaseIpcHandlers() {
             const newPath = await repairDatabase(dbPath);
             const resCode = await setActiveDb(newPath);
             if (resCode === 200) return newPath;
-            // A main-process dialog already explained why it didn't open.
-            if (resCode === OPEN_STOPPED_STATUS) return null;
+            // A main-process dialog already explained why it didn't open, or the renderer asks
+            // the person before converting the repaired copy.
+            if (
+                resCode === OPEN_STOPPED_STATUS ||
+                resCode === NEEDS_CONVERSION_STATUS
+            )
+                return null;
             throw new Error(
                 `The repaired file was saved at ${newPath} but couldn't be opened (status ${resCode}).`,
             );
@@ -431,6 +463,13 @@ function initDatabaseIpcHandlers() {
         }
     });
     ipcMain.handle("audio:insert", async () => insertAudioFile());
+    ipcMain.handle("conversion:getPending", () => pendingConversion);
+    ipcMain.handle("conversion:confirm", async () =>
+        confirmPendingConversion(),
+    );
+    ipcMain.handle("conversion:cancel", () => {
+        pendingConversion = null;
+    });
 }
 
 function initRecentFilesIpcHandlers() {
@@ -842,7 +881,10 @@ async function openDatabaseAtPathWithoutReload(
         if (result.sqlSuspension !== undefined)
             DatabaseServices.resumeSqlProxy(result.sqlSuspension);
         if (result.status !== 200) {
-            return result.status === OPEN_STOPPED_STATUS ? result.status : -1;
+            return result.status === OPEN_STOPPED_STATUS ||
+                result.status === NEEDS_CONVERSION_STATUS
+                ? result.status
+                : -1;
         }
 
         store.set("databasePath", filePath);
@@ -1453,26 +1495,57 @@ const reloadEvents = () => (win && !win.isDestroyed() ? win.webContents : null);
  *
  * @param path path to the database file
  * @param isNewFile True if this is a new file, false if it is an existing file
- * @returns 200, a refusal code, or `OPEN_STOPPED_STATUS` when a main-process
- *   dialog already explained why nothing opened
+ * @returns 200, a refusal code, `OPEN_STOPPED_STATUS` when a main-process
+ *   dialog already explained why nothing opened, or `NEEDS_CONVERSION_STATUS`
+ *   when the renderer must first ask to convert a page-era file
  */
-function setActiveDb(path: string, isNewFile = false): Promise<number> {
+function setActiveDb(
+    path: string,
+    isNewFile = false,
+    options: OpenShowOptions = {},
+): Promise<number> {
     // Get the current path from the store if the path is "."
     // I.e. last opened file
     if (path === ".") path = store.get("databasePath") as string;
     return openOnce(path, () =>
-        withOpenLock(() => setActiveDbNow(path, isNewFile)),
+        withOpenLock(() => setActiveDbNow(path, isNewFile, options)),
     );
 }
 
-async function setActiveDbNow(path: string, isNewFile: boolean) {
+async function setActiveDbNow(
+    path: string,
+    isNewFile: boolean,
+    options: OpenShowOptions,
+) {
     try {
         // The 3D View shows one show; close it when the editor switches shows.
         closeView3dWindow();
 
-        const result = await openShowDatabase(path, isNewFile, openShowDeps());
+        const result = await openShowDatabase(
+            path,
+            isNewFile,
+            openShowDeps(),
+            options,
+        );
         result.db?.close();
         const token = result.sqlSuspension;
+
+        if (result.status === NEEDS_CONVERSION_STATUS && result.backupPath) {
+            if (token !== undefined) DatabaseServices.resumeSqlProxy(token);
+            // A page-era file: nothing was written. Show no file, and let the renderer ask the
+            // person whether to convert it (`ConvertShowDialog` reads this after the reload).
+            pendingConversion = {
+                filePath: resolve(path),
+                fileName: basename(path),
+                backupPath: result.backupPath,
+                backupFileName: basename(result.backupPath),
+                folder: dirname(resolve(path)),
+            };
+            store.delete("databasePath");
+            win?.setTitle("OpenMarch");
+            win?.webContents.reload();
+            return result.status;
+        }
 
         if (result.status !== 200) {
             if (token !== undefined) DatabaseServices.resumeSqlProxy(token);
@@ -1487,8 +1560,8 @@ async function setActiveDbNow(path: string, isNewFile: boolean) {
             }
             store.delete("databasePath");
             if (result.status === OPEN_STOPPED_STATUS) {
-                // Convert on open (P9.3, behind OPENMARCH_CONVERT_ON_OPEN until P9.4): a dialog
-                // already told the person why the file didn't open. Open nothing.
+                // Convert on open: a dialog already told the person why the file didn't open.
+                // Open nothing.
                 win?.setTitle("OpenMarch");
                 win?.webContents.reload();
             } else {

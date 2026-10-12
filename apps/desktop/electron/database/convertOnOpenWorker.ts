@@ -1,5 +1,5 @@
 /**
- * The convert-on-open worker thread (P9.8). Backs up and converts one file
+ * The convert-on-open worker thread (P9.8). Backs up, migrates and converts one file
  * with `convertFileOnOpen`, on its own `node:sqlite` connection, so the
  * main process's event loop keeps running (Windows marks a window "Not
  * Responding" after about 5 s, and a large show takes seconds).
@@ -46,14 +46,20 @@ export async function runConvertWorker(
     request: ConvertWorkerRequest,
     post: (message: ConvertWorkerMessage) => void,
 ): Promise<void> {
-    const { filePath, busyTimeoutMs, convertedAt, test = {} } = request;
+    const {
+        filePath,
+        migrationsFolder,
+        busyTimeoutMs,
+        convertedAt,
+        test = {},
+    } = request;
     const db = new DatabaseSync(filePath);
     let result: ConvertOnOpenResult;
     try {
         db.exec(
             `PRAGMA busy_timeout = ${Math.max(0, Math.floor(busyTimeoutMs))}`,
         );
-        result = await convertFileOnOpen(filePath, db, {
+        result = await convertFileOnOpen(filePath, db, migrationsFolder, {
             onProgress: (progress) => {
                 post({ type: "progress", progress });
                 if (progress.phase === "convert" && test.blockPerPageMs)

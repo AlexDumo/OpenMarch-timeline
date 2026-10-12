@@ -25,8 +25,8 @@ import * as path from "path";
 import { randomBytes } from "crypto";
 import { readUserVersion } from "./fileVersion";
 
-/** Text in the backup's name, before the extension. */
-export const BACKUP_NAME_SUFFIX = "before timeline conversion";
+/** Text in the backup's name, before the extension: `<name>.pre-conversion.dots`. */
+export const BACKUP_NAME_SUFFIX = "pre-conversion";
 
 /** Most numbered names tried before giving up. */
 const MAX_NAME_ATTEMPTS = 100;
@@ -110,17 +110,17 @@ function entryExists(p: string): boolean {
     }
 }
 
-/** `<base> (before timeline conversion[ n])<ext>`, with `base` cut to fit 255 bytes. */
+/** `<base>.pre-conversion[-n]<ext>`, with `base` cut to fit 255 bytes. */
 function backupName(base: string, ext: string, n: number): string {
-    const label = n === 1 ? BACKUP_NAME_SUFFIX : `${BACKUP_NAME_SUFFIX} ${n}`;
-    const tail = ` (${label})${ext}`;
+    const label = n === 1 ? BACKUP_NAME_SUFFIX : `${BACKUP_NAME_SUFFIX}-${n}`;
+    const tail = `.${label}${ext}`;
     const room = MAX_NAME_BYTES - byteLength(tail);
     return `${truncateUtf8(base, Math.max(room, 0))}${tail}`;
 }
 
 /**
- * The name for a backup of `filePath`: `<name> (before timeline conversion).dots`,
- * or `<name> (before timeline conversion 2).dots` (3, ...) when that exists.
+ * The name for a backup of `filePath`: `<name>.pre-conversion.dots`,
+ * or `<name>.pre-conversion-2.dots` (3, ...) when that exists.
  * Existing includes dangling symlinks. Starts at number `startAt` (1 is the
  * unnumbered name). Only checks which names are free; it creates nothing.
  * Throws a `RangeError` after `MAX_NAME_ATTEMPTS` taken names.
@@ -419,7 +419,7 @@ export function backupBeforeConversion(
             } catch (e) {
                 return fail(
                     "unknown",
-                    `No free name for a backup was found in "${dir}". Your file was not changed. Remove old "${BACKUP_NAME_SUFFIX}" backups, then try again. (${e instanceof Error ? e.message : String(e)})`,
+                    `No free name for a backup was found in "${dir}". Your file was not changed. Remove old ".${BACKUP_NAME_SUFFIX}" backups, then try again. (${e instanceof Error ? e.message : String(e)})`,
                 );
             }
             try {

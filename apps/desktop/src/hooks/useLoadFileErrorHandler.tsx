@@ -2,7 +2,10 @@ import { useEffect } from "react";
 import { T } from "@tolgee/react";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
 import { FILE_TOO_NEW_STATUS } from "@om-electron/database/fileVersion";
-import { OPEN_STOPPED_STATUS } from "@om-electron/database/convertOnOpenGate";
+import {
+    NEEDS_CONVERSION_STATUS,
+    OPEN_STOPPED_STATUS,
+} from "@om-electron/database/convertOnOpenGate";
 
 const FILE_ERROR_GUIDE_URLS = {
     forbidden:
@@ -46,8 +49,13 @@ export function useLoadFileErrorHandler() {
     useEffect(() => {
         const unsubscribe = window.electron.onLoadFileResponse(
             (resCode: number) => {
-                // OPEN_STOPPED_STATUS: the main process already showed a dialog (convert on open).
-                if (resCode !== 200 && resCode !== OPEN_STOPPED_STATUS) {
+                // OPEN_STOPPED_STATUS: the main process already showed a dialog (convert on open);
+                // NEEDS_CONVERSION_STATUS: ConvertShowDialog asks the person.
+                if (
+                    resCode !== 200 &&
+                    resCode !== OPEN_STOPPED_STATUS &&
+                    resCode !== NEEDS_CONVERSION_STATUS
+                ) {
                     switch (resCode) {
                         case 403:
                             setTitle("fileAccessDialogError.forbidden.title");

@@ -2,8 +2,8 @@
  * Starts the convert-on-open worker (P9.8) and turns what it sends into a
  * `ConvertOnOpenResult`. The backup and the conversion run on the worker's
  * own `node:sqlite` connection in a `node:worker_threads` thread, so the main
- * process keeps handling events (and the "Preparing your file…" window keeps
- * painting) while a large show converts.
+ * process keeps handling events (and sends the renderer its progress) while a
+ * large show converts.
  *
  * It imports no Electron or renderer module, so tests drive it with a built
  * worker. The caller must not hold a connection to the file with an open
@@ -39,6 +39,8 @@ export const defaultConvertWorkerPath = (mainDir: string) =>
 export interface ConvertInWorkerOptions {
     /** The built worker script. */
     workerPath: string;
+    /** The app's migrations folder. */
+    migrationsFolder: string;
     /** How long the worker's connection waits for another connection's lock. */
     busyTimeoutMs: number;
     onProgress?: (progress: ConvertProgress) => void;
@@ -141,6 +143,7 @@ export function convertInWorker(
     return new Promise<ConvertOnOpenResult>((resolve) => {
         const request: ConvertWorkerRequest = {
             filePath,
+            migrationsFolder: options.migrationsFolder,
             busyTimeoutMs: options.busyTimeoutMs,
             convertedAt,
             test: options.test,
