@@ -1,0 +1,9 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "allowImportingTsExtensions": true,
+        "types": ["node"]
+    },
+    "include": [".", "../src/**/*.d.ts", "../electron-env.d.ts"],
+    "exclude": []
+}

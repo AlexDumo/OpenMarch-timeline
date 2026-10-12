@@ -1,12 +1,16 @@
 import type { LabeledHoldMarks } from "./PageHoldMark";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineClipResizeCommands } from "./TimelineClipResize";
+import type { TimelineDrillFlagMove } from "./TimelinePageFlagHandles";
 import type { ReactNode } from "react";
+import type { AudioEnvelope } from "@/timeline/timelineWaveform";
+import type { CountUnit, TypedSection } from "@/timeline/tempo";
 import type {
     TimelineAddMarchersMenu,
     TimelineMoveCommands,
     TimelineMenuTarget,
 } from "./TimelineRangeMenu";
+import type { TimelineMeasureRowCommands } from "./TimelineMeasureRow";
 
 export type TimelineTrackId = string | number;
 
@@ -130,6 +134,39 @@ export interface TimelineTrack {
 export interface TimelineWaveform {
     /** Normalized peak magnitudes (0..1), grouped by beat. */
     readonly peaksByBeat: readonly (readonly number[])[];
+    /**
+     * The music after the show's last count (E1), on the beats the show would have if it went on
+     * at its last tempo, on the same scale. Drawn dimmed past the end, so the music that has no
+     * counts yet shows. Empty or missing without music there.
+     */
+    readonly peaksPastEnd?: readonly (readonly number[])[];
+}
+
+/**
+ * **+ N counts** after the last page (E1): always offered while paused, since nothing lies after
+ * the end of the show. The owner names it, since it adds counts.
+ */
+export interface TimelineAppendCounts {
+    /** The button's text, such as "+ 16 counts" */
+    readonly label: string;
+    /** Its tooltip and accessible name, such as "Add a page of 16 counts after the last page" */
+    readonly title: string;
+    readonly onAppend: () => void;
+    /** "Add pages every 16 counts to the end", when counts run on past the last page (FB-7) */
+    readonly toEnd?: {
+        readonly label: string;
+        readonly title: string;
+        readonly onAppend: () => void;
+    };
+}
+
+/** The music runs past the last count (E1): a note past the end that offers extending the counts */
+export interface TimelineMusicPastEnd {
+    /** Such as "Counts end at 0:40; the music runs to 2:31." */
+    readonly message: string;
+    /** Such as "Extend counts to the end" */
+    readonly actionLabel: string;
+    readonly onExtend: () => void;
 }
 
 export interface TimelineViewModel {
@@ -251,8 +288,17 @@ export interface TimelineInteractionProps {
      * The owner passes it only where flags can move (paused, not isolated).
      */
     readonly pageFlagMove?: TimelinePageFlagMove;
+    /** **+ N counts** after the last page's flag (E1); without it, none */
+    readonly appendCounts?: TimelineAppendCounts;
+    /** The note past the last count when the music runs on (E1); without it, none */
+    readonly musicPastEnd?: TimelineMusicPastEnd;
     /** Double-clicking a page box or clip opens (isolates) its range, in view beats here */
     readonly onOpenRange?: (target: TimelineMenuTarget) => void;
+    /**
+     * Editing rehearsal marks and measure lines on the measure row (tempo E8), in view beats here.
+     * Without it, the row only shows them.
+     */
+    readonly measureRow?: TimelineMeasureRowCommands;
 }
 
 export interface TimelineScaleProps {
@@ -263,9 +309,77 @@ export interface TimelineScaleProps {
     readonly onZoomFittedChange?: (fitted: boolean) => void;
 }
 
+/** A retime from the Align view, in spec count indexes, written as one undo entry */
+export interface TimelineAlignEdit {
+    /** Every count's new length, by ordinal (`beats` order) */
+    readonly durations: readonly number[];
+    /** How far count 1 moved against the music (`RetimeResult.originShift`) */
+    readonly originShift: number;
+    /** The synced counts afterwards */
+    readonly synced: readonly number[];
+}
+
+/**
+ * The Align view (E7, Tempo lab `alignView`; docs/tempo/README.md). Counts are spec count
+ * indexes, as in `@/timeline/tempo`. Without it, the timeline has no Align view.
+ */
+export interface TimelineAlign {
+    /** Whether the Align view is on; only the user changes it (`onToggle`) */
+    readonly on: boolean;
+    readonly onToggle: (on: boolean) => void;
+    /** A key press doesn't toggle it, as when A moves the selected marchers */
+    readonly keyBlocked?: boolean;
+    /** Every count's length in seconds, by ordinal */
+    readonly durations: readonly number[];
+    /** The counts already on the music, ascending */
+    readonly synced: readonly number[];
+    /** The audio offset: positive pads silence before the music */
+    readonly audioOffsetSeconds: number;
+    /** The music, on the show's clock */
+    readonly envelope: AudioEnvelope | null;
+    /** Writes a retime; resolves once the timeline shows it (or it failed) */
+    readonly onRetime: (edit: TimelineAlignEdit) => Promise<unknown> | void;
+    /** Replaces the synced counts */
+    readonly onSetSynced: (synced: readonly number[]) => void;
+    /** Punch-in tap (E9, Tempo lab `punchInTap`); without it, Align has no Tap */
+    readonly punchTap?: TimelinePunchTapConfig;
+    /**
+     * What the tempo map knows (FX-5, FX-7): each count's note and its length in it (by count
+     * index), for "♩.=88" labels, and the typed sections a drag must not rescale silently.
+     */
+    readonly tempoMap?: {
+        readonly units: readonly (CountUnit | undefined)[];
+        readonly sections: readonly TypedSection[];
+    };
+}
+
+/**
+ * What punch-in tap needs from the app: playback, the live clock, and where to report. A take is
+ * applied with Done (Enter), on leaving Align, or when another tool opens (DT-1).
+ */
+export interface TimelinePunchTapConfig {
+    /**
+     * Where the music was when an input event happened, in seconds on the show's clock (the
+     * event's `timeStamp`, on the `performance.now()` clock, corrects for a late handler)
+     */
+    readonly liveTime: (eventTimeStamp: number) => number;
+    /** Plays from spec count `from` (a count-in); false when nothing can play */
+    readonly play: (from: number) => boolean;
+    /** Another tool has T now, such as Tap the beat's open panel */
+    readonly blocked?: () => boolean;
+    /** Another tool is open now (Tap the beat's panel): opening it applies the take */
+    readonly otherToolOpen?: boolean;
+    /** After the taps were written, with "Lined up pages 12–18 to your taps." */
+    readonly onApplied?: (message: string) => void;
+    /** A take that couldn't be applied on leaving (it would change a typed tempo), and why */
+    readonly onNotice?: (message: string) => void;
+}
+
 export interface TimelineCommonProps
     extends TimelineInteractionProps, TimelineScaleProps {
     readonly model: TimelineViewModel;
+    /** The Align view, with the view axis's hidden beats (spec index = view beat + `offset`) */
+    readonly align?: TimelineAlign & { readonly offset: number };
     readonly showTransport?: boolean;
     /** The playback clock shown in the transport. The app passes its audio clock; stories pass none. */
     readonly transportClock?: ReactNode;
@@ -297,6 +411,22 @@ export interface TimelineCommonProps
     readonly onRemoveBasicPoint?: (beat: number) => void;
     /** UI-19 Basic: per page id, how many marchers on it use Expert moves (locked in Basic) */
     readonly expertMarks?: ReadonlyMap<string | number, number>;
+    /**
+     * Page flag grips that move a flag and carry the drill (Tempo lab `drillChoices`, E10), in
+     * view beats. When set, they take the place of the `pageFlagMove` grips (UI-16).
+     */
+    readonly drillFlagMove?: TimelineDrillFlagMove;
+    /**
+     * A notice over the waveform lane's left edge, such as Tap the beat's "Counts aren't lined up
+     * with the music yet" (Tempo lab, E6). Shown only in the full timeline, with audio loaded.
+     */
+    readonly waveformNotice?: ReactNode;
+    /** A small action at the waveform lane's right edge (Tap the beat's way back, FB-4) */
+    readonly waveformAction?: ReactNode;
+    /** Drawn over the lanes (Tap the beat's preview and flash, FB-5) */
+    readonly countOverlay?: TimelineCountOverlay;
+    /** Spec beats hidden before view beat 0 (spec = view + offset) */
+    readonly beatOffset?: number;
 }
 
 /** A mid-page position on a Basic page box (UI-19): its beat and its count in words */
@@ -305,6 +435,13 @@ export interface TimelineBasicPoint {
     /** "count 4 of page 2" */
     readonly label: string;
 }
+
+/** Where to draw over the timeline: a spec count position (fractional) to x, and the lane */
+export type TimelineCountOverlay = (geometry: {
+    readonly toX: (count: number) => number;
+    readonly top: number;
+    readonly height: number;
+}) => ReactNode;
 
 export interface TimelineRangeChange extends TimelineBeatRange {
     readonly timelineId: TimelineTrackId;
