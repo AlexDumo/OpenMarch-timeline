@@ -4,6 +4,7 @@ import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { refuse, TimelineWriteError } from "./timelineErrors";
 import {
+    defaultNewPageCountsInTransaction,
     planTimelineRipple,
     readPageGrid,
     readRippleRows,
@@ -130,8 +131,15 @@ const refuseOutsideTimelineMode = async (tx: DbTransaction, what: string) => {
 /** A page added by **+**: the new page row and its page timeline's range `[startBeat, endBeat)`. */
 export interface AddedPageFlag {
     page: DatabasePage;
+    /** The new page's name, as the timeline shows it ("5", or "5A" before a subset) */
+    name: string;
     startBeat: number;
     endBeat: number;
+    /**
+     * With `appendDefaultCounts` and an append: the new page's counts, and the file's default it
+     * was cut short from where the show's beats end first
+     */
+    appended?: { counts: number; wanted: number };
     /** With `splitMoves` and a split: the marchers split at the new flag, and those left alone */
     splitMoves?: SplitMovesResult;
 }
@@ -144,7 +152,11 @@ export interface AddedPageFlag {
  *   start, so the split page keeps its flag, id and data (notes, appearance) and the new page comes
  *   before it. Later pages renumber; no `is_subset` page is made. Splitting the last page also
  *   rewrites `last_page_counts` so its flag stays where it was.
- * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`).
+ * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`). With
+ *   `appendDefaultCounts` (Basic) it ends the file's `defaultNewPageCounts` after the last flag
+ *   instead, or where the show's beats end if sooner, wherever `beat` is past the flag: Basic's
+ *   **+** adds a page of the usual length, as page mode's add page did, rather than one as long
+ *   as wherever the playhead happened to be.
  *
  * With `splitMoves` (Basic, README "Basic's panel"), a split first splits each marcher's move
  * across `beat` there (`splitMovesAtBeatInTransaction` on the split page's box), so no simple
@@ -156,10 +168,12 @@ export async function addPageFlagInTransaction({
     tx,
     beat,
     splitMoves = false,
+    appendDefaultCounts = false,
 }: {
     tx: DbTransaction;
     beat: number;
     splitMoves?: boolean;
+    appendDefaultCounts?: boolean;
 }): Promise<AddedPageFlag> {
     await refuseOutsideTimelineMode(tx, "Adding a page flag");
     const grid = await readPageGrid(tx);
@@ -199,6 +213,7 @@ export async function addPageFlagInTransaction({
             });
         return {
             page: created!,
+            name: await pageNameIn(tx, created!.id),
             startBeat: page.start,
             endBeat: beat,
             ...(split ? { splitMoves: split } : {}),
@@ -206,12 +221,43 @@ export async function addPageFlagInTransaction({
     }
 
     const start = plan.lastPage.end;
+    const wanted = appendDefaultCounts
+        ? await defaultNewPageCountsInTransaction(tx)
+        : beat - start;
+    const end = Math.min(start + wanted, grid.beatIds.length);
     const [created] = await createPagesInTransaction({
         tx,
         newPages: [{ start_beat: grid.beatIds[start]!, is_subset: false }],
     });
-    await updateLastPageCounts({ tx, lastPageCounts: beat - start });
-    return { page: created!, startBeat: start, endBeat: beat };
+    await updateLastPageCounts({ tx, lastPageCounts: end - start });
+    return {
+        page: created!,
+        name: await pageNameIn(tx, created!.id),
+        startBeat: start,
+        endBeat: end,
+        ...(appendDefaultCounts
+            ? { appended: { counts: end - start, wanted } }
+            : {}),
+    };
+}
+
+/** Page `id`'s name as the timeline shows it, read inside `tx`. */
+const pageNameIn = async (tx: DbTransaction, id: number): Promise<string> =>
+    (await readPageGrid(tx)).pages.find((p) => p.id === id)?.name ?? "";
+
+/**
+ * What Basic's **+** past the last flag says it did (`AddedPageFlag.appended`): the new page and
+ * its counts, and that the show's end cut it short when it did. Null for anything else.
+ */
+export function appendedPageMessage({
+    name,
+    appended,
+}: Pick<AddedPageFlag, "name" | "appended">): string | null {
+    if (!appended) return null;
+    const counts = `${appended.counts} ${appended.counts === 1 ? "count" : "counts"}`;
+    return appended.counts < appended.wanted
+        ? `Added Page ${name} · ${counts}, to the end of the show`
+        : `Added Page ${name} · ${counts}`;
 }
 
 /** **+** (UI-9) at `beat` as one undoable edit. See `addPageFlagInTransaction`. */
@@ -219,15 +265,23 @@ export async function addPageFlag({
     db,
     beat,
     splitMoves = false,
+    appendDefaultCounts = false,
 }: {
     db: DbConnection;
     beat: number;
     splitMoves?: boolean;
+    appendDefaultCounts?: boolean;
 }): Promise<AddedPageFlag> {
     return await transactionWithHistory(
         db,
         "addPageFlag",
-        async (tx) => await addPageFlagInTransaction({ tx, beat, splitMoves }),
+        async (tx) =>
+            await addPageFlagInTransaction({
+                tx,
+                beat,
+                splitMoves,
+                appendDefaultCounts,
+            }),
     );
 }
 
