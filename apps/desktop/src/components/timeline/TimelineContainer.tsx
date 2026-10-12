@@ -20,8 +20,6 @@ import TimelineModePanel from "./TimelineModePanel";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { T } from "@tolgee/react";
 import clsx from "clsx";
-import { useIsBasicMode } from "@/stores/EditorModeStore";
-import BasicPageBarRows from "./basic/BasicPageBarRows";
 
 export default function TimelineContainer() {
     const { isPlaying } = useIsPlaying()!;
@@ -33,15 +31,9 @@ export default function TimelineContainer() {
     const { isFullscreen } = useFullscreenStore();
     const timelineRef = useRef<HTMLDivElement>(null);
     const timelineMode = useTimelineMode();
-    // UI-19: Basic mode is the page bar over timeline data (docs/timeline/research/basic-mode)
-    const basicSetting = useIsBasicMode();
-    const basic = timelineMode && basicSetting;
-    const contentRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Basic follows the playhead itself (BasicPlayhead); the selected page doesn't advance
-        // while a timeline plays
-        if (!selectedPage || basic) return;
+        if (!selectedPage) return;
 
         const container = timelineRef.current;
         const selectedPageElement = document.querySelector(
@@ -77,7 +69,7 @@ export default function TimelineContainer() {
             container.style.scrollBehavior = "smooth";
             container.style.transition = "";
         };
-    }, [selectedPage, isPlaying, basic]);
+    }, [selectedPage, isPlaying]);
 
     // Rerender the timeline when the measures or pages change
     useEffect(() => {
@@ -88,7 +80,7 @@ export default function TimelineContainer() {
     // Editing beats (the focused timeline) still uses the page timeline. The audio player stays
     // mounted, headless, because it runs playback and the timeline reads its clock. The timeline
     // draws its own waveform lane, so the player builds no wavesurfer or markers here.
-    if (timelineMode && !basic && focussedComponent !== "timeline") {
+    if (timelineMode && focussedComponent !== "timeline") {
         return (
             // UI-12: perspective and fullscreen live on the field's zoom widget in timeline mode
             <div className="flex gap-8" data-testid="timeline-mode-container">
@@ -107,10 +99,7 @@ export default function TimelineContainer() {
                 id="timeline"
                 className="rounded-6 border-stroke bg-fg-1 relative flex h-full w-full min-w-0 overflow-x-auto overflow-y-hidden border p-8 transition-all duration-200"
             >
-                <div
-                    ref={contentRef}
-                    className="relative flex h-full min-h-0 w-fit flex-col justify-center gap-8"
-                >
+                <div className="flex h-full min-h-0 w-fit flex-col justify-center gap-8">
                     <div className="flex h-fit items-center">
                         <div>
                             <p className="text-sub w-[4rem]">
@@ -119,12 +108,6 @@ export default function TimelineContainer() {
                         </div>
                         <PageTimeline />
                     </div>
-                    {basic && focussedComponent !== "timeline" && (
-                        <BasicPageBarRows
-                            contentRef={contentRef}
-                            scrollRef={timelineRef}
-                        />
-                    )}
 
                     <div className={"flex items-center"}>
                         {!isFullscreen && (

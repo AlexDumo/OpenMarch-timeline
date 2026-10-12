@@ -71,8 +71,65 @@ import { keepHereMenu, usePageKeepChains } from "./PageKeepChain";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
+import TimelineControls from "./TimelineControls";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { useBasicLocksStore } from "@/timeline/basicLocks";
+import { useBasicPoints } from "./useBasicPoints";
+import type Page from "@/global/classes/Page";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
+const NO_CLIPS: TimelineInput[] = [];
+
+/**
+ * TEMPORARY, the Basic transport study (V-207, ~/ux-sim/basic-transport): `"side"` puts the
+ * original bar's controls on the left instead of the timeline's transport. Read from
+ * localStorage once; remove with the study.
+ */
+function basicTransportStudy(): "top" | "side" {
+    try {
+        return localStorage.getItem("openmarch.basicTransport") === "side"
+            ? "side"
+            : "top";
+    } catch {
+        return "top";
+    }
+}
+
+/**
+ * Basic's marks on the page boxes (UI-19): the selected marchers' mid-page positions, with
+ * **Remove this count's position**, and the Expert mark where marchers are locked.
+ */
+function useBasicTimelineExtras(pages: readonly Page[]) {
+    const { points, removePoint } = useBasicPoints();
+    const locked = useBasicLocksStore((s) => s.locked);
+    const boxes = useBasicLocksStore((s) => s.boxes);
+    return useMemo(() => {
+        const names = new Map(
+            pageFlags(pages).flatMap((f) =>
+                f.range
+                    ? [[`${f.range.start}:${f.range.end}`, f.page] as const]
+                    : [],
+            ),
+        );
+        const expertMarks = new Map<number, number>();
+        boxes.forEach((box, index) => {
+            const count = locked.get(index)?.size ?? 0;
+            const page = names.get(`${box.start}:${box.end}`);
+            if (count > 0 && page) expertMarks.set(page.id, count);
+        });
+        return {
+            basicPoints: points.map((point) => ({
+                beat: point.beat,
+                label: `count ${point.beat - point.box.start} of page ${names.get(`${point.box.start}:${point.box.end}`)?.name ?? ""}`,
+            })),
+            onRemoveBasicPoint: (beat: number) => {
+                const point = points.find((p) => p.beat === beat);
+                if (point) removePoint(point);
+            },
+            expertMarks,
+        };
+    }, [pages, points, removePoint, locked, boxes]);
+}
 
 // The transport's controls read their own state: the same elements every render, so the
 // memoized transport doesn't re-render for them
@@ -117,6 +174,11 @@ export const toTimelineSelection = (
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
+    // UI-19: Basic is this timeline with its page boxes holding the music, and none of the
+    // Expert parts (clips, the loop, isolation, moves): docs/timeline/research/basic-mode
+    const basic = useIsBasicMode();
+    const basicExtras = useBasicTimelineExtras(pages);
+    const sideTransport = basic && basicTransportStudy() === "side";
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
     // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
@@ -337,47 +399,60 @@ export default function TimelineModePanel() {
                 };
             }}
         >
+            {/* Basic transport study (V-207): the original's controls on the left */}
+            {sideTransport && <TimelineControls />}
             <TimelineWaveformProvider waveform={waveform ?? NO_WAVEFORM}>
                 <PlayingTimeline
-                    mode={compact ? "collapsed" : "expanded"}
+                    mode={basic ? "basic" : compact ? "collapsed" : "expanded"}
+                    showTransport={!sideTransport}
+                    basic={basic}
+                    {...(basic ? basicExtras : {})}
                     zoomFitted={zoomFitted}
                     onZoomFittedChange={setZoomFitted}
                     className="w-full"
                     beats={beats}
                     pages={pages}
                     measures={measures}
-                    timelines={offPage}
-                    transportAccessories={LOOP_BUTTON}
+                    timelines={basic ? NO_CLIPS : offPage}
+                    transportAccessories={basic ? undefined : LOOP_BUTTON}
                     transportSecondary={SOUND_BUTTON}
-                    transportViewControls={COMPACT_BUTTON}
+                    transportViewControls={basic ? undefined : COMPACT_BUTTON}
                     holdMarks={holdMarks}
                     keepChains={keepChains}
                     keepHere={keepHere}
                     onSelectionChange={changeSelection}
-                    onTimelineRangeCommit={commands.commitTimelineRange}
-                    clipResize={clipResize}
+                    onTimelineRangeCommit={
+                        basic ? undefined : commands.commitTimelineRange
+                    }
+                    clipResize={basic ? undefined : clipResize}
                     onUnpinStart={() =>
                         useTimelineSelectionStore.getState().unpinStart()
                     }
-                    onOpenRange={(range) => {
-                        if (isPlaying) return;
-                        const store = useTimelineSelectionStore.getState();
-                        const timeline = store.storedTimelines?.find(
-                            (t) =>
-                                t.start === range.startBeatIndex &&
-                                t.end === range.endBeatIndex,
-                        );
-                        if (timeline)
-                            store.isolate(
-                                timeline.id,
-                                windowBeforeClick.current ?? undefined,
-                            );
-                        else
-                            toast.info(
-                                "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
-                            );
-                    }}
-                    moveCommands={moveCommands}
+                    onOpenRange={
+                        basic
+                            ? undefined
+                            : (range) => {
+                                  if (isPlaying) return;
+                                  const store =
+                                      useTimelineSelectionStore.getState();
+                                  const timeline = store.storedTimelines?.find(
+                                      (t) =>
+                                          t.start === range.startBeatIndex &&
+                                          t.end === range.endBeatIndex,
+                                  );
+                                  if (timeline)
+                                      store.isolate(
+                                          timeline.id,
+                                          windowBeforeClick.current ??
+                                              undefined,
+                                      );
+                                  else
+                                      toast.info(
+                                          "Nothing moves here yet. Drag marchers in this range to make a move, then double-click it to isolate it.",
+                                      );
+                              }
+                    }
+                    moveCommands={basic ? undefined : moveCommands}
                     pageFlagMove={pageFlagMove}
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
@@ -411,19 +486,20 @@ export default function TimelineModePanel() {
  * playhead) with it, and the zoom every frame of a pinch, so all of them are read here, under the
  * panel: they re-render the timeline, not the panel and its queries.
  */
-function PlayingTimeline(
-    props: Omit<
-        TimelineProps,
-        | "playback"
-        | "pixelsPerBeat"
-        | "onPixelsPerBeatChange"
-        | "selection"
-        | "transportClock"
-        | "onAddPageFlag"
-        | "loop"
-        | "onLoopChange"
-    >,
-) {
+function PlayingTimeline({
+    basic = false,
+    ...props
+}: { basic?: boolean } & Omit<
+    TimelineProps,
+    | "playback"
+    | "pixelsPerBeat"
+    | "onPixelsPerBeatChange"
+    | "selection"
+    | "transportClock"
+    | "onAddPageFlag"
+    | "loop"
+    | "onLoopChange"
+>) {
     const { beats, pages } = props;
     const playback = useTimelinePlayback({ beats, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
@@ -433,11 +509,12 @@ function PlayingTimeline(
     const storeLoop = useTimelineSelectionStore((s) => s.loop);
     const isolation = useTimelineSelectionStore((s) => s.isolation);
     const loop = useMemo(() => {
+        if (basic) return null;
         const region = isolation ?? storeLoop;
         return region
             ? { startBeatIndex: region.start, endBeatIndex: region.end }
             : null;
-    }, [isolation, storeLoop]);
+    }, [basic, isolation, storeLoop]);
     const changeLoop = useCallback(
         (next: { startBeatIndex: number; endBeatIndex: number }) =>
             useTimelineSelectionStore.getState().setLoop({
@@ -499,7 +576,7 @@ function PlayingTimeline(
             pixelsPerBeat={pixelsPerBeat}
             onPixelsPerBeatChange={setPixelsPerBeat}
             loop={loop}
-            onLoopChange={isolation ? undefined : changeLoop}
+            onLoopChange={isolation || basic ? undefined : changeLoop}
         />
     );
 }
