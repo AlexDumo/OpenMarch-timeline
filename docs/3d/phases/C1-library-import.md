@@ -670,3 +670,10 @@ Nothing yet.
   `scripts/3d/run-worker.sh` and the C phase files now name `main`. The C1
   code (C1.4 to C1.10, C1.12) is rebuilt as a stack of PRs on `main`, docs
   first; C1 adds no migrations.
+
+- 2026-10-12, lead (C1.10, C1.12): the File-tab entries ("Artwork
+  templates" and "Import to Library…") are temporary. The owner expects the
+  3D work to get its own home, likely a 3D tab in the left sidebar; where
+  exactly is not decided. Both entries are single components, so moving them
+  is a small change. Q73: no cue target (band, section, tag or set) reaches
+  items. Q74: `coord.sh` targets `main`, pending Alex's agreement in review.
