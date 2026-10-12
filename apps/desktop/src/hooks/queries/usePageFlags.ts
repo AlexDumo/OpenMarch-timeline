@@ -10,6 +10,7 @@ import { db } from "@/global/database/db";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     addPageFlag,
+    appendedPageMessage,
     deletePageFlags,
     movePageFlag,
     type MovedPageFlag,
@@ -40,7 +41,10 @@ import { simpleDefaultsOn } from "@/timeline/simpleDefaults";
 /**
  * **+** at a beat. Resolves to the new page and its range `[startBeat, endBeat)`, the page timeline
  * the UI selects next (`onAdded`). In Basic it also splits each marcher's move at the new flag
- * (`splitMoves`); those rows reach the resolver through the database's change events.
+ * (`splitMoves`); those rows reach the resolver through the database's change events. Past the
+ * last flag, Basic's page is the file's default new-page counts long, not as long as wherever the
+ * playhead was (`appendDefaultCounts`), and a toast names the page and its counts. Expert keeps
+ * UI-9's flag at the playhead: there **+** places a flag where the person scrubbed to.
  */
 export const addPageFlagMutationOptions = (
     qc: QueryClient,
@@ -52,10 +56,16 @@ export const addPageFlagMutationOptions = (
                 db,
                 beat,
                 splitMoves: isBasicMode() || simpleDefaultsOn(),
+                appendDefaultCounts: isBasicMode(),
             }),
         onSuccess: (added) => {
             void invalidatePageQueries(qc);
             onAdded?.(added);
+            const message = appendedPageMessage(added);
+            if (message)
+                toast.success(message, {
+                    description: "Drag its flag to change its length",
+                });
         },
         onError: (e) => toastTimelineError(e),
     });

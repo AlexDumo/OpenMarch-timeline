@@ -2,6 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { generatePageNames } from "@openmarch/core";
 import * as schema from "@om-electron/database/migrations/schema";
 import {
+    defaultWorkspaceSettings,
     isTimelineModeEnabled,
     workspaceSettingsSchema,
 } from "@/settings/workspaceSettings";
@@ -180,6 +181,24 @@ export async function pageNumberOffsetInTransaction(
         return parsed.success ? parsed.data.pageNumberOffset : 0;
     } catch {
         return 0;
+    }
+}
+
+/** The file's `defaultNewPageCounts`, read inside `tx` from `workspace_settings` (16 without one). */
+export async function defaultNewPageCountsInTransaction(
+    tx: DbTransaction,
+): Promise<number> {
+    const fallback = defaultWorkspaceSettings.defaultNewPageCounts;
+    const row = await tx
+        .select({ json: schema.workspace_settings.json_data })
+        .from(schema.workspace_settings)
+        .get();
+    if (!row) return fallback;
+    try {
+        const parsed = workspaceSettingsSchema.safeParse(JSON.parse(row.json));
+        return parsed.success ? parsed.data.defaultNewPageCounts : fallback;
+    } catch {
+        return fallback;
     }
 }
 

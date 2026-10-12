@@ -180,6 +180,8 @@ export interface TimelineProps {
      * show (on a flag, at home, past the beats).
      */
     readonly onAddPageFlag?: () => void;
+    /** **+**'s tooltip where it isn't "Add a page flag here" (Basic past the last flag) */
+    readonly addPageFlagLabel?: string;
     /** The page box menu's **Delete page** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
     /** The page box menu's **Delete page and its moves**, by page id */
@@ -724,6 +726,7 @@ export function Timeline(props: TimelineProps) {
         addSelectedMarchers: addMarchersMenu,
         moveCommands: trackMoveCommands,
         onAddPageFlag: useLatestCallback(props.onAddPageFlag),
+        addPageFlagLabel: props.addPageFlagLabel,
         pageFlagMove,
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,

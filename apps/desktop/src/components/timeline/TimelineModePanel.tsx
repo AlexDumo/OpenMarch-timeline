@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     pageFlagMoveLimits,
     type AddedPageFlag,
@@ -29,7 +29,10 @@ import {
     selectionOfPage,
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    useTimelineMode,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import {
@@ -528,6 +531,7 @@ function PlayingTimeline({
     | "selection"
     | "transportClock"
     | "onAddPageFlag"
+    | "addPageFlagLabel"
     | "loop"
     | "onLoopChange"
 >) {
@@ -583,6 +587,22 @@ function PlayingTimeline({
         isPlaying: playback.isPlaying || holding,
         onAdded: selectAddedPage,
     });
+    // Basic's + past the last flag adds a page of the file's default length, not one ending here
+    const defaultNewPageCounts = useQuery({
+        ...workspaceSettingsQueryOptions(basic),
+        select: (s) => s.defaultNewPageCounts,
+    }).data;
+    const append =
+        basic && addPageFlag.insertion?.kind === "append"
+            ? addPageFlag.insertion.lastPage
+            : null;
+    const addPageFlagLabel = append
+        ? appendPageLabel(
+              pages.find((p) => p.id === append.id)?.name,
+              defaultNewPageCounts &&
+                  Math.min(defaultNewPageCounts, beats.length - append.end),
+          )
+        : undefined;
     // The zoom changes every frame of a pinch: keep it here, and save it once the gesture settles
     const [pixelsPerBeat, setPixelsPerBeat] = useState(
         () => useUiSettingsStore.getState().uiSettings.timelinePixelsPerBeat,
@@ -603,6 +623,7 @@ function PlayingTimeline({
             selection={selection}
             transportClock={clock}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
+            addPageFlagLabel={addPageFlagLabel}
             playback={playback}
             pixelsPerBeat={pixelsPerBeat}
             onPixelsPerBeatChange={setPixelsPerBeat}
@@ -675,6 +696,19 @@ export function selectionAfterDeleteWithMoves(
 }
 
 /** **+** selects the new page's page timeline (UI-9: "The new page is selected"). */
+/** Basic's **+** past the last flag, in words: "Add a page of 16 counts after Page 4" */
+export const appendPageLabel = (
+    lastPageName: string | undefined,
+    counts: number | undefined,
+) =>
+    [
+        "Add a page",
+        counts ? `of ${counts} ${counts === 1 ? "count" : "counts"}` : "",
+        lastPageName ? `after Page ${lastPageName}` : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
+
 export const selectAddedPage = ({
     startBeat,
     endBeat,

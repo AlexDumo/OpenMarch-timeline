@@ -84,6 +84,12 @@ of page boxes sized by duration, with the music inside them.
 - **+ after the playhead** adds a page there, as in Expert. In Basic, adding a page (and the
   inspector's **Split page**) also splits each marcher's move at the new flag, keeping its
   position there, so no move crosses the new flag (otherwise every split would lock).
+- **+ past the last flag** (lead default, 2026-10-12, after simulated users got 4- and 6-count
+  pages from where they happened to click) adds a page of the file's **default new-page counts**
+  (Workspace settings, what page mode's add page used) from the last flag, cut short where the
+  show's counts end, wherever the playhead is past the flag. The new page is selected (playhead
+  on its flag) and a toast names it: "Added Page 5 · 16 counts". The **+** tooltip says the same
+  first. Expert keeps UI-9's page ending at the playhead.
 - Not in Basic: clips (moves off flags), the start flag and pinning, the loop bar, isolation,
   clip resize, the measure row.
 - Play, Space and Shift+Space use the timeline playback driver. Space plays on from the playhead;

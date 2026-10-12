@@ -229,6 +229,8 @@ export interface TimelineInteractionProps {
      * while it's given and the timeline isn't playing; the owner passes it only where **+** applies.
      */
     readonly onAddPageFlag?: () => void;
+    /** **+**'s tooltip and accessible name where it isn't "Add a page flag here" */
+    readonly addPageFlagLabel?: string;
     /**
      * Moving page flags by their grips (docs/timeline/research/move-page-flag), in view beats here.
      * The owner passes it only where flags can move (paused, not isolated).
