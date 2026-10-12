@@ -74,6 +74,7 @@ export function editEndBeat(
     } | null = useTimelineSelectionStore.getState().isolation,
 ): number | null {
     if (target.kind === "range") return target.end;
+    if (target.kind === "point") return target.beat;
     if (target.kind === "home") return 0;
     return isolation?.timelineId === target.timelineId ? isolation.end : null;
 }
@@ -271,9 +272,11 @@ export async function toastLaterOwnMoves(
 const windowKey = (target: TimelineEditTarget) =>
     target.kind === "range"
         ? `range:${target.start}-${target.end}`
-        : target.kind === "home"
-          ? "home"
-          : `timeline:${target.timelineId}`;
+        : target.kind === "point"
+          ? `point:${target.beat}`
+          : target.kind === "home"
+            ? "home"
+            : `timeline:${target.timelineId}`;
 
 /**
  * A timeline coordinate edit (`moveMarchersInTarget`) with what it says after: the pass-through
