@@ -33,7 +33,7 @@ import {
 /**
  * Basic mode's writes (docs/timeline/research/basic-mode/README.md, "How Basic writes"): every
  * edit is "marcher m is at (x, y) at beat P" on the page box `[a, b)` holding P (`a < P ≤ b`).
- * Per marcher, with R its moves inside the box (simple: one-slot, shapeless, direct, inside the
+ * Per marcher, with R its moves inside the box (simple: shapeless, direct, inside the
  * box, not overlapping; `marcherSimpleOnBox`):
  *
  * | Where P is                                    | What's written                                  |
@@ -77,7 +77,7 @@ interface NewMove {
 
 /** What one edit writes, decided before the first write. */
 interface PointPlan {
-    /** Slot destinations to set: the row's transition is the marcher's own (one slot) */
+    /** Slot destinations to set, at each row's own slot */
     setDestinations: { row: BasicRow; point: XY }[];
     /** Rows deleted, with their transitions and any timeline they leave empty */
     removed: BasicRow[];
@@ -320,13 +320,13 @@ const writePlan = async (
         await updateTimelineSlotDestinationInTransaction({
             tx,
             transitionId: row.transitionId,
-            slotIndex: 0,
+            slotIndex: row.slotIndex,
             point,
         });
         result.slots.push({
             marcherId: row.marcherId,
             transitionId: row.transitionId,
-            slotIndex: 0,
+            slotIndex: row.slotIndex,
         });
     }
     // An edited kept spot is the marcher's own move from now on (as `writeSlotMoves`)

@@ -18,6 +18,7 @@ const row = (
         assignmentId: id,
         marcherId,
         transitionId: id,
+        slotIndex: 0,
         timelineId: id,
         start,
         end,
@@ -68,12 +69,18 @@ describe("marcherSimpleOnBox", () => {
         ).toEqual({ simple: false, reason: "overlaps" });
     });
 
-    it("a shape or more than one slot, and a path other than direct, aren't", () => {
+    it("a shared shapeless transition is simple (a converted page)", () => {
+        expect(
+            marcherSimpleOnBox(
+                [row(1, 9, 17, { slotCount: 4, slotIndex: 2 })],
+                BOX,
+            ),
+        ).toEqual({ simple: true });
+    });
+
+    it("a shape, and a path other than direct, aren't", () => {
         expect(
             marcherSimpleOnBox([row(1, 9, 17, { shapeId: 3 })], BOX),
-        ).toEqual({ simple: false, reason: "shape" });
-        expect(
-            marcherSimpleOnBox([row(1, 9, 17, { slotCount: 4 })], BOX),
         ).toEqual({ simple: false, reason: "shape" });
         expect(
             marcherSimpleOnBox([row(1, 9, 17, { pathStyle: "arc" })], BOX),

@@ -18,6 +18,7 @@ import { pageEndBeat } from "./timelineCanvas";
 import { TimelineEditRefusedError } from "./timelineEditRefusals";
 import { moveMarchersAndOfferFollowUp } from "./timelineMoveThemToo";
 import { isBasicMode } from "@/stores/EditorModeStore";
+import { toastLockedMarchers, withoutLockedMarchers } from "./basicLocks";
 import {
     timelineResolverSettled,
     useTimelineResolverStore,
@@ -88,10 +89,10 @@ export type CanvasEditPlan =
  * - nothing selected: refused.
  */
 export function planCanvasEdit(
-    state: Pick<
-        TimelineSelectionState,
-        "selection" | "isolation" | "pageBoxes"
-    > = useTimelineSelectionStore.getState(),
+    state: Pick<TimelineSelectionState, "selection" | "isolation"> &
+        Partial<
+            Pick<TimelineSelectionState, "pageBoxes">
+        > = useTimelineSelectionStore.getState(),
     basic: boolean = isBasicMode(),
 ): CanvasEditPlan {
     const { selection, isolation } = state;
@@ -116,7 +117,9 @@ export function planCanvasEdit(
     if (selection.kind === "range") {
         // UI-19: Basic edits where each marcher is at the playhead, inside its page box
         // (docs/timeline/research/basic-mode, "How Basic writes")
-        const box = basic ? basicPageBox(state, selection.end) : null;
+        const box = basic
+            ? basicPageBox({ pageBoxes: state.pageBoxes ?? [] }, selection.end)
+            : null;
         if (box)
             return {
                 ok: true,
@@ -260,13 +263,28 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
     snapIsolatedPlayheadToEnd();
-    const next = transform(timelineCoordinateRecords(plan.beat, marcherIds));
+    // UI-19: Basic leaves marchers it can't edit on this page alone, and says so
+    const editable = withoutLockedMarchers(
+        plan.target,
+        marcherIds.map((marcherId) => ({ marcherId })),
+    );
+    if (editable.moves.length === 0)
+        throw new TimelineEditRefusedError("notSimple", {
+            marcherIds: editable.locked,
+        });
+    const next = transform(
+        timelineCoordinateRecords(
+            plan.beat,
+            editable.moves.map((m) => m.marcherId),
+        ),
+    );
     const moves = toTimelineMoves(next);
     await moveMarchersAndOfferFollowUp({
         database: db,
         target: plan.target,
         moves,
     });
+    toastLockedMarchers(editable.locked.length, true);
     return next;
 }
 
@@ -414,8 +432,21 @@ export function canvasCoordinateWriter<A extends MarcherXY>({
         }
         // A drop is where the marcher was dragged at the playhead; isolation writes the move's
         // end, so carry the drag over as an offset from where the plan has it there
-        const moves = toTimelineMoves(atIsolatedEnd(changes));
+        // UI-19: Basic drops marchers it can't edit on this page; they snap back
+        const editable = withoutLockedMarchers(
+            current.target,
+            toTimelineMoves(atIsolatedEnd(changes)),
+        );
+        if (editable.moves.length === 0) {
+            onRefused(
+                new TimelineEditRefusedError("notSimple", {
+                    marcherIds: editable.locked,
+                }),
+            );
+            return;
+        }
         snapIsolatedPlayheadToEnd();
-        writeTimeline({ target: current.target, moves });
+        writeTimeline({ target: current.target, moves: editable.moves });
+        toastLockedMarchers(editable.locked.length, true);
     };
 }

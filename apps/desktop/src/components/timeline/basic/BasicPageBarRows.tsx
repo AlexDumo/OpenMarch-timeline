@@ -25,7 +25,7 @@ export default function BasicPageBarRows({
         (s) => s.uiSettings.timelinePixelsPerSecond,
     );
     const axis = useBasicTimeAxis(contentRef, pages);
-    const { points, onPointContextMenu, menu } = useBasicPoints();
+    const { points, removePoint } = useBasicPoints();
     const last = pages[pages.length - 1];
     // The page boxes' width: home's 40px box, then each page's duration
     const width = last
@@ -42,7 +42,7 @@ export default function BasicPageBarRows({
                     pixelsPerSecond={pixelsPerSecond}
                     width={width}
                     points={points}
-                    onPointContextMenu={onPointContextMenu}
+                    onRemovePoint={removePoint}
                 />
             </div>
             <BasicPlayhead
@@ -51,7 +51,6 @@ export default function BasicPageBarRows({
                 beats={beats}
                 pixelsPerSecond={pixelsPerSecond}
             />
-            {menu}
         </>
     );
 }

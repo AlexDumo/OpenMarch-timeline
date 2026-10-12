@@ -561,3 +561,76 @@ describe("Basic point writes: refusals", () => {
         });
     });
 });
+
+describeDbTests("Basic point writes on a converted show", (it) => {
+    /** Converted pages share one shapeless transition per page (C-11), one slot per marcher */
+    const converted = async (db: DbConnection) => {
+        await db.delete(schema.workspace_settings);
+        await db.insert(schema.workspace_settings).values({
+            id: 1,
+            json_data: JSON.stringify({ timelineMode: true }),
+        });
+        await convertPagesToTimeline(db);
+        await db.run(sql`DELETE FROM history_undo`);
+        await db.run(sql`DELETE FROM history_redo`);
+        const rows = await readBasicRows(db);
+        const shared = rows.find((r) => r.slotCount > 1);
+        expect(shared).toBeDefined();
+        const box = { start: shared!.start, end: shared!.end };
+        const others = rows
+            .filter(
+                (r) =>
+                    r.transitionId === shared!.transitionId &&
+                    r.marcherId !== shared!.marcherId,
+            )
+            .map((r) => r.marcherId);
+        expect(others.length).toBeGreaterThan(0);
+        return { box, marcher: shared!.marcherId, others };
+    };
+
+    /** Every count of the show, for each marcher */
+    const positionsOf = async (db: DbConnection, marcherIds: number[]) => {
+        const r = await resolverOf(db);
+        const last = Math.max(...(await readBasicRows(db)).map((x) => x.end));
+        const beats = Array.from({ length: last + 1 }, (_, b) => b);
+        return marcherIds.map((m) => beats.map((b) => r.positionAt(m, b)));
+    };
+
+    it("edits one marcher's slot on the flag, and only that marcher", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { box, marcher, others } = await converted(db);
+        const othersBefore = await positionsOf(db, others);
+        const before = await snapshot(db);
+        await point(db, box.end, [[marcher, C]], { box });
+        const r = await resolverOf(db);
+        expect(r.positionAt(marcher, box.end)).toEqual(C);
+        expect(await positionsOf(db, others)).toEqual(othersBefore);
+        expect(await violations(db)).toEqual([]);
+        await oneUndoStep(db, before, await snapshot(db));
+    });
+
+    it("splits one marcher mid-page out of the shared transition, and only that marcher", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { box, marcher, others } = await converted(db);
+        const mid = box.start + Math.floor((box.end - box.start) / 2);
+        const r0 = await resolverOf(db);
+        const endBefore = r0.positionAt(marcher, box.end);
+        const othersBefore = await positionsOf(db, others);
+        await point(db, mid, [[marcher, C]], { box });
+        const r = await resolverOf(db);
+        expect(r.positionAt(marcher, mid)).toEqual(C);
+        expect(r.positionAt(marcher, box.end)).toEqual(endBefore);
+        expect(await rowsOf(db, marcher)).toEqual(
+            expect.arrayContaining([
+                [box.start, mid, expect.any(Number)],
+                [mid, box.end, expect.any(Number)],
+            ]),
+        );
+        expect(await positionsOf(db, others)).toEqual(othersBefore);
+        expect(await violations(db)).toEqual([]);
+    });
+});

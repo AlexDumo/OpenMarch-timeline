@@ -18,6 +18,7 @@ export async function readBasicRows(
             assignmentId: a.id,
             marcherId: a.marcher_id,
             transitionId: a.transition_id,
+            slotIndex: a.slot_index,
             timelineId: t.timeline_id,
             start: a.start_beat,
             end: a.end_beat,
