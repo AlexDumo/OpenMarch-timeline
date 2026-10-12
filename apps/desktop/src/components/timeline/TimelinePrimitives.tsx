@@ -413,8 +413,9 @@ export const TimelineTransport = memo(function TimelineTransport({
                     <TransportButton
                         label="Previous page"
                         shortcut={TRANSPORT_SHORTCUTS.previousPage}
-                        // ⏮ reads as "the start" to many (basic-past-flag study), but the plain
-                        // click is the common step (owner, UI-17), so the hint names the start's ways
+                        // The plain click is the common step (owner, UI-17, ui.md); ⏮ reads as
+                        // "the start" to some, so the hint names the start's ways (basic-mode
+                        // README, V-210)
                         hint="One page back. For the start of the show: Shift+click, Shift+Q or the house"
                         onClick={onNavigate ? previousPage : undefined}
                     >
@@ -457,7 +458,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                     <TransportButton
                         label="Next page"
                         shortcut={TRANSPORT_SHORTCUTS.nextPage}
-                        hint="One page on. For the last page: Shift+click or Shift+E"
+                        hint="One page forward. For the last page: Shift+click or Shift+E"
                         onClick={onNavigate ? nextPage : undefined}
                     >
                         {SKIP_FORWARD_ICON}
