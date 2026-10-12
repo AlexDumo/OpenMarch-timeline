@@ -80,7 +80,8 @@ import {
     useLiveValue,
 } from "./timelineLiveValue";
 import {
-    PageStatusChip,
+    HoldMarkTooltip,
+    PageHoldMarkView,
     type LabeledHoldMark,
     type LabeledHoldMarks,
 } from "./PageHoldMark";
@@ -1088,7 +1089,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
                             if (!scrub.consumeClick(event))
                                 onSelectPage(initialPage);
                         }}
-                        className="border-stroke text-text focus-visible:ring-accent absolute top-0 left-0 flex h-full items-center justify-center border-r text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
+                        className="border-stroke text-text focus-visible:ring-accent absolute top-0 left-0 flex h-full items-center justify-center rounded-l-[5px] border-r text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
                         style={{ width: initialPageWidth }}
                     >
                         {/* UI-13: a house, so home's "0" isn't read as a count or a measure */}
@@ -1148,51 +1149,46 @@ const TimelinePageBox = memo(function TimelinePageBox({
     const boxLeft =
         initialPageWidth + beatToX(range.startBeatIndex, pixelsPerBeat);
     const box = (
-        <button
-            type="button"
-            data-timeline-interactive="true"
-            {...timelineRangeTargetProps(range, undefined, page.id)}
-            aria-label={`Page ${page.label}`}
-            aria-describedby={hold ? holdDescriptionId : undefined}
-            aria-pressed={selected}
-            {...scrub.handlers}
-            onClick={(event) => {
-                if (scrub.consumeClick(event)) return;
-                // macOS ctrl+click opens the context menu (UI-9: no selection change)
-                if (!event.ctrlKey) onSelectPage(page, event.shiftKey);
-            }}
-            className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
-            style={{ left: boxLeft, width: boxWidth }}
-        >
-            <PageBoxLabel
-                label={page.label}
-                shown={pageLabelFits(page.label, boxWidth)}
-            />
-            {hold && (
-                <span id={holdDescriptionId} className="sr-only">
-                    {hold.label}. {hold.hint}
-                </span>
-            )}
-        </button>
+        <HoldMarkTooltip hold={hold}>
+            <button
+                type="button"
+                data-timeline-interactive="true"
+                {...timelineRangeTargetProps(range, undefined, page.id)}
+                aria-label={`Page ${page.label}`}
+                aria-describedby={hold ? holdDescriptionId : undefined}
+                aria-pressed={selected}
+                {...scrub.handlers}
+                onClick={(event) => {
+                    if (scrub.consumeClick(event)) return;
+                    // macOS ctrl+click opens the context menu (UI-9: no selection change)
+                    if (!event.ctrlKey) onSelectPage(page, event.shiftKey);
+                }}
+                className="border-stroke text-text focus-visible:ring-accent absolute top-0 flex h-full items-center justify-end border-r px-8 text-[11px] outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
+                style={{ left: boxLeft, width: boxWidth }}
+            >
+                <PageBoxLabel
+                    label={page.label}
+                    shown={pageLabelFits(page.label, boxWidth)}
+                />
+                <PageHoldMarkView
+                    hold={hold}
+                    descriptionId={holdDescriptionId}
+                />
+            </button>
+        </HoldMarkTooltip>
     );
-    // One status per box, at its top left (owner, 2026-10-12): the keep chain where the selected
-    // marchers follow a page or were kept, else whether they move or hold here. Siblings, not
-    // inside the box: a button can't hold a button
-    const left = boxLeft + chainOffset(boxWidth);
+    if (!chain) return box;
+    // A sibling, not inside the box: a button can't hold a button
     return (
         <>
             {box}
-            {chain ? (
-                <PageKeepChainButton
-                    chain={chain}
-                    pageId={page.id}
-                    pageLabel={page.label}
-                    range={range}
-                    left={left}
-                />
-            ) : hold ? (
-                <PageStatusChip hold={hold} pageId={page.id} left={left} />
-            ) : null}
+            <PageKeepChainButton
+                chain={chain}
+                pageId={page.id}
+                pageLabel={page.label}
+                range={range}
+                left={boxLeft + chainOffset(boxWidth)}
+            />
         </>
     );
 });
