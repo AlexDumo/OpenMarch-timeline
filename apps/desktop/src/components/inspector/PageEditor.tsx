@@ -7,11 +7,14 @@ import { T } from "@tolgee/react";
 import { updatePagesMutationOptions } from "../../hooks/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useSplitPage } from "./PageEditorUtils";
+import { usePlayingPage } from "@/timeline/usePlayingPage";
 
 // TODO: figure out how to make this work with the new music system
 function PageEditor() {
     const queryClient = useQueryClient();
-    const { selectedPage } = useSelectedPage()!;
+    const selected = useSelectedPage()!.selectedPage;
+    // While timeline playback runs, the page being played (the selected page waits for the stop)
+    const selectedPage = usePlayingPage() ?? selected;
     const updatePagesMutation = useMutation(
         updatePagesMutationOptions(queryClient),
     );
