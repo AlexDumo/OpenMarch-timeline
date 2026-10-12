@@ -24,6 +24,7 @@ import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import { splitPage } from "@/global/classes/Page";
 import Page from "@/global/classes/Page";
+import { simpleDefaultsOn } from "@/timeline/simpleDefaults";
 
 // Types
 export type SplitPageArgs = {
@@ -133,7 +134,10 @@ const useSplitPageMutation = <TArgs>(
 export const useSplitPage = () => {
     return useSplitPageMutation(
         (args: SplitPageArgs) =>
-            _splitPage({ ...args, splitMoves: isBasicMode() }),
+            _splitPage({
+                ...args,
+                splitMoves: isBasicMode() || simpleDefaultsOn(),
+            }),
         "inspector.page.split.error",
     );
 };
