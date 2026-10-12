@@ -20,7 +20,7 @@ const migrationTags = journal.entries
     .sort((a, b) => a.idx - b.idx)
     .map((e) => e.tag);
 
-const RECIPE_MIGRATION = migrationTags[19]!;
+const RECIPE_MIGRATION = migrationTags[20]!;
 
 /** Runs one migration file the way `DrizzleMigrationService` does, foreign keys off. */
 const runMigration = (db: DatabaseSync, tag: string) => {
@@ -49,7 +49,7 @@ const TIMELINE_ROWS = `
 `;
 
 /**
- * Migration 0019 adds the Shape tool's recipe tables (ADR 0004): a recipe per placed shape, deleted
+ * Migration 0020 adds the Shape tool's recipe tables (ADR 0004): a recipe per placed shape, deleted
  * with its move, and its members, deleted with the recipe or the marcher. It only adds tables, so
  * older files open and keep their rows.
  */
@@ -63,8 +63,8 @@ describe(`Migration ${RECIPE_MIGRATION}`, () => {
         );
 
     beforeEach(() => {
-        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0019-"));
-        db = new DatabaseSync(path.join(tempDir, "pre-0019.dots"));
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0020-"));
+        db = new DatabaseSync(path.join(tempDir, "pre-0020.dots"));
         for (const tag of migrationTags.slice(0, 19)) runMigration(db, tag);
         db.exec(TIMELINE_ROWS);
     });
@@ -138,17 +138,17 @@ describe(`Migration ${RECIPE_MIGRATION}`, () => {
 
 /**
  * A version-8 file from an earlier development build (migrated through 0018) opens: the app's
- * migrator applies 0019 and leaves the version and the timeline rows alone.
+ * migrator applies 0020 and leaves the version and the timeline rows alone.
  */
 describe("opening a version-8 file from before the recipe tables", () => {
     let tempDir: string;
 
     beforeEach(() => {
-        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0019-open-"));
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0020-open-"));
     });
     afterEach(() => fs.rmSync(tempDir, { recursive: true, force: true }));
 
-    /** The migrations folder as a build without 0019 shipped it. */
+    /** The migrations folder as a build without 0020 shipped it. */
     const olderMigrationsFolder = () => {
         const folder = path.join(tempDir, "migrations-0018");
         fs.mkdirSync(path.join(folder, "meta"), { recursive: true });
@@ -177,7 +177,7 @@ describe("opening a version-8 file from before the recipe tables", () => {
         }
     };
 
-    it("applies 0019 and keeps the version and the rows", async () => {
+    it("applies 0020 and keeps the version and the rows", async () => {
         const filePath = path.join(tempDir, "older-v8.dots");
         const db = new DatabaseSync(filePath);
         applyFileVersionDecision(db, true);

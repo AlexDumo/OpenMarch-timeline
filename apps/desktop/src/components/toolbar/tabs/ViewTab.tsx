@@ -1,7 +1,12 @@
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useShallow } from "zustand/react/shallow";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
-import { CaretDownIcon, EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
+import {
+    CaretDownIcon,
+    CubeIcon,
+    EyeIcon,
+    EyeSlashIcon,
+} from "@phosphor-icons/react";
 import * as Popover from "@radix-ui/react-popover";
 import { ShapeViewSection } from "@/shapes/ui/ShapeViewSection";
 import { resolveShapeView } from "@/shapes/canvas/previewView";
@@ -24,6 +29,7 @@ export default function ViewTab() {
             <ToolbarSection>
                 <ShapePreviewPopover />
             </ToolbarSection>
+            <View3dToolbar />
         </div>
     );
 }
@@ -58,6 +64,23 @@ function ShapePreviewPopover() {
                 </Popover.Content>
             </Popover.Portal>
         </Popover.Root>
+    );
+}
+
+/** Opens the 3D View window, or focuses it (3D View UI-1). */
+function View3dToolbar() {
+    return (
+        <ToolbarSection>
+            <button
+                onClick={() => {
+                    void window.electron.openView3d();
+                }}
+                className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
+            >
+                <T keyName="view3d.open" />
+                <CubeIcon size={24} />
+            </button>
+        </ToolbarSection>
     );
 }
 
