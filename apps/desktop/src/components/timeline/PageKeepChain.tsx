@@ -17,8 +17,16 @@ import {
     timelineRangeTargetProps,
     type TimelineKeepHereMenu,
 } from "./TimelineRangeMenu";
-import type { TimelineBeatRange } from "./TimelineViewModel";
-import { pageLabelRoom } from "./TimelineGeometry";
+import type {
+    TimelineBeatRange,
+    TimelinePageMarker,
+} from "./TimelineViewModel";
+import {
+    beatToX,
+    getPageRange,
+    pageLabelFits,
+    pageLabelRoom,
+} from "./TimelineGeometry";
 
 /** A page box's chain (`pageChainWords`), with what a click does. */
 export interface PageKeepChain extends PageChainWords {
@@ -131,7 +139,10 @@ export function usePageKeepChains(
  * full ruler height), the flag's grip (`TimelinePageFlagGrips`, at most 12px, centered on the
  * flag), and the start flag's pennant (a 14x14 handle from the flag rightward, the ruler's top 14px).
  * The box starts 1px past its flag (the ruler's border). On the selected page the start flag sits
- * on the box's left flag and the playhead on either flag, so both edges matter.
+ * on the box's left flag and the playhead on either flag, so both edges matter. The playhead's
+ * add-page-flag **+** (16px, 8px right of the playhead, the ruler's top 6..22px) would cover the
+ * chain of the box the playhead is in up to about 23px past its flag, so it moves past the chain
+ * there (`addPageFlagLeft`).
  */
 
 /**
@@ -214,6 +225,58 @@ export function keepDotFit(boxWidth: number, labelChars: number): KeepDotFit {
  */
 export const labelPaddingBeside = (offset: number, size: number) =>
     offset + size + LABEL_GAP;
+
+/** How far right of the playhead the add-page-flag **+** sits (`TimelineVariants`) */
+export const ADD_PAGE_FLAG_OFFSET = 8;
+
+/**
+ * Where the add-page-flag **+** goes (px from beat 0): `ADD_PAGE_FLAG_OFFSET` right of the
+ * playhead, or just past the chain of the box the playhead is in where that would land on it. The
+ * + is drawn above the chain and would take its clicks, and on the selected page, where the
+ * playhead usually is, the linked chain always shows (review, 2026-10-12). A box with a chain that
+ * shows only on hover counts too: hovering would put it under the +.
+ */
+export function addPageFlagLeft({
+    pages,
+    beatCount,
+    positionBeat,
+    pixelsPerBeat,
+    keepChains,
+}: {
+    pages: readonly TimelinePageMarker[];
+    beatCount: number;
+    positionBeat: number;
+    pixelsPerBeat: number;
+    keepChains?: PageKeepChains;
+}): number {
+    const left = beatToX(positionBeat, pixelsPerBeat) + ADD_PAGE_FLAG_OFFSET;
+    if (!keepChains || keepChains.size === 0) return left;
+    for (const page of pages) {
+        if (!keepChains.has(page.id)) continue;
+        const range = getPageRange({ pages, pageId: page.id, beatCount });
+        if (
+            !range ||
+            positionBeat <= range.startBeatIndex ||
+            positionBeat >= range.endBeatIndex
+        )
+            continue;
+        const boxWidth =
+            (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
+        const fit = chainFit(
+            boxWidth,
+            pageLabelFits(page.label, boxWidth) ? page.label.length : 0,
+        );
+        if (!fit) return left;
+        // The box starts 1px past its flag: the ruler's border
+        const chainEnd =
+            beatToX(range.startBeatIndex, pixelsPerBeat) +
+            1 +
+            fit.offset +
+            fit.size;
+        return Math.max(left, chainEnd + LABEL_GAP);
+    }
+    return left;
+}
 
 const BASE =
     "focus-visible:ring-accent absolute z-30 flex items-center justify-center rounded-full outline-hidden focus-visible:ring-2";

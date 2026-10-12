@@ -45,7 +45,7 @@ import {
     getPlayheadReadout,
     getVisiblePageCounts,
     getPageRange,
-    pageLabelRoom,
+    pageLabelFits,
     parseTimelineGoTo,
     getSelectionRange,
     getTrackRange,
@@ -822,10 +822,6 @@ const PageBoxLabel = memo(function PageBoxLabel({
         <span className="sticky right-8 font-semibold">{label}</span>
     ) : null;
 });
-
-/** Whether a page box this wide has room for its name (`PageBoxLabel`) */
-const pageLabelFits = (label: string, width: number) =>
-    width >= pageLabelRoom(label.length);
 
 /** The ruler's page boxes in show order, each with its range (UI-9: previous flag to its own) */
 const pageBoxesOf = (

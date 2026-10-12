@@ -111,6 +111,10 @@ export const beatToX = (
  */
 export const pageLabelRoom = (labelChars: number) => labelChars * 7 + 10;
 
+/** Whether a page box this wide has room for its name (`PageBoxLabel`) */
+export const pageLabelFits = (label: string, width: number) =>
+    width >= pageLabelRoom(label.length);
+
 /** A horizontal span of a layer, in CSS pixels from the layer's left edge */
 export interface TimelineSpan {
     readonly left: number;
