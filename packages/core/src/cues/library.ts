@@ -6,6 +6,7 @@
  */
 import type {
     CueChannel,
+    CueLibraryItem,
     CueShowDefaults,
     PerformerCarry,
     ShowPhraseAsset,
@@ -40,6 +41,8 @@ export interface CueLibraryValue {
     standingOnly?: boolean;
     /** The settings it takes; a cue's missing settings get these defaults. */
     settings?: readonly CueSettingField[];
+    /** Carry values: what holding it counts as. */
+    holds?: PerformerCarry;
 }
 
 const choice = (
@@ -70,7 +73,15 @@ export const ALL_CARRIES: readonly PerformerCarry[] = [
     "sabre",
     "none",
 ];
-const GUARD: readonly PerformerCarry[] = ["flag", "rifle", "sabre"];
+/** Guard equipment: a Horn/Equipment value for one fits only performers holding it. */
+export const GUARD_CARRIES: readonly PerformerCarry[] = [
+    "flag",
+    "rifle",
+    "sabre",
+];
+const FLAG: readonly PerformerCarry[] = ["flag"];
+const RIFLE: readonly PerformerCarry[] = ["rifle"];
+const SABRE: readonly PerformerCarry[] = ["sabre"];
 
 const state = (
     id: string,
@@ -112,6 +123,15 @@ const phrase = (
     ...extra,
 });
 
+/** A Carry, Silk or Uniform value: a state that cuts, never a transition. */
+const look = (
+    id: string,
+    channel: CueChannel,
+    name: string,
+    label: string,
+    fits: readonly PerformerCarry[] = ALL_CARRIES,
+): CueLibraryValue => state(id, channel, name, label, fits, 1);
+
 export const CUE_LIBRARY: readonly CueLibraryValue[] = [
     state("feet.step", "feet", "Step", "Step", ALL_CARRIES, 1, {
         settings: FEET_SETTINGS,
@@ -126,14 +146,14 @@ export const CUE_LIBRARY: readonly CueLibraryValue[] = [
     state("battery.sticksDown", "horn_equipment", "Sticks down", "Down", [
         "battery",
     ]),
-    state("flag.set", "horn_equipment", "Flag set", "Set", GUARD),
-    state("flag.port", "horn_equipment", "Flag port", "Port", GUARD),
+    state("flag.set", "horn_equipment", "Flag set", "Set", FLAG),
+    state("flag.port", "horn_equipment", "Flag port", "Port", FLAG),
     phrase(
         "flag.dropSpin",
         "horn_equipment",
         "Flag drop spin",
         "Drop",
-        GUARD,
+        FLAG,
         2,
         16,
     ),
@@ -142,18 +162,18 @@ export const CUE_LIBRARY: readonly CueLibraryValue[] = [
         "horn_equipment",
         "Flag single toss",
         "1x",
-        GUARD,
+        FLAG,
         2,
         8,
     ),
-    state("rifle.portArms", "horn_equipment", "Port arms", "Port", GUARD),
-    state("rifle.present", "horn_equipment", "Present", "Pres", GUARD),
+    state("rifle.portArms", "horn_equipment", "Port arms", "Port", RIFLE),
+    state("rifle.present", "horn_equipment", "Present", "Pres", RIFLE),
     phrase(
         "rifle.dropSpin",
         "horn_equipment",
         "Rifle drop spin",
         "Drop",
-        GUARD,
+        RIFLE,
         2,
         16,
     ),
@@ -162,7 +182,7 @@ export const CUE_LIBRARY: readonly CueLibraryValue[] = [
         "horn_equipment",
         "Rifle single toss",
         "1x",
-        GUARD,
+        RIFLE,
         2,
         8,
     ),
@@ -171,17 +191,17 @@ export const CUE_LIBRARY: readonly CueLibraryValue[] = [
         "horn_equipment",
         "Rifle double toss",
         "2x",
-        GUARD,
+        RIFLE,
         2,
         8,
     ),
-    state("sabre.set", "horn_equipment", "Sabre set", "Set", GUARD),
+    state("sabre.set", "horn_equipment", "Sabre set", "Set", SABRE),
     phrase(
         "sabre.toss1",
         "horn_equipment",
         "Sabre single toss",
         "1x",
-        GUARD,
+        SABRE,
         2,
         8,
     ),
@@ -212,6 +232,17 @@ export const CUE_LIBRARY: readonly CueLibraryValue[] = [
         takesOver: ["horn_equipment"],
         settings: [choice("energy", ["low", "medium", "high"], "medium")],
     }),
+    // Carry, Silk and Uniform: the values compile falls back to. Cues name
+    // Library items (`library:<uuid>@<version hash>`) or Carry's `none`.
+    { ...look("none", "carry", "Nothing", "None"), id: "none", holds: "none" },
+    { ...look("carry.winds", "carry", "Horn", "Horn"), holds: "winds" },
+    { ...look("carry.battery", "carry", "Drum", "Drum"), holds: "battery" },
+    { ...look("carry.flag", "carry", "Flag", "Flag"), holds: "flag" },
+    { ...look("carry.rifle", "carry", "Rifle", "Rifle"), holds: "rifle" },
+    { ...look("carry.sabre", "carry", "Sabre", "Sabre"), holds: "sabre" },
+    look("silk.plain", "silk", "Plain silk", "Plain", FLAG),
+    look("uniform.band", "uniform", "Band uniform", "Band"),
+    look("uniform.guard", "uniform", "Guard uniform", "Guard"),
 ];
 
 const BY_ID = new Map(CUE_LIBRARY.map((v) => [v.id, v]));
@@ -223,13 +254,31 @@ export function cueLibraryValue(id: string): CueLibraryValue | undefined {
 /** Looks a cue value up in the built-in library or the show's phrase assets. */
 export type CueValueLookup = (id: string) => CueLibraryValue | undefined;
 
+/** A Library item as a Carry, Silk or Uniform value. */
+function itemValue(item: CueLibraryItem): CueLibraryValue {
+    const channel = item.channel;
+    return {
+        id: item.id,
+        channel,
+        kind: "state",
+        name: item.name,
+        label: item.label ?? item.name,
+        fits: channel === "silk" ? FLAG : ALL_CARRIES,
+        defaultTransition: 1,
+        ...(item.holds ? { holds: item.holds } : {}),
+    };
+}
+
 /**
  * A lookup over the built-ins plus the show's phrase assets, which fit every
- * performer and take over every channel they list.
+ * performer and take over every channel they list, and the Library items
+ * and equipment that Carry, Silk and Uniform values name. A built-in wins
+ * over an item of the same id.
  */
 export function cueValueLookup(
     phraseAssets: readonly ShowPhraseAsset[] = [],
     showDefaults: CueShowDefaults = {},
+    items: readonly CueLibraryItem[] = [],
 ): CueValueLookup {
     const feet = BY_ID.get("builtin:feet.step")!;
     const showFeet: CueLibraryValue = {
@@ -257,6 +306,8 @@ export function cueValueLookup(
             },
         ]),
     );
+    for (const item of items)
+        if (!shown.has(item.id)) shown.set(item.id, itemValue(item));
     return (id) =>
         id === feet.id ? showFeet : (BY_ID.get(id) ?? shown.get(id));
 }
@@ -280,12 +331,22 @@ const DEFAULT_CARRY_VALUE: Record<PerformerCarry, string | null> = {
     none: null,
 };
 
-/** The built-in default, never stored, on a channel for what a performer carries. */
+/**
+ * The built-in default, never stored, on a channel for what a performer
+ * carries. Compile refines Carry (the section's usual equipment) and
+ * Uniform (the guard default) from its input.
+ */
 export function defaultCueValue(
     channel: CueChannel,
     carries: PerformerCarry,
 ): string | null {
     switch (channel) {
+        case "carry":
+            return carries === "none" ? "none" : `builtin:carry.${carries}`;
+        case "silk":
+            return "builtin:silk.plain";
+        case "uniform":
+            return "builtin:uniform.band";
         case "feet":
             return "builtin:feet.step";
         case "horn_equipment":

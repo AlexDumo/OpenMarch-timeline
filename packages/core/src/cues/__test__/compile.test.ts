@@ -1,6 +1,7 @@
 // cspell:words choreo recompiles
 import { describe, expect, it } from "vitest";
 import {
+    CUE_CHANNELS,
     compileCues,
     type CompileInput,
     type CueInput,
@@ -752,12 +753,7 @@ describe("compileCues", () => {
         const full = compileCues(after);
 
         for (const m of after.marchers)
-            for (const channel of [
-                "feet",
-                "horn_equipment",
-                "facing",
-                "body",
-            ] as const)
+            for (const channel of CUE_CHANNELS)
                 expect(partial.segments(m.id, channel)).toEqual(
                     full.segments(m.id, channel),
                 );

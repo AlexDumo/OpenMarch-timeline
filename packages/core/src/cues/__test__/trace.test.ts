@@ -57,9 +57,14 @@ describe("traceCue", () => {
         });
     });
 
-    it("reports the default before any cue applies", () => {
+    it("reports the default before any cue applies, and where it comes from", () => {
         expect(traceCue(compiled, 1, "horn_equipment", 2)).toEqual({
             winner: null,
+            default: {
+                source: "carry",
+                value: "builtin:horn.up",
+                carries: "winds",
+            },
             beaten: [],
         });
     });

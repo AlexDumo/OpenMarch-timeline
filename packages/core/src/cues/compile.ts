@@ -1,4 +1,5 @@
 import {
+    GUARD_CARRIES,
     cueSettings,
     cueValueLookup,
     defaultCueValue,
@@ -9,12 +10,17 @@ import {
     type CompileInput,
     type CompiledCues,
     type CueChannel,
-    type CueFlag,
+    type CueTraceDefault,
+    type CueEquipment,
     type CueFlagKind,
     type CueInput,
+    type CueLibraryItem,
     type CueMarcher,
+    type CueNoteKind,
+    type CueSection,
     type CueSegment,
     type CueTrace,
+    type PerformerCarry,
     type RippleOrder,
 } from "./types";
 
@@ -83,10 +89,44 @@ function segment(
 }
 
 /**
+ * A channel's default from count `at`. On Horn/Equipment a new span starts
+ * wherever what Carry gives changes (`holds`).
+ */
+interface DefaultSpan {
+    at: number;
+    value: string | null;
+    /** Settings the default shows beside its value's (the plain silk's color). */
+    settings?: Readonly<Record<string, unknown>>;
+    holds?: PerformerCarry;
+}
+
+function defaultSegment(
+    lookup: CueValueLookup,
+    from: number,
+    to: number,
+    span: DefaultSpan,
+): CueSegment {
+    const seg = segment(lookup, from, to, "default", span.value, null);
+    return span.settings
+        ? { ...seg, settings: { ...seg.settings, ...span.settings } }
+        : seg;
+}
+
+/** Whether a value fits a performer holding `holds`. */
+const fitsHolds = (
+    lookup: CueValueLookup,
+    value: string | null,
+    holds: PerformerCarry,
+) => (value === null ? false : (lookup(value)?.fits.includes(holds) ?? false));
+
+/**
  * The state timeline for one marcher and channel: the default, then each
  * winning state cue landing on its count's click with its transition before
  * it, counted inclusively (a transition of L counts starts on the click of
- * `count - L + 1`; L = 1 is a snap).
+ * `count - L + 1`; L = 1 is a snap). Carry, Silk and Uniform cut on the
+ * click with no transition. Where `defaults` start a new span (what Carry
+ * gives changed), a default, or a state that doesn't fit what's now held,
+ * gives way to the new default.
  */
 function stateTimeline(
     lookup: CueValueLookup,
@@ -94,15 +134,41 @@ function stateTimeline(
     channel: CueChannel,
     states: readonly PlacedCue[],
     counts: number,
-    flags: FlagCollector,
+    flags: FlagCollector<CueFlagKind>,
+    defaults: readonly DefaultSpan[],
 ): CueSegment[] {
-    const defaultValue = defaultCueValue(channel, marcher.carries);
     const out: CueSegment[] = [];
-    let current = segment(lookup, 0, counts, "default", defaultValue, null);
+    let current = defaultSegment(lookup, 0, counts, defaults[0]!);
     let previousCount = 0;
     let previous: CueInput | null = null;
+    const events = [
+        ...defaults.slice(1).map((span) => ({ at: span.at, span })),
+        ...states.map((placed) => ({ at: placed.at, placed })),
+    ].sort((a, b) => a.at - b.at || ("span" in a ? -1 : 0));
 
-    for (const { cue, at: count } of states) {
+    for (const event of events) {
+        if ("span" in event) {
+            const { span } = event;
+            if (
+                current.kind !== "default" &&
+                span.holds !== undefined &&
+                fitsHolds(lookup, current.value, span.holds)
+            )
+                continue;
+            if (span.at > current.from) out.push({ ...current, to: span.at });
+            current = defaultSegment(lookup, span.at, counts, span);
+            previousCount = Math.max(previousCount, span.at);
+            previous = null;
+            continue;
+        }
+        const { cue, at: count } = event.placed;
+        if (HARD_CUT.has(channel)) {
+            if (count > current.from) out.push({ ...current, to: count });
+            current = segment(lookup, count, counts, "state", cue.value, cue);
+            previousCount = count;
+            previous = cue;
+            continue;
+        }
         const length =
             cue.transitionLength ?? lookup(cue.value)?.defaultTransition ?? 1;
         if (previous && count - length + 1 < previousCount)
@@ -125,20 +191,33 @@ function stateTimeline(
 }
 
 /** Channels that take states only (no Feet phrases in v1). */
-const STATES_ONLY: ReadonlySet<CueChannel> = new Set(["facing", "feet"]);
+const STATES_ONLY: ReadonlySet<CueChannel> = new Set([
+    "facing",
+    "feet",
+    "carry",
+    "silk",
+    "uniform",
+]);
+
+/** Channels whose states cut on their count, ignoring `transitionLength`. */
+const HARD_CUT: ReadonlySet<CueChannel> = new Set(["carry", "silk", "uniform"]);
+
+/** Items (props, equipment with its own row) are never performers. */
+const isItem = (marcher: CueMarcher) =>
+    marcher.type === "prop" || marcher.type === "equipment";
 
 const SPECIFICITY = { band: 0, section: 1, tag: 2, set: 3 } as const;
 
 const specificity = (cue: CueInput) => SPECIFICITY[cue.target.kind];
 
-/** Flags merged across marchers: one per kind and set of cues. */
-class FlagCollector {
+/** Flags or notes merged across marchers: one per kind and set of cues. */
+class FlagCollector<K extends string> {
     private readonly byKey = new Map<
         string,
-        CueFlag & { marcherIds: number[] }
+        { kind: K; cueIds: number[]; marcherIds: number[] }
     >();
 
-    add(kind: CueFlagKind, cueIds: readonly number[], marcherId: number) {
+    add(kind: K, cueIds: readonly number[], marcherId: number) {
         const ids = [...cueIds].sort((a, b) => a - b);
         const key = `${kind}:${ids.join(",")}`;
         const flag = this.byKey.get(key);
@@ -149,7 +228,7 @@ class FlagCollector {
             this.byKey.set(key, { kind, cueIds: ids, marcherIds: [marcherId] });
     }
 
-    get flags(): CueFlag[] {
+    get flags(): { kind: K; cueIds: number[]; marcherIds: number[] }[] {
         return [...this.byKey.values()];
     }
 }
@@ -161,7 +240,7 @@ class FlagCollector {
 function winnersByCount(
     cues: readonly PlacedCue[],
     marcherId: number,
-    flags: FlagCollector,
+    flags: FlagCollector<CueFlagKind>,
 ): PlacedCue[] {
     const groups = new Map<number, PlacedCue[]>();
     for (const p of cues) {
@@ -196,7 +275,7 @@ function phraseSpans(
     phrases: readonly PlacedCue[],
     marcherId: number,
     counts: number,
-    flags: FlagCollector,
+    flags: FlagCollector<CueFlagKind>,
 ): CueSegment[] {
     const out: CueSegment[] = [];
     for (const { cue, at: count } of phrases) {
@@ -256,7 +335,7 @@ function applyTakeovers(
     marcherId: number,
     channels: Map<CueChannel, CueSegment[]>,
     travels: CompileInput["travels"],
-    flags: FlagCollector,
+    flags: FlagCollector<CueFlagKind>,
 ): void {
     const taken = new Map<CueChannel, CueSegment[]>();
     for (const [channel, segments] of channels) {
@@ -401,24 +480,14 @@ function appliesTo(cue: CueInput, marcher: CueMarcher): boolean {
     const target = cue.target;
     switch (target.kind) {
         case "band":
-            return true;
+            return !isItem(marcher);
         case "section":
-            return target.section === marcher.section;
+            return !isItem(marcher) && target.section === marcher.section;
         case "tag":
             return marcher.tagIds.includes(target.tagId);
         case "set":
             return target.marcherIds.includes(marcher.id);
     }
-}
-
-/** Whether the cue's value suits what the marcher carries. */
-function fits(
-    lookup: CueValueLookup,
-    cue: CueInput,
-    marcher: CueMarcher,
-): boolean {
-    const value = lookup(cue.value);
-    return value ? value.fits.includes(marcher.carries) : false;
 }
 
 /**
@@ -431,7 +500,8 @@ function resolveChannel(
     channel: CueChannel,
     applicable: readonly PlacedCue[],
     counts: number,
-    flags: FlagCollector,
+    flags: FlagCollector<CueFlagKind>,
+    defaults: readonly DefaultSpan[],
 ): CueSegment[] {
     const states = winnersByCount(
         applicable.filter((p) => p.cue.kind === "state"),
@@ -444,7 +514,15 @@ function resolveChannel(
         flags,
     );
     return overlay(
-        stateTimeline(lookup, marcher, channel, states, counts, flags),
+        stateTimeline(
+            lookup,
+            marcher,
+            channel,
+            states,
+            counts,
+            flags,
+            defaults,
+        ),
         phraseSpans(lookup, phrases, marcher.id, counts, flags),
     );
 }
@@ -455,20 +533,74 @@ interface ChannelResult {
     base: CueSegment[];
 }
 
+/**
+ * A marcher's Carry, Silk and Uniform defaults, and what Carry gives over
+ * the show, which sets the Horn/Equipment default and the cues that fit.
+ */
+interface MarcherLooks {
+    carry: CueTraceDefault & { holds: PerformerCarry };
+    silk: CueTraceDefault;
+    uniform: CueTraceDefault;
+    /** What Carry gives from each count where it changes, from count 0. */
+    holds: readonly { at: number; holds: PerformerCarry }[];
+}
+
 /** What a compile keeps beside its output. */
 interface CompileState {
     lookup: CueValueLookup;
     channels: Map<string, ChannelResult>;
     /** Flags raised while resolving each channel (clashes, overlaps, cuts). */
-    channelFlags: Map<CueChannel, FlagCollector>;
+    channelFlags: Map<CueChannel, FlagCollector<CueFlagKind>>;
+    looks: Map<number, MarcherLooks>;
 }
 
 const compileStates = new WeakMap<CompiledCues, CompileState>();
 
+/** What Carry gives the marcher at `count` (the usual, before Carry resolves). */
+function holdsAt(looks: MarcherLooks, count: number): PerformerCarry {
+    let holds = looks.carry.holds;
+    for (const span of looks.holds) {
+        if (span.at > count) break;
+        holds = span.holds;
+    }
+    return holds;
+}
+
+/** Why a channel shows its default at `count`. */
+function defaultTrace(
+    looks: MarcherLooks,
+    channel: CueChannel,
+    count: number,
+): CueTraceDefault {
+    switch (channel) {
+        case "carry": {
+            const { holds: _holds, ...carry } = looks.carry;
+            return carry;
+        }
+        case "silk":
+            return looks.silk;
+        case "uniform":
+            return looks.uniform;
+        case "horn_equipment": {
+            const holds = holdsAt(looks, count);
+            return {
+                source: "carry",
+                value: defaultCueValue(channel, holds),
+                carries: holds,
+            };
+        }
+        default:
+            return {
+                source: "library",
+                value: defaultCueValue(channel, looks.carry.holds),
+            };
+    }
+}
+
 /**
  * Why a marcher does what it does on a channel at a count: the cue in
- * effect (null for the default) and the applicable cues it beat, latest
- * and most specific first.
+ * effect (null for the default, with where the default comes from) and the
+ * applicable cues it beat, latest and most specific first.
  */
 export function traceCue(
     compiled: CompiledCues,
@@ -484,7 +616,12 @@ export function traceCue(
     const takeover = current?.takenOverFrom
         ? { takenOverFrom: current.takenOverFrom }
         : {};
-    if (!state || !entry) return { winner, ...takeover, beaten: [] };
+    const looks = state?.looks.get(marcherId);
+    const why =
+        winner === null && looks
+            ? { default: defaultTrace(looks, channel, count) }
+            : {};
+    if (!state || !entry) return { winner, ...takeover, ...why, beaten: [] };
     const beaten = entry.placed
         .filter(({ cue, at }) => {
             if (cue.id === winner || at > count) return false;
@@ -499,7 +636,7 @@ export function traceCue(
                 b.cue.id - a.cue.id,
         )
         .map((p) => p.cue.id);
-    return { winner, ...takeover, beaten };
+    return { winner, ...takeover, ...why, beaten };
 }
 
 /** Options for recompiling after an edit. */
@@ -509,73 +646,334 @@ export interface RecompileOptions {
     /**
      * The channels whose cues changed. Every other channel is reused from
      * `previous`, so nothing else may have changed: not the beats, the
-     * marchers, the phrase assets, positions or show defaults.
+     * marchers, the phrase assets, positions, sections, Library items or
+     * show defaults. A Carry edit also resolves Horn/Equipment and Silk
+     * again, since what is held decides the cues that fit them.
      */
     channels: readonly CueChannel[];
 }
 
+const sectionKey = (name: string) => name.trim().toLowerCase();
+
+/** The compile's value lookup, knowing the Library items and equipment it names. */
+function compileLookup(input: CompileInput): CueValueLookup {
+    const asItem = (e: CueEquipment): CueLibraryItem => ({
+        id: e.id,
+        channel: "carry",
+        name: e.name,
+        holds: e.holds,
+        ...(e.label !== undefined ? { label: e.label } : {}),
+    });
+    const equipment = [
+        ...(input.sections ?? []).flatMap((s) =>
+            s.equipment ? [s.equipment] : [],
+        ),
+        ...Object.values(input.equipmentFallback ?? {}),
+    ];
+    return cueValueLookup(input.phraseAssets, input.showDefaults, [
+        ...(input.libraryItems ?? []),
+        ...equipment.map(asItem),
+    ]);
+}
+
+/** Each marcher's Carry, Silk and Uniform defaults (ADR 0004 amendment). */
+function marcherDefaults(
+    input: CompileInput,
+): (marcher: CueMarcher) => Omit<MarcherLooks, "holds"> {
+    const sections = new Map(
+        (input.sections ?? []).map((s) => [sectionKey(s.name), s]),
+    );
+    const fallback = new Map(
+        Object.entries(input.equipmentFallback ?? {}).map(([name, e]) => [
+            sectionKey(name),
+            e,
+        ]),
+    );
+    return (marcher) => marcherLooks(input, sections, fallback, marcher);
+}
+
+function marcherLooks(
+    input: CompileInput,
+    sections: ReadonlyMap<string, CueSection>,
+    fallback: ReadonlyMap<string, CueEquipment>,
+    marcher: CueMarcher,
+): Omit<MarcherLooks, "holds"> {
+    const key = sectionKey(marcher.section);
+    const section = sections.get(key);
+    const usual = section?.equipment;
+    const fromFallback = usual === undefined ? fallback.get(key) : undefined;
+    const carry: MarcherLooks["carry"] =
+        usual === null
+            ? {
+                  source: "section_equipment",
+                  value: "none",
+                  section: marcher.section,
+                  holds: "none",
+              }
+            : usual
+              ? {
+                    source: "section_equipment",
+                    value: usual.id,
+                    section: marcher.section,
+                    holds: usual.holds,
+                }
+              : fromFallback
+                ? {
+                      source: "equipment_fallback",
+                      value: fromFallback.id,
+                      section: marcher.section,
+                      holds: fromFallback.holds,
+                  }
+                : {
+                      source: "marcher_carries",
+                      value: defaultCueValue("carry", marcher.carries),
+                      holds: marcher.carries,
+                  };
+    const color = section?.color ?? null;
+    const guard = marcher.isGuard ?? GUARD_CARRIES.includes(marcher.carries);
+    const defaults = input.showDefaults ?? {};
+    return {
+        carry,
+        silk: {
+            source: "section_color",
+            value: defaultCueValue("silk", marcher.carries),
+            section: marcher.section,
+            color,
+        },
+        uniform: guard
+            ? {
+                  source: "guard_uniform",
+                  value: defaults.guardUniform ?? "builtin:uniform.guard",
+              }
+            : {
+                  source: "band_uniform",
+                  value: defaults.bandUniform ?? "builtin:uniform.band",
+              },
+    };
+}
+
+/** What Carry gives over the show, from a marcher's resolved Carry channel. */
+function holdsOver(
+    lookup: CueValueLookup,
+    carry: readonly CueSegment[],
+    usual: PerformerCarry,
+): MarcherLooks["holds"] {
+    const out: { at: number; holds: PerformerCarry }[] = [];
+    for (const seg of carry) {
+        if (seg.to <= seg.from) continue;
+        const holds =
+            (seg.value !== null ? lookup(seg.value)?.holds : undefined) ??
+            usual;
+        if (out[out.length - 1]?.holds !== holds)
+            out.push({ at: out.length === 0 ? 0 : seg.from, holds });
+    }
+    return out.length > 0 ? out : [{ at: 0, holds: usual }];
+}
+
+/** The default spans a channel starts from. */
+function defaultSpans(looks: MarcherLooks, channel: CueChannel): DefaultSpan[] {
+    switch (channel) {
+        case "carry":
+            return [{ at: 0, value: looks.carry.value }];
+        case "silk":
+            return [
+                {
+                    at: 0,
+                    value: looks.silk.value,
+                    settings: { color: looks.silk.color ?? null },
+                },
+            ];
+        case "uniform":
+            return [{ at: 0, value: looks.uniform.value }];
+        case "horn_equipment":
+            return looks.holds.map(({ at, holds }) => ({
+                at,
+                value: defaultCueValue(channel, holds),
+                holds,
+            }));
+        default:
+            return [
+                { at: 0, value: defaultCueValue(channel, looks.carry.holds) },
+            ];
+    }
+}
+
+/**
+ * Whether a cue fits a marcher holding `holds`: Carry and Uniform fit every
+ * performer, Silk only those carrying a flag, the rest as their value says.
+ */
+function fitsHolding(
+    lookup: CueValueLookup,
+    cue: CueInput,
+    holds: PerformerCarry,
+): boolean {
+    switch (cue.channel) {
+        case "carry":
+        case "uniform":
+            return true;
+        case "silk":
+            return holds === "flag";
+        default:
+            return fitsHolds(lookup, cue.value, holds);
+    }
+}
+
+/**
+ * Whether skipping a Horn/Equipment cue is down to what Carry gives, so it
+ * earns a quiet note: the value fits what the marcher usually carries, or
+ * it's guard equipment work on a marcher holding other guard equipment. A
+ * horn state on the guard is skipped without one.
+ */
+function carryMismatch(
+    lookup: CueValueLookup,
+    cue: CueInput,
+    usual: PerformerCarry,
+    holds: PerformerCarry,
+): boolean {
+    if (cue.channel !== "horn_equipment") return false;
+    const fits = lookup(cue.value)?.fits ?? [];
+    return (
+        fits.includes(usual) ||
+        (GUARD_CARRIES.includes(holds) &&
+            fits.some((f) => GUARD_CARRIES.includes(f)))
+    );
+}
+
+/** One compile's inputs and working state. */
+interface Pass {
+    input: CompileInput;
+    lookup: CueValueLookup;
+    placed: readonly PlacedCue[];
+    time: TimeMap;
+    previous: CompileState | undefined;
+    /** Whether a channel is reused from the previous compile. */
+    reused: (channel: CueChannel) => boolean;
+    state: CompileState;
+}
+
+/**
+ * A compile's pass. A Carry edit also resolves Horn/Equipment and Silk
+ * again; channels nobody edited keep the previous compile's flags.
+ */
+function newPass(input: CompileInput, recompile?: RecompileOptions): Pass {
+    const lookup = compileLookup(input);
+    const previous = recompile && compileStates.get(recompile.previous);
+    const edited = new Set(recompile?.channels ?? []);
+    if (edited.has("carry")) {
+        edited.add("horn_equipment");
+        edited.add("silk");
+    }
+    const reused = (channel: CueChannel) =>
+        previous !== undefined && !edited.has(channel);
+    return {
+        input,
+        lookup,
+        placed: placeAll(input),
+        time: new TimeMap(input.beats),
+        previous,
+        reused,
+        state: {
+            lookup,
+            channels: new Map(),
+            channelFlags: new Map(
+                CUE_CHANNELS.map((channel) => [
+                    channel,
+                    reused(channel)
+                        ? previous!.channelFlags.get(channel)!
+                        : new FlagCollector<CueFlagKind>(),
+                ]),
+            ),
+            looks: new Map(),
+        },
+    };
+}
+
+/** One marcher's channel: reused from the previous compile, or resolved. */
+function resolve(
+    pass: Pass,
+    marcher: CueMarcher,
+    channel: CueChannel,
+    looks: MarcherLooks,
+    checked: CueChecks,
+): ChannelResult {
+    const { lookup, state } = pass;
+    const key = segmentKey(marcher.id, channel);
+    const kept = pass.reused(channel)
+        ? pass.previous!.channels.get(key)
+        : undefined;
+    const result =
+        kept ??
+        resolveMarcherChannel(
+            lookup,
+            marcher,
+            channel,
+            pass.placed.filter(
+                (p) =>
+                    p.cue.channel === channel &&
+                    !checked.notAllowed.has(p.cue.id) &&
+                    appliesTo(p.cue, marcher) &&
+                    fitsHolding(lookup, p.cue, holdsAt(looks, p.count)),
+            ),
+            checked.ripples,
+            pass.input.beats.length,
+            state.channelFlags.get(channel)!,
+            defaultSpans(looks, channel),
+        );
+    state.channels.set(key, result);
+    return result;
+}
+
 /**
  * Resolves the show's cues into each marcher's behavior per channel
- * (docs/3d/performer-behavior.md sections 2 and 6). Pure. With `recompile`,
- * only the edited channels are resolved again; take-overs and the flags
- * that cross channels are always redone.
+ * (docs/3d/performer-behavior.md sections 2 and 6). Pure. Carry resolves
+ * first: what it gives decides the Horn/Equipment default and the
+ * Horn/Equipment and Silk cues that fit. With `recompile`, only the edited
+ * channels are resolved again; take-overs and the flags and notes that
+ * cross channels are always redone.
  */
 export function compileCues(
     input: CompileInput,
     recompile?: RecompileOptions,
 ): CompiledCues {
-    const counts = input.beats.length;
     const byKey = new Map<string, CueSegment[]>();
-    const flags = new FlagCollector();
-    const lookup = cueValueLookup(input.phraseAssets, input.showDefaults);
-    const previous = recompile && compileStates.get(recompile.previous);
-    const reused = (channel: CueChannel) =>
-        previous !== undefined && !recompile!.channels.includes(channel);
-    const state: CompileState = {
-        lookup,
-        channels: new Map(),
-        channelFlags: new Map(
-            CUE_CHANNELS.map((channel) => [
-                channel,
-                reused(channel)
-                    ? previous!.channelFlags.get(channel)!
-                    : new FlagCollector(),
-            ]),
-        ),
-    };
+    const flags = new FlagCollector<CueFlagKind>();
+    const notes = new FlagCollector<CueNoteKind>();
+    const pass = newPass(input, recompile);
+    const { lookup, state } = pass;
+    const defaultsOf = marcherDefaults(input);
 
-    const { placed, ripples, notAllowed } = placeCues(
-        input,
-        lookup,
+    // Carry first: every performer, whatever they hold.
+    const carryChecks = checkCues(pass, "carry", () => true, flags, notes);
+    for (const marcher of input.marchers) {
+        const looks: MarcherLooks = { ...defaultsOf(marcher), holds: [] };
+        const carry = resolve(pass, marcher, "carry", looks, carryChecks);
+        looks.holds = holdsOver(lookup, carry.base, looks.carry.holds);
+        state.looks.set(marcher.id, looks);
+    }
+
+    const looksOf = (marcher: CueMarcher) => state.looks.get(marcher.id)!;
+    const otherChecks = checkCues(
+        pass,
+        "others",
+        (cue, marcher, count) =>
+            fitsHolding(lookup, cue, holdsAt(looksOf(marcher), count)),
         flags,
-        reused,
+        notes,
+        looksOf,
     );
-
     for (const marcher of input.marchers) {
         const channels = new Map<CueChannel, CueSegment[]>();
         for (const channel of CUE_CHANNELS) {
-            const key = segmentKey(marcher.id, channel);
-            const kept = reused(channel)
-                ? previous!.channels.get(key)
-                : undefined;
             const result =
-                kept ??
-                resolveMarcherChannel(
-                    lookup,
-                    marcher,
-                    channel,
-                    placed.filter(
-                        (p) =>
-                            p.cue.channel === channel &&
-                            !notAllowed.has(p.cue.id) &&
-                            appliesTo(p.cue, marcher) &&
-                            fits(lookup, p.cue, marcher),
-                    ),
-                    ripples,
-                    counts,
-                    state.channelFlags.get(channel)!,
-                );
-            state.channels.set(key, result);
+                channel === "carry"
+                    ? state.channels.get(segmentKey(marcher.id, channel))!
+                    : resolve(
+                          pass,
+                          marcher,
+                          channel,
+                          looksOf(marcher),
+                          otherChecks,
+                      );
             channels.set(channel, result.base);
         }
         applyTakeovers(lookup, marcher.id, channels, input.travels, flags);
@@ -590,39 +988,66 @@ export function compileCues(
             ...flags.flags,
             ...CUE_CHANNELS.flatMap((c) => state.channelFlags.get(c)!.flags),
         ],
+        notes: notes.flags,
     };
     compileStates.set(compiled, state);
     return compiled;
 }
 
-/**
- * Puts each cue on its count, raises the flags that don't depend on one
- * marcher's channel (fits nobody, a phrase on a states-only channel), and
- * works out ripples for the channels being resolved.
- */
-function placeCues(
-    input: CompileInput,
-    lookup: CueValueLookup,
-    flags: FlagCollector,
-    reused: (channel: CueChannel) => boolean,
-) {
-    const counts = input.beats.length;
+/** Each cue on its count, sorted by count then id; cues on unknown beats are dropped. */
+function placeAll(input: CompileInput): PlacedCue[] {
     const countOfBeat = new Map(input.beats.map((b, i) => [b.id, i]));
     const placed: PlacedCue[] = [];
     for (const cue of input.cues) {
         const count = countOfBeat.get(cue.beatId);
         if (count !== undefined) placed.push({ cue, count, at: count });
     }
-    placed.sort((a, b) => a.count - b.count || a.cue.id - b.cue.id);
+    return placed.sort((a, b) => a.count - b.count || a.cue.id - b.cue.id);
+}
 
-    const time = new TimeMap(input.beats);
+interface CueChecks {
+    ripples: Map<number, Map<number, number>>;
+    notAllowed: Set<number>;
+}
+
+/**
+ * Raises the flags that don't depend on one marcher's channel (fits
+ * nobody, a phrase on a states-only channel), notes Horn/Equipment cues
+ * skipped for what Carry gives, and works out ripples for the channels
+ * being resolved.
+ */
+function checkCues(
+    pass: Pass,
+    which: "carry" | "others",
+    fitsAt: (cue: CueInput, marcher: CueMarcher, count: number) => boolean,
+    flags: FlagCollector<CueFlagKind>,
+    notes: FlagCollector<CueNoteKind>,
+    looksOf?: (marcher: CueMarcher) => MarcherLooks,
+): CueChecks {
+    const { input, lookup, reused, time } = pass;
+    const counts = input.beats.length;
     const ripples = new Map<number, Map<number, number>>();
     const notAllowed = new Set<number>();
-    for (const { cue, count } of placed) {
+    for (const { cue, count } of pass.placed) {
+        if ((cue.channel === "carry") !== (which === "carry")) continue;
         const targeted = input.marchers.filter((m) => appliesTo(cue, m));
-        const fitting = targeted.filter((m) => fits(lookup, cue, m));
+        const fitting = targeted.filter((m) => fitsAt(cue, m, count));
         if (targeted.length > 0 && fitting.length === 0)
             for (const m of targeted) flags.add("fits_nobody", [cue.id], m.id);
+        if (looksOf)
+            for (const m of targeted) {
+                if (fitting.includes(m)) continue;
+                const looks = looksOf(m);
+                if (
+                    carryMismatch(
+                        lookup,
+                        cue,
+                        looks.carry.holds,
+                        holdsAt(looks, count),
+                    )
+                )
+                    notes.add("carry_mismatch", [cue.id], m.id);
+            }
         if (cue.kind === "phrase" && STATES_ONLY.has(cue.channel)) {
             for (const m of fitting)
                 flags.add("kind_not_allowed", [cue.id], m.id);
@@ -639,7 +1064,7 @@ function placeCues(
         );
         if (rippled) ripples.set(cue.id, rippled);
     }
-    return { placed, ripples, notAllowed };
+    return { ripples, notAllowed };
 }
 
 /** Places a marcher's applicable cues (after ripples) and resolves them. */
@@ -650,7 +1075,8 @@ function resolveMarcherChannel(
     applicable: readonly PlacedCue[],
     ripples: ReadonlyMap<number, ReadonlyMap<number, number>>,
     counts: number,
-    flags: FlagCollector,
+    flags: FlagCollector<CueFlagKind>,
+    defaults: readonly DefaultSpan[],
 ): ChannelResult {
     const placed = applicable.map((p) => ({
         ...p,
@@ -658,6 +1084,14 @@ function resolveMarcherChannel(
     }));
     return {
         placed,
-        base: resolveChannel(lookup, marcher, channel, placed, counts, flags),
+        base: resolveChannel(
+            lookup,
+            marcher,
+            channel,
+            placed,
+            counts,
+            flags,
+            defaults,
+        ),
     };
 }
