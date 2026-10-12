@@ -60,6 +60,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
         Component: GeneralSettings,
         descriptionKey: "settings.general.description",
         searchKeys: [
+            "settings.general.editorMode",
+            "settings.general.editorMode.basic",
+            "settings.general.editorMode.expert",
             "settings.general.language",
             "settings.general.automaticUpdates",
         ],

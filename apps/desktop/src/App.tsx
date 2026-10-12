@@ -31,6 +31,7 @@ import FocusNotice from "./components/FocusNotice";
 import SvgPreviewHandler from "./utilities/SvgPreviewHandler";
 import { useFullscreenStore } from "./stores/FullscreenStore";
 import AnalyticsOptInModal from "./components/AnalyticsOptInModal";
+import { useEditorModeStore } from "./stores/EditorModeStore";
 import { attachCodegenListeners } from "@/components/canvas/listeners/CodegenListeners";
 import ErrorBoundary from "./ErrorBoundary";
 import {
@@ -76,6 +77,12 @@ function App() {
     const [analyticsConsent, setAnalyticsConsent] = useState<boolean | null>(
         null,
     );
+    const editorModeLoaded = useEditorModeStore((s) => s.loaded);
+    const editorMode = useEditorModeStore((s) => s.mode);
+    // With no mode chosen, the launch page's welcome flow asks about analytics
+    // instead (UI-19). Automated sessions get Expert, so they still come here.
+    const welcomeFlowAsksAnalytics =
+        !editorModeLoaded || (editorMode === null && !databaseIsReady);
     const fetchUiSettings = useUiSettingsStore((s) => s.fetchUiSettings);
     const focussedComponent = useUiSettingsStore(
         (s) => s.uiSettings.focussedComponent,
@@ -253,11 +260,15 @@ function App() {
                     <ReactQueryDevtools initialIsOpen={false} />
                 )}
                 <main className="bg-bg-1 text-text outline-accent flex h-screen min-h-0 w-screen min-w-0 flex-col overflow-hidden font-sans">
-                    {analyticsConsent === null && !isCodegen && (
-                        <AnalyticsOptInModal
-                            onChoice={(choice) => setAnalyticsConsent(choice)}
-                        />
-                    )}
+                    {analyticsConsent === null &&
+                        !isCodegen &&
+                        !welcomeFlowAsksAnalytics && (
+                            <AnalyticsOptInModal
+                                onChoice={(choice) =>
+                                    setAnalyticsConsent(choice)
+                                }
+                            />
+                        )}
                     {/* Codegen mode indicator */}
                     {isCodegen && (
                         <div className="bg-yellow px-16 py-8 text-center font-bold text-black">
