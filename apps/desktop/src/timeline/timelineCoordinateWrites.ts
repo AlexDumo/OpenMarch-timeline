@@ -15,6 +15,7 @@ import {
 } from "./timelineIsolationPlan";
 import type { CoordinateRecord } from "@/utilities/CoordinateActions";
 import { pageEndBeat } from "./timelineCanvas";
+import { TimelineEditRefusedError } from "./timelineEditRefusals";
 import { moveMarchersAndOfferFollowUp } from "./timelineMoveThemToo";
 import { isBasicMode } from "@/stores/EditorModeStore";
 import {
@@ -60,30 +61,11 @@ export class TimelineNotReadyError extends Error {
     }
 }
 
-/**
- * Why a canvas move can't run in timeline mode (UI-10). Each has a Tolgee key with the English
- * text as its default; `timelineErrorMessage` shows it.
- */
-export const CANVAS_EDIT_REFUSALS = {
-    /** Nothing is selected and the playhead isn't on beat 0 */
-    noTimeline: {
-        key: "timeline.edit.selectTimeline",
-        defaultMessage:
-            "Click the timeline to choose when marchers arrive, then move them.",
-    },
-} as const;
-
-export type CanvasEditRefusal = keyof typeof CANVAS_EDIT_REFUSALS;
-
-/** A canvas move refused by the selection (see `CANVAS_EDIT_REFUSALS`). */
-export class TimelineEditRefusedError extends Error {
-    readonly key: string;
-    constructor(readonly refusal: CanvasEditRefusal) {
-        super(CANVAS_EDIT_REFUSALS[refusal].defaultMessage);
-        this.key = CANVAS_EDIT_REFUSALS[refusal].key;
-        this.name = "TimelineEditRefusedError";
-    }
-}
+export {
+    CANVAS_EDIT_REFUSALS,
+    TimelineEditRefusedError,
+    type CanvasEditRefusal,
+} from "./timelineEditRefusals";
 
 /** What a canvas move edits, and the beat whose positions the canvas shows for it. */
 export type CanvasEditPlan =
