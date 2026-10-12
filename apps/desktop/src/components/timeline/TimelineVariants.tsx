@@ -935,8 +935,9 @@ const TimelineSurface = memo(function TimelineSurface({
                         isPlaying={props.isPlaying}
                         scrubLine={pointer.scrubLine}
                         // UI-14: below the ruler and measure rows (over the waveform and the clip
-                        // rows) the playhead is drawn, not grabbed. Basic's bodies are all scrub
-                        hitHeight={basic ? timelineHeight : audioTop}
+                        // rows) the playhead is drawn, not grabbed. Basic's bodies scrub anyway,
+                        // and a mid-page tick under the playhead must still take its right-click
+                        hitHeight={basic ? 28 : audioTop}
                     />
                     {props.onAddPageFlag && !props.isPlaying && (
                         <button
