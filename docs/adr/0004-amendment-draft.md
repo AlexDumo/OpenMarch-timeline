@@ -156,10 +156,20 @@ Printing cues stays out of scope, with one exception: page-grained exports
 and item Placement changes under their page with their count. Behavior cues
 (Feet, Horn/Equipment, Facing, Body) are still never printed [21, 26.5].
 
+### Storage decisions (owner, 2026-10-12)
+
+- **Q70:** ADR 0004's storage migration (0020 on the local branch
+  `3d/cue-storage`) stays tables-only. The dormant `equipment_state` column
+  is dropped in C3's own migration, not in ADR 0004's. To be confirmed with
+  Alex in review.
+- **Q71:** `cue_marchers` has a surrogate `id` primary key plus a unique
+  (`cue_id`, `marcher_id`) constraint, not a two-column primary key, because
+  undo replays by rowid (as `marcher_tags` does).
+
 ## Consequences
 
 - The `channel` CHECK widens (in ADR 0004's migration if unshipped) and
-  `equipment_state` is dropped.
+  `equipment_state` is dropped in C3's migration (Q70).
 - `compileCues` and `traceCue` carry three more channels and compute the
   Carry, Silk and Uniform defaults, so the why readout explains a default
   where it explains a cue (owner, 2026-10-11 [26.26]). Their input also
