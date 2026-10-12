@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { and, gt, inArray, lt } from "drizzle-orm";
 import { createResolver, validateDestination, type XY } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
@@ -19,6 +19,7 @@ import { updateTimelineSlotDestinationInTransaction } from "./timelineTransition
 import {
     clearKeptMarkersInTransaction,
     keptAmong,
+    markAssignmentsKeptInTransaction,
 } from "./timelineKeptMarkers";
 import {
     clearOwnPageMoves,
@@ -73,6 +74,8 @@ interface NewMove {
     end: number;
     point: XY;
     layer: number;
+    /** Marked kept once written: a kept spot split in two stays kept (`splitMovesAtBeat…`) */
+    kept?: boolean;
 }
 
 /** What one edit writes, decided before the first write. */
@@ -101,6 +104,8 @@ interface BoxState {
     timelineRange: Map<number, BeatRange>;
     /** The kept rows among the marchers' rows */
     kept: Set<number>;
+    /** Marchers that aren't simple on the box, when they weren't refused (`refuseLocked` off) */
+    locked: Set<number>;
 }
 
 const refuseBeat = (beat: number, box: Box, strict: boolean) => {
@@ -120,12 +125,14 @@ const refuseBeat = (beat: number, box: Box, strict: boolean) => {
 
 /**
  * Reads what the plans need, refusing a box that isn't a page's and marchers that aren't simple
- * on it (`notSimple`, naming them).
+ * on it (`notSimple`, naming them). With `refuseLocked` off, those marchers are listed in
+ * `locked` instead, for the caller to leave alone.
  */
 const readBoxState = async (
     tx: DbTransaction,
     box: Box,
     marcherIds: readonly number[],
+    { refuseLocked = true }: { refuseLocked?: boolean } = {},
 ): Promise<BoxState> => {
     if (!isPageBox(await readPageGrid(tx), box))
         refuse(`[${box.start}, ${box.end}) isn't a page's box`);
@@ -140,7 +147,7 @@ const readBoxState = async (
     const locked = [...new Set(marcherIds)]
         .filter((id) => !marcherSimpleOnBox(inBox.get(id) ?? [], box).simple)
         .sort((x, y) => x - y);
-    if (locked.length > 0) {
+    if (refuseLocked && locked.length > 0) {
         const labels: string[] = [];
         for (const id of locked) labels.push(await marcherLabel(tx, id));
         const message =
@@ -178,6 +185,7 @@ const readBoxState = async (
         positionAt: (id, beat) => resolver.positionAt(id, beat),
         timelineRange,
         kept,
+        locked: new Set(locked),
     };
 };
 
@@ -368,6 +376,10 @@ const writePlan = async (
             timeline,
             members,
         );
+        await markAssignmentsKeptInTransaction(
+            tx,
+            own.filter((_, i) => members[i]!.kept).map((t) => t.assignmentId),
+        );
         for (const t of own)
             result.slots.push({
                 marcherId: t.marcherId,
@@ -502,4 +514,90 @@ export async function removePositionAtBeat({
         if (e instanceof NothingRemoved) return e.result;
         throw e;
     }
+}
+
+/** What `splitMovesAtBeatInTransaction` did. */
+export interface SplitMovesResult {
+    /** Marchers whose move was split at the beat, by id */
+    split: number[];
+    /** Marchers with a move across the beat that isn't simple on the box, left alone, by id */
+    leftAlone: number[];
+}
+
+/**
+ * Splits every marcher's move at `beat`, for a page flag added there in Basic (README, "Basic's
+ * panel": **+** and **Split page**), so no move crosses the new flag. Run it inside the page
+ * edit's transaction, before the page rows change: `box` is the page box holding `beat` now.
+ *
+ * For each marcher with a row r where `r.start < beat < r.end`, simple on `box`, r becomes
+ * `[r.start, beat)` → the marcher's position at `beat` and `[beat, r.end)` → its position at
+ * r.end (r's destination), both on r's layer. Positions are the resolver's, read once before
+ * anything is written. A direct move is a straight line at a constant speed per beat (R-7), so
+ * the two halves give the same position at every beat as r did. A kept spot split in two stays
+ * kept in both halves. Marchers that aren't simple on the box (moves across its flags,
+ * overlapping, shaped or not direct) are left alone and listed in `leftAlone`: they stay Expert
+ * moves. Timelines are reused or created per range (C-12), and a timeline left empty is deleted,
+ * as the point writer does.
+ *
+ * Refused (`E-ARGS`) before any write: a beat that isn't whole or strictly inside `box`, and a
+ * box that isn't a page's.
+ */
+export async function splitMovesAtBeatInTransaction({
+    tx,
+    beat,
+    box,
+}: {
+    tx: DbTransaction;
+    beat: number;
+    box: { start: number; end: number };
+}): Promise<SplitMovesResult> {
+    refuseBeat(beat, box, true);
+    if (!isPageBox(await readPageGrid(tx), box))
+        refuse(`[${box.start}, ${box.end}) isn't a page's box`);
+    const a = schema.timeline_assignments;
+    const across = (
+        await tx
+            .selectDistinct({ id: a.marcher_id })
+            .from(a)
+            .where(and(lt(a.start_beat, beat), gt(a.end_beat, beat)))
+            .all()
+    )
+        .map((r) => r.id)
+        .sort((x, y) => x - y);
+    if (across.length === 0) return { split: [], leftAlone: [] };
+    const state = await readBoxState(tx, box, across, {
+        refuseLocked: false,
+    });
+    const plan = emptyPlan();
+    const split: number[] = [];
+    for (const marcherId of across) {
+        if (state.locked.has(marcherId)) continue;
+        const row = state
+            .rowsOf(marcherId)
+            .find((r) => r.start < beat && beat < r.end);
+        if (!row) continue;
+        const kept = state.kept.has(row.assignmentId);
+        plan.removed.push(row);
+        plan.added.push(
+            {
+                marcherId,
+                start: row.start,
+                end: beat,
+                point: state.positionAt(marcherId, beat),
+                layer: row.layer,
+                kept,
+            },
+            {
+                marcherId,
+                start: beat,
+                end: row.end,
+                point: state.positionAt(marcherId, row.end),
+                layer: row.layer,
+                kept,
+            },
+        );
+        split.push(marcherId);
+    }
+    await writePlan(tx, plan);
+    return { split, leftAlone: [...state.locked].sort((x, y) => x - y) };
 }
