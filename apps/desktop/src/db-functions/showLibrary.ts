@@ -9,7 +9,7 @@
  * The editor is the show's only writer (D-4): it reads a Version's parts from the local Library
  * over `library:read-parts` and embeds them here. Nothing here touches the local Library.
  */
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
@@ -19,7 +19,7 @@ import {
     LicenseFieldsSchema,
     VersionHashSchema,
     type LibraryItemKind,
-} from "../../electron/main/library/types";
+} from "@om-electron/main/library/types";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
 import {
     planLibraryPrune,
@@ -78,6 +78,13 @@ export interface ShowLibraryItem {
 
 const SIDECAR_ROLE = "sidecar";
 
+/** Matches the `library_items` row of one Version. */
+const isLibraryVersion = (ref: LibraryRef) =>
+    and(
+        eq(schema.library_items.item_id, ref.itemId),
+        eq(schema.library_items.version_hash, ref.versionHash),
+    );
+
 function parseSidecar(bytes: Uint8Array | undefined): string | null {
     if (!bytes) return null;
     const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -102,9 +109,7 @@ export async function embedLibraryVersionInTransaction({
     const existing = await tx
         .select({ item_id: schema.library_items.item_id })
         .from(schema.library_items)
-        .where(
-            sql`${schema.library_items.item_id} = ${version.itemId} AND ${schema.library_items.version_hash} = ${version.versionHash}`,
-        )
+        .where(isLibraryVersion(version))
         .get();
     if (existing) return { embedded: false };
 
@@ -147,19 +152,6 @@ export async function embedLibraryVersionInTransaction({
         })
         .run();
     return { embedded: true };
-}
-
-/** Embeds a Version in its own transaction. Not undoable. */
-export async function embedLibraryVersion({
-    db,
-    version,
-}: {
-    db: DbConnection;
-    version: EmbedLibraryVersion;
-}): Promise<{ embedded: boolean }> {
-    return await db.transaction(
-        async (tx) => await embedLibraryVersionInTransaction({ tx, version }),
-    );
 }
 
 const ShowLibraryRowSchema = z.object({
@@ -340,9 +332,7 @@ export async function pruneShowLibraryInTransaction({
     for (const ref of plan.items) {
         await tx
             .delete(schema.library_items)
-            .where(
-                sql`${schema.library_items.item_id} = ${ref.itemId} AND ${schema.library_items.version_hash} = ${ref.versionHash}`,
-            )
+            .where(isLibraryVersion(ref))
             .run();
     }
     if (plan.blobs.length > 0)
@@ -351,19 +341,6 @@ export async function pruneShowLibraryInTransaction({
             .where(inArray(schema.library_blobs.hash, plan.blobs))
             .run();
     return plan;
-}
-
-/** Prunes the show's Library in its own transaction. Not undoable. */
-export async function pruneShowLibrary({
-    db,
-    keep,
-}: {
-    db: DbConnection;
-    keep: readonly LibraryKeep[];
-}): Promise<LibraryPrunePlan> {
-    return await db.transaction(
-        async (tx) => await pruneShowLibraryInTransaction({ tx, keep }),
-    );
 }
 
 function safeJson(text: string): unknown {

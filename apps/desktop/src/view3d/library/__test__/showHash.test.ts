@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-    computeVersionHash,
-    sha256Hex,
-} from "../../../../electron/main/library/hash";
+import { computeVersionHash, sha256Hex } from "@om-electron/main/library/hash";
 import { hashParts, sha256HexOf, versionHashOf } from "../showHash";
 
 const bytes = (text: string) => new TextEncoder().encode(text);

@@ -4,11 +4,10 @@ import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { tablesWithHistory } from "../historyTriggers";
 import {
-    embedLibraryVersion,
     embedLibraryVersionInTransaction,
     getShowLibraryItems,
     libraryKeepsFromHistory,
-    pruneShowLibrary,
+    pruneShowLibraryInTransaction,
     readLibraryBlob,
     type EmbedLibraryVersion,
 } from "../showLibrary";
@@ -17,8 +16,25 @@ import {
     createShowBlobCache,
     renderPartHash,
 } from "@/view3d/library/showBlobCache";
+import type { LibraryKeep } from "@/view3d/library/showLibraryPrune";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
+
+/** Each in its own plain transaction, as a caller outside an undoable edit would run them. */
+const embedLibraryVersion = ({
+    db,
+    version,
+}: {
+    db: DbConnection;
+    version: EmbedLibraryVersion;
+}) => db.transaction((tx) => embedLibraryVersionInTransaction({ tx, version }));
+const pruneShowLibrary = ({
+    db,
+    keep,
+}: {
+    db: DbConnection;
+    keep: LibraryKeep[];
+}) => db.transaction((tx) => pruneShowLibraryInTransaction({ tx, keep }));
 
 const metadata = {
     tags: ["guard"],

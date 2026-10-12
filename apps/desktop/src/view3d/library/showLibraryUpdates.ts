@@ -36,8 +36,10 @@ const sameTags = (a: readonly string[], b: readonly string[]) =>
  *
  * A Version update needs every show Version to be one the Library knows and none to be its
  * latest: a Version from another machine is neither older nor newer, so nothing is offered.
- * Otherwise a metadata update is offered when the name, tags or license differ, or when the
- * Library's item changed after the show's snapshot.
+ * "Latest" is the Library's last-added Version, as the store orders them. Otherwise a metadata
+ * update is offered when the name, tags or license differ. `updatedAt` isn't compared: adding a
+ * Version bumps it, so the show that just added its Version would see a false update. Changes
+ * to fields the Library index doesn't carry (author, attribution) aren't detected here.
  */
 export function findLibraryUpdates({
     showItems,
@@ -75,8 +77,7 @@ export function findLibraryUpdates({
         if (
             current.name !== entry.name ||
             !sameTags(current.metadata.tags, entry.tags) ||
-            current.metadata.license !== entry.license ||
-            entry.updatedAt > current.metadata.updatedAt
+            current.metadata.license !== entry.license
         ) {
             updates.push({ itemId, type: "metadata" });
         }

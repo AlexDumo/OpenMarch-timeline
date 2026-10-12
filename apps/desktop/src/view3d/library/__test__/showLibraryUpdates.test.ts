@@ -80,7 +80,6 @@ describe("findLibraryUpdates", () => {
             { name: "Parade rifle" },
             { tags: ["guard", "rifle"] },
             { license: "CC0-1.0" },
-            { updatedAt: "2026-10-05T00:00:00.000Z" },
         ]) {
             expect(
                 findLibraryUpdates({
@@ -89,6 +88,18 @@ describe("findLibraryUpdates", () => {
                 }),
             ).toEqual([{ itemId: RIFLE, type: "metadata" }]);
         }
+    });
+
+    it("offers nothing when only the item's updated time moved", () => {
+        // "Add to my Library" adds this show's Version and bumps updatedAt
+        expect(
+            findLibraryUpdates({
+                showItems: [showRifle()],
+                library: [
+                    libraryRifle({ updatedAt: "2026-10-05T00:00:00.000Z" }),
+                ],
+            }),
+        ).toEqual([]);
     });
 
     it("lists an item once when the show has several of its Versions", () => {
