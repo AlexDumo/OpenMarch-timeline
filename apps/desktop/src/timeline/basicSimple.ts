@@ -14,6 +14,8 @@ export interface BasicRow {
     assignmentId: number;
     marcherId: number;
     transitionId: number;
+    /** The marcher's slot in its transition (a converted page shares one transition, C-11) */
+    slotIndex: number;
     timelineId: number;
     start: number;
     end: number;
@@ -60,7 +62,9 @@ const verdictOfSorted = (
         }
         if (row.start < reach) better("overlaps");
         reach = Math.max(reach, row.end);
-        if (row.slotCount !== 1 || row.shapeId !== null) better("shape");
+        // A shared shapeless transition is fine: a converted show writes one per page, and Basic
+        // edits its marchers' slots one by one (UI-19, "Simple")
+        if (row.shapeId !== null) better("shape");
         else if (row.pathStyle !== "direct") better("path");
     }
     return reason === null ? SIMPLE : { simple: false, reason };

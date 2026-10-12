@@ -48,6 +48,8 @@ import {
 } from "@/timeline/usePageHoldMarks";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { pageEndBeat } from "@/timeline/pageEndBeat";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { useBasicLocksStore } from "@/timeline/basicLocks";
 import {
     HoldMarkTooltip,
     PageHoldMarkView,
@@ -114,6 +116,9 @@ export default function PageTimeline() {
     const holdMarks = useLabeledHoldMarks(
         timelineMode ? timelineHoldMarks : pageModeHoldMarks,
     );
+    // UI-19: in Basic, how many marchers each page box locks (index = page index - 1)
+    const basic = useIsBasicMode() && timelineMode;
+    const lockedByBox = useBasicLocksStore((st) => st.locked);
     /**
      * Selects a page. In timeline mode the playhead goes to the page's flag (UI-19: a page box
      * click edits the page), even when the page is already selected because the playhead is
@@ -517,6 +522,15 @@ export default function PageTimeline() {
                                                     hold={hold}
                                                     descriptionId={`${holdMarkId}-${page.id}`}
                                                 />
+                                                {basic && (
+                                                    <ExpertMark
+                                                        count={
+                                                            lockedByBox.get(
+                                                                index - 1,
+                                                            )?.size ?? 0
+                                                        }
+                                                    />
+                                                )}
                                                 {/* ------ progress bar (fullscreen) ------ */}
                                                 {(selectedIndex === index - 1 ||
                                                     (selectedIndex === 0 &&
@@ -664,6 +678,33 @@ export default function PageTimeline() {
                 </button>
             )}
         </div>
+    );
+}
+
+/**
+ * UI-19 (V-202): a page box's mark in Basic when some marchers on it use Expert moves, so Basic
+ * can't edit them there. Says how many in its tooltip.
+ */
+function ExpertMark({ count }: { count: number }) {
+    if (count === 0) return null;
+    const text = `${count === 1 ? "One marcher uses" : `${count} marchers use`} Expert moves on this page. Basic can't edit ${count === 1 ? "it" : "them"} here.`;
+    return (
+        <ToolTip.Root delayDuration={300}>
+            <ToolTip.Trigger asChild>
+                <span
+                    data-testid="basic-expert-mark"
+                    aria-label={text}
+                    className="bg-fg-1 border-stroke text-sub text-text-subtitle absolute top-2 left-2 z-10 rounded-full border px-4 font-sans leading-none"
+                >
+                    E
+                </span>
+            </ToolTip.Trigger>
+            <ToolTip.Portal>
+                <ToolTip.Content className={TooltipClassName} side="top">
+                    {text}
+                </ToolTip.Content>
+            </ToolTip.Portal>
+        </ToolTip.Root>
     );
 }
 

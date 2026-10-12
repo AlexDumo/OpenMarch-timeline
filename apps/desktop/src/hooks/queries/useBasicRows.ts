@@ -35,8 +35,14 @@ export const basicRowsQueryOptions = (
         placeholderData: keepPreviousData,
     });
 
-/** Every assignment row as Basic mode reads it (`BasicRow`), current after every timeline edit. */
-export function useBasicRows() {
+/**
+ * Every assignment row as Basic mode reads it (`BasicRow`), current after every timeline edit.
+ * Reads nothing while `enabled` is false (Expert), since every edit would otherwise re-read them.
+ */
+export function useBasicRows(enabled = true) {
     const { version, displayVersion } = useTimelineViewVersions();
-    return useQuery(basicRowsQueryOptions(version, displayVersion));
+    return useQuery({
+        ...basicRowsQueryOptions(version, displayVersion),
+        enabled,
+    });
 }

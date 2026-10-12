@@ -117,16 +117,6 @@ export const toTimelineSelection = (
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
-    // UI-10: the start flag follows the page boxes
-    useEffect(() => {
-        useTimelineSelectionStore
-            .getState()
-            .setPageBoxes(
-                pageFlags(pages).flatMap((f) =>
-                    f.range ? [{ ...f.range, name: f.page.name }] : [],
-                ),
-            );
-    }, [pages]);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
     // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis
     const envelope = useAudioEnvelopeStore((s) => s.envelope);

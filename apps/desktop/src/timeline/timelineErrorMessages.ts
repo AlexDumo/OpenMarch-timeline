@@ -2,6 +2,8 @@ import tolgee from "@/global/singletons/Tolgee";
 import { TimelineCommitViolationError } from "@/db-functions/timelineChanges";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { conToastError } from "@/utilities/utils";
+import { toast } from "sonner";
+import { useEditorModeStore } from "@/stores/EditorModeStore";
 
 /**
  * User-facing messages for the timeline's refusals (spec section 6, P8.6). One place maps every
@@ -231,6 +233,21 @@ export function toastTimelineError(
     fallback?: string,
     ...additional: unknown[]
 ): void {
+    // UI-19: a Basic lock offers the way out
+    if (
+        error instanceof Error &&
+        error.name === "TimelineEditRefusedError" &&
+        (error as Error & { refusal?: unknown }).refusal === "notSimple"
+    ) {
+        toast.warning(timelineErrorMessage(error, { fallback }), {
+            id: "basic-locked-marchers",
+            action: {
+                label: "Switch to Expert",
+                onClick: () => useEditorModeStore.getState().setMode("expert"),
+            },
+        });
+        return;
+    }
     const cause =
         timelineErrorCode(error) === "E-DB" && error instanceof Error
             ? [error.cause]

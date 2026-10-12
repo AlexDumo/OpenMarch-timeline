@@ -10,6 +10,10 @@ import { useDeselectDimmedMarchers } from "./useTimelineDimming";
 import { useTimelinePlaybackDriver } from "./useTimelinePlaybackDriver";
 import { useKeptAssignmentsHost } from "./useKeepLaterPages";
 import { useBasicModeGuards } from "./useBasicModeGuards";
+import { useTimingObjects } from "@/hooks/useTimingObjects";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { pageFlags } from "./timelinePlayhead";
+import { useBasicLocksHost } from "./basicLocks";
 import {
     createTimelineDevApi,
     type TimelineDevApi,
@@ -61,6 +65,21 @@ export function useTimelineDevApi(
     }, [database, enabled, queryClient]);
 }
 
+/** Keeps `useTimelineSelectionStore`'s page boxes on the show's pages, in timeline mode. */
+function useTimelinePageBoxes(enabled: boolean): void {
+    const { pages } = useTimingObjects();
+    useEffect(() => {
+        if (!enabled) return;
+        useTimelineSelectionStore
+            .getState()
+            .setPageBoxes(
+                pageFlags(pages).flatMap((f) =>
+                    f.range ? [{ ...f.range, name: f.page.name }] : [],
+                ),
+            );
+    }, [enabled, pages]);
+}
+
 /**
  * Runs the timeline resolver for the open file while its timeline dev flag (`timelineMode` in
  * `workspace_settings`) is on, and, in development builds only, installs the dev console API.
@@ -77,8 +96,12 @@ export default function TimelineResolverHost() {
     useDeselectDimmedMarchers(enabled);
     // UI-9 Play: loop a selected range, stop at the end, leave the playhead where a pause lands
     useTimelinePlaybackDriver(enabled);
+    // UI-10: the start flag follows the page boxes (both modes: Basic edits inside them, UI-19)
+    useTimelinePageBoxes(enabled);
     // UI-19: no pinned start flag, loop or isolation in Basic
     useBasicModeGuards(enabled);
+    // UI-19: the marchers Basic can't edit, per page
+    useBasicLocksHost(enabled);
     // UI-18 keep later pages: the kept spots the chains and the inspector line read
     useKeptAssignmentsHost(db, enabled);
     // The console API can write fixtures into the file. The flag lives in the file itself, so it

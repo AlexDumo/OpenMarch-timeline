@@ -7,6 +7,8 @@ import {
     useState,
 } from "react";
 import { T } from "@tolgee/react";
+import * as ContextMenu from "@radix-ui/react-context-menu";
+import type { BasicPoint } from "./useBasicPoints";
 import type Page from "@/global/classes/Page";
 import type Beat from "@/global/classes/Beat";
 import { useIsPlaying } from "@/context/IsPlayingContext";
@@ -147,17 +149,11 @@ export function BasicPlayhead({
     );
 }
 
-/** A tick on the counts strip: a beat, a page's flag, or a mid-page position of the selection */
-export interface CountsStripMark {
-    readonly beat: number;
-    readonly kind: "point";
-}
-
 /**
  * The counts strip under the page boxes: a tick per count, a taller one per page flag, and an
  * accent tick where a selected marcher has a mid-page position. Clicking or dragging on it puts the
  * playhead on the nearest count (UI-19 free playhead). While playing, it jumps playback there.
- * Right-clicking a mid-page tick calls `onPointMenu` with its beat.
+ * A mid-page tick is a button (it seeks there) whose right-click menu removes that position.
  */
 export function BasicCountsStrip({
     axis,
@@ -166,7 +162,7 @@ export function BasicCountsStrip({
     pixelsPerSecond,
     width,
     points,
-    onPointContextMenu,
+    onRemovePoint,
 }: {
     axis: BasicTimeAxis | null;
     beats: readonly Beat[];
@@ -174,9 +170,9 @@ export function BasicCountsStrip({
     pixelsPerSecond: number;
     /** The strip's width in px: the page boxes' */
     width: number;
-    /** Beats where a selected marcher has a mid-page position */
-    points: readonly number[];
-    onPointContextMenu?: (beat: number, event: React.MouseEvent) => void;
+    /** Where a selected marcher has a mid-page position */
+    points: readonly BasicPoint[];
+    onRemovePoint: (point: BasicPoint) => void;
 }) {
     const stripRef = useRef<HTMLDivElement>(null);
     const { isPlaying } = useIsPlaying()!;
@@ -221,21 +217,16 @@ export function BasicCountsStrip({
         if (flags.has(b)) flagPath += `M${x} 0V16`;
         else countPath += `M${x} 10V16`;
     }
-    const pointXs = points.flatMap((beat) => {
-        const x = xOf(beat);
-        return x === null ? [] : [{ beat, x }];
+    const pointXs = points.flatMap((point) => {
+        const x = xOf(point.beat);
+        return x === null ? [] : [{ point, x }];
     });
 
     return (
         <div
             ref={stripRef}
             data-testid="basic-counts-strip"
-            role="slider"
-            aria-label="Playhead count"
-            aria-valuemin={0}
-            aria-valuemax={beats.length}
-            aria-valuenow={useTimelineSelectionStore(displayedBeat)}
-            tabIndex={-1}
+            title="Click or drag to put the playhead on a count"
             className="relative h-16 cursor-col-resize touch-none select-none"
             style={{ width }}
             onPointerDown={(e) => {
@@ -273,21 +264,35 @@ export function BasicCountsStrip({
                     strokeWidth={1}
                 />
             </svg>
-            {pointXs.map(({ beat, x }) => (
-                <button
-                    key={beat}
-                    type="button"
-                    data-testid="basic-point-tick"
-                    aria-label={`Position at count ${beat}`}
-                    className="bg-accent absolute top-0 h-16 w-[3px] -translate-x-1/2 cursor-context-menu rounded-full"
-                    style={{ left: x }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={() => seekTo(beat)}
-                    onContextMenu={(e) => {
-                        e.preventDefault();
-                        onPointContextMenu?.(beat, e);
-                    }}
-                />
+            {pointXs.map(({ point, x }) => (
+                <ContextMenu.Root key={point.beat}>
+                    <ContextMenu.Trigger asChild>
+                        <button
+                            type="button"
+                            data-testid="basic-point-tick"
+                            aria-label={`Position at count ${point.beat - point.box.start}`}
+                            className="group/tick absolute top-0 flex h-16 w-8 -translate-x-1/2 cursor-pointer justify-center"
+                            style={{ left: x }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={() => seekTo(point.beat)}
+                        >
+                            <span className="bg-accent h-full w-[3px] rounded-full group-hover/tick:w-[5px]" />
+                        </button>
+                    </ContextMenu.Trigger>
+                    <ContextMenu.Portal>
+                        <ContextMenu.Content className="bg-modal text-text rounded-6 border-stroke shadow-modal z-50 flex flex-col border p-4 backdrop-blur-md">
+                            <ContextMenu.Item
+                                className="text-body hover:text-red rounded-4 cursor-pointer px-8 py-4 outline-none"
+                                onSelect={() => onRemovePoint(point)}
+                            >
+                                <T
+                                    keyName="timeline.basic.removePoint"
+                                    defaultValue="Remove this count's position"
+                                />
+                            </ContextMenu.Item>
+                        </ContextMenu.Content>
+                    </ContextMenu.Portal>
+                </ContextMenu.Root>
             ))}
         </div>
     );
