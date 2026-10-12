@@ -7,6 +7,7 @@ import {
     type PageBox,
 } from "@/stores/TimelineSelectionStore";
 import { useBasicRows } from "@/hooks/queries/useBasicRows";
+import { useSimpleDefaults } from "./simpleDefaults";
 import type { TimelineEditTarget } from "@/db-functions/timelineMoves";
 import type { TimelineMarcherMove } from "@/db-functions/timelineMoves";
 import {
@@ -60,7 +61,10 @@ export const useBasicLocksStore = create<BasicLocksState>((set) => ({
 
 /** Keeps the locks current: on while `enabled` (a timeline file) and Basic is on. */
 export function useBasicLocksHost(enabled: boolean): void {
-    const on = useIsBasicMode() && enabled;
+    // Basic locks with them; the simple-defaults timeline (study flag) reads them to tell a move
+    // inside one page from an Expert one
+    const simple = useSimpleDefaults();
+    const on = (useIsBasicMode() || simple) && enabled;
     const { data: rows } = useBasicRows(on);
     const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
     useEffect(() => {
@@ -125,7 +129,9 @@ export function withoutLockedMarchers<
     moves: readonly M[],
     state?: Pick<BasicLocksState, "boxes" | "locked">,
 ): { moves: M[]; locked: number[] } {
-    if (target.kind !== "point") return { moves: [...moves], locked: [] };
+    // The simple-defaults timeline edits them another way (`others: "window"`)
+    if (target.kind !== "point" || target.others === "window")
+        return { moves: [...moves], locked: [] };
     const locked = lockedOnBox(target.box, state);
     if (locked.size === 0) return { moves: [...moves], locked: [] };
     return {

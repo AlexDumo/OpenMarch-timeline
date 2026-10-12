@@ -484,6 +484,12 @@ export type TimelineEditTarget =
           readonly kind: "point";
           readonly beat: number;
           readonly box: { readonly start: number; readonly end: number };
+          /**
+           * Marchers that aren't simple on the box: Basic refuses them (`"refuse"`, the default);
+           * the simple-defaults timeline edits them over the window `[box.start, beat)` as a
+           * range edit, in the same undo step (`"window"`)
+           */
+          readonly others?: "refuse" | "window";
       };
 
 /**
@@ -1073,6 +1079,51 @@ export const moveMarchersFromFlagInstead = async ({
         },
     );
 
+/**
+ * A point edit (`setPositionsAtBeatInTransaction`); with `others: "window"`, the marchers it
+ * leaves alone (not simple on the box) are then edited over `[box.start, beat)` by the range
+ * writer, as an unpinned start flag would (UI-10), and the results are merged.
+ */
+const pointThenWindow = async ({
+    tx,
+    target,
+    moves,
+    clearOwn,
+}: {
+    tx: DbTransaction;
+    target: Extract<TimelineEditTarget, { kind: "point" }>;
+    moves: readonly TimelineMarcherMove[];
+    clearOwn: boolean;
+}): Promise<TimelineMoveResult> => {
+    const window = target.others === "window";
+    const { leftAlone, ...point } = await setPositionsAtBeatInTransaction({
+        tx,
+        beat: target.beat,
+        box: target.box,
+        moves,
+        clearOwn,
+        leaveOthers: window,
+    });
+    if (!window || leftAlone.length === 0) return point;
+    const others = new Set(leftAlone);
+    const ranged = await moveMarchersInRangeInTransaction({
+        tx,
+        range: { start: target.box.start, end: target.beat },
+        moves: moves.filter((m) => others.has(m.marcherId)),
+        clearOwn,
+    });
+    return {
+        ...ranged,
+        homes: [...point.homes, ...ranged.homes],
+        slots: [...point.slots, ...ranged.slots],
+        convertedTransitionIds: [
+            ...point.convertedTransitionIds,
+            ...ranged.convertedTransitionIds,
+        ],
+        cleared: [...(point.cleared ?? []), ...(ranged.cleared ?? [])],
+    };
+};
+
 /** Thrown inside an edit that turned out to write nothing, so it rolls back instead of failing. */
 class NothingWritten extends Error {
     constructor(readonly result: TimelineMoveResult) {
@@ -1136,10 +1187,9 @@ export const moveMarchersInTarget = async ({
                               moves,
                               clearOwn,
                           })
-                        : await setPositionsAtBeatInTransaction({
+                        : await pointThenWindow({
                               tx,
-                              beat: target.beat,
-                              box: target.box,
+                              target,
                               moves,
                               clearOwn,
                           });

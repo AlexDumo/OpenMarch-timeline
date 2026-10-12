@@ -15,6 +15,7 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { useSimpleDefaults } from "@/timeline/simpleDefaults";
 
 /**
  * How the isolation bar names a timeline, in pages and counts as designers count them:
@@ -173,7 +174,10 @@ export function TimelineFromStartBadge() {
     // Play's icon say it (owner, 2026-10-09)
     const loopShown = !basic && !isolated && loopName !== null;
     // UI-19: Basic has no start flag or loop; it edits a page, or a count inside one
-    const basicSpot = basic && range ? basicEditSpot(range.end, pages) : null;
+    // Simple defaults (study flag): an unpinned edit is a page or a count in it, as in Basic
+    const simple = useSimpleDefaults() && !pinned;
+    const basicSpot =
+        (basic || simple) && range ? basicEditSpot(range.end, pages) : null;
     const through = range && !basic ? flagsInside(range, pages) : [];
     const name =
         selection.kind === "home"
