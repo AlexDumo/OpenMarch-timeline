@@ -3,7 +3,7 @@ import { TimelineCommitViolationError } from "@/db-functions/timelineChanges";
 import { TimelineWriteError } from "@/db-functions/timelineErrors";
 import { conToastError } from "@/utilities/utils";
 import { toast } from "sonner";
-import { useEditorModeStore } from "@/stores/EditorModeStore";
+import { toastBasicLock } from "./basicLockToast";
 
 /**
  * User-facing messages for the timeline's refusals (spec section 6, P8.6). One place maps every
@@ -233,18 +233,17 @@ export function toastTimelineError(
     fallback?: string,
     ...additional: unknown[]
 ): void {
-    // UI-19: a Basic lock offers the way out
-    if (
-        error instanceof Error &&
-        error.name === "TimelineEditRefusedError" &&
-        (error as Error & { refusal?: unknown }).refusal === "notSimple"
-    ) {
-        toast.warning(timelineErrorMessage(error, { fallback }), {
-            id: "basic-locked-marchers",
-            action: {
-                label: "Switch to Expert",
-                onClick: () => useEditorModeStore.getState().setMode("expert"),
-            },
+    if (error instanceof Error && error.name === "TimelineEditRefusedError") {
+        const { refusal } = error as Error & { refusal?: unknown };
+        // UI-19: a Basic lock offers the way out
+        if (refusal === "notSimple") {
+            toastBasicLock(timelineErrorMessage(error, { fallback }));
+            return;
+        }
+        // One toast per reason: a burst of refused nudges replaces it instead of stacking
+        console.error(error);
+        toast.error(timelineErrorMessage(error, { fallback }), {
+            id: `timeline-refused-${String(refusal)}`,
         });
         return;
     }

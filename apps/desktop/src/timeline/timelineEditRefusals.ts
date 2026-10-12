@@ -20,6 +20,15 @@ export const CANVAS_EDIT_REFUSALS = {
         defaultMessage:
             "Some of these marchers use Expert moves on this page. Switch to Expert to edit them.",
     },
+    /**
+     * Basic mode (UI-19): the playhead is past the last page's flag, where Basic has no page box
+     * to edit; a page added there (**+**) makes one
+     */
+    pastLastPage: {
+        key: "timeline.edit.pastLastPage",
+        defaultMessage:
+            "There's no page here yet. Add a page with + to write a set after the last page.",
+    },
 } as const;
 
 export type CanvasEditRefusal = keyof typeof CANVAS_EDIT_REFUSALS;

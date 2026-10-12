@@ -344,6 +344,83 @@ describeDbTests("Basic point writes: the spec table", (it) => {
     });
 });
 
+describeDbTests("Basic point writes: kept spots and drag back", (it) => {
+    const kept = (db: DbConnection) =>
+        db.select().from(schema.timeline_kept_assignments).all();
+    const keepRowEndingAt = async (
+        db: DbConnection,
+        marcherId: number,
+        end: number,
+    ) => {
+        const row = (await readBasicRows(db, { marcherIds: [marcherId] })).find(
+            (r) => r.end === end,
+        )!;
+        await db.transaction((tx) =>
+            markAssignmentsKeptInTransaction(tx, [row.assignmentId]),
+        );
+    };
+
+    it("a kept move with a move after it, dragged back to its start, is not merged away", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await madeInTimelineMode(db);
+        await range(db, a, 9, 17, A);
+        await point(db, 13, [[a, B]]);
+        await keepRowEndingAt(db, a, 13);
+        const start = (await resolverOf(db)).positionAt(a, 9) as XY;
+        await point(db, 13, [[a, start]]);
+        // Its new ending is written instead; the split stays
+        expect(await rowsOf(db, a)).toEqual([
+            [9, 13, 0],
+            [13, 17, 0],
+        ]);
+        const r = await resolverOf(db);
+        expect(r.positionAt(a, 13)).toEqual(start);
+        expect(r.positionAt(a, 17)).toEqual(A);
+        expect(await violations(db)).toEqual([]);
+    });
+
+    it("dragging back onto a kept move's start keeps the merged move kept", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await madeInTimelineMode(db);
+        await range(db, a, 9, 17, A);
+        await point(db, 13, [[a, B]]);
+        await keepRowEndingAt(db, a, 17);
+        const start = (await resolverOf(db)).positionAt(a, 9) as XY;
+        await point(db, 13, [[a, start]]);
+        expect(await rowsOf(db, a)).toEqual([[9, 17, 0]]);
+        const [merged] = await readBasicRows(db, { marcherIds: [a] });
+        expect((await kept(db)).map((k) => k.assignment_id)).toEqual([
+            merged!.assignmentId,
+        ]);
+        expect((await resolverOf(db)).positionAt(a, 17)).toEqual(A);
+    });
+
+    it("removing a kept spot's split point keeps the merged move kept", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await madeInTimelineMode(db);
+        await range(db, a, 9, 17, A);
+        await point(db, 13, [[a, B]]);
+        await keepRowEndingAt(db, a, 17);
+        await removePositionAtBeat({
+            db,
+            beat: 13,
+            box: PAGE2,
+            marcherIds: [a],
+        });
+        const [merged] = await readBasicRows(db, { marcherIds: [a] });
+        expect(merged).toMatchObject({ start: 9, end: 17 });
+        expect((await kept(db)).map((k) => k.assignment_id)).toEqual([
+            merged!.assignmentId,
+        ]);
+    });
+});
+
 describeDbTests("Basic point writes: repeated and mixed edits", (it) => {
     it("splitting twice gives three moves; the page end stays", async ({
         db,

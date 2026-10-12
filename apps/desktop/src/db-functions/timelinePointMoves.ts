@@ -50,8 +50,9 @@ import {
  * **Drag back:** on a move's end, a position equal to where that move starts removes the point:
  * the move merges with the next move starting at P (`[r.start, next.end)` → next's destination),
  * or, with none (a hold or the flag follows), the move is deleted, as UI-18's "back onto the start
- * clears the move". A kept spot (`timeline_kept_assignments`) is never cleared that way; its new
- * ending is written instead, as on the range path.
+ * clears the move". A kept spot (`timeline_kept_assignments`) is never cleared or merged that way;
+ * its new ending is written instead, as on the range path. A merged move arrives where the next
+ * move did, so it is kept when that one was.
  *
  * Positions ("r's end", "the held position", "where r starts") are the resolver's, read once
  * from the rows the edit sees before anything is written. New moves go on the layer of the move
@@ -220,6 +221,24 @@ const setEnding = (
     });
 };
 
+/**
+ * `first` and `second` (meeting at `first.end`) as one move arriving where `second` did, on
+ * `first`'s layer. The arrival is `second`'s, so it stays kept when `second` was (a kept spot split
+ * in two and merged again is kept, as `splitMovesAtBeatInTransaction` left it).
+ */
+const mergedMove = (
+    state: BoxState,
+    first: BasicRow,
+    second: BasicRow,
+): NewMove => ({
+    marcherId: first.marcherId,
+    start: first.start,
+    end: second.end,
+    point: state.positionAt(first.marcherId, second.end),
+    layer: first.layer,
+    kept: state.kept.has(second.assignmentId),
+});
+
 /** Plans one marcher's position at `beat` (see the module comment). */
 const planPoint = (
     plan: PointPlan,
@@ -267,25 +286,20 @@ const planPoint = (
 
     const ending = rows.find((r) => r.end === beat);
     if (ending) {
-        // Back onto where the move starts: the point goes
-        if (samePosition(point, at(ending.start))) {
+        // Back onto where the move starts: the point goes, unless it is a kept spot
+        if (
+            samePosition(point, at(ending.start)) &&
+            !state.kept.has(ending.assignmentId)
+        ) {
             const next = rows.find((r) => r.start === beat);
             if (next) {
                 plan.removed.push(ending, next);
-                plan.added.push({
-                    marcherId,
-                    start: ending.start,
-                    end: next.end,
-                    point: at(next.end),
-                    layer: ending.layer,
-                });
+                plan.added.push(mergedMove(state, ending, next));
                 return;
             }
-            if (!state.kept.has(ending.assignmentId)) {
-                plan.removed.push(ending);
-                plan.cleared.push(marcherId);
-                return;
-            }
+            plan.removed.push(ending);
+            plan.cleared.push(marcherId);
+            return;
         }
         setEnding(plan, state, ending, point);
         return;
@@ -477,13 +491,7 @@ export async function removePositionAtBeatInTransaction({
         const second = rows.find((r) => r.start === beat);
         if (!first || !second) continue;
         plan.removed.push(first, second);
-        plan.added.push({
-            marcherId,
-            start: first.start,
-            end: second.end,
-            point: state.positionAt(marcherId, second.end),
-            layer: first.layer,
-        });
+        plan.added.push(mergedMove(state, first, second));
     }
     return await writePlan(tx, plan);
 }

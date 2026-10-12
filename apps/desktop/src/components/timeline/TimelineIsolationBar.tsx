@@ -16,6 +16,7 @@ import {
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useSimpleDefaults } from "@/timeline/simpleDefaults";
+import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
 
 /**
  * How the isolation bar names a timeline, in pages and counts as designers count them:
@@ -119,20 +120,29 @@ export function isWholePageWindow(
 }
 
 /**
- * Where a Basic edit at playhead `beat` lands (UI-19): a page (on its flag, `count` null), or a
- * count inside a page, counted from the page's start. `null` past the last flag.
+ * Where a Basic point edit lands (UI-19): a page (on its flag, `count` null), or a count inside a
+ * page, counted from the page's start. Takes the point target `planCanvasEdit` chose, so the line
+ * names what a drop writes. `null` when no page ends on the box.
  */
 export function basicEditSpot(
-    beat: number,
+    target: {
+        readonly beat: number;
+        readonly box: { readonly start: number; readonly end: number };
+    },
     pages: readonly (FlagPage & { readonly name: string })[],
 ): { pageName: string; count: number | null } | null {
     const flag = pageFlags(pages).find(
-        (f) => f.range && f.range.start < beat && beat <= f.range.end,
+        (f) =>
+            f.range?.start === target.box.start &&
+            f.range.end === target.box.end,
     );
-    if (!flag?.range) return null;
+    if (!flag) return null;
     return {
         pageName: flag.page.name,
-        count: beat === flag.range.end ? null : beat - flag.range.start,
+        count:
+            target.beat === target.box.end
+                ? null
+                : target.beat - target.box.start,
     };
 }
 
@@ -173,11 +183,28 @@ export function TimelineFromStartBadge() {
     // Only when the loop is elsewhere: on the page being edited, the lit Loop button, the bar and
     // Play's icon say it (owner, 2026-10-09)
     const loopShown = !basic && !isolated && loopName !== null;
-    // UI-19: Basic has no start flag or loop; it edits a page, or a count inside one
-    // Simple defaults (study flag): an unpinned edit is a page or a count in it, as in Basic
-    const simple = useSimpleDefaults() && !pinned;
+    // UI-19: Basic has no start flag or loop; it edits a page, or a count inside one. So does the
+    // simple-defaults timeline (study flag) when a drop there is a point edit. The line asks the
+    // writer's own plan, so it names what a drop writes
+    const simpleDefaults = useSimpleDefaults();
+    const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const plan =
+        (basic || simpleDefaults) && range
+            ? planCanvasEdit(
+                  {
+                      selection,
+                      isolation: null,
+                      pageBoxes,
+                      startPinned: pinned,
+                  },
+                  basic,
+                  simpleDefaults,
+              )
+            : null;
     const basicSpot =
-        (basic || simple) && range ? basicEditSpot(range.end, pages) : null;
+        plan?.ok && plan.target.kind === "point"
+            ? basicEditSpot(plan.target, pages)
+            : null;
     const through = range && !basic ? flagsInside(range, pages) : [];
     const name =
         selection.kind === "home"
