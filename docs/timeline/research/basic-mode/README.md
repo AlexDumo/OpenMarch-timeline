@@ -76,13 +76,13 @@ chosen by `planCanvasEdit` in Basic, so canvas drags, the inspector, align/distr
 set-to-previous/next all use it. Per marcher, with `R` = its moves inside `[a, b)` (all one-slot
 shapeless moves on one layer, ordered, not overlapping; see "Simple"):
 
-| Where P is | What's written |
-| --- | --- |
-| On a move's end (P = r.end, including the flag) | r's destination is set (as today's page edit) |
-| Inside a move r (r.start < P < r.end) | r becomes `[r.start, P)` → (x, y) and `[P, r.end)` → r's old destination |
+| Where P is                                                 | What's written                                                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| On a move's end (P = r.end, including the flag)            | r's destination is set (as today's page edit)                                      |
+| Inside a move r (r.start < P < r.end)                      | r becomes `[r.start, P)` → (x, y) and `[P, r.end)` → r's old destination           |
 | In a hold after the last move, before the flag (e < P < b) | `[e, P)` → (x, y) and `[P, b)` → the held position, so the flag keeps its position |
-| On the flag (P = b) with no move ending there | `[e, b)` → (x, y), with e = the last move's end, or a |
-| Nothing changes for a marcher | nothing is written for it (UI-18) |
+| On the flag (P = b) with no move ending there              | `[e, b)` → (x, y), with e = the last move's end, or a                              |
+| Nothing changes for a marcher                              | nothing is written for it (UI-18)                                                  |
 
 - The move after P always ends where it used to, so the page's end position and every later page
   are unchanged when editing mid-page (brief 3). An edit on the flag carries forward as in UI-18.
@@ -139,11 +139,11 @@ in `apps/desktop/src/assets/editor-mode/`, and used by both the welcome flow and
 
 ## Work packages
 
-| ID | What | Depends on |
-| --- | --- | --- |
-| B1 | `editorMode` setting: store, hook, Settings row (no screenshots yet) | none |
-| B2 | Simple predicate + the point writer + Remove position, with tests | none |
-| B3 | Basic panel in timeline mode; `planCanvasEdit` returns the point target in Basic | B1, B2 |
-| B4 | Locks: canvas lock, toast, page-box Expert mark, open banner | B2, B3 |
-| B5 | Welcome flow (mode + analytics), screenshots in welcome and Settings | B1, B3 |
-| B6 | Convert on open on by default; page mode as fallback | none (ship with B3) |
+| ID  | What                                                                                                                                                                                                                        | Depends on         |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| B1  | `editorMode` setting: store, hook, Settings row (no screenshots yet)                                                                                                                                                        | none               |
+| B2  | Simple predicate + the point writer + Remove position, with tests                                                                                                                                                           | none               |
+| B3  | Basic panel in timeline mode; `planCanvasEdit` returns the point target in Basic                                                                                                                                            | B1, B2             |
+| B4  | Locks: canvas lock, toast, page-box Expert mark, open banner                                                                                                                                                                | B2, B3             |
+| B5  | Welcome flow (mode + analytics), screenshots in welcome and Settings                                                                                                                                                        | B1, B3             |
+| B6  | Convert on open on by default; page mode as fallback. This is P9.4 (phases/09-flip.md): its prerequisites (packaged smoke run, the owner's manual pass on a real show) still stand, so it ships as P9.4, not in this branch | P9.4 prerequisites |
