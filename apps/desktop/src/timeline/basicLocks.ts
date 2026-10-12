@@ -64,7 +64,8 @@ export function useBasicLocksHost(enabled: boolean): void {
     // Basic locks with them; the simple-defaults timeline (study flag) reads them to tell a move
     // inside one page from an Expert one
     const simple = useSimpleDefaults();
-    const on = (useIsBasicMode() || simple) && enabled;
+    const basic = useIsBasicMode() && enabled;
+    const on = (basic || simple) && enabled;
     const { data: rows } = useBasicRows(on);
     const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
     useEffect(() => {
@@ -73,7 +74,8 @@ export function useBasicLocksHost(enabled: boolean): void {
     // Once per show opened (or Basic turned on): say which pages hold Expert moves
     const told = useRef(false);
     useEffect(() => {
-        if (!on) {
+        // Only Basic locks, so only Basic says so
+        if (!basic) {
             told.current = false;
             return;
         }
@@ -92,7 +94,7 @@ export function useBasicLocksHost(enabled: boolean): void {
                 action: { label: "Switch to Expert", onClick: switchToExpert },
             },
         );
-    }, [on, rows, boxes]);
+    }, [basic, rows, boxes]);
 }
 
 /** "Page 4", "Pages 4 and 6", "Pages 4, 5 and 9" (names as the boxes have them) */
