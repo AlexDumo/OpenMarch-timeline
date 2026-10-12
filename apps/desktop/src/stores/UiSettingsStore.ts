@@ -54,8 +54,8 @@ export interface UiSettings {
         referencePointY?: number;
     };
     /**
-     * Marcher labels on the field: full drill numbers, numbers only, or `auto` (numbers only
-     * when zoomed out so far that full ones at 2 steps apart would overlap)
+     * Marcher labels on the field: full drill numbers, numbers only, off, or `auto` (full drill
+     * numbers, shrunk as far as a smallest readable size where they would touch)
      */
     marcherLabels?: MarcherLabelForm;
     /** Marcher labels' size on the field and in the Shape preview */
@@ -70,7 +70,7 @@ export interface UiSettings {
     tolgeeApiKey?: string;
 }
 
-export type MarcherLabelForm = "auto" | "names" | "numbers";
+export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
 export type MarcherLabelSize = "small" | "normal" | "large";
 
 /** How much each label size scales the labels' normal size */
@@ -86,7 +86,7 @@ export interface ShapePreviewView {
     paths: "auto" | "all" | "problems" | "collisions" | "none";
     /** Labels on the new spots and where marchers start */
     labels: "auto" | "names" | "numbers" | "none";
-    /** The shape being replaced: `auto` shows it until the new one is edited */
+    /** The shape being replaced: hidden on `auto` */
     oldShape: "auto" | "show" | "hide";
     /** Where marchers start, and their walks: faint, or drawn strongly (easier on the grid) */
     starts: "auto" | "faint" | "strong" | "off";

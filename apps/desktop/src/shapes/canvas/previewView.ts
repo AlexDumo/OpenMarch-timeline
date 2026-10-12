@@ -7,6 +7,9 @@ import {
     type ShapePreviewView,
 } from "@/stores/UiSettingsStore";
 
+/** Preview labels' size, relative to normal, where spots are tight and the field is on Auto */
+const TIGHT_LABEL_SCALE = 0.72;
+
 /** A band bigger than this draws only the walks with a problem, by default */
 export const DENSE_BAND = 24;
 
@@ -36,8 +39,7 @@ export interface ResolvedShapeView {
 /**
  * Decides the Shape tool's view options set to `auto`: a big band draws only the walks with a
  * problem and no labels where marchers start; labels follow the field's label setting, and on
- * its Auto, spots under 3 steps apart get numbers only; the
- * shape being replaced shows until the new one is edited.
+ * its Auto, spots under 3 steps apart get smaller labels; the shape being replaced is hidden.
  */
 export function resolveShapeView(
     view: Partial<ShapePreviewView> | undefined,
@@ -54,14 +56,17 @@ export function resolveShapeView(
     const v = { ...defaultShapePreviewView, ...view };
     const dense = band.count > DENSE_BAND;
     const field = band.fieldLabels ?? "auto";
-    const labels =
+    // Auto follows the field: off, numbers or full drill numbers. On the field's Auto, full drill
+    // numbers, shrunk where spots are tight (owner, 2026-10-11: shrink, don't drop letters)
+    const labels: ResolvedShapeView["labels"] =
         v.labels !== "auto"
             ? v.labels
-            : field !== "auto"
-              ? field
-              : band.tight
+            : field === "off"
+              ? "none"
+              : field === "numbers"
                 ? "numbers"
                 : "names";
+    const shrink = v.labels === "auto" && field === "auto" && band.tight;
     return {
         paths: v.paths !== "auto" ? v.paths : dense ? "problems" : "all",
         labels,
@@ -70,11 +75,14 @@ export function resolveShapeView(
             labels !== "none" &&
             v.starts !== "off" &&
             (v.labels !== "auto" || !dense || v.starts === "strong"),
-        oldShape: v.oldShape !== "auto" ? v.oldShape === "show" : !band.edited,
+        // Hidden on Auto (owner, 2026-10-11: every simulated user asked to hide it)
+        oldShape: v.oldShape === "show",
         // Strong on a small band (sims, round 8: "darker start rings"), faint on a big one
         strongStarts: v.starts === "auto" ? !dense : v.starts === "strong",
         noStarts: v.starts === "off",
-        labelScale: LABEL_SIZE_SCALE[band.fieldLabelSize ?? "normal"],
+        labelScale:
+            LABEL_SIZE_SCALE[band.fieldLabelSize ?? "normal"] *
+            (shrink ? TIGHT_LABEL_SCALE : 1),
         labelBeside: band.fieldLabelPosition === "beside",
         showOnly: v.look === "show",
         walksOnly: v.look === "walks",

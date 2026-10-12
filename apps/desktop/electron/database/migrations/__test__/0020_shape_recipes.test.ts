@@ -177,6 +177,45 @@ describe("opening a version-8 file from before the recipe tables", () => {
         }
     };
 
+    it("opens a file the shapes branch saved before 0019 was the 3D venue's", async () => {
+        // That build recorded the recipe tables as its own 0019 (dated before the 3D 0019), so
+        // both 0019 and 0020 run on it; 0020 must find its tables already there
+        const filePath = path.join(tempDir, "shapes-branch.dots");
+        const db = new DatabaseSync(filePath);
+        applyFileVersionDecision(db, true);
+        const orm = getOrm(db);
+        await new DrizzleMigrationService(orm, db).applyPendingMigrations(
+            olderMigrationsFolder(),
+        );
+        runMigration(db, RECIPE_MIGRATION);
+        db.prepare(
+            "INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('shapes-0019', 1791662993303)",
+        ).run();
+        db.close();
+
+        await migrate(filePath, migrationsDir);
+
+        const after = new DatabaseSync(filePath);
+        try {
+            const tables = (
+                after
+                    .prepare(
+                        "SELECT name FROM sqlite_schema WHERE type = 'table'",
+                    )
+                    .all() as { name: string }[]
+            ).map((r) => r.name);
+            expect(tables).toEqual(
+                expect.arrayContaining([
+                    "timeline_shape_recipes",
+                    "timeline_shape_recipe_marchers",
+                    "view3d_venue",
+                ]),
+            );
+        } finally {
+            after.close();
+        }
+    });
+
     it("applies 0020 and keeps the version and the rows", async () => {
         const filePath = path.join(tempDir, "older-v8.dots");
         const db = new DatabaseSync(filePath);

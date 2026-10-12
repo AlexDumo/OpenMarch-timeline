@@ -102,6 +102,8 @@ interface TimelinePathSide {
 
 /** Marcher labels' normal font size (CanvasMarcher draws them at this size) */
 const LABEL_FONT_SIZE = 14;
+/** The sizes Auto tries, largest first, when labels crowd; the last is the smallest readable */
+const AUTO_LABEL_SCALES = [1, 0.85, 0.72, 0.6];
 
 /** Why the selection is locked in place (`OpenMarchCanvas.setSelectionLocked`) */
 export type SelectionLockReason = "shapeTool" | "playback";
@@ -2766,44 +2768,61 @@ export default class OpenMarchCanvas extends fabric.Canvas {
      */
     refreshMarcherLabels(): void {
         const setting = this._uiSettings.marcherLabels ?? "auto";
-        const fontSize =
+        const normal =
             LABEL_FONT_SIZE *
             LABEL_SIZE_SCALE[this._uiSettings.marcherLabelSize ?? "normal"];
         const beside = this._uiSettings.marcherLabelPosition === "beside";
         const moved = CanvasMarcher.labelBeside !== beside;
         CanvasMarcher.labelBeside = beside;
+        const off = setting === "off";
+        const offChanged = CanvasMarcher.labelsOff !== off;
+        CanvasMarcher.labelsOff = off;
         const marchers = this.getCanvasMarchers();
-        const fullOf = (m: CanvasMarcher) => m.marcherObj.drill_number;
-        const shortOf = (m: CanvasMarcher) => String(m.marcherObj.drill_order);
-        const crowded =
-            setting === "auto" &&
+        const numbers = setting === "numbers";
+        const textOf = (m: CanvasMarcher) =>
+            numbers
+                ? String(m.marcherObj.drill_order)
+                : m.marcherObj.drill_number;
+        // Auto keeps full drill numbers (section letters matter when sections share numbers) and
+        // shrinks every label, down to a smallest readable size, until none touch (owner,
+        // 2026-10-11: shrink rather than drop letters)
+        const crowdedAt = (size: number) =>
             crowdedLabels(
                 marchers.map((m) => {
+                    const width = textOf(m).length * size * 0.6;
                     return {
                         // The label's middle, wherever it's anchored
-                        x:
-                            (m.textLabel.left ?? 0) +
-                            (beside
-                                ? (fullOf(m).length * fontSize * 0.6) / 2
-                                : 0),
+                        x: (m.textLabel.left ?? 0) + (beside ? width / 2 : 0),
                         y: m.textLabel.top ?? 0,
                         // Courier is monospaced: 0.6 em a character
-                        width: fullOf(m).length * fontSize * 0.6,
-                        height: fontSize,
+                        width,
+                        height: size,
                     };
                 }),
             ).some(Boolean);
-        CanvasMarcher.labelNumbersOnly = setting === "numbers" || crowded;
+        let fontSize = normal;
+        if (setting === "auto") {
+            for (const scale of AUTO_LABEL_SCALES) {
+                fontSize = normal * scale;
+                if (!crowdedAt(fontSize)) break;
+            }
+        }
+        CanvasMarcher.labelNumbersOnly = numbers;
         CanvasMarcher.labelFontSize = fontSize;
         marchers.forEach((m) => {
-            const text =
-                setting === "numbers" || crowded ? shortOf(m) : fullOf(m);
+            const text = textOf(m);
             if (m.textLabel.text !== text || m.textLabel.fontSize !== fontSize)
                 m.textLabel.set({ text, fontSize });
             if (moved) {
                 m.textLabel.set({ originX: beside ? "left" : "center" });
                 m.updateTextLabelPosition();
             }
+            if (offChanged)
+                m.textLabel.set({
+                    visible:
+                        !off &&
+                        m.currentAppearanceValues.label_visible !== false,
+                });
         });
     }
 

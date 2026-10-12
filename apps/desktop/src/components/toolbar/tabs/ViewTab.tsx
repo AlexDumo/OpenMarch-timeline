@@ -215,6 +215,9 @@ function UiSettingsToolbar() {
                             <SelectItem value="numbers">
                                 {t("toolbar.view.labelsNumbers")}
                             </SelectItem>
+                            <SelectItem value="off">
+                                {t("toolbar.view.labelsOff")}
+                            </SelectItem>
                         </SelectContent>
                     </Select>
                 </label>

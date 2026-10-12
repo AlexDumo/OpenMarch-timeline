@@ -75,6 +75,8 @@ export default class CanvasMarcher
      */
     static labelNumbersOnly = false;
     static labelFontSize = 14;
+    /** The View tab's labels Off: no marcher labels on the field, whatever the section styles say */
+    static labelsOff = false;
 
     /** Where a label's anchor sits from its dot's center */
     static labelOffset(): { x: number; y: number } {
@@ -291,7 +293,7 @@ export default class CanvasMarcher
                 selectable: false,
                 hasControls: false,
                 hasBorders: false,
-                visible: labelVisible === true,
+                visible: labelVisible === true && !CanvasMarcher.labelsOff,
             },
         );
         (this.textLabel as unknown as TightCache)._limitCacheSize =
@@ -386,7 +388,9 @@ export default class CanvasMarcher
         this.dotObject.set({ visible });
 
         // Update label visibility
-        this.textLabel.set({ visible: labelVisible });
+        this.textLabel.set({
+            visible: labelVisible === true && !CanvasMarcher.labelsOff,
+        });
 
         // Exit early if not visible
         if (!visible) {
