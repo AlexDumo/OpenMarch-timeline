@@ -4,7 +4,7 @@
  * The item table loads at open; blobs are read lazily by hash, for the current or a nearby
  * moment, through a small in-memory cache. Rendering never reads originals.
  */
-import { READABLE_ROLES, type ReadableRole } from "./protocol";
+import { RENDER_ROLES, type RenderRole } from "./protocol";
 
 /** Default budget: enough for the display textures and models of a few nearby moments. */
 export const SHOW_BLOB_CACHE_BYTES = 64 * 1024 * 1024;
@@ -86,9 +86,9 @@ export function createShowBlobCache({
  */
 export function renderPartHash(
     item: { parts: Readonly<Record<string, string>> },
-    role: ReadableRole,
+    role: RenderRole,
 ): string | undefined {
-    if (!(READABLE_ROLES as readonly string[]).includes(role)) {
+    if (!(RENDER_ROLES as readonly string[]).includes(role)) {
         throw new Error(`Rendering can't read the ${role} part`);
     }
     return item.parts[role];
