@@ -42,14 +42,7 @@ import {
     deletePagesWithMovesMutationOptions,
 } from "@/hooks/queries/usePageFlags";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import {
-    usePageModeHoldMarks,
-    useTimelineHoldMarks,
-} from "@/timeline/usePageHoldMarks";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { pageEndBeat } from "@/timeline/pageEndBeat";
-import { useIsBasicMode } from "@/stores/EditorModeStore";
-import { useBasicLocksStore } from "@/timeline/basicLocks";
+import { usePageModeHoldMarks } from "@/timeline/usePageHoldMarks";
 import {
     HoldMarkTooltip,
     PageHoldMarkView,
@@ -104,33 +97,9 @@ export default function PageTimeline() {
         [selectedIdsKey],
     );
     const holdMarkId = useId();
-    const pageModeHoldMarks = usePageModeHoldMarks(
-        pages,
-        selectedIds,
-        !timelineMode,
-    );
-    const timelineHoldMarks = useTimelineHoldMarks(
-        pages,
-        timelineMode ? selectedIds : [],
-    );
     const holdMarks = useLabeledHoldMarks(
-        timelineMode ? timelineHoldMarks : pageModeHoldMarks,
+        usePageModeHoldMarks(pages, selectedIds, !timelineMode),
     );
-    // UI-19: in Basic, how many marchers each page box locks (index = page index - 1)
-    const basic = useIsBasicMode() && timelineMode;
-    const lockedByBox = useBasicLocksStore((st) => st.locked);
-    /**
-     * Selects a page. In timeline mode the playhead goes to the page's flag (UI-19: a page box
-     * click edits the page), even when the page is already selected because the playhead is
-     * inside it; the page bridge then selects it.
-     */
-    const selectPage = (page: Page) => {
-        setSelectedPage(page);
-        if (timelineMode)
-            useTimelineSelectionStore
-                .getState()
-                .seek(page.id === pages[0]?.id ? 0 : pageEndBeat(page));
-    };
 
     // Page clicking and dragging
     const resizingPage = useRef<Page | null>(null);
@@ -406,8 +375,7 @@ export default function PageTimeline() {
                                       ],
                             )}
                             onClick={() => {
-                                if (isPlaying) return;
-                                selectPage(pages[0]);
+                                setSelectedPage(pages[0]);
                                 setSelectedShapePageIds([]);
                             }}
                             title={t("timeline.page.firstPage")}
@@ -511,7 +479,7 @@ export default function PageTimeline() {
                                                 )}
                                                 onClick={() => {
                                                     if (!isPlaying)
-                                                        selectPage(page);
+                                                        setSelectedPage(page);
                                                     setSelectedShapePageIds([]);
                                                 }}
                                             >
@@ -522,23 +490,12 @@ export default function PageTimeline() {
                                                     hold={hold}
                                                     descriptionId={`${holdMarkId}-${page.id}`}
                                                 />
-                                                {basic && (
-                                                    <ExpertMark
-                                                        count={
-                                                            lockedByBox.get(
-                                                                index - 1,
-                                                            )?.size ?? 0
-                                                        }
-                                                    />
-                                                )}
                                                 {/* ------ progress bar (fullscreen) ------ */}
                                                 {(selectedIndex === index - 1 ||
                                                     (selectedIndex === 0 &&
                                                         index ===
                                                             pages.length)) &&
-                                                    isPlaying &&
-                                                    // A timeline's playhead line shows progress
-                                                    !timelineMode && (
+                                                    isPlaying && (
                                                         <div
                                                             className={clsx(
                                                                 "absolute top-0 left-0 z-0 h-full w-full",
@@ -678,33 +635,6 @@ export default function PageTimeline() {
                 </button>
             )}
         </div>
-    );
-}
-
-/**
- * UI-19 (V-202): a page box's mark in Basic when some marchers on it use Expert moves, so Basic
- * can't edit them there. Says how many in its tooltip.
- */
-function ExpertMark({ count }: { count: number }) {
-    if (count === 0) return null;
-    const text = `${count === 1 ? "One marcher uses" : `${count} marchers use`} Expert moves on this page. Basic can't edit ${count === 1 ? "it" : "them"} here.`;
-    return (
-        <ToolTip.Root delayDuration={300}>
-            <ToolTip.Trigger asChild>
-                <span
-                    data-testid="basic-expert-mark"
-                    aria-label={text}
-                    className="bg-fg-1 border-stroke text-sub text-text-subtitle absolute top-2 left-2 z-10 rounded-full border px-4 font-sans leading-none"
-                >
-                    E
-                </span>
-            </ToolTip.Trigger>
-            <ToolTip.Portal>
-                <ToolTip.Content className={TooltipClassName} side="top">
-                    {text}
-                </ToolTip.Content>
-            </ToolTip.Portal>
-        </ToolTip.Root>
     );
 }
 
