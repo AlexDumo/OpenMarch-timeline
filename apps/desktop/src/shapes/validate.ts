@@ -184,14 +184,14 @@ export function validatePaths(
             level: "warning",
             // The fix, when there is one, is offered beside the warning (sims, draw round 1:
             // "Nearest untangles them" was promised even where Nearest made it worse)
-            message: `${pairs(crossings)} of marchers would walk through each other (drawn in red).`,
+            message: `${pairs(crossings)} of marchers would walk through each other (drawn in red). Point here to see who.`,
             slots: [...crossingSlots],
             mark: "collision",
         });
     if (passes > 0)
         issues.push({
             level: "warning",
-            message: `${pairs(passes)} of marchers pass closer than ${MIN_SPACING_STEPS} step mid-move (drawn in red).`,
+            message: `${pairs(passes)} of marchers pass closer than ${MIN_SPACING_STEPS} step mid-move (drawn in red). Point here to see who.`,
             slots: [...closeSlots],
             mark: "close",
         });

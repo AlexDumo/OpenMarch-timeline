@@ -146,3 +146,32 @@ describe("drawing with the tool open", () => {
         expect(useShapeToolStore.getState().clicked).toBeNull();
     });
 });
+
+describe("bending a drawn arc", () => {
+    it("bends with the pointer after the chord is drawn, until a click sets it", () => {
+        useShapeToolStore.setState({
+            session: null,
+            last: null,
+            past: [],
+            drawing: null,
+            bending: false,
+        });
+        const store = useShapeToolStore.getState();
+        store.open("arc", row(5), ctx);
+        useShapeToolStore.getState().beginDraw(xy(0, 0));
+        useShapeToolStore.getState().drawTo(xy(200, 0), ctx);
+        useShapeToolStore.getState().endDraw();
+        expect(useShapeToolStore.getState().bending).toBe(true);
+        useShapeToolStore.getState().bendTo(xy(100, 80), ctx);
+        const bulge = (
+            useShapeToolStore.getState().session!.params as { bulge: number }
+        ).bulge;
+        expect(Math.abs(bulge)).toBeCloseTo(80);
+        useShapeToolStore.getState().endBend();
+        useShapeToolStore.getState().bendTo(xy(100, 10), ctx);
+        expect(
+            (useShapeToolStore.getState().session!.params as { bulge: number })
+                .bulge,
+        ).toBe(bulge);
+    });
+});

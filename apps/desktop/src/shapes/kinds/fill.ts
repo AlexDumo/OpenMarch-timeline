@@ -189,10 +189,21 @@ export const fillKind: ShapeKind<FillParams> = {
     },
 
     outline(p) {
+        if (p.outline === "box") {
+            // The corners (quarter points of the edge are corners only on a square)
+            const hw = p.width / 2;
+            const hh = p.height / 2;
+            const corners = [
+                fieldOf(p, -hw, hh),
+                fieldOf(p, hw, hh),
+                fieldOf(p, hw, -hh),
+                fieldOf(p, -hw, -hh),
+            ];
+            return [[...corners, corners[0]!]];
+        }
         const outline = fillOutline(p);
-        const count = p.outline === "circle" ? 72 : 4;
-        const points = Array.from({ length: count + 1 }, (_, i) =>
-            outline.pointAt(i / count),
+        const points = Array.from({ length: 73 }, (_, i) =>
+            outline.pointAt(i / 72),
         );
         return [points];
     },

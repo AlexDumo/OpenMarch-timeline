@@ -253,6 +253,7 @@ function SessionControls({ session }: { session: ShapeSession }) {
     const kind = shapeKind(session.kindId)!;
     const inputError = useShapeToolStore((s) => s.inputError);
     const placeAsked = useShapeToolStore((s) => s.placeAsked);
+    const bending = useShapeToolStore((s) => s.bending);
     const shapeUi = useUiSettingsStore((s) => s.uiSettings.shapeUi ?? "draw");
     const edited = useShapeToolStore((s) => s.past.length > 0);
     const storedView = useUiSettingsStore((s) => s.uiSettings.shapePreview);
@@ -360,9 +361,11 @@ function SessionControls({ session }: { session: ShapeSession }) {
                 >
                     <T
                         keyName={
-                            GESTURES[session.kindId] === "clicks"
-                                ? "inspector.shapeTool.draw.hintClicks"
-                                : "inspector.shapeTool.draw.hint"
+                            bending
+                                ? "inspector.shapeTool.draw.hintBend"
+                                : GESTURES[session.kindId] === "clicks"
+                                  ? "inspector.shapeTool.draw.hintClicks"
+                                  : "inspector.shapeTool.draw.hint"
                         }
                         params={{ kind: kind.label.toLowerCase() }}
                     />
@@ -742,7 +745,7 @@ export function ShapeFineTuneBox({
     const session = useShapeToolStore((s) => s.session);
     // Out of the way while a stroke is drawn or points are clicked in
     const drawing = useShapeToolStore(
-        (s) => s.drawing !== null || s.clicked !== null,
+        (s) => s.drawing !== null || s.clicked !== null || s.bending,
     );
     const shapeUi = useUiSettingsStore((s) => s.uiSettings.shapeUi ?? "draw");
     const ctx = useMemo(
@@ -758,9 +761,23 @@ export function ShapeFineTuneBox({
     // Placed again when the shape opens, changes kind or is drawn anew; not while it's tuned
     const strokes = useShapeToolStore((s) => s.strokes.length);
     const anchor = session
-        ? `${session.kindId}|${strokes}|${session.marchers.map((m) => m.id).join(",")}`
+        ? // Not the kind: switching Grid and Natural, or Outline and Filled, keeps the box put
+          `${strokes}|${session.marchers.map((m) => m.id).join(",")}`
         : "";
     const spot = useBoxSpot(canvas, preview?.slots ?? null, anchor);
+    // Measured, so the whole box (Place included) stays on the field (sims, draw round 2: Place
+    // cut off below it)
+    const boxRef = useRef<HTMLDivElement>(null);
+    const [boxHeight, setBoxHeight] = useState(BOX_HEIGHT_PX);
+    useEffect(() => {
+        const element = boxRef.current;
+        if (!element) return;
+        const observer = new ResizeObserver(() =>
+            setBoxHeight(element.offsetHeight),
+        );
+        observer.observe(element);
+        return () => observer.disconnect();
+    });
     // Dragged by its title out of the way; placed afresh when the shape is
     const [moved, setMoved] = useState({ dx: 0, dy: 0, anchor });
     const offset = moved.anchor === anchor ? moved : { dx: 0, dy: 0, anchor };
@@ -796,9 +813,16 @@ export function ShapeFineTuneBox({
     return (
         <div
             className="rounded-6 border-stroke bg-modal shadow-modal backdrop-blur-32 text-body absolute z-20 flex w-[17rem] flex-col gap-8 border p-10"
+            ref={boxRef}
             style={{
                 left: spot.left + offset.dx,
-                top: spot.top + offset.dy,
+                top: Math.max(
+                    8,
+                    Math.min(
+                        spot.top + offset.dy,
+                        (canvas?.getHeight() ?? Infinity) - boxHeight - 8,
+                    ),
+                ),
             }}
             data-testid="shape-fine-tune"
             data-shape-ui
@@ -831,9 +855,9 @@ export function ShapeFineTuneBox({
 }
 
 /**
- * Where the box sits: beside the shape's spots, on whichever side has room. It's placed when the
- * shape opens or a stroke ends, then stays put while the shape is tuned, so it never slides under
- * the pointer (sims, draw round 1: a moving box took a click as Place).
+ * Where the box sits: a corner of the field clear of the shape. It's placed when the shape opens
+ * or a stroke ends, then stays put while the shape is tuned, so it never slides under the pointer
+ * (sims, draw round 1: a moving box took a click as Place).
  */
 function useBoxSpot(
     canvas: OpenMarchCanvas | null,
@@ -855,19 +879,23 @@ function useBoxSpot(
         const v = canvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
         const xs = current.map((p) => p.x * v[0]! + v[4]!);
         const ys = current.map((p) => p.y * v[3]! + v[5]!);
-        const right = Math.max(...xs);
-        const left = Math.min(...xs);
+        // A corner of the field, the top right unless the shape is there: a fixed place that
+        // isn't where you're drawing (sims, draw round 2: beside the shape, it opened right
+        // where the next drag went)
         const width = canvas.getWidth();
-        const height = canvas.getHeight();
-        const boxLeft =
-            right + BOX_GAP_PX + BOX_WIDTH_PX <= width
-                ? right + BOX_GAP_PX
-                : Math.max(8, left - BOX_GAP_PX - BOX_WIDTH_PX);
-        const boxTop = Math.min(
-            Math.max(8, Math.min(...ys) - 20),
-            Math.max(8, height - BOX_HEIGHT_PX),
-        );
-        setSpot({ left: Math.round(boxLeft), top: Math.round(boxTop) });
+        const shape = {
+            left: Math.min(...xs),
+            right: Math.max(...xs),
+            top: Math.min(...ys),
+        };
+        const rightCorner = width - BOX_WIDTH_PX - BOX_MARGIN_PX;
+        const overlapsRight =
+            shape.right > rightCorner && shape.top < BOX_HEIGHT_PX;
+        const boxLeft = overlapsRight ? BOX_MARGIN_PX : rightCorner;
+        setSpot({
+            left: Math.round(Math.max(BOX_MARGIN_PX, boxLeft)),
+            top: BOX_MARGIN_PX + 48,
+        });
     }, [canvas, anchor, hasSlots]);
     return spot;
 }
@@ -875,7 +903,7 @@ function useBoxSpot(
 /** The box's size and distance from the shape, in screen pixels, for placing it */
 const BOX_WIDTH_PX = 272;
 const BOX_HEIGHT_PX = 320;
-const BOX_GAP_PX = 32;
+const BOX_MARGIN_PX = 12;
 
 function Kbd({ children }: { children: ReactNode }) {
     return <kbd className="text-sub ml-6 font-mono opacity-70">{children}</kbd>;

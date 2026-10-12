@@ -119,6 +119,10 @@ export interface HandleDragEvents {
     drawFinish(): void;
     /** Whether points are being clicked in (a curve being drawn) */
     clicking(): boolean;
+    /** Whether a just-drawn arc is being bent by moving the pointer */
+    bending(): boolean;
+    bendMove(at: XY): void;
+    bendEnd(): void;
 }
 
 // Small enough not to bury the marchers they sit by (sims, round 7: "the giant ring")
@@ -300,6 +304,14 @@ export default class ShapeToolOverlay {
 
     private readonly onPointerDown = (e: PointerEvent) => {
         if (e.button !== 0) return;
+        // Bending a just-drawn arc: the click sets the bend, and does nothing else
+        if (this.handles.length > 0 && this.events.bending()) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.events.bendEnd();
+            this.bendClick = true;
+            return;
+        }
         // While points are being clicked in, every click is one more, wherever it lands
         // (sims, draw round 1: a click on the curve's own line was taken as a bend)
         const clicking = this.handles.length > 0 && this.events.clicking();
@@ -343,8 +355,17 @@ export default class ShapeToolOverlay {
     private drawMode: "drag" | "clicks" | null = null;
     private drawDown: { x: number; y: number } | null = null;
 
+    /** The press that set an arc's bend, whose mousedown fabric mustn't see either */
+    private bendClick = false;
+
     /** The mousedown that follows a handle's pointerdown mustn't reach fabric either */
     private readonly swallowIfDragging = (e: MouseEvent) => {
+        if (this.bendClick) {
+            this.bendClick = false;
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
         if (this.dragKey === null && this.drawMode === null) return;
         e.preventDefault();
         e.stopPropagation();
@@ -405,6 +426,11 @@ export default class ShapeToolOverlay {
 
     private readonly onHover = (event: fabric.IEvent<MouseEvent>) => {
         if (this.handles.length === 0 || !event.e) return;
+        if (this.events.bending()) {
+            this.events.bendMove(this.fieldPoint(event.e));
+            this.canvas.setCursor("crosshair");
+            return;
+        }
         this.setFaded(this.dragKey === null && !this.near(event.e));
         const handle = this.dragKey === null ? this.handleAt(event.e) : null;
         if (handle)

@@ -35,7 +35,8 @@ export const GESTURES: Readonly<Record<string, GestureKind>> = {
 /** The handle that plays the dragged end, so a locked interval keeps the start where it was put */
 export const DRAGGED_HANDLE: Readonly<Record<string, string>> = {
     line: "b",
-    arc: "b",
+    // Not the arc: as an end, a locked run pulled short would straighten it (sims, draw round
+    // 2: "I drew an arc and got a straight line"); as a whole it keeps its bend at the run's size
     circle: "radius",
 };
 

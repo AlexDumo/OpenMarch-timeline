@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { shapeKind } from "./registry";
 import type { AssignMarcher, OrderMode } from "./assign";
 import {
     changeKind,
@@ -69,6 +70,13 @@ interface ShapeToolState {
         samples: StrokeSample[];
         t0: number;
     } | null;
+    /**
+     * An arc's chord was just drawn: moving the pointer bends it, a click sets the bend (sims,
+     * draw round 2: "let me pull a bulge", as Pyware's three-point arc)
+     */
+    bending: boolean;
+    bendTo(at: XY, ctx: ShapeContext): void;
+    endBend(): void;
     /** Points clicked so far for a kind drawn by clicks (a curve) */
     clicked: XY[] | null;
     /** Recent finished strokes, kept for recognizing drawn shapes later */
@@ -159,6 +167,31 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
             });
         },
         drawing: null,
+        bending: false,
+        bendTo(at, ctx) {
+            const { session, bending } = get();
+            if (!session || !bending) return;
+            const kind = shapeKind(session.kindId);
+            if (!kind) return;
+            const n = session.marchers.length;
+            const bent = kind.drag(
+                session.params,
+                "bulge",
+                at,
+                { shift: false },
+                n,
+                ctx,
+            );
+            set({
+                session: reassign(
+                    drawShape(session, bent, undefined, ctx),
+                    ctx,
+                ),
+            });
+        },
+        endBend() {
+            if (get().bending) set({ bending: false });
+        },
         clicked: null,
         strokes: [],
         convert: (kindId, params, ctx) =>
@@ -212,6 +245,7 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
             const moved = session !== drawing.base;
             set({
                 drawing: null,
+                bending: moved && session?.kindId === "arc",
                 strokes: [
                     ...strokes.slice(-(STROKES_KEPT - 1)),
                     { kindId: drawing.base.kindId, samples: drawing.samples },
@@ -283,6 +317,7 @@ export const useShapeToolStore = create<ShapeToolState>((set, get) => {
                     inputError: null,
                     highlight: null,
                     drawing: null,
+                    bending: false,
                     clicked: null,
                     past: [],
                     future: [],

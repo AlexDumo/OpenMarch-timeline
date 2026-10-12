@@ -117,6 +117,12 @@ export function useShapeToolCanvas({
                 },
                 drawFinish: () => useShapeToolStore.getState().finishClicks(),
                 clicking: () => useShapeToolStore.getState().clicked !== null,
+                bending: () => useShapeToolStore.getState().bending,
+                bendMove: (at) => {
+                    const ctx = shapeContextFor(canvas);
+                    useShapeToolStore.getState().bendTo(ctx.snapPoint(at), ctx);
+                },
+                bendEnd: () => useShapeToolStore.getState().endBend(),
                 doubleClick: (at, key) => {
                     const store = useShapeToolStore.getState();
                     const ctx = shapeContextFor(canvas);

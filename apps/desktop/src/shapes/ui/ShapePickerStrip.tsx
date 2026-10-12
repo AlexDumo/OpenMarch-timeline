@@ -41,7 +41,13 @@ export function ShapePickerStrip({
     return (
         <div
             className="rounded-6 border-stroke bg-modal shadow-modal backdrop-blur-32 absolute z-20 flex gap-2 border p-2"
-            style={{ left: spot.left, top: spot.top }}
+            // While a shape is open it waits at the top of the field, off the marchers (sims,
+            // draw round 2: it hid a marcher); before, it sits by the selection
+            style={
+                session
+                    ? { left: "50%", top: 8, transform: "translateX(-50%)" }
+                    : { left: spot.left, top: spot.top }
+            }
             data-testid="shape-picker-strip"
             // The field's own handlers mustn't see presses on the strip
             onPointerDown={(e) => e.stopPropagation()}

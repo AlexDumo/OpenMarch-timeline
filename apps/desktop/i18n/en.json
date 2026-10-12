@@ -863,6 +863,7 @@
                 "moveBox": "Drag to move this box",
                 "sizeInBox": "Spacing, size and Place are in the box beside the shape.",
                 "warnings": "{count, plural, one {# warning} other {# warnings}}",
+                "hintBend": "Move the pointer to bend the arc, then click to set it.",
                 "hintClicks": "Click points on the field to draw the {kind}; double-click to finish.",
                 "tool": "Shape tool",
                 "toolDraw": "Draw",

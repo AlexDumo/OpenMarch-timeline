@@ -35,17 +35,12 @@ export function blockToFill(
     n: number,
     stepPx: number,
 ): FillParams {
+    // The area the block takes up, each marcher its own interval square: a spread over just the
+    // outer files and ranks is far tighter than the block (sims, draw round 1: 1.2 steps), and a
+    // bigger one isn't the block you sized (round 2)
     const files = Math.max(1, Math.round(p.files));
-    let width = Math.max(stepPx, (files - 1) * p.across);
-    let height = Math.max(stepPx, (ranksOf(p, n) - 1) * p.deep);
-    // Room for the spread at about the block's own intervals: a natural spread over just the
-    // block's outer files and ranks is far tighter than the block (sims, draw round 1: 1.2 steps)
-    const needed = (Math.sqrt(3) / 2) * Math.max(1, n) * p.across * p.deep;
-    if (width * height < needed) {
-        const k = Math.sqrt(needed / (width * height));
-        width *= k;
-        height *= k;
-    }
+    const width = Math.max(stepPx, files * p.across);
+    const height = Math.max(stepPx, ranksOf(p, n) * p.deep);
     return {
         outline: "box",
         center: p.center,

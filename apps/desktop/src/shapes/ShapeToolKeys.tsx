@@ -31,6 +31,11 @@ export function ShapeToolKeys(): null {
             store.cancelDrag();
             return;
         }
+        // Escape while bending a just-drawn arc keeps the bend it has
+        if (store.bending) {
+            store.endBend();
+            return;
+        }
         // Escape in the toolbar's tabs (the View ribbon) leaves the toolbar, not the shape (sims,
         // round 13: closing the View menu threw away the block)
         const focused = document.activeElement;
