@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useTranslate } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { LinkBreakIcon, LinkSimpleIcon } from "@phosphor-icons/react";
@@ -295,9 +295,17 @@ const KIND_CLASS: Record<PageKeepChain["kind"], string> = {
  * pointer (its own box, drawn just before it); everywhere else the
  * hold bar says they hold, and the box's menu keeps them. Simulated users, 2026-10-12: a chain on
  * every following page drowned out the kept ones; with none they couldn't find keep.
+ *
+ * Hidden, it takes no pointer (review, 2026-10-12): a press there goes to the box under it
+ * (select, scrub, drag), not to keep. Hovering the box shows it at once but lets it take the
+ * pointer only `REVEAL_PRESS_DELAY` later, so a press as the pointer arrives (or a tap, which
+ * hovers the box as it lands) still goes to the box. Once the pointer is on it, its own hover
+ * keeps it so (the box isn't hovered then). Tab still reaches it, and focus shows it at once.
  */
 const REVEAL_ON_HOVER =
-    "opacity-0 hover:opacity-100 focus-visible:opacity-100 [:hover+&]:opacity-100";
+    "opacity-0 pointer-events-none hover:opacity-100 hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto [:hover+&]:opacity-100 [:hover+&]:pointer-events-auto [:hover+&]:[transition:pointer-events_0s_200ms_allow-discrete]";
+/** How long a chain shown by hovering its box waits to take the pointer (ms, in `REVEAL_ON_HOVER`) */
+export const REVEAL_PRESS_DELAY = 200;
 
 const KIND_WEIGHT: Record<PageKeepChain["kind"], "regular" | "bold"> = {
     follows: "regular",
@@ -337,6 +345,9 @@ export function PageKeepChainButton({
     const Icon = chain.kind === "follows" ? LinkSimpleIcon : LinkBreakIcon;
     const stop = (event: { stopPropagation: () => void }) =>
         event.stopPropagation();
+    // A click runs only after a press on the chain itself, or from the keyboard (detail 0): a tap
+    // whose press went to the box can end as a click here once the chain shows
+    const pressed = useRef(false);
     const hidden = chain.kind === "follows" && !always;
     return (
         <ShortcutTooltip
@@ -369,12 +380,18 @@ export function PageKeepChainButton({
                     width: size,
                     height: size,
                 }}
-                onPointerDown={stop}
+                onPointerDown={(event) => {
+                    event.stopPropagation();
+                    pressed.current = true;
+                }}
+                onPointerCancel={() => (pressed.current = false)}
                 onMouseDown={stop}
                 onDoubleClick={stop}
                 onClick={(event) => {
                     event.stopPropagation();
-                    chain.onToggle();
+                    const fromPress = pressed.current;
+                    pressed.current = false;
+                    if (event.detail === 0 || fromPress) chain.onToggle();
                 }}
             >
                 <Icon
