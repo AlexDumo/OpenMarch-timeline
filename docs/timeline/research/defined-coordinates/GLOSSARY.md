@@ -184,13 +184,14 @@ gives way to a dot as well (review, 2026-10-12: it sat under the flags' handles)
   was noise), but a kept one still shows the kept chip.
 - **Where:** at the bottom left of the box, on the start of the hold bar, 14 px in from the flag
   before it (clear of the flag's grip, the playhead and the start flag's pennant; the playhead's
-  **+** moves past it when the playhead is just inside the box). 16 px where the page number
-  leaves room, 12 px where only that fits. It never covers the number, even when the number slides
-  left as the box runs off the right edge (owner, 2026-10-12: the chips covered the numbers and
-  each other). Where neither size fits, a kept chain becomes an 8 px accent dot and a mixed one a
-  ring; a linked one shows nothing. The dot keeps clear of the number too, except in a box only
-  just wide enough for a one-digit number (about 17 to 22 px), where the two touch (V-210). Such a box's tooltip then shows the chain's words, ending "Right-click
-  the page to …", since a click on the box selects it (V-210).
+  **+** moves past any chain it would cover, also from a beat before the flag zoomed out). 16 px
+  where the page number leaves room, 12 px where only that fits. It never covers the number, even
+  when the number slides left as the box runs off the right edge (owner, 2026-10-12: the chips
+  covered the numbers and each other). Where neither size fits, a kept chain becomes an 8 px accent
+  dot and a mixed one a ring; a linked one shows nothing. The dot keeps clear of the number too,
+  except in a box only just wide enough for a one-digit number (about 17 to 22 px), where the two
+  touch (V-210). Such a box's tooltip then shows the chain's words, ending "Right-click the page to
+  …", since a click on the box selects it (V-210).
 - **Clicks:** a press never selects, scrubs or drags the box. Right-click opens the page box menu
   (section 6). The chain that K would toggle adds " (K)" to its tooltip label.
 - **Names:** up to three ("OT1, OT2 and OT3"), then "OT1, OT2 and 4 others"; one marcher reads "It

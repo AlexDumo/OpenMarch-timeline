@@ -21,12 +21,7 @@ import type {
     TimelineBeatRange,
     TimelinePageMarker,
 } from "./TimelineViewModel";
-import {
-    beatToX,
-    getPageRange,
-    pageLabelFits,
-    pageLabelRoom,
-} from "./TimelineGeometry";
+import { beatToX, pageLabelFits, pageLabelRoom } from "./TimelineGeometry";
 
 /** A page box's chain (`pageChainWords`), with what a click does. */
 export interface PageKeepChain extends PageChainWords {
@@ -141,8 +136,9 @@ export function usePageKeepChains(
  * The box starts 1px past its flag (the ruler's border). On the selected page the start flag sits
  * on the box's left flag and the playhead on either flag, so both edges matter. The playhead's
  * add-page-flag **+** (16px, 8px right of the playhead, the ruler's top 6..22px) would cover the
- * chain of the box the playhead is in up to about 23px past its flag, so it moves past the chain
- * there (`addPageFlagLeft`).
+ * chain of the box the playhead is in up to about 23px past its flag, and zoomed out the next
+ * box's chain from a beat before its flag, so it moves past any chain it would cover
+ * (`addPageFlagLeft`).
  */
 
 /**
@@ -228,13 +224,18 @@ export const labelPaddingBeside = (offset: number, size: number) =>
 
 /** How far right of the playhead the add-page-flag **+** sits (`TimelineVariants`) */
 export const ADD_PAGE_FLAG_OFFSET = 8;
+/** The add-page-flag **+**'s width (`TimelineVariants`, `size-16`) */
+const ADD_PAGE_FLAG_SIZE = 16;
 
 /**
  * Where the add-page-flag **+** goes (px from beat 0): `ADD_PAGE_FLAG_OFFSET` right of the
- * playhead, or just past the chain of the box the playhead is in where that would land on it. The
- * + is drawn above the chain and would take its clicks, and on the selected page, where the
- * playhead usually is, the linked chain always shows (review, 2026-10-12). A box with a chain that
- * shows only on hover counts too: hovering would put it under the +.
+ * playhead, or just past any chain that would land under it. The + is drawn above the chains and
+ * would take their clicks, and on the selected page, where the playhead usually is, the linked
+ * chain always shows (review, 2026-10-12). That is the chain of the box the playhead is in, but
+ * zoomed out also the next box's: the playhead can sit a beat before its flag, a few px away
+ * (review, 2026-10-12). A chain that shows only on hover counts too: hovering would put it under
+ * the +. Past a chain in a box only just wide enough for it, the + can reach past that box's right
+ * flag.
  */
 export function addPageFlagLeft({
     pages,
@@ -249,31 +250,27 @@ export function addPageFlagLeft({
     pixelsPerBeat: number;
     keepChains?: PageKeepChains;
 }): number {
-    const left = beatToX(positionBeat, pixelsPerBeat) + ADD_PAGE_FLAG_OFFSET;
+    let left = beatToX(positionBeat, pixelsPerBeat) + ADD_PAGE_FLAG_OFFSET;
     if (!keepChains || keepChains.size === 0) return left;
-    for (const page of pages) {
+    // The boxes in order, as getPageRange works them out, sorted once per call
+    const ordered = pages
+        .filter((page) => !page.isInitial)
+        .sort((a, b) => a.atBeat - b.atBeat);
+    // Left to right, and the + only moves right, so one pass finds every chain it reaches
+    for (const [index, page] of ordered.entries()) {
         if (!keepChains.has(page.id)) continue;
-        const range = getPageRange({ pages, pageId: page.id, beatCount });
-        if (
-            !range ||
-            positionBeat <= range.startBeatIndex ||
-            positionBeat >= range.endBeatIndex
-        )
-            continue;
-        const boxWidth =
-            (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat;
+        const endBeat = ordered[index + 1]?.atBeat ?? page.endBeat ?? beatCount;
+        const boxWidth = (endBeat - page.atBeat) * pixelsPerBeat;
         const fit = chainFit(
             boxWidth,
             pageLabelFits(page.label, boxWidth) ? page.label.length : 0,
         );
-        if (!fit) return left;
+        if (!fit) continue;
         // The box starts 1px past its flag: the ruler's border
-        const chainEnd =
-            beatToX(range.startBeatIndex, pixelsPerBeat) +
-            1 +
-            fit.offset +
-            fit.size;
-        return Math.max(left, chainEnd + LABEL_GAP);
+        const chainStart = beatToX(page.atBeat, pixelsPerBeat) + 1 + fit.offset;
+        const chainEnd = chainStart + fit.size;
+        if (left < chainEnd && left + ADD_PAGE_FLAG_SIZE > chainStart)
+            left = chainEnd + LABEL_GAP;
     }
     return left;
 }
