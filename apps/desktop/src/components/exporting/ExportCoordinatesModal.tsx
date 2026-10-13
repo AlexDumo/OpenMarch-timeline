@@ -9,7 +9,10 @@ import {
     tagAppearanceByPageIdMapQueryOptions,
 } from "@/hooks/queries";
 import { buildMarcherAppearancesByPageId } from "./utils/exportAppearances";
-import { buildCoordinateSheets } from "./utils/coordinateSheets";
+import {
+    buildCoordinateSheets,
+    coordinateSheetMarchers,
+} from "./utils/coordinateSheets";
 import {
     marchersWithoutPositions,
     readExportPositions,
@@ -49,6 +52,7 @@ import { ShareNoteExportLine } from "@/components/assets/ShowCredits";
 import tolgee from "@/global/singletons/Tolgee";
 import { useQuery } from "@tanstack/react-query";
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
+import { isPerformer } from "@/global/classes/Marcher";
 import { assert } from "@/utilities/utils";
 import {
     generateDrillChartExportSVGs,
@@ -204,28 +208,7 @@ function CoordinateSheetExport() {
                 throw new Error(t("exportCoordinates.cancelledByUser"));
             setProgress(15);
 
-            const processedMarchers = marchers
-                .map((marcher) => ({
-                    ...marcher,
-                    // Use raw DB section with the numeric part of drill_number as fallback display name
-                    name:
-                        marcher.name ||
-                        `${marcher.section} ${
-                            marcher.drill_number.match(/\d+/)?.[0] ||
-                            String(marcher.drill_order)
-                        }`,
-                }))
-                .sort((a, b) => {
-                    const sectionCompare = (a.section || "").localeCompare(
-                        b.section || "",
-                    );
-                    if (sectionCompare !== 0) return sectionCompare;
-                    return a.drill_number.localeCompare(
-                        b.drill_number,
-                        undefined,
-                        { numeric: true },
-                    );
-                });
+            const processedMarchers = coordinateSheetMarchers(marchers);
 
             await new Promise((resolve) => setTimeout(resolve, 300));
             if (isCancelled.current)
@@ -741,6 +724,9 @@ function DrillChartExport() {
 
             // Generate PDFs for each marcher or MAIN if individual charts are not selected
             for (let marcher = 0; marcher < svgPages.length; marcher++) {
+                // Items (props and equipment) are on every chart but get no chart of their own
+                if (individualCharts && !isPerformer(marchers[marcher]!))
+                    continue;
                 // Index i is always marchers[i]. A marcher missing a position on some page
                 // has no pages here: skip its PDF rather than draw an incomplete one
                 if (individualCharts && svgPages[marcher].length === 0) {
