@@ -617,6 +617,7 @@
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "loading": "Loading marcher",
+            "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",
             "name": "Name",

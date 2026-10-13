@@ -7,8 +7,9 @@ import { usePlayingPage } from "@/timeline/usePlayingPage";
 const PlayingPageContext = createContext<Page | null>(null);
 
 /**
- * Runs the inspector's one playback-page loop (`usePlayingPage`) for every section under it, so
- * the page title, the marcher's coordinates and step sizes, and the notes all show the same page.
+ * Runs the inspector's one playback-page loop (`usePlayingPage`) for the page sections under it
+ * (the page editor and its notes). The marcher section doesn't follow playback: it shows a note
+ * while timeline playback runs (`MarcherEditor`), so it reads nothing per page.
  */
 export function InspectorPageProvider({ children }: { children: ReactNode }) {
     const playingPage = usePlayingPage();
