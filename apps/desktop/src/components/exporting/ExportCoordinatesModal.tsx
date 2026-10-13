@@ -299,7 +299,7 @@ function CoordinateSheetExport() {
             toast.success(
                 <span>
                     {t("exportCoordinates.exportSuccess", {
-                        count: marchers.length,
+                        count: processedMarchers.length,
                     })}
                     <button
                         type="button"
