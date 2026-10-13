@@ -242,7 +242,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 - Owner: trevor (3d/c1-show-embedding)
 - Status: in-review
-- PR: pending
+- PR: #148
 - Parallel: yes
 - Depends on: C1.3, C1.6
 
