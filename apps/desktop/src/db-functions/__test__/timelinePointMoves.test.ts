@@ -8,7 +8,11 @@ import { readTimelineTables } from "@/timeline/timelineRows";
 import { TimelineEditRefusedError } from "@/timeline/timelineEditRefusals";
 import { performRedo, performUndo } from "../history";
 import { moveMarchersInTarget } from "../timelineMoves";
-import { removePositionAtBeat } from "../timelinePointMoves";
+import {
+    removePositionAtBeat,
+    splitMovesAtBeatInTransaction,
+} from "../timelinePointMoves";
+import { transactionWithHistory } from "../history";
 import { readBasicRows } from "../basicRows";
 import { pointsInBox } from "@/timeline/basicSimple";
 import { markAssignmentsKeptInTransaction } from "../timelineKeptMarkers";
@@ -26,6 +30,7 @@ keepFixturesInPageMode(
  */
 
 type XY = [number, number];
+type Box = { start: number; end: number };
 const PAGE2 = { start: 9, end: 17 };
 const A: XY = [300, 200];
 const B: XY = [120, 80];
@@ -961,6 +966,92 @@ describeDbTests("Basic point writes on a converted show", (it) => {
         expect(await inBox()).toEqual([]);
         expect(await positionsOf(db, [marcher])).toEqual(holding);
         expect(await positionsOf(db, others)).toEqual(othersBefore);
+        expect(await violations(db)).toEqual([]);
+    });
+
+    const vacant = async (db: DbConnection) =>
+        (await resolverOf(db))
+            .diagnostics()
+            .filter((d) => d.code === "D-VACANT");
+    const transitionsOver = async (db: DbConnection, box: Box) =>
+        (await db.select().from(schema.timeline_transitions).all()).filter(
+            (t) => t.start_beat === box.start && t.end_beat === box.end,
+        );
+
+    it("set all to previous page deletes the shared transition and its timeline, with no vacant slots", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { box, marcher, others } = await converted(db);
+        const before = await snapshot(db);
+        await point(
+            db,
+            box.end,
+            [marcher, ...others].map((m) => [m, C] as [number, XY]),
+            { box, clearOwn: true },
+        );
+        expect(await vacant(db)).toEqual([]);
+        expect(await transitionsOver(db, box)).toEqual([]);
+        expect(await timelineRanges(db)).not.toContainEqual([
+            box.start,
+            box.end,
+        ]);
+        expect(await violations(db)).toEqual([]);
+        await oneUndoStep(db, before, await snapshot(db));
+    });
+
+    it("set to previous page for one marcher compacts the shared transition; the others are unchanged", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { box, marcher, others } = await converted(db);
+        const othersBefore = await positionsOf(db, others);
+        const before = await snapshot(db);
+        await point(db, box.end, [[marcher, C]], { box, clearOwn: true });
+        expect(await vacant(db)).toEqual([]);
+        const [shared] = await transitionsOver(db, box);
+        expect(shared!.slot_count).toBe(others.length);
+        expect(await positionsOf(db, others)).toEqual(othersBefore);
+        expect(await violations(db)).toEqual([]);
+        await oneUndoStep(db, before, await snapshot(db));
+    });
+
+    it("a mid-page split out of the shared transition leaves no vacant slot", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { box, marcher, others } = await converted(db);
+        const mid = box.start + Math.floor((box.end - box.start) / 2);
+        const othersBefore = await positionsOf(db, others);
+        const before = await snapshot(db);
+        await point(db, mid, [[marcher, C]], { box });
+        expect(await vacant(db)).toEqual([]);
+        expect(await positionsOf(db, others)).toEqual(othersBefore);
+        expect(await violations(db)).toEqual([]);
+        await oneUndoStep(db, before, await snapshot(db));
+    });
+
+    it("splitting every move at a new flag (Split page) leaves no vacant slot", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { box, marcher, others } = await converted(db);
+        const mid = box.start + Math.floor((box.end - box.start) / 2);
+        const all = [marcher, ...others];
+        const positionsBefore = await positionsOf(db, all);
+        const result = await transactionWithHistory(db, "split", (tx) =>
+            splitMovesAtBeatInTransaction({ tx, beat: mid, box }),
+        );
+        expect(result.split).toEqual(expect.arrayContaining(all));
+        expect(await vacant(db)).toEqual([]);
+        expect(await transitionsOver(db, box)).toEqual([]);
+        const after = await positionsOf(db, all);
+        positionsBefore.forEach((beats, m) =>
+            beats.forEach(([x, y], b) => {
+                expect(after[m]![b]![0]).toBeCloseTo(x, 9);
+                expect(after[m]![b]![1]).toBeCloseTo(y, 9);
+            }),
+        );
         expect(await violations(db)).toEqual([]);
     });
 });

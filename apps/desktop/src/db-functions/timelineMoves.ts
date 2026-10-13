@@ -784,10 +784,15 @@ export const ownPageMoves = async (
 /**
  * Deletes `rows` (marchers' own page moves, `ownPageMoves`) with their kept markers and one-slot
  * transitions, and then each of their timelines that has no transition left, children first.
+ *
+ * With `tidyShared` (Basic's writes, whose rows may be slots of a converted page's shared
+ * transition), a shared transition they leave is compacted (`compact`) and one they empty is
+ * deleted, so no vacant slot (D-VACANT) is left behind.
  */
 export const clearOwnPageMoves = async (
     tx: DbTransaction,
     rows: readonly DatabaseTimelineAssignment[],
+    { tidyShared = false }: { tidyShared?: boolean } = {},
 ): Promise<void> => {
     if (rows.length === 0) return;
     // A kept spot's marker goes first (children first, as C-1)
@@ -811,7 +816,8 @@ export const clearOwnPageMoves = async (
     await removeAssignmentRowsInTransaction({
         tx,
         removed: rows,
-        compact: false,
+        compact: tidyShared,
+        deleteEmptied: tidyShared,
     });
     const left = new Set(
         (
