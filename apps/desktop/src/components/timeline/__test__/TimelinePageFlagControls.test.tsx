@@ -119,7 +119,7 @@ describe("**+** at the paused playhead (UI-9)", () => {
         expect(onAddPageFlag).toHaveBeenCalledTimes(1);
     });
 
-    it("stays inside the timeline with the playhead on the show's last beat (Basic appends there)", () => {
+    it("stays inside the timeline with the playhead on the show's last beat (a page to the show's end)", () => {
         show({ positionBeat: BEATS.length, onAddPageFlag: vi.fn() });
         const button = plus()!;
         const surface = screen.getByTestId(
