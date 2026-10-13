@@ -118,8 +118,10 @@ shapeless moves on one layer, ordered, not overlapping; see "Simple"):
   move's destination.
 - A merge that goes nowhere (its destination is where `s` is) is deleted instead, by both of
   those: a point set in a hold and removed again leaves the hold as it was, with no tick at the
-  hold's end, and a page the marcher held through follows earlier pages again (lead default). A
-  kept spot is merged as usual.
+  hold's end, and a page the marcher held through follows earlier pages again (lead default).
+  Likewise a point set inside a move at the move's end position writes only `[s, P)`, and the
+  marcher holds from P (lead default). A merge with a kept spot in either move is written, kept
+  (lead default).
 - Timelines stay one per range (C-12). Marchers split at different counts get different timelines.
   The page timeline `[a, b)` stays for marchers that don't split.
 

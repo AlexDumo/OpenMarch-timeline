@@ -52,17 +52,20 @@ import {
  * or, with none (a hold or the flag follows), the move is deleted, as UI-18's "back onto the start
  * clears the move". A kept spot (`timeline_kept_assignments`) is never cleared or merged that way;
  * its new ending is written instead, as on the range path. A merged move arrives where the next
- * move did, so it is kept when that one was.
+ * move did, and is kept when either of the two was (a designer's spot survives the merge).
  *
  * **A merge that goes nowhere** (drag back or **Remove this count's position**, arriving where the
  * first move starts) is deleted instead of written: a point set in a hold and then removed leaves
  * the hold as it was, with no move ending at the hold's end (no tick there), and a page it held
- * through follows earlier pages again. A kept spot among the two moves is merged as above.
+ * through follows earlier pages again. A kept spot among the two moves is merged as above. In the
+ * same way, a point set inside a move r at r's end position writes only `[r.start, P)`: the
+ * marcher holds from P to r.end instead of a second half that goes nowhere (unless r is kept), so a
+ * chain of points set in a hold and removed again leaves the hold too.
  *
  * Positions ("r's end", "the held position", "where r starts") are the resolver's, read once
- * from the rows the edit sees before anything is written, and only when an edit reads one. New moves go on the layer of the move
- * they replace or follow (0 when the marcher has none in the box), never `stealLayer`: nothing in
- * a simple box overlaps them. They get their own one-slot `direct` transition (C-11) in the
+ * from the rows the edit sees before anything is written, and only when an edit reads one. New
+ * moves go on the layer of the move they replace or follow (0 when the marcher has none in the
+ * box), never `stealLayer`: nothing in a simple box overlaps them. They get their own one-slot `direct` transition (C-11) in the
  * timeline over their range, reused when one is stored (C-12) and created otherwise; a timeline
  * left with no transition is deleted (`clearOwnPageMoves`).
  *
@@ -250,6 +253,7 @@ const planMerge = async (
 ): Promise<void> => {
     const { marcherId } = first;
     const point = await state.positionAt(marcherId, second.end);
+    // A kept spot among the two is the designer's: the merge keeps it (lead default)
     const kept =
         state.kept.has(first.assignmentId) ||
         state.kept.has(second.assignmentId);
@@ -267,7 +271,7 @@ const planMerge = async (
         end: second.end,
         point,
         layer: first.layer,
-        kept: state.kept.has(second.assignmentId),
+        kept,
     });
 };
 
@@ -297,22 +301,23 @@ const planPoint = async (
     const inside = rows.find((r) => r.start < beat && beat < r.end);
     if (inside) {
         plan.removed.push(inside);
-        plan.added.push(
-            {
-                marcherId,
-                start: inside.start,
-                end: beat,
-                point,
-                layer: inside.layer,
-            },
-            {
+        plan.added.push({
+            marcherId,
+            start: inside.start,
+            end: beat,
+            point,
+            layer: inside.layer,
+        });
+        // Already where the move ends: no second half that goes nowhere, the marcher holds
+        const end = await at(inside.end);
+        if (state.kept.has(inside.assignmentId) || !samePosition(point, end))
+            plan.added.push({
                 marcherId,
                 start: beat,
                 end: inside.end,
-                point: await at(inside.end),
+                point: end,
                 layer: inside.layer,
-            },
-        );
+            });
         return;
     }
 

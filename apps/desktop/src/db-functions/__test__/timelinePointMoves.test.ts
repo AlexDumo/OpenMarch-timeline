@@ -536,6 +536,62 @@ describeDbTests("Basic point writes: a merge that goes nowhere", (it) => {
         expect((await resolverOf(db)).positionAt(a, 17)).toEqual(held);
     });
 
+    it("a kept first half spares the merge, and the merged move stays kept", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await madeInTimelineMode(db);
+        await point(db, 11, [[a, B]]);
+        const first = (await readBasicRows(db, { marcherIds: [a] })).find(
+            (r) => r.end === 11,
+        )!;
+        await db.transaction((tx) =>
+            markAssignmentsKeptInTransaction(tx, [first.assignmentId]),
+        );
+        await removePositionAtBeat({
+            db,
+            beat: 11,
+            box: PAGE2,
+            marcherIds: [a],
+        });
+        const rows = await readBasicRows(db, { marcherIds: [a] });
+        expect(rows.map((r) => [r.start, r.end])).toEqual([[9, 17]]);
+        expect(
+            (
+                await db.select().from(schema.timeline_kept_assignments).all()
+            ).map((k) => k.assignment_id),
+        ).toEqual([rows[0]!.assignmentId]);
+    });
+
+    it("a point set inside a move at that move's end writes no second half; a chain of points in a hold removes cleanly", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a } = await madeInTimelineMode(db);
+        const held = (await resolverOf(db)).positionAt(a, 9) as XY;
+        const before = await snapshot(db);
+        await point(db, 11, [[a, B]]);
+        // Inside [11, 17) → H, back at H by count 15: the marcher holds from 15
+        await point(db, 15, [[a, held]]);
+        expect(await rowsOf(db, a)).toEqual([
+            [9, 11, 0],
+            [11, 15, 0],
+        ]);
+        expect(await ticks(db, a)).toEqual([11, 15]);
+        const r = await resolverOf(db);
+        for (const beat of [15, 17, 25])
+            expect(r.positionAt(a, beat)).toEqual(held);
+        await removePositionAtBeat({
+            db,
+            beat: 11,
+            box: PAGE2,
+            marcherIds: [a],
+        });
+        expect(await rowsOf(db, a)).toEqual([]);
+        expect(await ticks(db, a)).toEqual([]);
+        expect(await snapshot(db)).toEqual(before);
+    });
+
     it("removing one marcher's no-motion merge and another's real merge in one step", async ({
         db,
         marchersAndPages: _,
@@ -845,6 +901,33 @@ describeDbTests("Basic point writes on a converted show", (it) => {
                 [mid, box.end, expect.any(Number)],
             ]),
         );
+        expect(await positionsOf(db, others)).toEqual(othersBefore);
+        expect(await violations(db)).toEqual([]);
+    });
+
+    it("a point set and removed inside a shared move: positions as before, the others untouched", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { box, marcher, others } = await converted(db);
+        const mid = box.start + Math.floor((box.end - box.start) / 2);
+        const mine = await positionsOf(db, [marcher]);
+        const othersBefore = await positionsOf(db, others);
+        await point(db, mid, [[marcher, C]], { box });
+        await removePositionAtBeat({
+            db,
+            beat: mid,
+            box,
+            marcherIds: [marcher],
+        });
+        expect(await rowsOf(db, marcher)).toEqual(
+            expect.arrayContaining([[box.start, box.end, expect.any(Number)]]),
+        );
+        const after = (await positionsOf(db, [marcher]))[0]!;
+        mine[0]!.forEach(([x, y], i) => {
+            expect(after[i]![0]).toBeCloseTo(x, 9);
+            expect(after[i]![1]).toBeCloseTo(y, 9);
+        });
         expect(await positionsOf(db, others)).toEqual(othersBefore);
         expect(await violations(db)).toEqual([]);
     });
