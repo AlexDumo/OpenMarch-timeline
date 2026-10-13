@@ -2,8 +2,10 @@ import { asc, eq } from "drizzle-orm";
 import { generatePageNames } from "@openmarch/core";
 import * as schema from "@om-electron/database/migrations/schema";
 import {
+    defaultWorkspaceSettings,
     isTimelineModeEnabled,
     workspaceSettingsSchema,
+    type WorkspaceSettings,
 } from "@/settings/workspaceSettings";
 import { DbTransaction } from "./types";
 import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
@@ -180,6 +182,26 @@ export async function pageNumberOffsetInTransaction(
         return parsed.success ? parsed.data.pageNumberOffset : 0;
     } catch {
         return 0;
+    }
+}
+
+/**
+ * The file's workspace settings, read inside `tx`, with the defaults where there are none or they
+ * don't parse.
+ */
+export async function workspaceSettingsInTransaction(
+    tx: DbTransaction,
+): Promise<WorkspaceSettings> {
+    const row = await tx
+        .select({ json: schema.workspace_settings.json_data })
+        .from(schema.workspace_settings)
+        .get();
+    if (!row) return defaultWorkspaceSettings;
+    try {
+        const parsed = workspaceSettingsSchema.safeParse(JSON.parse(row.json));
+        return parsed.success ? parsed.data : defaultWorkspaceSettings;
+    } catch {
+        return defaultWorkspaceSettings;
     }
 }
 

@@ -194,7 +194,10 @@ from it. The spec still wins on the model; this file decides presentation.
     so motion is unchanged. The new page is selected. Pages store their
     start beat, so this inserts a row at the split page's old start and moves
     that page's `start_beat` to the playhead. Past the last flag, nothing is
-    split: **+** appends a page ending at the playhead (_lead default_).
+    split: **+** appends a page ending at the playhead (_lead default_). In
+    Basic (UI-19) it appends a page of the file's `defaultNewPageCounts`
+    instead, also offered on the last flag, lengthening the show when it's
+    too short (research/basic-mode, "Basic's panel"; provisional, see U-Q5).
   - **Selection.** With a stored timeline selected, marchers without a
     transition in it are dimmed, and a dimmed marcher can't be selected or
     interacted with at all: clicks and box selection pass over it, and
@@ -826,12 +829,21 @@ from it. The spec still wins on the model; this file decides presentation.
     on); the owner found it asked two presses to play on from the playhead, and that page-from-start
     playing belongs to loop mode. Testers had expected Space to play a page they'd just selected;
     the tooltip and the menu's "Play Page Once" are the answer to that, to watch (V-176).
-  - **Playing on stops where it is**, and when that is a new page the field line says so with a ring
-    ("Stopped on a new page · Editing Page 4…") for a few seconds (owner; the quiet line was missed
-    by every tester who then edited the wrong set).
+  - **Playing on stops where it is**, and when that is another page the field line says so with a
+    ring ("Stopped on page 4 · Editing Page 4…") for a few seconds (owner; the quiet line was missed
+    by every tester who then edited the wrong set). Pages are compared, not the line's words, so
+    stopping inside the page it started on stays quiet, and leaving that page drops the note. Past
+    the last flag it reads "Stopped after the last page · Editing After page 5…". Basic can't edit
+    there, so its line says "Add a page with + to edit here" instead of "Editing …" whenever the
+    playhead is past the last flag, stopped there or not. It first said "Stopped on a new page", which
+    all four users of the Basic past-the-last-flag study read as "the app made a page" and went to
+    check.
   - **⏮ is the previous page; Shift+click (or Shift+Q) goes to the start of the show**, as before
     (owner, 2026-10-09: briefly swapped after testers read ⏮ as "start"; the owner wants the
-    common step on the plain click). The tooltip says Shift+click goes to the start.
+    common step on the plain click). The tooltip says "One page back" and names the ways to the
+    start: Shift+click, Shift+Q or the house, whose own tooltip says it's the start of the show
+    (2026-10-12, after Basic testers pressed ⏮ then Play and saw one page; the plain click is
+    unchanged).
   - **A click on a beat seeks to that count** (UI-12); the page box row selects the page (owner,
     2026-10-09, after briefly making any click select the page).
   - **Home while playing jumps playback to the start**; transport buttons don't take keyboard focus
@@ -913,13 +925,13 @@ from it. The spec still wins on the model; this file decides presentation.
       chip. A box with some of each shows a broken chain outlined in the accent with a filled kept
       count. Linked and kept are meant to differ at a glance (wp19). Nothing shows without a
       selection (owner). Kept and mixed chains always show; a linked one only on the selected page,
-      the page **K** works on, and while its box is hovered (V-211). The chain sits at the bottom
+      the page **K** works on, and while its box is hovered (V-223). The chain sits at the bottom
       left of its box, on the start of the hold bar, 14 px in from the flag before it (past the
       start flag's pennant; the playhead's **+** moves past any chain it would cover, also from a
       beat before the flag zoomed out): 16 px where the page number leaves room, else 12 px. It
       never covers the number (owner, 2026-10-12). Where it can't fit, a kept chain becomes a dot (a
       ring for a mix; in a box only just wide enough for a one-digit number it touches the number)
-      and the box's tooltip takes its words, ending "Right-click the page to …" (V-210). Its tooltip
+      and the box's tooltip takes its words, ending "Right-click the page to …" (V-222). Its tooltip
       names the marchers a click changes, up to three ("OT1, OT2 and 4 others" past that): "Keep OT1
       and OT8 on Page 3 · They won't follow Page 2 any more", "OT1 and OT8 kept on Page 3 · Click to
       follow Page 2 again", or "2 of the 8 selected are kept on Page 3 (OT1, OT8) · Click to keep
@@ -1201,7 +1213,9 @@ points (P7.2).
 
   TODO (project owner, 2026-10-01; not now):
   - how a selected marcher's spans (UI-1) show inside a timeline's one track;
-  - appending pages past the last flag (today's `defaultNewPageCounts`);
+  - appending pages past the last flag (today's `defaultNewPageCounts`;
+    Basic uses it provisionally, research/basic-mode "Basic's panel", with
+    counts added at the default tempo where the show is too short);
   - ~~whether clicking a clip selects its timeline~~ (yes: UI-12);
   - editing anywhere in the selected timeline, not only at its end (the
     temporary refusal in UI-9).

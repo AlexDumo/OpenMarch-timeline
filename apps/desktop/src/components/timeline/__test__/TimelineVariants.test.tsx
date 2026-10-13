@@ -1596,6 +1596,35 @@ describe("a calmer timeline (UI-12)", () => {
         ]);
     });
 
+    // The plain click stays on the previous page (UI-17, ui.md); the tooltip names the ways to the
+    // start for those who read ⏮ as "the start" (basic-mode README, V-210)
+    it("says Previous goes one page back and names the ways to the start", async () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onNavigate={vi.fn()}
+            />,
+        );
+        const previous = screen.getByRole("button", {
+            name: /^Previous page/,
+        });
+        act(() => previous.focus());
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            "Previous pageQOne page back. For the start of the show: Shift+click, Shift+Q or the house",
+        );
+        act(() => previous.blur());
+        const next = screen.getByRole("button", { name: /^Next page/ });
+        act(() => next.focus());
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            "Next pageEOne page forward. For the last page: Shift+click or Shift+E",
+        );
+        expect(screen.getByTestId("timeline-initial-page")).toHaveAttribute(
+            "title",
+            "Home: the start of the show (page 0's set)",
+        );
+    });
+
     it("keeps page navigation live while playing, where it jumps playback", () => {
         const onNavigate = vi.fn();
         render(
@@ -1695,8 +1724,9 @@ describe("the transport's go-to box (UI-12)", () => {
 });
 
 describe("Fit (UI-12 review)", () => {
-    // The story show has 32 beats: at 360px, less the 40px home box, it fits at 10px a beat
-    let width = 360;
+    // The story show has 32 beats: at 392px, less the 40px home box and the 32px end inset for
+    // +, it fits at 10px a beat
+    let width = 392;
     let observers: (() => void)[] = [];
     beforeEach(() => {
         vi.spyOn(
@@ -1719,7 +1749,7 @@ describe("Fit (UI-12 review)", () => {
         vi.restoreAllMocks();
         vi.unstubAllGlobals();
         observers = [];
-        width = 360;
+        width = 392;
     });
 
     const Zoomed = ({
@@ -1775,7 +1805,7 @@ describe("Fit (UI-12 review)", () => {
 
     it("zooms in from a show that opened fitted, where there is no zoom to go back to", () => {
         // Fitted at 25px a beat, closer in than the starting zoom of 16
-        width = 840;
+        width = 872;
         const onZoom = vi.fn();
         render(
             <Zoomed
@@ -1800,7 +1830,7 @@ describe("Fit (UI-12 review)", () => {
                 onFittedChange={onFittedChange}
             />,
         );
-        width = 680;
+        width = 712;
         act(() => observers.forEach((observe) => observe()));
         expect(onZoom).toHaveBeenLastCalledWith(20);
         expect(onFittedChange).not.toHaveBeenCalled();

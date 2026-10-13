@@ -68,6 +68,13 @@ type TimelineDensity = "expanded" | "collapsed" | "basic";
 /** Timeline's starting zoom, and the least a second Fit zooms in to when it can't go back */
 const TIMELINE_DEFAULT_PX_PER_BEAT = 16;
 
+/**
+ * Room after the show's last beat: **+** (UI-9) is drawn just after the playhead, so with the
+ * playhead on the last beat (Basic appends there) it needs this much to stay on screen and
+ * clickable, fitted or scrolled to the end. The button's 8px gap, its 16px, and 8px to spare.
+ */
+export const TIMELINE_END_INSET = 32;
+
 /** How far above the fitted zoom a remembered zoom must be for a second Fit to go back to it */
 const FIT_BACK_MARGIN = 1.05;
 
@@ -105,6 +112,7 @@ const useTimelineZoom = ({
     pixelsPerBeat,
     beatCount,
     leadingInset,
+    trailingInset,
     playheadBeat,
     onPixelsPerBeatChange,
     fitted: rememberedFitted,
@@ -114,6 +122,8 @@ const useTimelineZoom = ({
     pixelsPerBeat: number;
     beatCount: number;
     leadingInset: number;
+    /** Room after the last beat (`TIMELINE_END_INSET`), left out of the fit */
+    trailingInset: number;
     playheadBeat: number;
     onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
     fitted?: boolean;
@@ -123,7 +133,8 @@ const useTimelineZoom = ({
     const fitValue =
         beatCount > 0 && viewportWidth > 0
             ? clamp(
-                  Math.max(0, viewportWidth - leadingInset) / beatCount,
+                  Math.max(0, viewportWidth - leadingInset - trailingInset) /
+                      beatCount,
                   TIMELINE_MIN_PX_PER_BEAT,
                   TIMELINE_MAX_PX_PER_BEAT,
               )
@@ -573,7 +584,7 @@ const TimelineSurface = memo(function TimelineSurface({
     const initialPageWidth = model.pages.some((page) => page.isInitial)
         ? TIMELINE_INITIAL_PAGE_WIDTH
         : 0;
-    const surfaceWidth = width + initialPageWidth;
+    const surfaceWidth = width + initialPageWidth + TIMELINE_END_INSET;
     // UI-12: the ruler (28px) and the measure row; then the waveform, when audio is loaded, so it
     // stays put as clips come and go; then the clip rows, one always kept (with no chrome), so the
     // first off-page clip doesn't move the ruler right after the drag that made it
@@ -622,6 +633,7 @@ const TimelineSurface = memo(function TimelineSurface({
         pixelsPerBeat,
         beatCount: model.beatCount,
         leadingInset: initialPageWidth,
+        trailingInset: TIMELINE_END_INSET,
         playheadBeat: positionBeat,
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
         fitted: props.zoomFitted,
@@ -933,8 +945,12 @@ const TimelineSurface = memo(function TimelineSurface({
                             type="button"
                             data-testid="timeline-add-page-flag"
                             data-timeline-interactive="true"
-                            aria-label="Add a page flag here"
-                            title="Add a page flag here"
+                            aria-label={
+                                props.addPageFlagLabel ?? "Add a page flag here"
+                            }
+                            title={
+                                props.addPageFlagLabel ?? "Add a page flag here"
+                            }
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={props.onAddPageFlag}
                             className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"

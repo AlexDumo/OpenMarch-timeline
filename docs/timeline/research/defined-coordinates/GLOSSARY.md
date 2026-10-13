@@ -141,7 +141,7 @@ chain for never-moved marchers (section 4)._
 ## 4. Keep chains on the page boxes
 
 A small chain button on the later page boxes that the selected marchers follow into or were kept on
-(TL only, B-40, V-185, V-210 to V-212). It answers "is this page attached to the earlier one?"
+(TL only, B-40, V-185, V-222 to V-224). It answers "is this page attached to the earlier one?"
 before you edit.
 
 | State      | Look                                                                          | Tooltip (label · hint)                                                                | Click                           |
@@ -179,7 +179,7 @@ gives way to a dot as well (review, 2026-10-12: it sat under the flags' handles)
 
 - **When:** only with marchers selected (owner: nothing without a selection). Kept and mixed
   chains show on every box they apply to. A linked chain shows only on the selected page, on the
-  page **K** works on, and while its box is hovered (V-211: a link on every following page
+  page **K** works on, and while its box is hovered (V-223: a link on every following page
   drowned out the kept ones). Marchers that haven't moved yet get no linked chain (on every box it
   was noise), but a kept one still shows the kept chip.
 - **Where:** at the bottom left of the box, on the start of the hold bar, 14 px in from the flag
@@ -190,8 +190,8 @@ gives way to a dot as well (review, 2026-10-12: it sat under the flags' handles)
   covered the numbers and each other). Where neither size fits, a kept chain becomes an 8 px accent
   dot and a mixed one a ring; a linked one shows nothing. The dot keeps clear of the number too,
   except in a box only just wide enough for a one-digit number (about 17 to 22 px), where the two
-  touch (V-210). Such a box's tooltip then shows the chain's words, ending "Right-click the page to
-  …", since a click on the box selects it (V-210).
+  touch (V-222). Such a box's tooltip then shows the chain's words, ending "Right-click the page to
+  …", since a click on the box selects it (V-222).
 - **Clicks:** a press never selects, scrubs or drags the box. Right-click opens the page box menu
   (section 6). The chain that K would toggle adds " (K)" to its tooltip label.
 - **Names:** up to three ("OT1, OT2 and OT3"), then "OT1, OT2 and 4 others"; one marcher reads "It
