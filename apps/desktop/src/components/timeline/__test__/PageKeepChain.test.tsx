@@ -1,5 +1,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { keepOnPage } from "@/timeline/timelineKeepCommands";
+import {
+    keepToggle,
+    pageChainWords,
+    type PageKeepState,
+} from "@/timeline/timelineKeepLater";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
 import { Timeline } from "../Timeline";
@@ -13,6 +19,7 @@ import {
     keepDotFit,
     keepHereMenu,
     REVEAL_PRESS_DELAY,
+    pageKeepChains,
     type PageKeepChain,
     type PageKeepChains,
 } from "../PageKeepChain";
@@ -24,6 +31,12 @@ import {
  * state. A chain sits at the bottom left of its box, clear of the page number, and gives way to a
  * dot (kept, mixed) or nothing (linked) where the box is too narrow.
  */
+
+// The menu's commands write the show; these tests only check whom they'd change
+vi.mock("@/timeline/timelineKeepCommands", () => ({
+    keepOnPage: vi.fn(async () => {}),
+    followAgainOn: vi.fn(async () => {}),
+}));
 
 afterEach(cleanup);
 
@@ -70,27 +83,31 @@ const PAGES = [
 const chain = (
     kind: PageKeepChain["kind"],
     extra: Partial<PageKeepChain> = {},
-): PageKeepChain => ({
-    kind,
-    label:
+): PageKeepChain => {
+    const label =
         kind === "follows"
             ? "Keep 2 marchers on Page 3"
             : kind === "kept"
               ? "2 marchers kept on Page 3"
-              : "2 of the 8 selected are kept on Page 3 (OT1, OT8)",
-    hint:
-        kind === "follows"
-            ? "They won't follow Page 2 any more"
-            : kind === "kept"
-              ? "Click to follow Page 2 again"
-              : "Click to keep the other 6 too",
-    menuHint: "Right-click the page to change this",
-    action: kind === "kept" ? "follow" : "keep",
-    marcherIds: [1, 2],
-    keptCount: kind === "follows" ? 0 : 2,
-    onToggle: vi.fn(),
-    ...extra,
-});
+              : "2 of the 8 selected are kept on Page 3 (OT1, OT8)";
+    return {
+        kind,
+        label,
+        hint:
+            kind === "follows"
+                ? "They won't follow Page 2 any more"
+                : kind === "kept"
+                  ? "Click to follow Page 2 again"
+                  : "Click to keep the other 6 too",
+        menuLabel: label,
+        menuHint: "Right-click the page to change this",
+        action: kind === "kept" ? "follow" : "keep",
+        marcherIds: [1, 2],
+        keptCount: kind === "follows" ? 0 : 2,
+        onToggle: vi.fn(),
+        ...extra,
+    };
+};
 
 const show = ({
     keepChains,
@@ -532,6 +549,77 @@ describe("the chains on the page boxes", () => {
         );
     });
 
+    it("a narrow box takes on its chain's words without a hold mark too", () => {
+        // A chain whose page has no hold mark (none passed): before, it vanished with no words
+        show({
+            keepChains: new Map([
+                [3, chain("kept")],
+                [4, chain("follows")],
+            ]),
+            pixelsPerBeat: 3,
+        });
+        expect(chains()).toEqual([]);
+        expect(
+            screen.getByRole("button", { name: "Page 3" }),
+        ).toHaveAccessibleDescription(
+            "2 marchers kept on Page 3. Right-click the page to change this",
+        );
+        // A linked chain gets no dot, but its words still reach the box
+        expect(
+            screen.getByRole("button", { name: "Page 4" }),
+        ).toHaveAccessibleDescription(
+            "Keep 2 marchers on Page 3. Right-click the page to change this",
+        );
+        // No hold mark is drawn for words alone
+        expect(screen.queryAllByTestId("page-hold-mark")).toEqual([]);
+    });
+
+    it("a narrow box names whom the menu changes, and says (K) where K does the same", async () => {
+        show({
+            keepChains: new Map([
+                [
+                    3,
+                    chain("follows", {
+                        withK: false,
+                        menuWithK: true,
+                        menuLabel:
+                            "OT1 and OT4 hold where earlier pages left them",
+                    }),
+                ],
+                [4, chain("follows")],
+            ]),
+            pixelsPerBeat: 3,
+        });
+        const box = screen.getByRole("button", { name: "Page 3" });
+        expect(box).toHaveAttribute("aria-keyshortcuts", "K");
+        expect(box).toHaveAccessibleDescription(
+            "OT1 and OT4 hold where earlier pages left them. Right-click the page to change this",
+        );
+        expect(
+            screen.getByRole("button", { name: "Page 4" }),
+        ).not.toHaveAttribute("aria-keyshortcuts");
+        fireEvent.focus(box);
+        expect(
+            (
+                await screen.findAllByText(
+                    "OT1 and OT4 hold where earlier pages left them (K)",
+                )
+            ).length,
+        ).toBeGreaterThan(0);
+    });
+
+    it("a wide box's chain says (K) only by withK, not by the menu's K", () => {
+        show({
+            keepChains: new Map([
+                [3, chain("follows", { withK: false, menuWithK: true })],
+            ]),
+        });
+        expect(chains()[0]).not.toHaveAttribute("aria-keyshortcuts");
+        expect(
+            screen.getByRole("button", { name: "Page 3" }),
+        ).not.toHaveAttribute("aria-keyshortcuts");
+    });
+
     it("a dot sits in from the flag where the label leaves room, and the label stops before it", () => {
         show({
             keepChains: new Map([[3, chain("kept")]]),
@@ -664,5 +752,65 @@ describe("the page box menu's keep entries", () => {
         fireEvent.contextMenu(chains()[0]!);
         expect(keepHere.stateFor).toHaveBeenCalledWith("3");
         expect(item("timeline-range-menu-keep-here")).not.toBeNull();
+    });
+});
+
+describe("a narrow box's words and its menu change the same marchers", () => {
+    // Page 3: OT1 follows page 2; OT4 hasn't moved yet, so it follows the start
+    const state = (kept: number[] = []): PageKeepState => ({
+        pageId: 3,
+        pageName: "3",
+        box: { start: 9, end: 17 },
+        follows: [1, 4],
+        fromStart: [4],
+        kept,
+        from: ["2"],
+        selected: 2 + kept.length,
+    });
+    const nameOf = (id: number) => `OT${id}`;
+
+    it("a linked chain keeps only OT1; the box's words name the menu's OT1 and OT4", () => {
+        const words = pageChainWords(state(), undefined, nameOf)!;
+        expect(words.marcherIds).toEqual([1]);
+        expect(words.label).toBe("OT1 holds where Page 2 left it");
+        expect(words.menuLabel).toBe(
+            "OT1 and OT4 hold where earlier pages left them",
+        );
+        expect(words.menuHint).toBe(
+            "Changes to earlier pages carry onto Page 3. Right-click the page to keep them here instead",
+        );
+        keepHereMenu([state()]).onKeep(3);
+        expect(keepOnPage).toHaveBeenLastCalledWith(state().box, [1, 4]);
+    });
+
+    it("a mixed chain counts the menu's rest, not-yet-moved ones too", () => {
+        const words = pageChainWords(state([2]))!;
+        expect(words.kind).toBe("mixed");
+        expect(words.menuLabel).toBe("1 of the 3 selected is kept on Page 3");
+        expect(words.menuHint).toBe(
+            "The other 2 follow earlier pages. Right-click the page to keep them here too",
+        );
+        keepHereMenu([state([2])]).onKeep(3);
+        expect(keepOnPage).toHaveBeenLastCalledWith(state().box, [1, 4]);
+    });
+
+    it("where all have moved, the box's words are the chain's", () => {
+        const moved = { ...state(), follows: [1], fromStart: [] };
+        const words = pageChainWords(moved)!;
+        expect(words.menuLabel).toBe(words.label);
+    });
+
+    it("says (K) on the box where K keeps the menu's marchers, though not the chain's", () => {
+        const states = [state()];
+        const k = keepToggle(states, 3, 1);
+        expect(k?.marcherIds).toEqual([1, 4]);
+        expect(
+            pageKeepChains(states, undefined, nameOf, k).get(3),
+        ).toMatchObject({ withK: false, menuWithK: true });
+        // No (K) where K would do something else there
+        expect(pageKeepChains(states).get(3)).toMatchObject({
+            withK: false,
+            menuWithK: false,
+        });
     });
 });

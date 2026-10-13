@@ -412,9 +412,13 @@ export interface PageChainWords {
     readonly label: string;
     readonly hint: string;
     /**
-     * The hint for a box too narrow for its chain: the same, but the page's menu does what a
-     * click on the chain would (a click on the box selects it)
+     * The label for a box too narrow for its chain, whose words send you to the page's menu (a
+     * click on the box selects it): it names whom the menu changes, as `keepHereMenu` keeps every
+     * selected marcher that follows, not-yet-moved ones too (so does **K**). The same as `label`
+     * when they have all moved.
      */
+    readonly menuLabel: string;
+    /** The hint for that box: what the page's menu does, for the marchers `menuLabel` names */
     readonly menuHint: string;
     /** A click keeps these marchers (follows, mixed) or lets them follow again (kept) */
     readonly action: "keep" | "follow";
@@ -422,6 +426,9 @@ export interface PageChainWords {
     /** How many are kept, for a mixed chain's badge */
     readonly keptCount: number;
 }
+
+/** A chain's words for one set of marchers */
+type ChainText = Pick<PageChainWords, "label" | "hint" | "menuHint">;
 
 /**
  * A linked chain's words: what is true now (they hold where a page left them, so changes to that
@@ -434,7 +441,7 @@ const followsWords = (
     fromPage: string | null,
     t: KeepTranslate,
     nameOf: MarcherNameOf | undefined,
-): Pick<PageChainWords, "label" | "hint" | "menuHint"> => {
+): ChainText => {
     const one = follows.length === 1;
     const names = marcherNamesText(follows, nameOf, t);
     const where = fromPage
@@ -502,7 +509,7 @@ const keptWords = (
     fromPage: string | null,
     t: KeepTranslate,
     nameOf: MarcherNameOf | undefined,
-): Pick<PageChainWords, "label" | "hint" | "menuHint"> => {
+): ChainText => {
     const names = marcherNamesText(kept, nameOf, t);
     return {
         label: names
@@ -558,7 +565,7 @@ const mixedWords = (
     page: string,
     t: KeepTranslate,
     nameOf: MarcherNameOf | undefined,
-): Pick<PageChainWords, "label" | "hint" | "menuHint"> => {
+): ChainText => {
     const counts = {
         page,
         kept: String(kept.length),
@@ -636,30 +643,52 @@ export function pageChainWords(
     const follows = state.follows.filter((id) => !start.has(id));
     if (follows.length === 0 && kept.length === 0) return null;
     const fromPage = from.length === 1 ? from[0]! : null;
+    // The page's menu keeps the not-yet-moved ones too, so a narrow box's words count them (and
+    // name no one page: those hold from the start)
+    const all = state.follows;
+    const menuToo = all.length > follows.length;
     if (kept.length === 0)
         return {
             kind: "follows",
-            ...followsWords(follows, page, fromPage, t, nameOf),
+            ...withMenu(
+                followsWords(follows, page, fromPage, t, nameOf),
+                menuToo && followsWords(all, page, null, t, nameOf),
+            ),
             action: "keep",
             marcherIds: follows,
             keptCount: 0,
         };
+    // The menu's Follow lets go exactly the kept ones, as the kept chain does
     if (follows.length === 0)
         return {
             kind: "kept",
-            ...keptWords(kept, page, fromPage, t, nameOf),
+            ...withMenu(keptWords(kept, page, fromPage, t, nameOf), false),
             action: "follow",
             marcherIds: kept,
             keptCount: kept.length,
         };
     return {
         kind: "mixed",
-        ...mixedWords(follows, kept, page, t, nameOf),
+        ...withMenu(
+            mixedWords(follows, kept, page, t, nameOf),
+            menuToo && mixedWords(all, kept, page, t, nameOf),
+        ),
         action: "keep",
         marcherIds: follows,
         keptCount: kept.length,
     };
 }
+
+/** A chain's words, with a narrow box's from `menu`'s marchers where they differ (`menuLabel`). */
+const withMenu = (
+    words: ChainText,
+    menu: ChainText | false,
+): Pick<PageChainWords, "label" | "hint" | "menuLabel" | "menuHint"> => ({
+    label: words.label,
+    hint: words.hint,
+    menuLabel: (menu || words).label,
+    menuHint: (menu || words).menuHint,
+});
 
 /** What **K** does: keep or let follow again these marchers on this page box. */
 export interface KeepToggle {
