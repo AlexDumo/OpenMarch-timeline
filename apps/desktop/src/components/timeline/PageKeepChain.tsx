@@ -28,6 +28,8 @@ export interface PageKeepChain extends PageChainWords {
     readonly onToggle: () => void;
     /** **K** does what a click does, so the tooltip says so */
     readonly withK?: boolean;
+    /** **K** does what the page's menu does for `menuLabel`'s marchers (a box too narrow for it) */
+    readonly menuWithK?: boolean;
 }
 
 /** The keyboard shortcut that toggles keep (`toggleKeepOnPage`), as menus and tooltips show it */
@@ -103,29 +105,47 @@ export function usePageKeepChains(
     k: KeepToggle | null = null,
 ): PageKeepChains {
     const { t } = useTranslate();
-    return useMemo(() => {
-        if (states.length === 0) return NO_CHAINS;
-        const translate: KeepTranslate = (key, defaultValue, params) =>
-            t(key, { defaultValue, ...params });
-        const chains = new Map<number, PageKeepChain>();
-        for (const state of states) {
-            const words = pageChainWords(state, translate, nameOf);
-            if (!words) continue;
-            chains.set(state.pageId, {
-                ...words,
-                // Only where K changes exactly the chain's marchers
-                withK:
-                    kDoes(k, state.pageId, words.action) &&
-                    k!.marcherIds.join() === words.marcherIds.join(),
-                onToggle: () =>
-                    void (words.action === "keep" ? keepOnPage : followAgainOn)(
-                        state.box,
-                        words.marcherIds,
-                    ),
-            });
-        }
-        return chains;
-    }, [states, t, nameOf, k]);
+    return useMemo(
+        () =>
+            pageKeepChains(
+                states,
+                (key, defaultValue, params) =>
+                    t(key, { defaultValue, ...params }),
+                nameOf,
+                k,
+            ),
+        [states, t, nameOf, k],
+    );
+}
+
+/** The chains `usePageKeepChains` gives, worded by `translate`. */
+export function pageKeepChains(
+    states: readonly PageKeepState[],
+    translate?: KeepTranslate,
+    nameOf?: MarcherNameOf,
+    k: KeepToggle | null = null,
+): PageKeepChains {
+    if (states.length === 0) return NO_CHAINS;
+    const chains = new Map<number, PageKeepChain>();
+    for (const state of states) {
+        const words = pageChainWords(state, translate, nameOf);
+        if (!words) continue;
+        chains.set(state.pageId, {
+            ...words,
+            // Only where K changes exactly the chain's marchers
+            withK:
+                kDoes(k, state.pageId, words.action) &&
+                k!.marcherIds.join() === words.marcherIds.join(),
+            // K changes whom the menu does (`keepToggle`, `keepHereMenu`) wherever it acts the same
+            menuWithK: kDoes(k, state.pageId, words.action),
+            onToggle: () =>
+                void (words.action === "keep" ? keepOnPage : followAgainOn)(
+                    state.box,
+                    words.marcherIds,
+                ),
+        });
+    }
+    return chains;
 }
 
 /*

@@ -83,12 +83,14 @@ import {
 import {
     HoldMarkTooltip,
     PageHoldMarkView,
+    type HoldWords,
     type LabeledHoldMark,
     type LabeledHoldMarks,
 } from "./PageHoldMark";
 import {
     chainFit,
     KEEP_DOT_SIZE,
+    KEEP_SHORTCUT,
     keepDotFit,
     labelPaddingBeside,
     PageKeepChainButton,
@@ -1163,19 +1165,28 @@ const TimelinePageBox = memo(function TimelinePageBox({
         : dot?.clear
           ? labelPaddingBeside(dot.offset, KEEP_DOT_SIZE)
           : undefined;
-    // A chain with no room for its button: its words go on the box, which has its menu
-    const words =
-        chain && !fit && hold
-            ? { ...hold, label: chain.label, hint: chain.menuHint }
+    // A chain with no room for its button: its words go on the box, mark or not, naming whom the
+    // box's menu changes, with (K) where K does the same, as the chain's button shows it
+    const menuK = !!chain && !fit && !!chain.menuWithK;
+    const words: HoldWords | undefined =
+        chain && !fit
+            ? { mark: hold?.mark, label: chain.menuLabel, hint: chain.menuHint }
             : hold;
     const box = (
-        <HoldMarkTooltip hold={words}>
+        <HoldMarkTooltip
+            hold={
+                words && menuK
+                    ? { ...words, label: `${words.label} (${KEEP_SHORTCUT})` }
+                    : words
+            }
+        >
             <button
                 type="button"
                 data-timeline-interactive="true"
                 {...timelineRangeTargetProps(range, undefined, page.id)}
                 aria-label={`Page ${page.label}`}
                 aria-describedby={words ? holdDescriptionId : undefined}
+                aria-keyshortcuts={menuK ? KEEP_SHORTCUT : undefined}
                 aria-pressed={selected}
                 {...scrub.handlers}
                 onClick={(event) => {
