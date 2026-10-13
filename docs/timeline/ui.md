@@ -1200,7 +1200,8 @@ points (P7.2).
   TODO (project owner, 2026-10-01; not now):
   - how a selected marcher's spans (UI-1) show inside a timeline's one track;
   - appending pages past the last flag (today's `defaultNewPageCounts`;
-    Basic uses it provisionally, research/basic-mode "Basic's panel");
+    Basic uses it provisionally, research/basic-mode "Basic's panel", with
+    counts added at the default tempo where the show is too short);
   - ~~whether clicking a clip selects its timeline~~ (yes: UI-12);
   - editing anywhere in the selected timeline, not only at its end (the
     temporary refusal in UI-9).

@@ -1,14 +1,15 @@
 import { act, cleanup, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, expect, vi } from "vitest";
 import { toast } from "sonner";
-import { describeDbTests } from "@/test/base";
-import { timelineFixtureMode } from "@/test/timelineMode";
+import { DbConnection, describeDbTests, schema } from "@/test/base";
+import { keepFixturesInPageMode } from "@/test/timelineMode";
 import {
     harnessQueryClient,
+    mountFeature,
     probed,
-    setUpFeature,
     timelineSelection,
 } from "@/test/featureHarness";
+import { convertPagesToTimeline } from "@/timeline/convert/writePageConversion";
 import tolgee from "@/global/singletons/Tolgee";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useAddPageFlag } from "@/hooks/queries/usePageFlags";
@@ -27,8 +28,8 @@ import { pageFlags } from "../timelinePlayhead";
  * Basic's **+** on or past the last flag (docs/timeline/research/basic-mode, "Basic's panel"), on
  * a converted `marchersAndPages` show (pages 1 to 6 of 8 counts, the last flag at beat 49 of 97,
  * no `defaultNewPageCounts`, so 16): it adds a page of the default length from the last flag,
- * however far past it the playhead is, and says so; Expert's page ends at the playhead. Runs
- * under `test:timeline`.
+ * however far past it the playhead is, and says so; Expert's page ends at the playhead. The tests
+ * convert the show themselves, so they run in the default run as well as under `test:timeline`.
  */
 
 const app = vi.hoisted(() => ({ client: (): unknown => null }));
@@ -38,6 +39,8 @@ vi.mock("@/App", () => ({
     },
 }));
 app.client = harnessQueryClient;
+
+keepFixturesInPageMode("its tests convert the show themselves");
 
 vi.mock("@/utilities/utils", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/utilities/utils")>()),
@@ -81,6 +84,25 @@ function PanelCommands() {
     return null;
 }
 
+/** Turns the timeline flag on, converts the show, and mounts the panel's **+** in `mode` */
+const setUp = async (db: DbConnection, mode: "basic" | "expert") => {
+    await db.delete(schema.workspace_settings);
+    await db.insert(schema.workspace_settings).values({
+        id: 1,
+        json_data: JSON.stringify({ timelineMode: true }),
+    });
+    await convertPagesToTimeline(db);
+    act(() => {
+        useEditorModeStore.setState({ mode, loaded: true });
+    });
+    mountFeature(<PanelCommands />);
+    await waitFor(() => {
+        expect(probed().timelineMode).toBe(true);
+        expect(probed().pages.length).toBeGreaterThan(2);
+        expect(useTimelineResolverStore.getState().status).toBe("ready");
+    });
+};
+
 const lastFlag = () => pageFlags(probed().pages).at(-1)!.range!.end;
 
 const seek = (beat: number) =>
@@ -108,15 +130,10 @@ const added = () =>
 
 describeDbTests("Basic's + on or past the last flag", (it) => {
     it("Basic: a page of the default length from the last flag, back to back, lengthening the show where the music ends", async ({
-        // Fixtures load only when asked for: the database too, not just the show
-        db: _db,
+        db,
         marchersAndPages: _,
     }) => {
-        if (!timelineFixtureMode()) return;
-        act(() => {
-            useEditorModeStore.setState({ mode: "basic", loaded: true });
-        });
-        await setUpFeature(<PanelCommands />, 2, []);
+        await setUp(db, "basic");
         expect(lastFlag()).toBe(49);
         expect(panel.beatCount).toBe(97);
 
@@ -148,15 +165,10 @@ describeDbTests("Basic's + on or past the last flag", (it) => {
     });
 
     it("Expert: the page ends at the playhead, + isn't on the last flag, and nothing is said", async ({
-        // Fixtures load only when asked for: the database too, not just the show
-        db: _db,
+        db,
         marchersAndPages: _,
     }) => {
-        if (!timelineFixtureMode()) return;
-        act(() => {
-            useEditorModeStore.setState({ mode: "expert", loaded: true });
-        });
-        await setUpFeature(<PanelCommands />, 2, []);
+        await setUp(db, "expert");
         seek(52);
         await plusSelects({ start: 49, end: 52 });
         await waitFor(() => expect(lastFlag()).toBe(52));
