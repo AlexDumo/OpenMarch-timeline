@@ -135,8 +135,7 @@ phases [26.24].
   downsized, Draco or meshopt decoded, extras stripped, influences
   renormalized); then name, tags, the license fields and Add. A clean file is
   one click. The report is saved in the sidecar as **Import notes**; lasting
-  states become badges (scaled, simplified, no stretch zones, not
-  print-ready). Rejections show on the same screen with the reason and a
+  states become badges (scaled, simplified, no stretch zones). Rejections show on the same screen with the reason and a
   pointer to the Starter kit, never an `AlertModal` [11].
 - **Fallbacks** with no `OM_*` nodes or `extras.openmarch`: set the grip by
   clicking a point (+Z snapped to the longest extent); set artwork slots by
@@ -159,11 +158,20 @@ phases [26.24].
 - **Artwork images** [08, 11]:
   - Standalone size step: chips of templates whose aspect matches ("Silk
     36 × 54 in", "Floor prop 4 × 8 ft") above locked-aspect ft/in fields, plus
-    "From file: …" when metadata can be trusted. Effective DPI and the "not
-    print-ready" warning update live. Multi-select asks once per distinct
-    aspect.
+    "From file: …" when metadata can be trusted. Multi-select asks once per
+    distinct aspect.
+  - Defaults on first pick (owner, 2026-10-12, Q77): the surface starts as
+    Silk, or Base floor when the image's aspect matches a floor in the
+    catalog. The size starts as that surface's catalog default, fitted to the
+    image's aspect: the default's long side is kept and the other side comes
+    from the image, so nothing stretches, with a note when the shape differs
+    from the standard. Changing the surface moves the size to the new
+    surface's default unless the user chose a size. A trustworthy size from
+    the file still wins.
+  - No print-readiness check: the review shows no DPI and stores no "not
+    print-ready" badge (owner, 2026-10-12, Q75).
   - SVG and PDF: a page picker for more than one page, one Artwork per page.
-    The original stays vector and reports "vector" instead of a DPI. The
+    The original stays vector. The
     display texture is rasterized by `sharp` at the kind's cap; PDF pages
     are rendered by pdf.js in a hidden window owned by main (no native
     dependency) [owner, 2026-10-11, Q33].
@@ -269,18 +277,17 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
   trustworthy size, it takes the slot's size.
 - **Artwork templates** per surface kind (silk Cut, Base floor, Floor prop,
   prop top/front/back, Uniform part front/back): physical size, safe area,
-  shape mask for arc, teardrop and swing cuts, minimum and recommended DPI,
+  shape mask for arc, teardrop and swing cuts, a PNG resolution,
   orientation marker (header or pole side; audience side for floors), and
   bleed (⅛ in flags, ½ in sublimation) in the download only. PNG, SVG and PDF
   at size. Values set by the owner on 2026-10-11 [Q29–Q32]:
   - Safe area: 1 in for flags and props; 6 in for floors and Floor props.
   - Bleed: 2 in for floors and Floor props; ½ in for prop panels.
-  - PNG resolution: flags, props and Uniform parts at their minimum print
-    DPI; floors capped at 8,192 px on the long edge, noting that the PDF or
+  - PNG resolution: flags, props and Uniform parts at 150 DPI; floors capped at 8,192 px on the long edge, noting that the PDF or
     SVG is the print master.
   - Silk templates put the pole side on the left (fly wide × header tall).
     Uniform panels split front from back at z = 0 in the rest pose and are
-    sized from the median body. Floor props use the floor DPI guide.
+    sized from the median body. Floor props use the floor resolution.
   - Cut outlines come from traced vendor silhouettes (research
     `research/silk-cuts`); low-confidence shapes carry a "shape from vendor
     photo" note. Templates mark the pole sleeve strip (about 3 in) with a
@@ -296,11 +303,10 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
   (pad with transparent where the surface allows, else the base color).
   Never non-uniform, no zoom inside fill in v1. Mode, pan and pad color live
   on the slot assignment, so one Artwork can sit differently on two slots.
-- **Print readiness:** the Version stores its native DPI; each slot
-  assignment shows its effective DPI (native ÷ scale, after crop). Minimum
-  150 DPI (silks, uniforms, props) or 30 dpi (floors at 1:1); recommended 300
-  and 60. Below minimum is a "not print-ready" warning, never a block. Color:
-  store sRGB plus an optional Pantone reference [03].
+- **No print readiness** (owner, 2026-10-12, Q75; replaces the earlier
+  effective-DPI warning): the Version still records its native DPI as
+  metadata, but nothing warns on it. Color: store sRGB plus an optional
+  Pantone reference [03].
 
 ### Models [08, 11, 18]
 
@@ -718,8 +724,7 @@ Checks are **quiet notes**: shown on the thing and in the show's notes list,
 never a modal, never a block (owner, 2026-10-11) [07, 08, 18, 21, 25].
 
 - Producers: hand conflicts, crew distance, crew-less moves (when the setting
-  is on), put-down drift, fit and print flags ("content outside cut", "not
-  print-ready", "scaled N%"), dormant slots, missing grips, missing Garment
+  is on), put-down drift, fit flags ("content outside cut", "scaled N%"), dormant slots, missing grips, missing Garment
   fits, more than about 8 Garments, budget notes, file size, platform steps,
   performers inside obstacles, dots leaving a moving platform, mismatched
   Horn/Equipment states [26.2], Silk aspect fits [26.13], outdated
@@ -742,7 +747,10 @@ readout) [22].
 - **Uniform editor:** in the inspector on the Uniform tab; palette only in v1
   [09, 26.16].
 - **Library side panel**, with Import… and Credits on its show tab [16,
-  26.16].
+  26.16]. Until Visuals mode exists, the Library lives in an **Assets** area
+  in the editor's left sidebar: a browser of every Library item by kind with
+  search, Import… and Artwork templates. A finished import closes the review
+  and shows the new items highlighted there (owner, 2026-10-12, Q76).
 - **Notes list** [26.16].
 - Pickers carry an Import… that pre-fills kind, slot and size [11], and write
   count-keyed data with the scope on the button [26.1].

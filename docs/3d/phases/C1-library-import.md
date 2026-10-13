@@ -677,3 +677,12 @@ Nothing yet.
   exactly is not decided. Both entries are single components, so moving them
   is a small change. Q73: no cue target (band, section, tag or set) reaches
   items. Q74: `coord.sh` targets `main`, pending Alex's agreement in review.
+
+- 2026-10-12, owner testing (C1.9, C1.10): Library Import… opened with the
+  models filter selected, so macOS greyed out every image; the dialog now
+  selects a combined "Models and artwork" filter first. Q75: no print
+  readiness; the DPI line and the "not print-ready" badge are gone. Q76:
+  the File-tab entries move to a new **Assets** area in the left sidebar,
+  with a Library browser that opens after each import. Q77: artwork starts
+  as Silk (or Base floor when its aspect matches a floor) at that surface's
+  catalog default size, fitted to the image's aspect.
