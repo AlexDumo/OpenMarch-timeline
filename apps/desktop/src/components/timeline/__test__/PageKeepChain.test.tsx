@@ -12,6 +12,7 @@ import {
     chainFit,
     keepDotFit,
     keepHereMenu,
+    REVEAL_PRESS_DELAY,
     type PageKeepChain,
     type PageKeepChains,
 } from "../PageKeepChain";
@@ -252,6 +253,51 @@ describe("the chains on the page boxes", () => {
         expect(next!.previousElementSibling).toBe(
             screen.getByRole("button", { name: "Page 4" }),
         );
+    });
+
+    it("a hidden linked chain takes no pointer; its box's hover lets it, after a pause", () => {
+        show({
+            keepChains: new Map([
+                [3, chain("follows")],
+                [4, chain("follows")],
+            ]),
+            selection: {
+                kind: "range",
+                range: { startBeatIndex: 9, endBeatIndex: 17 },
+            },
+        });
+        const [here, next] = chains();
+        // Hidden, a press there goes to the box under it (review, 2026-10-12)
+        expect(next!.className).toMatch(/(^|\s)pointer-events-none(\s|$)/);
+        // Shown by its box's hover, it takes the pointer only REVEAL_PRESS_DELAY later
+        expect(next!.className).toContain("[:hover+&]:pointer-events-auto");
+        expect(next!.className).toContain(
+            `[:hover+&]:[transition:pointer-events_0s_${REVEAL_PRESS_DELAY}ms_allow-discrete]`,
+        );
+        // Its own hover holds it once the pointer is on it; focus shows it and lets it be clicked
+        expect(next!.className).toContain("hover:pointer-events-auto");
+        expect(next!.className).toContain("focus-visible:pointer-events-auto");
+        // Still a tab stop, as before
+        expect(next).not.toHaveAttribute("tabindex", "-1");
+        // A chain that shows takes the pointer as before
+        expect(here!.className).not.toMatch(/pointer-events-none/);
+    });
+
+    it("a click keeps only after a press on the chain itself, or from the keyboard", () => {
+        const linked = chain("follows");
+        show({ keepChains: new Map([[3, linked]]) });
+        const [button] = chains();
+        const box = screen.getByRole("button", { name: "Page 3" });
+        // A tap whose press went to the box, ending as a click on the chain once it shows
+        fireEvent.pointerDown(box);
+        fireEvent.click(button!, { detail: 1 });
+        expect(linked.onToggle).not.toHaveBeenCalled();
+        fireEvent.pointerDown(button!);
+        fireEvent.click(button!, { detail: 1 });
+        expect(linked.onToggle).toHaveBeenCalledTimes(1);
+        // Enter or Space (detail 0)
+        fireEvent.click(button!, { detail: 0 });
+        expect(linked.onToggle).toHaveBeenCalledTimes(2);
     });
 
     it("K's page shows its linked chain, and kept and mixed chains always show", () => {
