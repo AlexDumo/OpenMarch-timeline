@@ -270,7 +270,9 @@ describe("timeline views", () => {
             />,
         );
 
-        fireEvent.click(screen.getByRole("button", { name: "Play" }));
+        fireEvent.click(
+            screen.getByRole("button", { name: "Play from the start flag" }),
+        );
         expect(onPlayingChange).toHaveBeenCalledWith(true);
         rerender(
             <ExpandedTimeline

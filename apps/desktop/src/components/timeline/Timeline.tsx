@@ -110,10 +110,10 @@ export interface TimelinePlayback {
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops (UI-17): the button says so */
     readonly playLoops?: boolean;
-    /** With no pin, a page is selected (UI-17): Play's tooltip names Shift+Space and C */
-    readonly playNext?: "page";
-    /** Shift+Space's once-through is playing (UI-17) */
+    /** Shift+Space's once-through of the loop is playing (UI-17) */
     readonly playingOnce?: boolean;
+    /** The transport's second Play button (Shift+Space): plays on from the playhead */
+    readonly onPlayFromPlayhead?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -686,8 +686,8 @@ export function Timeline(props: TimelineProps) {
         onSeek: seekToBeat,
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
         playLoops: playback.playLoops,
-        playNext: playback.playNext,
         playingOnce: playback.playingOnce,
+        onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,

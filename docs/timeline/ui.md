@@ -825,14 +825,16 @@ from it. The spec still wins on the model; this file decides presentation.
     locator's loop end was the playhead, so navigating stretched it). The separate loop region keeps
     both lessons: it covers whole pages and follows page navigation, and the playhead never resizes
     it.
-  - **Space plays on from the playhead; Shift+Space plays the page's move once** and goes back to
-    its set when it ends or is stopped (project owner, 2026-10-09, after trying round 3's choice by
-    hand). Looping a page is loop mode's job (C); Shift+Space is the one-shot check. With a page
-    selected and nothing pinned, Play's tooltip names both. Round 3 of the simulated-user tests
-    had picked a hybrid (Space on a selected page plays its move once, Space straight after plays
-    on); the owner found it asked two presses to play on from the playhead, and that page-from-start
-    playing belongs to loop mode. Testers had expected Space to play a page they'd just selected;
-    the tooltip and the menu's "Play Page Once" are the answer to that, to watch (V-176).
+  - **Space plays on from the start flag; Shift+Space plays on from the playhead** (project owner,
+    2026-10-13, after the lab test playback-start at lab.openmarch.com: version B). The transport has
+    a second Play button for Shift+Space, a bar in the playhead's color then ▶, beside Play's bar in
+    the start flag's color. With looping on, Space loops and Shift+Space plays the loop once and goes
+    back. A stop within the first beat from the start flag changes nothing: the flag is the page
+    before's end flag, and stopping on it would move the window back a page (V-192).
+  - **Before that, Space played on from the playhead and Shift+Space played the page's move once**
+    (project owner, 2026-10-09, after trying round 3's choice by hand, V-176). Round 3 of the
+    simulated-user tests had picked a hybrid (Space on a selected page plays its move once, Space
+    straight after plays on); the owner found it asked two presses to play on from the playhead.
   - **Playing on stops where it is**, and when that is a new page the field line says so with a ring
     ("Stopped on a new page · Editing Page 4…") for a few seconds (owner; the quiet line was missed
     by every tester who then edited the wrong set).
@@ -857,7 +859,7 @@ from it. The spec still wins on the model; this file decides presentation.
     Timeline and the rest, read from the action registry so it can't go stale, plus the timeline's
     own keys and gestures (G, Shift+Z, Esc, Ctrl+drag, Ctrl+scroll, Alt+drag) and the WASD nudge. It
     is also Help → Keyboard Shortcuts (_lead default_).
-  - **App menu items**: a **Playback** menu (Play / Stop, Play Page Once, Loop On / Off) and Help →
+  - **App menu items**: a **Playback** menu (Play / Stop, Play from Playhead, Loop On / Off) and Help →
     Keyboard Shortcuts. They show their keys without registering them, so text fields keep Space
     and letters; macOS puts the key in the label (docs/adr/0003-menu-actions-ipc.md).
   - Deferred: a one-time hint the first time someone pins (dropped with the second play button,

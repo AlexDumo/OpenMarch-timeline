@@ -133,7 +133,6 @@ export interface TimelineSelectionInteraction {
 
 // The same elements every render, so the memoized transport buttons don't re-render for them
 const SKIP_BACK_ICON = <SkipBackIcon size={16} />;
-const PLAY_ICON = <PlayIcon size={18} weight="fill" />;
 const STOP_ICON = <StopIcon size={16} weight="fill" />;
 const SKIP_FORWARD_ICON = <SkipForwardIcon size={16} />;
 // Previous and Next while Shift (the start or end of the show) or Alt (a beat) is held
@@ -144,8 +143,8 @@ const BEAT_FORWARD_ICON = <CaretRightIcon size={16} weight="bold" />;
 const FIT_ICON = <ArrowsOutLineHorizontalIcon size={16} />;
 const HOUSE_ICON = <HouseIcon size={14} aria-hidden="true" />;
 /**
- * Play's icon while the start flag is pinned (UI-17, project owner's pick): a bar in the start
- * flag's color, echoing the flag's line on the ruler, then Play ("loop from the mark")
+ * Play's icon (UI-17, project owner's pick): a bar in the start flag's color, echoing the flag's
+ * line on the ruler, then Play ("play from the mark")
  */
 const PLAY_FROM_FLAG_ICON = (
     <span className="flex items-center gap-2">
@@ -153,6 +152,13 @@ const PLAY_FROM_FLAG_ICON = (
             aria-hidden
             className={clsx("rounded-2 h-14 w-[2.5px]", START_INK.bg)}
         />
+        <PlayIcon size={14} weight="fill" />
+    </span>
+);
+/** Play from the playhead: a bar in the playhead's color */
+const PLAY_FROM_PLAYHEAD_ICON = (
+    <span className="flex items-center gap-2">
+        <span aria-hidden className="rounded-2 bg-accent h-14 w-[2.5px]" />
         <PlayIcon size={14} weight="fill" />
     </span>
 );
@@ -440,8 +446,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     isPlaying,
     onPlayingChange,
     playLoops = false,
-    playNext,
     playingOnce = false,
+    onPlayFromPlayhead,
     onNavigate,
     onFit,
     fitted = false,
@@ -459,10 +465,10 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops and shows the loop's bar (UI-17) */
     playLoops?: boolean;
-    /** With no pin, a page is selected (UI-17): Play's tooltip names Shift+Space and C */
-    playNext?: "page";
     /** Shift+Space's once-through is playing (UI-17) */
     playingOnce?: boolean;
+    /** The second Play button (Shift+Space): plays on from the playhead */
+    onPlayFromPlayhead?: () => void;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -627,7 +633,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 ? "Stop"
                                 : playLoops
                                   ? "Play the loop"
-                                  : "Play"
+                                  : "Play from the start flag"
                         }
                         shortcut={TRANSPORT_SHORTCUTS.play}
                         hint={
@@ -637,20 +643,37 @@ export const TimelineTransport = memo(function TimelineTransport({
                                     : "Stops where it is"
                                 : playLoops
                                   ? "Loops the yellow bar, wherever the playhead is. C or Loop turns looping off"
-                                  : playNext === "page"
-                                    ? "Plays on from here. Shift+Space plays this page's move once; C loops it"
-                                    : "Plays on from here. C loops the page you're on"
+                                  : "Plays on from the yellow start flag. Shift+Space plays from the playhead; C loops the page"
                         }
                         testId="timeline-play"
                         pressed={isPlaying}
                         onClick={onPlayingChange ? togglePlaying : undefined}
                     >
-                        {isPlaying
-                            ? STOP_ICON
-                            : playLoops
-                              ? PLAY_FROM_FLAG_ICON
-                              : PLAY_ICON}
+                        {isPlaying ? STOP_ICON : PLAY_FROM_FLAG_ICON}
                     </TransportButton>
+                    {onPlayFromPlayhead && (
+                        <TransportButton
+                            label={
+                                isPlaying
+                                    ? "Stop"
+                                    : playLoops
+                                      ? "Play the loop once"
+                                      : "Play from the playhead"
+                            }
+                            shortcut={TRANSPORT_SHORTCUTS.playPage}
+                            hint={
+                                isPlaying
+                                    ? undefined
+                                    : playLoops
+                                      ? "Plays the yellow bar once, then goes back"
+                                      : "Plays on from where the playhead is"
+                            }
+                            testId="timeline-play-from-playhead"
+                            onClick={onPlayFromPlayhead}
+                        >
+                            {isPlaying ? STOP_ICON : PLAY_FROM_PLAYHEAD_ICON}
+                        </TransportButton>
+                    )}
                     <TransportNavigationButton
                         direction="next"
                         onNavigate={onNavigate}
