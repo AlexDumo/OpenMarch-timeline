@@ -449,6 +449,30 @@ The Base floor is an import kind with Artwork (2048 on the long edge). When
 set, its Artwork replaces ADR 0002 D-5's tarp image; the field background
 image stays the fallback.
 
+**Planned change (owner, 2026-10-12, Q78–Q82; needs an ADR 0002 amendment
+before building):**
+
+- All assets are managed in one place, the Assets area. Contextual links
+  ("Upload floor…", "Upload flag…", …) still start an import where the user
+  is, through the same import review, pre-filled with surface and size, next
+  to a pick from the Library (Q78, Q82).
+- One floor per show: the show's Base floor is the field image, used by the
+  2D canvas, exports, mobile and the 3D tarp. Fill or fit and opacity stay in
+  Field settings (Q79).
+- The floor is an embedded Version like any other. Setting it also writes
+  its image to `field_properties.image`, which stays as the 2D copy, so 2D,
+  exports, mobile sync and older app versions are untouched. Opening an
+  existing show converts its field image into the show's floor (Q80).
+- Assets has two sections: **This show** (everything the show embeds,
+  including its floor; travels with the file) and **Library** (this
+  computer). Embedded items missing from the Library offer "Add to Library"
+  (Q81).
+- Field settings → Image gets "Upload floor…" (surface Base floor, size from
+  the field) in place of its current upload (Q82).
+- Order: C1.11 (embedded Library tables), then the floor as the field image
+  with convert-on-open, then the Field settings link and the This show
+  section, each its own PR after the C1 stack (Q82).
+
 ### Platforms and obstacles [25]
 
 - A performer stands at the height of the **tallest platform under their

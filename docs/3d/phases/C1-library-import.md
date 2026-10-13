@@ -686,3 +686,10 @@ Nothing yet.
   with a Library browser that opens after each import. Q77: artwork starts
   as Silk (or Base floor when its aspect matches a floor) at that surface's
   catalog default size, fitted to the image's aspect.
+
+- 2026-10-12, owner (Q78–Q82): all assets are managed in the Assets area,
+  with contextual upload links into the same import review; the show's Base
+  floor becomes the field image, mirrored into `field_properties.image`
+  for 2D; Assets gets This show and Library sections. Planned as follow-up
+  PRs after the C1 stack, starting with C1.11; details in props-spec.md
+  "Base floor". Needs an ADR 0002 amendment.
