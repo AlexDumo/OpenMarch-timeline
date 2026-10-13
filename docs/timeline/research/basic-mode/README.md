@@ -94,6 +94,25 @@ of page boxes sized by duration, with the music inside them.
 - **+ after the playhead** adds a page there, as in Expert. In Basic, adding a page (and the
   inspector's **Split page**) also splits each marcher's move at the new flag, keeping its
   position there, so no move crosses the new flag (otherwise every split would lock).
+- **+ on or past the last flag** (_provisional lead default, 2026-10-12, for the owner_; after
+  simulated users got 4- and 6-count pages from where they happened to click) adds a page of the
+  file's **default new-page counts** (Workspace settings, what page mode's add page used) from
+  the last flag, wherever the playhead is on or past it, so pages can be added back to back. In a
+  show with only home, that is on home's flag, and it adds page 1.
+- Where the show is too short (often the music ends on the last flag in old files) it first adds
+  **only the missing counts, rounded up to whole measures**, in the same undo step. Page mode's
+  add page instead adds a whole `defaultNewPageCounts` of measures. Both use the file's **default
+  tempo and meter**, not the show's last tempo: a 144 bpm show gets 120 bpm counts.
+- The new page is selected (playhead on its flag) and a toast names it, closing on the next edit:
+  "Added Page 7 · 16 counts" ("…, and 4 measures at the end of the show"). The **+** tooltip says
+  the same first. Expert keeps UI-9's page ending at the playhead.
+- While the timeline shows (timeline mode, both modes), toasts sit just above it rather than in
+  the bottom corner, where they covered the timeline's right end and the **+** at the show's end;
+  and the timeline keeps 32px after the show's last beat so that **+** stays on screen.
+- **Owner to confirm** (next to the U-Q5 TODO in `../../ui.md`, appending pages past the last
+  flag): the default counts or the last page's counts (every page-mode fixture has
+  `defaultNewPageCounts` 16 with 8-count pages, so converted files get 16-count pages); and the
+  default tempo for added counts, or the show's last tempo.
 - Not in Basic: clips (moves off flags), the start flag and pinning, the loop bar, isolation,
   clip resize, the measure row.
 - Play, Space and Shift+Space use the timeline playback driver. Space plays on from the playhead;
