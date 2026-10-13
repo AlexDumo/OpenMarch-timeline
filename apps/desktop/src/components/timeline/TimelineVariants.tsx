@@ -42,6 +42,7 @@ import {
     useTimelinePointer,
 } from "./TimelinePrimitives";
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
+import { addPageFlagLeft } from "./PageKeepChain";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useLatestCallback } from "./useLatestCallback";
 import {
@@ -950,8 +951,15 @@ const TimelineSurface = memo(function TimelineSurface({
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={props.onAddPageFlag}
                             className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
+                            // Past the playhead's box's keep chain, if it would cover it
                             style={{
-                                left: beatToX(positionBeat, pixelsPerBeat) + 8,
+                                left: addPageFlagLeft({
+                                    pages: model.pages,
+                                    beatCount: model.beatCount,
+                                    positionBeat,
+                                    pixelsPerBeat,
+                                    keepChains: props.keepChains,
+                                }),
                             }}
                         >
                             <PlusIcon size={10} weight="bold" />

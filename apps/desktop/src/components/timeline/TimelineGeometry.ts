@@ -104,6 +104,17 @@ export const beatToX = (
     startBeat = 0,
 ) => (beat - startBeat) * pixelsPerBeat;
 
+/**
+ * How much of a page box's width its name takes, from the box's right edge (px): about 7px a
+ * character of the 11px mono label, the box's 8px right padding and 2px to spare. The box shows
+ * the name only when it is at least this wide (`pageLabelFits`), and a keep chain stays left of it.
+ */
+export const pageLabelRoom = (labelChars: number) => labelChars * 7 + 10;
+
+/** Whether a page box this wide has room for its name (`PageBoxLabel`) */
+export const pageLabelFits = (label: string, width: number) =>
+    width >= pageLabelRoom(label.length);
+
 /** A horizontal span of a layer, in CSS pixels from the layer's left edge */
 export interface TimelineSpan {
     readonly left: number;

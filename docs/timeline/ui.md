@@ -921,20 +921,25 @@ from it. The spec still wins on the model; this file decides presentation.
     too, ahead of any move (wp19, after the final study): a later first move then doesn't reach the
     kept page. They get no chain on the page boxes (lead, wp19: it showed on every box); the
     inspector, the page box menu and **K** offer to keep them, and a kept one shows the kept chip.
-    - **Chains on the page boxes.** With marchers selected, each page box they follow into shows a
+    - **Chains on the page boxes.** With marchers selected, a page box they follow into can show a
       chain as a quiet outline. A box where they were kept shows a broken chain on a filled accent
-      chip. A box with some of each shows a chain outlined in the accent with a filled kept count.
-      Linked and kept are meant to differ at a glance (wp19). Nothing shows without a selection
-      (owner). The
-      chain is a 20 px target, 22 px in from the flag before its box, so the selected page's flag, the
-      start flag and the playhead never cover it. Its tooltip names the marchers a click changes, up
-      to three ("OT1, OT2 and 4 others" past that): "Keep OT1 and OT8 on Page 3 · They won't follow
-      Page 2 any more", "OT1 and OT8 kept on Page 3 · Click to follow Page 2 again", or "2 of the 8
-      selected are kept on Page 3 (OT1, OT8) · Click to keep the other 6 too". It counts the
-      selection only. The chain that **K** would toggle adds "(K)" to its tooltip. A click keeps
-      or lets follow again exactly those marchers, as one undo step. On a mixed chain a click keeps
-      the rest (_lead default_). A press never selects, scrubs or drags the box, and a right-click
-      opens the box's menu.
+      chip. A box with some of each shows a broken chain outlined in the accent with a filled kept
+      count. Linked and kept are meant to differ at a glance (wp19). Nothing shows without a
+      selection (owner). Kept and mixed chains always show; a linked one only on the selected page,
+      the page **K** works on, and while its box is hovered (V-223). The chain sits at the bottom
+      left of its box, on the start of the hold bar, 14 px in from the flag before it (past the
+      start flag's pennant; the playhead's **+** moves past any chain it would cover, also from a
+      beat before the flag zoomed out): 16 px where the page number leaves room, else 12 px. It
+      never covers the number (owner, 2026-10-12). Where it can't fit, a kept chain becomes a dot (a
+      ring for a mix; in a box only just wide enough for a one-digit number it touches the number)
+      and the box's tooltip takes its words, ending "Right-click the page to …" (V-222). Its tooltip
+      names the marchers a click changes, up to three ("OT1, OT2 and 4 others" past that): "Keep OT1
+      and OT8 on Page 3 · They won't follow Page 2 any more", "OT1 and OT8 kept on Page 3 · Click to
+      follow Page 2 again", or "2 of the 8 selected are kept on Page 3 (OT1, OT8) · Click to keep
+      the other 6 too". It counts the selection only. The chain that **K** would toggle adds "(K)"
+      to its tooltip. A click keeps or lets follow again exactly those marchers, as one undo step.
+      On a mixed chain a click keeps the rest (_lead default_). A press never selects, scrubs or
+      drags the box, and a right-click opens the box's menu.
     - **The inspector line** on a page they follow into: "Hold from Page 2 → · **Keep here**" (or
       "Hold from the start → · **Keep here**"). The link's tooltip says "Go to Page 2, where these
       marchers last moved". Where
