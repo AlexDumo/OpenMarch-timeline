@@ -29,7 +29,7 @@ import { subscribeHistoryChanges } from "@/db-functions/history";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "./usePages";
 import { invalidateTagQueries } from "./tags/queries";
-import { isBasicMode, useIsBasicMode } from "@/stores/EditorModeStore";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { measureKeys } from "./useMeasures";
 import { simpleDefaultsOn } from "@/timeline/simpleDefaults";
 
@@ -71,8 +71,8 @@ const toastUntilNextHistoryChange = (
  */
 export const addPageFlagMutationOptions = (
     qc: QueryClient,
+    basic: boolean,
     onAdded?: (added: AddedPageFlag) => void,
-    basic: boolean = isBasicMode(),
 ) =>
     mutationOptions({
         mutationFn: (beat: number) =>
@@ -214,7 +214,7 @@ export function useAddPageFlag({
     const queryClient = useQueryClient();
     const basic = useIsBasicMode();
     const { mutate } = useMutation(
-        addPageFlagMutationOptions(queryClient, onAdded, basic),
+        addPageFlagMutationOptions(queryClient, basic, onAdded),
     );
     const insertion = useMemo(
         () =>

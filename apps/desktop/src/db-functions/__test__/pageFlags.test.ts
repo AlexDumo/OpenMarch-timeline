@@ -195,6 +195,23 @@ describe("planPageFlagInsertion", () => {
         for (const beat of [0, 1, 9, 4.5]) expect(basic(beat)).toBeNull();
     });
 
+    test("in a show with only home, Basic appends on home's flag; Expert doesn't", () => {
+        const home = [pages[0]!];
+        expect(
+            planPageFlagInsertion({ beatCount: 30, pages: home }, 1, {
+                basic: true,
+            }),
+        ).toEqual({ kind: "append", beat: 1, lastPage: pages[0] });
+        expect(
+            planPageFlagInsertion({ beatCount: 30, pages: home }, 1),
+        ).toBeNull();
+        expect(
+            planPageFlagInsertion({ beatCount: 30, pages: home }, 0, {
+                basic: true,
+            }),
+        ).toBeNull();
+    });
+
     test("pageFlagGrid reads the renderer's pages", () => {
         const beats = (from: number, to: number) =>
             Array.from({ length: to - from }, (_, i) => ({ index: from + i }));
@@ -517,6 +534,26 @@ describeDbTests("page flags in timeline mode (UI-9)", (it) => {
                 expect([added.startBeat, added.endBeat]).toEqual([9, 13]);
                 expect(added.name).toBe("2");
                 expect(added.appended).toBeUndefined();
+            });
+
+            it("a show with only home: appends page 1 on home's flag", async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                await setUp(db);
+                await deletePageFlags({
+                    db,
+                    pageIds: new Set([1, 2, 3, 4, 5, 6]),
+                });
+                expect(await grid(db)).toEqual([[0, 0, 1]]);
+                await expectRefused(addPageFlag({ db, beat: 1 }));
+                const added = await addPageFlag({ db, beat: 1, basic: true });
+                expect([added.startBeat, added.endBeat]).toEqual([1, 17]);
+                expect(added.name).toBe("1");
+                expect(await grid(db)).toEqual([
+                    [0, 0, 1],
+                    [added.page.id, 1, 17],
+                ]);
             });
 
             it("Expert still refuses on the last flag", async ({
