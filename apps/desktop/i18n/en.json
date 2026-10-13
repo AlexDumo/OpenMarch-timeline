@@ -114,6 +114,8 @@
             "hidePreviousPaths": "Hide previous page paths",
             "openCommandPalette": "Command palette",
             "openSettings": "Settings…",
+            "openView3d": "Open 3D View",
+            "openView3dKeywords": "3d three dimensional stadium venue window",
             "showShortcuts": "Keyboard shortcuts",
             "showNextPaths": "Show next page paths",
             "showPreviousPaths": "Show previous page paths",
@@ -1053,12 +1055,56 @@
     "marchers": {
         "addMarcher": "Add",
         "addMarchers": "Add Marchers",
+        "addMethod": {
+            "manual": "Add manually",
+            "or": "or"
+        },
         "cancelDeleteButton": "Cancel",
         "createButton": "{quantity, plural, one {Create Marcher} other {Create Marchers}}",
         "createButtonWithSection": "{quantity, plural, one {Create {section} Marcher} other {Create {quantity} {section} Marchers}}",
         "created": "{count, plural, one {Marcher {drillNumbers} created successfully} other {Marchers {drillNumbers} created successfully}}",
         "createError": "{count, plural, one {Error creating marcher {drillNumbers}} other {Error creating marchers {drillNumbers}}}",
         "createInfo": "New marchers may not show up until a refresh",
+        "csv": {
+            "chooseFile": "Choose CSV file",
+            "copySections": "Copy",
+            "downloadExample": "Example CSV",
+            "error": {
+                "unknownSection": "Unknown section \"{value}\"",
+                "missingSection": "Missing section",
+                "missingDrillNumber": "Missing drill number",
+                "invalidDrillNumber": "\"{value}\" is not a drill number like F12",
+                "unknownPrefix": "No section uses the prefix \"{value}\"; add a section column",
+                "ambiguousPrefix": "The prefix \"{value}\" is shared by several sections; add a section column",
+                "duplicateInFile": "{value} appears more than once in the file",
+                "duplicateInShow": "{value} already exists in this show"
+            },
+            "ignoredColumns": "Ignoring columns: {columns}",
+            "importButton": "{count, plural, =0 {Import} one {Import 1 marcher} other {Import {count} marchers}}",
+            "info": "Name, year and notes are optional. Rows with errors are skipped; fix them and import again. Undo with [Ctrl/Cmd+Z].",
+            "line": "Line {line}",
+            "missingColumns": "The file needs a {columns} column",
+            "mode": {
+                "section": {
+                    "title": "By section",
+                    "help": "Give each marcher a section. Drill numbers are created automatically (F1, F2, …), skipping ones already in the show."
+                },
+                "drillNumber": {
+                    "title": "By drill number",
+                    "help": "Give each marcher a drill number such as F12. The section comes from the prefix, or from an optional section column."
+                }
+            },
+            "readError": "Could not read that file",
+            "result": {
+                "success": "{valid, plural, one {1 marcher is ready to import} other {All {valid} marchers are ready to import}}",
+                "partial": "{valid, plural, one {1 marcher is} other {{valid} marchers are}} ready to import. {invalid, plural, one {1 row has a problem and will be skipped:} other {{invalid} rows have problems and will be skipped:}}",
+                "failed": "None of the rows could be imported. Fix the problems below and choose the file again:",
+                "empty": "This file doesn't have any marchers in it"
+            },
+            "sections": "Sections and drill prefixes",
+            "sectionsHelp": "Use these section names (or prefixes) in the section column. Drill numbers start with the section's prefix, for example F12 for Flute 12.",
+            "title": "Import from CSV"
+        },
         "deleteButton": "Delete",
         "deleteDescription": "You are about to delete these section styles: {sections}. This can be undone with [Ctrl/Cmd+Z].",
         "deleteTitle": "Warning",
@@ -1365,6 +1411,7 @@
         "general.automaticUpdates": "Automatically download and install updates",
         "general.description": "Language and other app-wide preferences.",
         "general.language": "Language",
+        "general.openView3dWithShow": "Open 3D View when a show opens",
         "general.showFullDatabasePath": "Show full file path",
         "general.showFullDatabasePath.description": "Show the full path of the open file in the title bar instead of just its name.",
         "mouse": "Mouse & Trackpad",
@@ -1647,6 +1694,155 @@
         "skipVersion": "Skip this version",
         "title": "New Version Available",
         "trigger": "New Version Available!"
+    },
+    "view3d": {
+        "camera": {
+            "blimp": "Blimp",
+            "corner": "Corner",
+            "endZone": "End zone",
+            "floor": "On the floor",
+            "frontRow": "Front row",
+            "geJudge": "GE judge",
+            "lowerBowl": "Lower bowl",
+            "podium": "Podium",
+            "pressBox": "Press box",
+            "sideline": "Sideline",
+            "topDown": "Top down",
+            "upperDeck": "Upper deck"
+        },
+        "kit": {
+            "bighs": "Big high school",
+            "blank": "Field only",
+            "college": "College bowl",
+            "gym": "Indoor gym",
+            "hs": "High school",
+            "pro": "Pro dome"
+        },
+        "lighting": {
+            "day": "Day",
+            "dusk": "Dusk",
+            "house": "House",
+            "night": "Night",
+            "roofClosed": "Roof closed",
+            "show": "Show"
+        },
+        "open": "Open 3D View",
+        "overlay": {
+            "cameras": "Camera",
+            "crowd": "Crowd",
+            "enterFullscreen": "Fullscreen (F)",
+            "exitFullscreen": "Exit fullscreen (F)",
+            "lighting": "Lighting",
+            "pickSeat": "Pick a seat",
+            "pickSeatTooltip": "Pick a seat: click a seat in the stands to sit there",
+            "venue": "Venue",
+            "freeCamera": "Free view"
+        },
+        "readout": {
+            "camera": "Eye {eye} up · {distance} to center",
+            "count": "Count {count} of {total}",
+            "noPages": "No pages",
+            "page": "Page {page}",
+            "showTime": "Show time"
+        },
+        "unit": {
+            "feet": "{value} ft",
+            "meters": "{value} m"
+        },
+        "window": {
+            "title": "3D View — {showName}",
+            "graphicsUnavailable": "3D View needs WebGL, which isn't available on this computer."
+        },
+        "playback": {
+            "label": "Playback",
+            "play": "Play (Space)",
+            "pause": "Pause (Space)",
+            "previousPage": "Previous page (Q)",
+            "nextPage": "Next page (E)"
+        },
+        "settings": {
+            "title": "View settings",
+            "close": "Close",
+            "venueSection": "This show",
+            "venueHint": "Saved in the show file. Undo in the editor reverts a change.",
+            "crowdColors": "Crowd colors",
+            "homeColor": "Home",
+            "awayColor": "Visitors",
+            "endZones": "End zones",
+            "endZoneText": "End-zone lettering",
+            "endZoneTextPlaceholder": "No lettering",
+            "endZoneColor": "Color",
+            "graphicsSection": "This computer",
+            "graphicsHint": "Not saved in the show, so it can differ on each computer.",
+            "quality": "Quality",
+            "qualityMode": {
+                "auto": "Automatic",
+                "low": "Low",
+                "high": "High"
+            },
+            "qualityHint": {
+                "auto": "Starts on High and switches to Low if the view stutters.",
+                "low": "No shadows and a lighter crowd, for older or battery-powered computers.",
+                "high": "Shadows and a full crowd. Choose Low if playback stutters."
+            },
+            "qualityAutoLowered": "Switched to Low because the view was stuttering. Choose High to keep full quality.",
+            "pauseWhenIdle": "Pause drawing when nothing moves",
+            "saveOnBattery": "Save power on battery",
+            "hornState": "Horn state",
+            "hornStateMode": {
+                "up": "Up",
+                "carry": "Carry",
+                "trail": "Trail"
+            },
+            "hornStateHint": "Shows always play horns up. The other positions are here to check the poses.",
+            "guardEquipment": "Guard equipment",
+            "guardEquipmentMode": {
+                "section": "By section",
+                "flag6": "6 ft flag",
+                "swingFlag": "Swing flag",
+                "doubleSwingFlag": "Double swing",
+                "rifle": "Rifle",
+                "sabre": "Sabre"
+            },
+            "guardEquipmentHint": "By section gives flags the 6 ft flag and rifles the rifle. Pick one piece to put it in every guard member's hands.",
+            "stepOffFoot": "Step off",
+            "stepOffFootMode": {
+                "left": "Performer's left",
+                "right": "Performer's right"
+            },
+            "stepOffFootHint": "The performer's own foot, whichever way they face. Facing you, their left foot is on your right.",
+            "keysSection": "Keyboard and mouse"
+        },
+        "keys": {
+            "playPause": "Play or pause",
+            "previousNext": "Previous or next page",
+            "firstLast": "First or last page",
+            "cameras": "Cameras, in menu order",
+            "fullscreen": "Fullscreen",
+            "crowd": "Show or hide the crowd",
+            "escape": "Cancel a seat pick, close settings, leave fullscreen",
+            "orbit": "Orbit",
+            "pan": "Pan (or right-drag)",
+            "zoom": "Zoom"
+        },
+        "keyNames": {
+            "playPause": "Space",
+            "previousNext": "Q / E",
+            "firstLast": "Shift+Q / E",
+            "cameras": "1–9",
+            "fullscreen": "F",
+            "crowd": "C",
+            "escape": "Esc",
+            "orbit": "Drag",
+            "pan": "Shift+drag",
+            "zoom": "Scroll"
+        }
+    },
+    "web": {
+        "download": "Download .dots",
+        "downloaded": "Downloaded {name}",
+        "fileMenu": "File",
+        "notDownloadedYet": "Changes since your last download are only in this browser"
     },
     "welcome": {
         "description": "No files found. Create one, and make sure to check out the guides. Customize your theme and navigation in Settings.",

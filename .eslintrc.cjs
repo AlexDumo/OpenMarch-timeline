@@ -12,10 +12,12 @@ module.exports = {
         "**/dist-electron/*",
         "**/dist-browser/*",
         "**/dist-browser-host/*",
+        "**/dist-web/**",
         "**/build/*",
         "**/src/styles/**/*.css",
         ".eslintrc.cjs",
         "**/astro.d.ts",
+        "**/view3d/vendor/**/*.js",
     ],
     parser: "@typescript-eslint/parser",
     parserOptions: {

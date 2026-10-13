@@ -1,3 +1,4 @@
+import { isWebBuild } from "@/utilities/webBuild";
 export type ActionScope = "global" | "canvas" | "timeline";
 export type ActionCategory =
     | "file"
@@ -152,13 +153,15 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.loadDialogue",
         category: "file",
         scope: "global",
-        defaultBindings: [],
+        // Electron binds this in the native menu; the web build has none.
+        defaultBindings: isWebBuild ? ["$mod+O"] : [],
     },
     launchSaveFileDialogue: {
         labelKey: "actions.file.saveDialogue",
         category: "file",
         scope: "global",
-        defaultBindings: [],
+        // Electron binds this in the native menu; the web build has none.
+        defaultBindings: isWebBuild ? ["$mod+S"] : [],
     },
     launchNewFileDialogue: {
         labelKey: "actions.file.newDialogue",
@@ -382,7 +385,10 @@ const STATIC_ACTIONS = {
         labelKey: "actions.swap.swap",
         category: "alignment",
         scope: "canvas",
-        defaultBindings: ["$mod+S", "Control+S"],
+        // On the web, Cmd/Ctrl+S downloads the show (saving), so swap moves.
+        defaultBindings: isWebBuild
+            ? ["$mod+Shift+S"]
+            : ["$mod+S", "Control+S"],
     },
 
     // UI
@@ -419,6 +425,14 @@ const STATIC_ACTIONS = {
         category: "ui",
         scope: "global",
         defaultBindings: ["$mod+Comma"],
+    },
+    // Opens the 3D View window, or focuses it (3D View UI-1). Unbound by default.
+    openView3d: {
+        labelKey: "actions.ui.openView3d",
+        keywordsKey: "actions.ui.openView3dKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
     },
     // UI-17 follow-up: ? lists every shortcut
     showShortcuts: {

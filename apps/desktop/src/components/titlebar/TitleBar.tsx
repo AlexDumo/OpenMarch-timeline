@@ -17,6 +17,9 @@ import { T } from "@tolgee/react";
 import clsx from "clsx";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import MarcherLogo from "@/components/MarcherLogo";
+import { isWebBuild, webChannel } from "@/utilities/webBuild";
+import WebFileMenu from "./WebFileMenu";
+import { useWebWelcomeStore } from "@/stores/WebWelcomeStore";
 
 /** Page zoom changes the viewport's CSS size, so it always fires a resize. */
 function usePageZoomFactor() {
@@ -31,21 +34,87 @@ function usePageZoomFactor() {
     return zoomFactor;
 }
 
+type TitleBarProps =
+    | {
+          showControls?: boolean;
+          /** "settings" is a minimal bar: no version, update check, file controls or file path. */
+          variant?: "main" | "settings";
+          windowTitle?: undefined;
+      }
+    | {
+          /** A secondary window's title, such as the 3D View's. */
+          windowTitle: string;
+          isMacOS: boolean;
+      };
+
+/**
+ * The app's title bar. With `windowTitle` it renders the slim bar for a
+ * secondary window (the 3D View): the logo and the title, with the window
+ * controls drawn by the system. That bar doesn't touch `window.electron`,
+ * which secondary windows don't have, and makes no network requests.
+ */
+export default function TitleBar(props: TitleBarProps) {
+    if (props.windowTitle !== undefined) {
+        return (
+            <SecondaryWindowTitleBar
+                title={props.windowTitle}
+                isMacOS={props.isMacOS}
+            />
+        );
+    }
+    return (
+        <EditorTitleBar
+            showControls={props.showControls}
+            variant={props.variant}
+        />
+    );
+}
+
+function SecondaryWindowTitleBar({
+    title,
+    isMacOS,
+}: {
+    title: string;
+    isMacOS: boolean;
+}) {
+    return (
+        <div
+            className="main-app-titlebar text-text relative flex h-fit w-full items-center"
+            // Leave room for the system's window controls overlay.
+            style={{
+                paddingRight:
+                    "calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))",
+            }}
+        >
+            <div
+                className={`flex min-w-0 items-center gap-12 px-24 py-8 ${isMacOS ? "ml-64" : ""}`}
+            >
+                <MarcherLogo width={8} height={21} className="text-accent" />
+                <p className="text-body min-w-0 truncate leading-none">
+                    {title}
+                </p>
+            </div>
+        </div>
+    );
+}
+
 // eslint-disable-next-line max-lines-per-function
-export default function TitleBar({
+function EditorTitleBar({
     showControls,
     variant = "main",
 }: {
     showControls?: boolean;
-    /** "settings" is a minimal bar: no version, update check, file controls or file path. */
     variant?: "main" | "settings";
 }) {
     const showFilePath = variant === "main";
-    const isMacOS = window.electron.isMacOS;
+    // In a browser there are no traffic lights, native menu or window buttons.
+    const isMacOS = window.electron.isMacOS && !isWebBuild;
+    const showWindowControls = !isMacOS && !isWebBuild;
     const showFullDatabasePath = useUiSettingsStore(
         (s) => s.uiSettings.showFullDatabasePath,
     );
     const zoomFactor = usePageZoomFactor();
+    const openWebWelcome = useWebWelcomeStore((state) => state.setOpen);
 
     const [dbPath, setDbPath] = useState<string>("");
     const [dbPathError, setDbPathError] = useState<boolean>(false);
@@ -107,7 +176,8 @@ export default function TitleBar({
                 style={isMacOS ? { zoom: 1 / zoomFactor } : undefined}
             >
                 <div className="titlebar-leading flex items-center gap-20 px-24 py-8">
-                    {!isMacOS && (
+                    {isWebBuild && variant === "main" && <WebFileMenu />}
+                    {showWindowControls && (
                         <button
                             className="titlebar-button hover:text-accent cursor-pointer outline-hidden duration-150 ease-out focus-visible:-translate-y-4"
                             onClick={() => {
@@ -130,8 +200,18 @@ export default function TitleBar({
                             <>
                                 <p className="text-body leading-none opacity-50">
                                     {currentVersion}
+                                    {webChannel === "nightly" && " nightly"}
                                 </p>
-                                <VersionChecker />
+                                {isWebBuild && (
+                                    <button
+                                        type="button"
+                                        className="bg-accent hover:bg-accent/80 focus-visible:ring-accent cursor-pointer rounded-full px-8 py-2 text-xs leading-none font-medium text-white outline-hidden duration-150 ease-out focus-visible:ring-2"
+                                        onClick={() => openWebWelcome(true)}
+                                    >
+                                        Web
+                                    </button>
+                                )}
+                                {!isWebBuild && <VersionChecker />}
                                 {showControls && <FileControls />}
                             </>
                         )}
@@ -144,7 +224,7 @@ export default function TitleBar({
                     className={`titlebar-button flex gap-12 ${isMacOS ? "pr-24" : ""}`}
                 >
                     <BugReport />
-                    {!isMacOS && (
+                    {showWindowControls && (
                         <div className="titlebar-button flex">
                             <button
                                 className="hover:text-accent focus-visible:text-accent cursor-pointer px-16 py-8 outline-hidden duration-150 ease-out"

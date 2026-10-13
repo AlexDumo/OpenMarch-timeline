@@ -6,6 +6,7 @@ import { SelectedPageProvider } from "@/context/SelectedPageContext";
 import { SelectedMarchersProvider } from "@/context/SelectedMarchersContext";
 import { IsPlayingProvider } from "@/context/IsPlayingContext";
 import StateInitializer from "@/components/singletons/StateInitializer";
+import { View3dPublisher } from "@/view3d/sync/useView3dPublisher";
 import TimelineResolverHost from "@/timeline/TimelineResolverHost";
 import LaunchPage from "@/components/launchpage/LaunchPage";
 import { useEffect, useRef, useState } from "react";
@@ -46,6 +47,8 @@ import { InContextTools } from "@tolgee/web/tools";
 import clsx from "clsx";
 import AlertModal from "./components/AlertModal";
 import ShortcutsDialog from "./components/ShortcutsDialog";
+import WebWelcomeModal from "./components/WebWelcomeModal";
+import { isWebBuild } from "./utilities/webBuild";
 import { useLoadFileErrorHandler } from "./hooks/useLoadFileErrorHandler";
 import { toast } from "sonner";
 import { version as currentVersion } from "../package.json";
@@ -264,6 +267,7 @@ function App() {
                         </div>
                     )}
                     <AlertModal />
+                    {isWebBuild && <WebWelcomeModal />}
                     <ShortcutDispatcher />
                     <CommandPalette />
                     <ShortcutsDialog />
@@ -289,6 +293,7 @@ function App() {
                                             <EditorActionHandlers />
                                             <ExportCoordinatesModal />
                                             <TimelineResolverHost />
+                                            <View3dPublisher />
                                             <SvgPreviewHandler />
                                             <TitleBar showControls />
                                             <FocusNotice />
