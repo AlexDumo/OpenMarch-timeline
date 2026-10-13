@@ -194,10 +194,10 @@ from it. The spec still wins on the model; this file decides presentation.
     so motion is unchanged. The new page is selected. Pages store their
     start beat, so this inserts a row at the split page's old start and moves
     that page's `start_beat` to the playhead. Past the last flag, nothing is
-    split: **+** appends a page ending at the playhead (_lead default_). In
-    Basic (UI-19) it appends a page of the file's `defaultNewPageCounts`
-    instead, also offered on the last flag, lengthening the show when it's
-    too short (research/basic-mode, "Basic's panel"; provisional, see U-Q5).
+    split: **+** appends a page ending at the playhead, in Basic (UI-19) too
+    (_owner, 2026-10-12_); it never adds beats, so where the music ends on
+    the last flag there is no **+** past it. The timeline keeps 32px after
+    the last beat so **+** stays on screen at the show's end.
   - **Selection.** With a stored timeline selected, marchers without a
     transition in it are dimmed, and a dimmed marcher can't be selected or
     interacted with at all: clicks and box selection pass over it, and
@@ -843,7 +843,8 @@ from it. The spec still wins on the model; this file decides presentation.
     common step on the plain click). The tooltip says "One page back" and names the ways to the
     start: Shift+click, Shift+Q or the house, whose own tooltip says it's the start of the show
     (2026-10-12, after Basic testers pressed ⏮ then Play and saw one page; the plain click is
-    unchanged).
+    unchanged). The owner confirmed it for Basic too, 2026-10-12 (V-210): Shift+click ⏭ goes to
+    the last page's flag.
   - **A click on a beat seeks to that count** (UI-12); the page box row selects the page (owner,
     2026-10-09, after briefly making any click select the page).
   - **Home while playing jumps playback to the start**; transport buttons don't take keyboard focus
@@ -1213,9 +1214,9 @@ points (P7.2).
 
   TODO (project owner, 2026-10-01; not now):
   - how a selected marcher's spans (UI-1) show inside a timeline's one track;
-  - appending pages past the last flag (today's `defaultNewPageCounts`;
-    Basic uses it provisionally, research/basic-mode "Basic's panel", with
-    counts added at the default tempo where the show is too short);
+  - ~~appending pages past the last flag~~ (decided, owner 2026-10-12: a
+    page ending at the playhead, Basic and Expert, and adding a page never
+    adds beats, measures or tempo for now; UI-9 **+**);
   - ~~whether clicking a clip selects its timeline~~ (yes: UI-12);
   - editing anywhere in the selected timeline, not only at its end (the
     temporary refusal in UI-9).

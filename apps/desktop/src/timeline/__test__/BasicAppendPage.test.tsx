@@ -25,11 +25,12 @@ import {
 import { pageFlags } from "../timelinePlayhead";
 
 /**
- * Basic's **+** on or past the last flag (docs/timeline/research/basic-mode, "Basic's panel"), on
- * a converted `marchersAndPages` show (pages 1 to 6 of 8 counts, the last flag at beat 49 of 97,
- * no `defaultNewPageCounts`, so 16): it adds a page of the default length from the last flag,
- * however far past it the playhead is, and says so; Expert's page ends at the playhead. The tests
- * convert the show themselves, so they run in the default run as well as under `test:timeline`.
+ * **+** past the last flag (docs/timeline/research/basic-mode, "Basic's panel"; owner 2026-10-12)
+ * on a converted `marchersAndPages` show (pages 1 to 6 of 8 counts, the last flag at beat 49 of
+ * 97): in Basic as in Expert it adds a page ending at the playhead, never on the last flag, and
+ * never adds beats or measures; Basic's **+** inside a page still splits the moves there. The
+ * tests convert the show themselves, so they run in the default run as well as under
+ * `test:timeline`.
  */
 
 const app = vi.hoisted(() => ({ client: (): unknown => null }));
@@ -122,58 +123,64 @@ const plusSelects = async (range: { start: number; end: number }) => {
     );
 };
 
-const added = () =>
-    vi
-        .mocked(toast.success)
-        .mock.calls.map(([message]) => message)
-        .filter((m) => String(m).startsWith("Added Page"));
+/** Every marcher's position at each of `beats`, from the resolver */
+const positions = async (beats: number[]) => {
+    await timelineResolverSettled();
+    const resolver = useTimelineResolverStore.getState().resolver!;
+    return resolver.marcherIds().map((id) =>
+        beats.map((beat) =>
+            // Splitting a move may round its last digit differently
+            resolver.positionAt(id, beat).map((v) => Number(v.toFixed(6))),
+        ),
+    );
+};
 
-describeDbTests("Basic's + on or past the last flag", (it) => {
-    it("Basic: a page of the default length from the last flag, back to back, lengthening the show where the music ends", async ({
+describeDbTests("+ past the last flag ends at the playhead", (it) => {
+    for (const mode of ["basic", "expert"] as const)
+        it(`${mode}: the page ends at the playhead, + isn't on the last flag, and the show isn't lengthened`, async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db, mode);
+            expect(lastFlag()).toBe(49);
+            expect(panel.beatCount).toBe(97);
+
+            seek(52);
+            await plusSelects({ start: 49, end: 52 });
+            await waitFor(() => expect(lastFlag()).toBe(52));
+            // The playhead is on the new flag: nothing to add there
+            expect(panel.canPlus).toBe(false);
+
+            // To the show's end, then nothing past it
+            seek(97);
+            await plusSelects({ start: 52, end: 97 });
+            await waitFor(() => expect(lastFlag()).toBe(97));
+            expect(panel.canPlus).toBe(false);
+            expect(panel.beatCount).toBe(97);
+            expect(toast.success).not.toHaveBeenCalled();
+            expect(conToastError).not.toHaveBeenCalled();
+        });
+
+    it("basic: + inside a page still splits it at the playhead, with motion unchanged", async ({
         db,
         marchersAndPages: _,
     }) => {
         await setUp(db, "basic");
-        expect(lastFlag()).toBe(49);
-        expect(panel.beatCount).toBe(97);
-
-        // Three counts past the flag: the page is 16 counts, not 3
-        seek(52);
-        await plusSelects({ start: 49, end: 65 });
-        expect(added()).toEqual(["Added Page 7 · 16 counts"]);
-        await waitFor(() => expect(lastFlag()).toBe(65));
-
-        // The playhead is on the new flag: + is still there, and adds the next page
-        await plusSelects({ start: 65, end: 81 });
-        await plusSelects({ start: 81, end: 97 });
-        // The music ends on the last flag now: + lengthens the show by 4 measures of 4/4
-        expect(panel.beatCount).toBe(97);
-        await plusSelects({ start: 97, end: 113 });
-        expect(added().at(-1)).toBe(
-            "Added Page 10 · 16 counts, and 4 measures at the end of the show",
+        const beats = [41, 43, 45, 47, 49];
+        const before = await positions(beats);
+        const transitions = async () =>
+            (await db.select().from(schema.timeline_transitions)).length;
+        const transitionsBefore = await transitions();
+        seek(45);
+        await plusSelects({ start: 41, end: 45 });
+        await waitFor(() =>
+            expect(
+                pageFlags(probed().pages).map((f) => f.range?.end),
+            ).toContain(45),
         );
-        await waitFor(() => expect(panel.beatCount).toBe(113));
-        await waitFor(() => expect(lastFlag()).toBe(113));
-        // The resolver plays on into the new beats, holding where the show ended
-        await timelineResolverSettled();
-        const resolver = useTimelineResolverStore.getState().resolver!;
-        for (const id of resolver.marcherIds())
-            expect(resolver.positionAt(id, 110)).toEqual(
-                resolver.positionAt(id, 97),
-            );
+        expect(await positions(beats)).toEqual(before);
+        // The moves crossing beat 45 were split there
+        expect(await transitions()).toBeGreaterThan(transitionsBefore);
         expect(conToastError).not.toHaveBeenCalled();
-    });
-
-    it("Expert: the page ends at the playhead, + isn't on the last flag, and nothing is said", async ({
-        db,
-        marchersAndPages: _,
-    }) => {
-        await setUp(db, "expert");
-        seek(52);
-        await plusSelects({ start: 49, end: 52 });
-        await waitFor(() => expect(lastFlag()).toBe(52));
-        expect(panel.canPlus).toBe(false);
-        expect(added()).toEqual([]);
-        expect(panel.beatCount).toBe(97);
     });
 });

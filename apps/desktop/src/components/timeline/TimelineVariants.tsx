@@ -70,8 +70,9 @@ const TIMELINE_DEFAULT_PX_PER_BEAT = 16;
 
 /**
  * Room after the show's last beat: **+** (UI-9) is drawn just after the playhead, so with the
- * playhead on the last beat (Basic appends there) it needs this much to stay on screen and
- * clickable, fitted or scrolled to the end. The button's 8px gap, its 16px, and 8px to spare.
+ * playhead on the last beat past the last flag (a page ending at the show's end) it needs this
+ * much to stay on screen and clickable, fitted or scrolled to the end. The button's 8px gap, its
+ * 16px, and 8px to spare.
  */
 export const TIMELINE_END_INSET = 32;
 
@@ -945,12 +946,8 @@ const TimelineSurface = memo(function TimelineSurface({
                             type="button"
                             data-testid="timeline-add-page-flag"
                             data-timeline-interactive="true"
-                            aria-label={
-                                props.addPageFlagLabel ?? "Add a page flag here"
-                            }
-                            title={
-                                props.addPageFlagLabel ?? "Add a page flag here"
-                            }
+                            aria-label="Add a page flag here"
+                            title="Add a page flag here"
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={props.onAddPageFlag}
                             className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
