@@ -659,6 +659,7 @@
             "measures": "Measures",
             "notes": "Notes",
             "notesPlaceholder": "Add notes for this page...",
+            "paused": "Pause to split this page or change its subset.",
             "splitPage": "Split page",
             "split": {
                 "success": "Page split successfully"
