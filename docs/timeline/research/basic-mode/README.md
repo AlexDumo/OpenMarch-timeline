@@ -69,16 +69,12 @@ of page boxes sized by duration, with the music inside them.
 - **Transport:** _owner leaning to Expert's transport bar_ ("no real reason to keep the
   original"), open to either. A simulated-user A/B compares it with the original's control block
   on the left (study: `~/ux-sim/basic-transport/`).
-- **Open (owner): what ⏮ does in Basic** (V-210). UI-17 (owner, 2026-10-09, before Basic) keeps
-  the plain click on the previous page and puts the start on Shift+click, Shift+Q and the house.
-  Basic testers read ⏮ as "the start": one pressed ⏮ then Play to watch the whole show and saw one
-  page (`~/ux-sim/basic-past-flag/rosa-after/r7/14-click.png`, LOG.md lines 50 to 52); in the
-  transport study one expected "go to start" (`basic-transport/marcus/notes.md`, lines 7 to 11)
-  and one the start of the current page (`priya/notes.md`, line 17). For now the tooltips say "One
-  page back" and name the ways to the start, and the house's tooltip says it's the start of the
-  show (a labeling stopgap: it helps only those who hover). Options: (a) keep that; (b) in Basic,
-  ⏮ goes to the start and page stepping stays on Q/E and the arrow keys; (c) a separate ⏪/⏩ pair
-  for the start and the end, as the original bar had, with ⏮/⏭ unchanged.
+- _Owner, 2026-10-12:_ **⏮ stays the previous page and ⏭ the next page** in Basic, as in Expert
+  (UI-17); **Shift+click goes to the start** (⏮) **or the end, the last page** (⏭) (V-210). Basic
+  testers had read ⏮ as "the start": one pressed ⏮ then Play to watch the whole show and saw one
+  page (`~/ux-sim/basic-past-flag/rosa-after/r7/14-click.png`, LOG.md lines 50 to 52). The
+  tooltips say "One page back" and name the ways to the start, and the house's tooltip says it's
+  the start of the show.
 - On or in the boxes: the status chip, the Expert mark, mid-page ticks (right-click
   **Remove this count's position**), the page menu (delete, subset), and dragging a flag to
   change a page's length (UI-16).
