@@ -231,6 +231,8 @@ export interface ImportReviewOptions {
     revokeUrl?: (url: string) => void;
     /** Called once when the review closes. */
     onClose?: () => void;
+    /** Called after a commit stores items, with their ids (Q76). */
+    onCommitted?: (itemIds: string[], done: DoneSummary) => void;
 }
 
 // ------------------------------------------------------------------ helpers
@@ -1055,6 +1057,10 @@ export function createImportReview(
                         newVersion: match !== null && match !== undefined,
                     },
                 });
+                options.onCommitted?.(
+                    [value.saved.item.id],
+                    get().done as DoneSummary,
+                );
             }
 
             async function commitArtwork() {
@@ -1102,6 +1108,10 @@ export function createImportReview(
                         newVersion,
                     },
                 });
+                options.onCommitted?.(
+                    reports.flatMap((r) => r.imported.map((p) => p.item.id)),
+                    get().done as DoneSummary,
+                );
             }
 
             return {

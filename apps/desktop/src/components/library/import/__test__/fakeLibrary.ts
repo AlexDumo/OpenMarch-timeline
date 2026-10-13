@@ -20,6 +20,7 @@ import type {
     ImportInspection,
     ImportProgress,
     ImportSession,
+    LibraryChanged,
     LibraryMatch,
     ModelImportReport,
     ModelSidecar,
@@ -34,6 +35,8 @@ export interface FakeLibrary {
     calls: Record<string, unknown[]>;
     on(method: string, handler: Handler): void;
     emitProgress(progress: ImportProgress): void;
+    /** Pushes `library:changed` to `onChanged` listeners. */
+    emitChanged(changed: LibraryChanged): void;
     closed: string[];
 }
 
@@ -51,6 +54,7 @@ export function createFakeLibrary(): FakeLibrary {
     const calls: Record<string, unknown[]> = {};
     const handlers: Record<string, Handler> = {};
     const listeners = new Set<(p: ImportProgress) => void>();
+    const changeListeners = new Set<(c: LibraryChanged) => void>();
     const closed: string[] = [];
     const invoke =
         (method: string) =>
@@ -79,6 +83,13 @@ export function createFakeLibrary(): FakeLibrary {
             return () => listeners.delete(cb);
         },
         templateSave: invoke("templateSave"),
+        list: invoke("list"),
+        readParts: invoke("readParts"),
+        thumbnails: invoke("thumbnails"),
+        onChanged: (cb: (c: LibraryChanged) => void) => {
+            changeListeners.add(cb);
+            return () => changeListeners.delete(cb);
+        },
     } as unknown as LibraryApi;
     return {
         api,
@@ -90,6 +101,9 @@ export function createFakeLibrary(): FakeLibrary {
         },
         emitProgress(progress) {
             for (const l of listeners) l(progress);
+        },
+        emitChanged(changed) {
+            for (const l of changeListeners) l(changed);
         },
     };
 }

@@ -2,9 +2,11 @@
 // cspell:words pdfkit
 /**
  * Library import review end to end (package C1.10; ADR 0002 D-13, owner
- * decisions Q60–Q68): the File tab's "Import to Library…" opens the review,
- * main's `dialog.showOpenDialog` is stubbed to "pick" files, and each import
- * lands in a Library under this test's own user data dir.
+ * decisions Q60–Q68, Q76): Import… in the Assets sidebar tab opens the
+ * review, main's `dialog.showOpenDialog` is stubbed to "pick" files, and
+ * each import lands in a Library under this test's own user data dir; after
+ * Add, the review closes onto the Assets tab's Library with the new items
+ * highlighted.
  *
  * Covered: a GLB needing the kind, units, rotate, simplify and a grip set by
  * a click, then Add; the same file again as "Add new version"; a model with
@@ -143,12 +145,23 @@ async function stubPick(app: ElectronApplication, paths: string[]) {
     }, paths);
 }
 
+/** Opens the Assets sidebar tab unless it's open already. */
+async function openAssets(page: Page) {
+    if (!(await page.getByTestId("assets-panel").count())) {
+        await page.getByTestId("assets-tab").click();
+    }
+    await expect(page.getByTestId("import-to-library")).toBeVisible({
+        timeout: SLOW,
+    });
+}
+
 async function startImport(
     app: ElectronApplication,
     page: Page,
     paths: string[],
 ) {
     await stubPick(app, paths);
+    await openAssets(page);
     await page.getByTestId("import-to-library").click();
     await expect(page.getByTestId("import-review-host")).toBeVisible();
 }
@@ -167,7 +180,22 @@ async function expectAddReady(page: Page) {
     });
 }
 
+/** After Add: the review closes onto the Library, the item highlighted (Q76). */
+async function expectInLibrary(page: Page, name: string) {
+    await expect(page.getByTestId("import-review-host")).toHaveCount(0, {
+        timeout: SLOW,
+    });
+    const items = page
+        .getByTestId("library-browser")
+        .getByTestId("library-item")
+        .filter({ hasText: name });
+    await expect(items.first()).toBeVisible({ timeout: SLOW });
+    await expect(items.first()).toHaveAttribute("data-highlighted", "true");
+    return items;
+}
+
 async function closeReview(page: Page) {
+    if (!(await page.getByTestId("import-review-host").count())) return;
     const close = page.getByTestId("import-close");
     if (await close.count()) await close.click();
     else await page.getByTestId("import-cancel").click();
@@ -216,10 +244,8 @@ test("imports models and artwork through the review", async ({
                 timeout: SLOW,
             });
         }
-        await page.getByRole("tab", { name: "File" }).first().click();
-        await expect(page.getByTestId("import-to-library")).toBeVisible({
-            timeout: SLOW,
-        });
+        await openAssets(page);
+        await expect(page.getByTestId("library-empty")).toBeVisible();
 
         await test.step("a model needing every choice, grip set by a click", async () => {
             await startImport(app, page, [fixtures.mace]);
@@ -298,12 +324,8 @@ test("imports models and artwork through the review", async ({
             await screenshot(page, "03-model-grip-set");
 
             await page.getByTestId("import-add").click();
-            await expectPhase(page, "done");
-            await expect(page.getByTestId("import-done")).toContainText(
-                "drum major mace",
-            );
+            await expectInLibrary(page, "drum major mace");
             await screenshot(page, "04-model-added");
-            await closeReview(page);
         });
 
         await test.step("the same file again adds a new version", async () => {
@@ -317,8 +339,9 @@ test("imports models and artwork through the review", async ({
             );
             await screenshot(page, "05-model-reimport");
             await page.getByTestId("import-add").click();
-            await expectPhase(page, "done");
-            await closeReview(page);
+            // A new version of the same item, not a second item.
+            const maces = await expectInLibrary(page, "drum major mace");
+            await expect(maces).toHaveCount(1);
         });
 
         await test.step("a model with no slot: pick its artwork surface", async () => {
@@ -346,11 +369,7 @@ test("imports models and artwork through the review", async ({
             await expectAddReady(page);
             await screenshot(page, "06-model-artwork-surface");
             await page.getByTestId("import-add").click();
-            await expectPhase(page, "done");
-            await expect(page.getByTestId("import-done")).toContainText(
-                "riser",
-            );
-            await closeReview(page);
+            await expectInLibrary(page, "riser");
         });
 
         await test.step("a rejection shows on the same screen", async () => {
@@ -385,8 +404,7 @@ test("imports models and artwork through the review", async ({
             await expectAddReady(page);
             await screenshot(page, "09-png-default-size");
             await page.getByTestId("import-add").click();
-            await expectPhase(page, "done");
-            await closeReview(page);
+            await expectInLibrary(page, "flag front");
         });
 
         await test.step("a two-page PDF with two aspects", async () => {
@@ -408,12 +426,15 @@ test("imports models and artwork through the review", async ({
             });
             await screenshot(page, "10-pdf-two-aspects");
             await page.getByTestId("import-add").click();
-            await expectPhase(page, "done");
-            await expect(page.getByTestId("import-done")).toContainText(
-                "page 2",
-            );
+            await expectInLibrary(page, "winter guard silks (page 1)");
+            await expectInLibrary(page, "winter guard silks (page 2)");
+            await expect(
+                page
+                    .getByTestId("library-group-silks")
+                    .getByTestId("library-item")
+                    .filter({ hasText: "(page 1)" }),
+            ).toHaveCount(1);
             await screenshot(page, "11-pdf-added");
-            await closeReview(page);
         });
     } finally {
         await app.close();

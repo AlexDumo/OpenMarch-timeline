@@ -4,8 +4,9 @@
  * grouped by surface kind, and saves one format per click (Q53) through
  * `library:template-save`; main shows the save dialog and writes the file.
  *
- * Self-contained so it can move to the Library side panel (Visuals mode,
- * props-spec.md §12) when that panel exists.
+ * Shown in the Assets sidebar tab (Q76). Self-contained so it can move to
+ * the Library side panel (Visuals mode, props-spec.md §12) when that panel
+ * exists.
  */
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {

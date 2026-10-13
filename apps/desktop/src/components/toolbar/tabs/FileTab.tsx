@@ -10,8 +10,6 @@ import {
     GearSixIcon,
 } from "@phosphor-icons/react";
 import ActionButton from "@/shortcuts/ActionButton";
-import ArtworkTemplatesMenu from "@/components/library/ArtworkTemplatesMenu";
-import ImportToLibraryButton from "@/components/library/import/ImportToLibraryButton";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { T } from "@tolgee/react";
 import {
@@ -90,11 +88,6 @@ export function FileTab() {
                     <ArrowSquareOutIcon size={24} />
                     <T keyName="exportCoordinates.exportButton" />
                 </ActionButton>
-            </ToolbarSection>
-            <ToolbarSection>
-                {/* TODO(Visuals mode): both move to the Library side panel. */}
-                <ImportToLibraryButton />
-                <ArtworkTemplatesMenu />
             </ToolbarSection>
             <ToolbarSection>
                 <ActionButton

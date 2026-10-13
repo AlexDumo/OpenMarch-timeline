@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import ImportToLibraryButton from "../ImportToLibraryButton";
+import { AssetsHost } from "@/components/assets/AssetsModal";
+import { useAssetsStore } from "@/components/assets/assetsStore";
 import {
     createFakeLibrary,
     fileRef,
@@ -21,13 +23,17 @@ vi.mock("../ImportPreviewCanvas", () => ({
 beforeAll(async () => {
     await tolgee.run();
 });
-afterEach(() => cleanup());
+afterEach(() => {
+    cleanup();
+    useAssetsStore.getState().review?.getState().close();
+});
 
 function renderButton() {
     const lib = createFakeLibrary();
     render(
         <TolgeeProvider tolgee={tolgee} fallback="">
             <ImportToLibraryButton client={lib.client} />
+            <AssetsHost />
         </TolgeeProvider>,
     );
     return lib;

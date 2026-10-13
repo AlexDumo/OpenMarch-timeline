@@ -5,9 +5,10 @@
  * Library side panel becomes `ImportPanel` and the Visuals mode stage shows
  * `ImportPreviewStage`, both reading the same `createImportReview` store.
  * Visuals mode arrives with ADR 0004's cue work, so until then this host
- * lays the two out the same way over the editor, opened by "Import to
- * Library…" in the File tab. Moving them means mounting the two components
- * there and deleting this file and `ImportToLibraryButton`.
+ * lays the two out the same way over the editor, opened by Import… in the
+ * Assets sidebar tab and rendered by `AssetsHost`. Moving them means
+ * mounting the two components there and deleting this file and
+ * `ImportToLibraryButton`.
  */
 import { useEffect } from "react";
 import { createPortal } from "react-dom";

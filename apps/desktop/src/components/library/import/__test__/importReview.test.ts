@@ -364,7 +364,8 @@ describe("createImportReview: a model", () => {
                 },
             }),
         );
-        const store = createImportReview(lib.client, urls);
+        const onCommitted = vi.fn();
+        const store = createImportReview(lib.client, { ...urls, onCommitted });
         await store.getState().pick("model");
         store
             .getState()
@@ -389,6 +390,10 @@ describe("createImportReview: a model", () => {
             names: ["Riser 8 × 4"],
             newVersion: true,
         });
+        expect(onCommitted).toHaveBeenCalledExactlyOnceWith(
+            [ITEM_ID],
+            store.getState().done,
+        );
     });
 
     it("adds as new without the item id when asked", async () => {
@@ -714,7 +719,10 @@ describe("createImportReview: artwork", () => {
                         filename: "silks.pdf",
                         format: "pdf",
                         imported: [
-                            { page: 0, item: { name: "silks (page 1)" } },
+                            {
+                                page: 0,
+                                item: { id: ITEM_ID, name: "silks (page 1)" },
+                            },
                         ],
                         notImported: [
                             {
@@ -732,7 +740,8 @@ describe("createImportReview: artwork", () => {
                 ],
             }),
         );
-        const store = createImportReview(lib.client, urls);
+        const onCommitted = vi.fn();
+        const store = createImportReview(lib.client, { ...urls, onCommitted });
         await store.getState().pick("any");
         await store.getState().commit();
         expect(store.getState().done).toEqual({
@@ -742,6 +751,10 @@ describe("createImportReview: artwork", () => {
             ],
             newVersion: false,
         });
+        expect(onCommitted).toHaveBeenCalledExactlyOnceWith(
+            [ITEM_ID],
+            store.getState().done,
+        );
     });
 });
 

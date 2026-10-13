@@ -132,6 +132,9 @@
         "whenYouOptIn": "When you opt-in",
         "whenYouOptOut": "When you opt-out"
     },
+    "assets": {
+        "title": "Assets"
+    },
     "audio": {
         "beats": {
             "create": {
@@ -1053,6 +1056,22 @@
         "title": "Launch Page"
     },
     "library": {
+        "browser": {
+            "title": "Library",
+            "search": "Search by name",
+            "empty": "Your Library is empty.",
+            "emptyHint": "Use Import… to add models and artwork.",
+            "noMatches": "Nothing in the Library matches “{query}”.",
+            "loadFailed": "Couldn't load the Library ({code}).",
+            "groups": {
+                "silks": "Silks",
+                "floors": "Floors",
+                "props": "Props",
+                "equipment": "Equipment",
+                "uniforms": "Uniforms",
+                "other": "Other"
+            }
+        },
         "templates": {
             "menu": "Artwork templates",
             "menuHint": "Full size, one file per click",
@@ -1084,7 +1103,7 @@
             "saveFailed": "Couldn't save the template"
         },
         "import": {
-            "entry": "Import to Library…",
+            "entry": "Import…",
             "library": "Library",
             "title": "Import",
             "back": "Back to the Library",
