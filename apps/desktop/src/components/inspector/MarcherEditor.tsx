@@ -23,7 +23,7 @@ import { StepSize } from "@/global/classes/StepSize";
 import MarcherRotationInput from "./marcher/MarcherRotationInput";
 import StepSizeWarningBadge from "./StepSizeWarningBadge";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useInspectorPage } from "./InspectorPageContext";
 import { clsx } from "clsx";
 import { T } from "@tolgee/react";
 import { useQuery } from "@tanstack/react-query";
@@ -430,7 +430,8 @@ function MarcherEditor() {
         () => new Set(selectedMarchers.map((marcher) => marcher.id)),
         [selectedMarchers],
     );
-    const { selectedPage } = useSelectedPage()!;
+    // While timeline playback runs, the page being played, as the page section above shows
+    const { page: selectedPage } = useInspectorPage();
     const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
         marcherPagesByPageQueryOptions(selectedPage?.id),
     );

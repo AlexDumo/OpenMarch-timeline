@@ -5,6 +5,11 @@ import { transactionWithHistory } from "@/db-functions/history";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useTimingObjects } from "@/hooks";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import { useSelectedPage } from "@/context/SelectedPageContext";
+import {
+    InspectorPageProvider,
+    useInspectorPage,
+} from "@/components/inspector/InspectorPageContext";
 import { usePlayingPage } from "../usePlayingPage";
 
 /**
@@ -125,5 +130,61 @@ describeDbTests("usePlayingPage", (it) => {
         audio.seconds = 3.1;
         frame();
         expect(result.current.playingPage).toBeNull();
+    });
+
+    it("is the inspector's page while playing, with its edits paused, and the selected page after", async ({
+        db,
+        wrapper,
+    }) => {
+        await seedShow(db, true);
+        const Base = wrapper as unknown as React.FC<{
+            children: React.ReactNode;
+        }>;
+        const { result } = renderHook(
+            () => ({
+                inspector: useInspectorPage(),
+                selected: useSelectedPage()!,
+                timing: useTimingObjects()!,
+                playing: useIsPlaying()!,
+                timelineMode: useTimelineMode(),
+            }),
+            {
+                wrapper: ({ children }) => (
+                    <Base>
+                        <InspectorPageProvider>
+                            {children}
+                        </InspectorPageProvider>
+                    </Base>
+                ),
+            },
+        );
+        await waitFor(() => expect(result.current.timing.pages.length).toBe(5));
+        await waitFor(() => expect(result.current.timelineMode).toBe(true));
+        act(() => {
+            result.current.selected.setSelectedPage({ id: 3 });
+        });
+        expect(result.current.inspector).toMatchObject({
+            page: { id: 3 },
+            playing: false,
+        });
+
+        act(() => {
+            result.current.playing.setIsPlaying(true);
+        });
+        audio.startInfo.current = {};
+        audio.seconds = 3.1; // beat 7.2, in page 2's box
+        frame();
+        expect(result.current.inspector).toMatchObject({
+            page: { id: 2 },
+            playing: true,
+        });
+
+        act(() => {
+            result.current.playing.setIsPlaying(false);
+        });
+        expect(result.current.inspector).toMatchObject({
+            page: { id: 3 },
+            playing: false,
+        });
     });
 });
