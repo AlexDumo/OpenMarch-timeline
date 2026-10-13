@@ -148,7 +148,6 @@ export function convertInWorker(
             busyTimeoutMs: options.busyTimeoutMs,
             convertedAt,
             backupPath: options.backupPath,
-            source: options.source,
             test: options.test,
         };
         let worker: Worker;

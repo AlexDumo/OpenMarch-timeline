@@ -24,10 +24,8 @@ import {
     NEEDS_CONVERSION_STATUS,
     OPEN_STOPPED_STATUS,
 } from "@om-electron/database/convertOnOpenGate";
-import type {
-    ConvertOnOpenHooks,
-    OlderReleaseChoice,
-} from "@om-electron/database/convertOnOpen";
+import type { ConvertOnOpenHooks } from "@om-electron/database/convertOnOpen";
+import { backupBeforeConversion } from "@om-electron/database/backup";
 import type {
     ConvertProgress,
     ConvertWorkerTestHooks,
@@ -58,11 +56,9 @@ import type { DatabaseSync } from "node:sqlite";
 
 /** Fake dialogs that record every call. */
 function fakeDialogs({
-    olderRelease = "stop",
     preparing,
     onProgress,
 }: {
-    olderRelease?: OlderReleaseChoice;
     /** Runs inside the preparing state, before the work. */
     preparing?: () => Promise<void>;
     /** Receives the progress the work reports. */
@@ -70,10 +66,6 @@ function fakeDialogs({
 } = {}) {
     const calls: string[] = [];
     const dialogs: ConvertOnOpenDialogs = {
-        async warnOlderRelease(fileName) {
-            calls.push(`warn ${fileName}`);
-            return olderRelease;
-        },
         async whilePreparing(work) {
             calls.push("preparing");
             await preparing?.();
@@ -263,35 +255,36 @@ describe("opening a show with convert on open", () => {
         expect(backupsIn(tempDir)).toHaveLength(1);
     });
 
-    it.each([
-        ["stop", OPEN_STOPPED_STATUS],
-        ["keep-timelines", 200],
-    ] as const)(
-        "older release, the person chooses %s: status %i",
-        async (choice, status) => {
-            await open(showPath);
-            withDb(showPath, (db) => db.exec("PRAGMA user_version = 7"));
-            const { dialogs, calls } = fakeDialogs({ olderRelease: choice });
+    it("a converted file an older release reset to 7: asks like any page-era file, then fails safe and opens nothing", async () => {
+        const first = await open(showPath);
+        expect(first.status).toBe(200);
+        withDb(showPath, (db) => db.exec("PRAGMA user_version = 7"));
+        const before = stateOf(showPath);
+        const { dialogs, calls } = fakeDialogs();
 
-            const result = await open(showPath, { dialogs });
+        const asked = await open(showPath, { confirmed: false, dialogs });
+        expect(asked.status).toBe(NEEDS_CONVERSION_STATUS);
+        expect(calls).toEqual([]);
+        let hashAtBackup = "";
+        const result = await open(showPath, {
+            dialogs,
+            hooks: {
+                backup: (filePath, target) => {
+                    hashAtBackup = sha256(filePath);
+                    return backupBeforeConversion(filePath, { target });
+                },
+            },
+        });
 
-            expect(result.status).toBe(status);
-            expect(DatabaseServices.getDbPath()).toBe(
-                choice === "stop" ? "" : showPath,
-            );
-            // Keeping the timelines backs the file up, then sets it back to 8; stopping writes
-            // nothing.
-            if (choice === "stop") {
-                expect(calls).toEqual(["warn show.dots"]);
-                expect(stateOf(showPath).userVersion).toBe(7);
-                expect(backupsIn(tempDir)).toHaveLength(1);
-            } else {
-                expect(calls).toEqual(["warn show.dots", "preparing"]);
-                expect(stateOf(showPath).userVersion).toBe(8);
-                expect(backupsIn(tempDir)).toHaveLength(2);
-            }
-        },
-    );
+        expect(result.status).toBe(OPEN_STOPPED_STATUS);
+        expect(DatabaseServices.getDbPath()).toBe("");
+        expect(calls).toEqual(["preparing", "conversion failed show.dots"]);
+        // Rolled back: the file is byte for byte what it was when backed up.
+        expect(sha256(showPath)).toBe(hashAtBackup);
+        expect(stateOf(showPath)).toEqual(before);
+        expect(stateOf(asked.backupPath!)).toEqual(before);
+        expect(backupsIn(tempDir)).toHaveLength(2);
+    });
 
     it("confirmed: a backup name taken since the person was shown it gets the next free name", async () => {
         const asked = await open(showPath, { confirmed: false });
@@ -490,19 +483,13 @@ describe("opening a show with convert on open", () => {
         expect(connection!.isOpen).toBe(false);
     });
 
-    it("a second open of a file that is waiting on a dialog returns the first open's result", async () => {
+    it("a second open of a file that is waiting on its conversion returns the first open's result", async () => {
+        // A converted file an older release reset to 7: its conversion fails, so the open stops.
         await open(showPath);
         withDb(showPath, (db) => db.exec("PRAGMA user_version = 7"));
-        let answer!: (choice: OlderReleaseChoice) => void;
-        const answered = new Promise<OlderReleaseChoice>((r) => (answer = r));
-        let warnings = 0;
-        const dialogs: ConvertOnOpenDialogs = {
-            ...fakeDialogs().dialogs,
-            warnOlderRelease: async () => {
-                warnings++;
-                return answered;
-            },
-        };
+        let answer!: () => void;
+        const answered = new Promise<void>((r) => (answer = r));
+        const { dialogs, calls } = fakeDialogs({ preparing: () => answered });
         const deps = {
             migrationsFolder,
             dialogs: () => dialogs,
@@ -515,12 +502,12 @@ describe("opening a show with convert on open", () => {
             openShowFile(showPath, false, deps, CONFIRMED),
         );
         expect(pendingOpenCount()).toBe(1);
-        answer("stop");
+        answer();
         const [a, b] = await Promise.all([first, second]);
 
         expect(a).toBe(b);
         expect(a.status).toBe(OPEN_STOPPED_STATUS);
-        expect(warnings).toBe(1);
+        expect(calls.filter((c) => c === "preparing")).toHaveLength(1);
         expect(pendingOpenCount()).toBe(0);
         if (a.sqlSuspension !== undefined)
             DatabaseServices.resumeSqlProxy(a.sqlSuspension);

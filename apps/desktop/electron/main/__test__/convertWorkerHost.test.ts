@@ -121,7 +121,6 @@ describe("the conversion worker", () => {
         busyTimeoutMs: 5000,
         // The name the person would be shown now, as the open flow passes it.
         backupPath: nextBackupPath(showPath),
-        source: "pages",
         ...extra,
     });
 

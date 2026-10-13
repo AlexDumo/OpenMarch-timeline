@@ -25,18 +25,13 @@ export const CONVERSION_STEPS = [
 ] as const;
 export type ConversionStep = (typeof CONVERSION_STEPS)[number];
 
-/**
- * Where a conversion's timelines come from: the page-era tables (replacing any
- * timeline rows), or the timeline rows already in the file (a converted file
- * an older release reset to 7, when the person keeps its timelines).
- */
-export type ConversionSource = "pages" | "timelines";
-
-/** What a conversion was agreed to: the backup's exact path, and what it converts from. */
+/** What a conversion was agreed to: where the backup goes. */
 export interface ConvertRequest {
-    /** The backup's path, as the person was shown it. Never replaced if taken. */
+    /**
+     * The backup's path, as the person was shown it. Never replaced if taken:
+     * the backup then goes to the next free name.
+     */
     backupPath: string;
-    source: ConversionSource;
 }
 
 /** How far the backup and conversion have got. */

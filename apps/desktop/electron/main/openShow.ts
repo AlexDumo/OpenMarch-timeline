@@ -203,7 +203,7 @@ async function openWithSuspension(
         db.exec(`PRAGMA busy_timeout = ${CONVERSION_BUSY_TIMEOUT_MS}`);
         const worker = deps.convertWorker;
         const checkDb = db;
-        // Only a version-7 file can need converting (or the older-release warning), so the
+        // Only a version-7 file can need converting, so the
         // converter and its flow load only then, keeping them out of the startup bundle.
         const step: ConvertOnOpenNext =
             readUserVersion(db) !== PAGE_MODEL_USER_VERSION

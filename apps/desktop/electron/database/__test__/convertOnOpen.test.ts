@@ -40,15 +40,12 @@ import {
 } from "../convertOnOpenGate";
 import {
     CONVERSION_STEPS,
-    findLatestBackup,
     runConvertOnOpen,
     type ConversionStep,
     type ConvertOnOpenOutcome,
     type ConvertOnOpenUi,
     type ConvertProgress,
     type ConvertRequest,
-    type OlderReleaseChoice,
-    type OlderReleaseInfo,
 } from "../convertOnOpen";
 import { convertInWorker } from "@om-electron/main/convertWorkerHost";
 import {
@@ -88,14 +85,10 @@ async function withDbAsync(
     }
 }
 
-/** Records what the flow asked; answers the older-release warning with `choice`. */
-function testUi(choice: OlderReleaseChoice = "stop") {
-    const calls = { warned: [] as OlderReleaseInfo[], prepared: 0 };
+/** Records how often the flow ran a backup and conversion. */
+function testUi() {
+    const calls = { prepared: 0 };
     const ui: ConvertOnOpenUi = {
-        warnOlderRelease: async (info) => {
-            calls.warned.push(info);
-            return choice;
-        },
         whilePreparing: async (work) => {
             calls.prepared++;
             return work((p) => progress.push(p));
@@ -250,7 +243,7 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
         expect(stateOf(showPath)).toEqual(before);
         expect(before.userVersion).toBe(7);
         expect(backupsIn(tempDir)).toEqual([]);
-        expect(calls).toEqual({ warned: [], prepared: 0 });
+        expect(calls).toEqual({ prepared: 0 });
     });
 
     it("a timeline file opens without asking", async () => {
@@ -272,7 +265,6 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
         if (outcome.kind !== "conversion" || outcome.status !== "converted")
             throw new Error(`not converted: ${JSON.stringify(outcome)}`);
         expect(calls.prepared).toBe(1);
-        expect(calls.warned).toEqual([]);
 
         // The backup: `show.pre-conversion.dots` next to the file, the untouched original.
         const expectedBackup = path.join(
@@ -477,7 +469,7 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
         expect(stateOf(showPath)).toEqual(converted);
         expect(sha256(showPath)).toBe(hashBeforeStep);
         expect(backupsIn(tempDir)).toHaveLength(1);
-        expect(calls).toEqual({ warned: [], prepared: 0 });
+        expect(calls).toEqual({ prepared: 0 });
     });
 
     it("rechecks inside the transaction: a file converted meanwhile isn't converted twice", async () => {
@@ -717,7 +709,6 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
      */
     async function convertedByEarlierBuildThenEditedInOlderRelease(
         filePath: string,
-        { marker = true }: { marker?: boolean } = {},
     ) {
         const { convertPagesToTimelineInTransaction } =
             await import("@/timeline/convert/convertPagesInTransaction");
@@ -726,10 +717,9 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
             await getOrm(db).transaction((tx) =>
                 convertPagesToTimelineInTransaction(tx as never),
             );
-            if (marker)
-                db.exec(
-                    `UPDATE workspace_settings SET json_data = json_set(json_data, '$.${TIMELINE_CONVERTED_AT_KEY}', '2026-09-01T00:00:00.000Z')`,
-                );
+            db.exec(
+                `UPDATE workspace_settings SET json_data = json_set(json_data, '$.${TIMELINE_CONVERTED_AT_KEY}', '2026-09-01T00:00:00.000Z')`,
+            );
             db.exec(EDIT_IN_OLDER_RELEASE);
         });
     }
@@ -748,33 +738,7 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
     }
 
     describe("a converted file back at version 7", () => {
-        it("converted by an earlier build, then edited in an older release: Cancel writes nothing", async () => {
-            await convertedByEarlierBuildThenEditedInOlderRelease(showPath);
-            const before = stateOf(showPath);
-            const { ui, calls } = testUi("stop");
-
-            const outcome = await openLikeSetActiveDb(showPath, { ui });
-
-            expect(outcome).toEqual({ kind: "older-release", choice: "stop" });
-            expect(calls).toEqual({
-                warned: [
-                    {
-                        backupPath: path.join(
-                            tempDir,
-                            `show.${BACKUP_NAME_SUFFIX}.dots`,
-                        ),
-                        latestBackup: undefined,
-                        canConvertAgain: true,
-                    },
-                ],
-                prepared: 0,
-            });
-            expect(stateOf(showPath)).toEqual(before);
-            expect(sha256(showPath)).toBe(hashBeforeStep);
-            expect(backupsIn(tempDir)).toEqual([]);
-        });
-
-        it("Convert Again: backs the file up, then converts the older release's edits, replacing the old timelines", async () => {
+        it("converted by a build that kept the page-era tables, then edited in an older release: asks like any page-era file, then converts the edits, replacing the old timelines", async () => {
             const expected = await destinationsWithTheEdit();
             await convertedByEarlierBuildThenEditedInOlderRelease(showPath);
             // A kept spot, which goes with the assignments it marks.
@@ -786,21 +750,28 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
             const staleDestinations = destinationsOf(showPath);
             expect(staleDestinations).not.toEqual(expected);
             const before = stateOf(showPath);
-            const { ui, calls } = testUi("convert-again");
 
-            const outcome = await openLikeSetActiveDb(showPath, { ui });
-
-            const shown = calls.warned[0]!.backupPath;
-            expect(outcome).toMatchObject({
-                kind: "conversion",
-                status: "converted",
-                backupPath: shown,
+            expect(
+                await openLikeSetActiveDb(showPath, { confirmed: false }),
+            ).toEqual({
+                kind: "needs-confirmation",
+                backupPath: path.join(
+                    tempDir,
+                    `show.${BACKUP_NAME_SUFFIX}.dots`,
+                ),
             });
+            expect(sha256(showPath)).toBe(hashBeforeStep);
+
+            const outcome = await openLikeSetActiveDb(showPath);
+
+            if (outcome.kind !== "conversion" || outcome.status !== "converted")
+                throw new Error(`not converted: ${JSON.stringify(outcome)}`);
             // The backup holds the file as it was: the old timelines and the edit.
-            expect(stateOf(shown)).toEqual(before);
-            expect(destinationsOf(shown)).toEqual(staleDestinations);
-            const after = stateOf(showPath);
-            expect(after).toMatchObject({
+            expect(stateOf(outcome.backupPath)).toEqual(before);
+            expect(destinationsOf(outcome.backupPath)).toEqual(
+                staleDestinations,
+            );
+            expect(stateOf(showPath)).toMatchObject({
                 userVersion: 8,
                 marker: CONVERTED_AT,
                 timelines: 6,
@@ -818,138 +789,11 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
             ).toEqual({ n: 0 });
         });
 
-        it("Keep Timelines: backs the file up first, so the older release's edits are kept there", async () => {
-            await convertedByEarlierBuildThenEditedInOlderRelease(showPath);
-            const staleDestinations = destinationsOf(showPath);
-            const before = stateOf(showPath);
-            const { ui, calls } = testUi("keep-timelines");
-
-            const outcome = await openLikeSetActiveDb(showPath, { ui });
-
-            const shown = calls.warned[0]!.backupPath;
-            expect(outcome).toMatchObject({
-                kind: "conversion",
-                status: "converted",
-                backupPath: shown,
-                report: undefined,
-            });
-            expect(stateOf(shown)).toEqual(before);
-            expect(stateOf(showPath)).toMatchObject({
-                userVersion: 8,
-                timelines: 6,
-                pageEraTables: [],
-            });
-            expect(destinationsOf(showPath)).toEqual(staleDestinations);
-        });
-
-        it("an older release that also lost the marker: the timeline rows and the conversion backup still warn, and Convert Again uses the edits", async () => {
-            const expected = await destinationsWithTheEdit();
-            await convertedByEarlierBuildThenEditedInOlderRelease(showPath, {
-                marker: false,
-            });
-            // The first conversion's backup, next to the file.
-            const firstBackup = path.join(
-                tempDir,
-                `show.${BACKUP_NAME_SUFFIX}.dots`,
-            );
-            fs.writeFileSync(firstBackup, "");
-            const { ui, calls } = testUi("convert-again");
-
-            const outcome = await openLikeSetActiveDb(showPath, { ui });
-
-            expect(calls.warned).toEqual([
-                {
-                    backupPath: path.join(
-                        tempDir,
-                        `show.${BACKUP_NAME_SUFFIX}-2.dots`,
-                    ),
-                    latestBackup: firstBackup,
-                    canConvertAgain: true,
-                },
-            ]);
-            expect(outcome).toMatchObject({ status: "converted" });
-            expect(destinationsOf(showPath)).toEqual(expected);
-            expect(stateOf(showPath).pageEraTables).toEqual([]);
-        });
-
-        /** What a release without the version guard does to a file this build converted. */
-        function reopenInOlderRelease(filePath: string) {
-            withDb(filePath, (db) => {
-                db.exec("PRAGMA user_version = 7");
-                expect(() => db.exec(EDIT_IN_OLDER_RELEASE)).toThrow(
-                    /no such table/,
-                );
-                db.exec(
-                    "UPDATE pages SET notes = 'edited by an older release' WHERE id = 1",
-                );
-            });
-        }
-
-        it.each([true, false])(
-            "converted by this build, then reset to 7 (marker kept: %s): nothing to convert again; Open backs it up and sets it back to 8",
-            async (keepMarker) => {
-                const first = await openLikeSetActiveDb(showPath);
-                if (first.kind !== "conversion" || first.status !== "converted")
-                    throw new Error("expected a conversion");
-                reopenInOlderRelease(showPath);
-                if (!keepMarker)
-                    withDb(showPath, (db) =>
-                        db.exec(
-                            "UPDATE workspace_settings SET json_data = '{}'",
-                        ),
-                    );
-                const before = stateOf(showPath);
-                const { ui, calls } = testUi("keep-timelines");
-
-                const outcome = await openLikeSetActiveDb(showPath, { ui });
-
-                expect(calls.warned).toEqual([
-                    {
-                        backupPath: path.join(
-                            tempDir,
-                            `show.${BACKUP_NAME_SUFFIX}-2.dots`,
-                        ),
-                        latestBackup: first.backupPath,
-                        canConvertAgain: false,
-                    },
-                ]);
-                expect(outcome).toMatchObject({ status: "converted" });
-                expect(stateOf(calls.warned[0]!.backupPath)).toEqual(before);
-                const after = stateOf(showPath);
-                expect(after.userVersion).toBe(8);
-                expect(after.timelines).toBe(before.timelines);
-                expect(after.homes).toEqual(before.homes);
-            },
-        );
-
-        it("a new file, then reset to 7 by an older release: warns (it has no timeline rows), Cancel writes nothing", async () => {
-            const fresh = path.join(tempDir, "fresh.dots");
-            await createNewTimelineShow(fresh, fixedNow);
-            withDb(fresh, (db) => {
-                db.exec("PRAGMA user_version = 7");
-                db.exec(
-                    "INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Trumpet', 'T', 1)",
-                );
-            });
-            expect(stateOf(fresh).timelines).toBe(0);
-            const { ui, calls } = testUi("stop");
-
-            const outcome = await openLikeSetActiveDb(fresh, { ui });
-
-            expect(outcome).toEqual({ kind: "older-release", choice: "stop" });
-            expect(calls.warned).toMatchObject([
-                { latestBackup: undefined, canConvertAgain: false },
-            ]);
-            expect(stateOf(fresh).userVersion).toBe(7);
-            expect(sha256(fresh)).toBe(hashBeforeStep);
-        });
-
-        it("a failed Convert Again leaves the file as it was and keeps the backup", async () => {
+        it("a failed conversion of one leaves the file as it was and keeps the backup", async () => {
             await convertedByEarlierBuildThenEditedInOlderRelease(showPath);
             const before = stateOf(showPath);
 
             const outcome = await openLikeSetActiveDb(showPath, {
-                ui: testUi("convert-again").ui,
                 hooks: { failAfterStep: "timeline-migrations" },
             });
 
@@ -961,6 +805,42 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
             expect(stateOf(outcome.backupPath)).toEqual(before);
             expect(stateOf(showPath)).toEqual(before);
             expect(sha256(showPath)).toBe(hashBeforeStep);
+        });
+
+        it("converted by this build, then reset to 7 by an older release (no page-era tables): asks, then fails safe with nothing to convert from", async () => {
+            const first = await openLikeSetActiveDb(showPath);
+            if (first.kind !== "conversion" || first.status !== "converted")
+                throw new Error("expected a conversion");
+            // What a release without the version guard does: resets the version, and saves an
+            // edit to a table it still has.
+            withDb(showPath, (db) => {
+                db.exec("PRAGMA user_version = 7");
+                db.exec(
+                    "UPDATE pages SET notes = 'edited by an older release' WHERE id = 1",
+                );
+            });
+            const before = stateOf(showPath);
+            expect(before.pageEraTables).toEqual([]);
+
+            expect(
+                await openLikeSetActiveDb(showPath, { confirmed: false }),
+            ).toMatchObject({ kind: "needs-confirmation" });
+            const outcome = await openLikeSetActiveDb(showPath);
+
+            if (
+                outcome.kind !== "conversion" ||
+                outcome.status !== "conversion-failed"
+            )
+                throw new Error(
+                    `expected a failure: ${JSON.stringify(outcome)}`,
+                );
+            expect(outcome.error.message).toMatch(/no pages to convert/i);
+            // Rolled back: the file is byte for byte what it was, and its copy is next to it.
+            expect(sha256(showPath)).toBe(hashBeforeStep);
+            expect(stateOf(showPath)).toEqual(before);
+            expect(stateOf(outcome.backupPath)).toEqual(before);
+            expect(outcome.backupPath).not.toBe(first.backupPath);
+            expect(stateOf(first.backupPath).userVersion).toBe(7);
         });
     });
 
@@ -998,45 +878,5 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
         expect(JSON.parse(after.settingsJson!)).not.toHaveProperty(
             "timelineMode",
         );
-    });
-
-    describe("findLatestBackup", () => {
-        const name = (n: number) =>
-            n === 1
-                ? `show.${BACKUP_NAME_SUFFIX}.dots`
-                : `show.${BACKUP_NAME_SUFFIX}-${n}.dots`;
-
-        it("finds the highest number, across gaps", () => {
-            expect(findLatestBackup(showPath)).toBeUndefined();
-            fs.writeFileSync(path.join(tempDir, name(1)), "");
-            expect(findLatestBackup(showPath)).toBe(
-                path.join(tempDir, name(1)),
-            );
-            fs.writeFileSync(path.join(tempDir, name(3)), "");
-            expect(findLatestBackup(showPath)).toBe(
-                path.join(tempDir, name(3)),
-            );
-            fs.rmSync(path.join(tempDir, name(1)));
-            fs.writeFileSync(path.join(tempDir, name(12)), "");
-            expect(findLatestBackup(showPath)).toBe(
-                path.join(tempDir, name(12)),
-            );
-        });
-
-        it("ignores other shows' backups and similar names", () => {
-            fs.writeFileSync(
-                path.join(tempDir, `other.${BACKUP_NAME_SUFFIX}-9.dots`),
-                "",
-            );
-            fs.writeFileSync(
-                path.join(tempDir, `show.${BACKUP_NAME_SUFFIX}-x.dots`),
-                "",
-            );
-            fs.writeFileSync(
-                path.join(tempDir, `show.${BACKUP_NAME_SUFFIX}-4.txt`),
-                "",
-            );
-            expect(findLatestBackup(showPath)).toBeUndefined();
-        });
     });
 });

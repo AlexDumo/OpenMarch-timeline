@@ -15,23 +15,10 @@ import {
     type ConvertOnOpenResult,
     type ConvertProgress,
     type ConvertRequest,
-    type OlderReleaseChoice,
-    type OlderReleaseInfo,
 } from "../database/convertOnOpen";
 
 /** What the step shows the person. `convertOnOpenDialogs.ts` implements it. */
 export interface ConvertOnOpenDialogs {
-    /**
-     * The file was converted, then reset to version 7 by an older release.
-     * Resolves what the person chose: convert it again from the older
-     * release's page-era tables (only when `info.canConvertAgain`), keep its
-     * timelines, or open nothing. The dialog says that either of the first two
-     * backs the file up to `info.backupPath` first.
-     */
-    warnOlderRelease(
-        fileName: string,
-        info: OlderReleaseInfo,
-    ): Promise<OlderReleaseChoice>;
     /**
      * Runs `work` while the renderer shows the conversion's progress, and
      * passes `work` a function that reports it there.
@@ -90,16 +77,7 @@ export async function convertOnOpenInMain(
     const outcome = await runConvertOnOpen(
         filePath,
         db,
-        {
-            warnOlderRelease: async (info) => {
-                const choice = await dialogs.warnOlderRelease(fileName, info);
-                console.log(
-                    `convert on open: ${filePath} was converted, then reset to version 7 by an older release; ${choice}`,
-                );
-                return choice;
-            },
-            whilePreparing: (work) => dialogs.whilePreparing(work),
-        },
+        { whilePreparing: (work) => dialogs.whilePreparing(work) },
         { confirmed, backupPath, migrationsFolder, hooks, convert },
     );
     switch (outcome.kind) {
@@ -107,8 +85,6 @@ export async function convertOnOpenInMain(
             return { next: "continue" };
         case "needs-confirmation":
             return { next: "ask", backupPath: outcome.backupPath };
-        case "older-release":
-            return { next: "stop" };
         case "conversion":
             break;
     }

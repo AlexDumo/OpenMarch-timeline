@@ -60,7 +60,6 @@ describe.runIf(process.env.OPENMARCH_PERF === "1")(
                     migrationsFolder,
                     {
                         backupPath: backup.ok ? backup.backupPath : "",
-                        source: "pages",
                     },
                     {
                         backup: () => backup,

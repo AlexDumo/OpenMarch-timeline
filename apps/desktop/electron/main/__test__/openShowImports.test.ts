@@ -50,7 +50,6 @@ describe("the main-process open path's imports", () => {
     });
 
     const dialogs = () => ({
-        warnOlderRelease: async () => "stop" as const,
         whilePreparing: <T>(work: () => Promise<T>) => work(),
         backupFailed: async () => {},
         conversionFailed: async () => {},

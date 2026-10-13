@@ -9,29 +9,26 @@
  * in `fileVersion.ts` already accepted, and writes nothing:
  *
  * - Version 8: a timeline file. Nothing to do.
- * - Version 7, converted before (the conversion marker, the page-era tables
- *   already dropped, or timeline rows with a conversion backup next to the
- *   file): an older release without the version guard opened it and reset the
- *   version to 7, and may have edited its page-era tables. The caller warns,
- *   and the person chooses to convert it again from those tables (when they
- *   are still there), to keep its timelines, or to stop.
- * - Version 7 otherwise: a page-era file (or one made with the retired
- *   timeline dev flag, which also has timeline rows). The renderer asks the
- *   person first.
+ * - Version 7: a page-era file. The renderer asks the person first. Every
+ *   version-7 file is treated alike, including one made with the retired
+ *   timeline dev flag (which also has timeline rows) and one converted before
+ *   and then reset to 7 by an older release without the version guard.
  *
  * Only once the person agreed is anything written. For a version-7 file the
  * page-era tables are the latest data an older release could have written, so
  * converting always reads them and replaces any timeline rows already there.
- * Either way the file is first backed up with `backupBeforeConversion` (the
- * untouched original, so older releases can open it) under the exact name the
- * person was shown, and then changed in ONE `BEGIN IMMEDIATE` transaction that
- * rechecks the version, applies the pending page-era migrations, converts,
- * writes the marker, applies the timeline-only migrations (which drop the
- * page-era tables) and sets `user_version = 8`. Any error rolls all of it
- * back, so the file is exactly what it was; the backup stays.
+ * A version-7 file without them (converted, then reset by an older release)
+ * has nothing to convert from: its conversion fails and rolls back like any
+ * other. The file is first backed up with `backupBeforeConversion` (the
+ * untouched original, so older releases can open it) under the name the
+ * person was shown (or the next free one, if it was taken since), and then
+ * changed in ONE `BEGIN IMMEDIATE` transaction that rechecks the version,
+ * applies the pending page-era migrations, converts, writes the marker,
+ * applies the timeline-only migrations (which drop the page-era tables) and
+ * sets `user_version = 8`. Any error rolls all of it back, so the file is
+ * exactly what it was; the backup stays.
  */
 import * as fs from "fs";
-import * as path from "path";
 import type { DatabaseSync } from "node:sqlite";
 import { sql } from "drizzle-orm";
 import type { PageConversionReport } from "@/timeline/convert/planPageConversion";
@@ -51,7 +48,6 @@ import {
     applyTimelineMigrationsInTransaction,
 } from "./services/DrizzleMigrationService";
 import {
-    BACKUP_NAME_SUFFIX,
     backupBeforeConversion,
     nextBackupPath,
     type BackupResult,
@@ -63,93 +59,26 @@ import {
 } from "./fileVersion";
 import {
     CONVERSION_STEPS,
-    type ConversionSource,
     type ConversionStep,
     type ConvertProgress,
     type ConvertRequest,
 } from "./convertOnOpenProtocol";
 import {
     countTimelineRows,
-    hasConversionMarker,
     hasPageEraTables,
-    readWorkspaceSettingsJson,
     withConversionMarker,
 } from "./convertOnOpenGate";
 
 export { countTimelineRows };
 
-/** What the person is told about a converted file an older release reset to version 7. */
-export interface OlderReleaseInfo {
-    /** Where the file, as it is now, is backed up before anything is written. */
-    backupPath: string;
-    /** The newest existing `.pre-conversion` backup next to it, if any. */
-    latestBackup: string | undefined;
-    /**
-     * The page-era tables are still there (the file was converted by a build
-     * that kept them), so it can be converted again from what the older
-     * release saved in them.
-     */
-    canConvertAgain: boolean;
-}
-
-/**
- * What the person chose for a converted file an older release reset to 7:
- * convert it again from its page-era tables, keep its timelines as they are,
- * or open nothing. Both of the first two back it up first.
- */
-export type OlderReleaseChoice = "convert-again" | "keep-timelines" | "stop";
-
 export type ConvertOnOpenCheck =
     /** Nothing to do: a timeline file (version 8). */
     | { action: "none" }
     /**
-     * A page-era file: ask the person, then back it up to `backupPath` (the
-     * name it would get now) and convert it.
+     * A page-era file (version 7): ask the person, then back it up to
+     * `backupPath` (the name it would get now) and convert it.
      */
-    | { action: "convert"; backupPath: string }
-    /** Converted, then reopened by an older release: warn, and let the person choose. */
-    | ({ action: "warn-older-release" } & OlderReleaseInfo);
-
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/**
- * The newest `<name>.pre-conversion[-n].dots` next to `filePath` (the
- * highest number), or undefined when there is none. Scans the folder, so a
- * deleted backup in the middle of the numbers doesn't hide later ones.
- */
-export function findLatestBackup(filePath: string): string | undefined {
-    const dir = path.dirname(path.resolve(filePath));
-    const ext = path.extname(filePath);
-    const numbered = new RegExp(
-        `\\.${escapeRegExp(BACKUP_NAME_SUFFIX)}(?:-(\\d+))?${escapeRegExp(ext)}$`,
-    );
-    let entries: string[];
-    try {
-        entries = fs.readdirSync(dir);
-    } catch {
-        return undefined;
-    }
-    let latest: { n: number; file: string } | undefined;
-    for (const entry of entries) {
-        const match = numbered.exec(entry);
-        if (!match) continue;
-        const n = match[1] ? Number(match[1]) : 1;
-        // Must be exactly the name the backup of this file gets for `n` (names are cut to fit).
-        const expected = nextBackupPath(
-            path.join(dir, path.basename(filePath)),
-            () => false,
-            n,
-        );
-        if (path.basename(expected) !== entry) continue;
-        if (!latest || n > latest.n) latest = { n, file: expected };
-    }
-    return latest?.file;
-}
-
-/** True when the file open on `db` carries the conversion marker. */
-export function hasConversionMarkerIn(db: DatabaseSync): boolean {
-    return hasConversionMarker(readWorkspaceSettingsJson(db));
-}
+    | { action: "convert"; backupPath: string };
 
 /**
  * Decides what convert on open does with the file open on `db`, before any
@@ -161,23 +90,15 @@ export function checkConvertOnOpen(
 ): ConvertOnOpenCheck {
     if (readUserVersion(db) !== PAGE_MODEL_USER_VERSION)
         return { action: "none" };
-    const pageEra = hasPageEraTables(db);
-    const latestBackup = findLatestBackup(filePath);
-    // An older release can rewrite the workspace settings and lose the marker, so timeline rows
-    // with a conversion backup next to the file count too (ADR 0001 §6).
-    const convertedBefore =
-        hasConversionMarkerIn(db) ||
-        !pageEra ||
-        (countTimelineRows(db) > 0 && latestBackup !== undefined);
-    if (!convertedBefore)
-        return { action: "convert", backupPath: nextBackupPath(filePath) };
-    return {
-        action: "warn-older-release",
-        backupPath: nextBackupPath(filePath),
-        latestBackup,
-        canConvertAgain: pageEra,
-    };
+    return { action: "convert", backupPath: nextBackupPath(filePath) };
 }
+
+/**
+ * Why a version-7 file without its page-era tables can't be converted. The
+ * open's "Couldn't convert your file" dialog shows it.
+ */
+export const NO_PAGES_TO_CONVERT_MESSAGE =
+    "It has no pages to convert from. It may have been converted to timelines already and then saved by an older version of OpenMarch.";
 
 /** Sets the conversion marker in `workspace_settings`, keeping the other settings. */
 export async function writeConversionMarkerInTransaction(
@@ -218,10 +139,7 @@ export type ConvertOnOpenResult =
     | {
           status: "converted";
           backupPath: string;
-          /**
-           * Undefined when nothing was converted: the show had no pages, or the
-           * person kept its timelines (`source: "timelines"`).
-           */
+          /** Undefined when the show had no pages to convert (only page 0). */
           report: PageConversionReport | undefined;
       }
     /**
@@ -245,7 +163,6 @@ export type ConvertOnOpenResult =
 
 export {
     CONVERSION_STEPS,
-    type ConversionSource,
     type ConversionStep,
     type ConvertProgress,
     type ConvertRequest,
@@ -331,10 +248,10 @@ async function convertPageEraTablesInTransaction(
  * The transaction is `BEGIN IMMEDIATE` and rechecks the version first, so a
  * file another instance converted since the check is never converted twice. It
  * applies the pending page-era migrations, so a failure leaves the file
- * exactly as it was. With `source: "pages"` it converts the page-era tables,
- * replacing any timeline rows (a show whose only page is page 0 gets no
- * timeline rows); with `source: "timelines"` it keeps the timeline rows. Both
- * write the marker, apply the timeline-only migrations and set the version.
+ * exactly as it was. It converts the page-era tables, replacing any timeline
+ * rows (a show whose only page is page 0 gets no timeline rows), writes the
+ * marker, applies the timeline-only migrations and sets the version. A file
+ * without the page-era tables fails with `NO_PAGES_TO_CONVERT_MESSAGE`.
  *
  * Foreign keys are off for the transaction, as they are for every migration
  * (a table rebuild would otherwise cascade); a check before the commit refuses
@@ -368,6 +285,9 @@ export async function convertFileOnOpen(
                 // `db` is the transaction's connection, so these see the locked file.
                 if (readUserVersion(db) !== PAGE_MODEL_USER_VERSION)
                     throw new AlreadyConverted();
+                // Converted, then reset to 7 by an older release: nothing to convert from.
+                if (!hasPageEraTables(db))
+                    throw new Error(NO_PAGES_TO_CONVERT_MESSAGE);
                 const violationsBefore = foreignKeyViolations(db);
                 // The file's own migrations, up to the ones that drop the page-era tables.
                 applyPageMigrationsInTransaction(db, migrationsFolder);
@@ -375,14 +295,11 @@ export async function convertFileOnOpen(
                 // The conversion is not an undoable edit (see clearHistoryInTransaction).
                 await dropAllUndoTriggers(tx as never);
                 await step("drop-undo-triggers");
-                const converted =
-                    request.source === "pages"
-                        ? await convertPageEraTablesInTransaction(
-                              tx,
-                              db,
-                              hooks.onProgress,
-                          )
-                        : undefined;
+                const converted = await convertPageEraTablesInTransaction(
+                    tx,
+                    db,
+                    hooks.onProgress,
+                );
                 await step("convert");
                 await writeConversionMarkerInTransaction(tx, convertedAt);
                 await step("marker");
@@ -433,12 +350,6 @@ const defaultBackup = (filePath: string, target: string) =>
 /** What the open flow asks the person, or shows them, during convert on open. */
 export interface ConvertOnOpenUi {
     /**
-     * The file was converted, then reset to version 7 by an older release.
-     * Resolves what the person chose; anything but `stop` backs the file up to
-     * `info.backupPath` first.
-     */
-    warnOlderRelease: (info: OlderReleaseInfo) => Promise<OlderReleaseChoice>;
-    /**
      * Runs the backup and conversion while the renderer shows its progress.
      * `work` reports its progress through the function it is given.
      */
@@ -455,15 +366,12 @@ export type ConvertOnOpenOutcome =
      * written; `backupPath` is where the backup would go.
      */
     | { kind: "needs-confirmation"; backupPath: string }
-    /** A converted file an older release reset to 7, and the person chose to stop. Nothing was written. */
-    | { kind: "older-release"; choice: "stop" }
     | ({ kind: "conversion" } & ConvertOnOpenResult);
 
 /**
  * The convert-on-open step of opening a file, before its migrations: checks
- * the file, then asks, converts (only when `confirmed`, or when the person
- * chose to in the older-release warning), or reports that the person must be
- * asked first.
+ * the file, then converts it (only when `confirmed`), or reports that the
+ * person must be asked first.
  */
 export async function runConvertOnOpen(
     filePath: string,
@@ -480,8 +388,8 @@ export async function runConvertOnOpen(
         confirmed: boolean;
         /**
          * The backup path the person was shown when they agreed. The backup
-         * gets exactly this name, or fails if it is taken. Defaults to the
-         * name the check picks now.
+         * gets this name, or the next free one if it was taken since. Defaults
+         * to the name the check picks now.
          */
         backupPath?: string;
         migrationsFolder: string;
@@ -515,34 +423,8 @@ export async function runConvertOnOpen(
     };
 
     const check = checkConvertOnOpen(db, filePath);
-    switch (check.action) {
-        case "none":
-            return { kind: "none" };
-        case "warn-older-release": {
-            const { backupPath, latestBackup, canConvertAgain } = check;
-            const choice = await ui.warnOlderRelease({
-                backupPath,
-                latestBackup,
-                canConvertAgain,
-            });
-            if (choice === "stop") return { kind: "older-release", choice };
-            return run({
-                backupPath,
-                source:
-                    choice === "convert-again" && canConvertAgain
-                        ? "pages"
-                        : "timelines",
-            });
-        }
-        case "convert":
-            if (!confirmed)
-                return {
-                    kind: "needs-confirmation",
-                    backupPath: check.backupPath,
-                };
-            return run({
-                backupPath: confirmedBackupPath ?? check.backupPath,
-                source: "pages",
-            });
-    }
+    if (check.action === "none") return { kind: "none" };
+    if (!confirmed)
+        return { kind: "needs-confirmation", backupPath: check.backupPath };
+    return run({ backupPath: confirmedBackupPath ?? check.backupPath });
 }

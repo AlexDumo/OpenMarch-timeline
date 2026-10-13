@@ -250,18 +250,13 @@ export async function openShow(bytes: Uint8Array | null): Promise<OpenResult> {
             );
             return { ok: true, converted: false };
         }
-        // A page-era demo converts without asking: it only lives in this page. One an older
-        // release reset to 7 converts again from its page-era tables when it still has them.
-        const source =
-            check.action === "convert" || check.canConvertAgain
-                ? "pages"
-                : "timelines";
+        // A page-era demo converts without asking: it only lives in this page.
         const result = await withMainProcessBridge(db, () =>
             convertFileOnOpen(
                 SHOW_PATH,
                 db,
                 MIGRATIONS_FOLDER,
-                { backupPath: check.backupPath, source },
+                { backupPath: check.backupPath },
                 { backup: () => ({ ok: true, backupPath: "" }) as never },
             ),
         );

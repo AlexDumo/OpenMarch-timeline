@@ -45,9 +45,10 @@ export interface PendingConversion {
 /**
  * Workspace-settings key that marks a file as converted to timelines (P9.3;
  * ADR 0001 §6): an ISO timestamp, written in the conversion transaction and
- * when a new file starts as a timeline file. It outlives the version: a release
- * without the version guard resets `user_version` to 7 but keeps this key
- * unless it saves the workspace settings (its schema drops unknown keys).
+ * when a new file starts as a timeline file. Opening a file doesn't read it:
+ * every version-7 file is converted alike. The worker host reads it to tell
+ * whether a worker that ended without a result committed its conversion, and
+ * the previous-show import reads it to pick the tables to read.
  */
 export const TIMELINE_CONVERTED_AT_KEY = "timelineConvertedAt";
 

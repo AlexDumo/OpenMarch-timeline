@@ -111,7 +111,7 @@ export async function convertFixtureFile(dbPath: string): Promise<void> {
             dbPath,
             db,
             migrationsFolder,
-            { backupPath: "", source: "pages" },
+            { backupPath: "" },
             { backup: () => ({ ok: true, backupPath: "", userVersion: 7 }) },
         );
         if (result.status === "conversion-failed") throw result.error;

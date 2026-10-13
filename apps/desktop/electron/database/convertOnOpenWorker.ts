@@ -52,7 +52,6 @@ export async function runConvertWorker(
         busyTimeoutMs,
         convertedAt,
         backupPath,
-        source,
         test = {},
     } = request;
     const db = new DatabaseSync(filePath);
@@ -65,7 +64,7 @@ export async function runConvertWorker(
             filePath,
             db,
             migrationsFolder,
-            { backupPath, source },
+            { backupPath },
             {
                 onProgress: (progress) => {
                     post({ type: "progress", progress });
