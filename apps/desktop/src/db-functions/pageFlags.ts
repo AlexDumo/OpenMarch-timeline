@@ -4,17 +4,18 @@ import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { refuse, TimelineWriteError } from "./timelineErrors";
 import {
-    defaultNewPageCountsInTransaction,
     planTimelineRipple,
     readPageGrid,
     readRippleRows,
     timelineModeInTransaction,
     withTimelinePageRipple,
+    workspaceSettingsInTransaction,
     type GridPage,
     type PageGrid,
     type RippleRows,
 } from "./timelineRipple";
 import {
+    appendTempoGroupFromWorkspaceSettingsInTransaction,
     createPagesInTransaction,
     FIRST_PAGE_ID,
     realDatabasePageToDatabasePage,
@@ -38,7 +39,8 @@ import {
  * **+** and Delete flag write only page rows, and `last_page_counts` when the last page changes.
  * They never run `withTimelinePageRipple` (P7.4): no timeline, transition or assignment is created,
  * moved or deleted, so motion is unchanged. The exception is **+** in Basic (`splitMoves`), which
- * also splits each marcher's move at the new flag, keeping motion unchanged. Timelines track flags only when a flag moves, so
+ * also splits each marcher's move at the new flag, keeping motion unchanged, and whose append can
+ * add beats and measures at the end of the show (`basic`). Timelines track flags only when a flag moves, so
  * moving one does run it (`movePageFlagInTransaction`). Each is one undoable edit.
  *
  * Beats here are ordinals (resolver beats), the same as timeline rows and `readPageGrid`: page 0
@@ -87,14 +89,21 @@ export function pageFlagGrid(
  * splits that page; past the last flag, while the show still has beats up to `beat`, it appends a
  * page ending there. On a flag, at or before home's flag (beat 1), past the show's beats, or at a
  * fractional beat, there's nothing to add (null).
+ *
+ * With `basic`, **+** also appends on the last flag itself: Basic's append doesn't end at the
+ * playhead (`basicAppendLength`), so it is offered right after one, and where the music ends on
+ * the last flag.
  */
 export function planPageFlagInsertion(
     grid: PageFlagGrid,
     beat: number,
+    { basic = false }: { basic?: boolean } = {},
 ): PageFlagInsertion | null {
     if (!Number.isInteger(beat) || grid.pages.length === 0) return null;
     const pages = grid.pages;
     const lastPage = pages[pages.length - 1]!;
+    if (basic && beat === lastPage.end)
+        return { kind: "append", beat, lastPage };
     if (beat > lastPage.end)
         return beat <= grid.beatCount
             ? { kind: "append", beat, lastPage }
@@ -136,10 +145,10 @@ export interface AddedPageFlag {
     startBeat: number;
     endBeat: number;
     /**
-     * With `appendDefaultCounts` and an append: the new page's counts, and the file's default it
-     * was cut short from where the show's beats end first
+     * With `basic` and an append: the new page's counts, and the measures added to the end of the
+     * show to fit it (0 when it had the counts)
      */
-    appended?: { counts: number; wanted: number };
+    appended?: { counts: number; addedMeasures: number };
     /** With `splitMoves` and a split: the marchers split at the new flag, and those left alone */
     splitMoves?: SplitMovesResult;
 }
@@ -153,10 +162,12 @@ export interface AddedPageFlag {
  *   before it. Later pages renumber; no `is_subset` page is made. Splitting the last page also
  *   rewrites `last_page_counts` so its flag stays where it was.
  * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`). With
- *   `appendDefaultCounts` (Basic) it ends the file's `defaultNewPageCounts` after the last flag
- *   instead, or where the show's beats end if sooner, wherever `beat` is past the flag: Basic's
- *   **+** adds a page of the usual length, as page mode's add page did, rather than one as long
- *   as wherever the playhead happened to be.
+ *   `basic` it is the file's `defaultNewPageCounts` long instead, wherever `beat` is on or past
+ *   the last flag (`basicAppendLength`): Basic's **+** adds a page of the usual length, as page
+ *   mode's add page did, rather than one as long as wherever the playhead happened to be. Where
+ *   the show has too few beats for it, it is lengthened first as page mode lengthens it
+ *   (`appendTempoGroupFromWorkspaceSettingsInTransaction`: the default tempo and meter, in whole
+ *   measures), in the same edit.
  *
  * With `splitMoves` (Basic, README "Basic's panel"), a split first splits each marcher's move
  * across `beat` there (`splitMovesAtBeatInTransaction` on the split page's box), so no simple
@@ -168,16 +179,16 @@ export async function addPageFlagInTransaction({
     tx,
     beat,
     splitMoves = false,
-    appendDefaultCounts = false,
+    basic = false,
 }: {
     tx: DbTransaction;
     beat: number;
     splitMoves?: boolean;
-    appendDefaultCounts?: boolean;
+    basic?: boolean;
 }): Promise<AddedPageFlag> {
     await refuseOutsideTimelineMode(tx, "Adding a page flag");
     const grid = await readPageGrid(tx);
-    const plan = planPageFlagInsertion(gridOf(grid), beat);
+    const plan = planPageFlagInsertion(gridOf(grid), beat, { basic });
     if (!plan)
         refuse(
             `no page can be added at beat ${beat}: it is on a flag, at home, or past the show's beats`,
@@ -221,13 +232,14 @@ export async function addPageFlagInTransaction({
     }
 
     const start = plan.lastPage.end;
-    const wanted = appendDefaultCounts
-        ? await defaultNewPageCountsInTransaction(tx)
-        : beat - start;
-    const end = Math.min(start + wanted, grid.beatIds.length);
+    const basicPage = basic
+        ? await lengthenForBasicAppendInTransaction(tx, start, grid.beatIds)
+        : null;
+    const end = basicPage ? start + basicPage.counts : beat;
+    const beatIds = basicPage?.beatIds ?? grid.beatIds;
     const [created] = await createPagesInTransaction({
         tx,
-        newPages: [{ start_beat: grid.beatIds[start]!, is_subset: false }],
+        newPages: [{ start_beat: beatIds[start]!, is_subset: false }],
     });
     await updateLastPageCounts({ tx, lastPageCounts: end - start });
     return {
@@ -235,9 +247,45 @@ export async function addPageFlagInTransaction({
         name: await pageNameIn(tx, created!.id),
         startBeat: start,
         endBeat: end,
-        ...(appendDefaultCounts
-            ? { appended: { counts: end - start, wanted } }
+        ...(basicPage
+            ? {
+                  appended: {
+                      counts: basicPage.counts,
+                      addedMeasures: basicPage.addedMeasures,
+                  },
+              }
             : {}),
+    };
+}
+
+/**
+ * Basic's append at `start` (the last flag): its length (`basicAppendLength`), after lengthening
+ * the show by the counts it's short of, as page mode does. `beatIds` are the show's beats before;
+ * returns the length, the measures added and the beat ids after.
+ */
+async function lengthenForBasicAppendInTransaction(
+    tx: DbTransaction,
+    start: number,
+    beatIds: number[],
+): Promise<{ counts: number; addedMeasures: number; beatIds: number[] }> {
+    const settings = await workspaceSettingsInTransaction(tx);
+    const length = basicAppendLength(
+        start,
+        beatIds.length,
+        settings.defaultNewPageCounts,
+    );
+    if (length.missing === 0)
+        return { counts: length.counts, addedMeasures: 0, beatIds };
+    const { createdMeasures } =
+        await appendTempoGroupFromWorkspaceSettingsInTransaction({
+            tx,
+            workspaceSettings: settings,
+            counts: length.missing,
+        });
+    return {
+        counts: length.counts,
+        addedMeasures: createdMeasures.length,
+        beatIds: (await readPageGrid(tx)).beatIds,
     };
 }
 
@@ -245,19 +293,61 @@ export async function addPageFlagInTransaction({
 const pageNameIn = async (tx: DbTransaction, id: number): Promise<string> =>
     (await readPageGrid(tx)).pages.find((p) => p.id === id)?.name ?? "";
 
+/** "1 count", "16 counts" */
+export const countsText = (counts: number) =>
+    `${counts} ${counts === 1 ? "count" : "counts"}`;
+
 /**
- * What Basic's **+** past the last flag says it did (`AddedPageFlag.appended`): the new page and
- * its counts, and that the show's end cut it short when it did. Null for anything else.
+ * How long Basic's **+** makes a page appended at `start` (the last flag) in a show of
+ * `beatCount` beats (beat 0 included): the file's `defaultNewPageCounts`, and how many counts the
+ * show is short of it (`missing`, 0 when it has them), which the write adds to the show first.
+ */
+export function basicAppendLength(
+    start: number,
+    beatCount: number,
+    defaultNewPageCounts: number,
+): { counts: number; missing: number } {
+    return {
+        counts: defaultNewPageCounts,
+        missing: Math.max(0, start + defaultNewPageCounts - beatCount),
+    };
+}
+
+/**
+ * Basic's **+** on or past the last flag, in words for its tooltip: "Add a page of 16 counts after
+ * Page 4", and "…, lengthening the show" where it will. Parts it doesn't know yet are left out.
+ */
+export function appendPageLabel(
+    lastPageName: string | undefined,
+    length: { counts: number; missing: number } | undefined,
+): string {
+    return [
+        "Add a page",
+        length ? `of ${countsText(length.counts)}` : "",
+        lastPageName ? `after Page ${lastPageName}` : "",
+    ]
+        .filter(Boolean)
+        .join(" ")
+        .concat(length && length.missing > 0 ? ", lengthening the show" : "");
+}
+
+/**
+ * What Basic's **+** on or past the last flag says it did (`AddedPageFlag.appended`): the new
+ * page and its counts, and the measures it added to the end of the show when it did. Null for
+ * anything else.
  */
 export function appendedPageMessage({
     name,
     appended,
 }: Pick<AddedPageFlag, "name" | "appended">): string | null {
     if (!appended) return null;
-    const counts = `${appended.counts} ${appended.counts === 1 ? "count" : "counts"}`;
-    return appended.counts < appended.wanted
-        ? `Added Page ${name} · ${counts}, to the end of the show`
-        : `Added Page ${name} · ${counts}`;
+    const added = appended.addedMeasures;
+    return [
+        `Added Page ${name} · ${countsText(appended.counts)}`,
+        added > 0
+            ? `, and ${added} ${added === 1 ? "measure" : "measures"} at the end of the show`
+            : "",
+    ].join("");
 }
 
 /** **+** (UI-9) at `beat` as one undoable edit. See `addPageFlagInTransaction`. */
@@ -265,12 +355,12 @@ export async function addPageFlag({
     db,
     beat,
     splitMoves = false,
-    appendDefaultCounts = false,
+    basic = false,
 }: {
     db: DbConnection;
     beat: number;
     splitMoves?: boolean;
-    appendDefaultCounts?: boolean;
+    basic?: boolean;
 }): Promise<AddedPageFlag> {
     return await transactionWithHistory(
         db,
@@ -280,7 +370,7 @@ export async function addPageFlag({
                 tx,
                 beat,
                 splitMoves,
-                appendDefaultCounts,
+                basic,
             }),
     );
 }

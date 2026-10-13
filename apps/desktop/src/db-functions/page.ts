@@ -1139,6 +1139,37 @@ export const getNextBeatToStartPageOn = async (
     return output;
 };
 
+/**
+ * Lengthens the show for a new page: a tempo group from the workspace settings (default tempo and
+ * meter) after the last beat, with enough whole measures for `counts` (`defaultNewPageCounts`
+ * unless given). Page mode's add page uses it when the show has too few beats, and so does
+ * Basic's **+** past the last flag. Returns the beats and measures it made.
+ */
+export const appendTempoGroupFromWorkspaceSettingsInTransaction = async ({
+    tx,
+    workspaceSettings,
+    counts = workspaceSettings.defaultNewPageCounts,
+}: {
+    tx: DbTransaction;
+    workspaceSettings: Pick<
+        WorkspaceSettings,
+        "defaultBeatsPerMeasure" | "defaultTempo" | "defaultNewPageCounts"
+    >;
+    counts?: number;
+}) => {
+    const lastBeat = await getLastBeat({ db: tx });
+    assert(lastBeat != null, "Last beat not found");
+    return await _createFromTempoGroupInTransaction({
+        tx,
+        tempoGroup: tempoGroupFromWorkspaceSettings({
+            ...workspaceSettings,
+            defaultNewPageCounts: counts,
+        }),
+        endTempo: undefined,
+        startingPosition: lastBeat.position + 1,
+    });
+};
+
 export const createTempoGroupAndPageFromWorkspaceSettings = async ({
     db,
     workspaceSettings,
@@ -1149,20 +1180,14 @@ export const createTempoGroupAndPageFromWorkspaceSettings = async ({
         "defaultBeatsPerMeasure" | "defaultTempo" | "defaultNewPageCounts"
     >;
 }) => {
-    const tempoGroup = tempoGroupFromWorkspaceSettings(workspaceSettings);
-
     const result = await transactionWithHistory(
         db,
         "createDefaultTempoGroupAndPage",
         async (tx) =>
             await withTimelinePageRipple(tx, async () => {
-                const lastBeat = await getLastBeat({ db });
-                assert(lastBeat != null, "Last beat not found");
-                await _createFromTempoGroupInTransaction({
+                await appendTempoGroupFromWorkspaceSettingsInTransaction({
                     tx,
-                    tempoGroup,
-                    endTempo: undefined,
-                    startingPosition: lastBeat.position + 1,
+                    workspaceSettings,
                 });
                 const nextBeat = await getNextBeatToStartPageOn(tx);
                 if (!nextBeat) throw new Error("Next beat not found");

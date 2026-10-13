@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     pageFlagMoveLimits,
+    appendPageLabel,
+    basicAppendLength,
     type AddedPageFlag,
     type PageFlagMoveBlock,
 } from "@/db-functions/pageFlags";
@@ -587,7 +589,8 @@ function PlayingTimeline({
         isPlaying: playback.isPlaying || holding,
         onAdded: selectAddedPage,
     });
-    // Basic's + past the last flag adds a page of the file's default length, not one ending here
+    // Basic's + on or past the last flag adds a page of the file's default length, not one
+    // ending here, and says so first
     const defaultNewPageCounts = useQuery({
         ...workspaceSettingsQueryOptions(basic),
         select: (s) => s.defaultNewPageCounts,
@@ -599,8 +602,13 @@ function PlayingTimeline({
     const addPageFlagLabel = append
         ? appendPageLabel(
               pages.find((p) => p.id === append.id)?.name,
-              defaultNewPageCounts &&
-                  Math.min(defaultNewPageCounts, beats.length - append.end),
+              defaultNewPageCounts === undefined
+                  ? undefined
+                  : basicAppendLength(
+                        append.end,
+                        beats.length,
+                        defaultNewPageCounts,
+                    ),
           )
         : undefined;
     // The zoom changes every frame of a pinch: keep it here, and save it once the gesture settles
@@ -696,19 +704,6 @@ export function selectionAfterDeleteWithMoves(
 }
 
 /** **+** selects the new page's page timeline (UI-9: "The new page is selected"). */
-/** Basic's **+** past the last flag, in words: "Add a page of 16 counts after Page 4" */
-export const appendPageLabel = (
-    lastPageName: string | undefined,
-    counts: number | undefined,
-) =>
-    [
-        "Add a page",
-        counts ? `of ${counts} ${counts === 1 ? "count" : "counts"}` : "",
-        lastPageName ? `after Page ${lastPageName}` : "",
-    ]
-        .filter(Boolean)
-        .join(" ");
-
 export const selectAddedPage = ({
     startBeat,
     endBeat,

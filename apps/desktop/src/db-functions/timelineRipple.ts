@@ -5,6 +5,7 @@ import {
     defaultWorkspaceSettings,
     isTimelineModeEnabled,
     workspaceSettingsSchema,
+    type WorkspaceSettings,
 } from "@/settings/workspaceSettings";
 import { DbTransaction } from "./types";
 import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
@@ -184,21 +185,23 @@ export async function pageNumberOffsetInTransaction(
     }
 }
 
-/** The file's `defaultNewPageCounts`, read inside `tx` from `workspace_settings` (16 without one). */
-export async function defaultNewPageCountsInTransaction(
+/**
+ * The file's workspace settings, read inside `tx`, with the defaults where there are none or they
+ * don't parse.
+ */
+export async function workspaceSettingsInTransaction(
     tx: DbTransaction,
-): Promise<number> {
-    const fallback = defaultWorkspaceSettings.defaultNewPageCounts;
+): Promise<WorkspaceSettings> {
     const row = await tx
         .select({ json: schema.workspace_settings.json_data })
         .from(schema.workspace_settings)
         .get();
-    if (!row) return fallback;
+    if (!row) return defaultWorkspaceSettings;
     try {
         const parsed = workspaceSettingsSchema.safeParse(JSON.parse(row.json));
-        return parsed.success ? parsed.data.defaultNewPageCounts : fallback;
+        return parsed.success ? parsed.data : defaultWorkspaceSettings;
     } catch {
-        return fallback;
+        return defaultWorkspaceSettings;
     }
 }
 
