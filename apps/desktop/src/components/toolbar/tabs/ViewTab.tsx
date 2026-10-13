@@ -21,6 +21,7 @@ import type {
     MarcherLabelForm,
     MarcherLabelSize,
 } from "@/stores/UiSettingsStore";
+import ActionButton from "@/shortcuts/ActionButton";
 
 export default function ViewTab() {
     return (
@@ -71,15 +72,13 @@ function ShapePreviewPopover() {
 function View3dToolbar() {
     return (
         <ToolbarSection>
-            <button
-                onClick={() => {
-                    void window.electron.openView3d();
-                }}
+            <ActionButton
+                action="openView3d"
                 className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
             >
                 <T keyName="view3d.open" />
                 <CubeIcon size={24} />
-            </button>
+            </ActionButton>
         </ToolbarSection>
     );
 }
