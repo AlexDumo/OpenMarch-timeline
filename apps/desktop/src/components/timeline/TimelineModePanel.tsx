@@ -1,8 +1,10 @@
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     pageFlagMoveLimits,
+    appendPageLabel,
+    basicAppendLength,
     type AddedPageFlag,
     type PageFlagMoveBlock,
 } from "@/db-functions/pageFlags";
@@ -29,7 +31,10 @@ import {
     selectionOfPage,
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    useTimelineMode,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import {
@@ -528,6 +533,7 @@ function PlayingTimeline({
     | "selection"
     | "transportClock"
     | "onAddPageFlag"
+    | "addPageFlagLabel"
     | "loop"
     | "onLoopChange"
 >) {
@@ -583,6 +589,28 @@ function PlayingTimeline({
         isPlaying: playback.isPlaying || holding,
         onAdded: selectAddedPage,
     });
+    // Basic's + on or past the last flag adds a page of the file's default length, not one
+    // ending here, and says so first
+    const defaultNewPageCounts = useQuery({
+        ...workspaceSettingsQueryOptions(basic),
+        select: (s) => s.defaultNewPageCounts,
+    }).data;
+    const append =
+        basic && addPageFlag.insertion?.kind === "append"
+            ? addPageFlag.insertion.lastPage
+            : null;
+    const addPageFlagLabel = append
+        ? appendPageLabel(
+              pages.find((p) => p.id === append.id)?.name,
+              defaultNewPageCounts === undefined
+                  ? undefined
+                  : basicAppendLength(
+                        append.end,
+                        beats.length,
+                        defaultNewPageCounts,
+                    ),
+          )
+        : undefined;
     // The zoom changes every frame of a pinch: keep it here, and save it once the gesture settles
     const [pixelsPerBeat, setPixelsPerBeat] = useState(
         () => useUiSettingsStore.getState().uiSettings.timelinePixelsPerBeat,
@@ -603,6 +631,7 @@ function PlayingTimeline({
             selection={selection}
             transportClock={clock}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
+            addPageFlagLabel={addPageFlagLabel}
             playback={playback}
             pixelsPerBeat={pixelsPerBeat}
             onPixelsPerBeatChange={setPixelsPerBeat}

@@ -10,6 +10,7 @@ import { db } from "@/global/database/db";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     addPageFlag,
+    appendedPageMessage,
     deletePageFlags,
     movePageFlag,
     type MovedPageFlag,
@@ -28,22 +29,49 @@ import { subscribeHistoryChanges } from "@/db-functions/history";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "./usePages";
 import { invalidateTagQueries } from "./tags/queries";
-import { isBasicMode } from "@/stores/EditorModeStore";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { measureKeys } from "./useMeasures";
 import { simpleDefaultsOn } from "@/timeline/simpleDefaults";
 
 /**
  * Page flag writes in timeline mode (ui.md UI-9 **+** and Deleting a flag, P8.13). They change only
- * page rows and `last_page_counts`, so they invalidate the page queries and nothing on the
- * timeline side. A refusal (E-ARGS) shows its message as a toast.
+ * page rows and `last_page_counts` (and, for Basic's **+** at the show's end, beats and measures),
+ * so they invalidate the page queries and nothing on the timeline side. A refusal (E-ARGS) shows
+ * its message as a toast.
  */
 
 /**
+ * A success toast that closes on the next history change (an edit, an undo, a redo): after that
+ * it would describe, or undo, something else. Delete move's toast works the same way.
+ */
+const toastUntilNextHistoryChange = (
+    message: string,
+    options: Parameters<typeof toast.success>[1] = {},
+) => {
+    let unsubscribe = () => {};
+    const id = toast.success(message, {
+        ...options,
+        onDismiss: () => unsubscribe(),
+        onAutoClose: () => unsubscribe(),
+    });
+    unsubscribe = subscribeHistoryChanges(() => {
+        unsubscribe();
+        toast.dismiss(id);
+    });
+};
+
+/**
  * **+** at a beat. Resolves to the new page and its range `[startBeat, endBeat)`, the page timeline
- * the UI selects next (`onAdded`). In Basic it also splits each marcher's move at the new flag
- * (`splitMoves`); those rows reach the resolver through the database's change events.
+ * the UI selects next (`onAdded`). In Basic (`basic`) it also splits each marcher's move at the new
+ * flag (`splitMoves`); those rows reach the resolver through the database's change events. On or
+ * past the last flag, Basic's page is the file's default new-page counts long, not as long as
+ * wherever the playhead was, lengthening the show when it must, and a toast names the page and
+ * its counts. Expert keeps UI-9's flag at the playhead: there **+** places a flag where the person
+ * scrubbed to.
  */
 export const addPageFlagMutationOptions = (
     qc: QueryClient,
+    basic: boolean,
     onAdded?: (added: AddedPageFlag) => void,
 ) =>
     mutationOptions({
@@ -51,11 +79,19 @@ export const addPageFlagMutationOptions = (
             addPageFlag({
                 db,
                 beat,
-                splitMoves: isBasicMode() || simpleDefaultsOn(),
+                splitMoves: basic || simpleDefaultsOn(),
+                basic,
             }),
         onSuccess: (added) => {
             void invalidatePageQueries(qc);
+            if (added.appended?.addedMeasures)
+                void qc.invalidateQueries({ queryKey: measureKeys.all() });
             onAdded?.(added);
+            const message = appendedPageMessage(added);
+            if (message)
+                toastUntilNextHistoryChange(message, {
+                    description: "Drag its flag to change its length",
+                });
         },
         onError: (e) => toastTimelineError(e),
     });
@@ -88,8 +124,7 @@ const toastDeleteWithMoves = (
     undo?: UndoAction,
 ) => {
     if (result.deleted.length === 0) return;
-    let unsubscribe = () => {};
-    const id = toast.success(pageDeleteWithMovesMessage(result), {
+    toastUntilNextHistoryChange(pageDeleteWithMovesMessage(result), {
         duration: 10000,
         action: undo
             ? {
@@ -97,12 +132,6 @@ const toastDeleteWithMoves = (
                   onClick: undo,
               }
             : undefined,
-        onDismiss: () => unsubscribe(),
-        onAutoClose: () => unsubscribe(),
-    });
-    unsubscribe = subscribeHistoryChanges(() => {
-        unsubscribe();
-        toast.dismiss(id);
     });
 };
 
@@ -164,7 +193,8 @@ export const movePageFlagMutationOptions = (
 
 /**
  * **+** for the paused playhead (UI-9): what it would add at `playheadBeat`, or null where it isn't
- * shown (playing, on a flag, at home, past the show's beats), and `add` to run it as one edit.
+ * shown (playing, on a flag, at home, past the show's beats), and `add` to run it as one edit. In
+ * Basic it is also shown on the last flag (`planPageFlagInsertion`'s `basic`).
  * `pages` are the renderer's pages (`useTimingObjects`) and `beatCount` the show's beat count,
  * beat 0 included. `onAdded` gets the new page and its range, for selecting its page timeline.
  */
@@ -182,8 +212,9 @@ export function useAddPageFlag({
     onAdded?: (added: AddedPageFlag) => void;
 }): { insertion: PageFlagInsertion | null; add: () => void } {
     const queryClient = useQueryClient();
+    const basic = useIsBasicMode();
     const { mutate } = useMutation(
-        addPageFlagMutationOptions(queryClient, onAdded),
+        addPageFlagMutationOptions(queryClient, basic, onAdded),
     );
     const insertion = useMemo(
         () =>
@@ -192,8 +223,9 @@ export function useAddPageFlag({
                 : planPageFlagInsertion(
                       pageFlagGrid(pages, beatCount),
                       playheadBeat,
+                      { basic },
                   ),
-        [pages, beatCount, playheadBeat, isPlaying],
+        [pages, beatCount, playheadBeat, isPlaying, basic],
     );
     const add = useCallback(() => {
         if (insertion) mutate(insertion.beat);

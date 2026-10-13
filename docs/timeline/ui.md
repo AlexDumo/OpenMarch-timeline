@@ -194,7 +194,10 @@ from it. The spec still wins on the model; this file decides presentation.
     so motion is unchanged. The new page is selected. Pages store their
     start beat, so this inserts a row at the split page's old start and moves
     that page's `start_beat` to the playhead. Past the last flag, nothing is
-    split: **+** appends a page ending at the playhead (_lead default_).
+    split: **+** appends a page ending at the playhead (_lead default_). In
+    Basic (UI-19) it appends a page of the file's `defaultNewPageCounts`
+    instead, also offered on the last flag, lengthening the show when it's
+    too short (research/basic-mode, "Basic's panel"; provisional, see U-Q5).
   - **Selection.** With a stored timeline selected, marchers without a
     transition in it are dimmed, and a dimmed marcher can't be selected or
     interacted with at all: clicks and box selection pass over it, and
@@ -1205,7 +1208,9 @@ points (P7.2).
 
   TODO (project owner, 2026-10-01; not now):
   - how a selected marcher's spans (UI-1) show inside a timeline's one track;
-  - appending pages past the last flag (today's `defaultNewPageCounts`);
+  - appending pages past the last flag (today's `defaultNewPageCounts`;
+    Basic uses it provisionally, research/basic-mode "Basic's panel", with
+    counts added at the default tempo where the show is too short);
   - ~~whether clicking a clip selects its timeline~~ (yes: UI-12);
   - editing anywhere in the selected timeline, not only at its end (the
     temporary refusal in UI-9).

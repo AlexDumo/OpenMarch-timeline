@@ -13,6 +13,10 @@ import {
 import { performRedo, performUndo } from "../history";
 import {
     addPageFlag,
+    appendedPageMessage,
+    appendPageLabel,
+    basicAppendLength,
+    countsText,
     deletePageFlags,
     pageFlagGrid,
     planPageFlagInsertion,
@@ -176,6 +180,38 @@ describe("planPageFlagInsertion", () => {
         );
     });
 
+    test("in Basic it also appends on the last flag, and only there", () => {
+        const basic = (beat: number, beatCount = 30) =>
+            planPageFlagInsertion({ beatCount, pages }, beat, { basic: true });
+        expect(basic(17)).toEqual({
+            kind: "append",
+            beat: 17,
+            lastPage: pages[2],
+        });
+        // Where the show's beats end on the last flag too
+        expect(basic(17, 17)).toMatchObject({ kind: "append", beat: 17 });
+        expect(basic(18)).toMatchObject({ kind: "append", beat: 18 });
+        expect(basic(12)).toMatchObject({ kind: "split", beat: 12 });
+        for (const beat of [0, 1, 9, 4.5]) expect(basic(beat)).toBeNull();
+    });
+
+    test("in a show with only home, Basic appends on home's flag; Expert doesn't", () => {
+        const home = [pages[0]!];
+        expect(
+            planPageFlagInsertion({ beatCount: 30, pages: home }, 1, {
+                basic: true,
+            }),
+        ).toEqual({ kind: "append", beat: 1, lastPage: pages[0] });
+        expect(
+            planPageFlagInsertion({ beatCount: 30, pages: home }, 1),
+        ).toBeNull();
+        expect(
+            planPageFlagInsertion({ beatCount: 30, pages: home }, 0, {
+                basic: true,
+            }),
+        ).toBeNull();
+    });
+
     test("pageFlagGrid reads the renderer's pages", () => {
         const beats = (from: number, to: number) =>
             Array.from({ length: to - from }, (_, i) => ({ index: from + i }));
@@ -190,6 +226,71 @@ describe("planPageFlagInsertion", () => {
                 30,
             ),
         ).toEqual({ beatCount: 30, pages });
+    });
+});
+
+describe("Basic's append in words", () => {
+    test("countsText", () => {
+        expect(countsText(1)).toBe("1 count");
+        expect(countsText(16)).toBe("16 counts");
+    });
+
+    test("basicAppendLength: the default counts, and how many the show is short", () => {
+        expect(basicAppendLength(49, 97, 16)).toEqual({
+            counts: 16,
+            missing: 0,
+        });
+        expect(basicAppendLength(81, 97, 16)).toEqual({
+            counts: 16,
+            missing: 0,
+        });
+        expect(basicAppendLength(97, 97, 16)).toEqual({
+            counts: 16,
+            missing: 16,
+        });
+        expect(basicAppendLength(90, 97, 8)).toEqual({ counts: 8, missing: 1 });
+    });
+
+    test("appendPageLabel leaves out what it doesn't know", () => {
+        const full = { counts: 16, missing: 0 };
+        expect(appendPageLabel("4", full)).toBe(
+            "Add a page of 16 counts after Page 4",
+        );
+        expect(appendPageLabel("4", { counts: 1, missing: 0 })).toBe(
+            "Add a page of 1 count after Page 4",
+        );
+        expect(appendPageLabel("4", { counts: 8, missing: 3 })).toBe(
+            "Add a page of 8 counts after Page 4, lengthening the show",
+        );
+        expect(appendPageLabel(undefined, full)).toBe(
+            "Add a page of 16 counts",
+        );
+        expect(appendPageLabel("4", undefined)).toBe("Add a page after Page 4");
+        expect(appendPageLabel(undefined, undefined)).toBe("Add a page");
+    });
+
+    test("appendedPageMessage names the page and its counts, and the measures it added", () => {
+        expect(
+            appendedPageMessage({
+                name: "5",
+                appended: { counts: 16, addedMeasures: 0 },
+            }),
+        ).toBe("Added Page 5 · 16 counts");
+        expect(
+            appendedPageMessage({
+                name: "5",
+                appended: { counts: 1, addedMeasures: 1 },
+            }),
+        ).toBe("Added Page 5 · 1 count, and 1 measure at the end of the show");
+        expect(
+            appendedPageMessage({
+                name: "5",
+                appended: { counts: 16, addedMeasures: 4 },
+            }),
+        ).toBe(
+            "Added Page 5 · 16 counts, and 4 measures at the end of the show",
+        );
+        expect(appendedPageMessage({ name: "5" })).toBeNull();
     });
 });
 
@@ -278,6 +379,190 @@ describeDbTests("page flags in timeline mode (UI-9)", (it) => {
             expect(await snapshot(db, TIMELINE_TABLES)).toEqual(timelineBefore);
             expect(await positions(db)).toEqual(motionBefore);
             await roundTrip(db, before, await snapshot(db));
+        });
+
+        describe("Basic (basic)", () => {
+            const setDefaultNewPageCounts = async (
+                db: DbConnection,
+                counts: number,
+            ) =>
+                await db.update(schema.workspace_settings).set({
+                    json_data: JSON.stringify({
+                        timelineMode: true,
+                        defaultNewPageCounts: counts,
+                    }),
+                });
+            const WITH_MEASURES = [...TABLES, schema.measures];
+
+            it("on or past the last flag: appends a page of the file's default new-page counts from the last flag, wherever the beat is", async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                await setUp(db);
+                await setDefaultNewPageCounts(db, 8);
+                const timelineBefore = await snapshot(db, TIMELINE_TABLES);
+                const before = await snapshot(db);
+
+                // On the flag, just past it, inside the new page, and past where it ends
+                for (const beat of [49, 50, 53, 80]) {
+                    const added = await addPageFlag({ db, beat, basic: true });
+                    expect([added.startBeat, added.endBeat]).toEqual([49, 57]);
+                    expect(added.name).toBe("7");
+                    expect(added.appended).toEqual({
+                        counts: 8,
+                        addedMeasures: 0,
+                    });
+                    expect(await grid(db)).toEqual([
+                        ...ORIGINAL,
+                        [added.page.id, 49, 57],
+                    ]);
+                    expect(await lastPageCounts(db)).toBe(8);
+                    expect(await snapshot(db, TIMELINE_TABLES)).toEqual(
+                        timelineBefore,
+                    );
+                    await roundTrip(db, before, await snapshot(db));
+                    expect((await performUndo(db)).success).toBe(true);
+                }
+            });
+
+            it("the default is 16 counts when the file doesn't set one", async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                await setUp(db);
+                const added = await addPageFlag({
+                    db,
+                    beat: 52,
+                    basic: true,
+                });
+                expect([added.startBeat, added.endBeat]).toEqual([49, 65]);
+                expect(added.appended).toEqual({
+                    counts: 16,
+                    addedMeasures: 0,
+                });
+            });
+
+            it("back to back, then where the music ends on the last flag: lengthens the show by whole default measures, in the same edit, with motion unchanged", async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                await setUp(db);
+                const timelineBefore = await snapshot(db, TIMELINE_TABLES);
+                const motionBefore = await positions(db);
+                // 97 ordinals: 16-count pages from the last flag at 49 fill the show to its end
+                for (const flag of [49, 65, 81]) {
+                    const added = await addPageFlag({
+                        db,
+                        beat: flag,
+                        basic: true,
+                    });
+                    expect([added.startBeat, added.endBeat]).toEqual([
+                        flag,
+                        flag + 16,
+                    ]);
+                }
+                const beatsBefore = (await db.select().from(schema.beats).all())
+                    .length;
+                expect(beatsBefore).toBe(97);
+                const measuresBefore = (
+                    await db.select().from(schema.measures).all()
+                ).length;
+                const before = await snapshot(db, WITH_MEASURES);
+
+                const added = await addPageFlag({ db, beat: 97, basic: true });
+
+                expect([added.startBeat, added.endBeat]).toEqual([97, 113]);
+                expect(added.name).toBe("10");
+                // 16 counts in the default 4/4 at 120: 4 measures
+                expect(added.appended).toEqual({
+                    counts: 16,
+                    addedMeasures: 4,
+                });
+                const beats = await db.select().from(schema.beats).all();
+                expect(beats).toHaveLength(113);
+                expect(beats.slice(97).every((b) => b.duration === 0.5)).toBe(
+                    true,
+                );
+                expect(
+                    (await db.select().from(schema.measures).all()).length,
+                ).toBe(measuresBefore + 4);
+                expect((await grid(db)).at(-1)).toEqual([
+                    added.page.id,
+                    97,
+                    113,
+                ]);
+                expect(await lastPageCounts(db)).toBe(16);
+                // No timeline row is written: motion is the same
+                expect(await snapshot(db, TIMELINE_TABLES)).toEqual(
+                    timelineBefore,
+                );
+                expect(await positions(db)).toEqual(motionBefore);
+                // One undo takes back the beats, the measures and the page
+                const after = await snapshot(db, WITH_MEASURES);
+                expect((await performUndo(db)).success).toBe(true);
+                expect(await snapshot(db, WITH_MEASURES)).toEqual(before);
+                expect((await performRedo(db)).success).toBe(true);
+                expect(await snapshot(db, WITH_MEASURES)).toEqual(after);
+                expect(await violations(db)).toEqual([]);
+            });
+
+            it("adds only the measures it's short of", async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                await setUp(db);
+                await setDefaultNewPageCounts(db, 50);
+                // From 49, 50 counts need beat 99: the show is 2 counts short, so 1 measure
+                const added = await addPageFlag({ db, beat: 52, basic: true });
+                expect([added.startBeat, added.endBeat]).toEqual([49, 99]);
+                expect(added.appended).toEqual({
+                    counts: 50,
+                    addedMeasures: 1,
+                });
+                expect(await db.select().from(schema.beats).all()).toHaveLength(
+                    101,
+                );
+                expect(await lastPageCounts(db)).toBe(50);
+            });
+
+            it("inside a page it still splits at the beat", async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                await setUp(db);
+                const added = await addPageFlag({ db, beat: 13, basic: true });
+                expect([added.startBeat, added.endBeat]).toEqual([9, 13]);
+                expect(added.name).toBe("2");
+                expect(added.appended).toBeUndefined();
+            });
+
+            it("a show with only home: appends page 1 on home's flag", async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                await setUp(db);
+                await deletePageFlags({
+                    db,
+                    pageIds: new Set([1, 2, 3, 4, 5, 6]),
+                });
+                expect(await grid(db)).toEqual([[0, 0, 1]]);
+                await expectRefused(addPageFlag({ db, beat: 1 }));
+                const added = await addPageFlag({ db, beat: 1, basic: true });
+                expect([added.startBeat, added.endBeat]).toEqual([1, 17]);
+                expect(added.name).toBe("1");
+                expect(await grid(db)).toEqual([
+                    [0, 0, 1],
+                    [added.page.id, 1, 17],
+                ]);
+            });
+
+            it("Expert still refuses on the last flag", async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                await setUp(db);
+                await expectRefused(addPageFlag({ db, beat: 49 }));
+            });
         });
 
         it("refuses on a flag, at home, past the show's beats, at a fractional beat, and in page mode, writing nothing", async ({
