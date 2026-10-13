@@ -117,7 +117,8 @@ phases [26.24].
 - **Where import starts:** a Library **Import…**, plus an Import… inside each
   picker (artwork slot, Equipment, Prop) that pre-fills kind, target slot and
   size. Files come through `dialog.showOpenDialog` in main with filters
-  "3D model (glb, gltf)", "Artwork (png, jpg, svg, pdf)" and "All Files".
+  "Models and artwork" (selected), "3D model (glb, gltf)", "Artwork (png,
+  jpg, svg, pdf)" and "All Files".
   Drag-and-drop comes later [11].
 - **Kind** (Prop, Equipment, Garment, Floor prop, Base floor): a picker sets
   it; a plain Library import asks for it as a required choice, pre-selected
