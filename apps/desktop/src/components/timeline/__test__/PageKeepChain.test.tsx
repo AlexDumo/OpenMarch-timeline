@@ -339,6 +339,30 @@ describe("the chains on the page boxes", () => {
         expect(parseFloat(plus.style.left)).toBeGreaterThanOrEqual(chainEnd);
     });
 
+    it("zoomed out, the + moves past the next box's chain from a beat before its flag", () => {
+        // At 6px a beat page 3's box is 48px, room for a 12px chain beside its number. The
+        // playhead on page 2's last beat sits 6px before page 3's flag, so the + (8px after it,
+        // 16px wide) would reach that chain; page 3 is selected, so the linked chain shows
+        show({
+            keepChains: new Map([[3, chain("follows")]]),
+            selection: {
+                kind: "range",
+                range: { startBeatIndex: 9, endBeatIndex: 17 },
+            },
+            pixelsPerBeat: 6,
+            positionBeat: 8,
+            onAddPageFlag: vi.fn(),
+        });
+        const [button] = chains();
+        expect(button!.style.width).toBe("12px");
+        const ruler = screen.getByTestId("timeline-page-ruler");
+        const plus = screen.getByTestId("timeline-add-page-flag");
+        const chainX =
+            parseFloat(ruler.style.left) + 1 + parseFloat(button!.style.left);
+        const chainEnd = chainX + parseFloat(button!.style.width);
+        expect(parseFloat(plus.style.left)).toBeGreaterThanOrEqual(chainEnd);
+    });
+
     it("the + stays 8px after the playhead where it can't reach a chain", () => {
         // Three beats into page 3 (x 176): already past its chain
         show({
