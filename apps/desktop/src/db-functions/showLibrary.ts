@@ -154,6 +154,24 @@ export async function embedLibraryVersionInTransaction({
     return { embedded: true };
 }
 
+/**
+ * Embeds Versions in one plain transaction, all or nothing, such as the copies an import adds.
+ * Not undoable, like workspace settings: nothing here is an edit to the show.
+ */
+export async function embedLibraryVersions({
+    db,
+    versions,
+}: {
+    db: DbConnection;
+    versions: readonly EmbedLibraryVersion[];
+}): Promise<void> {
+    await db.transaction(async (tx) => {
+        for (const version of versions) {
+            await embedLibraryVersionInTransaction({ tx, version });
+        }
+    });
+}
+
 const ShowLibraryRowSchema = z.object({
     item_id: LibraryItemIdSchema,
     version_hash: VersionHashSchema,

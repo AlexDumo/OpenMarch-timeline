@@ -1,4 +1,9 @@
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import {
+    queryOptions,
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from "@tanstack/react-query";
 import { db } from "@/global/database/db";
 import {
     getShowLibraryItems,
@@ -6,6 +11,11 @@ import {
     type ShowLibraryItem,
 } from "@/db-functions/showLibrary";
 import { createShowBlobCache } from "@/view3d/library/showBlobCache";
+import {
+    embedImportedVersions,
+    type ImportedVersion,
+} from "@/view3d/library/showLibraryEmbed";
+import { conToastError } from "@/utilities/utils";
 import { DEFAULT_STALE_TIME } from "./constants";
 
 /**
@@ -36,3 +46,32 @@ export const useShowLibrary = () => useQuery(showLibraryItemsQueryOptions());
 export const showLibraryBlobs = createShowBlobCache({
     read: (hash) => readLibraryBlob({ db, hash }),
 });
+
+/**
+ * Embeds a copy of each imported Version in the open show. The import already succeeded, so a
+ * failure here is a toast, not a review error.
+ */
+export const useEmbedImportedVersions = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (saved: ImportedVersion[]) =>
+            embedImportedVersions({
+                db,
+                saved,
+                readParts: (request) =>
+                    window.electron.library.readParts(request),
+            }),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({
+                queryKey: showLibraryKeys.all(),
+            });
+        },
+        onError: (error, saved) => {
+            conToastError(
+                "Couldn't copy the import into the show",
+                error,
+                saved.map((s) => s.item.id),
+            );
+        },
+    });
+};

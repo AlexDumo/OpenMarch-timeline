@@ -30,6 +30,7 @@ import {
     isStale,
     type ImportClient,
 } from "@/view3d/library/importClient";
+import type { ImportedVersion } from "@/view3d/library/showLibraryEmbed";
 import type {
     ArtworkImportReport,
     ArtworkInspection,
@@ -233,6 +234,12 @@ export interface ImportReviewOptions {
     onClose?: () => void;
     /** Called after a commit stores items, with their ids (Q76). */
     onCommitted?: (itemIds: string[], done: DoneSummary) => void;
+    /**
+     * Called with every Version a commit saved, so the show can embed a copy (ADR 0002 D-12:
+     * imports land in the local Library and the show embeds a copy). Not called when nothing
+     * was saved.
+     */
+    onImported?: (saved: ImportedVersion[]) => void;
 }
 
 // ------------------------------------------------------------------ helpers
@@ -1048,6 +1055,12 @@ export function createImportReview(
                     set({ phase: "review", progress: null });
                     return;
                 }
+                options.onImported?.([
+                    {
+                        item: value.saved.item,
+                        versionHash: value.saved.versionHash,
+                    },
+                ]);
                 set({
                     phase: "done",
                     progress: null,
@@ -1089,6 +1102,13 @@ export function createImportReview(
                 }
                 if (result.value.type !== "artwork") return;
                 const reports: ArtworkImportReport[] = result.value.reports;
+                const saved = reports.flatMap((r) =>
+                    r.imported.map((p) => ({
+                        item: p.item,
+                        versionHash: p.version.hash,
+                    })),
+                );
+                if (saved.length > 0) options.onImported?.(saved);
                 set({
                     phase: "done",
                     progress: null,

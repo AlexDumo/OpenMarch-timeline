@@ -5,6 +5,7 @@ import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { tablesWithHistory } from "../historyTriggers";
 import {
     embedLibraryVersionInTransaction,
+    embedLibraryVersions,
     getShowLibraryItems,
     libraryKeepsFromHistory,
     pruneShowLibraryInTransaction,
@@ -17,7 +18,7 @@ import {
     renderPartHash,
 } from "@/view3d/library/showBlobCache";
 import type { LibraryKeep } from "@/view3d/library/showLibraryPrune";
-import { versionToEmbed } from "@/view3d/library/showLibraryEmbed";
+import { embedImportedVersions } from "@/view3d/library/showLibraryEmbed";
 import { buildAddFromShowRequest } from "@/view3d/library/showLibraryUpdates";
 import { AddFromShowRequestSchema } from "@/view3d/library/protocol";
 import type { LibraryItem } from "@om-electron/main/library/types";
@@ -186,6 +187,27 @@ describeDbTests("showLibrary", (it) => {
             expect(await rows(db)).toEqual({ items: 0, blobs: 0 });
         });
 
+        it("embeds several Versions all or nothing", async ({ db }) => {
+            const r = await rifle();
+            const f = await flag();
+            await expect(
+                embedLibraryVersions({
+                    db,
+                    versions: [
+                        r,
+                        { ...f, parts: { ...f.parts, display: bytes("x") } },
+                    ],
+                }),
+            ).rejects.toThrow(/Version hash/);
+            expect(await rows(db)).toEqual({ items: 0, blobs: 0 });
+
+            await embedLibraryVersions({ db, versions: [r, f] });
+            expect(await rows(db)).toEqual({ items: 2, blobs: 4 });
+            expect(await db.select().from(schema.history_undo).all()).toEqual(
+                [],
+            );
+        });
+
         it("isn't undone with the edit it was embedded in", async ({ db }) => {
             const v = await rifle();
             await transactionWithHistory(db, "placeRifle", async (tx) => {
@@ -281,17 +303,15 @@ describeDbTests("showLibrary", (it) => {
                     },
                 ],
             };
-            await embedLibraryVersion({
+            // As an import does: copy the saved Version from the local Library
+            await embedImportedVersions({
                 db,
-                version: await versionToEmbed({
-                    item,
-                    versionHash: f.versionHash,
-                    readParts: async ({ roles }) => ({
-                        ok: true,
-                        value: Object.fromEntries(
-                            roles.map((r) => [r, f.parts[r]]),
-                        ),
-                    }),
+                saved: [{ item, versionHash: f.versionHash }],
+                readParts: async ({ roles }) => ({
+                    ok: true,
+                    value: Object.fromEntries(
+                        roles.map((r) => [r, f.parts[r]]),
+                    ),
                 }),
             });
 
