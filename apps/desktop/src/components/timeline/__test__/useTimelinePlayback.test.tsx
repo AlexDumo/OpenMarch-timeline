@@ -567,7 +567,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         });
         expect(store().startPinned).toBe(false);
         expect(result.current.playback.playLoops).toBe(false);
-        // The transport's second Play button is there (Shift+Space, from the playhead)
+        // Shift+click on Play plays from the playhead, as Shift+Space
         expect(result.current.playback.onPlayFromPlayhead).toBeDefined();
         // Space: plays on from the start flag. The driver, not this hook, moves P when it stops
         act(() => {

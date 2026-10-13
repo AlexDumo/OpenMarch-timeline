@@ -56,7 +56,7 @@ const playbackCommands = (latest: {
             setIsPlaying,
         });
     },
-    // The second Play button, as Shift+Space
+    // Shift+click on Play, as Shift+Space
     onPlayFromPlayhead: () => {
         const { beats, isPlaying, setIsPlaying } = latest.current;
         playTimelinePage({

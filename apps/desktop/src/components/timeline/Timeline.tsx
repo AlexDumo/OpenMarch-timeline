@@ -112,7 +112,7 @@ export interface TimelinePlayback {
     readonly playLoops?: boolean;
     /** Shift+Space's once-through of the loop is playing (UI-17) */
     readonly playingOnce?: boolean;
-    /** The transport's second Play button (Shift+Space): plays on from the playhead */
+    /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     readonly onPlayFromPlayhead?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;

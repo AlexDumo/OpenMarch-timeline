@@ -258,6 +258,29 @@ describe("timeline views", () => {
         expect(onSelectionChange).toHaveBeenCalledTimes(1);
     });
 
+    it("has one Play button, and Shift+click on it plays from the playhead", () => {
+        const onPlayingChange = vi.fn();
+        const onPlayFromPlayhead = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onPlayingChange={onPlayingChange}
+                onPlayFromPlayhead={onPlayFromPlayhead}
+            />,
+        );
+        const play = screen.getByRole("button", {
+            name: "Play from the start flag",
+        });
+        expect(screen.getAllByTestId("timeline-play")).toHaveLength(1);
+        fireEvent.click(play, { shiftKey: true });
+        expect(onPlayFromPlayhead).toHaveBeenCalledTimes(1);
+        expect(onPlayingChange).not.toHaveBeenCalled();
+        fireEvent.click(play);
+        expect(onPlayingChange).toHaveBeenCalledWith(true);
+        expect(onPlayFromPlayhead).toHaveBeenCalledTimes(1);
+    });
+
     it("forwards transport playback, and zooms with Fit and Ctrl+scroll in both densities (UI-12)", async () => {
         const onPlayingChange = vi.fn();
         const onPixelsPerBeatChange = vi.fn();

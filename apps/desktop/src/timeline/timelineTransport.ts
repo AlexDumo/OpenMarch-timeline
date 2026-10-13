@@ -315,7 +315,7 @@ export function toggleTimelinePlayback({
 }
 
 /**
- * **Play from the playhead** (Shift+Space, the transport's second Play button): plays on from the
+ * **Play from the playhead** (Shift+Space, or Shift+click on Play): plays on from the
  * playhead, or, with looping on, plays the loop's region once and goes back to the playhead when it
  * ends or is stopped. Playing, it stops.
  */

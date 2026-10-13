@@ -4,7 +4,7 @@ import { playTimelinePage, toggleTimelinePlayback } from "../timelineTransport";
 
 /**
  * Where Play starts (lab test playback-start, project owner 2026-10-13: version B): Space plays on
- * from the start flag, and Shift+Space, the second Play button, plays on from the playhead.
+ * from the start flag, and Shift+Space (or Shift+click on Play) plays on from the playhead.
  * Looping is unchanged.
  */
 

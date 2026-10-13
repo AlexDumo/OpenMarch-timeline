@@ -155,13 +155,6 @@ const PLAY_FROM_FLAG_ICON = (
         <PlayIcon size={14} weight="fill" />
     </span>
 );
-/** Play from the playhead: a bar in the playhead's color */
-const PLAY_FROM_PLAYHEAD_ICON = (
-    <span className="flex items-center gap-2">
-        <span aria-hidden className="rounded-2 bg-accent h-14 w-[2.5px]" />
-        <PlayIcon size={14} weight="fill" />
-    </span>
-);
 
 /**
  * The transport's shortcuts as the tooltips show them (UI-17), as keycaps joined with " + ". They
@@ -467,7 +460,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     playLoops?: boolean;
     /** Shift+Space's once-through is playing (UI-17) */
     playingOnce?: boolean;
-    /** The second Play button (Shift+Space): plays on from the playhead */
+    /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     onPlayFromPlayhead?: () => void;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
@@ -550,9 +543,13 @@ export const TimelineTransport = memo(function TimelineTransport({
         }
         setGoTo(null);
     };
+    // Shift+click is Shift+Space: plays from the playhead (or the loop once)
     const togglePlaying = useCallback(
-        () => onPlayingChange?.(!isPlaying),
-        [isPlaying, onPlayingChange],
+        (event: ReactMouseEvent) =>
+            event.shiftKey && onPlayFromPlayhead
+                ? onPlayFromPlayhead()
+                : onPlayingChange?.(!isPlaying),
+        [isPlaying, onPlayingChange, onPlayFromPlayhead],
     );
     const readout =
         goTo !== null ? (
@@ -642,8 +639,8 @@ export const TimelineTransport = memo(function TimelineTransport({
                                     ? "Goes back to where you were editing"
                                     : "Stops where it is"
                                 : playLoops
-                                  ? "Loops the yellow bar, wherever the playhead is. C or Loop turns looping off"
-                                  : "Plays on from the yellow start flag. Shift+Space plays from the playhead; C loops the page"
+                                  ? "Loops the yellow bar, wherever the playhead is. Shift+click plays it once; C or Loop turns looping off"
+                                  : "Plays on from the yellow start flag. Shift+click or Shift+Space plays from the playhead; C loops the page"
                         }
                         testId="timeline-play"
                         pressed={isPlaying}
@@ -651,29 +648,6 @@ export const TimelineTransport = memo(function TimelineTransport({
                     >
                         {isPlaying ? STOP_ICON : PLAY_FROM_FLAG_ICON}
                     </TransportButton>
-                    {onPlayFromPlayhead && (
-                        <TransportButton
-                            label={
-                                isPlaying
-                                    ? "Stop"
-                                    : playLoops
-                                      ? "Play the loop once"
-                                      : "Play from the playhead"
-                            }
-                            shortcut={TRANSPORT_SHORTCUTS.playPage}
-                            hint={
-                                isPlaying
-                                    ? undefined
-                                    : playLoops
-                                      ? "Plays the yellow bar once, then goes back"
-                                      : "Plays on from where the playhead is"
-                            }
-                            testId="timeline-play-from-playhead"
-                            onClick={onPlayFromPlayhead}
-                        >
-                            {isPlaying ? STOP_ICON : PLAY_FROM_PLAYHEAD_ICON}
-                        </TransportButton>
-                    )}
                     <TransportNavigationButton
                         direction="next"
                         onNavigate={onNavigate}

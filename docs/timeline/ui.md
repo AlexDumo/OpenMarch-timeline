@@ -826,10 +826,9 @@ from it. The spec still wins on the model; this file decides presentation.
     both lessons: it covers whole pages and follows page navigation, and the playhead never resizes
     it.
   - **Space plays on from the start flag; Shift+Space plays on from the playhead** (project owner,
-    2026-10-13, after the lab test playback-start at lab.openmarch.com: version B). The transport has
-    a second Play button for Shift+Space, a bar in the playhead's color then ▶, beside Play's bar in
-    the start flag's color. With looping on, Space loops and Shift+Space plays the loop once and goes
-    back. A stop within the first beat from the start flag changes nothing: the flag is the page
+    2026-10-13, after the lab test playback-start at lab.openmarch.com: version B, with one Play
+    button: Shift+click on it is Shift+Space; the lab's second button was dropped). With looping
+    on, Space loops and Shift+Space plays the loop once and goes back. A stop within the first beat from the start flag changes nothing: the flag is the page
     before's end flag, and stopping on it would move the window back a page (V-192).
   - **Before that, Space played on from the playhead and Shift+Space played the page's move once**
     (project owner, 2026-10-09, after trying round 3's choice by hand, V-176). Round 3 of the
