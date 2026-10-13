@@ -23,6 +23,7 @@ Status: research, 2026-10-10. Nothing here is decided until the owner answers th
 | [02-prior-art.md](02-prior-art.md)     | Pyware classic and 3DX, EnVision, formation apps, Figma, Illustrator, Blender, Onshape. Four candidate architectures (C.1 to C.4) with a comparison table                     |
 | [03-shape-model.md](03-shape-model.md) | Taxonomy of formations, the `ShapeKind` contract (line, arc, block with stagger and spline declared in full), storage options, assignment algorithms, a suggested build order |
 | [04-user-voice.md](04-user-voice.md)   | GitHub issues and discussions, today's shape bugs, and the owner's UX rules with references                                                                                   |
+| [06-box-v1.md](06-box-v1.md)           | The interaction rebuild: why, the build order, and the owner's box v1 spec                                                                                                    |
 
 ## What the research agrees on
 
