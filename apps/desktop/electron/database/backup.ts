@@ -55,8 +55,6 @@ export type BackupErrorCode =
     | "file-busy"
     /** The backup's file name would be too long for the file system. */
     | "name-too-long"
-    /** The name the backup was to get (`target`) is taken. */
-    | "name-taken"
     /** The file couldn't be read as an SQLite database. */
     | "source-unreadable"
     /** The copy was written but doesn't match the original. */
@@ -89,9 +87,9 @@ export type BackupTestHooks = {
 
 export type BackupOptions = BackupTestHooks & {
     /**
-     * The exact path the backup gets: the name the person was shown before they
-     * agreed. When it is taken, the backup fails (`name-taken`) instead of
-     * picking another name. Without it, the first free `nextBackupPath` name.
+     * The path the backup should get: the name the person was shown before they
+     * agreed. When it is taken by then, the backup gets the next free
+     * `nextBackupPath` name instead. Without it, the first free name.
      */
     target?: string;
 };
@@ -362,16 +360,10 @@ function snapshotInto(
     }
 }
 
-const nameTaken = (target: string) =>
-    fail(
-        "name-taken",
-        `A file named "${path.basename(target)}" appeared next to your show, so the backup can't use that name. Your file was not changed. Try again; the backup will get a new name.`,
-    );
-
 /**
- * Gives the verified copy at `tempPath` its final name: exactly `target` when
- * given (failing with `name-taken` when it is taken), or else the first free
- * `nextBackupPath` name for `absolute`. Never replaces a file.
+ * Gives the verified copy at `tempPath` its final name: `target` when given and
+ * free, or else the first free `nextBackupPath` name for `absolute`. Never
+ * replaces a file.
  */
 function publishBackup(
     tempPath: string,
@@ -385,9 +377,8 @@ function publishBackup(
             publishWithoutOverwrite(tempPath, exact);
             return { ok: true, backupPath: exact };
         } catch (e) {
-            return errnoOf(e) === "EEXIST"
-                ? nameTaken(exact)
-                : classify(e, dir);
+            if (errnoOf(e) !== "EEXIST") return classify(e, dir);
+            // Taken since the person was asked: use the next free name.
         }
     }
     let startAt = 1;
@@ -421,7 +412,7 @@ function publishBackup(
  *
  * - Never writes to the original's main file.
  * - Never overwrites an existing file (a dangling symlink counts as taken): a
- *   taken name gets a number, or, with `target`, fails with `name-taken`.
+ *   taken name (including `target`) gets the next free number.
  * - Verifies the copy before returning success, and removes it (and any
  *   temporary file) when anything fails.
  * - Never throws for an expected failure; it returns `{ ok: false, ... }`.
@@ -449,10 +440,6 @@ export function backupBeforeConversion(
             `The file "${absolute}" doesn't exist, so it can't be backed up.`,
         );
     }
-
-    // Fail early, before the snapshot, when the agreed name is already taken.
-    if (requestedTarget !== undefined && entryExists(requestedTarget))
-        return nameTaken(requestedTarget);
 
     sweepOrphanedTempFiles(dir);
 

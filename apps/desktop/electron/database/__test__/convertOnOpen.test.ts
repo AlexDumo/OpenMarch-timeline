@@ -667,7 +667,7 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
             });
         });
 
-        it("taken since it was shown: nothing is overwritten, renamed or converted", async () => {
+        it("taken since it was shown: leaves that file alone and backs up to the next free name", async () => {
             const asked = await openLikeSetActiveDb(showPath, {
                 confirmed: false,
             });
@@ -679,18 +679,17 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
                 backupPath: asked.backupPath,
             });
 
+            const next = asked.backupPath.replace(/\.dots$/, "-2.dots");
             expect(outcome).toMatchObject({
-                kind: "conversion",
-                status: "backup-failed",
-                backup: { code: "name-taken" },
+                status: "converted",
+                backupPath: next,
             });
             expect(fs.readFileSync(asked.backupPath, "utf8")).toBe(
                 "someone else's file",
             );
-            expect(backupsIn(tempDir)).toEqual([
-                path.basename(asked.backupPath),
-            ]);
-            expect(sha256(showPath)).toBe(hashBeforeStep);
+            expect(backupsIn(tempDir).sort()).toEqual(
+                [path.basename(asked.backupPath), path.basename(next)].sort(),
+            );
         });
     });
 

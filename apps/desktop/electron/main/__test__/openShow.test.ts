@@ -293,7 +293,7 @@ describe("opening a show with convert on open", () => {
         },
     );
 
-    it("confirmed: the backup gets the name the person was shown, and a name taken since stops the open", async () => {
+    it("confirmed: a backup name taken since the person was shown it gets the next free name", async () => {
         const asked = await open(showPath, { confirmed: false });
         expect(asked.status).toBe(NEEDS_CONVERSION_STATUS);
         const shown = asked.backupPath!;
@@ -306,14 +306,20 @@ describe("opening a show with convert on open", () => {
             { migrationsFolder, dialogs: () => dialogs },
             { conversionConfirmed: true, conversionBackupPath: shown },
         );
+        result.db?.close();
         if (result.sqlSuspension !== undefined)
             DatabaseServices.resumeSqlProxy(result.sqlSuspension);
 
-        expect(result.status).toBe(OPEN_STOPPED_STATUS);
-        expect(calls).toEqual(["preparing", "backup failed show.dots"]);
+        expect(result.status).toBe(200);
+        expect(calls).toEqual(["preparing"]);
         expect(fs.readFileSync(shown, "utf8")).toBe("someone else's file");
-        expect(backupsIn(tempDir)).toEqual([path.basename(shown)]);
-        expect(stateOf(showPath).userVersion).toBe(7);
+        expect(backupsIn(tempDir).sort()).toEqual(
+            [
+                path.basename(shown),
+                path.basename(shown).replace(/\.dots$/, "-2.dots"),
+            ].sort(),
+        );
+        expect(stateOf(showPath).userVersion).toBe(8);
     });
 
     it("two opens of the same file at once: converted once, both open quietly", async () => {

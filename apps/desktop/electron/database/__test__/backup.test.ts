@@ -191,19 +191,21 @@ describe("backupBeforeConversion", () => {
     });
 
     it.each(["file", "dangling symlink"] as const)(
-        "with a target taken by a %s, fails without touching it or picking another name",
+        "with a target taken by a %s, leaves it alone and uses the next free name",
         (kind) => {
             const target = path.join(dir, `My Show.${BACKUP_NAME_SUFFIX}.dots`);
             if (kind === "file") fs.writeFileSync(target, "not a database");
             else fs.symlinkSync(path.join(dir, "nowhere"), target);
-            const before = fs.readdirSync(dir).sort();
 
             const result = backupBeforeConversion(showPath, { target });
 
-            expect(result).toMatchObject({ ok: false, code: "name-taken" });
-            expect(fs.readdirSync(dir).sort()).toEqual(before);
+            const next = path.join(dir, `My Show.${BACKUP_NAME_SUFFIX}-2.dots`);
+            expect(result).toMatchObject({ ok: true, backupPath: next });
+            const copy = new DatabaseSync(next, { readOnly: true });
+            copy.close();
             if (kind === "file")
                 expect(fs.readFileSync(target, "utf8")).toBe("not a database");
+            else expect(fs.lstatSync(target).isSymbolicLink()).toBe(true);
         },
     );
 
