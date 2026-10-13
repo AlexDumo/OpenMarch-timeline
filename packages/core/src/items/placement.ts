@@ -302,3 +302,86 @@ export function crewOutOfReach(
         (d) => d.distance > reach,
     );
 }
+
+/** A held → placed change: where the item is put down, and who held it until then. */
+export interface PutDown {
+    changeId: number;
+    /** The position of the placed change */
+    beat: number;
+    /** Who held it just before */
+    holders: readonly Holder[];
+}
+
+/**
+ * Every put-down in an item's changes, in beat order: a placed change right after a held one, or
+ * the first change when the item's origin is a flag (held by its original performer until then).
+ */
+export function putDowns(
+    changes: readonly PlacementChange[],
+    origin: ItemOrigin = CREATED,
+): PutDown[] {
+    const sorted = [...changes].sort((a, b) => a.beat - b.beat || a.id - b.id);
+    const out: PutDown[] = [];
+    let before = fromOrigin(origin);
+    for (const c of sorted) {
+        if (c.state === "placed" && before.state === "held")
+            out.push({ changeId: c.id, beat: c.beat, holders: before.holders });
+        before = fromChange(c);
+    }
+    return out;
+}
+
+/**
+ * Where a put-down item lands: its holder's position, or the midpoint of its holders' for
+ * several. Null when no holder has a position.
+ */
+export function putDownSpot(
+    holders: readonly Holder[],
+    positions: ReadonlyMap<number, XY>,
+): XY | null {
+    const points = holders
+        .map((h) => positions.get(h.marcherId))
+        .filter((p): p is XY => p !== undefined);
+    if (points.length === 0) return null;
+    const sum = points.reduce<[number, number]>(
+        (acc, p) => [acc[0] + p[0], acc[1] + p[1]],
+        [0, 0],
+    );
+    return [sum[0] / points.length, sum[1] / points.length];
+}
+
+/** A put-down item no longer where its holder was: the holder's drill changed after it. */
+export interface PutDownDrift extends PutDown {
+    /** Where the holder (or the holders' midpoint) is now at the put-down */
+    spot: XY;
+    /** Where the item is at the put-down */
+    at: XY;
+    distance: number;
+}
+
+/**
+ * The put-downs where the item isn't at its holder's position at that count, by more than
+ * `tolerance` (canvas units). `positionAt` reads the resolver; null for a marcher it doesn't have.
+ */
+export function putDownDrifts(
+    changes: readonly PlacementChange[],
+    origin: ItemOrigin,
+    itemMarcherId: number,
+    positionAt: (marcherId: number, beat: number) => XY | null,
+    tolerance = 1e-3,
+): PutDownDrift[] {
+    const out: PutDownDrift[] = [];
+    for (const putDown of putDowns(changes, origin)) {
+        const positions = new Map<number, XY>();
+        for (const h of putDown.holders) {
+            const p = positionAt(h.marcherId, putDown.beat);
+            if (p) positions.set(h.marcherId, p);
+        }
+        const spot = putDownSpot(putDown.holders, positions);
+        const at = positionAt(itemMarcherId, putDown.beat);
+        if (!spot || !at) continue;
+        const distance = Math.hypot(at[0] - spot[0], at[1] - spot[1]);
+        if (distance > tolerance) out.push({ ...putDown, spot, at, distance });
+    }
+    return out;
+}

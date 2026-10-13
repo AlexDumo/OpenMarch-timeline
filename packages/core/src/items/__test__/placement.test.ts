@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { XY } from "../../timeline/types";
 import {
+    CREATED,
     crewDistances,
     crewOutOfReach,
     handConflicts,
     handsAt,
     handsNeeded,
     placementAt,
+    putDowns,
+    putDownDrifts,
+    putDownSpot,
     type Holder,
     type ItemPlacements,
     type PlacementChange,
@@ -307,5 +311,84 @@ describe("handsNeeded", () => {
         expect(handsNeeded({ left: true, right: true })).toBe("both");
         expect(handsNeeded({ left: false, right: true })).toBe("right");
         expect(handsNeeded({ left: true, right: false })).toBe("left");
+    });
+});
+
+describe("put-down", () => {
+    it("finds each held → placed change with the holders just before it", () => {
+        const changes = [
+            held(2, [{ marcherId: ALICE, hand: "both" }]),
+            placed(6),
+            offField(8),
+            held(10, [
+                { marcherId: ALICE, hand: "left" },
+                { marcherId: BOB, hand: "right" },
+            ]),
+            placed(12, [CREW_A]),
+            placed(14),
+        ];
+        expect(
+            putDowns(changes).map((p) => [p.beat, p.holders.length]),
+        ).toEqual([
+            [6, 1],
+            [12, 2],
+        ]);
+    });
+
+    it("puts down a flag item's first placed change, from its original performer", () => {
+        expect(putDowns(FLAG.changes, FLAG.origin)).toEqual([
+            {
+                changeId: FLAG.changes[0]!.id,
+                beat: 8,
+                holders: [{ marcherId: ALICE, hand: "both" }],
+            },
+        ]);
+        expect(putDowns(FLAG.changes)).toEqual([]);
+    });
+
+    it("lands at the holder, or the midpoint of several", () => {
+        const positions = new Map<number, XY>([
+            [ALICE, [0, 0]],
+            [BOB, [4, 2]],
+        ]);
+        expect(
+            putDownSpot([{ marcherId: ALICE, hand: "both" }], positions),
+        ).toEqual([0, 0]);
+        expect(
+            putDownSpot(
+                [
+                    { marcherId: ALICE, hand: "left" },
+                    { marcherId: BOB, hand: "right" },
+                ],
+                positions,
+            ),
+        ).toEqual([2, 1]);
+        expect(
+            putDownSpot([{ marcherId: 99, hand: "both" }], positions),
+        ).toBeNull();
+    });
+});
+
+describe("putDownDrifts", () => {
+    const ITEM_MARCHER = 100;
+    const changes = [held(2, [{ marcherId: ALICE, hand: "both" }]), placed(6)];
+
+    it("is quiet while the item is where its holder was", () => {
+        const at = () => [3, 4] as XY;
+        expect(putDownDrifts(changes, CREATED, ITEM_MARCHER, at)).toEqual([]);
+    });
+
+    it("names a put-down once the holder's drill moved", () => {
+        const at = (id: number): XY => (id === ALICE ? [6, 8] : [3, 4]);
+        expect(putDownDrifts(changes, CREATED, ITEM_MARCHER, at)).toEqual([
+            {
+                changeId: changes[1]!.id,
+                beat: 6,
+                holders: [{ marcherId: ALICE, hand: "both" }],
+                spot: [6, 8],
+                at: [3, 4],
+                distance: 5,
+            },
+        ]);
     });
 });
