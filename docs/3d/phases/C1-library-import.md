@@ -277,8 +277,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### C1.13: Starter kit
 
 - Owner: trevor (3d/c1-starter-kit)
-- Status: in-progress
-- PR: none
+- Status: in-review
+- PR: #155
 - Parallel: yes
 - Depends on: C1.7, C1.12
 
