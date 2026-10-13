@@ -784,10 +784,16 @@ export const ownPageMoves = async (
 /**
  * Deletes `rows` (marchers' own page moves, `ownPageMoves`) with their kept markers and one-slot
  * transitions, and then each of their timelines that has no transition left, children first.
+ *
+ * With `tidyShared` (Basic's writes, whose rows may be slots of a converted page's shared
+ * transition), a shared transition they leave is compacted (`compact`) and one they empty is
+ * deleted, so the edit makes no vacant slot (D-VACANT). A vacancy already in the last slot, or in
+ * a transition sharing a marcher with an inheriting follow-the-leader one, stays (`compact`).
  */
 export const clearOwnPageMoves = async (
     tx: DbTransaction,
     rows: readonly DatabaseTimelineAssignment[],
+    { tidyShared = false }: { tidyShared?: boolean } = {},
 ): Promise<void> => {
     if (rows.length === 0) return;
     // A kept spot's marker goes first (children first, as C-1)
@@ -811,7 +817,8 @@ export const clearOwnPageMoves = async (
     await removeAssignmentRowsInTransaction({
         tx,
         removed: rows,
-        compact: false,
+        compact: tidyShared,
+        deleteEmptied: tidyShared,
     });
     const left = new Set(
         (
@@ -1246,6 +1253,23 @@ export const shapeBackedTransitionIds = async ({
     return new Set(rows.filter((r) => r.shapeId !== null).map((r) => r.id));
 };
 
+/** Whether `shift`'s marcher still holds its slot (a compaction may have moved another in). */
+const holdsSlot = async (tx: DbTransaction, shift: SlotShift) => {
+    const a = schema.timeline_assignments;
+    const row = await tx
+        .select({ id: a.id })
+        .from(a)
+        .where(
+            and(
+                eq(a.transition_id, shift.transitionId),
+                eq(a.slot_index, shift.slotIndex),
+                eq(a.marcher_id, shift.marcherId),
+            ),
+        )
+        .get();
+    return row !== undefined;
+};
+
 class NothingShifted extends Error {
     constructor() {
         super("nothing to shift");
@@ -1255,7 +1279,9 @@ class NothingShifted extends Error {
 /**
  * **Move them too** (timeline mode, defined-coordinates 09): moves each slot's destination by its
  * offset, as one undoable edit. Shape-backed transitions are skipped (their slots have no point of
- * their own), as are slots that are gone. Later pages that hold from the moved destinations follow.
+ * their own), as are slots that are gone and slots no longer held by the shift's marcher (a shared
+ * transition compacted since the shift was planned moves another marcher into it). Later pages that
+ * hold from the moved destinations follow.
  *
  * @returns the shifts written (empty, with no edit, when none could be)
  */
@@ -1290,9 +1316,11 @@ export const shiftSlotDestinations = async ({
                         .filter((r) => r.shapeId === null)
                         .map((r) => r.id),
                 );
+                const a = schema.timeline_assignments;
                 const written: SlotShift[] = [];
                 for (const shift of shifts) {
                     if (!shapeless.has(shift.transitionId)) continue;
+                    if (!(await holdsSlot(tx, shift))) continue;
                     const point = await tx
                         .select({ x: d.x, y: d.y })
                         .from(d)
@@ -1315,7 +1343,6 @@ export const shiftSlotDestinations = async ({
                 // An edit that writes nothing can't be an undo step
                 if (written.length === 0) throw new NothingShifted();
                 // A moved kept spot is its marcher's own move from now on (as writeSlotMoves)
-                const a = schema.timeline_assignments;
                 const moved: number[] = [];
                 for (const shift of written) {
                     const rows = await tx

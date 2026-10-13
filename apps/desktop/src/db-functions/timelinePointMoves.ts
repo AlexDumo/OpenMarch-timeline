@@ -52,14 +52,28 @@ import {
  * or, with none (a hold or the flag follows), the move is deleted, as UI-18's "back onto the start
  * clears the move". A kept spot (`timeline_kept_assignments`) is never cleared or merged that way;
  * its new ending is written instead, as on the range path. A merged move arrives where the next
- * move did, so it is kept when that one was.
+ * move did, and is kept when either of the two was (a designer's spot survives the merge).
+ *
+ * **A merge that goes nowhere** (drag back or **Remove this count's position**, arriving where the
+ * first move starts) is deleted instead of written: a point set in a hold and then removed leaves
+ * the hold as it was, with no move ending at the hold's end (no tick there), and a page it held
+ * through follows earlier pages again; moves right after it that go nowhere either (not kept) go
+ * with it, since their only tick was its end. A kept spot among the two moves is merged as above.
+ * A point set inside a move writes both halves even when the second goes nowhere: it is the
+ * user's point, with a tick that Remove takes out. Splitting a kept move keeps the second half
+ * kept (it arrives where the kept spot did); the new point before it isn't.
  *
  * Positions ("r's end", "the held position", "where r starts") are the resolver's, read once
- * from the rows the edit sees before anything is written. New moves go on the layer of the move
- * they replace or follow (0 when the marcher has none in the box), never `stealLayer`: nothing in
- * a simple box overlaps them. They get their own one-slot `direct` transition (C-11) in the
- * timeline over their range, reused when one is stored (C-12) and created otherwise; a timeline
- * left with no transition is deleted (`clearOwnPageMoves`).
+ * from the rows the edit sees before anything is written, and only when an edit reads one. New
+ * moves go on the layer of the move they replace or follow (0 when the marcher has none in the
+ * box), never `stealLayer`: nothing in a simple box overlaps them. They get their own one-slot
+ * `direct` transition (C-11) in the timeline over their range, reused when one is stored (C-12)
+ * and created otherwise. A converted page's shared transition the edit leaves is compacted, one it
+ * empties is deleted, and a timeline left with no transition is deleted (`clearOwnPageMoves` with
+ * `tidyShared`), so Basic makes no vacant slot. (Compaction stops at a last slot that was already
+ * vacant, and skips a transition sharing a marcher with an inheriting follow-the-leader one; their
+ * vacancies stay.) The simple-defaults timeline's point half and Basic's Split page write here
+ * too, so they tidy the same way.
  *
  * Refused before any write: a beat outside `(a, b]` or not whole, a box that isn't a page's box,
  * a marcher named twice, an invalid position (`E-ARGS` or the validator's code), and any listed
@@ -100,7 +114,8 @@ const emptyPlan = (): PointPlan => ({
 /** What the plans read: each marcher's rows inside the box, and positions before the edit. */
 interface BoxState {
     rowsOf: (marcherId: number) => BasicRow[];
-    positionAt: (marcherId: number, beat: number) => XY;
+    /** The resolver's, built on the first call (most edits read one; some read none) */
+    positionAt: (marcherId: number, beat: number) => Promise<XY>;
     /** Each timeline's range, for the rows' timelines */
     timelineRange: Map<number, BeatRange>;
     /** The kept rows among the marchers' rows */
@@ -178,12 +193,18 @@ const readBoxState = async (
         tx,
         [...inBox.values()].flat().map((r) => r.assignmentId),
     );
-    // Where the marchers are now, from the rows this edit sees, before anything is written
-    const resolver = createResolver((await readTimelineTables(tx)).snapshot);
+    // Where the marchers are now, from the rows this edit sees: read once and only when needed,
+    // always before the plan writes anything
+    let resolver: ReturnType<typeof createResolver> | undefined;
     return {
         rowsOf: (id) =>
             [...(inBox.get(id) ?? [])].sort((x, y) => x.start - y.start),
-        positionAt: (id, beat) => resolver.positionAt(id, beat),
+        positionAt: async (id, beat) => {
+            resolver ??= createResolver(
+                (await readTimelineTables(tx)).snapshot,
+            );
+            return resolver.positionAt(id, beat);
+        },
         timelineRange,
         kept,
         locked: new Set(locked),
@@ -222,32 +243,67 @@ const setEnding = (
 };
 
 /**
- * `first` and `second` (meeting at `first.end`) as one move arriving where `second` did, on
+ * Plans `first` and `second` (meeting at `first.end`) as one move arriving where `second` did, on
  * `first`'s layer. The arrival is `second`'s, so it stays kept when `second` was (a kept spot split
  * in two and merged again is kept, as `splitMovesAtBeatInTransaction` left it).
+ *
+ * A merge that would go nowhere (arriving where `first` starts) is deleted instead, so the marcher
+ * holds there as it did before the point was set, and the hold's end isn't left as a tick. Moves
+ * right after it that go nowhere either (not kept) are deleted with it: their start was that tick.
+ * Unless either move is a kept spot: those merge as above.
  */
-const mergedMove = (
+const planMerge = async (
+    plan: PointPlan,
     state: BoxState,
     first: BasicRow,
     second: BasicRow,
-): NewMove => ({
-    marcherId: first.marcherId,
-    start: first.start,
-    end: second.end,
-    point: state.positionAt(first.marcherId, second.end),
-    layer: first.layer,
-    kept: state.kept.has(second.assignmentId),
-});
+): Promise<void> => {
+    const { marcherId } = first;
+    const point = await state.positionAt(marcherId, second.end);
+    // A kept spot among the two is the designer's: the merge keeps it (lead default)
+    const kept =
+        state.kept.has(first.assignmentId) ||
+        state.kept.has(second.assignmentId);
+    plan.removed.push(first, second);
+    const from = await state.positionAt(marcherId, first.start);
+    if (!kept && samePosition(point, from)) {
+        // Moves right after it that go nowhere either had their only tick at its end: they go
+        // too, so the marcher holds until its next real move (or the flag)
+        let end = second.end;
+        // Sorted by start and not overlapping, so each next one starts where the last ended
+        for (const next of state.rowsOf(marcherId)) {
+            if (next.start < end) continue;
+            if (
+                next.start > end ||
+                state.kept.has(next.assignmentId) ||
+                !samePosition(await state.positionAt(marcherId, next.end), from)
+            )
+                break;
+            plan.removed.push(next);
+            end = next.end;
+        }
+        plan.cleared.push(marcherId);
+        return;
+    }
+    plan.added.push({
+        marcherId,
+        start: first.start,
+        end: second.end,
+        point,
+        layer: first.layer,
+        kept,
+    });
+};
 
 /** Plans one marcher's position at `beat` (see the module comment). */
-const planPoint = (
+const planPoint = async (
     plan: PointPlan,
     state: BoxState,
     box: Box,
     beat: number,
     move: TimelineMarcherMove,
     clearOwn: boolean,
-): void => {
+): Promise<void> => {
     const { marcherId } = move;
     const rows = state.rowsOf(marcherId);
     const point: XY = [move.x, move.y];
@@ -260,7 +316,7 @@ const planPoint = (
         plan.cleared.push(marcherId);
         return;
     }
-    if (samePosition(point, at(beat))) return;
+    if (samePosition(point, await at(beat))) return;
 
     const inside = rows.find((r) => r.start < beat && beat < r.end);
     if (inside) {
@@ -273,12 +329,14 @@ const planPoint = (
                 point,
                 layer: inside.layer,
             },
+            // It arrives where a kept spot did, so it stays kept; the new point isn't
             {
                 marcherId,
                 start: beat,
                 end: inside.end,
-                point: at(inside.end),
+                point: await at(inside.end),
                 layer: inside.layer,
+                kept: state.kept.has(inside.assignmentId),
             },
         );
         return;
@@ -288,13 +346,12 @@ const planPoint = (
     if (ending) {
         // Back onto where the move starts: the point goes, unless it is a kept spot
         if (
-            samePosition(point, at(ending.start)) &&
-            !state.kept.has(ending.assignmentId)
+            !state.kept.has(ending.assignmentId) &&
+            samePosition(point, await at(ending.start))
         ) {
             const next = rows.find((r) => r.start === beat);
             if (next) {
-                plan.removed.push(ending, next);
-                plan.added.push(mergedMove(state, ending, next));
+                await planMerge(plan, state, ending, next);
                 return;
             }
             plan.removed.push(ending);
@@ -318,7 +375,7 @@ const planPoint = (
             marcherId,
             start: beat,
             end: g1,
-            point: at(beat),
+            point: await at(beat),
             layer,
         });
 };
@@ -369,7 +426,7 @@ const writePlan = async (
                 ),
             )
             .all();
-        await clearOwnPageMoves(tx, removed);
+        await clearOwnPageMoves(tx, removed, { tidyShared: true });
     }
 
     const byRange = new Map<string, NewMove[]>();
@@ -454,7 +511,7 @@ export async function setPositionsAtBeatInTransaction({
     const plan = emptyPlan();
     for (const move of moves)
         if (!state.locked.has(move.marcherId))
-            planPoint(plan, state, box, beat, move, clearOwn);
+            await planPoint(plan, state, box, beat, move, clearOwn);
     return {
         ...(await writePlan(tx, plan)),
         leftAlone: [...state.locked].sort((x, y) => x - y),
@@ -464,7 +521,9 @@ export async function setPositionsAtBeatInTransaction({
 /**
  * **Remove this count's position**: for each of `marcherIds` with a move ending at `beat` and
  * another starting there (a split), the two merge into one move from the first's start to the
- * second's end, arriving where the second did. Marchers without a split at `beat` are untouched.
+ * second's end, arriving where the second did; a merge that goes nowhere is deleted instead and
+ * the marcher listed in `cleared` (see the module comment). Marchers without a split at `beat`
+ * are untouched.
  * `beat` must be strictly inside `box`; non-simple marchers are refused as by
  * `setPositionsAtBeatInTransaction`.
  */
@@ -490,8 +549,7 @@ export async function removePositionAtBeatInTransaction({
         const first = rows.find((r) => r.end === beat);
         const second = rows.find((r) => r.start === beat);
         if (!first || !second) continue;
-        plan.removed.push(first, second);
-        plan.added.push(mergedMove(state, first, second));
+        await planMerge(plan, state, first, second);
     }
     return await writePlan(tx, plan);
 }
@@ -531,7 +589,8 @@ export async function removePositionAtBeat({
                     box,
                     marcherIds,
                 });
-                if (result.slots.length === 0) throw new NothingRemoved(result);
+                if (result.slots.length === 0 && !result.cleared)
+                    throw new NothingRemoved(result);
                 return result;
             },
         );
@@ -608,7 +667,7 @@ export async function splitMovesAtBeatInTransaction({
                 marcherId,
                 start: row.start,
                 end: beat,
-                point: state.positionAt(marcherId, beat),
+                point: await state.positionAt(marcherId, beat),
                 layer: row.layer,
                 kept,
             },
@@ -616,7 +675,7 @@ export async function splitMovesAtBeatInTransaction({
                 marcherId,
                 start: beat,
                 end: row.end,
-                point: state.positionAt(marcherId, row.end),
+                point: await state.positionAt(marcherId, row.end),
                 layer: row.layer,
                 kept,
             },
