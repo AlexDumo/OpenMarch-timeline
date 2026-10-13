@@ -70,7 +70,8 @@ const TIMELINE_DEFAULT_PX_PER_BEAT = 16;
 /**
  * Room after the show's last beat: **+** (UI-9) is drawn just after the playhead, so with the
  * playhead on the last beat past the last flag (a page ending at the show's end) it needs this
- * much to stay on screen and clickable, fitted or scrolled to the end. The button's 8px gap, its 16px, and 8px to spare.
+ * much to stay on screen and clickable, fitted or scrolled to the end. The button's 8px gap, its
+ * 16px, and 8px to spare.
  */
 export const TIMELINE_END_INSET = 32;
 

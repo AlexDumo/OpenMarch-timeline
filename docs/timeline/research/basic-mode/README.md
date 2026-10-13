@@ -70,7 +70,7 @@ of page boxes sized by duration, with the music inside them.
   original"), open to either. A simulated-user A/B compares it with the original's control block
   on the left (study: `~/ux-sim/basic-transport/`).
 - _Owner, 2026-10-12:_ **⏮ stays the previous page and ⏭ the next page** in Basic, as in Expert
-  (UI-17); **Shift+click goes to the start** (⏮) **or the end, the last page** (⏭) (V-210). Basic
+  (UI-17); **Shift+click goes to the start** (⏮) **or the last page's flag** (⏭) (V-210). Basic
   testers had read ⏮ as "the start": one pressed ⏮ then Play to watch the whole show and saw one
   page (`~/ux-sim/basic-past-flag/rosa-after/r7/14-click.png`, LOG.md lines 50 to 52). The
   tooltips say "One page back" and name the ways to the start, and the house's tooltip says it's
@@ -97,7 +97,9 @@ of page boxes sized by duration, with the music inside them.
   a short-lived Basic default (a page of `defaultNewPageCounts` from the last flag, offered on
   the flag too, lengthening the show where it was too short). Page mode's add page, which does
   lengthen the show, is unchanged. The timeline keeps 32px after the show's last beat so **+**
-  stays on screen with the playhead on the last count (both modes).
+  stays on screen with the playhead on the last count (both modes), and while the timeline shows
+  in timeline mode toasts sit just above it, so one (such as "There's no page here yet. Add a page
+  with +…") never covers **+**. A raised toast covers the field's zoom-in button while it shows.
 - Not in Basic: clips (moves off flags), the start flag and pinning, the loop bar, isolation,
   clip resize, the measure row.
 - Play, Space and Shift+Space use the timeline playback driver. Space plays on from the playhead;
