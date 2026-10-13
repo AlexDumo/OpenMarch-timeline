@@ -14,9 +14,9 @@ import { AlertDialogAction, AlertDialogCancel } from "@openmarch/ui";
 import { T, useTolgee } from "@tolgee/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    allMarchersQueryOptions,
     deleteMarchersMutationOptions,
     updateMarchersMutationOptions,
+    performersQueryOptions,
 } from "@/hooks/queries";
 import { ModifiedMarcherArgs } from "@/db-functions";
 import { MarcherFormContents } from "@/components/marcher/MarchersModal";
@@ -55,7 +55,7 @@ export default function MarcherList({
         isSuccess: marchersSuccess,
         isLoading: marchersLoading,
         isError: marchersError,
-    } = useQuery(allMarchersQueryOptions());
+    } = useQuery(performersQueryOptions()); // Items are not edited as marchers
 
     // localMarchers are the marchers that are displayed in the table
     const [localMarchers, setLocalMarchers] = useState<Marcher[]>();
