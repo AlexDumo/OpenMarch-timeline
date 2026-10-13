@@ -128,6 +128,15 @@ export function planCanvasEdit(
                       selection.end,
                   )
                 : null;
+        // Basic never falls back to the window: its moves would cross flags it can't show
+        if (basic && !box)
+            return {
+                ok: false,
+                error:
+                    (state.pageBoxes ?? []).length === 0
+                        ? new TimelineNotReadyError()
+                        : new TimelineEditRefusedError("pastLastPage"),
+            };
         if (box && (basic || selection.start === box.start))
             return {
                 ok: true,

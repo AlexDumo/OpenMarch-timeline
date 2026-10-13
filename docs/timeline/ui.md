@@ -194,7 +194,10 @@ from it. The spec still wins on the model; this file decides presentation.
     so motion is unchanged. The new page is selected. Pages store their
     start beat, so this inserts a row at the split page's old start and moves
     that page's `start_beat` to the playhead. Past the last flag, nothing is
-    split: **+** appends a page ending at the playhead (_lead default_).
+    split: **+** appends a page ending at the playhead (_lead default_). In
+    Basic (UI-19) it appends a page of the file's `defaultNewPageCounts`
+    instead, also offered on the last flag, lengthening the show when it's
+    too short (research/basic-mode, "Basic's panel"; provisional, see U-Q5).
   - **Selection.** With a stored timeline selected, marchers without a
     transition in it are dimmed, and a dimmed marcher can't be selected or
     interacted with at all: clicks and box selection pass over it, and
@@ -826,12 +829,21 @@ from it. The spec still wins on the model; this file decides presentation.
     on); the owner found it asked two presses to play on from the playhead, and that page-from-start
     playing belongs to loop mode. Testers had expected Space to play a page they'd just selected;
     the tooltip and the menu's "Play Page Once" are the answer to that, to watch (V-176).
-  - **Playing on stops where it is**, and when that is a new page the field line says so with a ring
-    ("Stopped on a new page · Editing Page 4…") for a few seconds (owner; the quiet line was missed
-    by every tester who then edited the wrong set).
+  - **Playing on stops where it is**, and when that is another page the field line says so with a
+    ring ("Stopped on page 4 · Editing Page 4…") for a few seconds (owner; the quiet line was missed
+    by every tester who then edited the wrong set). Pages are compared, not the line's words, so
+    stopping inside the page it started on stays quiet, and leaving that page drops the note. Past
+    the last flag it reads "Stopped after the last page · Editing After page 5…". Basic can't edit
+    there, so its line says "Add a page with + to edit here" instead of "Editing …" whenever the
+    playhead is past the last flag, stopped there or not. It first said "Stopped on a new page", which
+    all four users of the Basic past-the-last-flag study read as "the app made a page" and went to
+    check.
   - **⏮ is the previous page; Shift+click (or Shift+Q) goes to the start of the show**, as before
     (owner, 2026-10-09: briefly swapped after testers read ⏮ as "start"; the owner wants the
-    common step on the plain click). The tooltip says Shift+click goes to the start.
+    common step on the plain click). The tooltip says "One page back" and names the ways to the
+    start: Shift+click, Shift+Q or the house, whose own tooltip says it's the start of the show
+    (2026-10-12, after Basic testers pressed ⏮ then Play and saw one page; the plain click is
+    unchanged).
   - **A click on a beat seeks to that count** (UI-12); the page box row selects the page (owner,
     2026-10-09, after briefly making any click select the page).
   - **Home while playing jumps playback to the start**; transport buttons don't take keyboard focus
@@ -1201,7 +1213,9 @@ points (P7.2).
 
   TODO (project owner, 2026-10-01; not now):
   - how a selected marcher's spans (UI-1) show inside a timeline's one track;
-  - appending pages past the last flag (today's `defaultNewPageCounts`);
+  - appending pages past the last flag (today's `defaultNewPageCounts`;
+    Basic uses it provisionally, research/basic-mode "Basic's panel", with
+    counts added at the default tempo where the show is too short);
   - ~~whether clicking a clip selects its timeline~~ (yes: UI-12);
   - editing anywhere in the selected timeline, not only at its end (the
     temporary refusal in UI-9).

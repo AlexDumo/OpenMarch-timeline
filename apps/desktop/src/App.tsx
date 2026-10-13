@@ -54,6 +54,7 @@ import { useLoadFileErrorHandler } from "./hooks/useLoadFileErrorHandler";
 import { toast } from "sonner";
 import { version as currentVersion } from "../package.json";
 import { shouldShowUpdateNotification } from "./utilities/updateNotification";
+import { isAnalyticsChoiceMade } from "./components/welcome/welcomeFlowSteps";
 
 export const queryClient = new QueryClient({
     defaultOptions: {
@@ -198,11 +199,10 @@ function App() {
         void window.electron
             .invoke("settings:get", "optOutAnalytics")
             .then((optOut) => {
-                if (optOut === undefined) {
-                    setAnalyticsConsent(null);
-                } else {
-                    setAnalyticsConsent(!optOut);
-                }
+                // Same rule as the welcome flow: a stored null is unanswered too
+                setAnalyticsConsent(
+                    isAnalyticsChoiceMade(optOut) ? !optOut : null,
+                );
             });
     }, []);
 

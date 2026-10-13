@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
-import { toast } from "sonner";
-import { useIsBasicMode, useEditorModeStore } from "@/stores/EditorModeStore";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { toastBasicLock } from "./basicLockToast";
 import {
     useTimelineSelectionStore,
     type PageBox,
@@ -119,10 +119,6 @@ export function withoutLockedMarchers<
     };
 }
 
-/** Switches to Expert (the toasts' action). */
-export const switchToExpert = () =>
-    useEditorModeStore.getState().setMode("expert");
-
 /**
  * The toast for marchers a Basic edit left alone because they're locked (V-203). `wrote` says
  * whether the others were edited.
@@ -130,11 +126,7 @@ export const switchToExpert = () =>
 export function toastLockedMarchers(count: number, wrote: boolean): void {
     if (count === 0) return;
     const who = count === 1 ? "One marcher uses" : `${count} marchers use`;
-    toast.warning(
+    toastBasicLock(
         `${who} Expert moves on this page${wrote ? `, so ${count === 1 ? "it wasn't" : "they weren't"} moved` : ""}. Switch to Expert to edit ${count === 1 ? "it" : "them"}.`,
-        {
-            id: "basic-locked-marchers",
-            action: { label: "Switch to Expert", onClick: switchToExpert },
-        },
     );
 }

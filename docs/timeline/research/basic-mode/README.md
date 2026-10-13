@@ -69,6 +69,16 @@ of page boxes sized by duration, with the music inside them.
 - **Transport:** _owner leaning to Expert's transport bar_ ("no real reason to keep the
   original"), open to either. A simulated-user A/B compares it with the original's control block
   on the left (study: `~/ux-sim/basic-transport/`).
+- **Open (owner): what ⏮ does in Basic** (V-210). UI-17 (owner, 2026-10-09, before Basic) keeps
+  the plain click on the previous page and puts the start on Shift+click, Shift+Q and the house.
+  Basic testers read ⏮ as "the start": one pressed ⏮ then Play to watch the whole show and saw one
+  page (`~/ux-sim/basic-past-flag/rosa-after/r7/14-click.png`, LOG.md lines 50 to 52); in the
+  transport study one expected "go to start" (`basic-transport/marcus/notes.md`, lines 7 to 11)
+  and one the start of the current page (`priya/notes.md`, line 17). For now the tooltips say "One
+  page back" and name the ways to the start, and the house's tooltip says it's the start of the
+  show (a labeling stopgap: it helps only those who hover). Options: (a) keep that; (b) in Basic,
+  ⏮ goes to the start and page stepping stays on Q/E and the arrow keys; (c) a separate ⏪/⏩ pair
+  for the start and the end, as the original bar had, with ⏮/⏭ unchanged.
 - On or in the boxes: the status chip, the Expert mark, mid-page ticks (right-click
   **Remove this count's position**), the page menu (delete, subset), and dragging a flag to
   change a page's length (UI-16).
@@ -89,6 +99,25 @@ of page boxes sized by duration, with the music inside them.
 - **+ after the playhead** adds a page there, as in Expert. In Basic, adding a page (and the
   inspector's **Split page**) also splits each marcher's move at the new flag, keeping its
   position there, so no move crosses the new flag (otherwise every split would lock).
+- **+ on or past the last flag** (_provisional lead default, 2026-10-12, for the owner_; after
+  simulated users got 4- and 6-count pages from where they happened to click) adds a page of the
+  file's **default new-page counts** (Workspace settings, what page mode's add page used) from
+  the last flag, wherever the playhead is on or past it, so pages can be added back to back. In a
+  show with only home, that is on home's flag, and it adds page 1.
+- Where the show is too short (often the music ends on the last flag in old files) it first adds
+  **only the missing counts, rounded up to whole measures**, in the same undo step. Page mode's
+  add page instead adds a whole `defaultNewPageCounts` of measures. Both use the file's **default
+  tempo and meter**, not the show's last tempo: a 144 bpm show gets 120 bpm counts.
+- The new page is selected (playhead on its flag) and a toast names it, closing on the next edit:
+  "Added Page 7 · 16 counts" ("…, and 4 measures at the end of the show"). The **+** tooltip says
+  the same first. Expert keeps UI-9's page ending at the playhead.
+- While the timeline shows (timeline mode, both modes), toasts sit just above it rather than in
+  the bottom corner, where they covered the timeline's right end and the **+** at the show's end;
+  and the timeline keeps 32px after the show's last beat so that **+** stays on screen.
+- **Owner to confirm** (next to the U-Q5 TODO in `../../ui.md`, appending pages past the last
+  flag): the default counts or the last page's counts (every page-mode fixture has
+  `defaultNewPageCounts` 16 with 8-count pages, so converted files get 16-count pages); and the
+  default tempo for added counts, or the show's last tempo.
 - Not in Basic: clips (moves off flags), the start flag and pinning, the loop bar, isolation,
   clip resize, the measure row.
 - Play, Space and Shift+Space use the timeline playback driver. Space plays on from the playhead;
@@ -121,6 +150,21 @@ shapeless moves on one layer, ordered, not overlapping; see "Simple"):
   (the two moves merge), like UI-18's "back onto the start clears the move" (lead default).
 - **Remove this count's position** merges `[s, P)` and `[P, e)` into `[s, e)` with the second
   move's destination.
+- A merge that goes nowhere (its destination is where `s` is) is deleted instead, by both of
+  those, with any moves right after it that go nowhere too (their only tick was its end): a
+  single point set in a hold and removed again leaves the hold as it was, with no tick at the
+  hold's end, and a page the marcher held through follows earlier pages again (V-220, lead
+  default). A point set inside a move always writes both halves, even when the second goes
+  nowhere: it is the user's point, with a tick Remove takes out.
+- Kept spots: setting a point inside a kept move keeps the second half kept (it arrives where the
+  kept spot did), and a merge with a kept spot in either move is written, kept (V-221, lead
+  default).
+- On a converted page, Basic's writes compact the page's shared transition when a marcher leaves
+  it and delete it (and its timeline, when empty) when the last one does, so they make no vacant
+  slot (D-VACANT). A last slot that was already vacant, or a transition sharing a marcher with an
+  inheriting follow-the-leader one, keeps its vacancies. The simple-defaults study's point half
+  and Basic's **Split page** write the same way. _Known nit:_ undo or redo after a compaction
+  selects the marcher that was moved into the vacated slot as well (left as is).
 - Timelines stay one per range (C-12). Marchers split at different counts get different timelines.
   The page timeline `[a, b)` stays for marchers that don't split.
 
