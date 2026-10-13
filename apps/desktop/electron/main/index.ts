@@ -1120,6 +1120,23 @@ export async function discardNewShowDraft(): Promise<number> {
     return 200;
 }
 
+/**
+ * Deletes the new-show draft after another show opened in its place. The DB connection already
+ * points at `openedPath`, so unlike `discardNewShowDraft` this leaves it alone.
+ */
+async function forgetReplacedNewShowDraft(openedPath: string): Promise<void> {
+    if (!currentNewShowDraftPath) return;
+    const draftPath = resolve(currentNewShowDraftPath);
+    if (draftPath === resolve(openedPath)) return;
+    currentNewShowDraftPath = null;
+    try {
+        if (fs.existsSync(draftPath)) await unlinkFileWithRetry(draftPath);
+    } catch (error) {
+        // An orphan draft is harmless; the drafts folder only holds throwaway files.
+        console.error("Error deleting replaced new show draft:", error);
+    }
+}
+
 /** Runs a renderer action chosen in the app menu (docs/adr/0003-menu-actions-ipc.md) */
 export function sendMenuAction(action: string) {
     win?.webContents.send(MENU_ACTION_CHANNEL, action);
@@ -1590,6 +1607,10 @@ async function setActiveDbNow(
             }
             return result.status;
         }
+
+        // Another show replaced a new-show draft: delete the draft now, so the reload's
+        // navigation doesn't discard it and close the show that just opened.
+        await forgetReplacedNewShowDraft(path);
 
         win?.setTitle("OpenMarch - " + path);
         store.set("databasePath", path); // Save current db path
