@@ -53,6 +53,7 @@ import {
 import {
     defaultPerformerBody,
     bassOptions,
+    DEFAULT_PRIMARY,
     fillToNumber,
     sectionUniform,
 } from "@/view3d/core/marchers/looks";
@@ -91,6 +92,7 @@ import { clipsToLoad } from "./marchers/marcherBodies";
 import { hornRowsOf } from "./marchers/hornRows";
 import { useShowPerformerDefaults, useStoredCues } from "./useStoredCues";
 import { dotModesPerCount } from "@/view3d/core/marchers/dotModes";
+import { SilkMotion } from "./marchers/silkMotion";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -178,6 +180,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 fill ? fillToNumber(fill) : undefined,
                 guardEquipment === "section" ? undefined : guardEquipment,
             ),
+            // no Silk cues yet: a plain silk in the section's 2D color
+            silkColor: fill ? fillToNumber(fill) : DEFAULT_PRIMARY,
         }));
     }, [looksKey, quality, hornState, guardEquipment]);
     const heightClasses = useMemo(
@@ -377,6 +381,13 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 : null,
         [marcherBodies, showPlans, marcherAssets, hornSlots],
     );
+    const silkMotion = useMemo(
+        () =>
+            marcherBodies && showPlans && marcherBodies.silkSlots.length > 0
+                ? new SilkMotion(showPlans, clock, marcherBodies.silkSlots)
+                : null,
+        [marcherBodies, showPlans, clock],
+    );
     const headings = useMemo(
         () => new Float32Array(count).fill(marcherHeading()),
         [count],
@@ -493,7 +504,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const dirtyRef = useRef(true);
     useEffect(() => {
         dirtyRef.current = true;
-    }, [meshes, slots, fieldProperties, appearances, marcherBodies, motion]);
+    }, [
+        meshes,
+        slots,
+        fieldProperties,
+        appearances,
+        marcherBodies,
+        motion,
+        silkMotion,
+    ]);
 
     // Colors and visibility, only when the looks change.
     useEffect(() => {
@@ -584,7 +603,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             if (marcherBodies) {
                 countRef.current = c;
                 motion?.update(c, xz, placed, headings);
-                marcherBodies.writeFrame(xz, headings, placed, c, cam);
+                marcherBodies.writeFrame(
+                    xz,
+                    headings,
+                    placed,
+                    c,
+                    cam,
+                    silkMotion?.update(c) ?? null,
+                );
                 marcherBodies.compose(state.gl);
                 lod[0] = cam[0];
                 lod[1] = cam[1];
