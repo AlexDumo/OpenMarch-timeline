@@ -843,7 +843,8 @@ from it. The spec still wins on the model; this file decides presentation.
     common step on the plain click). The tooltip says "One page back" and names the ways to the
     start: Shift+click, Shift+Q or the house, whose own tooltip says it's the start of the show
     (2026-10-12, after Basic testers pressed ⏮ then Play and saw one page; the plain click is
-    unchanged).
+    unchanged). The owner confirmed it for Basic too, 2026-10-12 (V-210): Shift+click ⏭ goes to
+    the last page's flag.
   - **A click on a beat seeks to that count** (UI-12); the page box row selects the page (owner,
     2026-10-09, after briefly making any click select the page).
   - **Home while playing jumps playback to the start**; transport buttons don't take keyboard focus
