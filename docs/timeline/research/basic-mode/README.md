@@ -117,11 +117,20 @@ shapeless moves on one layer, ordered, not overlapping; see "Simple"):
 - **Remove this count's position** merges `[s, P)` and `[P, e)` into `[s, e)` with the second
   move's destination.
 - A merge that goes nowhere (its destination is where `s` is) is deleted instead, by both of
-  those: a point set in a hold and removed again leaves the hold as it was, with no tick at the
-  hold's end, and a page the marcher held through follows earlier pages again (lead default).
-  Likewise a point set inside a move at the move's end position writes only `[s, P)`, and the
-  marcher holds from P (lead default). A merge with a kept spot in either move is written, kept
-  (lead default).
+  those, with any moves right after it that go nowhere too (their only tick was its end): a
+  single point set in a hold and removed again leaves the hold as it was, with no tick at the
+  hold's end, and a page the marcher held through follows earlier pages again (V-220, lead
+  default). A point set inside a move always writes both halves, even when the second goes
+  nowhere: it is the user's point, with a tick Remove takes out.
+- Kept spots: setting a point inside a kept move keeps the second half kept (it arrives where the
+  kept spot did), and a merge with a kept spot in either move is written, kept (V-221, lead
+  default).
+- On a converted page, Basic's writes compact the page's shared transition when a marcher leaves
+  it and delete it (and its timeline, when empty) when the last one does, so they make no vacant
+  slot (D-VACANT). A last slot that was already vacant, or a transition sharing a marcher with an
+  inheriting follow-the-leader one, keeps its vacancies. The simple-defaults study's point half
+  and Basic's **Split page** write the same way. _Known nit:_ undo or redo after a compaction
+  selects the marcher that was moved into the vacated slot as well (left as is).
 - Timelines stay one per range (C-12). Marchers split at different counts get different timelines.
   The page timeline `[a, b)` stays for marchers that don't split.
 
