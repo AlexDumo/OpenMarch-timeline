@@ -66,8 +66,10 @@ import {
  * from the rows the edit sees before anything is written, and only when an edit reads one. New
  * moves go on the layer of the move they replace or follow (0 when the marcher has none in the
  * box), never `stealLayer`: nothing in a simple box overlaps them. They get their own one-slot `direct` transition (C-11) in the
- * timeline over their range, reused when one is stored (C-12) and created otherwise; a timeline
- * left with no transition is deleted (`clearOwnPageMoves`).
+ * timeline over their range, reused when one is stored (C-12) and created otherwise. A converted
+ * page's shared transition the edit leaves is compacted, one it empties is deleted, and a timeline
+ * left with no transition is deleted (`clearOwnPageMoves` with `tidyShared`), so Basic leaves no
+ * vacant slot.
  *
  * Refused before any write: a beat outside `(a, b]` or not whole, a box that isn't a page's box,
  * a marcher named twice, an invalid position (`E-ARGS` or the validator's code), and any listed
@@ -405,7 +407,7 @@ const writePlan = async (
                 ),
             )
             .all();
-        await clearOwnPageMoves(tx, removed);
+        await clearOwnPageMoves(tx, removed, { tidyShared: true });
     }
 
     const byRange = new Map<string, NewMove[]>();
