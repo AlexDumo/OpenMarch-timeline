@@ -13,9 +13,18 @@ import {
     starterKitFilename,
 } from "./kit";
 
-/** Where the kit is, in development and in a packaged build. */
+/**
+ * Where the kit is: beside `dist-electron/` in development, and at the app
+ * root in a packaged build (electron-builder ships `starter-kit` there).
+ * `app.getAppPath()` won't do: launched as `electron dist-electron/main/index.js`,
+ * as the e2e tests do, it is `dist-electron/main`.
+ */
 export const starterKitDir = () =>
-    path.join(app.getAppPath(), STARTER_KIT_DIRNAME);
+    path.join(
+        process.env.DIST_ELECTRON ?? path.join(__dirname, ".."),
+        "..",
+        STARTER_KIT_DIRNAME,
+    );
 
 export async function saveStarterKit(
     window: BrowserWindow | null = BrowserWindow.getFocusedWindow(),

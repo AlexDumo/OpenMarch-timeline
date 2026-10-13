@@ -19,6 +19,7 @@ import { importModelFile } from "../../model-import/pipeline";
 import type { ModelImportResult } from "../../model-import/types";
 import { loadWithBareGltfLoader } from "../../model-import/__test__/gltfLoader";
 import { readKitVersion } from "../kit";
+import { asksArtworkSurface } from "@/components/library/import/importReview";
 
 const KIT = path.resolve(__dirname, "../../../../starter-kit");
 const CASES = path.join(__dirname, "fixtures");
@@ -43,6 +44,8 @@ async function expectClean(r: ModelImportResult) {
     expect(r.report.notes).toEqual([]);
     expect(r.report.badges).toEqual([]);
     expect(r.report.kindSource).toBe("stamp");
+    // the review adds its own Needs your choice row for an unmarked surface
+    expect(asksArtworkSurface(r.report)).toBe(false);
     const { errors } = await loadWithBareGltfLoader(r.output!.glb);
     expect(errors).toEqual([]);
 }
