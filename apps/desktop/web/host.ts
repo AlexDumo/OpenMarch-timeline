@@ -122,6 +122,7 @@ export function registerHandlers({ onLeaveShow }: WebHostCallbacks) {
     ipcMain.handle("newShow:getPending", () => false);
     ipcMain.handle("newShow:getDraftPath", () => null);
     ipcMain.handle("conversion:getPending", () => null);
+    ipcMain.handle("load-file:takeRefusal", () => null);
     ipcMain.handle("plugins:list", () => []);
     ipcMain.handle("auth:get-state", () => ({
         isAuthenticated: false,

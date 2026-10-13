@@ -216,6 +216,12 @@ const APP_API = {
         ipcRenderer.on("load-file-response", listener);
         return () => ipcRenderer.removeListener("load-file-response", listener);
     },
+    /**
+     * The status of a refused open that closed the show that was open and reloaded the window
+     * to the launch page, or null. Taking it clears it.
+     */
+    takeLoadFileRefusal: () =>
+        ipcRenderer.invoke("load-file:takeRefusal") as Promise<number | null>,
 
     // Converting a page-era show to timelines when it opens (ADR 0001 §6)
     /** The page-era file waiting for the person to agree to convert it, or null. */

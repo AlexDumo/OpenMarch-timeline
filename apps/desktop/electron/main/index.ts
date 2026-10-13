@@ -366,9 +366,17 @@ async function showSaveDialogHandler(options: Electron.SaveDialogOptions) {
  * that a main-process dialog already explained (convert on open), and a page-era file waiting for
  * the person to agree to convert it (the renderer asks), so no second dialog shows.
  */
+/**
+ * A refused open that closed the show that was open. The window reloads to the launch page,
+ * which takes this with `load-file:takeRefusal` and explains it there.
+ */
+let refusalAfterReload: number | null = null;
+
 function sendLoadFileResponse(resCode: number) {
     if (resCode === OPEN_STOPPED_STATUS || resCode === NEEDS_CONVERSION_STATUS)
         return;
+    // The reloaded launch page explains it (`load-file:takeRefusal`).
+    if (resCode === refusalAfterReload) return;
     win?.webContents.send("load-file-response", resCode);
 }
 
@@ -474,6 +482,11 @@ function initDatabaseIpcHandlers() {
     });
     ipcMain.handle("audio:insert", async () => insertAudioFile());
     ipcMain.handle("conversion:getPending", () => conversionQuestion.current());
+    ipcMain.handle("load-file:takeRefusal", () => {
+        const resCode = refusalAfterReload;
+        refusalAfterReload = null;
+        return resCode;
+    });
     ipcMain.handle("conversion:confirm", async () =>
         confirmPendingConversion(),
     );
@@ -1549,6 +1562,8 @@ async function setActiveDbNow(
     // This open supersedes any question about converting another file (Confirm already took
     // its file); a page-era file asks again below.
     conversionQuestion.forget();
+    refusalAfterReload = null;
+    const hadShowOpen = DatabaseServices.getDbPath() !== "";
     try {
         // The 3D View shows one show; a confirmed conversion is about to replace it.
         if (options.conversionConfirmed) closeView3dWindow();
@@ -1604,6 +1619,13 @@ async function setActiveDbNow(
                 console.error(
                     `Error loading database file [code=${result.status}] [path=${path}]`,
                 );
+                if (hadShowOpen && !DatabaseServices.getDbPath()) {
+                    // The refusal closed the show that was open: go to the launch page, which
+                    // explains why the file didn't open.
+                    refusalAfterReload = result.status;
+                    win?.setTitle("OpenMarch");
+                    win?.webContents.reload();
+                }
             }
             return result.status;
         }

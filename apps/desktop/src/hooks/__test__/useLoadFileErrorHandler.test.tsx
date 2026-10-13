@@ -10,6 +10,7 @@ import { FILE_TOO_NEW_STATUS } from "@om-electron/database/fileVersion";
 
 describe("useLoadFileErrorHandler", () => {
     let send: (code: number) => void;
+    let refusal: number | null = null;
     const original = window.electron;
 
     beforeEach(() => {
@@ -20,10 +21,12 @@ describe("useLoadFileErrorHandler", () => {
                 send = callback;
                 return () => {};
             }),
+            takeLoadFileRefusal: vi.fn(async () => refusal),
         } as typeof window.electron;
     });
 
     afterEach(() => {
+        refusal = null;
         window.electron = original;
     });
 
@@ -40,5 +43,18 @@ describe("useLoadFileErrorHandler", () => {
         renderHook(() => useLoadFileErrorHandler());
         act(() => send(code));
         expect(useAlertModalStore.getState().isOpen).toBe(opens);
+    });
+
+    it("explains a refused open that reloaded the window to the launch page", async () => {
+        refusal = 404;
+        renderHook(() => useLoadFileErrorHandler());
+        await act(async () => {});
+        expect(useAlertModalStore.getState().isOpen).toBe(true);
+    });
+
+    it("opens nothing after a reload with no refusal", async () => {
+        renderHook(() => useLoadFileErrorHandler());
+        await act(async () => {});
+        expect(useAlertModalStore.getState().isOpen).toBe(false);
     });
 });
