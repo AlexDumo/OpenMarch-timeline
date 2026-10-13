@@ -1744,6 +1744,22 @@
         "undoWithCtrlZ": "This action is undoable with Ctrl + Z",
         "volume": "Volume"
     },
+    "notes": {
+        "title": "Notes",
+        "empty": "No notes",
+        "count": "{count, plural, one {# note} other {# notes}}",
+        "where": "count {count} of page {page}",
+        "whereAfter": "{count, plural, one {# count} other {# counts}} after page {page}",
+        "whereStart": "at the start",
+        "handConflict": "{item} not put down, {where}",
+        "handConflictDetail": "{other} takes {who}'s hand",
+        "putDownDrift": "{item} put down away from its holder, {where}",
+        "putDownDriftDetail": "{who} is somewhere else now",
+        "crewDistance": "{item}'s crew is away from it, {where}",
+        "crewDistanceDetail": "Out of reach: {who}",
+        "crewlessMove": "{item} moves without a crew, {where}",
+        "snapToHolder": "Snap to holder"
+    },
     "pages": {
         "createFailed": "Failed to create page - {error}",
         "createLastPageFailed": "Failed to create last page - {error}",
