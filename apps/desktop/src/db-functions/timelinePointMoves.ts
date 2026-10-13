@@ -57,19 +57,23 @@ import {
  * **A merge that goes nowhere** (drag back or **Remove this count's position**, arriving where the
  * first move starts) is deleted instead of written: a point set in a hold and then removed leaves
  * the hold as it was, with no move ending at the hold's end (no tick there), and a page it held
- * through follows earlier pages again. A kept spot among the two moves is merged as above. In the
- * same way, a point set inside a move r at r's end position writes only `[r.start, P)`: the
- * marcher holds from P to r.end instead of a second half that goes nowhere (unless r is kept), so a
- * chain of points set in a hold and removed again leaves the hold too.
+ * through follows earlier pages again; moves right after it that go nowhere either (not kept) go
+ * with it, since their only tick was its end. A kept spot among the two moves is merged as above.
+ * A point set inside a move writes both halves even when the second goes nowhere: it is the
+ * user's point, with a tick that Remove takes out. Splitting a kept move keeps the second half
+ * kept (it arrives where the kept spot did); the new point before it isn't.
  *
  * Positions ("r's end", "the held position", "where r starts") are the resolver's, read once
  * from the rows the edit sees before anything is written, and only when an edit reads one. New
  * moves go on the layer of the move they replace or follow (0 when the marcher has none in the
- * box), never `stealLayer`: nothing in a simple box overlaps them. They get their own one-slot `direct` transition (C-11) in the
- * timeline over their range, reused when one is stored (C-12) and created otherwise. A converted
- * page's shared transition the edit leaves is compacted, one it empties is deleted, and a timeline
- * left with no transition is deleted (`clearOwnPageMoves` with `tidyShared`), so Basic leaves no
- * vacant slot.
+ * box), never `stealLayer`: nothing in a simple box overlaps them. They get their own one-slot
+ * `direct` transition (C-11) in the timeline over their range, reused when one is stored (C-12)
+ * and created otherwise. A converted page's shared transition the edit leaves is compacted, one it
+ * empties is deleted, and a timeline left with no transition is deleted (`clearOwnPageMoves` with
+ * `tidyShared`), so Basic makes no vacant slot. (Compaction stops at a last slot that was already
+ * vacant, and skips a transition sharing a marcher with an inheriting follow-the-leader one; their
+ * vacancies stay.) The simple-defaults timeline's point half and Basic's Split page write here
+ * too, so they tidy the same way.
  *
  * Refused before any write: a beat outside `(a, b]` or not whole, a box that isn't a page's box,
  * a marcher named twice, an invalid position (`E-ARGS` or the validator's code), and any listed
@@ -244,8 +248,9 @@ const setEnding = (
  * in two and merged again is kept, as `splitMovesAtBeatInTransaction` left it).
  *
  * A merge that would go nowhere (arriving where `first` starts) is deleted instead, so the marcher
- * holds there as it did before the point was set, and the hold's end isn't left as a tick. Unless
- * either move is a kept spot: those merge as above.
+ * holds there as it did before the point was set, and the hold's end isn't left as a tick. Moves
+ * right after it that go nowhere either (not kept) are deleted with it: their start was that tick.
+ * Unless either move is a kept spot: those merge as above.
  */
 const planMerge = async (
     plan: PointPlan,
@@ -260,10 +265,23 @@ const planMerge = async (
         state.kept.has(first.assignmentId) ||
         state.kept.has(second.assignmentId);
     plan.removed.push(first, second);
-    if (
-        !kept &&
-        samePosition(point, await state.positionAt(marcherId, first.start))
-    ) {
+    const from = await state.positionAt(marcherId, first.start);
+    if (!kept && samePosition(point, from)) {
+        // Moves right after it that go nowhere either had their only tick at its end: they go
+        // too, so the marcher holds until its next real move (or the flag)
+        let end = second.end;
+        // Sorted by start and not overlapping, so each next one starts where the last ended
+        for (const next of state.rowsOf(marcherId)) {
+            if (next.start < end) continue;
+            if (
+                next.start > end ||
+                state.kept.has(next.assignmentId) ||
+                !samePosition(await state.positionAt(marcherId, next.end), from)
+            )
+                break;
+            plan.removed.push(next);
+            end = next.end;
+        }
         plan.cleared.push(marcherId);
         return;
     }
@@ -303,23 +321,24 @@ const planPoint = async (
     const inside = rows.find((r) => r.start < beat && beat < r.end);
     if (inside) {
         plan.removed.push(inside);
-        plan.added.push({
-            marcherId,
-            start: inside.start,
-            end: beat,
-            point,
-            layer: inside.layer,
-        });
-        // Already where the move ends: no second half that goes nowhere, the marcher holds
-        const end = await at(inside.end);
-        if (state.kept.has(inside.assignmentId) || !samePosition(point, end))
-            plan.added.push({
+        plan.added.push(
+            {
+                marcherId,
+                start: inside.start,
+                end: beat,
+                point,
+                layer: inside.layer,
+            },
+            // It arrives where a kept spot did, so it stays kept; the new point isn't
+            {
                 marcherId,
                 start: beat,
                 end: inside.end,
-                point: end,
+                point: await at(inside.end),
                 layer: inside.layer,
-            });
+                kept: state.kept.has(inside.assignmentId),
+            },
+        );
         return;
     }
 
