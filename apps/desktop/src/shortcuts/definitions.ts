@@ -458,46 +458,15 @@ const STATIC_ACTIONS = {
         hiddenFromPalette: true,
     },
 
-    // Shape tool (docs/timeline/research/shapes): select marchers, pick a shape, Enter places
-    // them. Escape is cancelAlignmentUpdates, which the open tool takes over (useShapeToolActions).
-    shapeLine: {
-        labelKey: "actions.shape.line",
-        keywordsKey: "actions.shape.keywords",
-        category: "shape",
-        scope: "canvas",
-        defaultBindings: ["L"],
-        args: { kind: "line" },
-    },
-    shapeArc: {
-        labelKey: "actions.shape.arc",
-        keywordsKey: "actions.shape.keywords",
-        category: "shape",
-        scope: "canvas",
-        defaultBindings: [],
-        args: { kind: "arc" },
-    },
-    shapeCircle: {
-        labelKey: "actions.shape.circle",
-        keywordsKey: "actions.shape.keywords",
-        category: "shape",
-        scope: "canvas",
-        defaultBindings: ["O"],
-        args: { kind: "circle" },
-    },
-    shapeCurve: {
-        labelKey: "actions.shape.curve",
-        keywordsKey: "actions.shape.keywords",
-        category: "shape",
-        scope: "canvas",
-        defaultBindings: [],
-        args: { kind: "curve" },
-    },
+    // Shape tool (docs/timeline/research/shapes/06-box-v1.md): select marchers, open a shape, draw
+    // it on the field, Enter places them. Escape is cancelAlignmentUpdates, which the open tool
+    // takes over (shapes/tool/ShapeToolKeys).
     shapeBlock: {
         labelKey: "actions.shape.block",
         keywordsKey: "actions.shape.keywords",
         category: "shape",
         scope: "canvas",
-        defaultBindings: [],
+        defaultBindings: ["B"],
         args: { kind: "block" },
     },
     applyShape: {
@@ -506,13 +475,17 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Enter"],
     },
-    // Switches the Shape preview between every mark and just the marchers (sims, round 9)
-    toggleShapeLook: {
-        labelKey: "actions.shape.toggleLook",
+    shapeFewerFiles: {
+        labelKey: "actions.shape.fewerFiles",
         category: "shape",
         scope: "canvas",
-        defaultBindings: ["V"],
-        ignoreRepeat: true,
+        defaultBindings: ["BracketLeft"],
+    },
+    shapeMoreFiles: {
+        labelKey: "actions.shape.moreFiles",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["BracketRight"],
     },
 
     // Cursor mode

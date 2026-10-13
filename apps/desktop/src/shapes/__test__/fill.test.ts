@@ -8,8 +8,6 @@ import {
     typicalNeighborDistance,
 } from "../geometry/naturalFill";
 import { fillKind, type FillParams } from "../kinds/fill";
-import { previewSession } from "../session";
-import { useShapeToolStore } from "../shapeToolStore";
 import { blockToFill, circleToFill, fillToBlock } from "../draw/convert";
 import type { ShapeContext } from "../types";
 
@@ -123,25 +121,6 @@ describe("the filled shape", () => {
         );
         expect(block.files).toBe(6);
         expect(block.center).toEqual(xy(0, 0));
-    });
-
-    it("opens through the store and converts in place", () => {
-        const marchers = Array.from({ length: 12 }, (_, i) => ({
-            id: i + 1,
-            at: xy((i % 4) * 20, Math.floor(i / 4) * 20),
-            drillRank: i,
-        }));
-        useShapeToolStore.setState({ session: null, last: null, past: [] });
-        useShapeToolStore.getState().open("circle", marchers, ctx);
-        const circle = useShapeToolStore.getState().session!;
-        useShapeToolStore
-            .getState()
-            .convert("fill", circleToFill(circle.params as never), ctx);
-        const filled = useShapeToolStore.getState().session!;
-        expect(filled.kindId).toBe("fill");
-        expect(previewSession(filled, ctx).slots).toHaveLength(12);
-        useShapeToolStore.getState().undo();
-        expect(useShapeToolStore.getState().session!.kindId).toBe("circle");
     });
 });
 

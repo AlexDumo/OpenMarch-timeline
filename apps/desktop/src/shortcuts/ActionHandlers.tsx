@@ -9,9 +9,9 @@ import { useNavigationActionHandlers } from "./handlers/useNavigationActionHandl
 import { useNudgeActionHandlers } from "./handlers/useNudgeActionHandlers";
 import { useTimelineActionEffects } from "./handlers/useTimelineActionEffects";
 import { useUiActionHandlers } from "./handlers/useUiActionHandlers";
-import { useShapeToolActions } from "@/shapes/useShapeToolActions";
-import { ShapeToolKeys } from "@/shapes/ShapeToolKeys";
-import { useShapeToolStore } from "@/shapes/shapeToolStore";
+import { useShapeToolActions } from "@/shapes/tool/useShapeToolActions";
+import { ShapeToolKeys } from "@/shapes/tool/ShapeToolKeys";
+import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
 
 /** Handlers available before a show is open (launch page). */
 export function FileActionHandlers() {
@@ -33,6 +33,6 @@ export function EditorActionHandlers() {
     useKeepActionHandlers();
     useTimelineActionEffects();
     // Mounted after the handlers above, so the open shape tool's keys are on top
-    const shapeToolOpen = useShapeToolStore((s) => s.session !== null);
+    const shapeToolOpen = useShapeToolStore((s) => s.tool !== null);
     return shapeToolOpen ? <ShapeToolKeys /> : null;
 }

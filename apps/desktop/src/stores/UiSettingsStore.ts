@@ -58,17 +58,10 @@ export interface UiSettings {
      * numbers, shrunk as far as a smallest readable size where they would touch)
      */
     marcherLabels?: MarcherLabelForm;
-    /** Marcher labels' size on the field and in the Shape preview */
+    /** Marcher labels' size on the field */
     marcherLabelSize?: MarcherLabelSize;
     /** Marcher labels above their dots, or beside them (to the right) */
     marcherLabelPosition?: "above" | "beside";
-    /**
-     * How shapes are made: `draw` (the default) puts a shape picker beside the selection and lets
-     * you draw the shape on the field; `panel` is the earlier panel-only tool, kept to compare
-     */
-    shapeUi?: "draw" | "panel";
-    /** What the Shape tool's preview shows; see `ShapePreviewView` */
-    shapePreview?: Partial<ShapePreviewView>;
     /** Whether to enable Tolgee In-Context Translating */
     tolgeeDevTools?: boolean;
     /** Tolgee API Key for In-Context Translating */
@@ -83,31 +76,6 @@ export const LABEL_SIZE_SCALE: Record<MarcherLabelSize, number> = {
     small: 0.7,
     normal: 1,
     large: 1.4,
-};
-
-/** The Shape tool's view options. `auto` picks by the band's size and spacing */
-export interface ShapePreviewView {
-    /** Walks drawn: every one, only those with a problem, or none (pointing still shows one) */
-    paths: "auto" | "all" | "problems" | "collisions" | "none";
-    /** Labels on the new spots and where marchers start */
-    labels: "auto" | "names" | "numbers" | "none";
-    /** The shape being replaced: hidden on `auto` */
-    oldShape: "auto" | "show" | "hide";
-    /** Where marchers start, and their walks: faint, or drawn strongly (easier on the grid) */
-    starts: "auto" | "faint" | "strong" | "off";
-    /** Working: every mark; Show: only the marchers where they'll stand, as the show will look */
-    look: "working" | "walks" | "show";
-    /** Handles away from the pointer: faded, hidden, or always shown */
-    handles: "fade" | "hide" | "show";
-}
-
-export const defaultShapePreviewView: ShapePreviewView = {
-    paths: "auto",
-    labels: "auto",
-    oldShape: "auto",
-    starts: "auto",
-    look: "working",
-    handles: "fade",
 };
 
 // Default settings that will be used if no localStorage data exists

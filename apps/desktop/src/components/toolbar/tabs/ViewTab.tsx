@@ -1,15 +1,7 @@
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useShallow } from "zustand/react/shallow";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
-import {
-    CaretDownIcon,
-    CubeIcon,
-    EyeIcon,
-    EyeSlashIcon,
-} from "@phosphor-icons/react";
-import * as Popover from "@radix-ui/react-popover";
-import { ShapeViewSection } from "@/shapes/ui/ShapeViewSection";
-import { resolveShapeView } from "@/shapes/canvas/previewView";
+import { CubeIcon, EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import { T, useTolgee } from "@tolgee/react";
 import {
     Select,
@@ -27,44 +19,8 @@ export default function ViewTab() {
     return (
         <div className="flex w-full flex-wrap gap-8">
             <UiSettingsToolbar />
-            <ToolbarSection>
-                <ShapePreviewPopover />
-            </ToolbarSection>
             <View3dToolbar />
         </div>
-    );
-}
-
-/**
- * The Shape tool's view options, reachable without opening a shape (sims, round 13: "to change
- * them I had to start a shape and risk placing it")
- */
-function ShapePreviewPopover() {
-    const stored = useUiSettingsStore((s) => s.uiSettings.shapePreview);
-    const fieldLabels = useUiSettingsStore((s) => s.uiSettings.marcherLabels);
-    return (
-        <Popover.Root>
-            <Popover.Trigger
-                className="hover:text-accent flex items-center gap-6 outline-hidden duration-150 ease-out focus-visible:-translate-y-4"
-                data-testid="view-shape-preview"
-            >
-                <T keyName="toolbar.view.shapePreview" />
-                <CaretDownIcon size={16} />
-            </Popover.Trigger>
-            <Popover.Portal>
-                <Popover.Content className="bg-modal text-text rounded-6 shadow-modal backdrop-blur-32 border-stroke z-50 m-8 w-[20rem] border p-12">
-                    <ShapeViewSection
-                        generic
-                        resolved={resolveShapeView(stored, {
-                            count: 0,
-                            tight: false,
-                            edited: false,
-                            fieldLabels,
-                        })}
-                    />
-                </Popover.Content>
-            </Popover.Portal>
-        </Popover.Root>
     );
 }
 

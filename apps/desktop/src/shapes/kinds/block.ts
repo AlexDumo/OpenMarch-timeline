@@ -32,6 +32,8 @@ export interface BlockParams {
     readonly pattern: "grid" | "offset";
     /** Where the last, short rank's marchers sit along it */
     readonly shortRank: "start" | "center" | "end";
+    /** Which rank is the short one: the front (absent, as recipes stored before box v1) or back */
+    readonly shortRankAt?: "front" | "back";
     /**
      * The across and deep intervals are locked (the default): dragging the side changes how many
      * files there are. Unlocked, dragging the sides stretches the intervals.
@@ -73,8 +75,9 @@ function localSlots(p: BlockParams, n: number): LocalSlot[] {
     const files = filesOf(p);
     const ranks = ranksOf(p, n);
     const slots: LocalSlot[] = [];
+    const shortRow = p.shortRankAt === "back" ? 0 : ranks - 1;
     for (let row = 0; row < ranks; row++) {
-        const inRank = row === ranks - 1 ? n - row * files : files;
+        const inRank = row === shortRow ? n - (ranks - 1) * files : files;
         // A short rank's first file: flush left, centered (may sit between files) or flush right
         const lead =
             p.shortRank === "end"

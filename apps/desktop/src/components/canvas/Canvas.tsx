@@ -40,9 +40,8 @@ import { ShapePath } from "@/global/classes/canvasObjects/ShapePath";
 import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
-import { useShapeToolCanvas } from "@/shapes/canvas/useShapeToolCanvas";
-import { ShapePickerStrip } from "@/shapes/ui/ShapePickerStrip";
-import { ShapeFineTuneBox } from "@/shapes/ui/ShapeToolPanel";
+import { useShapeToolCanvas } from "@/shapes/tool/useShapeToolCanvas";
+import { ShapeToolReadout } from "@/shapes/tool/ShapeToolReadout";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelineDimming } from "@/timeline/useTimelineDimming";
@@ -654,7 +653,7 @@ export default function Canvas({
         redrawKey: marcherVisuals,
     });
 
-    // The shape tool's preview and handles (docs/timeline/research/shapes/README.md)
+    // The shape tool on the field (docs/timeline/research/shapes/06-box-v1.md)
     useShapeToolCanvas({
         canvas,
         isPlaying,
@@ -740,8 +739,7 @@ export default function Canvas({
             }}
         >
             {timelineMode && <TimelineIsolationBar />}
-            <ShapePickerStrip canvas={canvas} isPlaying={isPlaying} />
-            <ShapeFineTuneBox canvas={canvas} isPlaying={isPlaying} />
+            <ShapeToolReadout canvas={canvas} />
             {timelineMode && <TimelineFromStartBadge />}
             {drawFromResolver && (
                 // UI-18: a broken chain beside each marcher kept on the current page
