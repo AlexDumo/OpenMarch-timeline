@@ -91,6 +91,11 @@ export interface TempoMapRow {
     readonly meter: Meter;
     /** The meter was read from count lengths, not typed. */
     readonly meterInferred: boolean;
+    /**
+     * A meter read from the counts that isn't plain n/4: compound (6/8 from ♩.=♩) or a pickup
+     * (DE-5). The map shows it with "?" and a one-click confirm.
+     */
+    readonly meterGuess?: MeterGuess;
     readonly unit: BeatUnit;
     readonly shape: TempoMapShape;
     /** Tempo of the first and last count, in beats of `unit` per minute. */
@@ -119,6 +124,8 @@ export interface TempoMapRow {
     readonly endMeasureNumber: number;
     /** Each count's length in beats of `unit` (1.5 for the long count of 7/8 2+2+3 in ♩). */
     readonly weights: readonly number[];
+    /** A row the map adds at a rehearsal mark inside a row (`rowsAtRehearsalMarks`) */
+    readonly continues?: boolean;
 }
 
 const close = (a: number, b: number, tolerance: number) =>
@@ -153,6 +160,8 @@ interface MeasureProfile {
     /** Fewer counts than the meter: a pickup, counted as the meter's last counts */
     readonly partial: boolean;
     readonly inferred: boolean;
+    /** How a meter read from the counts differs from plain n/4 (DE-5), if it does */
+    readonly guess?: MeterGuess;
     readonly unit: BeatUnit;
     readonly marked: boolean;
     readonly from: number;
@@ -177,6 +186,70 @@ const isSteady = (bpms: readonly number[]) =>
         (b) => Number.isFinite(b) && close(b, bpms[0], STEADY_TOLERANCE),
     );
 
+/** How a meter read from the counts differs from plain n/4 (DE-5). */
+export type MeterGuess = "compound" | "pickup";
+
+/** Relative difference under which a count is read as 1.5× (or ⅔ of) another (DE-5). */
+const COMPOUND_TOLERANCE = 1e-3;
+
+/** Whether every count in `own` has the same length. */
+const evenCounts = (own: readonly number[]) =>
+    own.length > 0 &&
+    own.every((d) => d > 0 && close(d, own[0], STEADY_TOLERANCE));
+
+/**
+ * The meter a measure without a typed or imported meter is read as (DE-5): `inferMeter`, unless
+ *
+ * - `compound`: its counts are even and each lasts 1.5× the plain ♩ count before it (a ♩.=♩
+ *   change, as an imported 6/8 or 12/8 after 4/4 is timed), or it follows such a measure with as
+ *   many counts and doesn't go back (⅔ of its count): n counts of ♩., so 2 is 6/8 and 4 is 12/8;
+ * - `pickup`: it is the show's first measure, it has one count and the next measure has more: the
+ *   last count of the next measure's meter.
+ *
+ * Inferring only names the counts; it never changes when any count lands.
+ */
+function guessMeter({
+    index,
+    own,
+    previous,
+    previousLength,
+    next,
+}: {
+    index: number;
+    own: readonly number[];
+    previous: MeasureProfile | undefined;
+    /** The length of the previous measure's last count, in seconds */
+    previousLength: number | undefined;
+    /** The next measure's meter, as typed or read from its counts */
+    next: Meter | undefined;
+}): { meter: Meter; guess?: MeterGuess } {
+    const plain = inferMeter(own);
+    if (index === 0 && own.length === 1 && next && meterCounts(next) > 1)
+        return { meter: next, guess: "pickup" };
+    if (
+        plain.groups !== null ||
+        !evenCounts(own) ||
+        !previous ||
+        !(previousLength && previousLength > 0)
+    )
+        return { meter: plain };
+    const lastLength = previousLength;
+    const compound = meterFromWeights(Array<number>(own.length).fill(6));
+    if (
+        previous.guess === "compound" &&
+        previous.to - previous.from === own.length &&
+        !close(own[0], (lastLength * 2) / 3, COMPOUND_TOLERANCE)
+    )
+        return { meter: compound, guess: "compound" };
+    if (
+        previous.unit === "q" &&
+        !previous.partial &&
+        close(own[0], lastLength * 1.5, COMPOUND_TOLERANCE)
+    )
+        return { meter: compound, guess: "compound" };
+    return { meter: plain };
+}
+
 function profiles(
     durations: readonly number[],
     measures: readonly TempoMapMeasure[],
@@ -185,6 +258,11 @@ function profiles(
     const out: MeasureProfile[] = [];
     // A mark's meter and unit carry on through the measures after it that have as many counts
     let carried: TempoMapMark = {};
+    const countsOf = (m: TempoMapMeasure) =>
+        durations.slice(
+            Math.max(m.firstCount, 1),
+            Math.min(m.firstCount + m.counts, durations.length),
+        );
     measures.forEach((m, i) => {
         const from = Math.max(m.firstCount, 1);
         const to = Math.min(m.firstCount + m.counts, durations.length);
@@ -192,21 +270,40 @@ function profiles(
         const mark = marks.get(i);
         if (mark) carried = { ...mark };
         const inferred = inferMeter(own);
-        // The marked measure itself may be short (a pickup): it is the meter's last counts
-        const partial =
-            mark?.meter !== undefined &&
-            own.length > 0 &&
-            own.length < meterCounts(mark.meter);
         // A mark stops at a measure with another number of counts or another grouping
         if (
-            !partial &&
+            !(
+                mark?.meter !== undefined &&
+                own.length > 0 &&
+                own.length < meterCounts(mark.meter)
+            ) &&
             carried.meter &&
             (meterCounts(carried.meter) !== own.length ||
                 (inferred.groups !== null &&
                     !sameShape(inferred, carried.meter)))
         )
             carried = {};
-        const meter = carried.meter ?? inferred;
+        const nextMeasure = measures[i + 1];
+        const guessed = carried.meter
+            ? null
+            : guessMeter({
+                  index: i,
+                  own,
+                  previous: out[out.length - 1],
+                  previousLength:
+                      i > 0 && from > 1 ? durations[from - 1] : undefined,
+                  next:
+                      i === 0 && nextMeasure
+                          ? (marks.get(1)?.meter ??
+                            inferMeter(countsOf(nextMeasure)))
+                          : undefined,
+              });
+        const meter = carried.meter ?? guessed!.meter;
+        // The marked measure itself may be short (a pickup): it is the meter's last counts
+        const partial =
+            own.length > 0 &&
+            own.length < meterCounts(meter) &&
+            (mark?.meter !== undefined || guessed?.guess === "pickup");
         const unit = carried.unit ?? defaultUnit(meter);
         const weights = partial
             ? unitWeights(meter, unit).slice(-own.length)
@@ -218,6 +315,7 @@ function profiles(
             label: carried.meter ? carried.label : undefined,
             partial,
             inferred: carried.meter === undefined,
+            ...(guessed?.guess ? { guess: guessed.guess } : {}),
             unit,
             marked: mark !== undefined,
             from,
@@ -308,6 +406,7 @@ export function deriveTempoMap({
             to,
             meter: first.meter,
             meterInferred: first.inferred,
+            ...(first.guess ? { meterGuess: first.guess } : {}),
             unit: first.unit,
             shape,
             startBpm,
@@ -408,6 +507,7 @@ function writeRow({
     unit,
     startBpm,
     endBpm,
+    label: typedLabel,
 }: {
     state: MapState;
     row: TempoMapRow;
@@ -415,6 +515,8 @@ function writeRow({
     unit: BeatUnit;
     startBpm: number;
     endBpm: number;
+    /** The meter as written, when it is counted as `meter` ("3/2" counted as 6/4) */
+    label?: string;
 }): TempoMapEditResult {
     if (Math.min(startBpm, endBpm) < MIN_TYPED_BPM)
         return { ok: false, error: "tooSlow" };
@@ -441,7 +543,8 @@ function writeRow({
             return { ok: false, error: "tooSlow" };
     }
     const marks = new Map(state.marks);
-    const label = sameMeter(meter, row.meter) ? row.label : undefined;
+    const label =
+        typedLabel ?? (sameMeter(meter, row.meter) ? row.label : undefined);
     marks.set(row.measureIndex, {
         meter,
         unit,
@@ -571,6 +674,23 @@ export function editRowMeter(
     const perMeasure = state.measures
         .slice(row.measureIndex, row.endMeasureIndex)
         .map((m) => m.counts);
+    // "3/2" or "2/2" over quarter counts: written that way, counted in ♩ (as an import keeps it)
+    const inQuarters = countedInQuarters(meter);
+    if (
+        perMeasure.some((c) => c !== meterCounts(meter)) &&
+        inQuarters &&
+        row.unit === "q" &&
+        perMeasure.every((c) => c === meterCounts(inQuarters))
+    )
+        return writeRow({
+            state,
+            row,
+            meter: inQuarters,
+            unit: "q",
+            startBpm: rowTempo(row),
+            endBpm: row.shape === "ramp" ? row.endBpm : rowTempo(row),
+            label: formatMeter(meter),
+        });
     if (perMeasure.some((c) => c !== meterCounts(meter)))
         return { ok: false, error: "changesCounts" };
     const unit = defaultUnit(meter);
@@ -582,6 +702,111 @@ export function editRowMeter(
         startBpm: rowTempo(row),
         endBpm: row.shape === "ramp" ? row.endBpm : rowTempo(row),
     });
+}
+
+/** A half-note meter (3/2, 2/2) as quarter counts (6/4, 4/4); null for anything else */
+function countedInQuarters(meter: Meter): Meter | null {
+    if (meter.bottom !== 2 || meter.groups !== null) return null;
+    return { top: meter.top * 2, bottom: 4, groups: null };
+}
+
+/**
+ * "?" on a meter read from the counts (DE-5): store it as the row's meter, in the unit it is
+ * shown in. No count changes length and no count is synced; the mark says nothing about tempo
+ * (it is stored as read from the score, so it never protects a tempo).
+ */
+export function confirmMeter(
+    state: MapState,
+    rowIndex: number,
+): TempoMapEditResult {
+    const row = state.rows[rowIndex];
+    if (!row) return { ok: false, error: "noSuchMeasure" };
+    const marks = new Map(state.marks);
+    const own = state.marks.get(row.measureIndex);
+    marks.set(row.measureIndex, {
+        ...own,
+        meter: row.meter,
+        unit: row.unit,
+        source: own?.source ?? "import",
+        ...(row.label ? { label: row.label } : {}),
+    });
+    return {
+        ok: true,
+        write: { durations: [...state.durations], marks, sync: [], unsync: [] },
+    };
+}
+
+/**
+ * The map's rows with one more row at every rehearsal mark inside a row (D7: the map lists every
+ * letter). A row added at a letter is a continuation: not typed, with the parent's meter, unit,
+ * shape and exactness, and its own counts, start and tempos. Only for showing and editing in the
+ * map: typed sections and synced edges come from the rows themselves.
+ */
+export function rowsAtRehearsalMarks(
+    rows: readonly TempoMapRow[],
+    measures: readonly TempoMapMeasure[],
+    durations: readonly number[],
+): TempoMapRow[] {
+    const times = countTimes(durations);
+    const out: TempoMapRow[] = [];
+    for (const row of rows) {
+        const cuts = [row.measureIndex];
+        for (let k = row.measureIndex + 1; k < row.endMeasureIndex; k++)
+            if (measures[k]?.rehearsalMark) cuts.push(k);
+        if (cuts.length === 1) {
+            out.push(row);
+            continue;
+        }
+        cuts.forEach((start, j) => {
+            const end = cuts[j + 1] ?? row.endMeasureIndex;
+            const from =
+                j === 0 ? row.from : Math.max(measures[start].firstCount, 1);
+            const to =
+                j === cuts.length - 1
+                    ? row.to
+                    : Math.max(measures[end].firstCount, 1);
+            const weights = row.weights.slice(from - row.from, to - row.from);
+            const bpmAt = (i: number) =>
+                durations[i] > 0
+                    ? (weights[i - from] * 60) / durations[i]
+                    : NaN;
+            const span = times[to] - times[from];
+            const total = weights.reduce((a, b) => a + b, 0);
+            if (j === 0) {
+                out.push({
+                    ...row,
+                    endMeasureIndex: end,
+                    endMeasureNumber: measures[end - 1].number,
+                    to,
+                    weights,
+                    endBpm: row.shape === "ramp" ? bpmAt(to - 1) : row.endBpm,
+                    averageBpm: span > 0 ? (total * 60) / span : NaN,
+                });
+                return;
+            }
+            out.push({
+                ...row,
+                measureIndex: start,
+                endMeasureIndex: end,
+                measureNumber: measures[start].number,
+                endMeasureNumber: measures[end - 1].number,
+                rehearsalMark: measures[start].rehearsalMark,
+                from,
+                to,
+                weights,
+                startTime: times[from],
+                startBpm: row.shape === "steady" ? row.startBpm : bpmAt(from),
+                endBpm: row.shape === "steady" ? row.endBpm : bpmAt(to - 1),
+                averageBpm: span > 0 ? (total * 60) / span : NaN,
+                typed: false,
+                source: undefined,
+                markedBpm: undefined,
+                partial: false,
+                continues: true,
+            });
+        });
+    }
+    return out;
 }
 
 /**
@@ -739,6 +964,36 @@ export function retimeArgsOf({
 }
 
 /**
+ * Whether a map edit changes nothing: the same count lengths, the same marks (as the file stores
+ * them) and no synced count added or taken out. Such an edit writes nothing, so it never takes an
+ * undo step (DE-4: Marcus's "86" after ♩.=86 and "6/8" after that used up two Ctrl+Z).
+ */
+export function isNoOpWrite({
+    write,
+    durations,
+    marks,
+    synced,
+}: {
+    write: TempoMapWrite;
+    durations: readonly number[];
+    marks: TempoMapMarks;
+    /** Synced count indexes before the edit */
+    synced: readonly number[];
+}): boolean {
+    if (write.durations.length !== durations.length) return false;
+    if (write.durations.some((d, i) => d !== durations[i])) return false;
+    const before = new Set(synced);
+    if (write.sync.some((c) => !before.has(c))) return false;
+    if (write.unsync.some((c) => before.has(c))) return false;
+    // Stored by measure index itself, so two sets of marks compare as the file would hold them
+    const last = Math.max(-1, ...write.marks.keys(), ...marks.keys());
+    const byIndex = Array.from({ length: last + 1 }, (_, i) => i);
+    const asStored = (m: TempoMapMarks) =>
+        JSON.stringify(storedMarks(m, byIndex));
+    return asStored(write.marks) === asStored(marks);
+}
+
+/**
  * The meter cell's text: the score's own signature when it is counted differently ("3/2"), and a
  * short marked measure as a pickup ("4/4 pickup").
  */
@@ -791,11 +1046,12 @@ export interface TypedSection {
 
 /**
  * The sections an Align drag must not rescale without saying so: rows typed in the map (not
- * imported) that still play at their typed tempo (FX-5).
+ * imported) that still play at their typed tempo (FX-5). A mark without a source was typed: files
+ * saved before marks had one only ever got them from the map (DE-2).
  */
 export const typedSections = (rows: readonly TempoMapRow[]): TypedSection[] =>
     rows
-        .filter((r) => r.source === "typed" && r.exact)
+        .filter((r) => r.typed && r.source !== "import" && r.exact)
         .map((r) => ({
             from: r.from,
             to: r.to,
@@ -805,6 +1061,33 @@ export const typedSections = (rows: readonly TempoMapRow[]): TypedSection[] =>
                     : formatTempo(r.unit, r.startBpm, true),
             measures: rowMeasures(r),
         }));
+
+/**
+ * The counts a ● row put among the synced counts (its first count and the count after its last,
+ * TM-3): typed or read from the score, never lined up with a recording (DE-6).
+ */
+export function typedEdgeCounts(rows: readonly TempoMapRow[]): Set<number> {
+    const out = new Set<number>();
+    for (const r of rows)
+        if (r.typed) {
+            out.add(r.from);
+            out.add(r.to);
+        }
+    return out;
+}
+
+/**
+ * The synced counts that say the show is lined up with the recording: those a ● row's edge
+ * didn't put there (DE-6). A count synced in Align that happens to sit on a ● edge isn't told
+ * apart; it reads as typed.
+ */
+export const linedUpCounts = (
+    synced: readonly number[],
+    rows: readonly TempoMapRow[],
+): number[] => {
+    const edges = typedEdgeCounts(rows);
+    return synced.filter((c) => !edges.has(c));
+};
 
 /** The typed sections whose counts an edit gives other lengths (FX-5). */
 export function overriddenSections(

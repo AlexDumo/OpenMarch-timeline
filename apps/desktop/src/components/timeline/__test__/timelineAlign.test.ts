@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { countTimes, MIN_COUNT_SECONDS, moveCount } from "@/timeline/tempo";
+import {
+    countTimes,
+    MIN_COUNT_SECONDS,
+    moveCount,
+    overriddenSections,
+    type TypedSection,
+} from "@/timeline/tempo";
 import en from "../../../../i18n/en.json";
 import {
     alignFlags,
@@ -18,6 +24,7 @@ import {
     moveChip,
     snapAlignTime,
     syncedWith,
+    typedCounts,
     typedPageTempo,
     type AlignTranslate,
 } from "../timelineAlign";
@@ -673,5 +680,142 @@ describe("typed sections (FX-5)", () => {
         });
         expect(chip.text).toMatch(/^Overrides typed ♩=176 \(m1–16\)/);
         expect(chip.amber).toBe(true);
+    });
+});
+
+/**
+ * Sam's typed corps show (capture 20261006-152208-critic-sam-drag-v2): a pickup and m1–16 typed
+ * ♩=176 (counts 1–65), C typed ♩=176 from count 66; pages of 16 counts with flags at 2, 18, 34,
+ * 50, 66, 82; synced where typed rows start (1, 2, 66) and at 90.
+ */
+describe("typed sections under the page scope (DE-1, Sam)", () => {
+    const beat = 60 / 176;
+    const sam = steady(97, beat);
+    const typed: TypedSection[] = [
+        { from: 1, to: 2, tempo: "♩=176", measures: "m0" },
+        { from: 2, to: 66, tempo: "♩=176", measures: "m1–16" },
+        { from: 66, to: 90, tempo: "♩=176", measures: "m17–24" },
+    ];
+    const synced = [1, 2, 66, 90];
+    const flags = [1, 2, 18, 34, 50, 66, 82, 97];
+    const at34 = countTimes(sam)[34]!;
+    const drag = (keepTyped: boolean) =>
+        alignMove({
+            durations: sam,
+            index: 34,
+            toTime: at34 - 0.4,
+            synced,
+            scope: "page",
+            flags,
+            typed,
+            keepTyped,
+        });
+
+    it("asks before page 2's typed ♩=176 changes (it re-timed to ≈195 with only a toast)", () => {
+        const wanted = drag(false);
+        const overrides = overriddenSections(typed, sam, wanted.durations);
+        expect(overrides.map((o) => o.measures)).toEqual(["m1–16"]);
+    });
+
+    it("lets pages 3–4 slide instead of re-spacing up to synced C", () => {
+        const wanted = drag(false);
+        // Page 2 re-spaced; everything from its flag on keeps its tempo and moves earlier
+        expect(wanted.effect.respaced).toEqual([{ from: 18, to: 34 }]);
+        expect(wanted.effect.shifted?.from).toBe(34);
+        expect(wanted.effect.shifted?.bySeconds).toBeCloseTo(-0.4, 9);
+        for (let i = 34; i < sam.length; i++)
+            expect(wanted.durations[i]).toBe(beat);
+    });
+
+    it("Keep typed: the drag stops at the typed section, so nothing moves", () => {
+        const kept = drag(true);
+        expect(kept.durations).toEqual(sam);
+        expect(kept.time).toBeCloseTo(at34, 9);
+        const chip = moveChip({
+            before: sam,
+            result: kept,
+            index: 34,
+            pages: [],
+            audioOffsetSeconds: 0,
+            t,
+            stoppedAt: overriddenSections(typed, sam, drag(false).durations),
+        });
+        expect(chip).toEqual({
+            text: "Stops at typed ♩=176 (m1–16): release to override or keep it",
+            amber: true,
+        });
+    });
+
+    it("Keep typed re-spaces only the counts that aren't typed", () => {
+        // Page 2 half typed: only counts 26–33 stretch, 18–25 keep ♩=176
+        const half: TypedSection[] = [
+            { from: 2, to: 26, tempo: "♩=176", measures: "m1–6" },
+        ];
+        const kept = alignMove({
+            durations: sam,
+            index: 34,
+            toTime: at34 - 0.4,
+            synced: [1, 2],
+            scope: "page",
+            flags,
+            typed: half,
+            keepTyped: true,
+        });
+        expect(kept.time).toBeCloseTo(at34 - 0.4, 9);
+        for (let i = 2; i < 26; i++) expect(kept.durations[i]).toBe(beat);
+        expect(kept.durations[26]).toBeCloseTo(beat - 0.05, 9);
+        expect(overriddenSections(half, sam, kept.durations)).toEqual([]);
+    });
+
+    it("still re-spaces up to a synced count when no typed count is in between", () => {
+        const result = alignMove({
+            durations: sam,
+            index: 34,
+            toTime: at34 - 0.4,
+            synced: [1, 50],
+            scope: "page",
+            flags,
+            typed: [],
+        });
+        expect(result.effect.heldFrom).toBe(50);
+        expect(result.effect.shifted).toBeNull();
+    });
+
+    it("a hold inside a typed section stops there when kept", () => {
+        const kept = alignHold({
+            durations: sam,
+            index: 30,
+            toTime: countTimes(sam)[30]! + 0.5,
+            synced,
+            scope: "page",
+            flags,
+            typed,
+            keepTyped: true,
+        });
+        expect(kept?.durations).toEqual(sam);
+    });
+
+    it("Tempo… on a page lets later typed pages slide instead of re-spacing them (DE-3)", () => {
+        const page = { id: 2, label: "2", start: 18, end: 34 };
+        const result = typedPageTempo({
+            durations: sam,
+            page,
+            bpm: 180,
+            synced,
+            typed,
+        })!;
+        for (let i = 34; i < sam.length; i++)
+            expect(result.durations[i]).toBe(beat);
+        expect(result.effect.shifted?.from).toBe(34);
+        // Page 2's own counts are typed: the prompt asks before writing (overriddenSections)
+        expect(
+            overriddenSections(typed, sam, result.durations).map(
+                (o) => o.measures,
+            ),
+        ).toEqual(["m1–16"]);
+    });
+
+    it("typedCounts lists every typed count once", () => {
+        expect([...typedCounts(typed)].length).toBe(89);
     });
 });

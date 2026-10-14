@@ -274,11 +274,11 @@ describeDbTests("counts past the end of the show (E1)", (it) => {
             await roundTrip(db, before, await snapshot(db));
         });
 
-        it("adds nothing when the counts already reach the end", async ({
+        it("works on a show not yet converted, and adds nothing when the counts already reach the end", async ({
             db,
             marchersAndPages: _,
         }) => {
-            await setUp(db);
+            await setTimelineFlag(db, false);
             expect(await extendCountsTo({ db, untilSeconds: 30 })).toBe(0);
             expect((await beats(db)).length).toBe(97);
             expect(await extendCountsTo({ db, untilSeconds: 49 })).toBe(4);

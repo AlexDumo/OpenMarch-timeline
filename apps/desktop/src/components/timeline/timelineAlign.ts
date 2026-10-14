@@ -12,15 +12,17 @@ import {
     keepSyncedAfter,
     MIN_COUNT_SECONDS,
     moveCount,
+    nextSynced,
     previousSynced,
     respaceEven,
-    respaceProportional,
+    respaceKeeping,
     setRangeBpm,
-    spanLimits,
+    spanLimitsKeeping,
     spanOf,
     unitTempo,
     type CountDurations,
     type CountUnit,
+    type FixedCounts,
     type MoveCountResult,
     type RetimeResult,
     type TypedSection,
@@ -291,12 +293,24 @@ export const flagAfter = (
     return best;
 };
 
+/** The counts of typed sections, which keep their lengths when the user keeps them (DE-1) */
+export function typedCounts(sections: readonly TypedSection[]): FixedCounts {
+    const out = new Set<number>();
+    for (const s of sections) for (let i = s.from; i < s.to; i++) out.add(i);
+    return out;
+}
+
 /**
  * A drag of count `index` to `toTime`: `moveCount`, re-spacing up to the next synced count. Before
  * it, counts re-space back to the previous synced count, or with the `page` scope only back to the
  * previous flag (`flags`, spec count indexes). The end of the show (`index === durations.length`,
  * the last page's flag) has nothing after it: the counts back to that start re-space, clamped as
  * `moveCount` clamps.
+ *
+ * Typed sections (DE-1): with the `page` scope, the counts after the drag slide when re-spacing
+ * them up to the next synced count would rescale a typed section (its first count is synced
+ * because it was typed, not because it was lined up). With `keepTyped`, typed counts keep their
+ * lengths everywhere: only the other counts stretch, and where there are none the drag stops.
  */
 export function alignMove({
     durations,
@@ -305,6 +319,8 @@ export function alignMove({
     synced,
     scope = "toSynced",
     flags = [],
+    typed = [],
+    keepTyped = false,
 }: {
     durations: CountDurations;
     index: number;
@@ -312,14 +328,31 @@ export function alignMove({
     synced: readonly number[];
     scope?: AlignDragScope;
     flags?: readonly number[];
+    typed?: readonly TypedSection[];
+    keepTyped?: boolean;
 }): MoveCountResult {
     // Count 1 is where the music starts: moving it shifts the whole show against the music and
     // never re-spaces the counts up to a synced one (FX-5)
     if (index === 1)
         return moveCount({ durations, index, toTime, after: "shift" });
+    const fixed = keepTyped ? typedCounts(typed) : undefined;
     const respaceFrom = scope === "page" ? flagBefore(flags, index) : undefined;
-    if (index < durations.length)
-        return moveCount({ durations, index, toTime, synced, respaceFrom });
+    if (index < durations.length) {
+        const next = nextSynced(synced, index, durations.length);
+        const slide =
+            scope === "page" &&
+            next !== null &&
+            typed.some((s) => s.from < next && index < s.to);
+        return moveCount({
+            durations,
+            index,
+            toTime,
+            synced,
+            respaceFrom,
+            after: slide ? "shift" : "respaceToNextSynced",
+            fixed,
+        });
+    }
     const times = countTimes(durations);
     const synced0 = previousSynced(synced, index);
     const from =
@@ -328,12 +361,12 @@ export function alignMove({
         respaceFrom < index
             ? respaceFrom
             : synced0;
-    const [min, max] = spanLimits(durations, from, index);
+    const [min, max] = spanLimitsKeeping(durations, from, index, fixed);
     const wanted = toTime - times[from]!;
     const span = Math.min(Math.max(wanted, min), max);
     const clamped = span !== wanted;
     return {
-        durations: respaceProportional(durations, from, index, span),
+        durations: respaceKeeping(durations, from, index, span, fixed),
         time: times[from]! + span,
         originShift: 0,
         effect: {
@@ -394,6 +427,8 @@ export function alignHold({
     synced,
     scope = "toSynced",
     flags = [],
+    typed = [],
+    keepTyped = false,
 }: {
     durations: CountDurations;
     index: number;
@@ -402,6 +437,9 @@ export function alignHold({
     /** `page`: the change is absorbed up to the next flag after the tick, so the hold stays in its page */
     scope?: AlignDragScope;
     flags?: readonly number[];
+    /** Typed sections; with `keepTyped` their counts keep their lengths (DE-1) */
+    typed?: readonly TypedSection[];
+    keepTyped?: boolean;
 }): RetimeResult | null {
     const held = index - 1;
     if (held < 1 || index >= durations.length + 1) return null;
@@ -412,10 +450,14 @@ export function alignHold({
         newDuration: toTime - start,
         synced,
         absorbUntil: scope === "page" ? flagAfter(flags, index) : undefined,
+        fixed: keepTyped ? typedCounts(typed) : undefined,
     });
 }
 
-/** "Even out page 5": its counts get equal lengths between its two flags, which stay put */
+/**
+ * "Even out page 5": its counts get equal lengths between its two flags, which stay put. A typed
+ * section it would change (a typed rit.) needs an Override first (DE-3).
+ */
 export const evenOutPage = (
     durations: CountDurations,
     page: AlignPage,
@@ -437,11 +479,14 @@ export function typedPageTempo({
     page,
     bpm,
     synced,
+    typed = [],
 }: {
     durations: CountDurations;
     page: AlignPage;
     bpm: number;
     synced: readonly number[];
+    /** Typed sections: later counts slide rather than re-space one of them (DE-3) */
+    typed?: readonly TypedSection[];
 }): RetimeResult | null {
     if (
         !Number.isFinite(bpm) ||
@@ -451,12 +496,18 @@ export function typedPageTempo({
     )
         return null;
     const edited = setRangeBpm(durations, page.start, page.end, bpm);
-    return keepSyncedAfter({
+    const kept = keepSyncedAfter({
         before: durations,
         edited,
         from: page.end,
         synced,
     });
+    const rescalesTyped = kept.effect.respaced.some((r) =>
+        typed.some((s) => s.from < r.to && r.from < s.to),
+    );
+    return rescalesTyped
+        ? keepSyncedAfter({ before: durations, edited, from: page.end })
+        : kept;
 }
 
 /** The "what will move" chip: one line, amber when the drag was limited */
@@ -584,6 +635,7 @@ export function moveChip({
     t,
     units,
     overrides = [],
+    stoppedAt = [],
 }: {
     before: CountDurations;
     result: MoveCountResult;
@@ -598,17 +650,23 @@ export function moveChip({
     units?: AlignUnits;
     /** Typed sections the drag would rescale (FX-5) */
     overrides?: readonly TypedSection[];
+    /** Typed sections the drag stopped at, kept (DE-1) */
+    stoppedAt?: readonly TypedSection[];
 }): AlignChip {
     const parts: string[] = [];
+    const stop = stoppedPart(stoppedAt, t);
     if (
         index !== 1 &&
         result.originShift === 0 &&
         result.durations.every((d, i) => d === before[i])
     )
-        return { text: t("tempo.align.chip.noChange"), amber: false };
+        return stop
+            ? { text: stop, amber: true }
+            : { text: t("tempo.align.chip.noChange"), amber: false };
     let mixedWarning = false;
     const override = overridePart(overrides, t);
     if (override) parts.push(override);
+    if (stop) parts.push(stop);
     if (index === 1) {
         // The music now starts this long before count 1 (negative: after it)
         parts.push(musicLeadText(result.originShift - audioOffsetSeconds, t));
@@ -662,8 +720,26 @@ export function moveChip({
     if (clamp) parts.push(clamp);
     return {
         text: parts.filter(Boolean).join(" · "),
-        amber: result.clamped || mixedWarning || overrides.length > 0,
+        amber:
+            result.clamped ||
+            mixedWarning ||
+            overrides.length > 0 ||
+            stoppedAt.length > 0,
     };
+}
+
+/** "Stops at typed ♩=176 (m1–16): release to override or keep it" (DE-1) */
+function stoppedPart(
+    stoppedAt: readonly TypedSection[],
+    t: AlignTranslate,
+): string | null {
+    const first = stoppedAt[0];
+    return first
+        ? t("tempo.align.chip.stopsAtTyped", {
+              tempo: first.tempo,
+              measures: first.measures,
+          })
+        : null;
 }
 
 /** Where the music starts against count 1, `lead` seconds before it (negative: after) */
@@ -699,6 +775,7 @@ export function holdChip({
     units,
     overrides = [],
     measures,
+    stoppedAt = [],
 }: {
     before: CountDurations;
     result: RetimeResult;
@@ -710,13 +787,19 @@ export function holdChip({
     overrides?: readonly TypedSection[];
     /** The measures in count indexes, to name the held count by the music */
     measures?: readonly PlaceMeasure[];
+    /** Typed sections the drag stopped at, kept (DE-1) */
+    stoppedAt?: readonly TypedSection[];
 }): AlignChip {
     const held = index - 1;
+    const stop = stoppedPart(stoppedAt, t);
     if (result.durations.every((d, i) => d === before[i]))
-        return { text: t("tempo.align.chip.noChange"), amber: false };
+        return stop
+            ? { text: stop, amber: true }
+            : { text: t("tempo.align.chip.noChange"), amber: false };
     const override = overridePart(overrides, t);
     const parts = [
         ...(override ? [override] : []),
+        ...(stop ? [stop] : []),
         t("tempo.align.chip.held", {
             count: heldName(pages, held, measures),
             from: (before[held] ?? 0).toFixed(2),
@@ -737,7 +820,7 @@ export function holdChip({
     if (clamp) parts.push(clamp);
     return {
         text: parts.join(" · "),
-        amber: result.clamped || overrides.length > 0,
+        amber: result.clamped || overrides.length > 0 || stoppedAt.length > 0,
     };
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
     addRowAt,
+    confirmMeter,
     countUnits,
     deriveTempoMap,
     editRowMeter,
@@ -10,6 +11,7 @@ import {
     findMeasure,
     formatUnitTempo,
     inferMeter,
+    isNoOpWrite,
     markText,
     marksByMeasure,
     meterText,
@@ -17,6 +19,9 @@ import {
     removeRow,
     retimeArgsOf,
     rowTempoText,
+    rowsAtRehearsalMarks,
+    typedEdgeCounts,
+    linedUpCounts,
     typedSections,
     unitTempo,
     type TempoMapMark,
@@ -639,9 +644,12 @@ describe("typed rows stay typed until something else changes them (FX-4)", () =>
             measures,
             marks: w.marks,
         });
-        const sections = typedSections(rows);
-        expect(sections).toEqual([
+        const sections = typedSections(rows).slice(0, 1);
+        // A row added in the map (a mark without a source, as files before FX-4 saved them) is
+        // typed too (DE-2)
+        expect(typedSections(rows)).toEqual([
             { from: 1, to: 5, tempo: "♩=176", measures: "m1" },
+            { from: 5, to: 9, tempo: "♩=120", measures: "m2" },
         ]);
         const inside = [...w.durations];
         inside[2] *= 1.1;
@@ -653,8 +661,8 @@ describe("typed rows stay typed until something else changes them (FX-4)", () =>
         expect(overriddenSections(sections, w.durations, later)).toEqual([]);
         // An imported row isn't protected
         const imported = new Map<number, TempoMapMark>([
-            ...w.marks,
             [0, { ...w.marks.get(0)!, source: "import" }],
+            [1, { source: "import" }],
         ]);
         expect(
             typedSections(
@@ -739,5 +747,255 @@ describe("tempos in their units for Align and the readout (FX-7)", () => {
         });
         const units = countUnits(rows, d.length);
         expect(formatUnitTempo(unitTempo(d, units, 1, 5)!)).toBe("♩=176");
+    });
+});
+
+describe("an edit that changes nothing writes nothing (DE-4)", () => {
+    it("Marcus: ♩.=86, then 86, then 6/8 on the same row: only the first is an edit", () => {
+        // m1–2 of 2/4 at ♩=88 (an imported 6/8 shown as 2/4)
+        const measures = measuresOf([2, 2]);
+        let d = [0, ...Array<number>(4).fill(60 / 88)];
+        let marks = new Map<number, TempoMapMark>();
+        let synced: number[] = [];
+        const apply = (w: ReturnType<typeof ok>) => {
+            d = w.durations;
+            marks = w.marks;
+            synced = [...new Set([...synced, ...w.sync])].sort((a, b) => a - b);
+        };
+        const noOp = (w: ReturnType<typeof ok>) =>
+            isNoOpWrite({ write: w, durations: d, marks, synced });
+
+        const first = ok(
+            editRowTempo(state(d, measures, marks), 0, {
+                kind: "tempo",
+                bpm: 86,
+                unit: "dq",
+            }),
+        );
+        expect(noOp(first)).toBe(false);
+        apply(first);
+        const again = ok(
+            editRowTempo(state(d, measures, marks), 0, {
+                kind: "tempo",
+                bpm: 86,
+                unit: null,
+            }),
+        );
+        expect(noOp(again)).toBe(true);
+        const sameMeter = ok(
+            editRowMeter(state(d, measures, marks), 0, meter("6/8")),
+        );
+        expect(noOp(sameMeter)).toBe(true);
+        // A real change still is one
+        const faster = ok(
+            editRowTempo(state(d, measures, marks), 0, {
+                kind: "tempo",
+                bpm: 90,
+                unit: null,
+            }),
+        );
+        expect(noOp(faster)).toBe(false);
+    });
+
+    it("adding a synced count or a mark is a change", () => {
+        const measures = measuresOf([4, 4]);
+        const d = [0, ...Array<number>(8).fill(0.5)];
+        const w = ok(addRowAt(state(d, measures), 1));
+        expect(
+            isNoOpWrite({
+                write: w,
+                durations: d,
+                marks: new Map(),
+                synced: [],
+            }),
+        ).toBe(false);
+        expect(
+            isNoOpWrite({
+                write: w,
+                durations: d,
+                marks: w.marks,
+                synced: [5],
+            }),
+        ).toBe(true);
+    });
+});
+
+/**
+ * Meters as written for shows without marks (DE-5): Marcus's score imported before marks
+ * existed. m0 one count, m1–4 4/4 ♩=132, m5–6 two counts of 60/88 s (6/8 ♩.=88 after ♩.=♩),
+ * m7 two counts at ♩.=85, m8 3/4 ♩=132.
+ */
+describe("meters read from the counts (DE-5)", () => {
+    const q = 60 / 132;
+    const d = [
+        0,
+        q,
+        ...Array<number>(16).fill(q),
+        ...Array<number>(4).fill(60 / 88),
+        ...Array<number>(2).fill(60 / 85),
+        ...Array<number>(3).fill(q),
+    ];
+    const measures = measuresOf([1, 4, 4, 4, 4, 2, 2, 2, 3], 0, {
+        1: "A",
+        5: "I",
+    });
+    const rows = deriveTempoMap({ durations: d, measures });
+
+    it("reads a one-count first measure as the next measure's pickup", () => {
+        expect(meterText(rows[0])).toBe("4/4 pickup");
+        expect(rows[0].meterGuess).toBe("pickup");
+        expect(rowTempoText(rows[0])).toBe("♩=132");
+    });
+
+    it("reads counts 1.5× the ♩ before as compound, and carries it on", () => {
+        const six = rows.filter((r) => meterText(r) === "6/8");
+        expect(six.map((r) => [r.measureNumber, rowTempoText(r)])).toEqual([
+            [5, "♩.=88"],
+            [7, "♩.=85"],
+        ]);
+        expect(six.every((r) => r.meterGuess === "compound")).toBe(true);
+        const last = rows[rows.length - 1];
+        expect(meterText(last)).toBe("3/4");
+        expect(last.meterGuess).toBeUndefined();
+    });
+
+    it("never changes when a count lands", () => {
+        for (const r of rows)
+            expect(r.startTime).toBeCloseTo(countTimes(d)[r.from], 12);
+        const w = ok(confirmMeter(state(d, measures), 2));
+        expect(w.durations).toEqual(d);
+        expect(w.sync).toEqual([]);
+        expect(w.marks.get(rows[2].measureIndex)).toMatchObject({
+            meter: meter("6/8"),
+            unit: "dq",
+            source: "import",
+        });
+        // Confirmed, it reads the same without the "?" and protects no tempo
+        const after = deriveTempoMap({
+            durations: d,
+            measures,
+            marks: w.marks,
+        });
+        expect(meterText(after[2])).toBe("6/8");
+        expect(after[2].meterInferred).toBe(false);
+        expect(typedSections(after)).toEqual([]);
+    });
+
+    it("doesn't guess where the counts say nothing new", () => {
+        const plain = deriveTempoMap({
+            durations: [0, ...Array<number>(8).fill(0.5)],
+            measures: measuresOf([4, 4]),
+        });
+        expect(plain.map((r) => r.meterGuess)).toEqual([undefined]);
+        // A two-count first measure could be a 2/4 bar: not a guessed pickup
+        const two = deriveTempoMap({
+            durations: [0, ...Array<number>(6).fill(0.5)],
+            measures: measuresOf([2, 4]),
+        });
+        expect(two[0].meterGuess).toBeUndefined();
+    });
+});
+
+describe("the map's rows at every rehearsal mark (D7)", () => {
+    it("adds a row at each letter inside a row, with its own counts and start", () => {
+        const d = [0, ...Array<number>(16).fill(0.5)];
+        const measures = measuresOf([4, 4, 4, 4], 1, {
+            1: "A",
+            3: "B",
+            4: "C",
+        });
+        const rows = deriveTempoMap({ durations: d, measures });
+        expect(rows).toHaveLength(1);
+        const shown = rowsAtRehearsalMarks(rows, measures, d);
+        expect(
+            shown.map((r) => [r.rehearsalMark, r.from, r.to, rowTempoText(r)]),
+        ).toEqual([
+            ["A", 1, 9, "♩=120"],
+            ["B", 9, 13, "♩=120"],
+            ["C", 13, 17, "♩=120"],
+        ]);
+        expect(shown[1]!.startTime).toBe(4);
+        expect(shown[1]!.continues).toBe(true);
+        expect(shown[1]!.typed).toBe(false);
+        // Typing at B changes B only
+        const w = ok(
+            editRowTempo({ ...state(d, measures), rows: shown }, 1, {
+                kind: "tempo",
+                bpm: 100,
+                unit: null,
+            }),
+        );
+        expect(w.durations.slice(9, 13)).toEqual(Array(4).fill(0.6));
+        expect(w.durations[13]).toBe(0.5);
+    });
+});
+
+describe("meters written another way (D7)", () => {
+    it("3/2 over six ♩ counts is kept as written, counted in ♩", () => {
+        const d = [0, ...Array<number>(12).fill(0.5)];
+        const measures = measuresOf([6, 6]);
+        const w = ok(editRowMeter(state(d, measures), 0, meter("3/2")));
+        expect(w.durations).toEqual(d);
+        expect(w.marks.get(0)).toMatchObject({
+            meter: meter("6/4"),
+            unit: "q",
+            label: "3/2",
+        });
+        const rows = deriveTempoMap({ durations: d, measures, marks: w.marks });
+        expect(meterText(rows[0])).toBe("3/2");
+    });
+
+    it("regroups 7/8 2+2+3 as 3+2+2 and back from the map", () => {
+        const e = 60 / 352;
+        const bar = [2 * e, 2 * e, 3 * e];
+        const d = [0, ...bar, ...bar];
+        const measures = measuresOf([3, 3]);
+        const before = deriveTempoMap({ durations: d, measures });
+        expect(meterText(before[0])).toBe("7/8 2+2+3");
+        const w = ok(editRowMeter(state(d, measures), 0, meter("7/8 3+2+2")));
+        const rows = deriveTempoMap({
+            durations: w.durations,
+            measures,
+            marks: w.marks,
+        });
+        expect(rows.map(meterText)).toEqual(["7/8 3+2+2"]);
+        expect(w.durations[1]).toBeCloseTo(3 * e, 12);
+        expect(w.durations[3]).toBeCloseTo(2 * e, 12);
+        // The measure keeps its length: the long count only moved
+        expect(w.durations.slice(1, 4).reduce((a, b) => a + b)).toBeCloseTo(
+            7 * e,
+            12,
+        );
+        const back = ok(
+            editRowMeter(
+                state(w.durations, measures, w.marks),
+                0,
+                meter("7/8 2+2+3"),
+            ),
+        );
+        expect(back.durations[1]).toBeCloseTo(2 * e, 12);
+    });
+});
+
+describe("● edges aren't lined up (DE-6)", () => {
+    it("leaves a typed row's edges out of the lined-up counts", () => {
+        const d = [0, ...Array<number>(8).fill(0.5)];
+        const measures = measuresOf([4, 4]);
+        const w = ok(
+            editRowTempo(state(d, measures, new Map([[1, {}]])), 1, {
+                kind: "tempo",
+                bpm: 100,
+                unit: null,
+            }),
+        );
+        const rows = deriveTempoMap({
+            durations: w.durations,
+            measures,
+            marks: w.marks,
+        });
+        expect([...typedEdgeCounts(rows)].sort((a, b) => a - b)).toEqual([
+            5, 9,
+        ]);
+        expect(linedUpCounts([5, 7], rows)).toEqual([7]);
     });
 });

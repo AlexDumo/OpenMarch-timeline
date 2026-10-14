@@ -20,6 +20,8 @@ import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react";
 import { useTimelineFollow, type FollowZoomAnchor } from "./useTimelineFollow";
 import clsx from "clsx";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { toast } from "sonner";
+import { overriddenSections } from "@/timeline/tempo";
 import {
     TimelineCountLinesCanvas,
     TimelineEnvelopeCanvas,
@@ -1229,12 +1231,34 @@ const TimelineSurface = memo(function TimelineSurface({
             {
                 id: "even-out",
                 label: t("tempo.align.evenOut", { page: page.label }),
-                onSelect: () =>
-                    void align.onRetime({
-                        durations: evenOutPage(align.durations, page),
-                        originShift: 0,
-                        synced: align.synced,
-                    }),
+                onSelect: () => {
+                    const next = evenOutPage(align.durations, page);
+                    const write = () =>
+                        void align.onRetime({
+                            durations: next,
+                            originShift: 0,
+                            synced: align.synced,
+                        });
+                    // A typed rit. evened out is a typed tempo changed: ask first (DE-3)
+                    const typed = overriddenSections(
+                        align.tempoMap?.sections ?? [],
+                        align.durations,
+                        next,
+                    )[0];
+                    if (!typed) return write();
+                    toast.warning(
+                        t("tempo.align.override.question", {
+                            tempo: typed.tempo,
+                            measures: typed.measures,
+                        }),
+                        {
+                            action: {
+                                label: t("tempo.align.override.confirm"),
+                                onClick: write,
+                            },
+                        },
+                    );
+                },
             },
             {
                 id: "tempo",
@@ -1944,6 +1968,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                     audioOffsetSeconds={
                                         align.audioOffsetSeconds
                                     }
+                                    typedEdges={align.tempoMap?.edges}
                                     formatTime={(seconds) =>
                                         formatShowTime(seconds, true)
                                     }
@@ -1993,6 +2018,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                             <TimelineAlignConfirm
                                                 preview={preview}
                                                 onConfirm={alignEdit.confirm}
+                                                onKeep={alignEdit.keepTyped}
                                                 onCancel={alignEdit.cancel}
                                             />
                                         ) : (
