@@ -6,10 +6,7 @@ import { transactionWithHistory } from "@/db-functions/history";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useTimingObjects } from "@/hooks";
-import {
-    displayedBeat,
-    useTimelineSelectionStore,
-} from "@/stores/TimelineSelectionStore";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     canPlayOn,
     navigationTarget,
@@ -18,18 +15,14 @@ import {
     playbackStep,
     previewBounds,
 } from "@/timeline/timelinePlayhead";
-import {
-    loopBounds,
-    startTimelinePlayOn,
-    toggleTimelineLoop,
-} from "@/timeline/timelineTransport";
+import { playRange, toggleTimelineLoop } from "@/timeline/timelineTransport";
 import { useTimelinePageBridge } from "@/timeline/useTimelinePageBridge";
 import { useTimelinePlayback } from "../useTimelinePlayback";
 
 /**
  * The timeline-mode playhead (ui.md UI-9; P8.11): pages are flags, the paused playhead rests on any
  * whole beat, seeking doesn't change the selection, navigation selects a page's range (home for
- * the first). Play loops the loop region, wherever the playhead is, and plays on otherwise (UI-17).
+ * the first). Play plays from the start flag to the end flag, and loops there with looping on (UI-22).
  */
 
 /** Pages as `fromDatabasePages` builds them: page 0 holds only the fixed beat 0. */
@@ -143,12 +136,12 @@ describe("play", () => {
         expect(playbackStep(on, 17, 17, null)).toBe("stop");
     });
 
-    it("loopBounds is the isolated range, else the loop, else nothing (UI-17)", () => {
+    it("playRange is the isolated range, else the start flag to the end flag (UI-22)", () => {
         store().selectRange(1, 9);
-        expect(loopBounds(store())).toBeNull();
-        store().setLoop({ start: 2, end: 6 });
-        expect(loopBounds(store())).toEqual({ from: 2, to: 6 });
-        // Isolation wins, even when a loop is also set
+        expect(playRange(store())).toEqual({ from: 1, to: 9 });
+        store().setEnd(6);
+        expect(playRange(store())).toEqual({ from: 1, to: 6 });
+        // Isolation wins
         store().setStoredTimelines([
             {
                 id: 1,
@@ -158,7 +151,7 @@ describe("play", () => {
             },
         ]);
         store().isolate(1);
-        expect(loopBounds(store())).toEqual({ from: 3, to: 9 });
+        expect(playRange(store())).toEqual({ from: 3, to: 9 });
     });
 
     it("loops over an isolated timeline (docs/timeline/research/ownership/09-isolation.md)", () => {
@@ -334,7 +327,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(result.current.playback.positionBeat).toBe(0);
     });
 
-    it("C turns the loop on over the window, and E/Q move it onto the page (UI-17)", async ({
+    it("C turns looping on and off, and E/Q put both flags on the page (UI-22)", async ({
         db,
         wrapper,
     }) => {
@@ -347,51 +340,31 @@ describeDbTests("useTimelinePlayback", (it) => {
         act(() => {
             result.current.playback.onNavigate!("next-page");
         });
-        expect(store().startPinned).toBe(false);
-        expect(store().loop).toBeNull();
-        // Page 1's window is the loop; C does not move the start flag
+        expect(store().looping).toBe(false);
         act(() => {
             toggleTimelineLoop();
         });
-        expect(store().loop).toEqual({ start: 1, end: 9 });
+        expect(store().looping).toBe(true);
         expect(store().startBeat).toBe(1);
-        expect(store().startPinned).toBe(false);
+        expect(store().endBeat).toBe(9);
         expect(result.current.playback.playLoops).toBe(true);
-        // E takes the loop to the next page
+        // A pinned end flag goes back on the page's end with E
         act(() => {
+            store().setEnd(12);
             result.current.playback.onNavigate!("next-page");
         });
-        expect(store().loop).toEqual({ start: 9, end: 17 });
-        expect(store().startPinned).toBe(false);
         expect(store().startBeat).toBe(9);
-        expect(result.current.selection).toEqual({
-            kind: "range",
-            start: 9,
-            end: 17,
-        });
-        // Q brings it back
-        act(() => {
-            result.current.playback.onNavigate!("previous-page");
-        });
-        expect(store().loop).toEqual({ start: 1, end: 9 });
-        expect(store().playheadBeat).toBe(9);
-        // Off: navigation leaves the loop null
+        expect(store().endBeat).toBe(17);
+        expect(store().endPinned).toBe(false);
+        expect(store().looping).toBe(true);
         act(() => {
             toggleTimelineLoop();
         });
-        expect(store().loop).toBeNull();
-        act(() => {
-            result.current.playback.onNavigate!("next-page");
-        });
-        expect(store().loop).toBeNull();
-        expect(result.current.selection).toEqual({
-            kind: "range",
-            start: 9,
-            end: 17,
-        });
+        expect(store().looping).toBe(false);
+        expect(result.current.playback.playLoops).toBe(false);
     });
 
-    it("a seek or a click leaves the loop, and page navigation moves it only while it is on (UI-17)", async ({
+    it("a seek or a click takes an unpinned end flag along, and leaves a pinned one (UI-22)", async ({
         db,
         wrapper,
     }) => {
@@ -401,48 +374,26 @@ describeDbTests("useTimelinePlayback", (it) => {
         act(() => {
             store().setPageBoxes(PAGE_BOXES);
             store().selectRange(1, 9);
-            store().setLoop({ start: 1, end: 17 });
         });
-        const loop = store().loop;
-        // Inside the loop, then past it: the playhead moves, the loop does not
         act(() => {
             result.current.playback.onSeek!(5);
         });
-        expect(store().playheadBeat).toBe(5);
-        expect(store().loop).toBe(loop);
-        act(() => {
-            result.current.playback.onSeek!(12);
-        });
-        expect(store().playheadBeat).toBe(12);
-        expect(store().loop).toBe(loop);
-        // A click (press, then release) is a seek too
+        expect(store().endBeat).toBe(5);
         act(() => {
             result.current.playback.onSeek!(4, { gesture: "press" });
             result.current.playback.onSeek!(4, { gesture: "end" });
         });
-        expect(store().playheadBeat).toBe(4);
-        expect(store().loop).toBe(loop);
-        // E moves an active loop onto the target page
+        expect(store().endBeat).toBe(4);
         act(() => {
-            result.current.playback.onNavigate!("next-page");
+            store().setEnd(8);
+            result.current.playback.onSeek!(12);
         });
-        expect(store().playheadBeat).toBe(9);
-        expect(store().loop).toEqual({ start: 1, end: 9 });
-        expect(loopBounds(store())).toEqual({ from: 1, to: 9 });
-        // Off: the same navigation leaves it null
-        act(() => {
-            store().setLoop(null);
-            result.current.playback.onNavigate!("next-page");
-        });
-        expect(store().loop).toBeNull();
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 9,
-            end: 17,
-        });
+        expect(store().playheadBeat).toBe(12);
+        expect(store().endBeat).toBe(8);
+        expect(store().endPinned).toBe(true);
     });
 
-    it("leaves a hand-drawn start flag through a seek, and page navigation selects the page (UI-12, UI-17)", async ({
+    it("leaves a hand-drawn start flag through a seek, and page navigation selects the page (UI-12)", async ({
         db,
         wrapper,
     }) => {
@@ -454,14 +405,12 @@ describeDbTests("useTimelinePlayback", (it) => {
             store().selectRange(12, 15);
         });
         expect(store().startPinned).toBe(true);
-        expect(store().loop).toBeNull();
         act(() => {
             result.current.playback.onSeek!(16);
         });
         expect(store().startBeat).toBe(12);
         expect(store().startPinned).toBe(true);
-        expect(store().loop).toBeNull();
-        // E selects the target page. It does not keep the drawn flag or turn the loop on
+        // E selects the target page. It does not keep the drawn flag or turn looping on
         act(() => {
             result.current.playback.onNavigate!("next-page");
         });
@@ -471,10 +420,10 @@ describeDbTests("useTimelinePlayback", (it) => {
             end: 17,
         });
         expect(store().startPinned).toBe(false);
-        expect(store().loop).toBeNull();
+        expect(store().looping).toBe(false);
     });
 
-    it("C loops the edit window, not the displayed beat; C again clears it; C in isolation does nothing (UI-17)", async ({
+    it("C in isolation does nothing; an isolated move always loops (UI-22)", async ({
         db,
         wrapper,
     }) => {
@@ -484,38 +433,6 @@ describeDbTests("useTimelinePlayback", (it) => {
         act(() => {
             store().setPageBoxes(PAGE_BOXES);
             store().selectRange(9, 17);
-            store().cue(12);
-        });
-        expect(store().startPinned).toBe(false);
-        expect(displayedBeat(store())).toBe(12);
-        act(() => {
-            toggleTimelineLoop();
-        });
-        expect(store().loop).toEqual({ start: 9, end: 17 });
-        expect(store().startBeat).toBe(9);
-        expect(store().startPinned).toBe(false);
-        expect(store().playheadBeat).toBe(17);
-        expect(store().cursorBeat).toBe(12);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 9,
-            end: 17,
-        });
-
-        act(() => {
-            toggleTimelineLoop();
-        });
-        expect(store().loop).toBeNull();
-        expect(store().startBeat).toBe(9);
-        expect(store().playheadBeat).toBe(17);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 9,
-            end: 17,
-        });
-
-        act(() => {
-            store().setLoop({ start: 9, end: 17 });
             store().setStoredTimelines([
                 {
                     id: 1,
@@ -526,23 +443,16 @@ describeDbTests("useTimelinePlayback", (it) => {
             ]);
             store().isolate(1);
         });
-        const loop = store().loop;
-        const pinned = store().startPinned;
-        const start = store().startBeat;
-        const playhead = store().playheadBeat;
+        expect(store().looping).toBe(false);
+        expect(result.current.playback.playLoops).toBe(true);
         act(() => {
             toggleTimelineLoop();
         });
+        expect(store().looping).toBe(false);
         expect(store().isolation).not.toBeNull();
-        expect(store().loop).toBe(loop);
-        expect(store().startPinned).toBe(pinned);
-        expect(store().startBeat).toBe(start);
-        expect(store().playheadBeat).toBe(playhead);
-        // The hook result is what keeps this render subscribed to the store
-        expect(result.current.playback.playLoops).toBe(true);
     });
 
-    it("playLoops when a loop is set or a move is isolated, and Space follows that (UI-17)", async ({
+    it("the Play button plays from the start flag, Pause pauses, and Stop goes to the end flag (UI-22)", async ({
         db,
         wrapper,
     }) => {
@@ -551,78 +461,40 @@ describeDbTests("useTimelinePlayback", (it) => {
         await waitFor(() => expect(result.current.pages).toHaveLength(3));
         act(() => {
             store().setPageBoxes(PAGE_BOXES);
-        });
-
-        // Playing on from the end of the show: nothing to play
-        act(() => {
-            store().seek(17);
-        });
-        act(() => {
-            startTimelinePlayOn(17, result.current.playing.setIsPlaying);
-        });
-        expect(result.current.playback.isPlaying).toBe(false);
-
-        act(() => {
             store().selectRange(1, 9);
         });
-        expect(store().startPinned).toBe(false);
-        expect(result.current.playback.playLoops).toBe(false);
-        // Shift+click on Play plays from the playhead, as Shift+Space
-        expect(result.current.playback.onPlayFromPlayhead).toBeDefined();
-        // Space: plays on from the start flag. The driver, not this hook, moves P when it stops
+        expect(result.current.playback.playKeys).toEqual({
+            stop: "Space",
+            pause: "Shift + Space",
+        });
         act(() => {
             result.current.playback.onPlayingChange!(true);
         });
         expect(result.current.playback.isPlaying).toBe(true);
-        expect(result.current.playback.playLoops).toBe(false);
-        expect(store().playback).toEqual({ kind: "on" });
+        expect(store().playback).toEqual({
+            kind: "preview",
+            from: 1,
+            to: 9,
+            once: true,
+        });
         expect(store().playheadBeat).toBe(9);
         // The start flag on beat 1, which cues as 0 (beat 0 has no length)
         expect(store().cursorBeat).toBe(0);
-        // While playing, the cursor follows the audio clock and is never -1
         expect(result.current.playback.positionBeat).toBeGreaterThanOrEqual(0);
-
         act(() => {
             result.current.playback.onPlayingChange!(false);
         });
         expect(result.current.playback.isPlaying).toBe(false);
-        // The driver isn't mounted, so clear the run it would have cleared on pause
+        // The driver isn't mounted: Stop, paused, goes to the end flag itself
         act(() => {
             store().setPlayback(null);
-            store().clearCursor();
-            // P sits on the loop's end; Space still loops the loop and leaves P
-            store().setLoop({ start: 5, end: 9 });
+            store().pauseAt(5, 1);
         });
-        expect(store().startPinned).toBe(false);
-        expect(result.current.playback.playLoops).toBe(true);
+        expect(store().playheadBeat).toBe(5);
         act(() => {
-            result.current.playback.onPlayingChange!(true);
+            result.current.playback.onStop!();
         });
-        expect(result.current.playback.isPlaying).toBe(true);
-        expect(result.current.playback.playLoops).toBe(true);
-        expect(store().playback).toEqual({ kind: "preview", from: 5, to: 9 });
-        expect(store().cursorBeat).toBe(5);
         expect(store().playheadBeat).toBe(9);
-
-        // Isolation loops even when the loop itself is off
-        act(() => {
-            result.current.playback.onPlayingChange!(false);
-            store().setPlayback(null);
-            store().clearCursor();
-            store().setLoop(null);
-            store().selectRange(9, 17);
-            store().setStoredTimelines([
-                {
-                    id: 1,
-                    start: 9,
-                    end: 17,
-                    marcherIds: new Set([1]),
-                },
-            ]);
-            store().isolate(1);
-        });
-        expect(store().startPinned).toBe(false);
-        expect(result.current.playback.playLoops).toBe(true);
     });
 
     it("keeps the legacy selected page on the playhead's page, and back (TEMPORARY, P8.12)", async ({

@@ -58,7 +58,7 @@ import {
 } from "./useTimelineCommands";
 import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
-import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
+import { jumpTimelinePlayback, playRange } from "@/timeline/timelineTransport";
 import { useLabeledHoldMarks } from "./PageHoldMark";
 import { useTimelineHoldMarks } from "@/timeline/usePageHoldMarks";
 import {
@@ -316,23 +316,15 @@ export default function TimelineModePanel() {
         }
         if (isPlaying) return;
         const store = useTimelineSelectionStore.getState();
+        // UI-22: a range (a page box, Shift+click, Ctrl+drag) puts the flags on it, with the
+        // playhead and the end flag on its end
         if (next?.kind === "home") store.selectHome();
-        else if (next?.kind === "range") {
-            const { startBeatIndex: start, endBeatIndex: end } = next.range;
-            store.selectRange(start, end);
-            // UI-17: a drawn range (Ctrl+drag) is the loop, and turns looping on, as dragging
-            // Logic's cycle bar does; a page box or Shift+click takes a loop that is on to the
-            // pages selected. A dragged start flag only moves the edit window
-            const pageBox = store.pageBoxes.some(
-                (b) => b.start === start && b.end === end,
+        else if (next?.kind === "range")
+            store.selectRange(
+                next.range.startBeatIndex,
+                next.range.endBeatIndex,
             );
-            if (
-                store.isolation === null &&
-                (next.drawn ||
-                    (store.loop && (next.via === "pages" || pageBox)))
-            )
-                store.setLoop({ start, end });
-        } else store.selectNothing();
+        else store.selectNothing();
     };
 
     return (
@@ -442,30 +434,49 @@ function PlayingTimeline(
         | "onAddPageFlag"
         | "onAddSubsetPage"
         | "addPageNames"
-        | "loop"
-        | "onLoopChange"
+        | "playRange"
+        | "onEndFlagChange"
+        | "onUnpinEnd"
     >,
 ) {
     const { beats, pages } = props;
     const playback = useTimelinePlayback({ beats, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
-    // UI-17: the loop, drawn as a bar with draggable ends; an isolated move always loops, so its
-    // range is drawn as the loop too, read-only
-    const storeLoop = useTimelineSelectionStore((s) => s.loop);
+    // UI-22: what Play plays, the start flag to the end flag, drawn as a bar with the end flag's
+    // pennant; an isolated move always loops, and its ends don't move
     const isolation = useTimelineSelectionStore((s) => s.isolation);
-    const loop = useMemo(() => {
-        const region = isolation ?? storeLoop;
-        return region
-            ? { startBeatIndex: region.start, endBeatIndex: region.end }
-            : null;
-    }, [isolation, storeLoop]);
-    const changeLoop = useCallback(
-        (next: { startBeatIndex: number; endBeatIndex: number }) =>
-            useTimelineSelectionStore.getState().setLoop({
-                start: next.startBeatIndex,
-                end: next.endBeatIndex,
-            }),
+    const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const endBeat = useTimelineSelectionStore((s) => s.endBeat);
+    const endPinned = useTimelineSelectionStore((s) => s.endPinned);
+    const looping = useTimelineSelectionStore((s) => s.looping);
+    const playheadAt = useTimelineSelectionStore((s) => s.playheadBeat);
+    const playRangeShown = useMemo(() => {
+        const range = playRange({ isolation, startBeat, endBeat, pageBoxes });
+        if (!range) return null;
+        return {
+            startBeatIndex: range.from,
+            endBeatIndex: range.to,
+            endOnPlayhead: range.to === playheadAt,
+            endPinned: endPinned && isolation === null,
+            looping: looping || isolation !== null,
+            fixed: isolation !== null,
+        };
+    }, [
+        isolation,
+        startBeat,
+        endBeat,
+        pageBoxes,
+        playheadAt,
+        endPinned,
+        looping,
+    ]);
+    const changeEndFlag = useCallback(
+        (beat: number) => useTimelineSelectionStore.getState().setEnd(beat),
+        [],
+    );
+    const unpinEnd = useCallback(
+        () => useTimelineSelectionStore.getState().unpinEnd(),
         [],
     );
     // UI-12: the pin shows outside isolation, whose start flag is the isolated move's own
@@ -524,8 +535,9 @@ function PlayingTimeline(
             playback={playback}
             pixelsPerBeat={pixelsPerBeat}
             onPixelsPerBeatChange={setPixelsPerBeat}
-            loop={loop}
-            onLoopChange={isolation ? undefined : changeLoop}
+            playRange={playRangeShown}
+            onEndFlagChange={isolation ? undefined : changeEndFlag}
+            onUnpinEnd={unpinEnd}
         />
     );
 }

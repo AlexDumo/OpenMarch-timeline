@@ -17,6 +17,24 @@ export type TimelineTrackId = string | number;
 export type BeatPosition = number;
 
 /** All timeline ranges use an inclusive start and an exclusive end. */
+/** What Play plays (UI-22): the start flag to the end flag */
+export interface TimelinePlayRange extends TimelineBeatRange {
+    /** The end flag sits on the playhead (it isn't pinned, and no pause has left it behind) */
+    readonly endOnPlayhead: boolean;
+    /** The end flag was placed by hand, so it stays when the playhead moves */
+    readonly endPinned: boolean;
+    /** Play loops at the end flag instead of stopping there */
+    readonly looping: boolean;
+    /** An isolated move's range: drawn, but its ends don't move */
+    readonly fixed?: boolean;
+}
+
+/** The keys that stop and pause while playing (UI-22), as keycaps ("Space", "Shift + Space") */
+export interface TimelinePlayKeys {
+    readonly stop: string;
+    readonly pause: string;
+}
+
 export interface TimelineBeatRange {
     readonly startBeatIndex: number;
     readonly endBeatIndex: number;
@@ -224,12 +242,12 @@ export interface TimelineInteractionProps {
     readonly selectedTarget?: TimelineTarget | null;
     readonly onSeek?: TimelineSeek;
     readonly onPlayingChange?: (isPlaying: boolean) => void;
-    /** Looping is on, so Play loops (UI-17) */
+    /** Play loops at the end flag (UI-22): looping is on, or a move is isolated */
     readonly playLoops?: boolean;
-    /** Shift+Space's once-through is playing (UI-17) */
-    readonly playingOnce?: boolean;
-    /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
-    readonly onPlayFromPlayhead?: () => void;
+    /** **Stop** (UI-22): the playhead goes to the end flag, playing or paused */
+    readonly onStop?: () => void;
+    /** The keys that stop and pause while playing, as keycaps (UI-22, Settings swaps them) */
+    readonly playKeys?: TimelinePlayKeys;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
@@ -277,10 +295,12 @@ export interface TimelineCommonProps
     readonly clipResize?: TimelineClipResizeCommands;
     /** Unpins the start flag (UI-12), from its pin */
     readonly onUnpinStart?: () => void;
-    /** The loop (UI-17), view beats; `null` or absent when looping is off */
-    readonly loop?: TimelineBeatRange | null;
-    /** A loop end dragged or stepped (UI-17), view beats */
-    readonly onLoopChange?: (loop: TimelineBeatRange) => void;
+    /** What Play plays (UI-22), view beats: the start flag to the end flag */
+    readonly playRange?: TimelinePlayRange | null;
+    /** The end flag dragged or stepped to a beat (UI-22), view beats */
+    readonly onEndFlagChange?: (beat: number) => void;
+    /** Unpins the end flag (UI-22), from its pin */
+    readonly onUnpinEnd?: () => void;
     /** Transport controls that fold into "⋯" on a narrow panel, such as Sound (UI-12) */
     readonly transportSecondary?: ReactNode;
     /** View controls at the transport's end, such as Compact (UI-12); they fold too */

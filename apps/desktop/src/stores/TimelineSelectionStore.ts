@@ -20,7 +20,7 @@ import { create } from "zustand";
  * there (a dragged range, the start handle). A pinned S stays until it is unpinned (UI-12). During
  * a gesture (a scrub, arrow keys held on the playhead) S stays put and follows once the gesture
  * ends (`beginScrub`, `endScrub`; UI-12 review), so it doesn't chase the playhead page by page.
- * Stopping a play-on run moves P, and an unpinned S follows it; a stopped preview leaves both.
+ * A pause moves P and leaves S; Stop puts P on the end flag (UI-22).
  *
  * Every beat here is a spec beat position (`beats` index, spec §7). The zero-length beat 0 and
  * beat 1 are both show time 0; the playhead writes that time as 0 (`normalizePlayheadBeat`).
@@ -36,12 +36,14 @@ import { create } from "zustand";
  * Esc, a page box or home, a dragged range, or the timeline going away ends isolation and puts S
  * and P back where they were.
  *
- * **Playback** (UI-11, UI-17): with a loop set (`loop`), **Play** loops it (a preview); with none it
- * plays on from the playhead. Playing never writes the playhead. Audio plays from, and the
- * paused canvas shows, the **cursor** (`cursorBeat`) when there is one, and the playhead
- * otherwise. Play sets the cursor where playback starts and `playback` to what is running: a
- * preview of the window, or playing on. A preview that loops moves the cursor back to its start;
- * a preview that stops clears the cursor, so the canvas is back at P. Every write of the window
+ * **Playback** (UI-22): **Play** always plays from the start flag S to the **end flag** E, and
+ * loops there while `looping` is on; otherwise it stops at E. Stopping (Stop, or the end of a run)
+ * puts the playhead on E (`stopAtEnd`); pausing freezes it on the nearest beat (`pauseAt`), and
+ * leaves both flags. An unpinned E sits on the playhead and follows it wherever the playhead goes,
+ * except for a pause; dragging E pins it there, and a page box, page navigation or home unpin it.
+ * Playing never writes the playhead. Audio plays from, and the paused canvas shows, the
+ * **cursor** (`cursorBeat`) when there is one, and the playhead otherwise. Play sets the cursor
+ * where playback starts and `playback` to what is running. Every write of the window
  * (navigation, seeking, a range) clears the cursor, so the canvas is back at P before anything
  * edits there.
  */
@@ -82,25 +84,20 @@ export interface TimelineIsolation {
 }
 
 /**
- * What is playing (UI-11): a **preview** of the window, from `from` (the start flag) to `to` (the
- * playhead), or playing **on** from where it started to the end of the show. Taken
- * when playback starts, so edits made while playing don't move its bounds.
+ * What is playing (UI-11, UI-22): a **preview**, Play's run from `from` (the start flag) to `to`
+ * (the end flag), or playing **on** from where it started to the end of the show (playback started
+ * outside the transport). Its bounds are taken when playback starts, so edits made while playing
+ * don't move them.
  */
 export type TimelinePlaybackRun =
     | {
           readonly kind: "preview";
           readonly from: number;
           readonly to: number;
-          /** Plays once and stops instead of looping (UI-17: Shift+Space plays the loop once) */
+          /** Stops at `to` instead of looping: looping is off (UI-22) */
           readonly once?: boolean;
       }
     | { readonly kind: "on" };
-
-/** The loop's region (UI-17), spec beats: `[start, end)` */
-export interface TimelineLoop {
-    readonly start: number;
-    readonly end: number;
-}
 
 /** A page's box: the previous flag to its own flag (`pageFlags`), in spec beats. */
 export interface PageBox {
@@ -117,6 +114,10 @@ export interface TimelineSelectionState {
     readonly startBeat: number;
     /** Whether S was placed by hand; an unpinned S follows navigation */
     readonly startPinned: boolean;
+    /** The end flag E (UI-22): where Play stops, or loops back from, and where Stop goes */
+    readonly endBeat: number;
+    /** Whether E was placed by hand; an unpinned E sits on the playhead (see the module comment) */
+    readonly endPinned: boolean;
     /** The paused playhead: a whole spec beat in `[0, beats.length]`. Not updated while playing. */
     readonly playheadBeat: number;
     /**
@@ -142,13 +143,8 @@ export interface TimelineSelectionState {
     readonly cursorBeat: number | null;
     /** What is playing, or `null` while paused (UI-11) */
     readonly playback: TimelinePlaybackRun | null;
-    /**
-     * The loop (UI-17): its own region, apart from the edit window, as Logic's cycle region. While
-     * set, Play loops it wherever the playhead is and stopping returns to the playhead. Moving the
-     * playhead (a scrub, a click on a count, arrow keys) leaves it; going to a page (E, Q, a page
-     * box) moves it to that page. `null` when looping is off.
-     */
-    readonly loop: TimelineLoop | null;
+    /** Looping (UI-22, C): Play goes back to the start flag at the end flag instead of stopping */
+    readonly looping: boolean;
     /** A gesture is moving the playhead: an unpinned S waits for it to end (UI-12 review) */
     readonly scrubbing: boolean;
     /** The start flag or the playhead being dragged by its line (UI-21), from where it began */
@@ -189,6 +185,20 @@ export interface TimelineSelectionState {
     readonly seek: (beat: number) => void;
     /** Moves the playhead and leaves S where it is. */
     readonly seekKeepingStart: (beat: number) => void;
+    /**
+     * A pause (UI-22): the playhead goes to `beat`, kept after `after` (the run's start, so the
+     * window doesn't fall back to the page before), and both flags stay where they are.
+     */
+    readonly pauseAt: (beat: number, after?: number) => void;
+    /** Stop (UI-22): the playhead goes to the end flag, and the canvas back to it. */
+    readonly stopAtEnd: () => void;
+    /**
+     * Places the end flag at `beat` by hand (UI-22): pinned, unless that is the playhead, where an
+     * unpinned E sits. Kept after S and within the show. Does nothing in isolation.
+     */
+    readonly setEnd: (beat: number) => void;
+    /** Unpins E: it goes back to the playhead and follows it again (UI-22). */
+    readonly unpinEnd: () => void;
     /**
      * A gesture that moves the playhead began (a scrub, a page-box drag, arrow keys): `seek` leaves
      * an unpinned S where it is until `endScrub`.
@@ -257,8 +267,11 @@ export interface TimelineSelectionState {
     readonly clearCursor: () => void;
     /** Records what is playing (`null` once it stops). Used by the transport and the driver. */
     readonly setPlayback: (playback: TimelinePlaybackRun | null) => void;
-    /** Sets the loop, or turns looping off with `null` (UI-17) */
-    readonly setLoop: (loop: TimelineLoop | null) => void;
+    /**
+     * Turns looping on or off (UI-22). A run playing now goes on with it: it loops at the end
+     * flag, or stops there.
+     */
+    readonly setLooping: (looping: boolean) => void;
     /** Used by `useTimelinePlaybackDriver` only. */
     readonly setShowEndBeat: (showEndBeat: number | null) => void;
     /** Opening a show: home, playhead at 0, nothing loaded. */
@@ -430,6 +443,30 @@ export function isMarcherDimmed(
 
 const HOME: TimelineEditSelection = { kind: "home" };
 
+/** A write that puts the end flag back on the playhead, unpinned (`followEnd` places it) */
+const UNPINNED_END = { endPinned: false } as const;
+
+/**
+ * UI-22: an unpinned end flag sits on the playhead. A write that moves the playhead takes it
+ * along, unless the write places E itself (a pause leaves it where the run ended).
+ */
+const followEnd = (
+    s: TimelineSelectionState,
+    next: Partial<TimelineSelectionState>,
+): Partial<TimelineSelectionState> => {
+    const pinned = next.endPinned ?? s.endPinned;
+    if (pinned || next.endBeat !== undefined) return next;
+    // Unpinned just now (a page box, home): E goes to the playhead even if it didn't move
+    const playhead = next.playheadBeat ?? s.playheadBeat;
+    const moved =
+        next.playheadBeat !== undefined && next.playheadBeat !== s.playheadBeat;
+    return moved || next.endPinned === false
+        ? playhead === s.endBeat
+            ? next
+            : { ...next, endBeat: playhead }
+        : next;
+};
+
 type WindowFields = Pick<
     TimelineSelectionState,
     "selection" | "startBeat" | "startPinned" | "playheadBeat" | "cursorBeat"
@@ -488,7 +525,10 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             rawSet((s) =>
                 keepEqualSelection(
                     s,
-                    typeof update === "function" ? update(s) : update,
+                    followEnd(
+                        s,
+                        typeof update === "function" ? update(s) : update,
+                    ),
                 ),
             );
         const clamp = (s: TimelineSelectionState, beat: number) => {
@@ -601,6 +641,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         : Math.min(r.playheadBeat, s.showEndBeat),
                     s.pageBoxes,
                 ),
+                ...UNPINNED_END,
                 isolation: null,
                 playheadRevision: s.playheadRevision + 1,
             };
@@ -609,6 +650,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             selection: HOME,
             startBeat: 0,
             startPinned: false,
+            endBeat: 0,
+            endPinned: false,
             playheadBeat: 0,
             playheadRevision: 0,
             pageBoxes: [],
@@ -616,7 +659,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             showEndBeat: null,
             isolation: null,
             cursorBeat: null,
-            loop: null,
+            looping: false,
             playback: null,
             scrubbing: false,
             lineDrag: null,
@@ -641,6 +684,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     };
                     return {
                         ...isolatedWindow(s, isolation, timeline.end),
+                        ...UNPINNED_END,
                         isolation,
                         // Isolated, there is no line drag (UI-21)
                         lineDrag: null,
@@ -652,6 +696,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             selectHome: () =>
                 set((s) => ({
                     ...windowFields(0, false, 0, s.pageBoxes),
+                    ...UNPINNED_END,
                     isolation: null,
                     scrubbing: false,
                     playheadRevision: s.playheadRevision + 1,
@@ -666,6 +711,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         end,
                         s.pageBoxes,
                     ),
+                    ...UNPINNED_END,
                     playheadRevision: s.playheadRevision + 1,
                 })),
             selectNothing: () =>
@@ -726,6 +772,61 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         playheadRevision: s.playheadRevision + 1,
                     };
                 }),
+            pauseAt: (beat, after) =>
+                set((s) => {
+                    if (!Number.isFinite(beat)) return {};
+                    let playhead = clamp(s, beat);
+                    if (after !== undefined && playhead <= after)
+                        playhead = clamp(s, after + 1);
+                    return {
+                        ...(s.isolation
+                            ? isolatedWindow(s, s.isolation, playhead)
+                            : windowFields(
+                                  s.startBeat,
+                                  s.startPinned,
+                                  playhead,
+                                  s.pageBoxes,
+                              )),
+                        // Both flags stay, so Play replays the run and Stop goes back to its end
+                        endBeat: s.endBeat,
+                        playheadRevision: s.playheadRevision + 1,
+                    };
+                }),
+            stopAtEnd: () =>
+                set((s) => {
+                    const end = clamp(s, s.endBeat);
+                    return {
+                        ...(s.isolation
+                            ? isolatedWindow(s, s.isolation, end)
+                            : windowFields(
+                                  s.startBeat,
+                                  s.startPinned,
+                                  end,
+                                  s.pageBoxes,
+                              )),
+                        endBeat: s.endBeat,
+                        playheadRevision: s.playheadRevision + 1,
+                    };
+                }),
+            setEnd: (beat) =>
+                set((s) => {
+                    if (s.isolation || !Number.isFinite(beat)) return {};
+                    const last = s.showEndBeat ?? Number.POSITIVE_INFINITY;
+                    const end = Math.max(
+                        clamp(s, beat),
+                        Math.min(s.startBeat + 1, last),
+                    );
+                    const endPinned = end !== s.playheadBeat;
+                    return end === s.endBeat && endPinned === s.endPinned
+                        ? {}
+                        : { endBeat: end, endPinned };
+                }),
+            unpinEnd: () =>
+                set((s) =>
+                    s.endPinned || s.endBeat !== s.playheadBeat
+                        ? { endBeat: s.playheadBeat, endPinned: false }
+                        : {},
+                ),
             beginScrub: () =>
                 set((s) => (s.scrubbing ? {} : { scrubbing: true })),
             endScrub: () =>
@@ -892,6 +993,10 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         const { start, end } = to;
                         return {
                             isolation,
+                            // A pinned end flag on the move's end goes with it
+                            ...(s.endPinned && s.endBeat === from.end
+                                ? { endBeat: to.end }
+                                : {}),
                             ...windowFields(
                                 start,
                                 start !== followingStart(end, s.pageBoxes),
@@ -944,6 +1049,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         return {
                             pageBoxes,
                             ...fields,
+                            // An end flag on the moved flag goes with it, pinned or not
+                            endBeat: follow(s.endBeat),
                             storedTimelines:
                                 s.storedTimelines?.map((t) =>
                                     onFlag(t)
@@ -1087,19 +1194,23 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                               ),
                           },
                 ),
-            setLoop: (loop) =>
+            setLooping: (looping) =>
                 set((s) =>
-                    loop === s.loop ||
-                    (loop !== null &&
-                        s.loop !== null &&
-                        loop.start === s.loop.start &&
-                        loop.end === s.loop.end)
+                    looping === s.looping
                         ? {}
                         : {
-                              loop:
-                                  loop === null || loop.end - loop.start < 1
-                                      ? null
-                                      : loop,
+                              looping,
+                              // The run playing now loops or stops at its end from here on;
+                              // an isolated move always loops
+                              ...(s.playback?.kind === "preview" &&
+                              s.isolation === null
+                                  ? {
+                                        playback: {
+                                            ...s.playback,
+                                            once: !looping,
+                                        },
+                                    }
+                                  : {}),
                           },
                 ),
             setShowEndBeat: (showEndBeat) => set({ showEndBeat }),
@@ -1110,8 +1221,9 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     isolation: null,
                     storedTimelines: null,
                     showEndBeat: null,
+                    ...UNPINNED_END,
                     playback: null,
-                    loop: null,
+                    looping: false,
                     scrubbing: false,
                     lineDrag: null,
                 })),

@@ -33,11 +33,11 @@ describe("transport shortcuts (UI-17)", () => {
             previousBeat: "Shift + Q",
             nextBeat: "Shift + E",
             play: "Space",
-            playPage: "Shift + Space",
+            pause: "Shift + Space",
             loop: "C",
         });
-        expect(TRANSPORT_SHORTCUTS.playPage).toBe(shown("playPage"));
-        expect(TRANSPORT_SHORTCUTS.play).toBe(shown("playPause"));
+        expect(TRANSPORT_SHORTCUTS.pause).toBe(shown("playPause"));
+        expect(TRANSPORT_SHORTCUTS.play).toBe(shown("playStop"));
         expect(TRANSPORT_SHORTCUTS.previousPage).toBe(shown("previousPage"));
         expect(TRANSPORT_SHORTCUTS.nextPage).toBe(shown("nextPage"));
         expect(TRANSPORT_SHORTCUTS.loop).toBe(shown("toggleLoop"));
@@ -51,13 +51,18 @@ describe("transport shortcuts (UI-17)", () => {
 describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
     const items = [...PLAYBACK_MENU_ACTIONS, ...HELP_MENU_ACTIONS];
 
-    it("lists Play, Play from Playhead and Loop, plus the shortcuts list (UI-17)", () => {
+    it("lists Play / Stop, Play / Pause, Stop and Loop, plus the shortcuts list (UI-22)", () => {
         expect(PLAYBACK_MENU_ACTIONS).toEqual([
-            { action: "playPause", label: "Play / Stop", accelerator: "Space" },
+            { action: "playStop", label: "Play / Stop", accelerator: "Space" },
             {
-                action: "playPage",
-                label: "Play from Playhead",
+                action: "playPause",
+                label: "Play / Pause",
                 accelerator: "Shift+Space",
+            },
+            {
+                action: "stopPlayback",
+                label: "Stop at End Flag",
+                accelerator: "",
             },
             {
                 action: "toggleLoop",
@@ -80,9 +85,10 @@ describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
             const [binding] = getActionDefinition(
                 item.action as ActionId,
             ).defaultBindings;
-            // Electron's accelerators name the slash "/"; the bindings name it by key code
+            // Electron's accelerators name the slash "/"; the bindings name it by key code. An
+            // action without a default key shows none
             expect(item.accelerator, item.action).toBe(
-                binding!.replace("Slash", "/"),
+                binding?.replace("Slash", "/") ?? "",
             );
         }
     });

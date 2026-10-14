@@ -9,11 +9,14 @@ import {
 import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
 import {
     navigateTimeline,
-    loopBounds,
-    playTimelinePage,
+    pauseTimelinePlayback,
+    playLoops as playLoopsOf,
+    playTimeline,
     seekTimeline,
-    toggleTimelinePlayback,
+    stopTimelinePlayback,
 } from "@/timeline/timelineTransport";
+import { spacePlayKey } from "@/shortcuts/playKeys";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import {
     getLivePlaybackPosition,
     playbackStartInfoRef,
@@ -32,7 +35,7 @@ const playbackCommands = (latest: {
     readonly current: PlaybackState;
 }): Pick<
     TimelinePlayback,
-    "onSeek" | "onNavigate" | "onPlayingChange" | "onPlayFromPlayhead"
+    "onSeek" | "onNavigate" | "onPlayingChange" | "onStop"
 > => ({
     // UI-12: while playing, a click or page button jumps playback there, and a scrub suspends it
     // until it ends (`seekTimeline`), which says where a scrub's seek landed
@@ -48,25 +51,21 @@ const playbackCommands = (latest: {
         const { beats, pages, isPlaying } = latest.current;
         navigateTimeline(beats, pages, isPlaying, direction);
     },
+    // UI-22: the Play button plays from the start flag; playing, it is Pause
     onPlayingChange: (next) => {
-        const { beats, isPlaying, setIsPlaying } = latest.current;
+        const { isPlaying, setIsPlaying } = latest.current;
         if (next === isPlaying) return;
-        toggleTimelinePlayback({
-            isPlaying,
-            showEndBeat: beats.length,
-            setIsPlaying,
-        });
+        if (next) playTimeline(setIsPlaying);
+        else pauseTimelinePlayback(setIsPlaying);
     },
-    // Shift+click on Play, as Shift+Space
-    onPlayFromPlayhead: () => {
-        const { beats, isPlaying, setIsPlaying } = latest.current;
-        playTimelinePage({
-            isPlaying,
-            showEndBeat: beats.length,
-            setIsPlaying,
-        });
+    onStop: () => {
+        const { isPlaying, setIsPlaying } = latest.current;
+        stopTimelinePlayback(isPlaying, setIsPlaying);
     },
 });
+
+const SPACE = "Space";
+const SHIFT_SPACE = "Shift + Space";
 
 /**
  * Feeds the timeline from the timeline-mode playhead (docs/timeline/ui.md UI-9, P8.11):
@@ -83,9 +82,8 @@ const playbackCommands = (latest: {
  *   flag and selects that page (`navigateTimelinePages`). While playing, both jump playback
  *   instead and leave the playhead alone (UI-12, `jumpTimelinePlayback`); a scrub suspends
  *   playback until it ends, then plays on from there once (`seekTimeline`, UI-12 review).
- * - Play (`toggleTimelinePlayback`, UI-17) loops the loop region while looping is on, wherever the
- *   playhead is, and returns to the playhead when it stops; otherwise it plays on from the
- *   playhead and stops in place.
+ * - Play (`playTimeline`, UI-22) plays from the start flag to the end flag, and loops there while
+ *   looping is on. Pause freezes on the nearest beat; Stop goes to the end flag.
  */
 export function useTimelinePlayback({
     beats,
@@ -96,11 +94,16 @@ export function useTimelinePlayback({
 }): TimelinePlayback {
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
     const playheadBeat = useTimelineSelectionStore(displayedBeat);
-    // UI-17: with looping on (or a move isolated), Play loops
-    const playLoops = useTimelineSelectionStore((s) => loopBounds(s) !== null);
-    // Shift+Space's once-through, which stops back on the page's set
-    const playingOnce = useTimelineSelectionStore(
-        (s) => s.playback?.kind === "preview" && s.playback.once === true,
+    // UI-22: with looping on (or a move isolated), Play loops at the end flag
+    const playLoops = useTimelineSelectionStore(playLoopsOf);
+    // Which play key stops and which pauses (Settings)
+    const space = useShortcutOverridesStore((s) => spacePlayKey(s.overrides));
+    const playKeys = useMemo(
+        () =>
+            space === "stop"
+                ? { stop: SPACE, pause: SHIFT_SPACE }
+                : { stop: SHIFT_SPACE, pause: SPACE },
+        [space],
     );
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
@@ -145,7 +148,7 @@ export function useTimelinePlayback({
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
             isPlaying,
             playLoops,
-            playingOnce,
+            playKeys,
             ...commands,
         }),
         [
@@ -155,7 +158,7 @@ export function useTimelinePlayback({
             liveIndex,
             playheadBeat,
             playLoops,
-            playingOnce,
+            playKeys,
         ],
     );
 }

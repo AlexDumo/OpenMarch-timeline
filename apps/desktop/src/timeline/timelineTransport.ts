@@ -4,16 +4,13 @@ import type {
 } from "@/components/timeline/TimelineViewModel";
 import {
     displayedBeat,
+    followingStart,
     useTimelineSelectionStore,
     type TimelineLine,
     type TimelinePlaybackRun,
+    type TimelineSelectionState,
 } from "@/stores/TimelineSelectionStore";
-import {
-    canPlayOn,
-    navigationTarget,
-    previewBounds,
-    type FlagPage,
-} from "./timelinePlayhead";
+import { navigationTarget, type FlagPage } from "./timelinePlayhead";
 import { beatAtTime, timeAtBeat, type BeatTiming } from "./timeMap";
 import {
     getLivePlaybackPosition,
@@ -28,6 +25,17 @@ import {
 
 /** Set by `suspendTimelinePlayback`, so the pause that follows leaves the cursor and playhead alone. */
 let suspendRequested = false;
+
+/**
+ * How the stop in progress ends (UI-22), set by `stopTimelinePlayback` and
+ * `pauseTimelinePlayback` for the playback driver: a stop puts the playhead on the end flag, a
+ * pause freezes it on the nearest beat. `null` for a stop from anywhere else (the audio editor, a
+ * run's end), which ends as the run does.
+ */
+let stopRequest: TimelineStopRequest = null;
+
+/** How the transport asked playback to end (UI-22) */
+export type TimelineStopRequest = "stop" | "pause" | null;
 
 /**
  * The scrub in progress (UI-12 review): the last whole beat it sent, so a move within the same
@@ -58,12 +66,8 @@ export function navigateTimelinePages(
     }
     const target = navigationTarget(pages, from, direction);
     if (!target) return false;
-    if (target.range) {
-        state.selectRange(target.range.start, target.range.end);
-        // UI-17: going to a page takes the loop there
-        if (state.loop && !state.isolation)
-            state.setLoop({ start: target.range.start, end: target.range.end });
-    } else state.selectHome();
+    if (target.range) state.selectRange(target.range.start, target.range.end);
+    else state.selectHome();
     return true;
 }
 
@@ -120,8 +124,8 @@ const playbackTarget = (beats: readonly BeatTiming[], beat: number) => {
 };
 
 /**
- * A loop jumped outside its window plays on from there (UI-11), so its stop stays; inside the
- * window it keeps looping. Isolation keeps its run.
+ * Play's run jumped outside its flags plays on from there (UI-11), so it doesn't loop or stop at
+ * an end flag it has passed; inside them it goes on as it was. Isolation keeps its run.
  */
 const runAfterJump = (
     run: TimelinePlaybackRun,
@@ -171,6 +175,13 @@ export function resumeTimelinePlayback(
 export function consumeSuspendRequest(): boolean {
     const requested = suspendRequested;
     suspendRequested = false;
+    return requested;
+}
+
+/** How the transport asked the stop in progress to end (UI-22); clears the request. */
+export function consumeStopRequest(): TimelineStopRequest {
+    const requested = stopRequest;
+    stopRequest = null;
     return requested;
 }
 
@@ -290,112 +301,115 @@ export function jumpTimelinePages(
     return target ? jumpTimelinePlayback(beats, target.flag) : false;
 }
 
-/**
- * What **Play** loops (UI-17): an isolated move's range, else the loop (`loop`, its own region,
- * wherever the playhead is); `null` when neither, and Play plays on.
- */
-export const loopBounds = (
-    state: Pick<
-        ReturnType<typeof useTimelineSelectionStore.getState>,
-        "isolation" | "selection" | "loop"
-    >,
-): { readonly from: number; readonly to: number } | null => {
-    if (state.isolation) return previewBounds(state);
-    return state.loop ? { from: state.loop.start, to: state.loop.end } : null;
-};
+type PlayState = Pick<
+    TimelineSelectionState,
+    "isolation" | "startBeat" | "endBeat" | "pageBoxes"
+>;
 
 /**
- * Playing on (UI-17, Play with no loop): plays from `from` (Play: the start flag; Shift+Space: the
- * playhead) to the end of the show. Returns false when there's nothing after it.
+ * What **Play** plays (UI-22): an isolated move's range, else the start flag to the end flag. With
+ * the end flag on or before the start flag (a pinned start flag the playhead went back past), from
+ * the start of the page box the end flag is in, as the edit window falls back to. `null` at home,
+ * where there is nothing between the flags.
  */
-export function startTimelinePlayOn(
-    showEndBeat: number,
+export const playRange = (
+    state: PlayState,
+): { readonly from: number; readonly to: number } | null => {
+    if (state.isolation)
+        return { from: state.isolation.start, to: state.isolation.end };
+    const to = state.endBeat;
+    const from =
+        state.startBeat < to
+            ? state.startBeat
+            : followingStart(to, state.pageBoxes);
+    return from < to ? { from, to } : null;
+};
+
+/** Whether Play loops (UI-22): looping is on, or a move is isolated, which always loops */
+export const playLoops = (
+    state: Pick<TimelineSelectionState, "isolation" | "looping">,
+): boolean => state.looping || state.isolation !== null;
+
+/**
+ * **Play** (UI-22): the playhead goes to the start flag and plays to the end flag, looping there
+ * while looping is on, stopping there (on the end flag) when it is off. At home, where both flags
+ * are on beat 0, it goes to the first page and plays that. Does nothing while playing. Returns
+ * false when there is nothing to play.
+ */
+export function playTimeline(
     setIsPlaying: (isPlaying: boolean) => void,
-    from?: number,
 ): boolean {
-    const state = useTimelineSelectionStore.getState();
-    const start = from ?? state.cursorBeat ?? state.playheadBeat;
-    if (!canPlayOn(start, showEndBeat)) return false;
-    state.cue(start);
-    state.setPlayback({ kind: "on" });
+    let state = useTimelineSelectionStore.getState();
+    if (state.playback) return false;
+    const first = state.pageBoxes[0];
+    if (!playRange(state) && first && state.selection.kind === "home") {
+        state.selectRange(first.start, first.end);
+        state = useTimelineSelectionStore.getState();
+    }
+    const range = playRange(state);
+    if (!range) return false;
+    state.cue(range.from);
+    state.setPlayback({
+        kind: "preview",
+        ...range,
+        once: !playLoops(state),
+    });
     setIsPlaying(true);
     return true;
 }
 
 /**
- * **Play / Stop** (UI-17, Space), the one play action. With looping on (or a move isolated) it
- * loops the loop's region wherever the playhead is, as Logic's cycle does, and stopping puts the
- * canvas back on the playhead, which looping never moved. Otherwise it plays on from the yellow
- * start flag, and stopping stays where it stopped, moving the playhead there (project owner,
- * 2026-10-13, lab test playback-start: version B won; Shift+Space plays on from the playhead,
- * `playTimelinePage`). The playback driver does both once the pause lands.
+ * **Pause** (UI-22): playback stops and the playhead freezes on the nearest beat. The flags stay,
+ * so Play plays the same run again from its start. The playback driver moves the playhead once the
+ * pause lands.
  */
-export function toggleTimelinePlayback({
-    isPlaying,
-    showEndBeat,
-    setIsPlaying,
-}: {
-    isPlaying: boolean;
-    showEndBeat: number;
-    setIsPlaying: (isPlaying: boolean) => void;
-}): void {
-    if (isPlaying) {
-        setIsPlaying(false);
-        return;
-    }
-    const state = useTimelineSelectionStore.getState();
-    const bounds = loopBounds(state);
-    if (!bounds) {
-        startTimelinePlayOn(showEndBeat, setIsPlaying, state.startBeat);
-        return;
-    }
-    state.cue(bounds.from);
-    state.setPlayback({ kind: "preview", ...bounds });
-    setIsPlaying(true);
+export function pauseTimelinePlayback(
+    setIsPlaying: (isPlaying: boolean) => void,
+): void {
+    if (!useTimelineSelectionStore.getState().playback) return;
+    stopRequest = "pause";
+    setIsPlaying(false);
 }
 
 /**
- * **Play from the playhead** (Shift+Space, or Shift+click on Play): plays on from the
- * playhead, or, with looping on, plays the loop's region once and goes back to the playhead when it
- * ends or is stopped. Playing, it stops.
+ * **Stop** (UI-22): the playhead goes to the end flag, playing or paused. Playing, the playback
+ * driver puts it there once the stop lands.
  */
-export function playTimelinePage({
-    isPlaying,
-    showEndBeat,
-    setIsPlaying,
-}: {
-    isPlaying: boolean;
-    showEndBeat: number;
-    setIsPlaying: (isPlaying: boolean) => void;
-}): void {
+export function stopTimelinePlayback(
+    isPlaying: boolean,
+    setIsPlaying: (isPlaying: boolean) => void,
+): void {
     if (isPlaying) {
+        stopRequest = "stop";
         setIsPlaying(false);
         return;
     }
-    const state = useTimelineSelectionStore.getState();
-    const bounds = loopBounds(state);
-    if (!bounds) {
-        startTimelinePlayOn(showEndBeat, setIsPlaying);
-        return;
-    }
-    state.cue(bounds.from);
-    state.setPlayback({ kind: "preview", ...bounds, once: true });
-    setIsPlaying(true);
+    useTimelineSelectionStore.getState().stopAtEnd();
+}
+
+/** What a play key does while playing (UI-22): stop, or pause */
+export type TimelinePlayKeyStop = "stop" | "pause";
+
+/**
+ * A play key (UI-22): paused, it plays; playing, it stops or pauses. Space stops and Shift+Space
+ * pauses, or the other way around (Settings, `playStop` and `playPause`).
+ */
+export function pressTimelinePlayKey(
+    stop: TimelinePlayKeyStop,
+    isPlaying: boolean,
+    setIsPlaying: (isPlaying: boolean) => void,
+): void {
+    if (!isPlaying) playTimeline(setIsPlaying);
+    else if (stop === "pause") pauseTimelinePlayback(setIsPlaying);
+    else stopTimelinePlayback(true, setIsPlaying);
 }
 
 /**
- * **C** and the Loop button (UI-17): turns looping on over the edit window (the page being edited,
- * or the pages Shift+click selected), or off, as Logic's C turns Cycle on and off. Does nothing in
- * isolation, which always loops its move.
+ * **C** and the Loop button (UI-22): turns looping on or off. A run playing now loops or stops at
+ * the end flag from then on. Does nothing in isolation, which always loops its move.
  */
 export function toggleTimelineLoop(): void {
     const state = useTimelineSelectionStore.getState();
     if (state.isolation) return;
-    if (state.loop) {
-        state.setLoop(null);
-        return;
-    }
-    const { selection } = state;
-    if (selection.kind === "range")
-        state.setLoop({ start: selection.start, end: selection.end });
+    state.setLooping(!state.looping);
 }

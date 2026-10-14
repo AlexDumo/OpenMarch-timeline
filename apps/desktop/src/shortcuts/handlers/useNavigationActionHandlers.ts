@@ -4,9 +4,9 @@ import { useTimingObjects } from "@/hooks";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
 import {
     navigateTimeline,
-    playTimelinePage,
+    pressTimelinePlayKey,
+    stopTimelinePlayback,
     toggleTimelineLoop,
-    toggleTimelinePlayback,
 } from "@/timeline/timelineTransport";
 import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
@@ -32,11 +32,6 @@ export function useNavigationActionHandlers() {
     const goPrevious = () => navigate("previous-page");
     // Playing, each jump restarts the audio, so a held key jumps once rather than stuttering
     const enabled = { enabled: canNavigate, ignoreRepeat: isPlaying };
-    const transport = () => ({
-        isPlaying,
-        showEndBeat: beats.length,
-        setIsPlaying,
-    });
 
     useActionHandler("nextPage", goNext, enabled);
     useActionHandler("timelineNextPage", goNext, enabled);
@@ -46,17 +41,25 @@ export function useNavigationActionHandlers() {
     useActionHandler("lastPage", () => navigate("last-page"), enabled);
     useActionHandler("previousBeat", () => navigate("previous-beat"), enabled);
     useActionHandler("nextBeat", () => navigate("next-beat"), enabled);
+    // UI-22: both play keys play from the start flag; playing, one stops at the end flag and the
+    // other pauses on the nearest beat
+    const play = { enabled: canNavigate };
+    useActionHandler(
+        "playStop",
+        () => pressTimelinePlayKey("stop", isPlaying, setIsPlaying),
+        play,
+    );
     useActionHandler(
         "playPause",
-        // UI-17 Play: loops the loop, or plays on from the start flag; playing, it stops
-        () => toggleTimelinePlayback(transport()),
-        enabled,
+        () => pressTimelinePlayKey("pause", isPlaying, setIsPlaying),
+        play,
     );
-    // Shift+Space plays on from the playhead (or the loop once)
-    useActionHandler("playPage", () => playTimelinePage(transport()), {
-        enabled: canNavigate,
-    });
-    // UI-17: C turns looping on over the page being edited, or off
+    useActionHandler(
+        "stopPlayback",
+        () => stopTimelinePlayback(isPlaying, setIsPlaying),
+        play,
+    );
+    // UI-22: C turns looping on or off
     useActionHandler("toggleLoop", () => toggleTimelineLoop(), {
         enabled: ready,
     });

@@ -7,9 +7,10 @@ import { runAction, subscribeToActionRuns } from "../registry";
 /** Playback controls, which leave a held preview frame alone (UI-11) */
 const TRANSPORT_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
     "playPause",
+    "playStop",
+    "stopPlayback",
     "timelinePlayPause",
     "toggleLoop",
-    "playPage",
     "toggleMetronome",
 ]);
 

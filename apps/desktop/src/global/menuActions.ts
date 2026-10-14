@@ -12,19 +12,18 @@ export interface MenuAction {
     readonly action: string;
     readonly label: string;
     /**
-     * The shortcut, in Electron's accelerator form. The menu only shows it: the renderer's own
-     * keyboard handler owns the key, so text fields keep Space and letters
+     * The shortcut, in Electron's accelerator form; empty for none. The menu only shows it: the
+     * renderer's own keyboard handler owns the key, so text fields keep Space and letters
      */
     readonly accelerator: string;
 }
 
 export const PLAYBACK_MENU_ACTIONS: readonly MenuAction[] = [
-    { action: "playPause", label: "Play / Stop", accelerator: "Space" },
-    {
-        action: "playPage",
-        label: "Play from Playhead",
-        accelerator: "Shift+Space",
-    },
+    // UI-22: the accelerators are the defaults; Settings can swap Space and Shift+Space, which
+    // the menu, built once by the main process, doesn't show
+    { action: "playStop", label: "Play / Stop", accelerator: "Space" },
+    { action: "playPause", label: "Play / Pause", accelerator: "Shift+Space" },
+    { action: "stopPlayback", label: "Stop at End Flag", accelerator: "" },
     { action: "toggleLoop", label: "Loop On / Off", accelerator: "C" },
 ];
 

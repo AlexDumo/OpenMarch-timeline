@@ -58,7 +58,9 @@ describe("ACTIONS", () => {
             "Control+Shift+Z",
         ]);
         expect(ACTIONS.nextPage.defaultBindings).toEqual(["E"]);
-        expect(ACTIONS.playPause.defaultBindings).toEqual(["Space"]);
+        // UI-22: Space plays and stops, Shift+Space plays and pauses (Settings swaps them)
+        expect(ACTIONS.playStop.defaultBindings).toEqual(["Space"]);
+        expect(ACTIONS.playPause.defaultBindings).toEqual(["Shift+Space"]);
         expect(ACTIONS.flipVertical.defaultBindings).toEqual(["Alt+Shift+F"]);
         expect(ACTIONS.moveSelectedMarchersUp.defaultBindings).toEqual([
             "W",

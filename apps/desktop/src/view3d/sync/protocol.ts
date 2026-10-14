@@ -83,6 +83,7 @@ export interface View3dVenueChangeRequest {
  */
 export const VIEW3D_PLAYBACK_ACTIONS = [
     "playPause",
+    "playStop",
     "previousPage",
     "nextPage",
     "firstPage",

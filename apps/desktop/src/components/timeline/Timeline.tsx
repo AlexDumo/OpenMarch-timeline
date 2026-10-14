@@ -33,6 +33,8 @@ import type {
 import type {
     TimelineActivitySpan,
     TimelineBeatRange,
+    TimelinePlayKeys,
+    TimelinePlayRange,
     TimelineCreateTrackRequest,
     TimelineNavigation,
     TimelinePageFlagMove,
@@ -108,13 +110,14 @@ export interface TimelinePlayback {
         beatIndex: number,
         options?: TimelineSeekOptions,
     ) => number | null | void;
+    /** Play (true), always from the start flag, or Pause (false), UI-22 */
     readonly onPlayingChange?: (isPlaying: boolean) => void;
-    /** Looping is on, so Play loops (UI-17): the button says so */
+    /** Play loops at the end flag (UI-22): the Loop button and the tooltips say so */
     readonly playLoops?: boolean;
-    /** Shift+Space's once-through of the loop is playing (UI-17) */
-    readonly playingOnce?: boolean;
-    /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
-    readonly onPlayFromPlayhead?: () => void;
+    /** **Stop** (UI-22): the playhead goes to the end flag, playing or paused */
+    readonly onStop?: () => void;
+    /** The keys that stop and pause while playing, as keycaps (UI-22) */
+    readonly playKeys?: TimelinePlayKeys;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -161,10 +164,12 @@ export interface TimelineProps {
     readonly clipResize?: TimelineClipResizeCommands;
     /** Unpins the start flag (UI-12), from its pin */
     readonly onUnpinStart?: () => void;
-    /** The loop (UI-17), spec beats; `null` or absent when looping is off */
-    readonly loop?: TimelineBeatRange | null;
-    /** A loop end dragged or stepped (UI-17), spec beats */
-    readonly onLoopChange?: (loop: TimelineBeatRange) => void;
+    /** What Play plays (UI-22), spec beats: the start flag to the end flag */
+    readonly playRange?: TimelinePlayRange | null;
+    /** The end flag dragged or stepped to a beat (UI-22), spec beats */
+    readonly onEndFlagChange?: (beat: number) => void;
+    /** Unpins the end flag (UI-22), from its pin */
+    readonly onUnpinEnd?: () => void;
     /**
      * The right-click menu's **Add selected marchers** (UI-9, P8.14), for a page box, a clip's
      * timeline or a dragged range. It gets spec beats; the menu doesn't change the selection.
@@ -424,25 +429,22 @@ export function Timeline(props: TimelineProps) {
                   onSelectionChange(selectionToSpec(next, axis))
             : undefined,
     );
-    // UI-17: the loop, mapped onto the view axis and back
-    const { loop } = props;
-    const viewLoop = useMemo(
+    // UI-22: what Play plays, mapped onto the view axis, and the end flag back
+    const { playRange } = props;
+    const viewPlayRange = useMemo(
         () =>
-            loop
+            playRange
                 ? {
-                      startBeatIndex: axis.toView(loop.startBeatIndex),
-                      endBeatIndex: axis.toView(loop.endBeatIndex),
+                      ...playRange,
+                      startBeatIndex: axis.toView(playRange.startBeatIndex),
+                      endBeatIndex: axis.toView(playRange.endBeatIndex),
                   }
                 : null,
-        [loop, axis],
+        [playRange, axis],
     );
-    const changeLoop = useLatestCallback(
-        props.onLoopChange
-            ? (next: TimelineBeatRange) =>
-                  props.onLoopChange?.({
-                      startBeatIndex: axis.toSpec(next.startBeatIndex),
-                      endBeatIndex: axis.toSpec(next.endBeatIndex),
-                  })
+    const changeEndFlag = useLatestCallback(
+        props.onEndFlagChange
+            ? (beat: number) => props.onEndFlagChange?.(axis.toSpec(beat))
             : undefined,
     );
     const { onTimelineRangeCommit, onCreateTrack, timelines } = props;
@@ -722,8 +724,8 @@ export function Timeline(props: TimelineProps) {
         onSeek: seekToBeat,
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
         playLoops: playback.playLoops,
-        playingOnce: playback.playingOnce,
-        onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
+        onStop: useLatestCallback(playback.onStop),
+        playKeys: playback.playKeys,
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,
@@ -740,8 +742,9 @@ export function Timeline(props: TimelineProps) {
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
         onUnpinStart: useLatestCallback(props.onUnpinStart),
-        loop: viewLoop,
-        onLoopChange: changeLoop,
+        playRange: viewPlayRange,
+        onEndFlagChange: changeEndFlag,
+        onUnpinEnd: useLatestCallback(props.onUnpinEnd),
         transportSecondary: props.transportSecondary,
         transportViewControls: props.transportViewControls,
         showTransport: props.showTransport ?? true,
@@ -761,6 +764,8 @@ export function Timeline(props: TimelineProps) {
 export type {
     TimelineActivitySpan,
     TimelineBeatRange,
+    TimelinePlayKeys,
+    TimelinePlayRange,
     TimelineCreateTrackRequest,
     TimelineSeekGesture,
     TimelineSeekOptions,

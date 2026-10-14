@@ -116,56 +116,71 @@ describe("timeline views", () => {
         });
     });
 
-    it("draws the loop bar and steps its ends with the arrow keys (UI-17)", () => {
-        const onLoopChange = vi.fn();
-        const loop = { startBeatIndex: 8, endBeatIndex: 16 };
+    it("draws what Play plays, and steps the end flag with the arrow keys (UI-22)", () => {
+        const onEndFlagChange = vi.fn();
+        const onUnpinEnd = vi.fn();
+        const range = {
+            startBeatIndex: 8,
+            endBeatIndex: 16,
+            endOnPlayhead: false,
+            endPinned: true,
+            looping: false,
+        };
         const { rerender } = render(
             <ExpandedTimeline
                 {...commonProps}
                 showTransport={false}
-                onLoopChange={onLoopChange}
+                onEndFlagChange={onEndFlagChange}
             />,
         );
-        expect(screen.queryByTestId("timeline-loop-bar")).toBeNull();
-        expect(screen.queryByTestId("timeline-loop-end")).toBeNull();
+        expect(screen.queryByTestId("timeline-play-range")).toBeNull();
         rerender(
             <ExpandedTimeline
                 {...commonProps}
                 showTransport={false}
-                loop={loop}
-                onLoopChange={onLoopChange}
+                playRange={range}
+                onEndFlagChange={onEndFlagChange}
+                onUnpinEnd={onUnpinEnd}
             />,
         );
-        expect(screen.getByTestId("timeline-loop-bar")).toBeInTheDocument();
-        const start = screen.getByTestId("timeline-loop-start");
-        const end = screen.getByTestId("timeline-loop-end");
-        expect(end).toHaveAttribute(
-            "title",
-            "Drag to move this end of the loop",
-        );
-        expect(end).toHaveAttribute("aria-label", "Loop end, beat 16");
-        expect(start).toHaveAttribute("aria-label", "Loop start, beat 8");
-        // jsdom has no layout, so the ends move by key, not by drag
+        // Faint while looping is off, solid while on
+        const bar = screen.getByTestId("timeline-play-range-bar");
+        expect(bar).not.toHaveAttribute("data-looping");
+        const end = screen.getByTestId("timeline-end-flag");
+        expect(end).toHaveAttribute("aria-label", "End flag, beat 16");
+        // Off the playhead, it has its own stem; pinned, its own pin
+        expect(screen.getByTestId("timeline-end-stem")).toBeInTheDocument();
+        fireEvent.click(screen.getByTestId("timeline-end-pin"));
+        expect(onUnpinEnd).toHaveBeenCalledTimes(1);
+        // jsdom has no layout, so the end flag moves by key, not by drag; never onto the start
         fireEvent.keyDown(end, { key: "ArrowRight" });
-        expect(onLoopChange).toHaveBeenCalledWith({
-            startBeatIndex: 8,
-            endBeatIndex: 17,
-        });
+        expect(onEndFlagChange).toHaveBeenLastCalledWith(17);
         fireEvent.keyDown(end, { key: "ArrowLeft" });
-        expect(onLoopChange).toHaveBeenLastCalledWith({
-            startBeatIndex: 8,
-            endBeatIndex: 15,
+        expect(onEndFlagChange).toHaveBeenLastCalledWith(15);
+        rerender(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                playRange={{
+                    ...range,
+                    startBeatIndex: 15,
+                    endOnPlayhead: true,
+                    endPinned: false,
+                    looping: true,
+                }}
+                onEndFlagChange={onEndFlagChange}
+            />,
+        );
+        expect(screen.getByTestId("timeline-play-range-bar")).toHaveAttribute(
+            "data-looping",
+        );
+        // On the playhead: no stem of its own, and no pin
+        expect(screen.queryByTestId("timeline-end-stem")).toBeNull();
+        expect(screen.queryByTestId("timeline-end-pin")).toBeNull();
+        fireEvent.keyDown(screen.getByTestId("timeline-end-flag"), {
+            key: "ArrowLeft",
         });
-        fireEvent.keyDown(start, { key: "ArrowLeft" });
-        expect(onLoopChange).toHaveBeenLastCalledWith({
-            startBeatIndex: 7,
-            endBeatIndex: 16,
-        });
-        fireEvent.keyDown(start, { key: "ArrowRight" });
-        expect(onLoopChange).toHaveBeenLastCalledWith({
-            startBeatIndex: 9,
-            endBeatIndex: 16,
-        });
+        expect(onEndFlagChange).toHaveBeenLastCalledWith(16);
     });
 
     it("presses the initial box for home", () => {
@@ -259,27 +274,39 @@ describe("timeline views", () => {
         expect(onSelectionChange).toHaveBeenCalledTimes(1);
     });
 
-    it("has one Play button, and Shift+click on it plays from the playhead", () => {
+    it("has Play, which is Pause while playing, and a Stop that is always there (UI-22)", () => {
         const onPlayingChange = vi.fn();
-        const onPlayFromPlayhead = vi.fn();
-        render(
+        const onStop = vi.fn();
+        const { rerender } = render(
             <ExpandedTimeline
                 {...commonProps}
                 showTransport
                 onPlayingChange={onPlayingChange}
-                onPlayFromPlayhead={onPlayFromPlayhead}
+                onStop={onStop}
             />,
         );
-        const play = screen.getByRole("button", {
-            name: "Play from the start flag",
-        });
-        expect(screen.getAllByTestId("timeline-play")).toHaveLength(1);
-        fireEvent.click(play, { shiftKey: true });
-        expect(onPlayFromPlayhead).toHaveBeenCalledTimes(1);
-        expect(onPlayingChange).not.toHaveBeenCalled();
-        fireEvent.click(play);
+        fireEvent.click(screen.getByRole("button", { name: "Play" }));
         expect(onPlayingChange).toHaveBeenCalledWith(true);
-        expect(onPlayFromPlayhead).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+        expect(onStop).toHaveBeenCalledTimes(1);
+        rerender(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                isPlaying
+                onPlayingChange={onPlayingChange}
+                onStop={onStop}
+                playKeys={{ stop: "Shift + Space", pause: "Space" }}
+            />,
+        );
+        const pause = screen.getByRole("button", { name: "Pause" });
+        expect(pause).toHaveAttribute("aria-keyshortcuts", "Space");
+        fireEvent.click(pause);
+        expect(onPlayingChange).toHaveBeenLastCalledWith(false);
+        const stop = screen.getByRole("button", { name: "Stop" });
+        expect(stop).toHaveAttribute("aria-keyshortcuts", "Shift+Space");
+        fireEvent.click(stop);
+        expect(onStop).toHaveBeenCalledTimes(2);
     });
 
     it("forwards transport playback, and zooms with Fit and Ctrl+scroll in both densities (UI-12)", async () => {
@@ -294,9 +321,7 @@ describe("timeline views", () => {
             />,
         );
 
-        fireEvent.click(
-            screen.getByRole("button", { name: "Play from the start flag" }),
-        );
+        fireEvent.click(screen.getByRole("button", { name: "Play" }));
         expect(onPlayingChange).toHaveBeenCalledWith(true);
         rerender(
             <ExpandedTimeline
@@ -308,21 +333,7 @@ describe("timeline views", () => {
             />,
         );
         expect(
-            screen.getByRole("button", { name: "Stop" }),
-        ).toBeInTheDocument();
-        rerender(
-            <ExpandedTimeline
-                {...commonProps}
-                showTransport
-                playLoops
-                onPlayingChange={onPlayingChange}
-                onPixelsPerBeatChange={onPixelsPerBeatChange}
-            />,
-        );
-        expect(
-            screen.getByRole("button", {
-                name: "Play the loop",
-            }),
+            screen.getByRole("button", { name: "Pause" }),
         ).toBeInTheDocument();
         expect(
             screen.queryByRole("button", { name: "Zoom in" }),
@@ -1054,8 +1065,14 @@ describe("page snapping in drags (UI-2)", () => {
                     range: { startBeatIndex: 8, endBeatIndex: 11 },
                 }}
                 onSelectionChange={vi.fn()}
-                loop={{ startBeatIndex: 8, endBeatIndex: 16 }}
-                onLoopChange={vi.fn()}
+                playRange={{
+                    startBeatIndex: 8,
+                    endBeatIndex: 16,
+                    endOnPlayhead: false,
+                    endPinned: true,
+                    looping: true,
+                }}
+                onEndFlagChange={vi.fn()}
                 pageFlagMove={{ limits: async () => null, commit: vi.fn() }}
             />,
         );
@@ -1067,16 +1084,15 @@ describe("page snapping in drags (UI-2)", () => {
             .getAllByTestId("timeline-page-flag-grip")
             .find((element) => px(element, "left") === 128)!;
         expect(px(grip, "top")).toBe(14);
-        // The pennant has the strip to itself: above the loop's ends, and clear of the grip
+        // The start pennant has the strip to itself, clear of the grip; the end flag's pennant
+        // (UI-22) points back at it from the end, in the same strip
         const pennant = screen.getByTestId("timeline-start-pennant");
         expect(pennant).toHaveClass("top-0", "w-14", "z-[59]");
         expect(px(pennant, "height")).toBe(14);
-        // The loop's start reaches left, out of the loop, so the pennant on its beat leaves it
-        // room
-        const loopStart = screen.getByTestId("timeline-loop-start");
-        expect(loopStart).toHaveClass("top-0", "z-[58]");
-        expect(px(loopStart, "height")).toBe(14);
-        expect(px(loopStart, "left")).toBeLessThan(px(pennant, "left") - 8);
+        const end = screen.getByTestId("timeline-end-flag");
+        expect(end).toHaveClass("top-0", "z-[59]");
+        expect(px(end, "height")).toBe(14);
+        expect(px(end, "left")).toBeGreaterThan(px(pennant, "left") + 14);
         // Stem and playhead are 2px, in hit areas as wide as before
         const start = screen.getByRole("button", { name: /^Start flag/ });
         const playhead = screen.getByTestId("timeline-playhead");
@@ -1762,37 +1778,31 @@ describe("a calmer timeline (UI-12)", () => {
         expect(next).toHaveAttribute("aria-keyshortcuts", "Alt+E");
     });
 
-    it("guides Play and Shift+Play in its tooltip, and swaps its name while Shift is held", async () => {
-        render(
+    it("says in Play's tooltip that it plays from the start flag, and loops with looping on (UI-22)", async () => {
+        const { rerender } = render(
             <ExpandedTimeline
                 {...commonProps}
                 showTransport
                 onPlayingChange={vi.fn()}
-                onPlayFromPlayhead={vi.fn()}
             />,
         );
         const play = screen.getByTestId("timeline-play");
+        expect(play).toHaveAttribute("aria-keyshortcuts", "Space");
         act(() => play.focus());
-        await screen.findByRole("tooltip");
-        const rows = () =>
-            [
-                ...document.querySelector(
-                    '[data-testid="timeline-play-guide"]',
-                )!.children,
-            ].map((row) => ({
-                text: row.textContent,
-                active: row.hasAttribute("data-active"),
-            }));
-        expect(rows()).toEqual([
-            { text: "Play from the start flagSpace", active: true },
-            { text: "Play from the playheadShift+Space", active: false },
-        ]);
-        fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
-        expect(play).toHaveAccessibleName("Play from the playhead");
-        expect(play).toHaveAttribute("aria-keyshortcuts", "Shift+Space");
-        expect(rows().map((row) => row.active)).toEqual([false, true]);
-        fireEvent.keyUp(window, { key: "Shift" });
-        expect(play).toHaveAccessibleName("Play from the start flag");
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            "From the start flag to the end flag",
+        );
+        rerender(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                playLoops
+                onPlayingChange={vi.fn()}
+            />,
+        );
+        expect(screen.getByRole("tooltip")).toHaveTextContent(
+            "From the start flag, looping at the end flag",
+        );
     });
 
     it("keeps page navigation live while playing, where it jumps playback", () => {

@@ -26,6 +26,8 @@ import clsx from "clsx";
 import { useCameraStore } from "../camera/cameraStore";
 import { CameraBar } from "./CameraBar";
 import { Panel, ToggleButton } from "./Panel";
+import { spacePlayKey } from "@/shortcuts/playKeys";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { playbackActionForKey } from "./playback";
 import { Readout } from "./Readout";
 import { SettingsPanel } from "./SettingsPanel";
@@ -53,11 +55,18 @@ function usePlaybackShortcuts() {
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
             if (isTypingTarget(event.target)) return;
-            const action = playbackActionForKey(event);
+            const action = playbackActionForKey(
+                event,
+                spacePlayKey(useShortcutOverridesStore.getState().overrides),
+            );
             if (!action) return;
             event.preventDefault();
             // Holding Q or E steps through pages; holding Space doesn't flicker.
-            if (event.repeat && action === "playPause") return;
+            if (
+                event.repeat &&
+                (action === "playPause" || action === "playStop")
+            )
+                return;
             window.view3d.requestPlayback(action);
         };
         window.addEventListener("keydown", onKeyDown, { capture: true });

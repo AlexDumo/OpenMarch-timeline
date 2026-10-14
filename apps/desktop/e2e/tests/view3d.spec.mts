@@ -17,7 +17,10 @@ import { test } from "../fixtures.mjs";
 import { expect, type Page } from "playwright/test";
 import type { ElectronApplication } from "playwright";
 import { seedShowSql } from "../browser/seed.mjs";
-import { selectTimelinePage as selectPage } from "../utils/timeline.mjs";
+import {
+    selectTimelinePage as selectPage,
+    timelinePageBox,
+} from "../utils/timeline.mjs";
 
 /** The largest difference allowed between the window's and the editor's show time. */
 const SYNC_TOLERANCE_MS = 50;
@@ -359,7 +362,11 @@ test("3D View follows the editor and saves the venue", async ({
     await expectWindowPage(view3d, "0");
     await expectPausedInSync(editor, view3d);
 
-    // Play: the window's clock runs with the editor's.
+    // Play: the window's clock runs with the editor's. Play runs from the
+    // start flag to the end flag (UI-22), so select pages 1 to 3 (12 s) to
+    // play long enough to sample.
+    await selectPage(editor, "1");
+    await timelinePageBox(editor, "3").click({ modifiers: ["Shift"] });
     await editor.getByTestId("timeline-play").click();
     await expect(view3d.getByTestId("view3d-sync-readout")).toHaveAttribute(
         "data-playing",
@@ -398,7 +405,8 @@ test("3D View follows the editor and saves the venue", async ({
         samples[0].showMs + 2000,
     );
 
-    // Pause: the window holds where the editor holds.
+    // Pause (Play is Pause while playing): the window holds where the editor
+    // holds.
     await editor.getByTestId("timeline-play").click();
     await expectPausedInSync(editor, view3d);
 

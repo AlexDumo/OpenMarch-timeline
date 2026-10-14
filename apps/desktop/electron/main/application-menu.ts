@@ -22,17 +22,19 @@ const rendererActionItem = ({
     label,
     accelerator,
 }: MenuAction): MenuItemConstructorOptions =>
-    isMacOS
-        ? {
-              label: `${label}  (${accelerator.replace("Shift+/", "?")})`,
-              click: () => mainProcess.sendMenuAction(action),
-          }
-        : {
-              label,
-              accelerator,
-              registerAccelerator: false,
-              click: () => mainProcess.sendMenuAction(action),
-          };
+    !accelerator
+        ? { label, click: () => mainProcess.sendMenuAction(action) }
+        : isMacOS
+          ? {
+                label: `${label}  (${accelerator.replace("Shift+/", "?")})`,
+                click: () => mainProcess.sendMenuAction(action),
+            }
+          : {
+                label,
+                accelerator,
+                registerAccelerator: false,
+                click: () => mainProcess.sendMenuAction(action),
+            };
 
 const template: MenuItem[] = [];
 

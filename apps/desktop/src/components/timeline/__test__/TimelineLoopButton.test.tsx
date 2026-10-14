@@ -17,7 +17,7 @@ const renderButton = () =>
         </TransportTooltipProvider>,
     );
 
-describe("the Loop button (UI-17)", () => {
+describe("the Loop button (UI-22)", () => {
     beforeEach(() => {
         store().reset();
         store().setPageBoxes(BOXES);
@@ -25,15 +25,17 @@ describe("the Loop button (UI-17)", () => {
     });
     afterEach(cleanup);
 
-    it("toggles looping over the page being edited", () => {
+    it("toggles looping between the flags, and leaves them", () => {
         renderButton();
         const button = screen.getByTestId("timeline-loop");
         expect(button).toHaveAttribute("aria-pressed", "false");
         fireEvent.click(button);
-        expect(store().loop).toEqual({ start: 9, end: 17 });
+        expect(store().looping).toBe(true);
+        expect(store().startBeat).toBe(9);
+        expect(store().endBeat).toBe(17);
         expect(button).toHaveAttribute("aria-pressed", "true");
         fireEvent.click(button);
-        expect(store().loop).toBeNull();
+        expect(store().looping).toBe(false);
     });
 
     it("is lit and can't turn off while a move is isolated, which always loops", () => {
@@ -46,7 +48,7 @@ describe("the Loop button (UI-17)", () => {
         expect(button).toHaveAttribute("aria-pressed", "true");
         expect(button).toHaveAttribute("aria-disabled", "true");
         fireEvent.click(button);
-        expect(store().loop).toBeNull();
+        expect(store().looping).toBe(false);
         expect(button).toHaveAttribute("aria-pressed", "true");
     });
 });

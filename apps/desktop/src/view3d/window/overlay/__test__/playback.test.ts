@@ -20,6 +20,7 @@ describe("transportState", () => {
     it("allows every step from a middle page while paused", () => {
         expect(transportState(pages, 10, false)).toEqual({
             playPause: true,
+            playStop: true,
             previousPage: true,
             firstPage: true,
             nextPage: true,
@@ -42,6 +43,7 @@ describe("transportState", () => {
     it("allows only pause while playing", () => {
         expect(transportState(pages, 3, true)).toEqual({
             playPause: true,
+            playStop: true,
             previousPage: false,
             firstPage: false,
             nextPage: false,
@@ -53,7 +55,7 @@ describe("transportState", () => {
 
     it("allows nothing without a selected page", () => {
         expect(Object.values(transportState(pages, null, false))).toEqual(
-            Array(7).fill(false),
+            Array(8).fill(false),
         );
         expect(Object.values(transportState([], 1, false))).not.toContain(true);
     });
@@ -61,7 +63,15 @@ describe("transportState", () => {
 
 describe("playbackActionForKey", () => {
     it("uses the editor's shortcuts", () => {
-        expect(playbackActionForKey(key("Space"))).toBe("playPause");
+        // UI-22: Space stops and Shift+Space pauses, or the other way around (the editor's setting)
+        expect(playbackActionForKey(key("Space"))).toBe("playStop");
+        expect(playbackActionForKey(key("Space", { shiftKey: true }))).toBe(
+            "playPause",
+        );
+        expect(playbackActionForKey(key("Space"), "pause")).toBe("playPause");
+        expect(
+            playbackActionForKey(key("Space", { shiftKey: true }), "pause"),
+        ).toBe("playStop");
         expect(playbackActionForKey(key("KeyQ"))).toBe("previousPage");
         expect(playbackActionForKey(key("KeyE"))).toBe("nextPage");
         expect(playbackActionForKey(key("KeyQ", { shiftKey: true }))).toBe(
@@ -85,8 +95,5 @@ describe("playbackActionForKey", () => {
         expect(playbackActionForKey(key("KeyE", { ctrlKey: true }))).toBeNull();
         expect(playbackActionForKey(key("KeyQ", { metaKey: true }))).toBeNull();
         expect(playbackActionForKey(key("Space", { altKey: true }))).toBeNull();
-        expect(
-            playbackActionForKey(key("Space", { shiftKey: true })),
-        ).toBeNull();
     });
 });

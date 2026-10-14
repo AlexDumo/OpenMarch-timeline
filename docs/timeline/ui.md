@@ -782,7 +782,8 @@ from it. The spec still wins on the model; this file decides presentation.
   - Not built: clips on the flag only move on release, not during the drag; edge scrolling while
     dragging a flag; a ripple variant (Shift-drag, shifting every later flag).
 
-- **UI-17: one Play, and a pinned start flag loops (project owner, 2026-10-09).** Supersedes UI-11's
+- **UI-17: one Play, and a pinned start flag loops (project owner, 2026-10-09).** _Its playback
+  rules are superseded by UI-22 (start and end flags)._ Supersedes UI-11's
   **From start** mode, **Pause** and **Stop**, and UI-12's Stop button. The owner disliked the
   stop-versus-pause distinction and asked for keys for the flag and the loop that are easy to
   communicate. A survey of DAWs and video editors (Logic, Ableton, Pro Tools, Reaper, Cubase, Studio
@@ -1076,6 +1077,63 @@ from it. The spec still wins on the model; this file decides presentation.
     `lineDragPositions` in `TimelineSelectionStore.ts`) owns the rule. The timeline sends each beat
     a dragged line reaches as a seek with `line: "start"` or `line: "playhead"`
     (`TimelineSeekOptions`), and `seekTimeline` passes a paused one to the store.
+
+- **UI-22: start and end flags; Play always plays between them (project owner, 2026-10-14).**
+  Supersedes UI-17's playback rules (Play from the start flag or the playhead, the separate loop
+  region, one button that reads Stop). The owner's feedback: Play from the start flag was right,
+  but Space pressed again while playing should go back to where they started. They found the old
+  model was trying to be an editor and a cinematic previewer at once; UI-22 makes the transport
+  an editing tool, and leaves watching long stretches to **Watch** mode (below).
+  - **Two flags.** The start flag S (UI-10) and a new **end flag** E. The edit window is still
+    S → playhead (owner chose this over "the flags are the window"), so the canvas edits at the
+    playhead as before.
+  - **The end flag follows the playhead unless placed by hand.** An unpinned E sits on the
+    playhead, and goes wherever a seek, scrub, line drag or page navigation puts it. A pause is
+    the exception: it moves the playhead and leaves E where it was, so Stop can go back. Dragging
+    E's pennant (or arrow keys on it) pins it there, as a dragged start flag is pinned; its pin
+    (left of its stem) or a double-click on the pennant unpins it. A page box, Q/E, home or
+    Shift+click on pages puts it back on the playhead, unpinned. E is kept after S and inside the
+    show. A pinned E on a page flag that moves goes with it.
+  - **Play** always cues the start flag and plays to the end flag, wherever the playhead is. With
+    looping off it stops there and the playhead lands on the end flag; with looping on it goes back
+    to the start flag. An isolated move always loops its range. At home (both flags on beat 0) Play
+    goes to the first page and plays it. If the end flag is on or before a pinned start flag, Play
+    plays the end flag's page box, as the edit window falls back to.
+  - **Pause** freezes on the nearest beat (rounded, not floored), and the playhead moves there. The
+    flags stay, so Play replays the same run from the start flag. A pause within half a beat of the
+    start flag lands a beat after it, so the window stays on the move instead of falling back to
+    the page before.
+  - **Stop** puts the playhead on the end flag, playing or paused.
+  - **The buttons.** Play turns into Pause while playing. A Stop button sits next to it and is
+    always shown. The Loop button (C) turns looping on and off; it no longer makes a region.
+  - **The keys.** Paused, Space and Shift+Space both play. Playing, Space stops and Shift+Space
+    pauses by default; Settings → General → **Space while playing** swaps them. The setting is
+    stored as the two actions' bindings (`playStop`, `playPause`; `shortcuts/playKeys.ts`), so the
+    shortcut list always agrees with it. **Stop at End Flag** (`stopPlayback`) has no key by
+    default; it is in the Playback menu and the command palette. The 3D window's Space and
+    Shift+Space follow the same setting. The app menu shows the default keys even after a swap
+    (it is built once by the main process; a rebound shortcut isn't shown either).
+  - **What's drawn.** A bar along the ruler's top edge from S to E in the start flag's color: solid
+    while looping, faint while not. E is a pennant pointing back at S, on the playhead when E sits
+    there (its left part grabs E; the middle is the playhead's), with its own stem once it's off
+    the playhead. The field line names what Play plays when it isn't the window being edited
+    ("Play loops Page 3's move").
+  - **Removed:** Play from the playhead (Shift+Space, Shift+click on Play, the "Play from Playhead"
+    menu item), the loop region with its two draggable ends, Ctrl+drag drawing a loop (it now just
+    sets the window and the flags), and #160's first-beat stop rule (Stop now goes to the end flag).
+  - **A click or scrub while playing** works as before (UI-12): inside the flags playback jumps and
+    goes on; outside them it plays on from there to the end of the show, and Stop or Pause end it
+    as they end Play.
+  - **Watch mode (out of scope, noted 2026-10-14).** In this editing flow there is no way to play a
+    long stretch of drill: Play never goes past the end flag. A separate **Watch** mode, for
+    watching the show (or a long part of it) play through, is the owner's planned answer. Not
+    designed yet.
+  - **How.** `TimelineSelectionStore` holds `endBeat`, `endPinned` and `looping`, with `pauseAt`,
+    `stopAtEnd`, `setEnd`, `unpinEnd` and `setLooping`. `timelineTransport.ts` has `playRange`,
+    `playTimeline`, `pauseTimelinePlayback`, `stopTimelinePlayback`, `pressTimelinePlayKey` and
+    `toggleTimelineLoop`; the playback driver ends a run by the stop request the transport left
+    (`consumeStopRequest`). The bar and the end flag are `TimelinePlayRange.tsx`. V-193 to V-197
+    log the feel checks.
 
 ## Mapping the spec onto the view model
 

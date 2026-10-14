@@ -6,7 +6,7 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useTimingObjects } from "@/hooks";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { toggleTimelinePlayback } from "../timelineTransport";
+import { pressTimelinePlayKey } from "../timelineTransport";
 import { useTimelinePageBridge } from "../useTimelinePageBridge";
 import { useTimelinePlaybackDriver } from "../useTimelinePlaybackDriver";
 
@@ -102,28 +102,28 @@ describeDbTests("timeline play, pause, play", (it) => {
             if (s.playheadRevision !== prev.playheadRevision) writes++;
         });
 
+        // Plays (from the start flag), then pauses on the nearest beat (UI-22: Shift+Space)
         const playPause = (liveSeconds: number) => {
             act(() => {
-                toggleTimelinePlayback({
-                    isPlaying: false,
-                    showEndBeat: result.current.timing.beats.length,
-                    setIsPlaying: result.current.playing.setIsPlaying,
-                });
+                pressTimelinePlayKey(
+                    "pause",
+                    false,
+                    result.current.playing.setIsPlaying,
+                );
             });
             audio.startInfo.current = {};
             audio.seconds = liveSeconds;
             frame();
             act(() => {
-                toggleTimelinePlayback({
-                    isPlaying: true,
-                    showEndBeat: result.current.timing.beats.length,
-                    setIsPlaying: result.current.playing.setIsPlaying,
-                });
+                pressTimelinePlayKey(
+                    "pause",
+                    true,
+                    result.current.playing.setIsPlaying,
+                );
             });
         };
 
-        // The page at [5, 9) is its own box, so the flag is not pinned and Space plays on.
-        // Stopping moves P and must not loop with the page bridge (UI-17)
+        // Pausing moves P and must not loop with the page bridge (UI-22)
         act(() => {
             store().setPageBoxes([
                 { start: 1, end: 5 },
@@ -135,12 +135,12 @@ describeDbTests("timeline play, pause, play", (it) => {
         });
         expect(store().startPinned).toBe(false);
         writes = 0;
-        playPause(3.1); // beat 7.2: Space stops in place, P moves to 7
+        playPause(3.1); // beat 7.2: the pause freezes on 7
         expect(store().cursorBeat).toBeNull();
         expect(store().playheadBeat).toBe(7);
-        playPause(3.4); // beat 7.8: plays on from the new P and stops there
+        playPause(3.4); // beat 7.8: plays again from the start flag, and pauses on 8
         expect(store().cursorBeat).toBeNull();
-        expect(store().playheadBeat).toBe(7);
+        expect(store().playheadBeat).toBe(8);
         unsubscribe();
 
         expect(maxDepthErrors()).toEqual([]);

@@ -80,8 +80,10 @@
         "playback": {
             "pause": "Pause",
             "play": "Play",
-            "playPage": "Play from playhead",
-            "playPause": "Play / stop",
+            "playPause": "Play / pause",
+            "playStop": "Play / stop",
+            "stop": "Stop",
+            "stopPlayback": "Stop at the end flag",
             "toggleMetronome": "Toggle metronome",
             "toggleLoop": "Loop on / off"
         },
@@ -1427,6 +1429,10 @@
         "general.description": "Language and other app-wide preferences.",
         "general.language": "Language",
         "general.openView3dWithShow": "Open 3D View when a show opens",
+        "general.spacePlayKey": "Space while playing",
+        "general.spacePlayKey.description": "Space stops at the end flag and Shift+Space pauses, or the other way around. Both play from the start flag.",
+        "general.spacePlayKey.pause": "Pauses",
+        "general.spacePlayKey.stop": "Stops",
         "general.showFullDatabasePath": "Show full file path",
         "general.showFullDatabasePath.description": "Show the full path of the open file in the title bar instead of just its name.",
         "mouse": "Mouse & Trackpad",
@@ -1829,7 +1835,7 @@
             "keysSection": "Keyboard and mouse"
         },
         "keys": {
-            "playPause": "Play or pause",
+            "playPause": "Play; stop or pause while playing",
             "previousNext": "Previous or next page",
             "firstLast": "First or last page",
             "cameras": "Cameras, in menu order",
@@ -1841,7 +1847,7 @@
             "zoom": "Zoom"
         },
         "keyNames": {
-            "playPause": "Space",
+            "playPause": "Space / Shift+Space",
             "previousNext": "Q / E",
             "firstLast": "Shift+Q / E",
             "cameras": "1–9",

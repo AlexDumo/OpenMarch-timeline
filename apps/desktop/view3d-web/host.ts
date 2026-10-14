@@ -252,7 +252,7 @@ class WebHost {
         const index = this.pageIndex();
         if (index < 0) return;
         const last = this.pages.length - 1;
-        if (action === "playPause") {
+        if (action === "playPause" || action === "playStop") {
             if (this.clock.playing) this.pause();
             else if (index < last) this.play();
             return;

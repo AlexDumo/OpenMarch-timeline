@@ -54,7 +54,7 @@ const renderOnMoveControl = () => {
 
 describe("ShortcutDispatcher on a timeline move control", () => {
     it("still plays on Space, without pressing the control", () => {
-        const play = handle("playPause");
+        const play = handle("playStop");
         const clip = renderOnMoveControl();
         const notCancelled = fireEvent.keyDown(clip, {
             key: " ",
@@ -110,16 +110,16 @@ describe("ShortcutDispatcher on a timeline move control", () => {
     });
 });
 
-describe("UI-17 shortcuts", () => {
-    it("binds Shift+Space, C and ?", () => {
-        const playPage = handle("playPage");
+describe("UI-17 and UI-22 shortcuts", () => {
+    it("binds Shift+Space (play or pause), C and ?", () => {
+        const playPause = handle("playPause");
         const loop = handle("toggleLoop");
         const shortcuts = handle("showShortcuts");
         render(<ShortcutDispatcher />);
         fireEvent.keyDown(window, { key: " ", code: "Space", shiftKey: true });
         fireEvent.keyDown(window, { key: "c", code: "KeyC" });
         fireEvent.keyDown(window, { key: "?", code: "Slash", shiftKey: true });
-        expect(playPage).toHaveBeenCalledTimes(1);
+        expect(playPause).toHaveBeenCalledTimes(1);
         expect(loop).toHaveBeenCalledTimes(1);
         expect(shortcuts).toHaveBeenCalledTimes(1);
     });
@@ -177,7 +177,7 @@ describe("a held preview frame (UI-11)", () => {
     function Effects() {
         useTimelineActionEffects();
         useActionHandler("lockX", () => {});
-        useActionHandler("playPage", () => {});
+        useActionHandler("playPause", () => {});
         return null;
     }
 
@@ -187,7 +187,7 @@ describe("a held preview frame (UI-11)", () => {
         useTimelineSelectionStore.setState({ playback: null, clearCursor });
         try {
             render(<Effects />);
-            runAction("playPage");
+            runAction("playPause");
             expect(clearCursor).not.toHaveBeenCalled();
             runAction("lockX");
             expect(clearCursor).toHaveBeenCalledTimes(1);

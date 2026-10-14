@@ -10,7 +10,7 @@ import {
     useState,
     type MouseEvent,
 } from "react";
-import { TimelineLoopBar } from "./TimelineLoopBar";
+import { TimelinePlayRange } from "./TimelinePlayRange";
 import { AddPageFlagMenu } from "./AddPageFlagMenu";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
@@ -750,8 +750,8 @@ const TimelineSurface = memo(function TimelineSurface({
                         isPlaying={props.isPlaying}
                         onPlayingChange={props.onPlayingChange}
                         playLoops={props.playLoops}
-                        playingOnce={props.playingOnce}
-                        onPlayFromPlayhead={props.onPlayFromPlayhead}
+                        onStop={props.onStop}
+                        playKeys={props.playKeys}
                         onNavigate={onNavigate}
                         onFit={
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
@@ -871,7 +871,7 @@ const TimelineSurface = memo(function TimelineSurface({
                     </div>
                     {/* Pinned to the viewport's top, over the tracks: the ruler and the measure
                         row, which hide the tracks scrolled under them, and the layers that span
-                        the pane (playhead, flags, the window and the loop) */}
+                        the pane (playhead, flags, the window and what Play plays) */}
                     <div
                         data-testid="timeline-pinned"
                         className="sticky top-0 z-[2] h-0"
@@ -986,13 +986,24 @@ const TimelineSurface = memo(function TimelineSurface({
                             pixelsPerBeat={pixelsPerBeat}
                             height={pinnedHeight}
                         />
-                        {props.loop && (
-                            <TimelineLoopBar
-                                loop={props.loop}
+                        {props.playRange && (
+                            <TimelinePlayRange
+                                range={props.playRange}
                                 beatCount={model.beatCount}
                                 pixelsPerBeat={pixelsPerBeat}
+                                height={pinnedHeight}
                                 snapBeats={snapBeats}
-                                onChange={props.onLoopChange}
+                                pinTop={
+                                    TIMELINE_PAGE_ROW_BOTTOM +
+                                    (expanded ? 1 : 0)
+                                }
+                                pinSize={expanded ? 18 : 14}
+                                onEndChange={
+                                    props.isPlaying
+                                        ? undefined
+                                        : props.onEndFlagChange
+                                }
+                                onUnpinEnd={props.onUnpinEnd}
                             />
                         )}
                         {selectionRange && (

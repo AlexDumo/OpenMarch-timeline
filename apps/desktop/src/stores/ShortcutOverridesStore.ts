@@ -7,6 +7,7 @@ import {
     type ShortcutOverrides,
 } from "@/shortcuts/keymap";
 import { isMacPlatform } from "@/shortcuts/platform";
+import { withSpacePlayKey } from "@/shortcuts/playKeys";
 import { syncFromStorage } from "@/stores/syncFromStorage";
 
 export const SHORTCUT_OVERRIDES_STORAGE_KEY = "openmarch:shortcutOverrides";
@@ -44,6 +45,8 @@ interface ShortcutOverridesStore {
     removeBinding: (id: ActionId, binding: string) => void;
     resetAction: (id: ActionId) => void;
     resetAll: () => void;
+    /** Settings (UI-22): Space stops and Shift+Space pauses, or the other way around */
+    setSpacePlayKey: (space: "stop" | "pause") => void;
 }
 
 export const useShortcutOverridesStore = create<ShortcutOverridesStore>(
@@ -78,6 +81,8 @@ export const useShortcutOverridesStore = create<ShortcutOverridesStore>(
                 update(rest);
             },
             resetAll: () => update({}),
+            setSpacePlayKey: (space) =>
+                update(withSpacePlayKey(get().overrides, space)),
         };
     },
 );

@@ -10,6 +10,7 @@ import {
     HouseIcon,
     PushPinIcon,
     StopIcon,
+    PauseIcon,
     PlayIcon,
     SkipBackIcon,
     SkipForwardIcon,
@@ -115,6 +116,7 @@ import type {
     TimelineNavigation,
     TimelinePageFlagMove,
     TimelinePageMarker,
+    TimelinePlayKeys,
     TimelineRangeChange,
     TimelineSeek,
     TimelineSeekGesture,
@@ -148,13 +150,7 @@ const BEAT_FORWARD_ICON = <CaretRightIcon size={16} weight="bold" />;
 const FIT_ICON = <ArrowsOutLineHorizontalIcon size={16} />;
 const HOUSE_ICON = <HouseIcon size={14} aria-hidden="true" />;
 const PLAY_ICON = <PlayIcon size={16} weight="fill" />;
-/** Play while Shift is held: a bar, the playhead's line, then Play ("play from the playhead") */
-const PLAY_FROM_PLAYHEAD_ICON = (
-    <span className="flex items-center gap-2">
-        <span aria-hidden className="rounded-2 bg-text h-14 w-[2.5px]" />
-        <PlayIcon size={14} weight="fill" />
-    </span>
-);
+const PAUSE_ICON = <PauseIcon size={16} weight="fill" />;
 
 /**
  * The transport's shortcuts as the tooltips show them (UI-17), as keycaps joined with " + ". They
@@ -168,10 +164,17 @@ export const TRANSPORT_SHORTCUTS = {
     lastPage: "Alt + E",
     previousBeat: "Shift + Q",
     nextBeat: "Shift + E",
+    /** Play, and Stop while playing; Settings can swap it with `pause` (UI-22, `playKeys`) */
     play: "Space",
-    playPage: "Shift + Space",
+    pause: "Shift + Space",
     loop: "C",
 } as const;
+
+/** The play keys as the defaults have them (UI-22): Space stops, Shift+Space pauses */
+const DEFAULT_PLAY_KEYS: TimelinePlayKeys = {
+    stop: TRANSPORT_SHORTCUTS.play,
+    pause: TRANSPORT_SHORTCUTS.pause,
+};
 
 const TransportButton = memo(function TransportButton({
     label,
@@ -289,34 +292,6 @@ function useHeldNavigationMode(enabled: boolean): TransportNavigationMode {
         };
     }, [enabled]);
     return mode;
-}
-
-/**
- * Whether Shift is held now, as Play would read it (`useHeldNavigationMode`'s rules: only a change
- * re-renders, losing focus lets go, a pointer event re-reads it)
- */
-function useHeldShift(enabled: boolean): boolean {
-    const [held, setHeld] = useState(false);
-    useEffect(() => {
-        if (!enabled) return;
-        const read = (event: KeyboardEvent | PointerEvent) =>
-            setHeld(event.shiftKey && !event.ctrlKey && !event.metaKey);
-        const onBlur = () => setHeld(false);
-        window.addEventListener("keydown", read, true);
-        window.addEventListener("keyup", read, true);
-        window.addEventListener("pointermove", read, true);
-        window.addEventListener("pointerdown", read, true);
-        window.addEventListener("blur", onBlur);
-        return () => {
-            window.removeEventListener("keydown", read, true);
-            window.removeEventListener("keyup", read, true);
-            window.removeEventListener("pointermove", read, true);
-            window.removeEventListener("pointerdown", read, true);
-            window.removeEventListener("blur", onBlur);
-            setHeld(false);
-        };
-    }, [enabled]);
-    return held;
 }
 
 const NAVIGATION_TARGETS = {
@@ -453,88 +428,76 @@ const TransportNavigationButton = memo(function TransportNavigationButton({
     );
 });
 
-/** What Play (Space) and Shift+Play (Shift+Space) do, in the order the tooltip lists them */
-const playGuide = (
-    loops: boolean,
-): readonly TransportGuideRow<"play" | "shift">[] => [
-    {
-        mode: "play",
-        icon: PLAY_ICON,
-        label: loops ? "Play the loop" : "Play from the start flag",
-        shortcut: TRANSPORT_SHORTCUTS.play,
-    },
-    {
-        mode: "shift",
-        icon: PLAY_FROM_PLAYHEAD_ICON,
-        label: loops ? "Play the loop once" : "Play from the playhead",
-        shortcut: TRANSPORT_SHORTCUTS.playPage,
-    },
-];
-
 /**
- * Play, or Stop while playing. Shift+click is Shift+Space: plays from the playhead, or the loop
- * once. Holding Shift swaps the icon and label to say so, and the tooltip is a guide to both, as
- * Previous and Next do. Kept apart from the transport so only this re-renders for Shift.
+ * Play, which plays from the start flag to the end flag, or Pause while playing (UI-22): it freezes
+ * on the nearest beat. Either play key plays; while playing, one pauses (`playKeys`).
  */
 const TransportPlayButton = memo(function TransportPlayButton({
     isPlaying,
     onPlayingChange,
     playLoops,
-    playingOnce,
-    onPlayFromPlayhead,
+    playKeys,
 }: {
     isPlaying: boolean;
     onPlayingChange?: (isPlaying: boolean) => void;
     playLoops: boolean;
-    playingOnce: boolean;
-    onPlayFromPlayhead?: () => void;
+    playKeys: TimelinePlayKeys;
 }) {
-    const shift = useHeldShift(onPlayingChange != null && !isPlaying);
-    const togglePlaying = useCallback(
-        (event: ReactMouseEvent) =>
-            event.shiftKey && onPlayFromPlayhead
-                ? onPlayFromPlayhead()
-                : onPlayingChange?.(!isPlaying),
-        [isPlaying, onPlayingChange, onPlayFromPlayhead],
+    const onClick = useCallback(
+        () => onPlayingChange?.(!isPlaying),
+        [isPlaying, onPlayingChange],
     );
-    const onClick = onPlayingChange ? togglePlaying : undefined;
     if (isPlaying)
         return (
             <TransportButton
-                label="Stop"
-                shortcut={TRANSPORT_SHORTCUTS.play}
-                hint={
-                    playLoops || playingOnce
-                        ? "Goes back to where you were editing"
-                        : "Stops where it is"
-                }
+                label="Pause"
+                shortcut={playKeys.pause}
+                hint="Stops on the nearest beat. Play starts again from the start flag"
                 testId="timeline-play"
                 pressed
-                onClick={onClick}
+                onClick={onPlayingChange ? onClick : undefined}
             >
-                {STOP_ICON}
+                {PAUSE_ICON}
             </TransportButton>
         );
-    const guide = playGuide(playLoops);
-    const mode = shift && onPlayFromPlayhead ? "shift" : "play";
-    const row = guide.find((r) => r.mode === mode)!;
     return (
         <TransportButton
-            label={row.label}
-            keyShortcut={row.shortcut}
-            hideLabel
+            label="Play"
+            shortcut={TRANSPORT_SHORTCUTS.play}
             hint={
-                <TransportGuide
-                    rows={onPlayFromPlayhead ? guide : guide.slice(0, 1)}
-                    mode={mode}
-                    testId="timeline-play-guide"
-                />
+                playLoops
+                    ? "From the start flag, looping at the end flag"
+                    : "From the start flag to the end flag"
             }
             testId="timeline-play"
             pressed={false}
-            onClick={onClick}
+            onClick={onPlayingChange ? onClick : undefined}
         >
-            {row.icon}
+            {PLAY_ICON}
+        </TransportButton>
+    );
+});
+
+/** Stop (UI-22), always shown: the playhead goes to the end flag, playing or paused */
+const TransportStopButton = memo(function TransportStopButton({
+    isPlaying,
+    onStop,
+    playKeys,
+}: {
+    isPlaying: boolean;
+    onStop?: () => void;
+    playKeys: TimelinePlayKeys;
+}) {
+    return (
+        <TransportButton
+            label="Stop"
+            // Paused, the play keys play, so only the button goes to the end flag
+            shortcut={isPlaying ? playKeys.stop : undefined}
+            hint="Goes to the end flag"
+            testId="timeline-stop"
+            onClick={onStop}
+        >
+            {STOP_ICON}
         </TransportButton>
     );
 });
@@ -546,7 +509,7 @@ const TRANSPORT_TIGHT_PX = 500;
 
 /**
  * The transport (UI-12): the timeline panel's one header row, as animation tools do it (Figma's
- * Motion timeline, Rive, Blender). Previous, Play, Next (UI-17); the caller's pinned accessories
+ * Motion timeline, Rive, Blender). Previous, Play (Pause while playing), Stop, Next (UI-22); the caller's pinned accessories
  * and secondary ones (Sound); the clock and the readout,
  * which is also the go-to box (click it or press G, then type a page, "m23" or a rehearsal mark);
  * then Fit and the caller's view controls (Compact). The play and page buttons, the accessories
@@ -554,7 +517,7 @@ const TRANSPORT_TIGHT_PX = 500;
  * or Next steps a beat and Alt+click goes to the start or end of the show, as Shift+Q/E and
  * Alt+Q/E do (`TransportNavigationButton`). While playing, navigation jumps playback there.
  *
- * With looping on, Play loops the loop (UI-17).
+ * Play always plays from the start flag to the end flag, looping there with looping on (UI-22).
  */
 export const TimelineTransport = memo(function TimelineTransport({
     model,
@@ -563,8 +526,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     isPlaying,
     onPlayingChange,
     playLoops = false,
-    playingOnce = false,
-    onPlayFromPlayhead,
+    onStop,
+    playKeys = DEFAULT_PLAY_KEYS,
     onNavigate,
     onFit,
     fitted = false,
@@ -579,13 +542,14 @@ export const TimelineTransport = memo(function TimelineTransport({
     clock?: ReactNode;
     positionBeat: BeatPosition;
     isPlaying: boolean;
+    /** Play (true) or Pause (false), UI-22 */
     onPlayingChange?: (isPlaying: boolean) => void;
-    /** Looping is on, so Play loops and shows the loop's bar (UI-17) */
+    /** Play loops at the end flag (UI-22) */
     playLoops?: boolean;
-    /** Shift+Space's once-through is playing (UI-17) */
-    playingOnce?: boolean;
-    /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
-    onPlayFromPlayhead?: () => void;
+    /** **Stop** (UI-22): to the end flag, playing or paused */
+    onStop?: () => void;
+    /** The keys that stop and pause while playing (UI-22) */
+    playKeys?: TimelinePlayKeys;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -744,8 +708,12 @@ export const TimelineTransport = memo(function TimelineTransport({
                         isPlaying={isPlaying}
                         onPlayingChange={onPlayingChange}
                         playLoops={playLoops}
-                        playingOnce={playingOnce}
-                        onPlayFromPlayhead={onPlayFromPlayhead}
+                        playKeys={playKeys}
+                    />
+                    <TransportStopButton
+                        isPlaying={isPlaying}
+                        onStop={onStop}
+                        playKeys={playKeys}
                     />
                     <TransportNavigationButton
                         direction="next"

@@ -281,22 +281,32 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["Shift+Q"],
     },
+    // UI-22: Play always plays from the start flag. Playing, one play key stops (to the end flag)
+    // and the other pauses; Settings swaps which key does which (`PLAY_KEYS`)
+    playStop: {
+        labelKey: "actions.playback.playStop",
+        toggleOnKey: "actions.playback.play",
+        toggleOffKey: "actions.playback.stop",
+        category: "playback",
+        scope: "canvas",
+        defaultBindings: ["Space"],
+    },
     playPause: {
         labelKey: "actions.playback.playPause",
         toggleOnKey: "actions.playback.play",
         toggleOffKey: "actions.playback.pause",
         category: "playback",
         scope: "canvas",
-        defaultBindings: ["Space"],
-    },
-    // Shift+Space plays on from the playhead (timeline mode); Space plays from the start flag
-    playPage: {
-        labelKey: "actions.playback.playPage",
-        category: "playback",
-        scope: "canvas",
         defaultBindings: ["Shift+Space"],
     },
-    // UI-17: C turns looping on over the page being edited, or off (timeline mode)
+    // The Stop button: the playhead goes to the end flag, playing or paused
+    stopPlayback: {
+        labelKey: "actions.playback.stopPlayback",
+        category: "playback",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // UI-22: C turns looping between the start and end flags on or off (timeline mode)
     toggleLoop: {
         labelKey: "actions.playback.toggleLoop",
         category: "playback",
