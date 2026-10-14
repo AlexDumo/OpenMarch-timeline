@@ -586,6 +586,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     return {
                         ...isolatedWindow(s, isolation, timeline.end),
                         isolation,
+                        // Isolated, there is no line drag (UI-21)
+                        lineDrag: null,
                         playheadRevision: s.playheadRevision + 1,
                     };
                 }),
@@ -1010,7 +1012,14 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                 }),
             clearCursor: () =>
                 set((s) => (s.cursorBeat === null ? {} : { cursorBeat: null })),
-            setPlayback: (playback) => set({ playback }),
+            // Playing ends a line drag where it is (UI-21): its release seeks while playing,
+            // which no longer reaches the store's line drag
+            setPlayback: (playback) =>
+                set(
+                    playback === null
+                        ? { playback }
+                        : { playback, lineDrag: null },
+                ),
             setLoop: (loop) =>
                 set((s) =>
                     loop === s.loop ||

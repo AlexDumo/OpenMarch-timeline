@@ -2201,6 +2201,11 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         resetPreview();
         return true;
     };
+    // A flag drag still down when the timeline goes (a variant switch) is cancelled, so a live
+    // drag's owner doesn't wait for a release that never comes
+    const latestCancelDrag = useRef(cancelDrag);
+    latestCancelDrag.current = cancelDrag;
+    useEffect(() => () => void latestCancelDrag.current(), []);
 
     const flagTitle = (kind: "start" | "end", beatIndex: number) =>
         kind === "start"

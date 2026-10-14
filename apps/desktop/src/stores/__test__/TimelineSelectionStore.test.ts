@@ -672,6 +672,24 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         store().dragLine(20);
         expect(store().playheadBeat).toBe(17);
     });
+
+    it("playing or isolating ends a line drag where it is", () => {
+        store().selectRange(5, 12);
+        store().beginLineDrag("start");
+        store().dragLine(20);
+        store().setPlayback({ kind: "preview", from: 12, to: 20 });
+        expect(store().lineDrag).toBeNull();
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 12,
+            end: 20,
+        });
+        store().setPlayback(null);
+        store().setStoredTimelines([timeline(1, 5, 17, [1])]);
+        store().beginLineDrag("playhead");
+        store().isolate(1);
+        expect(store().lineDrag).toBeNull();
+    });
 });
 
 describe("the playback cursor (UI-11)", () => {

@@ -84,6 +84,17 @@ describe("dragging the start flag by itself (UI-21)", () => {
         });
     });
 
+    it("a drag still down when the timeline goes is cancelled", () => {
+        const { onSeek, start } = renderWindow();
+        pointer(start, "pointerdown", 80);
+        pointer(start, "pointermove", 240);
+        cleanup();
+        expect(onSeek).toHaveBeenLastCalledWith(5, {
+            gesture: "cancel",
+            line: "start",
+        });
+    });
+
     it("an arrow step is a whole drag, onto or past the playhead too", () => {
         const { onSeek, start } = renderWindow();
         fireEvent.keyDown(start, { key: "ArrowRight" });
