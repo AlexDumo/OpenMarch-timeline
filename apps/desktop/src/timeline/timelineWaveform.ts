@@ -21,6 +21,40 @@ export const WAVEFORM_PEAKS_PER_BEAT = 32;
 export const WAVEFORM_BAR_WIDTH = 2;
 export const WAVEFORM_BAR_GAP = 1;
 
+/**
+ * How the waveform is drawn, a setting: `simplified` is rounded bars at a fixed pixel pitch on a
+ * linear scale (the old WaveSurfer look); `precise` is square bars locked to each beat on a
+ * decibel scale, so quiet passages show their detail (UI-12).
+ */
+export type WaveformStyle = "simplified" | "precise";
+export const WAVEFORM_STYLES: readonly WaveformStyle[] = [
+    "simplified",
+    "precise",
+];
+
+/** A stored waveform style, or the default (simplified) when it's missing or unknown */
+export function parseWaveformStyle(value: unknown): WaveformStyle {
+    return WAVEFORM_STYLES.find((style) => style === value) ?? "simplified";
+}
+
+/** How many bars a beat gets in the precise style */
+export const WAVEFORM_PRECISE_BARS_PER_BEAT = 8;
+
+/** The quietest level the precise style draws, in dB below the show's loudest moment */
+export const WAVEFORM_FLOOR_DB = 42;
+
+/** A linear level (0 .. 1 of the loudest moment) on the decibel scale: `-WAVEFORM_FLOOR_DB` .. 0 dB onto 0 .. 1 */
+export function waveformLevelDb(level: number): number {
+    if (level <= 0) return 0;
+    return Math.min(
+        1,
+        Math.max(
+            0,
+            (20 * Math.log10(level) + WAVEFORM_FLOOR_DB) / WAVEFORM_FLOOR_DB,
+        ),
+    );
+}
+
 export const useAudioEnvelopeStore = create<{
     readonly envelope: AudioEnvelope | null;
     readonly setEnvelope: (envelope: AudioEnvelope | null) => void;

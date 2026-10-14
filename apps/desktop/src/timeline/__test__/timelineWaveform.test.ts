@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
     audioEnvelope,
+    parseWaveformStyle,
     peaksByBeat,
+    WAVEFORM_PEAKS_PER_BEAT,
+    WAVEFORM_PRECISE_BARS_PER_BEAT,
     waveformBarLevel,
+    waveformLevelDb,
 } from "../timelineWaveform";
 
 /** A one-channel buffer of `seconds` at `sampleRate`, loud (0.5) only in `[from, to)` seconds */
@@ -147,5 +151,40 @@ describe("the waveform's bars", () => {
     it("is silent past the audio and past the show", () => {
         expect(waveformBarLevel(peaks, 2, 2.5)).toBe(0);
         expect(waveformBarLevel(peaks, 5, 6)).toBe(0);
+    });
+});
+
+describe("the precise waveform style", () => {
+    it("draws loudness in decibels, so a quiet passage stays visible next to a loud one", () => {
+        expect(waveformLevelDb(1)).toBeCloseTo(1);
+        // A tenth of the loudest moment is -20 dB: (-20 + 42) / 42, where linear gives 0.1
+        expect(waveformLevelDb(0.1)).toBeCloseTo(22 / 42);
+        expect(waveformLevelDb(0.001)).toBe(0);
+        expect(waveformLevelDb(0)).toBe(0);
+    });
+
+    it("gives each of a beat's bars the loudest of the peaks in its slice", () => {
+        const perBar = WAVEFORM_PEAKS_PER_BEAT / WAVEFORM_PRECISE_BARS_PER_BEAT;
+        const beat = Array.from({ length: WAVEFORM_PEAKS_PER_BEAT }, (_, i) =>
+            i === perBar ? 0.7 : 0.1,
+        );
+        const bar = (index: number) =>
+            waveformBarLevel(
+                [beat],
+                index / WAVEFORM_PRECISE_BARS_PER_BEAT,
+                (index + 1) / WAVEFORM_PRECISE_BARS_PER_BEAT,
+            );
+        expect(bar(0)).toBeCloseTo(0.1);
+        expect(bar(1)).toBeCloseTo(0.7);
+        expect(bar(2)).toBeCloseTo(0.1);
+    });
+});
+
+describe("the waveform style setting", () => {
+    it("keeps a known style and falls back to simplified otherwise", () => {
+        expect(parseWaveformStyle("precise")).toBe("precise");
+        expect(parseWaveformStyle("simplified")).toBe("simplified");
+        expect(parseWaveformStyle(undefined)).toBe("simplified");
+        expect(parseWaveformStyle("fancy")).toBe("simplified");
     });
 });
