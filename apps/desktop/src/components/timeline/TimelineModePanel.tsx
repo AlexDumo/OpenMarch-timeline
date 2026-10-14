@@ -168,19 +168,19 @@ export default function TimelineModePanel() {
     const waveformHidden = useUiSettingsStore(
         (s) => s.uiSettings.timelineWaveformStyle === "hidden",
     );
-    const waveform = useMemo(
-        () =>
-            envelope && !waveformHidden
-                ? {
-                      peaksByBeat: peaksByBeat(
-                          envelope,
-                          beats,
-                          createTimelineBeatAxis(beats).offset,
-                      ),
-                  }
-                : null,
-        [envelope, beats, waveformHidden],
-    );
+    const waveform = useMemo(() => {
+        if (!envelope || waveformHidden) return null;
+        const peaks = peaksByBeat(
+            envelope,
+            beats,
+            createTimelineBeatAxis(beats).offset,
+        );
+        // A show with no audio plays a silent placeholder: nothing to draw, so in Basic, where the
+        // lane sets the pane's height, it counts as no waveform (UI-19)
+        if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
+            return null;
+        return { peaksByBeat: peaks };
+    }, [envelope, beats, waveformHidden, basic]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );

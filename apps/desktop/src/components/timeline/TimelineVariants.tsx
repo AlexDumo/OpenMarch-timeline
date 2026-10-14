@@ -615,9 +615,10 @@ const TimelineSurface = memo(function TimelineSurface({
         showWaveform,
         rowCount: rows.length,
     });
-    // Basic (UI-19): under each box's header (the page row) its body, the same height with or
-    // without audio: the measure numbers, the waveform, then the count ticks along the bottom
-    const basicBodyHeight = 60;
+    // Basic (UI-19): under each box's header (the page row) its body: the measure numbers, the
+    // waveform, then the count ticks along the bottom. With no waveform (no audio, or hidden in
+    // settings) the body is just the measure numbers and the ticks, so it is shorter
+    const basicBodyHeight = showWaveform ? 60 : 30;
     const basicMeasureRow = 18;
     const basicAudioTop = TIMELINE_PAGE_ROW_BOTTOM + basicMeasureRow;
     const basicWaveformHeight = basicBodyHeight - basicMeasureRow - 12;
