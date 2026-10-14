@@ -165,17 +165,58 @@ export async function readShapeRecipes({
             ),
         )
         .all();
-    if (hits.length === 0) return [];
-    const ids = hits.map((h) => h.id);
+    return recipesById(
+        db,
+        hits.map((h) => h.id),
+    );
+}
+
+/** Every recipe that any of `marcherIds` is in, in any move */
+export async function readShapeRecipesOf({
+    db,
+    marcherIds,
+}: {
+    db: DbConnection | DbTransaction;
+    marcherIds: readonly number[];
+}): Promise<StoredShapeRecipe[]> {
+    if (marcherIds.length === 0) return [];
+    const hits = await db
+        .selectDistinct({ id: members.recipe_id })
+        .from(members)
+        .where(inArray(members.marcher_id, [...new Set(marcherIds)]))
+        .all();
+    return recipesById(
+        db,
+        hits.map((h) => h.id),
+    );
+}
+
+/** Every recipe in the show */
+export async function readAllShapeRecipes(
+    db: DbConnection | DbTransaction,
+): Promise<StoredShapeRecipe[]> {
+    const rows = await db.select({ id: recipes.id }).from(recipes).all();
+    return recipesById(
+        db,
+        rows.map((r) => r.id),
+    );
+}
+
+/** Recipes by id, with their members in slot order */
+async function recipesById(
+    db: DbConnection | DbTransaction,
+    ids: readonly number[],
+): Promise<StoredShapeRecipe[]> {
+    if (ids.length === 0) return [];
     const rows = await db
         .select()
         .from(recipes)
-        .where(inArray(recipes.id, ids))
+        .where(inArray(recipes.id, [...ids]))
         .all();
     const memberRows = await db
         .select()
         .from(members)
-        .where(inArray(members.recipe_id, ids))
+        .where(inArray(members.recipe_id, [...ids]))
         .all();
     return rows
         .sort((a, b) => a.id - b.id)

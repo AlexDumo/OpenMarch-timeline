@@ -32,6 +32,7 @@ import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
 import { useShapeToolCanvas } from "@/shapes/tool/useShapeToolCanvas";
+import { usePlacedBoxesCanvas } from "@/shapes/placed/usePlacedBoxesCanvas";
 import { ShapeToolReadout } from "@/shapes/tool/ShapeToolReadout";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -476,6 +477,13 @@ export default function Canvas({
 
     // The shape tool on the field (docs/timeline/research/shapes/06-box-v1.md)
     useShapeToolCanvas({
+        canvas,
+        isPlaying,
+        theme: fieldProperties?.theme,
+    });
+
+    // Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md)
+    usePlacedBoxesCanvas({
         canvas,
         isPlaying,
         theme: fieldProperties?.theme,

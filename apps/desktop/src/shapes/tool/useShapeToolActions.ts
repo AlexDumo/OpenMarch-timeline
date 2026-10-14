@@ -47,6 +47,7 @@ export function useApplyShape(): () => Promise<void> {
                 db,
                 marcherIds: tool.marchers.map((m) => m.id),
                 transform,
+                writesShapes: true,
                 afterWrite: async (tx, timelineId) => {
                     await saveShapeRecipeInTransaction({
                         tx,
@@ -54,7 +55,11 @@ export function useApplyShape(): () => Promise<void> {
                         recipe: {
                             kind: kind.id,
                             kindVersion: kind.version,
-                            params: tool.params,
+                            // The spot count keeps holes when members leave later
+                            params: {
+                                ...(tool.params as object),
+                                spots: targets.length,
+                            },
                             orderMode: "nearest",
                             reverse: false,
                         },
@@ -73,9 +78,6 @@ export function useApplyShape(): () => Promise<void> {
         }
         // Not a React Query mutation, so refresh what one would
         void queryClient.invalidateQueries({ queryKey: historyKeys.all() });
-        void queryClient.invalidateQueries({
-            queryKey: ["timeline_shape_recipes"],
-        });
         closeShapeTool();
     }, [queryClient]);
 }

@@ -34,7 +34,8 @@ and a group transition into a shape breaks UI-9's one-transition-per-marcher rul
      the recipe), `marcher_id` (deleted with the marcher), `slot` (the marcher's spot in the
      recipe's slot order) and `x`, `y` (where the recipe put it when last placed). One row per
      marcher and recipe.
-3. **Overrides are the difference between where a member stands and where its recipe put it.**
+3. *(Revised 2026-10-14, see below.)* **Overrides are the difference between where a member
+   stands and where its recipe put it.**
    They are not stored separately: a member nudged after placement simply stands somewhere else,
    and reopening the recipe shows it as moved by hand. Editing the recipe moves each member to
    its new spot plus its override, unless the designer resets the overrides.
@@ -60,3 +61,15 @@ and a group transition into a shape breaks UI-9's one-transition-per-marcher rul
   both, with the same ids.
 - Deleting the move, or a marcher, deletes the recipe rows that hang off it.
 - Unit tests for reopening: overrides computed from positions, edited recipes keep overrides.
+
+## Revision, 2026-10-14: no overrides
+
+The owner chose binary membership for placed boxes
+(docs/timeline/research/shapes/07-placed-boxes.md). A member stands exactly on its spot or isn't
+in the recipe. Moving some members takes them out, leaving their spots as holes (the box's params
+store `spots`, the spot count with holes). Moving every member the same way moves the recipe.
+Decision 3 is replaced: there are no overrides, and a reopened recipe always matches the field.
+
+A recipe is shown at its move's end and at later moments while all its members stand on their
+spots. Editing it at a later moment saves a copy on that later move.
+

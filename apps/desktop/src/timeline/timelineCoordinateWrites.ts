@@ -264,6 +264,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     transform,
     plan = planCanvasEdit(),
     afterWrite,
+    writesShapes,
 }: {
     db: DbConnection;
     marcherIds: readonly number[];
@@ -273,7 +274,9 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     afterWrite?: (
         tx: DbTransaction,
         timelineId: number | null,
-    ) => Promise<void>;
+    ) => Promise<void | boolean>;
+    /** `afterWrite` saves shape recipes itself, so placed boxes aren't kept up to date around it */
+    writesShapes?: boolean;
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
     snapIsolatedPlayheadToEnd();
@@ -285,6 +288,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
         target: plan.target,
         moves,
         afterWrite,
+        writesShapes,
     });
     return next;
 }

@@ -11,6 +11,7 @@ import {
 } from "@openmarch/ui";
 import type {
     MarcherLabelForm,
+    ShapeOutlines,
     MarcherLabelSize,
 } from "@/stores/UiSettingsStore";
 import ActionButton from "@/shortcuts/ActionButton";
@@ -54,6 +55,7 @@ function UiSettingsToolbar() {
             marcherLabels: s.uiSettings.marcherLabels ?? "auto",
             marcherLabelSize: s.uiSettings.marcherLabelSize ?? "normal",
             marcherLabelPosition: s.uiSettings.marcherLabelPosition ?? "above",
+            shapes: s.uiSettings.shapes ?? "selected",
         })),
     );
 
@@ -144,6 +146,35 @@ function UiSettingsToolbar() {
                 </button>
             </ToolbarSection>
             <ToolbarSection>
+                {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
+                <label className="flex items-center gap-8">
+                    <T keyName="toolbar.view.shapes" />
+                    <Select
+                        value={uiSettings.shapes}
+                        onValueChange={(v) =>
+                            setUiSettings({
+                                ...useUiSettingsStore.getState().uiSettings,
+                                shapes: v as ShapeOutlines,
+                            })
+                        }
+                    >
+                        <SelectTriggerCompact
+                            label={t("toolbar.view.shapes")}
+                            data-testid="view-shapes"
+                        />
+                        <SelectContent>
+                            <SelectItem value="selected">
+                                {t("toolbar.view.shapesSelected")}
+                            </SelectItem>
+                            <SelectItem value="always">
+                                {t("toolbar.view.shapesAlways")}
+                            </SelectItem>
+                            <SelectItem value="off">
+                                {t("toolbar.view.shapesOff")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </label>
                 {/* Full drill numbers crowd at 2-step intervals (shape sims, round 6) */}
                 <label className="flex items-center gap-8">
                     <T keyName="toolbar.view.labels" />

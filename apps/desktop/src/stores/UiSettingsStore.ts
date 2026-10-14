@@ -71,6 +71,11 @@ export interface UiSettings {
     marcherLabelSize?: MarcherLabelSize;
     /** Marcher labels above their dots, or beside them (to the right) */
     marcherLabelPosition?: "above" | "beside";
+    /**
+     * When placed shapes (a box after Place) show their outline and label on the field: while
+     * any member is selected, always, or never
+     */
+    shapes?: ShapeOutlines;
     /** Whether to enable Tolgee In-Context Translating */
     tolgeeDevTools?: boolean;
     /** Tolgee API Key for In-Context Translating */
@@ -79,6 +84,7 @@ export interface UiSettings {
 
 export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
 export type MarcherLabelSize = "small" | "normal" | "large";
+export type ShapeOutlines = "selected" | "always" | "off";
 
 /** How much each label size scales the labels' normal size */
 export const LABEL_SIZE_SCALE: Record<MarcherLabelSize, number> = {
@@ -120,6 +126,7 @@ export const defaultSettings: UiSettings = {
         referencePointY: undefined,
     },
     marcherLabels: "auto",
+    shapes: "selected",
     tolgeeDevTools: false,
 };
 

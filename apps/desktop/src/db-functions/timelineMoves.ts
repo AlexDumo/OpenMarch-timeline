@@ -1156,12 +1156,13 @@ export const moveMarchersInTarget = async ({
     /**
      * Called inside the edit after the positions are written, with the move they belong to
      * (`null` for homes), so app data about them (a shape recipe, ADR 0004) is part of the same
-     * undo step. Not called for a range with no move to hold the positions.
+     * undo step. Not called for a range with no move to hold the positions. Resolving to `false`
+     * says it wrote nothing, so an edit that changed no positions either is still no undo step.
      */
     afterWrite?: (
         tx: DbTransaction,
         timelineId: number | null,
-    ) => Promise<void>;
+    ) => Promise<void | boolean>;
 }): Promise<TimelineMoveResult> => {
     if (moves.length === 0)
         return { homes: [], slots: [], convertedTransitionIds: [] };
@@ -1199,10 +1200,12 @@ export const moveMarchersInTarget = async ({
                         ? await timelineWithRange(tx, target)
                         : await timelineEndingAt(tx, target.beat)
                     : null;
-                if (afterWrite && timelineId !== null)
-                    await afterWrite(tx, timelineId);
+                const wroteAppData =
+                    afterWrite && timelineId !== null
+                        ? (await afterWrite(tx, timelineId)) !== false
+                        : false;
                 // An edit that writes nothing (and no app data beside it) can't be an undo step
-                else if (!wroteSomething(result))
+                if (!wroteAppData && !wroteSomething(result))
                     throw new NothingWritten(result);
                 return result;
             }

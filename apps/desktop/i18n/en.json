@@ -1559,6 +1559,16 @@
         "tolgeeDevToolsToggle": "Tolgee In-Context Translating"
     },
     "shapes": {
+        "box": {
+            "label": "Box {files} × {ranks} · {interval} steps",
+            "left": {
+                "closeUp": "Close up",
+                "hint": "Their spots stay empty. Undo puts them back.",
+                "many": "{count} left the box",
+                "one": "{name} left the box",
+                "resplit": "Re-split"
+            }
+        },
         "circle": "Circle",
         "square": "Square",
         "triangle": "Triangle",
@@ -1771,6 +1781,10 @@
             "labelsOff": "Off",
             "nextPaths": "Next paths",
             "previousPaths": "Previous paths",
+            "shapes": "Shapes",
+            "shapesAlways": "Always",
+            "shapesOff": "Off",
+            "shapesSelected": "When selected",
             "stepSizeWarnings": "Step size warnings",
             "uiSettingsToolbar": "Ui Settings Toolbar"
         }
