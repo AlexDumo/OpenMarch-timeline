@@ -980,8 +980,10 @@ from it. The spec still wins on the model; this file decides presentation.
     or press Home, to go back to fitted.
   - **Taller than the tracks:** the track area expands (grid, page lines, playhead and
     selection fill the extra room). Track heights stay the same.
-  - **Shorter than the tracks:** the track area scrolls vertically; the transport stays put and
-    the horizontal scrollbar stays at the bottom of the pane. The mouse wheel scrolls the tracks
+  - **Shorter than the tracks:** the track area scrolls vertically; the transport, the page ruler
+    and the measure row stay put (only the waveform and the clip rows scroll, under the ruler), and
+    the horizontal scrollbar stays at the bottom of the pane. A resize tag with no room between its
+    clip and the ruler shows beside the dragged edge. The mouse wheel scrolls the tracks
     here; when the tracks fit, a vertical wheel still scrolls the timeline sideways (Shift+wheel
     or a horizontal swipe does that when they overflow).
   - **Remembered** per user in the UI settings (`timelineHeight`, `null` is fitted). Minimums:

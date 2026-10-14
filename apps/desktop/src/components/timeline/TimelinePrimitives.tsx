@@ -521,11 +521,14 @@ export const TimelineShell = ({
     children,
     viewportRef,
     className,
+    pinnedHeight = 0,
 }: {
     transport?: ReactNode;
     children: ReactNode;
     viewportRef: RefObject<HTMLDivElement | null>;
     className?: string;
+    /** How tall the rows pinned at the viewport's top are, so a focused clip scrolls out from under them */
+    pinnedHeight?: number;
 }) => (
     <div
         className={clsx(
@@ -544,6 +547,11 @@ export const TimelineShell = ({
                 aria-label="Timeline"
                 // The scrollbar's track is always there, so zooming never changes the height
                 className="focus-visible:ring-accent rounded-4 min-h-0 min-w-0 flex-1 overflow-x-scroll overflow-y-auto outline-hidden focus-visible:ring-2"
+                style={
+                    pinnedHeight > 0
+                        ? { scrollPaddingTop: pinnedHeight }
+                        : undefined
+                }
             >
                 {children}
             </div>
