@@ -1,3 +1,4 @@
+import { FieldProperties } from "@openmarch/core";
 import type {
     FieldTestApi,
     FieldTestGesture,
@@ -78,9 +79,15 @@ export function createFabricFieldTestApi(
         viewport() {
             const { cssScale } = toScreen();
             const [zoom, , , , panX, panY] = transform();
+            // Fabric's (0, 0) is half a grid line off the field's: marchers are
+            // drawn at their field position plus this (`CanvasMarcher.gridOffset`).
+            const offset = (FieldProperties.GRID_STROKE_WIDTH / 2) * zoom;
             return {
                 zoom: zoom * cssScale,
-                pan: { x: panX * cssScale, y: panY * cssScale },
+                pan: {
+                    x: (panX + offset) * cssScale,
+                    y: (panY + offset) * cssScale,
+                },
             };
         },
 

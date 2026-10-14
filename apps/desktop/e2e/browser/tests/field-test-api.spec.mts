@@ -108,9 +108,10 @@ test("reads the view", async ({ show }) => {
         x: t1.screen.x - t1.x * zoom - field!.x,
         y: t1.screen.y - t1.y * zoom - field!.y,
     };
-    // The dot is drawn up to a grid line off its stored position (#189).
-    expect(Math.abs(origin.x - pan.x)).toBeLessThan(zoom * 2);
-    expect(Math.abs(origin.y - pan.y)).toBeLessThan(zoom * 2);
+    // Within a twentieth of a pixel: the field's (0, 0), not the renderer's
+    // (Fabric's is half a grid line off).
+    expect(origin.x).toBeCloseTo(pan.x, 1);
+    expect(origin.y).toBeCloseTo(pan.y, 1);
 });
 
 test("reads the gesture in progress", async ({ show }) => {

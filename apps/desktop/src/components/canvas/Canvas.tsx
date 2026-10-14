@@ -171,6 +171,8 @@ export default function Canvas({
         canvas.requestRenderAll();
     }, [canvas, fieldProperties, isFullscreen]);
 
+    useEffect(() => () => installFieldTestApi(undefined), []);
+
     /* Initialize the canvas */
     useEffect(() => {
         if (canvas || !selectedPage || !fieldProperties) {
