@@ -1,6 +1,5 @@
 import MarcherEditor from "./MarcherEditor";
 import PageEditor from "./PageEditor";
-import ShapeEditor from "./ShapeEditor";
 import { ShapeToolSection } from "@/shapes/tool/ShapeToolSection";
 import { PageNotesSection } from "./PageNotesSection";
 import { TimelineInspectorSection } from "./TimelineInspectorSection";
@@ -23,7 +22,6 @@ function Inspector() {
                 <TimelineMoveCardSlot />
                 <PageEditor />
                 <MarcherEditor />
-                <ShapeEditor />
                 <TimelineInspectorSection />
             </div>
 

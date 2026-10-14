@@ -2,8 +2,6 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { historyKeys } from "@/hooks/queries/useHistory";
 import { db } from "@/global/database/db";
-import { useUpdateSelectedMarchersOnSelectedPage } from "@/hooks/queries";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { saveShapeRecipeInTransaction } from "@/db-functions/shapeRecipes";
 import { transformMarchersInSelection } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
@@ -24,12 +22,10 @@ import {
 
 /**
  * Places the tool's marchers on its shape as one edit, through the same path as a canvas drag
- * (timeline mode: they leave the start flag and arrive at the playhead), then closes the tool.
- * In timeline mode the shape's recipe is saved in the same edit (ADR 0004).
+ * (they leave the start flag and arrive at the playhead), then closes the tool. The shape's
+ * recipe is saved in the same edit (ADR 0004).
  */
 export function useApplyShape(): () => Promise<void> {
-    const { mutateAsync } = useUpdateSelectedMarchersOnSelectedPage();
-    const timelineMode = useTimelineMode();
     const queryClient = useQueryClient();
     return useCallback(async () => {
         const canvas = currentCanvas();
@@ -45,13 +41,6 @@ export function useApplyShape(): () => Promise<void> {
                     ? [{ marcher_id: c.marcher_id, x: spot.x, y: spot.y }]
                     : [];
             });
-        if (!timelineMode) {
-            await mutateAsync(({ currentCoordinates }) =>
-                transform(currentCoordinates),
-            );
-            closeShapeTool();
-            return;
-        }
         const kind = tool.kind.shape;
         try {
             await transformMarchersInSelection({
@@ -88,7 +77,7 @@ export function useApplyShape(): () => Promise<void> {
             queryKey: ["timeline_shape_recipes"],
         });
         closeShapeTool();
-    }, [mutateAsync, timelineMode, queryClient]);
+    }, [queryClient]);
 }
 
 /** Opens the box tool on the selected marchers */

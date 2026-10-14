@@ -9,7 +9,6 @@ import { updatePagesMutationOptions } from "../../hooks/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useSplitPage } from "./PageEditorUtils";
 import { useIsPlaying } from "../../context/IsPlayingContext";
-import { useTimelineMode } from "../../hooks/queries/useWorkspaceSettings";
 
 // TODO: figure out how to make this work with the new music system
 function PageEditor() {
@@ -22,9 +21,7 @@ function PageEditor() {
     const isFirstPage = selectedPage?.previousPageId === null;
     // Timeline mode doesn't follow pages while playing (useTimelinePageBridge), so the page
     // shown would be the one play started on: say it's playing instead (shape sims)
-    const isPlaying = useIsPlaying()?.isPlaying ?? false;
-    const timelineMode = useTimelineMode();
-    const playing = isPlaying && timelineMode;
+    const playing = useIsPlaying()?.isPlaying ?? false;
 
     const countsInputId = "page-counts";
     const subsetInputId = "page-subset";

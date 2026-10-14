@@ -1,7 +1,7 @@
 import { afterEach, expect } from "vitest";
+import { eq } from "drizzle-orm";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
-import { keepFixturesInPageMode } from "@/test/timelineMode";
-import { readShowTiming } from "@/timeline/convert/writePageConversion";
+import { readShowTiming } from "@/timeline/showTiming";
 import {
     startTimelineResolver,
     stopTimelineResolver,
@@ -16,10 +16,6 @@ import {
     saveShapeRecipeInTransaction,
     type ShapeRecipeRecord,
 } from "../shapeRecipes";
-
-keepFixturesInPageMode(
-    "its tests trim the show, write timeline rows and set the flag themselves",
-);
 
 /**
  * Shape recipes (ADR 0004) are saved in the same edit as the positions they place, so undo and
@@ -40,15 +36,7 @@ const LINE: ShapeRecipeRecord = { ...ARC, kind: "line", params: {} };
 
 const resolver = () => useTimelineResolverStore.getState().resolver!;
 
-const setTimelineFlag = async (db: DbConnection) => {
-    await db.delete(schema.workspace_settings);
-    await db.insert(schema.workspace_settings).values({
-        id: 1,
-        json_data: JSON.stringify({ timelineMode: true }),
-    });
-};
-
-/** Pages 1–4 in timeline mode, nobody moved yet */
+/** Pages 1–4, nobody moved yet */
 const show = async (db: DbConnection) => {
     const pages = [...(await readShowTiming(db)).pages].sort(
         (a, b) => a.order - b.order,
@@ -58,7 +46,6 @@ const show = async (db: DbConnection) => {
         pageIds: new Set(pages.filter((p) => p.order >= 2).map((p) => p.id)),
     });
     for (let i = 0; i < 3; i++) await createLastPage({ db, newPageCounts: 8 });
-    await setTimelineFlag(db);
     await startTimelineResolver(db);
     const [a, b, c] = resolver().marcherIds();
     return { a: a!, b: b!, c: c! };
@@ -97,13 +84,15 @@ const place = async (
     return saved!;
 };
 
-const page2Timeline = async (db: DbConnection) =>
+/** The move a placed recipe belongs to (the converted show has moves of its own) */
+const recipeTimeline = async (db: DbConnection, recipeId: number) =>
     (
         await db
-            .select({ id: schema.timelines.id })
-            .from(schema.timelines)
-            .all()
-    ).map((r) => r.id)[0]!;
+            .select({ id: schema.timeline_shape_recipes.timeline_id })
+            .from(schema.timeline_shape_recipes)
+            .where(eq(schema.timeline_shape_recipes.id, recipeId))
+            .get()
+    )?.id ?? null;
 
 describeDbTests("Shape recipes", (it) => {
     it("are saved with the positions, and undo and redo take both", async ({
@@ -112,7 +101,7 @@ describeDbTests("Shape recipes", (it) => {
     }) => {
         const { a, b } = await show(db);
         const id = await place(db, [a, b], ARC);
-        const timelineId = await page2Timeline(db);
+        const timelineId = await recipeTimeline(db, id);
         const stored = await readShapeRecipes({
             db,
             timelineId,
@@ -144,7 +133,7 @@ describeDbTests("Shape recipes", (it) => {
         expect(
             await readShapeRecipes({
                 db,
-                timelineId: await page2Timeline(db),
+                timelineId: await recipeTimeline(db, id),
                 marcherIds: [b],
             }),
         ).toEqual(stored);
@@ -157,7 +146,7 @@ describeDbTests("Shape recipes", (it) => {
         const { a, b, c } = await show(db);
         const arc = await place(db, [a, b, c], ARC);
         const line = await place(db, [b, c], LINE);
-        const timelineId = await page2Timeline(db);
+        const timelineId = await recipeTimeline(db, arc);
         const stored = await readShapeRecipes({
             db,
             timelineId,
@@ -231,7 +220,7 @@ describeDbTests("Shape recipes", (it) => {
     it("an edited recipe keeps its id", async ({ db, marchersAndPages: _ }) => {
         const { a, b } = await show(db);
         const id = await place(db, [a, b], ARC);
-        const timelineId = await page2Timeline(db);
+        const timelineId = (await recipeTimeline(db, id))!;
         let replaced: number | null = null;
         await moveMarchersInTarget({
             db,

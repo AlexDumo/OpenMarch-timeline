@@ -12,9 +12,11 @@ import { WEB_CHANNELS } from "../protocol";
 import { emit, handleInPage, invokeWorker, listenInPage } from "./ipc";
 import { storageKey } from "./channel";
 import { handOffShow } from "./handoff";
+import { webExampleShows } from "../../src/utilities/webBuild";
+import { SETTINGS_DEFAULT } from "../../electron/main/settings-window-bounds";
 
 const SETTINGS_KEY = storageKey("settings");
-/** Tells this build's other tabs (e.g. the settings tab) about a change. */
+/** Tells this build's other pages (e.g. the settings window) about a change. */
 const settingsBroadcast =
     typeof BroadcastChannel === "function"
         ? new BroadcastChannel(SETTINGS_KEY)
@@ -242,6 +244,18 @@ async function closeShow() {
     return 200;
 }
 
+/** Opens one of a preview build's example shows. 404 if `path` isn't one. */
+async function openExampleShow(path: string): Promise<number> {
+    const example = webExampleShows.find((show) => show.file === path);
+    if (!example) return 404;
+    if (!confirmDiscard()) return 0;
+    if (!(await confirmReplaceKept("Opening a show"))) return 0;
+    const response = await fetch(example.file);
+    if (!response.ok) return response.status;
+    const name = example.file.split("/").pop() ?? `${example.id}.dots`;
+    return openShowFile(new File([await response.blob()], name));
+}
+
 // eslint-disable-next-line max-lines-per-function
 export function registerPageHandlers({ isSettingsTab = false } = {}) {
     // Settings, theme and language, from electron/main/index.ts.
@@ -274,8 +288,8 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
         window.open(url, "_blank", "noopener,noreferrer");
     });
 
-    // Windows: the browser owns them. Settings open in their own tab, as
-    // they open in their own window in Electron.
+    // Windows: the browser owns them. Settings open in a pop-up window of
+    // their own, centered on the editor, as they open in Electron.
     for (const channel of ["window:minimize", "window:maximize", "menu:open"])
         listenInPage(channel, () => {});
     listenInPage("window:close", () => window.close());
@@ -283,7 +297,18 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
     handleInPage("settings:open", () => {
         const url = new URL(window.location.href);
         url.hash = "settings";
-        window.open(url, "openmarch-settings");
+        const { width, height } = SETTINGS_DEFAULT;
+        const left = Math.round(
+            window.screenX + (window.outerWidth - width) / 2,
+        );
+        const top = Math.round(
+            window.screenY + (window.outerHeight - height) / 2,
+        );
+        window.open(
+            url,
+            "openmarch-settings",
+            `popup,width=${width},height=${height},left=${left},top=${top}`,
+        );
     });
 
     // Electron-only features, answered as when they are unavailable.
@@ -294,7 +319,11 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
         "recent-files:clear-missing",
     ])
         handleInPage(channel, () => undefined);
-    handleInPage("recent-files:open", () => 404);
+    // A preview build's start page opens its example shows by path, the
+    // way a recent file opens (see ExampleShows.tsx).
+    handleInPage("recent-files:open", (path: string) =>
+        isSettingsTab ? 404 : openExampleShow(path),
+    );
     handleInPage("plugins:list", () => []);
     handleInPage("newShow:getPending", () => false);
     handleInPage("newShow:clearPending", () => undefined);

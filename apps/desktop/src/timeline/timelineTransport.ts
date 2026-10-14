@@ -13,13 +13,16 @@ import {
     previewBounds,
     type FlagPage,
 } from "./timelinePlayhead";
-import { timeAtBeat, type BeatTiming } from "./timeMap";
-import { restartLivePlaybackAt } from "@/components/timeline/audio/AudioPlayer";
+import { beatAtTime, timeAtBeat, type BeatTiming } from "./timeMap";
+import {
+    getLivePlaybackPosition,
+    playbackStartInfoRef,
+    restartLivePlaybackAt,
+} from "@/components/timeline/audio/AudioPlayer";
 
 /**
- * The timeline-mode transport (docs/timeline/ui.md UI-9; P8.11), shared by the timeline's
- * transport buttons and the registered actions (shortcuts, menus). These drive
- * `useTimelineSelectionStore`; page mode keeps its own page-based transport.
+ * The transport (docs/timeline/ui.md UI-9; P8.11), shared by the timeline's transport buttons and
+ * the registered actions (shortcuts, menus). These drive `useTimelineSelectionStore`.
  */
 
 /** Set by `suspendTimelinePlayback`, so the pause that follows leaves the cursor and playhead alone. */
@@ -36,9 +39,10 @@ let scrub: {
 } | null = null;
 
 /**
- * Page navigation (UI-9 Page-relative tools): moves the playhead to the target flag and selects
- * that page's timeline, or home for the first page; a loop moves to that page (UI-17). Returns
- * false when there is nowhere to go. Callers don't navigate while playing.
+ * Navigation (UI-9 Page-relative tools): moves the playhead to the target flag and selects that
+ * page's timeline, or home for the first page; a loop moves to that page (UI-17). A beat step
+ * moves the playhead one beat, as a click there does. Returns false when there is nowhere to go.
+ * Callers don't navigate while playing (`navigateTimeline` jumps playback instead).
  */
 export function navigateTimelinePages(
     pages: readonly FlagPage[],
@@ -46,7 +50,12 @@ export function navigateTimelinePages(
 ): boolean {
     const state = useTimelineSelectionStore.getState();
     // From the beat the timeline shows: a held preview frame, or the playhead (UI-11)
-    const target = navigationTarget(pages, displayedBeat(state), direction);
+    const from = displayedBeat(state);
+    if (direction === "previous-beat" || direction === "next-beat") {
+        state.seek(beatStep(Math.round(from), direction));
+        return displayedBeat(useTimelineSelectionStore.getState()) !== from;
+    }
+    const target = navigationTarget(pages, from, direction);
     if (!target) return false;
     if (target.range) {
         state.selectRange(target.range.start, target.range.end);
@@ -55,6 +64,31 @@ export function navigateTimelinePages(
             state.setLoop({ start: target.range.start, end: target.range.end });
     } else state.selectHome();
     return true;
+}
+
+/**
+ * A beat on or back from `beat`. Beats 0 and 1 are both show time 0, written as 0
+ * (`normalizePlayheadBeat`), so a step on from the start goes to beat 2.
+ */
+const beatStep = (beat: number, direction: "previous-beat" | "next-beat") =>
+    direction === "next-beat" ? Math.max(beat, 1) + 1 : beat - 1;
+
+/**
+ * Previous and Next, from the transport buttons and the shortcuts alike (Q and E; Shift for a
+ * beat, Alt for the start and end). Paused, it moves the playhead (`navigateTimelinePages`); playing,
+ * playback jumps there from the beat playing now and goes on (`jumpTimelinePages`).
+ */
+export function navigateTimeline(
+    beats: readonly BeatTiming[],
+    pages: readonly FlagPage[],
+    isPlaying: boolean,
+    direction: TimelineNavigation,
+): boolean {
+    if (!isPlaying) return navigateTimelinePages(pages, direction);
+    const live = playbackStartInfoRef.current
+        ? beatAtTime(beats, getLivePlaybackPosition())
+        : displayedBeat(useTimelineSelectionStore.getState());
+    return jumpTimelinePages(beats, pages, Math.floor(live), direction);
 }
 
 /**
@@ -201,8 +235,8 @@ export function seekTimeline(
 }
 
 /**
- * Page navigation while playing (UI-12): playback jumps to the target flag, from the beat playing
- * now. Returns false when there is nowhere to go.
+ * Navigation while playing (UI-12): playback jumps to the target flag, or a beat on, from the
+ * beat playing now. Returns false when there is nowhere to go.
  */
 export function jumpTimelinePages(
     beats: readonly BeatTiming[],
@@ -210,6 +244,8 @@ export function jumpTimelinePages(
     liveBeat: number,
     direction: TimelineNavigation,
 ): boolean {
+    if (direction === "previous-beat" || direction === "next-beat")
+        return jumpTimelinePlayback(beats, beatStep(liveBeat, direction));
     const target = navigationTarget(pages, liveBeat, direction);
     return target ? jumpTimelinePlayback(beats, target.flag) : false;
 }
@@ -229,15 +265,16 @@ export const loopBounds = (
 };
 
 /**
- * Playing on (UI-17, Play with no pin): plays from the playhead to the end of the show, as UI-10's
- * Play did. Returns false when there's nothing after it.
+ * Playing on (UI-17, Play with no loop): plays from `from` (Play: the start flag; Shift+Space: the
+ * playhead) to the end of the show. Returns false when there's nothing after it.
  */
 export function startTimelinePlayOn(
     showEndBeat: number,
     setIsPlaying: (isPlaying: boolean) => void,
+    from?: number,
 ): boolean {
     const state = useTimelineSelectionStore.getState();
-    const start = state.cursorBeat ?? state.playheadBeat;
+    const start = from ?? state.cursorBeat ?? state.playheadBeat;
     if (!canPlayOn(start, showEndBeat)) return false;
     state.cue(start);
     state.setPlayback({ kind: "on" });
@@ -246,43 +283,12 @@ export function startTimelinePlayOn(
 }
 
 /**
- * The page box a selected page fills (UI-17): the playhead on its end flag, the window exactly
- * its box, nothing pinned and no held frame. `null` for home, a partial window or a pin. Play's
- * tooltip then names Shift+Space and C, the ways to watch that page's move.
- */
-export const selectedPageBox = (
-    state: Pick<
-        ReturnType<typeof useTimelineSelectionStore.getState>,
-        | "selection"
-        | "playheadBeat"
-        | "cursorBeat"
-        | "pageBoxes"
-        | "startPinned"
-        | "isolation"
-    >,
-): { readonly from: number; readonly to: number } | null => {
-    const { selection } = state;
-    if (
-        state.startPinned ||
-        state.isolation ||
-        state.cursorBeat !== null ||
-        selection.kind !== "range" ||
-        selection.end !== state.playheadBeat
-    )
-        return null;
-    const box = state.pageBoxes.find(
-        (b) => b.end === selection.end && b.start === selection.start,
-    );
-    return box ? { from: box.start, to: box.end } : null;
-};
-
-/**
  * **Play / Stop** (UI-17, Space), the one play action. With looping on (or a move isolated) it
  * loops the loop's region wherever the playhead is, as Logic's cycle does, and stopping puts the
- * canvas back on the playhead, which looping never moved. Otherwise it plays on from the playhead,
- * and stopping stays where it stopped, moving the playhead there (project owner, 2026-10-09:
- * playing a page from its start is loop mode's job, C, or Shift+Space's once, `playTimelinePage`).
- * The playback driver does both once the pause lands.
+ * canvas back on the playhead, which looping never moved. Otherwise it plays on from the yellow
+ * start flag, and stopping stays where it stopped, moving the playhead there (project owner,
+ * 2026-10-13, lab test playback-start: version B won; Shift+Space plays on from the playhead,
+ * `playTimelinePage`). The playback driver does both once the pause lands.
  */
 export function toggleTimelinePlayback({
     isPlaying,
@@ -300,7 +306,7 @@ export function toggleTimelinePlayback({
     const state = useTimelineSelectionStore.getState();
     const bounds = loopBounds(state);
     if (!bounds) {
-        startTimelinePlayOn(showEndBeat, setIsPlaying);
+        startTimelinePlayOn(showEndBeat, setIsPlaying, state.startBeat);
         return;
     }
     state.cue(bounds.from);
@@ -309,9 +315,9 @@ export function toggleTimelinePlayback({
 }
 
 /**
- * **Play the page once** (UI-17, Shift+Space): plays the window from the start flag to the playhead
- * (the selected page's move), or the loop's region with looping on, once, and goes back to the playhead,
- * the page's set, when it ends or is stopped. Playing, it stops. With no window (home) it plays on.
+ * **Play from the playhead** (Shift+Space, or Shift+click on Play): plays on from the
+ * playhead, or, with looping on, plays the loop's region once and goes back to the playhead when it
+ * ends or is stopped. Playing, it stops.
  */
 export function playTimelinePage({
     isPlaying,
@@ -327,7 +333,7 @@ export function playTimelinePage({
         return;
     }
     const state = useTimelineSelectionStore.getState();
-    const bounds = loopBounds(state) ?? previewBounds(state);
+    const bounds = loopBounds(state);
     if (!bounds) {
         startTimelinePlayOn(showEndBeat, setIsPlaying);
         return;

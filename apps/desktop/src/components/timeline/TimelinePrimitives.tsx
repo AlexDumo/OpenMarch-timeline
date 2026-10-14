@@ -1,7 +1,11 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Popover from "@radix-ui/react-popover";
 import {
+    ArrowLineLeftIcon,
+    ArrowLineRightIcon,
     ArrowsOutLineHorizontalIcon,
+    CaretLeftIcon,
+    CaretRightIcon,
     DotsThreeIcon,
     HouseIcon,
     PushPinIcon,
@@ -12,8 +16,17 @@ import {
     WarningIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { flushSync } from "react-dom";
+import {
+    isLayoutResizing,
+    subscribeLayoutResizing,
+} from "@/global/layoutResize";
 import { START_INK } from "./startFlagInk";
-import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
+import {
+    Keycaps,
+    ShortcutTooltip,
+    TransportTooltipProvider,
+} from "./ShortcutTooltip";
 import {
     isPlainNudgeKey,
     isTyping,
@@ -52,6 +65,10 @@ import {
     isPageSnapDisabled,
     snapBoundary,
     snapRangeOffset,
+    TIMELINE_HEADROOM_HEIGHT,
+    TIMELINE_PAGE_ROW_BOTTOM,
+    TIMELINE_PAGE_ROW_HEIGHT,
+    TIMELINE_PAGE_ROW_TOP,
 } from "./TimelineGeometry";
 import {
     KEEP_MENU_EVENTS,
@@ -121,21 +138,20 @@ export interface TimelineSelectionInteraction {
 
 // The same elements every render, so the memoized transport buttons don't re-render for them
 const SKIP_BACK_ICON = <SkipBackIcon size={16} />;
-const PLAY_ICON = <PlayIcon size={18} weight="fill" />;
 const STOP_ICON = <StopIcon size={16} weight="fill" />;
 const SKIP_FORWARD_ICON = <SkipForwardIcon size={16} />;
+// Previous and Next while Shift (the start or end of the show) or Alt (a beat) is held
+const START_ICON = <ArrowLineLeftIcon size={16} />;
+const END_ICON = <ArrowLineRightIcon size={16} />;
+const BEAT_BACK_ICON = <CaretLeftIcon size={16} weight="bold" />;
+const BEAT_FORWARD_ICON = <CaretRightIcon size={16} weight="bold" />;
 const FIT_ICON = <ArrowsOutLineHorizontalIcon size={16} />;
 const HOUSE_ICON = <HouseIcon size={14} aria-hidden="true" />;
-/**
- * Play's icon while the start flag is pinned (UI-17, project owner's pick): a bar in the start
- * flag's color, echoing the flag's line on the ruler, then Play ("loop from the mark")
- */
-const PLAY_FROM_FLAG_ICON = (
+const PLAY_ICON = <PlayIcon size={16} weight="fill" />;
+/** Play while Shift is held: a bar, the playhead's line, then Play ("play from the playhead") */
+const PLAY_FROM_PLAYHEAD_ICON = (
     <span className="flex items-center gap-2">
-        <span
-            aria-hidden
-            className={clsx("rounded-2 h-14 w-[2.5px]", START_INK.bg)}
-        />
+        <span aria-hidden className="rounded-2 bg-text h-14 w-[2.5px]" />
         <PlayIcon size={14} weight="fill" />
     </span>
 );
@@ -148,6 +164,10 @@ const PLAY_FROM_FLAG_ICON = (
 export const TRANSPORT_SHORTCUTS = {
     previousPage: "Q",
     nextPage: "E",
+    firstPage: "Alt + Q",
+    lastPage: "Alt + E",
+    previousBeat: "Shift + Q",
+    nextBeat: "Shift + E",
     play: "Space",
     playPage: "Shift + Space",
     loop: "C",
@@ -157,29 +177,47 @@ const TransportButton = memo(function TransportButton({
     label,
     shortcut,
     hint,
+    hideLabel,
+    keyShortcut,
     children,
     onClick,
     pressed,
     testId,
+    navigation,
 }: {
     label: string;
     /** The shortcut the tooltip shows as keycaps */
     shortcut?: string;
-    /** A second tooltip line */
-    hint?: string;
+    /** A second tooltip line, or a guide */
+    hint?: ReactNode;
+    /** The shortcut for assistive tech when the tooltip shows it elsewhere (in a guide) */
+    keyShortcut?: string;
+    /** The tooltip is just `hint`, without the label above it */
+    hideLabel?: boolean;
     children: ReactNode;
     onClick?: (event: ReactMouseEvent) => void;
     pressed?: boolean;
     testId?: string;
+    /** Previous or Next (`useHeldNavigationMode`) */
+    navigation?: boolean;
 }) {
     return (
-        <ShortcutTooltip label={label} shortcut={shortcut} hint={hint}>
+        <ShortcutTooltip
+            label={label}
+            shortcut={shortcut}
+            hint={hint}
+            hideLabel={hideLabel}
+        >
             <button
                 type="button"
                 aria-label={label}
-                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
+                aria-keyshortcuts={(shortcut ?? keyShortcut)?.replace(
+                    /\s*\+\s*/g,
+                    "+",
+                )}
                 aria-pressed={pressed}
                 data-testid={testId}
+                {...(navigation ? { [NAVIGATION_BUTTON_ATTRIBUTE]: "" } : {})}
                 // UI-17 follow-up: a click doesn't take keyboard focus, so Space after clicking
                 // a transport button is still the app's Play, not a second press of the button
                 onMouseDown={(event) => event.preventDefault()}
@@ -196,6 +234,311 @@ const TransportButton = memo(function TransportButton({
     );
 });
 
+/** What Previous and Next do: step a page, or with Shift a beat, with Alt go to the start or end */
+type TransportNavigationMode = "page" | "edge" | "beat";
+
+const navigationMode = (event: {
+    readonly shiftKey: boolean;
+    readonly altKey: boolean;
+}): TransportNavigationMode =>
+    event.altKey ? "edge" : event.shiftKey ? "beat" : "page";
+
+/** Marks Previous and Next, so a held Alt over them can be kept from the menu bar */
+const NAVIGATION_BUTTON_ATTRIBUTE = "data-transport-navigation";
+
+/**
+ * The modifier held now, as Previous and Next would read it. Only a change re-renders, so key
+ * repeats and other keys cost nothing; losing focus lets go of it. A pointer event re-reads it
+ * too, in case the window missed a key going up.
+ *
+ * On Windows and Linux the window's menu bar hides until Alt is pressed and let go on its own, so
+ * holding Alt over Previous or Next to see the start and end would open the menu and take the
+ * keyboard. Over those two buttons the app keeps Alt to itself: Electron only lets the menu see
+ * keys the page didn't handle.
+ */
+function useHeldNavigationMode(enabled: boolean): TransportNavigationMode {
+    const [mode, setMode] = useState<TransportNavigationMode>("page");
+    useEffect(() => {
+        if (!enabled) return;
+        const read = (event: KeyboardEvent | PointerEvent) =>
+            setMode(
+                event.ctrlKey || event.metaKey ? "page" : navigationMode(event),
+            );
+        const onKey = (event: KeyboardEvent) => {
+            if (
+                event.key === "Alt" &&
+                !isMac() &&
+                document.querySelector(`[${NAVIGATION_BUTTON_ATTRIBUTE}]:hover`)
+            )
+                event.preventDefault();
+            read(event);
+        };
+        const onBlur = () => setMode("page");
+        window.addEventListener("keydown", onKey, true);
+        window.addEventListener("keyup", onKey, true);
+        window.addEventListener("pointermove", read, true);
+        window.addEventListener("pointerdown", read, true);
+        window.addEventListener("blur", onBlur);
+        return () => {
+            window.removeEventListener("keydown", onKey, true);
+            window.removeEventListener("keyup", onKey, true);
+            window.removeEventListener("pointermove", read, true);
+            window.removeEventListener("pointerdown", read, true);
+            window.removeEventListener("blur", onBlur);
+            setMode("page");
+        };
+    }, [enabled]);
+    return mode;
+}
+
+/**
+ * Whether Shift is held now, as Play would read it (`useHeldNavigationMode`'s rules: only a change
+ * re-renders, losing focus lets go, a pointer event re-reads it)
+ */
+function useHeldShift(enabled: boolean): boolean {
+    const [held, setHeld] = useState(false);
+    useEffect(() => {
+        if (!enabled) return;
+        const read = (event: KeyboardEvent | PointerEvent) =>
+            setHeld(event.shiftKey && !event.ctrlKey && !event.metaKey);
+        const onBlur = () => setHeld(false);
+        window.addEventListener("keydown", read, true);
+        window.addEventListener("keyup", read, true);
+        window.addEventListener("pointermove", read, true);
+        window.addEventListener("pointerdown", read, true);
+        window.addEventListener("blur", onBlur);
+        return () => {
+            window.removeEventListener("keydown", read, true);
+            window.removeEventListener("keyup", read, true);
+            window.removeEventListener("pointermove", read, true);
+            window.removeEventListener("pointerdown", read, true);
+            window.removeEventListener("blur", onBlur);
+            setHeld(false);
+        };
+    }, [enabled]);
+    return held;
+}
+
+const NAVIGATION_TARGETS = {
+    page: ["previous-page", "next-page"],
+    edge: ["first-page", "last-page"],
+    beat: ["previous-beat", "next-beat"],
+} as const satisfies Record<
+    TransportNavigationMode,
+    readonly [TimelineNavigation, TimelineNavigation]
+>;
+
+interface TransportGuideRow<Mode extends string = string> {
+    readonly mode: Mode;
+    readonly icon: ReactNode;
+    readonly label: string;
+    /** The shortcut as keycaps */
+    readonly shortcut: string;
+}
+
+/** What Previous (or Next) does with each modifier, in the order the tooltip lists them */
+const navigationGuide = (
+    back: boolean,
+): readonly TransportGuideRow<TransportNavigationMode>[] => {
+    const alt = isMac() ? "Option" : "Alt";
+    return [
+        {
+            mode: "page",
+            icon: back ? SKIP_BACK_ICON : SKIP_FORWARD_ICON,
+            label: back ? "Previous page" : "Next page",
+            shortcut: back
+                ? TRANSPORT_SHORTCUTS.previousPage
+                : TRANSPORT_SHORTCUTS.nextPage,
+        },
+        {
+            mode: "beat",
+            icon: back ? BEAT_BACK_ICON : BEAT_FORWARD_ICON,
+            label: back ? "Previous beat" : "Next beat",
+            shortcut: back
+                ? TRANSPORT_SHORTCUTS.previousBeat
+                : TRANSPORT_SHORTCUTS.nextBeat,
+        },
+        {
+            mode: "edge",
+            icon: back ? START_ICON : END_ICON,
+            label: back ? "Start of the show" : "End of the show",
+            shortcut: (back
+                ? TRANSPORT_SHORTCUTS.firstPage
+                : TRANSPORT_SHORTCUTS.lastPage
+            ).replace("Alt", alt),
+        },
+    ];
+};
+
+/**
+ * The tooltip's guide to Previous, Play or Next: each icon, what it does, its shortcut and its
+ * click, with the row the held modifier picks in the accent color.
+ */
+function TransportGuide({
+    rows,
+    mode,
+    testId,
+}: {
+    rows: readonly TransportGuideRow[];
+    mode: string;
+    testId: string;
+}) {
+    return (
+        <span
+            data-testid={testId}
+            className="grid w-max grid-cols-[auto_auto_auto] items-center gap-x-8 gap-y-4"
+        >
+            {rows.map((row) => (
+                <span
+                    key={row.mode}
+                    data-active={row.mode === mode || undefined}
+                    className={clsx(
+                        "col-span-3 grid grid-cols-subgrid items-center",
+                        row.mode === mode ? "text-accent" : "text-text",
+                    )}
+                >
+                    <span aria-hidden="true" className="flex">
+                        {row.icon}
+                    </span>
+                    <span className="text-[12px]">{row.label}</span>
+                    <Keycaps shortcut={row.shortcut} plus />
+                </span>
+            ))}
+        </span>
+    );
+}
+
+/**
+ * Previous and Next. Q and E step a page; Shift (Shift+click, Shift+Q/E) steps a beat and Alt
+ * (Alt+click, Alt+Q/E, also Home and End) goes to the start or end of the show. Holding either modifier swaps the icon
+ * and label to say so, and the tooltip is a guide to all three (`TransportGuide`). Kept apart
+ * from the transport so only these two re-render for it.
+ */
+const TransportNavigationButton = memo(function TransportNavigationButton({
+    direction,
+    onNavigate,
+}: {
+    direction: "previous" | "next";
+    onNavigate?: (direction: TimelineNavigation) => void;
+}) {
+    const mode = useHeldNavigationMode(onNavigate != null);
+    const back = direction === "previous";
+    const onClick = useCallback(
+        (event: ReactMouseEvent) =>
+            onNavigate?.(
+                NAVIGATION_TARGETS[navigationMode(event)][back ? 0 : 1],
+            ),
+        [back, onNavigate],
+    );
+    const guide = navigationGuide(back);
+    const row = guide.find((r) => r.mode === mode)!;
+    return (
+        <TransportButton
+            label={row.label}
+            keyShortcut={row.shortcut}
+            hideLabel
+            hint={
+                <TransportGuide
+                    rows={guide}
+                    mode={mode}
+                    testId="timeline-navigation-guide"
+                />
+            }
+            testId={`timeline-${direction}`}
+            navigation
+            onClick={onNavigate ? onClick : undefined}
+        >
+            {row.icon}
+        </TransportButton>
+    );
+});
+
+/** What Play (Space) and Shift+Play (Shift+Space) do, in the order the tooltip lists them */
+const playGuide = (
+    loops: boolean,
+): readonly TransportGuideRow<"play" | "shift">[] => [
+    {
+        mode: "play",
+        icon: PLAY_ICON,
+        label: loops ? "Play the loop" : "Play from the start flag",
+        shortcut: TRANSPORT_SHORTCUTS.play,
+    },
+    {
+        mode: "shift",
+        icon: PLAY_FROM_PLAYHEAD_ICON,
+        label: loops ? "Play the loop once" : "Play from the playhead",
+        shortcut: TRANSPORT_SHORTCUTS.playPage,
+    },
+];
+
+/**
+ * Play, or Stop while playing. Shift+click is Shift+Space: plays from the playhead, or the loop
+ * once. Holding Shift swaps the icon and label to say so, and the tooltip is a guide to both, as
+ * Previous and Next do. Kept apart from the transport so only this re-renders for Shift.
+ */
+const TransportPlayButton = memo(function TransportPlayButton({
+    isPlaying,
+    onPlayingChange,
+    playLoops,
+    playingOnce,
+    onPlayFromPlayhead,
+}: {
+    isPlaying: boolean;
+    onPlayingChange?: (isPlaying: boolean) => void;
+    playLoops: boolean;
+    playingOnce: boolean;
+    onPlayFromPlayhead?: () => void;
+}) {
+    const shift = useHeldShift(onPlayingChange != null && !isPlaying);
+    const togglePlaying = useCallback(
+        (event: ReactMouseEvent) =>
+            event.shiftKey && onPlayFromPlayhead
+                ? onPlayFromPlayhead()
+                : onPlayingChange?.(!isPlaying),
+        [isPlaying, onPlayingChange, onPlayFromPlayhead],
+    );
+    const onClick = onPlayingChange ? togglePlaying : undefined;
+    if (isPlaying)
+        return (
+            <TransportButton
+                label="Stop"
+                shortcut={TRANSPORT_SHORTCUTS.play}
+                hint={
+                    playLoops || playingOnce
+                        ? "Goes back to where you were editing"
+                        : "Stops where it is"
+                }
+                testId="timeline-play"
+                pressed
+                onClick={onClick}
+            >
+                {STOP_ICON}
+            </TransportButton>
+        );
+    const guide = playGuide(playLoops);
+    const mode = shift && onPlayFromPlayhead ? "shift" : "play";
+    const row = guide.find((r) => r.mode === mode)!;
+    return (
+        <TransportButton
+            label={row.label}
+            keyShortcut={row.shortcut}
+            hideLabel
+            hint={
+                <TransportGuide
+                    rows={onPlayFromPlayhead ? guide : guide.slice(0, 1)}
+                    mode={mode}
+                    testId="timeline-play-guide"
+                />
+            }
+            testId="timeline-play"
+            pressed={false}
+            onClick={onClick}
+        >
+            {row.icon}
+        </TransportButton>
+    );
+});
+
 /** Below this width the transport folds its secondary controls into "⋯" (Bitwig's rule) */
 const TRANSPORT_FOLD_PX = 640;
 /** Below this width the readout drops the measure */
@@ -208,10 +551,10 @@ const TRANSPORT_TIGHT_PX = 500;
  * which is also the go-to box (click it or press G, then type a page, "m23" or a rehearsal mark);
  * then Fit and the caller's view controls (Compact). The play and page buttons, the accessories
  * and the readout never leave: on a narrow panel the rest folds into "⋯". Shift+click on Previous
- * or Next goes to the first or last page (as Shift+Q/E do). While playing, page navigation jumps
- * playback to the flag.
+ * or Next steps a beat and Alt+click goes to the start or end of the show, as Shift+Q/E and
+ * Alt+Q/E do (`TransportNavigationButton`). While playing, navigation jumps playback there.
  *
- * With looping on, Play loops the loop and shows its bar in its icon (UI-17).
+ * With looping on, Play loops the loop (UI-17).
  */
 export const TimelineTransport = memo(function TimelineTransport({
     model,
@@ -220,8 +563,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     isPlaying,
     onPlayingChange,
     playLoops = false,
-    playNext,
     playingOnce = false,
+    onPlayFromPlayhead,
     onNavigate,
     onFit,
     fitted = false,
@@ -239,10 +582,10 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops and shows the loop's bar (UI-17) */
     playLoops?: boolean;
-    /** With no pin, a page is selected (UI-17): Play's tooltip names Shift+Space and C */
-    playNext?: "page";
     /** Shift+Space's once-through is playing (UI-17) */
     playingOnce?: boolean;
+    /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
+    onPlayFromPlayhead?: () => void;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -324,20 +667,6 @@ export const TimelineTransport = memo(function TimelineTransport({
         }
         setGoTo(null);
     };
-    const previousPage = useCallback(
-        (event: ReactMouseEvent) =>
-            onNavigate?.(event.shiftKey ? "first-page" : "previous-page"),
-        [onNavigate],
-    );
-    const nextPage = useCallback(
-        (event: ReactMouseEvent) =>
-            onNavigate?.(event.shiftKey ? "last-page" : "next-page"),
-        [onNavigate],
-    );
-    const togglePlaying = useCallback(
-        () => onPlayingChange?.(!isPlaying),
-        [isPlaying, onPlayingChange],
-    );
     const readout =
         goTo !== null ? (
             <input
@@ -407,52 +736,21 @@ export const TimelineTransport = memo(function TimelineTransport({
                 className="border-stroke flex h-32 min-w-0 shrink-0 items-center gap-6 border-b px-6"
             >
                 <div className="flex shrink-0 items-center gap-2">
-                    <TransportButton
-                        label="Previous page"
-                        shortcut={TRANSPORT_SHORTCUTS.previousPage}
-                        hint="Shift+click or Shift+Q: the start of the show"
-                        onClick={onNavigate ? previousPage : undefined}
-                    >
-                        {SKIP_BACK_ICON}
-                    </TransportButton>
-                    <TransportButton
-                        label={
-                            isPlaying
-                                ? "Stop"
-                                : playLoops
-                                  ? "Play the loop"
-                                  : "Play"
-                        }
-                        shortcut={TRANSPORT_SHORTCUTS.play}
-                        hint={
-                            isPlaying
-                                ? playLoops || playingOnce
-                                    ? "Goes back to where you were editing"
-                                    : "Stops where it is"
-                                : playLoops
-                                  ? "Loops the yellow bar, wherever the playhead is. C or Loop turns looping off"
-                                  : playNext === "page"
-                                    ? "Plays on from here. Shift+Space plays this page's move once; C loops it"
-                                    : "Plays on from here. C loops the page you're on"
-                        }
-                        testId="timeline-play"
-                        pressed={isPlaying}
-                        onClick={onPlayingChange ? togglePlaying : undefined}
-                    >
-                        {isPlaying
-                            ? STOP_ICON
-                            : playLoops
-                              ? PLAY_FROM_FLAG_ICON
-                              : PLAY_ICON}
-                    </TransportButton>
-                    <TransportButton
-                        label="Next page"
-                        shortcut={TRANSPORT_SHORTCUTS.nextPage}
-                        hint="Shift+click or Shift+E: last page"
-                        onClick={onNavigate ? nextPage : undefined}
-                    >
-                        {SKIP_FORWARD_ICON}
-                    </TransportButton>
+                    <TransportNavigationButton
+                        direction="previous"
+                        onNavigate={onNavigate}
+                    />
+                    <TransportPlayButton
+                        isPlaying={isPlaying}
+                        onPlayingChange={onPlayingChange}
+                        playLoops={playLoops}
+                        playingOnce={playingOnce}
+                        onPlayFromPlayhead={onPlayFromPlayhead}
+                    />
+                    <TransportNavigationButton
+                        direction="next"
+                        onNavigate={onNavigate}
+                    />
                 </div>
                 {(accessories != null || (secondary != null && !folded)) && (
                     <>
@@ -516,21 +814,24 @@ export const TimelineShell = ({
     children,
     viewportRef,
     className,
+    pinnedHeight = 0,
 }: {
     transport?: ReactNode;
     children: ReactNode;
     viewportRef: RefObject<HTMLDivElement | null>;
     className?: string;
+    /** How tall the rows pinned at the viewport's top are, so a focused clip scrolls out from under them */
+    pinnedHeight?: number;
 }) => (
     <div
         className={clsx(
-            "border-stroke bg-fg-1 text-text rounded-6 flex min-w-0 flex-col overflow-visible border font-sans",
+            "border-stroke bg-fg-1 text-text rounded-6 flex h-full min-h-0 min-w-0 flex-col overflow-visible border font-sans",
             className,
         )}
     >
         {transport}
         {/* Its own stacking context: nothing on the timeline (+, the playhead) paints over a menu */}
-        <section className="isolate min-w-0 px-6 pt-4">
+        <section className="isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4">
             <div
                 ref={viewportRef}
                 data-testid="timeline-viewport"
@@ -538,7 +839,12 @@ export const TimelineShell = ({
                 tabIndex={-1}
                 aria-label="Timeline"
                 // The scrollbar's track is always there, so zooming never changes the height
-                className="focus-visible:ring-accent rounded-4 min-w-0 overflow-x-scroll overflow-y-hidden outline-hidden focus-visible:ring-2"
+                className="focus-visible:ring-accent rounded-4 min-h-0 min-w-0 flex-1 overflow-x-scroll overflow-y-auto outline-hidden focus-visible:ring-2"
+                style={
+                    pinnedHeight > 0
+                        ? { scrollPaddingTop: pinnedHeight }
+                        : undefined
+                }
             >
                 {children}
             </div>
@@ -848,7 +1154,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     keepChains,
     scrubLine,
     pageFlagMove,
-    height = 28,
+    height = TIMELINE_PAGE_ROW_BOTTOM,
     flagSnapPlayhead,
 }: {
     pages: readonly TimelinePageMarker[];
@@ -1063,8 +1369,10 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
             <div
                 data-testid="timeline-page-ruler"
                 // Clipped without being a scroll container, so labels can stick to the viewport
-                className="border-stroke bg-fg-2 rounded-6 absolute top-0 h-28 overflow-clip border font-mono"
+                className="border-stroke bg-fg-2 rounded-6 absolute overflow-clip border font-mono"
                 style={{
+                    top: TIMELINE_PAGE_ROW_TOP,
+                    height: TIMELINE_PAGE_ROW_HEIGHT,
                     left: -initialPageWidth,
                     width: beatCount * pixelsPerBeat + initialPageWidth,
                 }}
@@ -1214,7 +1522,8 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
         // Each number starts just right of its bar line, so the line doesn't cross it
         <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-[31px] h-16 font-mono"
+            className="pointer-events-none absolute inset-x-0 h-16 font-mono"
+            style={{ top: TIMELINE_PAGE_ROW_BOTTOM + 3 }}
         >
             {visibleMeasures.map((measure) => (
                 <span
@@ -1262,12 +1571,16 @@ export const TimelinePageLines = memo(function TimelinePageLines({
                 .map((page) => (
                     <span
                         key={page.id}
-                        className="bg-text absolute top-28 w-px opacity-[0.24]"
+                        className="bg-text absolute w-px opacity-[0.24]"
                         style={{
+                            top: TIMELINE_PAGE_ROW_BOTTOM,
                             left: Math.round(
                                 beatToX(page.atBeat, pixelsPerBeat),
                             ),
-                            height: Math.max(0, height - 28),
+                            height: Math.max(
+                                0,
+                                height - TIMELINE_PAGE_ROW_BOTTOM,
+                            ),
                         }}
                     />
                 ))}
@@ -1956,7 +2269,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     startFlagBeatIndex,
     startPinned = false,
     onUnpin,
-    pinTop = 30,
+    pinTop = TIMELINE_PAGE_ROW_BOTTOM + 2,
     pinSize = 18,
     beatCount,
     pixelsPerBeat,
@@ -2259,13 +2572,13 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
                     style={{ left: x, height: hitHeight }}
                 >
+                    {/* UI-20: 2px, from the headroom strip down */}
                     <span
                         className={clsx(
-                            "pointer-events-none absolute top-px left-1/2",
+                            "pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2",
                             START_INK.bg,
-                            "w-px",
                         )}
-                        style={{ height: Math.max(0, height - 1) }}
+                        style={{ height }}
                     />
                 </button>
                 {startPinned && (
@@ -2294,9 +2607,11 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                         />
                     </button>
                 )}
-                {/* The pennant is its own handle above the playhead's (z-50): after Stop the flag
-                    is drawn on the playhead, and this is the part of it that can be grabbed. Its
-                    left edge is drawn on the stem's pixels, so the two read as one shape */}
+                {/* The pennant is its own handle in the headroom strip (UI-20), above the
+                    playhead's (z-50) and the loop's ends (z-58): after Stop the flag is drawn on
+                    the playhead, and on a page flag the grip takes the page row, so this is the
+                    part of it that can always be grabbed. Its left edge is drawn on the stem's
+                    pixels, so the two read as one shape */}
                 <button
                     type="button"
                     tabIndex={-1}
@@ -2306,27 +2621,22 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     onKeyDown={undefined}
-                    className="pointer-events-auto absolute top-0 z-[55] h-14 w-14 touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize! disabled:cursor-default!"
-                    style={{ left: x }}
+                    className="pointer-events-auto absolute top-0 z-[59] w-14 touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize! disabled:cursor-default!"
+                    style={{ left: x - 1, height: TIMELINE_HEADROOM_HEIGHT }}
                 >
                     <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 10 10"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
                         aria-hidden="true"
                         className={clsx(
-                            "absolute top-px left-0",
+                            "absolute top-0 left-0",
                             START_INK.text,
                         )}
                     >
-                        {/* A hollow right triangle whose top lines up with the page boxes' (1px down,
-                            inside the ruler's border): a 1px outline whose left side is the 1px stem,
-                            a fill, not a stroke, so no edge spills past it */}
-                        <path
-                            d="M0 0 L10 0 L0 10 Z M1 1 L1 7.59 L7.59 1 Z"
-                            fill="currentColor"
-                            fillRule="evenodd"
-                        />
+                        {/* A filled right triangle on the strip's top edge, flush with the loop
+                            bar's top; its left side is the 2px stem */}
+                        <path d="M0 0 L12 0 L0 12 Z" fill="currentColor" />
                     </svg>
                 </button>
             </>
@@ -2355,15 +2665,14 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             <span
                 ref={tintRef}
                 aria-hidden="true"
-                className={clsx(
-                    // 1px down, inside the ruler's border, like the flag and the page boxes
-                    "absolute top-px z-30 origin-left",
-                    "bg-accent/8",
-                )}
+                // From the page boxes' top (1px down, inside the ruler's border): the headroom
+                // strip above stays clear for the flags' tops (UI-20)
+                className="bg-accent/8 absolute z-30 origin-left"
                 style={{
                     left: startX,
                     width: endX - startX,
-                    height: height - 1,
+                    top: TIMELINE_PAGE_ROW_TOP + 1,
+                    height: Math.max(0, height - TIMELINE_PAGE_ROW_TOP - 1),
                 }}
             />
             <div className="pointer-events-none absolute inset-0">
@@ -2671,20 +2980,20 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 height: Math.min(hitHeight, height),
             }}
         >
-            {/* The line runs from the page boxes' top (1px down, inside the ruler's border), and
-                the head is a fill centered on the line's pixel, so its tip runs into the line */}
+            {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
+                the line, so its tip runs into the line */}
             <span
-                className="bg-accent pointer-events-none absolute top-px left-1/2 w-px"
-                style={{ height: Math.max(0, height - 1) }}
+                className="bg-accent pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2"
+                style={{ height }}
             />
             <svg
-                width="9"
-                height="6"
-                viewBox="0 0 9 6"
+                width="12"
+                height="11"
+                viewBox="0 0 12 11"
                 aria-hidden="true"
-                className="text-accent absolute top-px left-[calc(50%-4px)]"
+                className="text-accent pointer-events-none absolute top-0 left-[calc(50%-6px)]"
             >
-                <path d="M0 0 L9 0 L4.5 6 Z" fill="currentColor" />
+                <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
             </svg>
         </button>
     );
@@ -3006,12 +3315,13 @@ export const TimelineRangePreview = memo(function TimelineRangePreview({
         <div
             data-testid="timeline-range-preview"
             aria-hidden="true"
-            className="bg-accent/15 border-accent pointer-events-none absolute top-28 z-30 border-x"
+            className="bg-accent/15 border-accent pointer-events-none absolute z-30 border-x"
             style={{
                 left: range.startBeatIndex * pixelsPerBeat,
                 width:
                     (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat,
-                height: Math.max(0, height - 28),
+                top: TIMELINE_PAGE_ROW_BOTTOM,
+                height: Math.max(0, height - TIMELINE_PAGE_ROW_BOTTOM),
             }}
         />
     );
@@ -3031,4 +3341,62 @@ export const useElementWidth = (ref: RefObject<HTMLElement | null>) => {
         return () => observer.disconnect();
     }, [ref]);
     return width;
+};
+
+/** How much taller than its viewport the surface grows while a splitter drag holds its height */
+const LAYOUT_RESIZE_HEADROOM = 160;
+
+/**
+ * The element's inner height, kept current (0 where nothing measures, as in jsdom).
+ *
+ * While a splitter drag resizes the pane (`isLayoutResizing`) the height doesn't follow every
+ * frame: it holds when the element shrinks and grows with headroom when the element outgrows it,
+ * so whatever sizes itself from it renders a few times per drag instead of once a frame. The
+ * extra is clipped (no vertical scrollbar appears for it), and the drag's end measures exactly.
+ */
+export const useElementHeight = (ref: RefObject<HTMLElement | null>) => {
+    const [height, setHeight] = useState(0);
+    useEffect(() => {
+        const element = ref.current;
+        if (!element) return;
+        let current = element.clientHeight;
+        let clipped = false;
+        const set = (next: number) => {
+            if (next === current) return;
+            current = next;
+            setHeight(next);
+        };
+        const update = () => {
+            const measured = element.clientHeight;
+            if (!isLayoutResizing()) set(measured);
+            else if (measured > current) set(measured + LAYOUT_RESIZE_HEADROOM);
+        };
+        setHeight(current);
+        const unsubscribe = subscribeLayoutResizing((resizing) => {
+            if (resizing) {
+                // Only where it doesn't scroll already: a scrollbar that's there stays
+                clipped = element.scrollHeight <= element.clientHeight;
+                if (clipped) element.style.overflowY = "hidden";
+                return;
+            }
+            if (clipped) element.style.overflowY = "";
+            clipped = false;
+            update();
+            // And once the release's render has laid out: the pane's new height and whether it
+            // still stretches arrive in it
+            requestAnimationFrame(update);
+        });
+        if (typeof ResizeObserver === "undefined") return unsubscribe;
+        // Committed before the frame paints: a render left for later shows a frame of the old
+        // height, and when the pane shrinks the stale, taller content flashes a scrollbar that
+        // narrows the viewport and redraws every canvas twice
+        const observer = new ResizeObserver(() => flushSync(update));
+        observer.observe(element);
+        return () => {
+            observer.disconnect();
+            unsubscribe();
+            if (clipped) element.style.overflowY = "";
+        };
+    }, [ref]);
+    return height;
 };

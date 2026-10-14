@@ -189,12 +189,21 @@ from it. The spec still wins on the model; this file decides presentation.
     there), a **+** shows just after it. It adds a page whose flag is at the
     playhead in one edit. The page that was split keeps its flag, id and
     per-page data (notes, appearance); the new page comes before it, and
-    later pages renumber (no subset letter). Only page rows change, plus
+    later pages renumber, unless it is a subset page (below). Only page rows change, plus
     `last_page_counts` when the last page is split; no timeline is written,
     so motion is unchanged. The new page is selected. Pages store their
     start beat, so this inserts a row at the split page's old start and moves
     that page's `start_beat` to the playhead. Past the last flag, nothing is
     split: **+** appends a page ending at the playhead (_lead default_).
+  - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
+    **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
+    subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
+    a page box offers **Change to subset**, or **Change to normal page** on a
+    subset page, matching the Subset switch in page mode's menu and the
+    inspector. It flips the page
+    and its name, and a later page's number may change as a subset page joins
+    or leaves the numbering. Home can't be a subset (it has no box). Each action
+    is one undo step.
   - **Selection.** With a stored timeline selected, marchers without a
     transition in it are dimmed, and a dimmed marcher can't be selected or
     interacted with at all: clicks and box selection pass over it, and
@@ -457,6 +466,10 @@ from it. The spec still wins on the model; this file decides presentation.
     popover with the slider and a reset; its button shows the angle whenever it isn't 0°, and it is
     disabled, not hidden, outside fullscreen, where the field isn't tilted. Page mode keeps its old
     layout until Phase 10.
+  - **The zoom widget has a slider** above the buttons (issue #168), over the same range as − and +
+    (20%–2500% of the canvas zoom). It is logarithmic, so equal travel is an equal zoom factor, and
+    it zooms about the canvas centre like the buttons. It follows every other zoom input and the
+    reset, and works in page and timeline mode.
   - **While playing,** a click on the timeline, and the page buttons, jump playback there and play
     on, as in a DAW; the playhead stays put. A preview jumped outside its window plays on;
     isolation keeps the jump inside the isolated range. A drag (a scrub) suspends playback instead
@@ -546,6 +559,9 @@ from it. The spec still wins on the model; this file decides presentation.
   - **The window badge** shows only while a handle is dragged or when the window starts off a page
     line; from a page line its length is the playhead's count, which the readout shows. It uses the
     field line's words: "counts 3–6" inside one page box, or "12 counts" when it passes a flag.
+    Past the last page flag it always shows (#163), counting from that flag to the window's end
+    ("5 counts"), so a new page's length can be read off; with a flag after the window's end the
+    rule above holds.
   - Deferred (UX review): counts along the selected page box in shows with measures, a count
     under the pointer while hovering, and thinning to downbeats in odd meters.
 
@@ -745,9 +761,9 @@ from it. The spec still wins on the model; this file decides presentation.
   - **The grip** is the page line through the whole page-box row (owner, 2026-10-08: the
     lower-half grip was hard to find, and "just the line at the top in the page boxes"; below the
     row the line isn't a grip), 12px wide (narrower on a narrow box), with a bar on hover and a
-    horizontal-drag (`ew-resize`) cursor. On a flag it takes the place of the playhead's head and the start
-    pennant; those are dragged from the measure row, and clicking a page box puts the playhead on
-    its flag. A press that doesn't move selects the box on that side; a plain drag elsewhere on a
+    horizontal-drag (`ew-resize`) cursor. The playhead's head and the start pennant are dragged from
+    the headroom strip above the row (UI-20; the measure row before), and clicking a page box puts
+    the playhead on its flag. A press that doesn't move selects the box on that side; a plain drag elsewhere on a
     box still scrubs (UI-12). Home's flag has no grip. While playing or isolated, there are no
     grips.
   - **Limits.** Every page keeps one count, so flags never pass or push each other, and the last
@@ -785,14 +801,17 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Play (Space), looping on**, loops exactly the loop's region (no roll, V-24) until stopped,
     wherever the playhead is. Stopping puts the canvas back on the playhead, which looping never
     moved (project owner). An isolated move loops its range the same way.
-  - **One Play button**, which reads Stop while playing. While looping its icon is a short bar in the
-    start flag's color, then Play (the owner picked it from mockups), and its name is "Play the
-    loop". There is no Pause and no separate Stop or second play button; Loop is its own button.
+  - **One Play button**, which reads Stop while playing. Its icon is a plain Play; while Shift is
+    held it becomes a short bar in the text color, then Play, and its name says Shift+click plays
+    from the playhead (or the loop once), as Previous and Next swap theirs (owner, 2026-10-14). Its
+    tooltip is a guide like theirs: Play with Space, then the barred Play with Shift + Space, the
+    held one lit. While looping its name is "Play the loop". There is no Pause and no separate Stop
+    or second play button; Loop is its own button.
   - **A click, scrub or page jump while looping**: inside the loop it jumps and keeps looping;
     outside it, playback plays on from there and the stop stays (UI-11, UI-12).
   - **The loop is its own region** (project owner, 2026-10-09, after trying the follow model by
     hand: moving the playhead to look at another count shouldn't change what loops), drawn as a
-    yellow bar along the ruler's top edge, as Logic draws its cycle region. It is apart from the
+    yellow bar along the ruler's top edge (in the headroom strip since UI-20), as Logic draws its cycle region. It is apart from the
     start flag and the edit window, which go back to UI-12's editing roles (owner, 2026-10-09, after trying
     both by hand: with the flag tied to the loop's start, a scrub to another page stretched the edit
     window from the loop's start, V-180). While looping is on,
@@ -801,15 +820,15 @@ from it. The spec still wins on the model; this file decides presentation.
     Q, a page box) moves it to that page, as the round 2 test chose ("the loop follows your page").
     Shift+click on page boxes, with looping on, sets it to those pages. The field line names the loop
     only while it is elsewhere than the window being edited ("Space loops Page 3's move"); on its
-    own page the lit Loop button, the bar and Play's icon say it (owner, 2026-10-09).
+    own page the lit Loop button and the bar say it (owner, 2026-10-09).
   - **Turning looping on and off**: C, or the **Loop** button on the transport (lit while on), loops
     the window being edited (the page, or the pages Shift+click selected); again turns it off.
     **Ctrl+drag** (Cmd on macOS) on the timeline draws the loop and turns looping on, as dragging
     Logic's cycle bar does; it also sets the edit window, as UI-12 had it. An isolated move always
     loops its own range, and shows it: the bar over its range (read-only) and the Loop button lit,
     saying "Loop is always on for an isolated move" (owner, 2026-10-09).
-  - **The loop's ends drag**: each end of the bar is a handle above the page flag's grip, so it
-    never moves a page. Dragging snaps to page lines and downbeats (Alt turns snapping off); a
+  - **The loop's ends drag**: each end of the bar is a handle in the headroom strip above the
+    page boxes (UI-20), so it never moves a page. Dragging snaps to page lines and downbeats (Alt turns snapping off); a
     focused end steps with the arrow keys. At rest the bar's rounded ends are the handles; a knob
     shows on hover. (It replaced a tab on the window's end that the owner found awkward.)
   - **C used to pin the start flag**, first at the playhead (a blind A/B test with four simulated
@@ -818,14 +837,15 @@ from it. The spec still wins on the model; this file decides presentation.
     locator's loop end was the playhead, so navigating stretched it). The separate loop region keeps
     both lessons: it covers whole pages and follows page navigation, and the playhead never resizes
     it.
-  - **Space plays on from the playhead; Shift+Space plays the page's move once** and goes back to
-    its set when it ends or is stopped (project owner, 2026-10-09, after trying round 3's choice by
-    hand). Looping a page is loop mode's job (C); Shift+Space is the one-shot check. With a page
-    selected and nothing pinned, Play's tooltip names both. Round 3 of the simulated-user tests
-    had picked a hybrid (Space on a selected page plays its move once, Space straight after plays
-    on); the owner found it asked two presses to play on from the playhead, and that page-from-start
-    playing belongs to loop mode. Testers had expected Space to play a page they'd just selected;
-    the tooltip and the menu's "Play Page Once" are the answer to that, to watch (V-176).
+  - **Space plays on from the start flag; Shift+Space plays on from the playhead** (project owner,
+    2026-10-13, after the lab test playback-start at lab.openmarch.com: version B, with one Play
+    button: Shift+click on it is Shift+Space; the lab's second button was dropped). With looping
+    on, Space loops and Shift+Space plays the loop once and goes back. A stop within the first beat from the start flag changes nothing: the flag is the page
+    before's end flag, and stopping on it would move the window back a page (V-192).
+  - **Before that, Space played on from the playhead and Shift+Space played the page's move once**
+    (project owner, 2026-10-09, after trying round 3's choice by hand, V-176). Round 3 of the
+    simulated-user tests had picked a hybrid (Space on a selected page plays its move once, Space
+    straight after plays on); the owner found it asked two presses to play on from the playhead.
   - **Playing on stops where it is**, and when that is a new page the field line says so with a ring
     ("Stopped on a new page · Editing Page 4…") for a few seconds (owner; the quiet line was missed
     by every tester who then edited the wrong set).
@@ -850,7 +870,7 @@ from it. The spec still wins on the model; this file decides presentation.
     Timeline and the rest, read from the action registry so it can't go stale, plus the timeline's
     own keys and gestures (G, Shift+Z, Esc, Ctrl+drag, Ctrl+scroll, Alt+drag) and the WASD nudge. It
     is also Help → Keyboard Shortcuts (_lead default_).
-  - **App menu items**: a **Playback** menu (Play / Stop, Play Page Once, Loop On / Off) and Help →
+  - **App menu items**: a **Playback** menu (Play / Stop, Play from Playhead, Loop On / Off) and Help →
     Keyboard Shortcuts. They show their keys without registering them, so text fields keep Space
     and letters; macOS puts the key in the label (docs/adr/0003-menu-actions-ipc.md).
   - Deferred: a one-time hint the first time someone pins (dropped with the second play button,
@@ -971,6 +991,49 @@ from it. The spec still wins on the model; this file decides presentation.
   - Deferred: a stored "lock here" for every later page (an Eos-style block), look-preserving
     ripple delete, live return links, hold marks and chains without a selection, and
     "Hold" on coordinate sheets. Marchers are never "pinned": the start flag owns that word.
+
+- **UI-19: a resizable split between the canvas and the timeline (hands-on feedback, 2026-10-13).**
+  A divider sits between the canvas and the timeline. Drag it, or focus it and press Arrow Up
+  or Down (Shift for bigger steps), to resize both panes. The field keeps its zoom and its place
+  on screen, during the drag and after it: the pane shows more or less of it, and the zoom
+  readout doesn't change (100% is the zoom the field was last centered at).
+  - **Default: fitted.** With no chosen height the timeline is as small as it can be and still
+    show every track, so it grows and shrinks as tracks come and go. Double-click the divider,
+    or press Home, to go back to fitted.
+  - **Taller than the tracks:** the track area expands (grid, page lines, playhead and
+    selection fill the extra room). Track heights stay the same.
+  - **Shorter than the tracks:** the track area scrolls vertically; the transport, the page ruler
+    and the measure row stay put (only the waveform and the clip rows scroll, under the ruler), and
+    the horizontal scrollbar stays at the bottom of the pane. A resize tag with no room between its
+    clip and the ruler shows beside the dragged edge. The mouse wheel scrolls the tracks
+    here; when the tracks fit, a vertical wheel still scrolls the timeline sideways (Shift+wheel
+    or a horizontal swipe does that when they overflow).
+  - **Remembered** per user in the UI settings (`timelineHeight`, `null` is fitted). Minimums:
+    timeline 120 px, canvas 200 px; in a window too short for both, the timeline's minimum
+    wins. The saved height is clamped to the window when drawn, not rewritten.
+  - The focused beat editor (the audio timeline) keeps its own sizing.
+- **UI-20: a headroom strip for the flags' tops (hands-on feedback, 2026-10-13).** The owner found
+  the yellow start flag hard to click: it was only grabbed above the audio row, and on a page flag
+  the flag's grip took the whole page row, so a thin band was left. As Logic gives its playhead and
+  cycle region a strip of their own, a 14px strip now sits above the page boxes.
+  - **What sits in it.** The start flag's pennant, the playhead's head and the loop's bar and ends.
+    The page boxes and their flags' grips keep the page row under it, so a grip and a flag's top
+    never share pixels.
+  - **The pennant wins the strip.** It is grabbed above the loop's ends and the playhead's head, so
+    the start flag can always be dragged by its top, on a page flag, on the loop's start or on the
+    playhead (after **Stop**). It is 12px, a 14px target as before. Each loop end's 12px handle
+    reaches outward, away from the loop, so a pennant on the loop's start leaves it room on the left
+    (_lead default_). The playhead is still grabbed anywhere down to the waveform, outside the grips.
+  - **Thicker lines.** The start flag's stem and the playhead's line are 2px (1px before), and run
+    from the strip's top; the playhead's head is larger. Their 12px hit areas are unchanged.
+  - **One top edge** (owner, 2026-10-13, after the first pass). The pennant (now filled), the loop
+    bar and the playhead's head all start on the strip's top edge, flush with the lines' tops. The
+    bar has square ends as wide as the 2px lines at each end, so bar, stem and playhead meet. Page lines stay 1px (_lead default_): they are the grid,
+    not something to grab.
+  - **The window's tint** starts at the page boxes' top, so the strip stays clear.
+  - **Layout.** The page row's top and height are named in `TimelineGeometry.ts`
+    (`TIMELINE_HEADROOM_HEIGHT`, `TIMELINE_PAGE_ROW_*`), and `getTimelineRows` lays out the rows
+    under it, so the strip's height is one number.
 
 ## Mapping the spec onto the view model
 

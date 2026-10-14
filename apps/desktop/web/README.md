@@ -32,8 +32,18 @@ runs the main process's database code in a Web Worker:
 | Saving            | Every write is on disk     | A copy in browser storage (`worker/storage.ts`); **Download** to keep  |
 | Settings          | electron-store             | `localStorage` (`renderer/handlers.ts`)                                |
 | File dialogs      | Native                     | File pickers and downloads (`renderer/handlers.ts`)                    |
-| Settings window   | A second `BrowserWindow`   | A second tab at `#settings`                                            |
+| Settings window   | A second `BrowserWindow`   | A pop-up window at `#settings`                                         |
+| 3D View window    | A second `BrowserWindow`   | A pop-up window at `?view=3d` that reads through the editor tab        |
 | Node modules      | `fs`, `path`, `crypto`     | Stand-ins in `worker/`                                                 |
+
+The 3D View window opens as a pop-up rather than a tab, so the editor stays
+visible: browsers stop animation frames in a hidden tab, and the editor's
+playback runs on them. The show is in the editor tab's worker, so the editor
+tab answers the window's reads and relays its clock, selection and requests
+over a `BroadcastChannel` (`renderer/view3d.ts`), as main does in Electron.
+The window closes when the editor closes the show, or about ten seconds after
+the editor tab closes. "Open the 3D View with the show" is hidden, since
+browsers block a window opened without a click.
 
 `vite.web.config.mts` points `electron` at `worker/electron.ts` for
 main-process code and at `renderer/electron.ts` for the preload.
@@ -122,3 +132,31 @@ with the build variables `WEB_CHANNEL` (`nightly` or `stable`) and
 
 `WEB_CHANNEL` (`stable`, `nightly`, or `dev` by default) names a build's
 channel.
+
+### The fork's preview build
+
+This fork also deploys a preview of the editor, with a few changes:
+
+- `WEB_CHANNEL=preview` adds an "Or open an example show" list to the start
+  page, with the shows in `web/public/demos/` (listed in `web/demos.ts`),
+  so a tester doesn't need a `.dots` file of their own. Other channels leave
+  the shows out of the build.
+- It is one Worker, `openmarch-editor-preview`, on `workers.dev`
+  (`web/wrangler.preview.jsonc`), with preview URLs on.
+
+Set it up in the Cloudflare dashboard under **Workers & Pages → Create →
+Import a repository**, pointing at this fork, with the repo root as the root
+directory, `main` as the production branch, builds for non-production
+branches turned on, and:
+
+```bash
+# build
+pnpm turbo run build --filter="@openmarch/desktop^..." && pnpm --filter @openmarch/desktop run web:build
+# deploy (main)
+pnpm --filter @openmarch/desktop exec wrangler deploy -c web/wrangler.preview.jsonc
+# non-production branch deploy (every other branch and pull request)
+pnpm --filter @openmarch/desktop exec wrangler versions upload -c web/wrangler.preview.jsonc
+```
+
+with the build variables `WEB_CHANNEL=preview` and `NODE_VERSION=24`. The
+Worker's name in the dashboard must match `openmarch-editor-preview`.

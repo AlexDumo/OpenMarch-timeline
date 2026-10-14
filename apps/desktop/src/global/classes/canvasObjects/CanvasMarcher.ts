@@ -92,8 +92,6 @@ export default class CanvasMarcher
 
     /** The object that represents the dot on the canvas */
     dotObject: fabric.Object;
-    private _locked: boolean = false;
-    private _lockedReason: string = "";
 
     readonly objectToGloballySelect: Marcher;
 
@@ -329,8 +327,6 @@ export default class CanvasMarcher
 
         // Add moving event listener for real-time coordinate snapping
         this.on("moving", this.handleMoving.bind(this));
-
-        this.refreshLockedStatus();
     }
 
     /**
@@ -481,14 +477,6 @@ export default class CanvasMarcher
         // Request canvas re-render if canvas exists
         if (this.canvas && options.requestRenderAll)
             this.canvas.requestRenderAll();
-    }
-
-    refreshLockedStatus() {
-        if (this.coordinate.page_id == null || this.marcherObj.id == null) {
-            return;
-        }
-        this._locked = this.coordinate.isLocked ?? false;
-        this._lockedReason = this.coordinate.lockedReason ?? "";
     }
 
     /**
@@ -708,7 +696,6 @@ export default class CanvasMarcher
         // This is needed for the canvas to register the change - http://fabricjs.com/fabric-gotchas
         if (bringToFront) this.getCanvas().bringToFront(this);
         this.setCoords();
-        this.refreshLockedStatus();
     }
 
     /**
@@ -943,12 +930,13 @@ export default class CanvasMarcher
         return this;
     }
 
+    /** Marchers are never locked; the selection interface asks */
     get locked() {
-        return this._locked;
+        return false;
     }
 
     get lockedReason() {
-        return this._lockedReason;
+        return "";
     }
 }
 
