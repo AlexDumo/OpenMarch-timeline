@@ -1,27 +1,24 @@
 import React, { useEffect } from "react";
-import { useSelectedPage } from "../../context/SelectedPageContext";
 import { InspectorCollapsible } from "./InspectorCollapsible";
 import { Button, Switch } from "@openmarch/ui";
 import { measureRangeString } from "../../global/classes/Page";
 import { T } from "@tolgee/react";
-import clsx from "clsx";
 import { updatePagesMutationOptions } from "../../hooks/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useSplitPage } from "./PageEditorUtils";
-import { useIsPlaying } from "../../context/IsPlayingContext";
+import { useInspectorPage } from "./InspectorPageContext";
+import { Help } from "./TimelineTransitionEditor";
 
 // TODO: figure out how to make this work with the new music system
 function PageEditor() {
     const queryClient = useQueryClient();
-    const { selectedPage } = useSelectedPage()!;
+    // While timeline playback runs, the page being played (the selected page waits for the stop)
+    const { page: selectedPage, playing } = useInspectorPage();
     const updatePagesMutation = useMutation(
         updatePagesMutationOptions(queryClient),
     );
     const splitPage = useSplitPage().mutate;
     const isFirstPage = selectedPage?.previousPageId === null;
-    // Timeline mode doesn't follow pages while playing (useTimelinePageBridge), so the page
-    // shown would be the one play started on: say it's playing instead (shape sims)
-    const playing = useIsPlaying()?.isPlaying ?? false;
 
     const countsInputId = "page-counts";
     const subsetInputId = "page-subset";
@@ -41,22 +38,14 @@ function PageEditor() {
         return (
             <InspectorCollapsible
                 defaultOpen
-                translatableTitle={
-                    playing
-                        ? { keyName: "inspector.page.playing" }
-                        : {
-                              keyName: "inspector.page.title",
-                              parameters: { pageNumber: selectedPage.name },
-                          }
-                }
+                translatableTitle={{
+                    keyName: "inspector.page.title",
+                    parameters: { pageNumber: selectedPage.name },
+                }}
                 className="mt-12"
             >
                 <form
-                    className={clsx(
-                        "edit-group flex w-full flex-col gap-16 px-6",
-                        playing && "pointer-events-none opacity-40",
-                    )}
-                    aria-hidden={playing || undefined}
+                    className="edit-group flex w-full flex-col gap-16 px-6"
                     id={formId}
                     onSubmit={(e) => e.preventDefault()}
                 >
@@ -83,7 +72,7 @@ function PageEditor() {
                             <T keyName="inspector.page.subset" />
                         </label>
                         <Switch
-                            disabled={isFirstPage}
+                            disabled={isFirstPage || playing}
                             onClick={(e) => {
                                 if (selectedPage) {
                                     updatePagesMutation.mutate({
@@ -113,10 +102,16 @@ function PageEditor() {
                         variant="secondary"
                         size="compact"
                         onClick={() => splitPage({ page: selectedPage })}
-                        disabled={selectedPage?.beats.length <= 1}
+                        disabled={selectedPage?.beats.length <= 1 || playing}
                     >
                         <T keyName="inspector.page.splitPage" />
                     </Button>
+                    {/* The page being played changes under the pointer: its edits wait */}
+                    {playing && (
+                        <Help testId="inspector-page-paused">
+                            <T keyName="inspector.page.paused" />
+                        </Help>
+                    )}
                 </form>
             </InspectorCollapsible>
         );

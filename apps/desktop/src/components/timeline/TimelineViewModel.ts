@@ -175,10 +175,16 @@ export type TimelineSelection =
  * a drag suspends playback, which resumes once from where the gesture ends; a press that ends
  * without a drag jumps playback there. The start flag moves once, when the gesture ends.
  */
-export type TimelineSeekGesture = "press" | "drag" | "end";
+export type TimelineSeekGesture = "press" | "drag" | "end" | "cancel";
 
 export interface TimelineSeekOptions {
     readonly gesture?: TimelineSeekGesture;
+    /**
+     * The gesture drags this line by itself (UI-21): the start flag, or the playhead by its line or
+     * head. Paused, a line dragged past the other swaps with it. `cancel` ends a start flag drag
+     * where it began.
+     */
+    readonly line?: "start" | "playhead";
 }
 
 /**
@@ -283,6 +289,19 @@ export interface TimelineCommonProps
     readonly holdMarks?: LabeledHoldMarks;
     /** The chains on the page boxes (UI-18 keep later pages); none without a selection */
     readonly keepChains?: PageKeepChains;
+    /** UI-19 Basic: the selected marchers' mid-page positions, view beats */
+    readonly basicPoints?: readonly TimelineBasicPoint[];
+    /** UI-19 Basic: **Remove this count's position**, by its view beat */
+    readonly onRemoveBasicPoint?: (beat: number) => void;
+    /** UI-19 Basic: per page id, how many marchers on it use Expert moves (locked in Basic) */
+    readonly expertMarks?: ReadonlyMap<string | number, number>;
+}
+
+/** A mid-page position on a Basic page box (UI-19): its beat and its count in words */
+export interface TimelineBasicPoint {
+    readonly beat: number;
+    /** "count 4 of page 2" */
+    readonly label: string;
 }
 
 export interface TimelineRangeChange extends TimelineBeatRange {
