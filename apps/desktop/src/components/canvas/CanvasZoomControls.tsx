@@ -164,11 +164,12 @@ export default function CanvasZoomControls({
                 "group border-stroke bg-bg-1 pointer-events-auto absolute right-6 bottom-6 z-10 flex min-w-200 flex-col overflow-hidden rounded-lg border shadow-lg",
             )}
         >
-            <div className="border-stroke flex items-center border-b px-12 py-4">
+            <div className="border-stroke flex items-center border-b px-12 py-2">
                 <Slider
                     aria-label="Zoom"
                     data-testid="canvas-zoom-slider"
-                    className="w-full"
+                    className="h-12 w-full"
+                    thumbClassName="size-10"
                     min={Math.log(FABRIC_MIN_ZOOM)}
                     max={Math.log(FABRIC_MAX_ZOOM)}
                     step={0.01}
