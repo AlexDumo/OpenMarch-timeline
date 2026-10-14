@@ -52,6 +52,9 @@ import {
     isPageSnapDisabled,
     snapBoundary,
     snapRangeOffset,
+    TIMELINE_PAGE_ROW_BOTTOM,
+    TIMELINE_PAGE_ROW_HEIGHT,
+    TIMELINE_PAGE_ROW_TOP,
 } from "./TimelineGeometry";
 import {
     KEEP_MENU_EVENTS,
@@ -848,7 +851,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     keepChains,
     scrubLine,
     pageFlagMove,
-    height = 28,
+    height = TIMELINE_PAGE_ROW_BOTTOM,
     flagSnapPlayhead,
 }: {
     pages: readonly TimelinePageMarker[];
@@ -1063,8 +1066,10 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
             <div
                 data-testid="timeline-page-ruler"
                 // Clipped without being a scroll container, so labels can stick to the viewport
-                className="border-stroke bg-fg-2 rounded-6 absolute top-0 h-28 overflow-clip border font-mono"
+                className="border-stroke bg-fg-2 rounded-6 absolute overflow-clip border font-mono"
                 style={{
+                    top: TIMELINE_PAGE_ROW_TOP,
+                    height: TIMELINE_PAGE_ROW_HEIGHT,
                     left: -initialPageWidth,
                     width: beatCount * pixelsPerBeat + initialPageWidth,
                 }}
@@ -1214,7 +1219,8 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
         // Each number starts just right of its bar line, so the line doesn't cross it
         <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-[31px] h-16 font-mono"
+            className="pointer-events-none absolute inset-x-0 h-16 font-mono"
+            style={{ top: TIMELINE_PAGE_ROW_BOTTOM + 3 }}
         >
             {visibleMeasures.map((measure) => (
                 <span
@@ -1262,12 +1268,16 @@ export const TimelinePageLines = memo(function TimelinePageLines({
                 .map((page) => (
                     <span
                         key={page.id}
-                        className="bg-text absolute top-28 w-px opacity-[0.24]"
+                        className="bg-text absolute w-px opacity-[0.24]"
                         style={{
+                            top: TIMELINE_PAGE_ROW_BOTTOM,
                             left: Math.round(
                                 beatToX(page.atBeat, pixelsPerBeat),
                             ),
-                            height: Math.max(0, height - 28),
+                            height: Math.max(
+                                0,
+                                height - TIMELINE_PAGE_ROW_BOTTOM,
+                            ),
                         }}
                     />
                 ))}
@@ -3006,12 +3016,13 @@ export const TimelineRangePreview = memo(function TimelineRangePreview({
         <div
             data-testid="timeline-range-preview"
             aria-hidden="true"
-            className="bg-accent/15 border-accent pointer-events-none absolute top-28 z-30 border-x"
+            className="bg-accent/15 border-accent pointer-events-none absolute z-30 border-x"
             style={{
                 left: range.startBeatIndex * pixelsPerBeat,
                 width:
                     (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat,
-                height: Math.max(0, height - 28),
+                top: TIMELINE_PAGE_ROW_BOTTOM,
+                height: Math.max(0, height - TIMELINE_PAGE_ROW_BOTTOM),
             }}
         />
     );
