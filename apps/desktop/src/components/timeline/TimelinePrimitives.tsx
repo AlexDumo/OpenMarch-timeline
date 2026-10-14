@@ -524,13 +524,13 @@ export const TimelineShell = ({
 }) => (
     <div
         className={clsx(
-            "border-stroke bg-fg-1 text-text rounded-6 flex min-w-0 flex-col overflow-visible border font-sans",
+            "border-stroke bg-fg-1 text-text rounded-6 flex h-full min-h-0 min-w-0 flex-col overflow-visible border font-sans",
             className,
         )}
     >
         {transport}
         {/* Its own stacking context: nothing on the timeline (+, the playhead) paints over a menu */}
-        <section className="isolate min-w-0 px-6 pt-4">
+        <section className="isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4">
             <div
                 ref={viewportRef}
                 data-testid="timeline-viewport"
@@ -538,7 +538,7 @@ export const TimelineShell = ({
                 tabIndex={-1}
                 aria-label="Timeline"
                 // The scrollbar's track is always there, so zooming never changes the height
-                className="focus-visible:ring-accent rounded-4 min-w-0 overflow-x-scroll overflow-y-hidden outline-hidden focus-visible:ring-2"
+                className="focus-visible:ring-accent rounded-4 min-h-0 min-w-0 flex-1 overflow-x-scroll overflow-y-auto outline-hidden focus-visible:ring-2"
             >
                 {children}
             </div>
@@ -3031,4 +3031,20 @@ export const useElementWidth = (ref: RefObject<HTMLElement | null>) => {
         return () => observer.disconnect();
     }, [ref]);
     return width;
+};
+
+/** The element's inner height, kept current (0 where nothing measures, as in jsdom) */
+export const useElementHeight = (ref: RefObject<HTMLElement | null>) => {
+    const [height, setHeight] = useState(0);
+    useEffect(() => {
+        const element = ref.current;
+        if (!element) return;
+        const update = () => setHeight(element.clientHeight);
+        update();
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(update);
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [ref]);
+    return height;
 };

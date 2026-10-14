@@ -37,6 +37,7 @@ import {
     TimelineShell,
     TimelineTrackClip,
     TimelineTransport,
+    useElementHeight,
     useElementWidth,
     useScrubFollow,
     useTimelinePointer,
@@ -582,6 +583,10 @@ const TimelineSurface = memo(function TimelineSurface({
     const clipHitHeight = expanded ? trackHeight : rowPitch;
     const trackBandHeight = Math.max(rows.length, 1) * rowPitch;
     const timelineHeight = trackTop + trackBandHeight + (expanded ? 2 : 0);
+    // The pane can be taller than the tracks (the splitter): the grid, page lines and playhead
+    // fill it, the track rows keep their height
+    const viewportHeight = useElementHeight(viewportRef);
+    const surfaceHeight = Math.max(timelineHeight, viewportHeight);
     const selectionRange = getSelectionRange(selection);
     // A dragged start flag's range: only the window's count reads it (`TimelineSelectionActions`)
     const [selectionInteraction] = useState(() =>
@@ -737,7 +742,7 @@ const TimelineSurface = memo(function TimelineSurface({
         >
             <div
                 className="relative"
-                style={{ width: surfaceWidth, height: timelineHeight }}
+                style={{ width: surfaceWidth, height: surfaceHeight }}
                 onContextMenu={rangeMenu.onContextMenu}
                 onDoubleClick={(event) => {
                     const marked = markedRangeAt(event.target);
@@ -751,12 +756,12 @@ const TimelineSurface = memo(function TimelineSurface({
                     style={{
                         left: initialPageWidth,
                         width,
-                        height: timelineHeight,
+                        height: surfaceHeight,
                     }}
                 >
                     <TimelineGridCanvas
                         width={width}
-                        height={timelineHeight}
+                        height={surfaceHeight}
                         pixelsPerBeat={pixelsPerBeat}
                         viewportRef={viewportRef}
                         layerLeft={initialPageWidth}
@@ -769,7 +774,7 @@ const TimelineSurface = memo(function TimelineSurface({
                     <TimelinePageLines
                         pages={model.pages}
                         pixelsPerBeat={pixelsPerBeat}
-                        height={timelineHeight}
+                        height={surfaceHeight}
                     />
                     <TimelineRuler
                         pages={model.pages}
@@ -786,7 +791,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         pageFlagMove={
                             props.isPlaying ? undefined : props.pageFlagMove
                         }
-                        height={timelineHeight}
+                        height={surfaceHeight}
                         flagSnapPlayhead={playheadAt}
                         // Only a show without measures numbers the playhead page's counts
                         positionBeat={
@@ -863,7 +868,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             props.isPlaying ? props.livePositionBeat : undefined
                         }
                         pixelsPerBeat={pixelsPerBeat}
-                        height={timelineHeight}
+                        height={surfaceHeight}
                         beatCount={model.beatCount}
                         anchorRef={playheadRef}
                         onSeek={props.onSeek}
@@ -894,7 +899,7 @@ const TimelineSurface = memo(function TimelineSurface({
                     <TimelineRangePreview
                         preview={pointer.rangePreview}
                         pixelsPerBeat={pixelsPerBeat}
-                        height={timelineHeight}
+                        height={surfaceHeight}
                     />
                     {props.loop && (
                         <TimelineLoopBar
@@ -922,7 +927,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             pinSize={expanded ? 18 : 14}
                             beatCount={model.beatCount}
                             pixelsPerBeat={pixelsPerBeat}
-                            height={timelineHeight}
+                            height={surfaceHeight}
                             // UI-14: below the ruler and measure rows the flags are drawn, not
                             // grabbed, so a Ctrl+drag or a short clip there isn't taken by a flag
                             // (round-2 review: the waveform row took it)

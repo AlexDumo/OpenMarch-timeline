@@ -1,12 +1,18 @@
-/** The timeline's height against the canvas: the defaults, the clamp and the keyboard step. */
+/** The timeline's height against the canvas: the clamp, the minimums and the keyboard step. */
 
-/** A bit taller than the content-sized timeline it replaces */
-export const DEFAULT_TIMELINE_HEIGHT = 260;
 export const MIN_TIMELINE_HEIGHT = 120;
 export const MIN_CANVAS_HEIGHT = 200;
 export const TIMELINE_SPLIT_KEY_STEP = 16;
 /** Room taken by the splitter and the gaps around it */
 export const TIMELINE_SPLIT_GUTTER = 16;
+
+/** The tallest the timeline pane gets: the canvas keeps its minimum. */
+export function maxTimelineHeight(available: number): number {
+    return Math.max(
+        MIN_TIMELINE_HEIGHT,
+        available - MIN_CANVAS_HEIGHT - TIMELINE_SPLIT_GUTTER,
+    );
+}
 
 /**
  * Keeps the timeline at least `MIN_TIMELINE_HEIGHT` tall and leaves the canvas at least
@@ -14,17 +20,21 @@ export const TIMELINE_SPLIT_GUTTER = 16;
  * share; in a window too short for both minimums the timeline's minimum wins.
  */
 export function clampTimelineHeight(height: number, available: number): number {
-    const max = Math.max(
-        MIN_TIMELINE_HEIGHT,
-        available - MIN_CANVAS_HEIGHT - TIMELINE_SPLIT_GUTTER,
+    const value = Number.isFinite(height) ? height : MIN_TIMELINE_HEIGHT;
+    return Math.round(
+        Math.min(
+            maxTimelineHeight(available),
+            Math.max(MIN_TIMELINE_HEIGHT, value),
+        ),
     );
-    const value = Number.isFinite(height) ? height : DEFAULT_TIMELINE_HEIGHT;
-    return Math.round(Math.min(max, Math.max(MIN_TIMELINE_HEIGHT, value)));
 }
 
-/** A saved height from storage, or the default when it isn't a usable number */
-export function parseTimelineHeight(value: unknown): number {
+/**
+ * A saved height from storage. `null` (the default) means no height was chosen: the pane is
+ * as small as it can be and still show every track.
+ */
+export function parseTimelineHeight(value: unknown): number | null {
     return typeof value === "number" && Number.isFinite(value) && value > 0
         ? value
-        : DEFAULT_TIMELINE_HEIGHT;
+        : null;
 }

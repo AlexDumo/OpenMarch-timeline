@@ -2,40 +2,50 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
-    DEFAULT_TIMELINE_HEIGHT,
     MIN_TIMELINE_HEIGHT,
     TIMELINE_SPLIT_KEY_STEP,
     clampTimelineHeight,
+    maxTimelineHeight,
 } from "./timelineSplit";
 
 /**
- * The timeline pane with a draggable divider on top. It takes its height from the saved
- * setting, clamped against the workspace it sits in (its parent), and the canvas above takes
- * the rest. Drag, arrow keys, or double-click (reset) change it.
+ * The timeline pane with a draggable divider on top. With no saved height the pane is as small as
+ * it can be and still show every track. Once the divider moves, the pane keeps that height,
+ * clamped to the workspace it sits in (its parent): taller than the tracks, the grid fills the
+ * extra room; shorter, the tracks scroll. Drag, arrow keys, or double-click (back to fitted).
  */
 export function TimelineSplitter({ children }: { children: ReactNode }) {
     const saved = useUiSettingsStore((s) => s.uiSettings.timelineHeight);
     const setTimelineHeight = useUiSettingsStore((s) => s.setTimelineHeight);
     const paneRef = useRef<HTMLDivElement>(null);
     const [available, setAvailable] = useState(Infinity);
+    const [measured, setMeasured] = useState(MIN_TIMELINE_HEIGHT);
     const [dragHeight, setDragHeight] = useState<number | null>(null);
 
     useEffect(() => {
-        const parent = paneRef.current?.parentElement;
-        if (!parent) return;
-        const measure = () => setAvailable(parent.clientHeight);
+        const pane = paneRef.current;
+        const parent = pane?.parentElement;
+        if (!pane || !parent) return;
+        const measure = () => {
+            setAvailable(parent.clientHeight);
+            setMeasured(pane.offsetHeight);
+        };
         measure();
         const observer = new ResizeObserver(measure);
         observer.observe(parent);
+        observer.observe(pane);
         return () => observer.disconnect();
     }, []);
 
-    const height = clampTimelineHeight(dragHeight ?? saved, available);
+    const chosen = dragHeight ?? saved;
+    const height =
+        chosen === null ? null : clampTimelineHeight(chosen, available);
+    const shown = height ?? measured;
 
     const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
-        setDragHeight(height);
+        setDragHeight(shown);
     };
     const onPointerMove = useCallback(
         (event: PointerEvent<HTMLDivElement>) => {
@@ -56,14 +66,17 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
         const step = event.shiftKey
             ? TIMELINE_SPLIT_KEY_STEP * 4
             : TIMELINE_SPLIT_KEY_STEP;
+        if (event.key === "Home") {
+            event.preventDefault();
+            setTimelineHeight(null);
+            return;
+        }
         const next =
             event.key === "ArrowUp"
-                ? height + step
+                ? shown + step
                 : event.key === "ArrowDown"
-                  ? height - step
-                  : event.key === "Home"
-                    ? DEFAULT_TIMELINE_HEIGHT
-                    : null;
+                  ? shown - step
+                  : null;
         if (next === null) return;
         event.preventDefault();
         setTimelineHeight(clampTimelineHeight(next, available));
@@ -73,7 +86,11 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
         <div
             ref={paneRef}
             className="flex min-h-0 shrink-0 flex-col"
-            style={{ height }}
+            style={
+                height === null
+                    ? { maxHeight: maxTimelineHeight(available) }
+                    : { height }
+            }
             data-testid="timeline-pane"
         >
             <div
@@ -81,7 +98,7 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
                 aria-orientation="horizontal"
                 aria-label="Resize timeline"
                 aria-valuemin={MIN_TIMELINE_HEIGHT}
-                aria-valuenow={height}
+                aria-valuenow={shown}
                 tabIndex={0}
                 data-testid="timeline-splitter"
                 className="group -mt-6 flex h-8 shrink-0 cursor-row-resize touch-none items-center justify-center outline-none"
@@ -89,12 +106,12 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerUp}
-                onDoubleClick={() => setTimelineHeight(DEFAULT_TIMELINE_HEIGHT)}
+                onDoubleClick={() => setTimelineHeight(null)}
                 onKeyDown={onKeyDown}
             >
                 <div className="bg-stroke group-hover:bg-accent group-focus-visible:bg-accent h-2 w-48 rounded-full transition-colors" />
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         </div>
     );
 }

@@ -974,13 +974,18 @@ from it. The spec still wins on the model; this file decides presentation.
 
 - **UI-19: a resizable split between the canvas and the timeline (hands-on feedback, 2026-10-13).**
   A divider sits between the canvas and the timeline. Drag it, or focus it and press Arrow Up
-  or Down (Shift for bigger steps), to resize both panes; the canvas refits. Double-click it,
-  or press Home, to reset. The height is remembered per user in the UI settings
-  (`timelineHeight`), and it defaults to 260 px, a bit taller than the old content-sized
-  timeline. The timeline keeps at least 120 px and the canvas at least 200 px; in a window too
-  short for both, the timeline's minimum wins. The saved height is kept as set and clamped to
-  the window when drawn, so a small window doesn't overwrite it. A timeline taller than its
-  pane scrolls. The focused beat editor (the audio timeline) keeps its own sizing.
+  or Down (Shift for bigger steps), to resize both panes; the canvas refits.
+  - **Default: fitted.** With no chosen height the timeline is as small as it can be and still
+    show every track, so it grows and shrinks as tracks come and go. Double-click the divider,
+    or press Home, to go back to fitted.
+  - **Taller than the tracks:** the track area expands (grid, page lines, playhead and
+    selection fill the extra room). Track heights stay the same.
+  - **Shorter than the tracks:** the track area scrolls vertically; the transport stays put and
+    the horizontal scrollbar stays at the bottom of the pane.
+  - **Remembered** per user in the UI settings (`timelineHeight`, `null` is fitted). Minimums:
+    timeline 120 px, canvas 200 px; in a window too short for both, the timeline's minimum
+    wins. The saved height is clamped to the window when drawn, not rewritten.
+  - The focused beat editor (the audio timeline) keeps its own sizing.
 
 ## Mapping the spec onto the view model
 
