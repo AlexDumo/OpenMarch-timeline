@@ -66,6 +66,7 @@ import {
 import {
     countTimelineRows,
     hasPageEraTables,
+    NO_PAGES_TO_CONVERT_MESSAGE,
     withConversionMarker,
 } from "./convertOnOpenGate";
 
@@ -92,13 +93,6 @@ export function checkConvertOnOpen(
         return { action: "none" };
     return { action: "convert", backupPath: nextBackupPath(filePath) };
 }
-
-/**
- * Why a version-7 file without its page-era tables can't be converted. The
- * open's "Couldn't convert your file" dialog shows it.
- */
-export const NO_PAGES_TO_CONVERT_MESSAGE =
-    "It has no pages to convert from. It may have been converted to timelines already and then saved by an older version of OpenMarch.";
 
 /** Sets the conversion marker in `workspace_settings`, keeping the other settings. */
 export async function writeConversionMarkerInTransaction(

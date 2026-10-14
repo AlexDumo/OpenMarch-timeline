@@ -174,3 +174,11 @@ export function countTimelineRows(db: DatabaseSync): number {
 export function hasPageEraTables(db: DatabaseSync): boolean {
     return tableExists(db, "marcher_pages");
 }
+
+/**
+ * Why a version-7 file without its page-era tables can't be converted. The
+ * open's "Couldn't convert your file" dialog shows it,
+ * and it isn't reported as an error.
+ */
+export const NO_PAGES_TO_CONVERT_MESSAGE =
+    "It has no pages to convert from. It may have been converted to timelines already and then saved by an older version of OpenMarch.";

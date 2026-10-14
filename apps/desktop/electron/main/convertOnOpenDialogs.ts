@@ -9,6 +9,7 @@ import { captureException } from "@sentry/electron/main";
 import type { ConvertOnOpenDialogs } from "./convertOnOpenFlow";
 import { showConversionProgress, throttleProgress } from "./conversionProgress";
 import { conversionWorkersStopped } from "./convertWorkerHost";
+import { NO_PAGES_TO_CONVERT_MESSAGE } from "../database/convertOnOpenGate";
 
 function messageBox(
     win: BrowserWindow | null,
@@ -50,7 +51,9 @@ export function electronConvertOnOpenDialogs(
 
         async conversionFailed(fileName, error, backupPath) {
             if (conversionWorkersStopped()) return;
-            captureException(error);
+            // A file with no pages to convert is expected, not a bug.
+            if (error.message !== NO_PAGES_TO_CONVERT_MESSAGE)
+                captureException(error);
             await messageBox(win, {
                 type: "error",
                 title: "Couldn't convert your file",
