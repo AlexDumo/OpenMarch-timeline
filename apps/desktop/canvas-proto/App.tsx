@@ -11,6 +11,8 @@ import { makeStressShow, type ShowSource } from "./source";
 export const SHOWS = [
     { id: "part1", name: "Part 1 Demo (.dots)", file: "demos/part1-demo.dots" },
     { id: "lhb", name: "LHB Daft Punk pt. 2 (.dots)", file: "demos/lhb-daft-punk-pt2.dots" },
+    // Made by cloning LHB's marchers 5x (not committed; see the README).
+    { id: "lhbx5", name: "LHB ×5: 1,925 marchers (.dots)", file: "demos/lhb-x5.dots" },
     { id: "stress2000", name: "Stress: 2,000 marchers", count: 2000 },
     { id: "stress5000", name: "Stress: 5,000 marchers", count: 5000 },
 ] as const;
@@ -235,7 +237,7 @@ export function App() {
 }
 
 function Overlay({ editor }: { editor: Editor }) {
-    useEditorVersion(editor);
+    useSyncExternalStore(editor.subscribeOverlay, editor.getOverlayVersion);
     const v = editor.scene.view;
     const g = editor.gesture;
     let marquee = null;

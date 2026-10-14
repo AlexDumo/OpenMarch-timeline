@@ -35,7 +35,15 @@ export interface Glyph {
     y: number;
     /** Advance in em. */
     advance: number;
+    /** The ink box plus the SDF margin, in cell pixels (y down). Empty for a space. */
+    rx: number;
+    ry: number;
+    rw: number;
+    rh: number;
 }
+
+/** Distance-field margin kept around the ink, in atlas pixels (covers the halo). */
+const INK_MARGIN = 5;
 
 export class GlyphAtlas {
     readonly texture: DataTexture;
@@ -75,8 +83,20 @@ export class GlyphAtlas {
             ctx.fillText(ch, BUFFER, this.baseline);
             const advance = ctx.measureText(ch).width / FONT_PX;
             const img = ctx.getImageData(0, 0, CELL, CELL).data;
+            let ix0 = CELL,
+                iy0 = CELL,
+                ix1 = -1,
+                iy1 = -1;
             for (let p = 0; p < n; p++) {
                 const a = img[p * 4 + 3] / 255;
+                if (a > 0) {
+                    const px = p % CELL;
+                    const py = (p / CELL) | 0;
+                    if (px < ix0) ix0 = px;
+                    if (px > ix1) ix1 = px;
+                    if (py < iy0) iy0 = py;
+                    if (py > iy1) iy1 = py;
+                }
                 if (a === 1) {
                     outer[p] = 0;
                     inner[p] = 1e20;
@@ -102,7 +122,11 @@ export class GlyphAtlas {
                     );
                 }
             }
-            this.glyphs.set(ch, { x: cx, y: cy, advance });
+            const rx = Math.max(0, ix0 - INK_MARGIN);
+            const ry = Math.max(0, iy0 - INK_MARGIN);
+            const rw = ix1 < 0 ? 0 : Math.min(CELL, ix1 + 1 + INK_MARGIN) - rx;
+            const rh = iy1 < 0 ? 0 : Math.min(CELL, iy1 + 1 + INK_MARGIN) - ry;
+            this.glyphs.set(ch, { x: cx, y: cy, advance, rx, ry, rw, rh });
         });
 
         this.texture = new DataTexture(
@@ -265,9 +289,6 @@ export class TextBatch {
         const scaleRot = new Float32Array(count * 2);
         this.owner = new Int32Array(count);
         this.anchors = new Float32Array(count * 2);
-        const cellEm = CELL / FONT_PX;
-        const bufEm = BUFFER / FONT_PX;
-        const belowEm = (CELL - a.baseline) / FONT_PX;
         let g = 0;
         labels.forEach((label, li) => {
             let width = 0;
@@ -281,13 +302,23 @@ export class TextBatch {
             const base = label.baselineEm ?? 0;
             for (const ch of label.text) {
                 const gl = a.glyphs.get(ch) ?? a.glyphs.get("?")!;
-                glyph.set([pen - bufEm, base - belowEm, cellEm, cellEm], g * 4);
+                // The quad covers only the glyph's ink (plus margin), not the
+                // whole atlas cell: much less fill on software renderers.
+                glyph.set(
+                    [
+                        pen + (gl.rx - BUFFER) / FONT_PX,
+                        base + (a.baseline - (gl.ry + gl.rh)) / FONT_PX,
+                        gl.rw / FONT_PX,
+                        gl.rh / FONT_PX,
+                    ],
+                    g * 4,
+                );
                 uv.set(
                     [
-                        gl.x / a.width,
-                        (gl.y + CELL) / a.height,
-                        (gl.x + CELL) / a.width,
-                        gl.y / a.height,
+                        (gl.x + gl.rx) / a.width,
+                        (gl.y + gl.ry + gl.rh) / a.height,
+                        (gl.x + gl.rx + gl.rw) / a.width,
+                        (gl.y + gl.ry) / a.height,
                     ],
                     g * 4,
                 );

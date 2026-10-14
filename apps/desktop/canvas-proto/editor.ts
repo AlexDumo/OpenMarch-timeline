@@ -217,9 +217,24 @@ export class Editor {
     // ----- positions -----
 
     /** Show positions plus edits at `ms`, into `out`. */
+    /** The show's own positions at `sampleMs`, kept so drags don't re-sample the resolver. */
+    private sample = new Float64Array(0);
+    private sampleMs = Number.NaN;
+    private sampleSource: ShowSource | null = null;
+
     private positionsAt(ms: number, out: Float64Array) {
         const src = this.source!;
-        src.positionsAt(ms, out);
+        if (ms === this.sampleMs && this.sampleSource === src && out !== this.sample) {
+            out.set(this.sample);
+        } else {
+            src.positionsAt(ms, out);
+            if (out === this.display) {
+                if (this.sample.length !== out.length) this.sample = new Float64Array(out.length);
+                this.sample.set(out);
+                this.sampleMs = ms;
+                this.sampleSource = src;
+            }
+        }
         const pages = src.pages;
         let k = pages.findIndex((p) => p.timeMs >= ms - 0.5);
         if (k < 0) k = pages.length - 1;
@@ -317,6 +332,15 @@ export class Editor {
     }
 
     // ----- notifications for React -----
+    //
+    // Two channels. The overlay (selection box, handles, marquee) follows
+    // every change, since it must stay glued to the dots. The rest of the
+    // chrome (toolbar, HUD, transport) re-renders at most ~10 times a second,
+    // so a drag or a marquee never re-renders the whole page per pointer move.
+
+    overlayVersion = 0;
+    private overlayListeners = new Set<() => void>();
+    private chromeTimer: ReturnType<typeof setTimeout> | null = null;
 
     subscribe = (fn: () => void) => {
         this.listeners.add(fn);
@@ -325,11 +349,29 @@ export class Editor {
 
     getVersion = () => this.version;
 
-    /** Tells React something changed; throttled to ~8 Hz while playing. */
+    subscribeOverlay = (fn: () => void) => {
+        this.overlayListeners.add(fn);
+        return () => this.overlayListeners.delete(fn);
+    };
+
+    getOverlayVersion = () => this.overlayVersion;
+
     notify(force: boolean) {
+        this.overlayVersion++;
+        for (const fn of this.overlayListeners) fn();
         const now = performance.now();
-        if (!force && this.continuous && now - this.lastNotify < 120) return;
-        this.lastNotify = now;
+        const minGap = this.continuous || this.gesture ? 100 : force ? 0 : 100;
+        if (now - this.lastNotify >= minGap) {
+            this.flushChrome();
+        } else if (!this.chromeTimer) {
+            this.chromeTimer = setTimeout(() => this.flushChrome(), minGap - (now - this.lastNotify));
+        }
+    }
+
+    private flushChrome() {
+        if (this.chromeTimer) clearTimeout(this.chromeTimer);
+        this.chromeTimer = null;
+        this.lastNotify = performance.now();
         this.version++;
         for (const fn of this.listeners) fn();
     }
