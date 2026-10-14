@@ -1,3 +1,4 @@
+import { wheelScrollsSideways } from "./timelineWheel";
 import {
     memo,
     useCallback,
@@ -217,11 +218,9 @@ const useTimelineZoom = ({
                 });
                 return;
             }
-            // A vertical scroll or swipe scrolls the timeline sideways; it has no rows to scroll
-            if (
-                Math.abs(event.deltaY) > Math.abs(event.deltaX) &&
-                viewport.scrollWidth > viewport.clientWidth
-            ) {
+            // A vertical scroll or swipe scrolls the timeline sideways, unless the tracks overflow
+            // the pane and have rows to scroll
+            if (wheelScrollsSideways(viewport, event.deltaX, event.deltaY)) {
                 event.preventDefault();
                 viewport.scrollLeft +=
                     event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;

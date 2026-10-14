@@ -981,7 +981,9 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Taller than the tracks:** the track area expands (grid, page lines, playhead and
     selection fill the extra room). Track heights stay the same.
   - **Shorter than the tracks:** the track area scrolls vertically; the transport stays put and
-    the horizontal scrollbar stays at the bottom of the pane.
+    the horizontal scrollbar stays at the bottom of the pane. The mouse wheel scrolls the tracks
+    here; when the tracks fit, a vertical wheel still scrolls the timeline sideways (Shift+wheel
+    or a horizontal swipe does that when they overflow).
   - **Remembered** per user in the UI settings (`timelineHeight`, `null` is fitted). Minimums:
     timeline 120 px, canvas 200 px; in a window too short for both, the timeline's minimum
     wins. The saved height is clamped to the window when drawn, not rewritten.
