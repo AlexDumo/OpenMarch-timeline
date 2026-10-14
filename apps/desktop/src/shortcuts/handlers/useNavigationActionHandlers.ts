@@ -30,7 +30,8 @@ export function useNavigationActionHandlers() {
 
     const goNext = () => navigate("next-page");
     const goPrevious = () => navigate("previous-page");
-    const enabled = { enabled: canNavigate };
+    // Playing, each jump restarts the audio, so a held key jumps once rather than stuttering
+    const enabled = { enabled: canNavigate, ignoreRepeat: isPlaying };
     const transport = () => ({
         isPlaying,
         showEndBeat: beats.length,

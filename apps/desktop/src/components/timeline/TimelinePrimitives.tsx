@@ -183,6 +183,7 @@ const TransportButton = memo(function TransportButton({
     onClick,
     pressed,
     testId,
+    navigation,
 }: {
     label: string;
     /** The shortcut the tooltip shows as keycaps */
@@ -195,6 +196,8 @@ const TransportButton = memo(function TransportButton({
     onClick?: (event: ReactMouseEvent) => void;
     pressed?: boolean;
     testId?: string;
+    /** Previous or Next (`useHeldNavigationMode`) */
+    navigation?: boolean;
 }) {
     return (
         <ShortcutTooltip label={label} shortcut={shortcut} hint={hint}>
@@ -207,6 +210,7 @@ const TransportButton = memo(function TransportButton({
                 )}
                 aria-pressed={pressed}
                 data-testid={testId}
+                {...(navigation ? { [NAVIGATION_BUTTON_ATTRIBUTE]: "" } : {})}
                 // UI-17 follow-up: a click doesn't take keyboard focus, so Space after clicking
                 // a transport button is still the app's Play, not a second press of the button
                 onMouseDown={(event) => event.preventDefault()}
@@ -232,25 +236,47 @@ const navigationMode = (event: {
 }): TransportNavigationMode =>
     event.altKey ? "edge" : event.shiftKey ? "beat" : "page";
 
+/** Marks Previous and Next, so a held Alt over them can be kept from the menu bar */
+const NAVIGATION_BUTTON_ATTRIBUTE = "data-transport-navigation";
+
 /**
  * The modifier held now, as Previous and Next would read it. Only a change re-renders, so key
- * repeats and other keys cost nothing; losing focus lets go of it.
+ * repeats and other keys cost nothing; losing focus lets go of it. A pointer event re-reads it
+ * too, in case the window missed a key going up.
+ *
+ * On Windows and Linux the window's menu bar hides until Alt is pressed and let go on its own, so
+ * holding Alt over Previous or Next to see the start and end would open the menu and take the
+ * keyboard. Over those two buttons the app keeps Alt to itself: Electron only lets the menu see
+ * keys the page didn't handle.
  */
 function useHeldNavigationMode(enabled: boolean): TransportNavigationMode {
     const [mode, setMode] = useState<TransportNavigationMode>("page");
     useEffect(() => {
         if (!enabled) return;
-        const onKey = (event: KeyboardEvent) =>
+        const read = (event: KeyboardEvent | PointerEvent) =>
             setMode(
                 event.ctrlKey || event.metaKey ? "page" : navigationMode(event),
             );
+        const onKey = (event: KeyboardEvent) => {
+            if (
+                event.key === "Alt" &&
+                !isMac() &&
+                document.querySelector(`[${NAVIGATION_BUTTON_ATTRIBUTE}]:hover`)
+            )
+                event.preventDefault();
+            read(event);
+        };
         const onBlur = () => setMode("page");
         window.addEventListener("keydown", onKey, true);
         window.addEventListener("keyup", onKey, true);
+        window.addEventListener("pointermove", read, true);
+        window.addEventListener("pointerdown", read, true);
         window.addEventListener("blur", onBlur);
         return () => {
             window.removeEventListener("keydown", onKey, true);
             window.removeEventListener("keyup", onKey, true);
+            window.removeEventListener("pointermove", read, true);
+            window.removeEventListener("pointerdown", read, true);
             window.removeEventListener("blur", onBlur);
             setMode("page");
         };
@@ -389,6 +415,7 @@ const TransportNavigationButton = memo(function TransportNavigationButton({
             keyShortcut={row.shortcut}
             hint={<NavigationGuide rows={guide} mode={mode} />}
             testId={`timeline-${direction}`}
+            navigation
             onClick={onNavigate ? onClick : undefined}
         >
             {row.icon}

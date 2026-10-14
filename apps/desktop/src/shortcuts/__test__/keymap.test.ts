@@ -306,6 +306,14 @@ describe("page navigation shortcuts", () => {
         );
         expect(resolve(press("Home", "Home"), canvas)).toBe("firstPage");
         expect(resolve(press("End", "End"), timeline)).toBe("lastPage");
+        // Alt wins over Shift, as on the transport's buttons
+        const altShift = { altKey: true, shiftKey: true };
+        expect(resolve(withMods("KeyQ", "Œ", altShift), canvas)).toBe(
+            "firstPage",
+        );
+        expect(resolve(withMods("KeyE", "E", altShift), timeline)).toBe(
+            "lastPage",
+        );
     });
 
     it("arrow keys step pages on the timeline", () => {
