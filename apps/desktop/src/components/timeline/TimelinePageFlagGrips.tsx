@@ -83,8 +83,9 @@ export const FLAG_DRAG_PX = 4;
 const GRIP_WIDTH = 12;
 /**
  * The grip is the page line through the whole page-box row (owner, 2026-10-08: "just the line
- * at the top in the page boxes"), above the playhead's head and the start pennant there; those are
- * grabbed in the measure row, and a page box's click puts the playhead on its flag
+ * at the top in the page boxes"). The playhead's head, the start pennant and the loop's ends are
+ * grabbed in the headroom strip above it (UI-20), and a page box's click puts the playhead on its
+ * flag
  */
 const GRIP_TOP = TIMELINE_PAGE_ROW_TOP;
 const GRIP_HEIGHT = TIMELINE_PAGE_ROW_HEIGHT;

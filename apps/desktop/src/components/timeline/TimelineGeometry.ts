@@ -104,10 +104,16 @@ export const beatToX = (
     startBeat = 0,
 ) => (beat - startBeat) * pixelsPerBeat;
 
+/**
+ * The headroom strip above the page boxes (UI-20), as Logic gives its playhead and cycle region
+ * their own strip: the start flag's pennant, the playhead's head and the loop's bar and ends sit
+ * and are grabbed here, clear of the page flags' grips in the page row
+ */
+export const TIMELINE_HEADROOM_HEIGHT = 14;
 /** The page-box row's height, in pixels */
 export const TIMELINE_PAGE_ROW_HEIGHT = 28;
-/** The page-box row's top, in pixels from the timeline's top */
-export const TIMELINE_PAGE_ROW_TOP = 0;
+/** The page-box row's top, in pixels from the timeline's top: under the headroom strip */
+export const TIMELINE_PAGE_ROW_TOP = TIMELINE_HEADROOM_HEIGHT;
 /** The page-box row's bottom: the measure row, the waveform and the clip rows sit below it */
 export const TIMELINE_PAGE_ROW_BOTTOM =
     TIMELINE_PAGE_ROW_TOP + TIMELINE_PAGE_ROW_HEIGHT;
@@ -129,7 +135,7 @@ export interface TimelineRows {
 }
 
 /**
- * The timeline's rows (UI-12): the page boxes and the measure row; then the waveform, when audio
+ * The timeline's rows (UI-12): the headroom strip (UI-20), the page boxes and the measure row; then the waveform, when audio
  * is loaded, so it stays put as clips come and go; then the clip rows, one always kept (with no
  * chrome), so the first off-page clip doesn't move the ruler right after the drag that made it
  */
