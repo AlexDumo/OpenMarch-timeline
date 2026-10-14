@@ -1,7 +1,6 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
-    CheckIcon,
     CursorTextIcon,
     FlagIcon,
     LinkSimpleHorizontalBreakIcon,
@@ -160,8 +159,8 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      */
     readonly keepHere?: TimelineKeepHereMenu;
     /**
-     * **Subset** on a page box (UI-9): a toggle that makes the page a subset page or a numbered
-     * one. Without it, the menu has no such entry.
+     * **Change to subset** or **Change to normal page** on a page box (UI-9), whichever the page
+     * isn't now. Without it, the menu has no such entry.
      */
     readonly subset?: {
         readonly isSubset: (pageId: string | number) => boolean;
@@ -374,29 +373,28 @@ export function useTimelineRangeMenu({
                     )}
                     {menu?.subset && open.target.pageId !== undefined && (
                         <>
-                            <DropdownMenu.CheckboxItem
+                            <DropdownMenu.Item
                                 data-testid="timeline-range-menu-subset"
-                                checked={menu.subset.isSubset(
-                                    open.target.pageId,
-                                )}
-                                onCheckedChange={(checked) =>
+                                onSelect={() =>
                                     menu.subset?.onSet(
                                         open.target.pageId!,
-                                        checked,
+                                        !menu.subset.isSubset(
+                                            open.target.pageId!,
+                                        ),
                                     )
                                 }
                                 className={ITEM_CLASS}
                             >
-                                <span className="flex size-14 items-center justify-center">
-                                    <DropdownMenu.ItemIndicator>
-                                        <CheckIcon size={14} />
-                                    </DropdownMenu.ItemIndicator>
-                                </span>
-                                {tolgee.t(
-                                    "timeline.rangeMenu.subset",
-                                    "Subset",
-                                )}
-                            </DropdownMenu.CheckboxItem>
+                                {menu.subset.isSubset(open.target.pageId)
+                                    ? tolgee.t(
+                                          "timeline.rangeMenu.toNormalPage",
+                                          "Change to normal page",
+                                      )
+                                    : tolgee.t(
+                                          "timeline.rangeMenu.toSubset",
+                                          "Change to subset",
+                                      )}
+                            </DropdownMenu.Item>
                             <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
                         </>
                     )}

@@ -285,7 +285,7 @@ export default function TimelineModePanel() {
         [isPlaying, isolated, movePageFlag],
     );
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
-    // Subset toggle: one `updatePages` edit, one undo step
+    // Change to subset / normal page: one `updatePages` edit, one undo step
     const { mutate: updatePages } = useMutation(
         updatePagesMutationOptions(queryClient),
     );

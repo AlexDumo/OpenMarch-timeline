@@ -180,8 +180,8 @@ export interface TimelineProps {
     /** The names **+**'s menu shows, muted, after **Add page** and **Add subset page** */
     readonly addPageNames?: { readonly page: string; readonly subset: string };
     /**
-     * The page box menu's **Subset** toggle (UI-9): sets page `pageId` to a subset page, or back
-     * to a numbered one. Without it, the menu has no such entry.
+     * The page box menu's **Change to subset** / **Change to normal page** (UI-9): sets page
+     * `pageId` to a subset page, or back to a numbered one. Without it, the menu has no such entry.
      */
     readonly onSetPageSubset?: (pageId: number, subset: boolean) => void;
     /** The page box menu's **Delete page** (UI-9 Deleting a flag), by page id */

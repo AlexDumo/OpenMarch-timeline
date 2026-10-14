@@ -342,18 +342,18 @@ describe("Add subset page on **+** (UI-9)", () => {
     });
 });
 
-describe("Subset toggle on a page box (UI-9)", () => {
+describe("Change to subset / normal page on a page box (UI-9)", () => {
     it("flips the right-clicked page, by page id", () => {
         const onSetPageSubset = vi.fn();
         show({ onSetPageSubset, withAdd: false });
         fireEvent.contextMenu(screen.getByRole("button", { name: "Page 2" }));
         const item = screen.getByTestId("timeline-range-menu-subset");
-        expect(item.getAttribute("aria-checked")).toBe("false");
+        expect(item.textContent).toBe("Change to subset");
         fireEvent.click(item);
         expect(onSetPageSubset).toHaveBeenCalledWith(3, true);
     });
 
-    it("shows a subset page as checked and turns it off", () => {
+    it("offers a subset page Change to normal page", () => {
         const onSetPageSubset = vi.fn();
         const subsetPages = PAGES.map((p) =>
             p.id === 3 ? ({ ...p, name: "1A", isSubset: true } as Page) : p,
@@ -374,7 +374,7 @@ describe("Subset toggle on a page box (UI-9)", () => {
         );
         fireEvent.contextMenu(screen.getByRole("button", { name: "Page 1A" }));
         const item = screen.getByTestId("timeline-range-menu-subset");
-        expect(item.getAttribute("aria-checked")).toBe("true");
+        expect(item.textContent).toBe("Change to normal page");
         fireEvent.click(item);
         expect(onSetPageSubset).toHaveBeenCalledWith(3, false);
     });
