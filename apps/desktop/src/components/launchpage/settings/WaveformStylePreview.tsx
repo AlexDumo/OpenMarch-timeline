@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { EyeSlashIcon } from "@phosphor-icons/react";
 import { defaultSettings } from "@/stores/UiSettingsStore";
 import {
     forEachWaveformBar,
@@ -57,6 +58,16 @@ export default function WaveformStylePreview({
     }, [style]);
     const radius = waveformBarRadius(style);
 
+    if (style === "hidden")
+        return (
+            <span
+                aria-hidden="true"
+                className="flex items-center justify-center"
+                style={{ width: WIDTH, height: HEIGHT }}
+            >
+                <EyeSlashIcon size={20} />
+            </span>
+        );
     return (
         <svg
             aria-hidden="true"

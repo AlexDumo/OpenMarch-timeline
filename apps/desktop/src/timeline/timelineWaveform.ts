@@ -24,12 +24,14 @@ export const WAVEFORM_BAR_GAP = 1;
 /**
  * How the waveform is drawn, a setting: `simplified` is rounded bars at a fixed pixel pitch on a
  * linear scale (the old WaveSurfer look); `precise` is square bars locked to each beat on a
- * decibel scale, so quiet passages show their detail (UI-12).
+ * decibel scale, so quiet passages show their detail (UI-12); `hidden` drops the waveform lane,
+ * as if the show had no audio, for designers who don't need it.
  */
-export type WaveformStyle = "simplified" | "precise";
+export type WaveformStyle = "simplified" | "precise" | "hidden";
 export const WAVEFORM_STYLES: readonly WaveformStyle[] = [
     "simplified",
     "precise",
+    "hidden",
 ];
 
 /** A stored waveform style, or the default (simplified) when it's missing or unknown */
@@ -184,6 +186,7 @@ export function forEachWaveformBar(
     to: number,
     draw: (x: number, width: number, level: number) => void,
 ): void {
+    if (style === "hidden") return;
     if (style === "precise") {
         const sliceWidth = pixelsPerBeat / WAVEFORM_PRECISE_BARS_PER_BEAT;
         // A gap between bars only once they're wide enough; narrower, they read as one shape

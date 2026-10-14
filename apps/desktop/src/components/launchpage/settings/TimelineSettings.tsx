@@ -17,6 +17,7 @@ export default function TimelineSettings() {
             <SettingRow
                 label={<T keyName="settings.timeline.waveformStyle" />}
                 htmlFor="waveform-style"
+                stacked
                 description={
                     <T
                         keyName={`settings.timeline.waveformStyle.${uiSettings.timelineWaveformStyle}.description`}

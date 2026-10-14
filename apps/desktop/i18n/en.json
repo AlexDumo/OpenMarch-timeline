@@ -1503,6 +1503,8 @@
         "timeline": "Timeline",
         "timeline.description": "How the timeline looks.",
         "timeline.waveformStyle": "Waveform",
+        "timeline.waveformStyle.hidden": "Hidden",
+        "timeline.waveformStyle.hidden.description": "No waveform on the timeline, so it takes less room. The music still plays.",
         "timeline.waveformStyle.precise": "Precise",
         "timeline.waveformStyle.precise.description": "Square bars locked to each beat, scaled in decibels so quiet passages show their detail.",
         "timeline.waveformStyle.simplified": "Simplified",

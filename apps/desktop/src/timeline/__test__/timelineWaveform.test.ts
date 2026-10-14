@@ -8,6 +8,7 @@ import {
     WAVEFORM_PRECISE_BARS_PER_BEAT,
     waveformBarLevel,
     waveformLevelDb,
+    type WaveformStyle,
 } from "../timelineWaveform";
 
 /** A one-channel buffer of `seconds` at `sampleRate`, loud (0.5) only in `[from, to)` seconds */
@@ -185,6 +186,7 @@ describe("the waveform style setting", () => {
     it("keeps a known style and falls back to simplified otherwise", () => {
         expect(parseWaveformStyle("precise")).toBe("precise");
         expect(parseWaveformStyle("simplified")).toBe("simplified");
+        expect(parseWaveformStyle("hidden")).toBe("hidden");
         expect(parseWaveformStyle(undefined)).toBe("simplified");
         expect(parseWaveformStyle("fancy")).toBe("simplified");
     });
@@ -196,7 +198,7 @@ describe("the waveform's bar layout", () => {
         Array<number>(WAVEFORM_PEAKS_PER_BEAT).fill(1),
         Array<number>(WAVEFORM_PEAKS_PER_BEAT).fill(0.1),
     ];
-    const layout = (style: "simplified" | "precise", from = 0, to = 64) => {
+    const layout = (style: WaveformStyle, from = 0, to = 64) => {
         const bars: [number, number, number][] = [];
         forEachWaveformBar(peaks, style, 32, from, to, (x, width, level) =>
             bars.push([x, width, level]),
@@ -230,5 +232,9 @@ describe("the waveform's bar layout", () => {
         expect(layout("simplified", 30, 36).map(([x]) => x)).toEqual([30, 33]);
         expect(layout("simplified", 66, 96)).toEqual([]);
         expect(layout("precise", 64, 96)).toEqual([]);
+    });
+
+    it("lays out no bars when the waveform is hidden", () => {
+        expect(layout("hidden")).toEqual([]);
     });
 });

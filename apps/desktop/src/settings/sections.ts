@@ -104,6 +104,7 @@ const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
             "settings.timeline.waveformStyle",
             "settings.timeline.waveformStyle.simplified",
             "settings.timeline.waveformStyle.precise",
+            "settings.timeline.waveformStyle.hidden",
         ],
     },
     {
