@@ -931,6 +931,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             hitHeight={audioTop}
                             snapBeats={snapBeats}
                             onCommit={commitSelection}
+                            onLineDrag={props.onSeek}
                             onInteractionChange={selectionInteraction.set}
                             positionBeat={positionBeat}
                             scrubLine={pointer.scrubLine}

@@ -325,7 +325,8 @@ from it. The spec still wins on the model; this file decides presentation.
     unpinned S follows it (UI-12 review), so the window doesn't silently span
     pages.
   - **Pinning** (_lead default_). Dragging the start handle, or dragging a
-    range on empty timeline space, pins S where it is dropped (before P). A
+    range on empty timeline space, pins S where it is dropped (before P;
+    past P it swaps with P, UI-21). A
     pinned S stays through navigation until P moves to or before it, which
     unpins it. Clicking a page box unpins it.
   - **Play, Pause, Stop.** Play plays on from P to the end of the show, with no
@@ -998,6 +999,33 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Layout.** The page row's top and height are named in `TimelineGeometry.ts`
     (`TIMELINE_HEADROOM_HEIGHT`, `TIMELINE_PAGE_ROW_*`), and `getTimelineRows` lays out the rows
     under it, so the strip's height is one number.
+- **UI-21: the start flag and the playhead swap when one is dragged past the other (project owner,
+  2026-10-14; issue #162).** Supersedes UI-10's rule that the start flag stops a beat before the
+  playhead. As Logic's locators, the left line is the start flag and the right one the playhead.
+  - **Which drags.** Paused and not isolated, a drag that starts on the start flag (its stem or
+    pennant), or on the playhead's line or head. A click on the timeline, a click on the playhead,
+    and a scrub started anywhere else move only the playhead, and pass the start flag as before
+    (owner).
+  - **The swap.** Drag the start flag past the playhead and the line being dragged becomes the
+    playhead, while the old playhead becomes the start flag. Drag the playhead behind the start
+    flag and the line being dragged becomes the start flag, while the old start flag becomes the
+    playhead. Afterwards the window `[S, P)` is valid again. On the same beat both are there, as
+    after **Stop**.
+  - **Live** (owner). The two trade the moment the dragged line crosses the other, and trade back
+    if it crosses back. The canvas follows the playhead. Escape on a start flag drag puts both back
+    where they were.
+  - **Pinning.** A start flag that a drag sets (the dragged flag, or the old playhead after a swap)
+    is pinned, unless it lands where it would follow to, as with UI-10's start handle. A playhead
+    drag that never crosses ends as a scrub does: an unpinned start flag follows it once (UI-12
+    review).
+  - **Arrow keys on the start flag** follow the same rule (owner). A step onto or past the playhead
+    swaps them, so stepping right walks a one-beat window right.
+  - **Undo.** Moving the start flag and the playhead isn't an undoable edit today, and a swap
+    isn't either.
+  - **How.** The store's line drag (`beginLineDrag`, `dragLine`, `endLineDrag`, `cancelLineDrag`,
+    `lineDragPositions` in `TimelineSelectionStore.ts`) owns the rule. The timeline sends each beat
+    a dragged line reaches as a seek with `line: "start"` or `line: "playhead"`
+    (`TimelineSeekOptions`), and `seekTimeline` passes a paused one to the store.
 
 ## Mapping the spec onto the view model
 

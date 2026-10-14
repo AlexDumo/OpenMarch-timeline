@@ -42,6 +42,7 @@ const playbackCommands = (
         return seekTimeline(beats, beatIndex, options?.gesture, {
             isPlaying,
             setIsPlaying,
+            line: options?.line,
         });
     },
     onNavigate: (direction) => {
