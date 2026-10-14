@@ -299,6 +299,90 @@ describeDbTests("marcher add and delete in timeline mode", (it) => {
             expect(vacancies()).toEqual([]);
         });
 
+        /** The new marchers' homes, by section, in creation order. */
+        const homesBySection = async (
+            db: DbConnection,
+            created: { id: number; section: string }[],
+        ) => {
+            const rows = await db.select().from(schema.marchers).all();
+            const bySection = new Map<string, [number, number][]>();
+            for (const c of created) {
+                const r = rows.find((row) => row.id === c.id)!;
+                bySection.set(c.section, [
+                    ...(bySection.get(c.section) ?? []),
+                    [r.home_x, r.home_y],
+                ]);
+            }
+            return { bySection, others: rows };
+        };
+
+        it("puts each section of new marchers in its own row, in the app's section order", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const created = await createMarchers({
+                db,
+                newMarchers: [
+                    { section: "Snare", drill_prefix: "QS", drill_order: 1 },
+                    { section: "Trumpet", drill_prefix: "QT", drill_order: 1 },
+                    { section: "Flute", drill_prefix: "QF", drill_order: 1 },
+                    { section: "Flute", drill_prefix: "QF", drill_order: 2 },
+                    { section: "Trumpet", drill_prefix: "QT", drill_order: 2 },
+                ],
+            });
+            const { bySection, others } = await homesBySection(db, created);
+
+            // One row per section
+            const rowY = new Map<string, number>();
+            for (const [section, homes] of bySection) {
+                expect(new Set(homes.map(([, y]) => y)).size).toBe(1);
+                rowY.set(section, homes[0]![1]);
+            }
+            // Woodwind, then Brass, then Battery: top to bottom
+            expect(rowY.get("Flute")!).toBeLessThan(rowY.get("Trumpet")!);
+            expect(rowY.get("Trumpet")!).toBeLessThan(rowY.get("Snare")!);
+            // Side by side within a row, starting at the same x
+            const flutes = bySection.get("Flute")!;
+            expect(flutes[1]![0]).toBeGreaterThan(flutes[0]![0]);
+            expect(bySection.get("Trumpet")![0]![0]).toBe(flutes[0]![0]);
+            // No new row shares a y with an existing marcher's home
+            const createdIds = new Set(created.map((c) => c.id));
+            const existingYs = others
+                .filter((o) => !createdIds.has(o.id))
+                .map((o) => o.home_y);
+            for (const y of rowY.values())
+                for (const other of existingYs)
+                    expect(Math.abs(other - y)).toBeGreaterThanOrEqual(1);
+        });
+
+        it("a second batch starts below the first batch's rows", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const first = await createMarchers({
+                db,
+                newMarchers: [
+                    { section: "Flute", drill_prefix: "QF", drill_order: 1 },
+                    { section: "Snare", drill_prefix: "QS", drill_order: 1 },
+                ],
+            });
+            const second = await createMarchers({
+                db,
+                newMarchers: [
+                    { section: "Flute", drill_prefix: "QF", drill_order: 2 },
+                ],
+            });
+            const firstHomes = await homesBySection(db, first);
+            const secondHomes = await homesBySection(db, second);
+            const firstYs = [...firstHomes.bySection.values()].map(
+                (h) => h[0]![1],
+            );
+            const secondY = secondHomes.bySection.get("Flute")![0]![1];
+            for (const y of firstYs) expect(secondY).not.toBe(y);
+        });
+
         it("joins no stored timeline, even empty or nested ones, and stands at home (UI-9 New marchers)", async ({
             db,
             marchersAndPages: _,
