@@ -1639,6 +1639,54 @@ describe("a calmer timeline (UI-12)", () => {
         ]);
     });
 
+    it("Alt+click on Previous and Next steps a beat", () => {
+        const onNavigate = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onNavigate={onNavigate}
+            />,
+        );
+        fireEvent.click(screen.getByRole("button", { name: /^Next page/ }), {
+            altKey: true,
+        });
+        fireEvent.click(
+            screen.getByRole("button", { name: /^Previous page/ }),
+            { altKey: true, shiftKey: true },
+        );
+        expect(onNavigate.mock.calls).toEqual([
+            ["next-beat"],
+            ["previous-beat"],
+        ]);
+    });
+
+    it("says what Previous and Next do while Shift or Alt is held", () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onNavigate={vi.fn()}
+            />,
+        );
+        const previous = screen.getByTestId("timeline-previous");
+        const next = screen.getByTestId("timeline-next");
+        fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
+        expect(previous).toHaveAccessibleName("Start of the show");
+        expect(next).toHaveAccessibleName("End of the show");
+        fireEvent.keyDown(window, { key: "Alt", altKey: true, shiftKey: true });
+        expect(previous).toHaveAccessibleName("Previous beat");
+        expect(next).toHaveAccessibleName("Next beat");
+        fireEvent.keyUp(window, { key: "Alt", shiftKey: true });
+        expect(next).toHaveAccessibleName("End of the show");
+        fireEvent.keyUp(window, { key: "Shift" });
+        expect(next).toHaveAccessibleName("Next page");
+        // Losing focus lets go of a held modifier
+        fireEvent.keyDown(window, { key: "Alt", altKey: true });
+        fireEvent.blur(window);
+        expect(previous).toHaveAccessibleName("Previous page");
+    });
+
     it("keeps page navigation live while playing, where it jumps playback", () => {
         const onNavigate = vi.fn();
         render(

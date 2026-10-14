@@ -267,6 +267,19 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["Shift+Q"],
     },
+    // Alt with Q and E steps the playhead a beat instead of a page
+    nextBeat: {
+        labelKey: "actions.navigation.nextBeat",
+        category: "navigation",
+        scope: "global",
+        defaultBindings: ["Alt+E"],
+    },
+    previousBeat: {
+        labelKey: "actions.navigation.previousBeat",
+        category: "navigation",
+        scope: "global",
+        defaultBindings: ["Alt+Q"],
+    },
     playPause: {
         labelKey: "actions.playback.playPause",
         toggleOnKey: "actions.playback.play",
