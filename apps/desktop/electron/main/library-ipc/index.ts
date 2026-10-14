@@ -154,8 +154,9 @@ export function watchEditorWindow(win: BrowserWindow) {
     const id = win.webContents.id;
     win.webContents.on(
         "did-start-navigation",
-        (_event, _url, _isInPlace, isMainFrame) => {
-            if (isMainFrame) service?.closeSender(id);
+        (_event, _url, isInPlace, isMainFrame) => {
+            // A hash or history change keeps the page, and so its sessions.
+            if (isMainFrame && !isInPlace) service?.closeSender(id);
         },
     );
     win.on("closed", () => {

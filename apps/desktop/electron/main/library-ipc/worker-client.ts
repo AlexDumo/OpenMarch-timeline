@@ -136,6 +136,8 @@ export class ImportWorkerClient {
                     `Couldn't start the import worker: ${String(error)}`,
                 ),
             );
+            // The rest of the queue tries again, so no job waits forever.
+            this.pump();
             return;
         }
         this.jobTimer = setTimeout(
