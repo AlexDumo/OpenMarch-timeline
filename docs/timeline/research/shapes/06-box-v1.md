@@ -1,6 +1,7 @@
 # Box v1: the rebuild's first shape
 
-Status: owner decisions, 2026-10-12 and 2026-10-13. Not built yet.
+Status: owner decisions, 2026-10-12 and 2026-10-13; revised after the owner's hands-on feedback on
+2026-10-14 (marchers on the edges, evenness first). Built on branch `shapes/box-v1`.
 
 ## Why a rebuild
 
@@ -36,27 +37,35 @@ The owner signs off each shape hands-on before the next one starts.
 ### Drawing
 
 - Select marchers, open Box, then drag from corner to corner.
-- The rectangle is the **footprint**. Each marcher stands in the middle of its own cell. The
-  owner's reason: "we have no idea if marchers will be on the corner."
-- The marchers are split into files and ranks with cells as close to square as possible. The
-  split uses hysteresis so the file count doesn't flicker as the drag crosses a boundary.
+- **The marchers stand on the rectangle's edges**: the front and back ranks on the front and back
+  edges, the end files on the sides. A marcher stands on the corner where the drag started,
+  snapped to the half-step grid. The intervals snap to half steps, so the far edge lands near
+  the cursor rather than always on it. (Revised 2026-10-14. The first build read the rectangle
+  as a footprint with each marcher in the middle of its cell; in the owner's hands that put the
+  marchers somewhere that looked arbitrary.)
+- **Evenness first.** Of the splits whose cells are within 2× of square for the drawn
+  rectangle, the one with the fewest empty spots in its short rank wins, then the one closest
+  to square. When no split is within 2×, the fewest empty spots of all. 20 marchers become 5 × 4
+  or 4 × 5, not 6 + 6 + 6 + 2. The split uses hysteresis so the file count doesn't flicker as
+  the drag crosses a boundary.
 - Intervals snap live to **half steps**. The smallest is half a step.
-- **The marchers snap** to the half-step grid, not the footprint's edges. The footprint follows
-  from where they stand.
 - **Shift** makes the across and deep intervals equal. The footprint is not forced square.
 - **Alt** turns snapping off.
-- A short rank is the **back** rank, **centered**.
+- A short rank is the **back** rank, **centered**, at the same interval. The readout says how
+  many spots it leaves empty ("· 2 short").
 - While dragging, dots show the new spots and the marchers stay where they are. The lines from
   each marcher to its spot appear when the drag ends.
 - No rotation in v1.
 
 ### Editing an open box
 
-- **Corner handles** stretch both intervals in half steps. Files and ranks stay the same.
-- **Side handles** stretch one axis's interval in half steps.
+- The handles sit on the corner and edge marchers. **Corner handles** stretch both intervals in
+  half steps. Files and ranks stay the same.
+- **Side handles** stretch one axis's interval in half steps. A single file or rank has no
+  handles on that axis.
 - **Drag inside** the box to move it.
 - A readout under the box shows files, ranks and intervals. Its **−** and **+** buttons, and
-  the `[` and `]` keys, change the number of files. The intervals and the **center** stay put.
+  the `[` and `]` keys, step through every number of files, even ones that leave a short rank. The intervals and the **center** stay put.
   Keeping the center is provisional until the owner has tried it.
 - A press on the field outside the box draws a new box that replaces it. That is one undo step.
 - **Enter** places the box. **Esc** cancels the tool.

@@ -2,11 +2,11 @@
 import { blockKind } from "../kinds/block";
 import type { ToolKind } from "../tool/toolKind";
 import {
-    BOX_HANDLE_KEYS,
     type BoxHandleKey,
     type BoxParams,
     drawBox,
     footprintOf,
+    handleKeysOf,
     handlePoint,
     insideBox,
     moveBox,
@@ -24,13 +24,16 @@ const CURSORS: Readonly<Record<BoxHandleKey, string>> = {
     w: "ew-resize",
 };
 
-/** The box tool: drawn corner to corner, stretched by its corners and sides, moved from inside */
+/**
+ * The box tool: drawn corner to corner, stretched by its corners and sides (the handles sit on the
+ * edge marchers), moved from inside
+ */
 export const boxTool: ToolKind<BoxParams> = {
     shape: blockKind,
     draw: drawBox,
     handles(params, n) {
         const f = footprintOf(params, n);
-        return BOX_HANDLE_KEYS.map((key) => ({
+        return handleKeysOf(params, n).map((key) => ({
             key,
             at: handlePoint(f, key),
             cursor: CURSORS[key],

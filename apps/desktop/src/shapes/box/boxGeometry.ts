@@ -4,8 +4,8 @@ import type { ToolEnv } from "../tool/toolKind";
 
 /**
  * A box as the box tool draws it (docs/timeline/research/shapes/06-box-v1.md): a block square to
- * the field, its rectangle the footprint, each marcher in the middle of its own cell, a short rank
- * at the back and centered.
+ * the field, its rectangle reaching from marcher to marcher (the edge files and ranks stand on
+ * its edges), a short rank at the back and centered.
  */
 export type BoxParams = BlockParams & {
     readonly rotation: 0;
@@ -14,7 +14,10 @@ export type BoxParams = BlockParams & {
     readonly shortRankAt: "back";
 };
 
-/** The footprint's edges, in field units. `top` is the back (toward the back sideline). */
+/**
+ * The rectangle through the edge marchers, in field units. `top` is the back (toward the back
+ * sideline). A single rank or file has no depth or width.
+ */
 export interface Footprint {
     readonly left: number;
     readonly top: number;
@@ -25,15 +28,25 @@ export interface Footprint {
 /** How much better, in log aspect, another file count must fit to replace the current one */
 const SPLIT_HYSTERESIS = 0.15;
 
+/**
+ * How far, in log aspect, a split's cells may be from square and still count as fitting the
+ * drawn rectangle: within 2× either way. Among the splits that fit, the fewest empty spots wins.
+ */
+const SPLIT_BAND = Math.log(2);
+
 export const filesOf = (p: BlockParams): number =>
     Math.max(1, Math.round(p.files));
 
 export const ranksOf = (p: BlockParams, n: number): number =>
     Math.max(1, Math.ceil(Math.max(1, n) / filesOf(p)));
 
+/** How many spots the short rank leaves empty: 0 when every rank is full */
+export const shortBy = (p: BlockParams, n: number): number =>
+    filesOf(p) * ranksOf(p, n) - Math.max(1, n);
+
 export function footprintOf(p: BlockParams, n: number): Footprint {
-    const halfW = (filesOf(p) * p.across) / 2;
-    const halfH = (ranksOf(p, n) * p.deep) / 2;
+    const halfW = ((filesOf(p) - 1) * p.across) / 2;
+    const halfH = ((ranksOf(p, n) - 1) * p.deep) / 2;
     return {
         left: p.center.x - halfW,
         right: p.center.x + halfW,
@@ -52,9 +65,11 @@ export function snapInterval(v: number, env: ToolEnv): number {
 }
 
 /**
- * The file count whose cells come closest to square in a `width` × `depth` footprint. A drag
- * passes through many sizes, so `current` is kept until another count fits clearly better,
- * which stops the count flickering at a boundary.
+ * The file count for `n` marchers in a `width` × `depth` drag. Evenness comes first: of the
+ * counts whose cells are within 2× of square, the one with the fewest empty spots in its short
+ * rank, then the one closest to square. When none is within 2×, the fewest empty spots of all.
+ * A drag passes through many sizes, so `current` is kept until another count fits clearly
+ * better, which stops the count flickering at a boundary.
  */
 export function splitFor(
     width: number,
@@ -67,13 +82,19 @@ export function splitFor(
     const d = Math.max(depth, 1e-6);
     const score = (files: number) =>
         Math.abs(Math.log(w / files / (d / Math.ceil(count / files))));
+    const empty = (files: number) => files * Math.ceil(count / files) - count;
+    const outside = (files: number) => (score(files) > SPLIT_BAND ? 1 : 0);
+    const better = (a: number, b: number) =>
+        outside(a) - outside(b) || empty(a) - empty(b) || score(a) - score(b);
     let best = 1;
     for (let files = 2; files <= count; files++)
-        if (score(files) < score(best)) best = files;
+        if (better(files, best) < 0) best = files;
     if (
         current !== undefined &&
         current >= 1 &&
         current <= count &&
+        outside(current) === outside(best) &&
+        empty(current) === empty(best) &&
         score(current) - score(best) < SPLIT_HYSTERESIS
     )
         return current;
@@ -81,8 +102,9 @@ export function splitFor(
 }
 
 /**
- * `p` moved so its marchers stand on the grid: the back-left cell's marcher snaps, and every
- * other full-rank marcher follows, the intervals being whole half steps. Unchanged without snap.
+ * `p` moved so its marchers stand on the grid: the back-left corner snaps (a spot of the full
+ * grid, even when the short back rank leaves it empty), and every other marcher follows, the
+ * intervals being whole half steps. Unchanged without snap.
  */
 export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
     if (!env.snap) return p;
@@ -100,7 +122,7 @@ export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
     };
 }
 
-/** A box from its file count and intervals, its footprint reaching from `anchor` toward `sign` */
+/** A box from its file count and intervals, its edge marchers reaching from `anchor` toward `sign` */
 function boxFrom(
     anchor: XY,
     sign: XY,
@@ -113,8 +135,8 @@ function boxFrom(
     const ranks = Math.ceil(Math.max(1, n) / files);
     const box: BoxParams = {
         center: {
-            x: anchor.x + (sign.x * files * across) / 2,
-            y: anchor.y + (sign.y * ranks * deep) / 2,
+            x: anchor.x + (sign.x * (files - 1) * across) / 2,
+            y: anchor.y + (sign.y * (ranks - 1) * deep) / 2,
         },
         rotation: 0,
         files,
@@ -136,10 +158,18 @@ function equalized(across: number, deep: number, env: ToolEnv) {
 }
 
 /**
+ * The interval that spreads `count` marchers across `extent`, edge to edge, or undefined for a
+ * single marcher, which has no interval on that axis
+ */
+const spread = (extent: number, count: number, env: ToolEnv) =>
+    count > 1 ? snapInterval(extent / (count - 1), env) : undefined;
+
+/**
  * The box a drag from `from` to `to` draws for `n` marchers: the files suit the rectangle's
- * proportions and the intervals fill it, in half steps. `previous` is the box this drag drew a
- * moment ago, so its file count holds until another fits clearly better. Undefined for a drag
- * too short to be a box.
+ * proportions, a marcher stands on the corner pressed, and the intervals spread the rest to the
+ * opposite edges, in half steps (so the far edge lands near the cursor, not always on it).
+ * `previous` is the box this drag drew a moment ago, so its file count holds until another fits
+ * clearly better. Undefined for a drag too short to be a box.
  */
 export function drawBox(
     from: XY,
@@ -158,13 +188,15 @@ export function drawBox(
         previous ? filesOf(previous) : undefined,
     );
     const ranks = Math.ceil(Math.max(1, n) / files);
-    let across = snapInterval(width / files, env);
-    let deep = snapInterval(depth / ranks, env);
-    // One rank has no depth to speak of: give it the across interval, for a later stretch
-    if (ranks === 1) deep = across;
+    // One file or one rank has no interval on that axis: it takes the other's, for a later
+    // stretch or file change
+    const a = spread(width, files, env);
+    const d = spread(depth, ranks, env);
+    let across = a ?? d ?? snapInterval(Math.max(width, depth), env);
+    let deep = d ?? across;
     if (env.shift) ({ across, deep } = equalized(across, deep, env));
     return boxFrom(
-        from,
+        env.snap ? env.gridSnap(from) : from,
         { x: signOf(to.x - from.x), y: signOf(to.y - from.y) },
         files,
         across,
@@ -187,6 +219,20 @@ export const BOX_HANDLE_KEYS: readonly BoxHandleKey[] = [
     "sw",
     "w",
 ];
+
+/**
+ * The handles a box shows: a single file has nothing to stretch across and a single rank nothing
+ * to stretch deep, so those handles go (both: none)
+ */
+export function handleKeysOf(p: BlockParams, n: number): BoxHandleKey[] {
+    const across = filesOf(p) > 1;
+    const deep = ranksOf(p, n) > 1;
+    return BOX_HANDLE_KEYS.filter((key) => {
+        const movesX = key.includes("e") || key.includes("w");
+        const movesY = key.includes("n") || key.includes("s");
+        return (!movesX || across) && (!movesY || deep);
+    });
+}
 
 export function handlePoint(f: Footprint, key: BoxHandleKey): XY {
     const x = key.includes("w")
@@ -223,12 +269,11 @@ export function stretchBox(
         x: key.includes("e") ? f.left : f.right,
         y: key.includes("s") ? f.top : f.bottom,
     };
-    let across = movesX
-        ? snapInterval(Math.abs(to.x - anchor.x) / files, env)
-        : base.across;
-    let deep = movesY
-        ? snapInterval(Math.abs(to.y - anchor.y) / ranks, env)
-        : base.deep;
+    let across =
+        (movesX && spread(Math.abs(to.x - anchor.x), files, env)) ||
+        base.across;
+    let deep =
+        (movesY && spread(Math.abs(to.y - anchor.y), ranks, env)) || base.deep;
     if (env.shift && movesX && movesY)
         ({ across, deep } = equalized(across, deep, env));
     // A side handle keeps the other axis where it was; past the fixed edge, the box flips over it
@@ -272,10 +317,18 @@ export function changeFiles(
     return snapToGrid({ ...p, files }, n, env);
 }
 
-/** Whether `at` is inside the footprint */
+/**
+ * Whether `at` grabs the box to move it: inside its edge marchers, or within half an interval
+ * of them, so a single rank or file can be grabbed too
+ */
 export function insideBox(p: BlockParams, n: number, at: XY): boolean {
     const f = footprintOf(p, n);
+    const padX = p.across / 2;
+    const padY = p.deep / 2;
     return (
-        at.x >= f.left && at.x <= f.right && at.y >= f.top && at.y <= f.bottom
+        at.x >= f.left - padX &&
+        at.x <= f.right + padX &&
+        at.y >= f.top - padY &&
+        at.y <= f.bottom + padY
     );
 }

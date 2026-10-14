@@ -29,7 +29,7 @@ const colorsOf = (theme: FieldTheme): ShapeToolLayerColors => ({
     handleFill: "#fff",
 });
 
-/** The outline the box tool draws: its footprint */
+/** The outline the box tool draws: through its edge marchers */
 function outlineOf(tool: ToolState): XY[] | null {
     if (tool.params === null) return null;
     const f = footprintOf(tool.params as BoxParams, tool.marchers.length);

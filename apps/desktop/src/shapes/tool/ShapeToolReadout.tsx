@@ -6,6 +6,7 @@ import {
     filesOf,
     footprintOf,
     ranksOf,
+    shortBy,
     type BoxParams,
 } from "../box/boxGeometry";
 import { stepFiles } from "./ShapeToolKeys";
@@ -42,7 +43,8 @@ function screenPoint(
 }
 
 /**
- * The open box's numbers, just under it: files, ranks and intervals, with buttons for one file
+ * The open box's numbers, just under it: files, ranks, intervals and how many spots the short
+ * rank leaves empty, with buttons for one file
  * fewer or more (also `[` and `]`). Before a box is drawn, a line at the top of the field says
  * how to draw one.
  */
@@ -65,10 +67,11 @@ export function ShapeToolReadout({
         const place = () => {
             const parent = ref.current?.offsetParent;
             if (!parent) return;
+            // Half an interval below the front rank, clear of its marchers
             const f = footprintOf(params, n);
             const p = screenPoint(canvas, parent, {
                 x: (f.left + f.right) / 2,
-                y: f.bottom,
+                y: f.bottom + params.deep / 2,
             });
             setAt((old) =>
                 old &&
@@ -99,6 +102,7 @@ export function ShapeToolReadout({
     const stepPx = canvas.fieldProperties.pixelsPerStep;
     const files = filesOf(params);
     const ranks = ranksOf(params, n);
+    const short = shortBy(params, n);
     return (
         <div
             ref={ref}
@@ -123,6 +127,7 @@ export function ShapeToolReadout({
                 {plural(ranks, "rank", "ranks")} ·{" "}
                 {formatSteps(params.across / stepPx)} ×{" "}
                 {formatSteps(params.deep / stepPx)} steps
+                {short > 0 && ` · ${short} short`}
             </span>
             <button
                 type="button"
