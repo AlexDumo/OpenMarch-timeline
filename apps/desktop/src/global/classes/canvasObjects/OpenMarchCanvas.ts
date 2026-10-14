@@ -234,6 +234,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     private _wrapperResizeObserver: ResizeObserver | null = null;
     private _viewportEl: HTMLElement | null = null;
     private _unsubscribeLayoutResizing: (() => void) | null = null;
+    /** See `getBaseZoom` */
+    private _baseZoom: number | null = null;
 
     /**
      * Constants for zoom limits
@@ -1100,10 +1102,20 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     }
 
     /**
-     * Compute the "base zoom" so that the field fits vertically in the current viewport.
-     * If the field already fits at 1.0, base zoom is 1.0.
+     * The "base zoom" (100% in the zoom controls): the zoom the field was last centered at
+     * (`centerAtBaseZoom`). Kept, not recomputed from the canvas's height, so resizing the panes
+     * (the timeline splitter, the window) doesn't change the zoom shown when the field's zoom
+     * hasn't changed.
      */
     public getBaseZoom(): number {
+        return this._baseZoom ?? this.fitBaseZoom();
+    }
+
+    /**
+     * The zoom at which the field fits vertically in the current viewport.
+     * If the field already fits at 1.0, it is 1.0.
+     */
+    private fitBaseZoom(): number {
         const viewportHeight = this.getHeight();
         const fieldHeight = this.fieldProperties?.height ?? viewportHeight;
         if (fieldHeight <= 0 || viewportHeight <= 0) return 1.0;
@@ -1118,7 +1130,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         const fieldWidth = this.fieldProperties?.width ?? viewportWidth;
         const fieldHeight = this.fieldProperties?.height ?? viewportHeight;
 
-        const baseZoom = this.getBaseZoom();
+        const baseZoom = this.fitBaseZoom();
+        this._baseZoom = baseZoom;
         const panX = (viewportWidth - fieldWidth * baseZoom) / 2;
         const panY = (viewportHeight - fieldHeight * baseZoom) / 2;
         this.setViewportTransform([baseZoom, 0, 0, baseZoom, panX, panY]);

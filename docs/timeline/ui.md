@@ -981,7 +981,9 @@ from it. The spec still wins on the model; this file decides presentation.
 
 - **UI-19: a resizable split between the canvas and the timeline (hands-on feedback, 2026-10-13).**
   A divider sits between the canvas and the timeline. Drag it, or focus it and press Arrow Up
-  or Down (Shift for bigger steps), to resize both panes; the canvas refits.
+  or Down (Shift for bigger steps), to resize both panes. The field keeps its zoom and its place
+  on screen, during the drag and after it: the pane shows more or less of it, and the zoom
+  readout doesn't change (100% is the zoom the field was last centered at).
   - **Default: fitted.** With no chosen height the timeline is as small as it can be and still
     show every track, so it grows and shrinks as tracks come and go. Double-click the divider,
     or press Home, to go back to fitted.
