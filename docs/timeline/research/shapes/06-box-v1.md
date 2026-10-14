@@ -64,7 +64,7 @@ The owner signs off each shape hands-on before the next one starts.
 - **Side handles** stretch one axis's interval in half steps. A single file or rank has no
   handles on that axis.
 - **Drag inside** the box to move it.
-- A readout under the box shows files, ranks and intervals. Its **−** and **+** buttons, and
+- A readout under the box shows its size as across × deep ("8 × 4") and the intervals. Its **−** and **+** buttons, and
   the `[` and `]` keys, step through every number of files, even ones that leave a short rank. The intervals and the **center** stay put.
   Keeping the center is provisional until the owner has tried it.
 - A press on the field outside the box draws a new box that replaces it. That is one undo step.

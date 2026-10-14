@@ -23,9 +23,6 @@ export function formatSteps(steps: number): string {
     return whole === 0 ? "½" : `${whole}½`;
 }
 
-const plural = (n: number, one: string, many: string) =>
-    `${n} ${n === 1 ? one : many}`;
-
 /** Where a field point is drawn, relative to the readout's positioned parent */
 function screenPoint(
     canvas: OpenMarchCanvas,
@@ -43,10 +40,10 @@ function screenPoint(
 }
 
 /**
- * The open box's numbers, just under it: files, ranks, intervals and how many spots the short
- * rank leaves empty, with buttons for one file
- * fewer or more (also `[` and `]`). Before a box is drawn, a line at the top of the field says
- * how to draw one.
+ * The open box's numbers, just under it: "8 × 4 · 2 steps · 1 short", across × deep (owner,
+ * 2026-10-14: say "8 × 4", nobody says files and ranks), with buttons for one fewer or more
+ * across (also `[` and `]`). Before a box is drawn, a line at the top of the field says how to
+ * draw one.
  */
 export function ShapeToolReadout({
     canvas,
@@ -114,8 +111,8 @@ export function ShapeToolReadout({
         >
             <button
                 type="button"
-                aria-label="One file fewer"
-                title="One file fewer ( [ )"
+                aria-label="One fewer across"
+                title="One fewer across ( [ )"
                 className="hover:text-accent disabled:opacity-40"
                 disabled={files <= 1}
                 onClick={() => stepFiles(-1)}
@@ -123,16 +120,14 @@ export function ShapeToolReadout({
                 <MinusIcon size={14} />
             </button>
             <span data-testid="shape-tool-readout-text">
-                {plural(files, "file", "files")} ×{" "}
-                {plural(ranks, "rank", "ranks")} ·{" "}
-                {formatSteps(params.across / stepPx)} ×{" "}
+                {files} × {ranks} · {formatSteps(params.across / stepPx)} ×{" "}
                 {formatSteps(params.deep / stepPx)} steps
                 {short > 0 && ` · ${short} short`}
             </span>
             <button
                 type="button"
-                aria-label="One file more"
-                title="One file more ( ] )"
+                aria-label="One more across"
+                title="One more across ( ] )"
                 className="hover:text-accent disabled:opacity-40"
                 disabled={files >= n}
                 onClick={() => stepFiles(1)}
