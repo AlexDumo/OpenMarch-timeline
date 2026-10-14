@@ -24,6 +24,7 @@ import { consumeStopRequest, consumeSuspendRequest } from "./timelineTransport";
  *   stops at the end of the show; an isolated timeline loops over its range instead. Stop and
  *   pause end it as they end Play; stopped from anywhere else, P moves to the last whole beat
  *   played (`seek`).
+ * - Navigation while playing (`haltTimelinePlayback`) stops it and moves the flags and P itself.
  * - A scrub's suspension (`suspendTimelinePlayback`, UI-12 review) pauses without writing P or the
  *   cursor: the scrub moves the cursor, and resumes playback when it ends.
  *
@@ -61,7 +62,8 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
         lastLiveBeat.current = null;
         if (run === null) return;
         store.setPlayback(null);
-        if (suspended) return;
+        // A halt leaves the playhead to the navigation that stopped playback (UI-22)
+        if (suspended || request === "halt") return;
         // UI-22: a pause freezes on the nearest beat played (after Play's start flag, so the
         // window stays on the move), and the flags stay
         if (request === "pause" && live !== null) {

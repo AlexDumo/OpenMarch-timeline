@@ -286,7 +286,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().selection).toEqual({ kind: "range", start: 1, end: 5 });
     });
 
-    it("pausing a play-on run moves an unpinned start flag with the playhead; a pinned one stays (UI-12 review)", async ({
+    it("playing on stopped from outside the transport lands on the last beat played, and the flags come to it (UI-22)", async ({
         db,
         wrapper,
     }) => {
@@ -298,7 +298,6 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             ]);
             store().selectRange(1, 9);
         });
-        expect(store().startPinned).toBe(false);
         audio.seconds = 6.1; // beat 13.2
         play(result);
         frame();
@@ -307,19 +306,8 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         });
         expect(store().playheadBeat).toBe(13);
         expect(store().startBeat).toBe(9);
+        expect(store().endBeat).toBe(17);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 13 });
-
-        act(() => {
-            store().selectRange(5, 9);
-        });
-        expect(store().startPinned).toBe(true);
-        play(result);
-        frame();
-        act(() => {
-            result.current.playing.setIsPlaying(false);
-        });
-        expect(store().playheadBeat).toBe(13);
-        expect(store().startBeat).toBe(5);
     });
 
     it("does nothing before the audio has started", async ({ db, wrapper }) => {
@@ -355,7 +343,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().playheadBeat).toBe(17);
     });
 
-    it("with looping on, Play loops between the flags wherever the playhead is, and never moves it while playing (UI-22)", async ({
+    it("with looping on, Play loops between the flags wherever the playhead is in them, and never moves it while playing (UI-22)", async ({
         db,
         wrapper,
     }) => {
@@ -391,18 +379,20 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(result.current.playing.isPlaying).toBe(false);
         expect(store().playheadBeat).toBe(13);
 
-        // A pinned end flag and the playhead dragged outside the flags: Play still goes to the
-        // start flag and plays to the end flag
+        // The end flag dragged on and the playhead moved back inside the flags: Play still goes
+        // to the start flag and plays to the end flag
         act(() => {
             store().setLooping(true);
-            store().setEnd(15);
-            store().seek(3);
+            store().beginLineDrag("end");
+            store().dragLine(15);
+            store().endLineDrag();
+            store().seek(11);
         });
         expect(store().endBeat).toBe(15);
         space(result);
         expect(store().playback).toMatchObject({ from: 9, to: 15 });
         expect(store().cursorBeat).toBe(9);
-        expect(store().playheadBeat).toBe(3);
+        expect(store().playheadBeat).toBe(11);
         audio.seconds = 5;
         frame();
         space(result);
@@ -431,12 +421,13 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 13 });
     });
 
-    it("Space in isolation loops the isolated range, looping on or off, and never moves P (UI-22)", async ({
+    it("Space in isolation loops the isolated range with looping on, and never moves P (UI-22)", async ({
         db,
         wrapper,
     }) => {
         const { result } = await setUp(db, wrapper);
         act(() => {
+            store().setLooping(true);
             store().setStoredTimelines([
                 {
                     id: 1,
@@ -622,6 +613,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         }) => {
             const { result } = await setUp(db, wrapper);
             act(() => {
+                store().setLooping(true);
                 store().setStoredTimelines([
                     {
                         id: 1,

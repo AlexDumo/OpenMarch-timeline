@@ -25,6 +25,7 @@ export function transportState(
     return {
         playPause: playing || hasNext,
         playStop: playing || hasNext,
+        stopPlayback: index >= 0,
         previousPage: !playing && hasPrevious,
         firstPage: !playing && hasPrevious,
         nextPage: !playing && hasNext,
@@ -38,7 +39,8 @@ export function transportState(
 /**
  * The playback action for a key press, using the editor's shortcuts: Space
  * and Shift+Space play, and while playing one stops and the other pauses
- * (`space`, the editor's setting, UI-22), Q and E step a page, Shift+Q and
+ * (`space`, the editor's setting, UI-22), `.` stops (to the end flag), Q and
+ * E step a page, Shift+Q and
  * Shift+E a beat, and Alt+Q and Alt+E (or Home and End) go to the first and
  * last page. Matches on `code`, like the editor, so the keys stay put on
  * other layouts.
@@ -69,6 +71,8 @@ export function playbackActionForKey(
             return event.shiftKey ? "previousBeat" : "previousPage";
         case "KeyE":
             return event.shiftKey ? "nextBeat" : "nextPage";
+        case "Period":
+            return event.shiftKey ? null : "stopPlayback";
         case "Home":
             return event.shiftKey ? null : "firstPage";
         case "End":

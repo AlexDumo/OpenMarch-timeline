@@ -259,6 +259,8 @@ describeDbTests("timeline rendering", (it) => {
             const canvas = await createCanvasWithMarchers(db);
             const store = useTimelineSelectionStore.getState();
             store.reset();
+            // Flags over beats 9 to 17, so the scrubs below end inside them (UI-22)
+            store.selectRange(1, 17);
             store.seek(9);
             let renders = 0;
             renderHook(() => {

@@ -26,7 +26,7 @@ export function useNavigationActionHandlers() {
      * Playing, it jumps playback there, as the transport's Previous and Next do.
      */
     const navigate = (target: TimelineNavigation) =>
-        navigateTimeline(beats, pages, isPlaying, target);
+        navigateTimeline(beats, pages, isPlaying, target, setIsPlaying);
 
     const goNext = () => navigate("next-page");
     const goPrevious = () => navigate("previous-page");

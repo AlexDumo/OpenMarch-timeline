@@ -3,9 +3,11 @@ import {
     displayedBeat,
     editWindow,
     followingStart,
+    insideFlags,
     isMarcherDimmed,
     lineDragPositions,
     normalizePlayheadBeat,
+    pageAround,
     resolveStoredTimeline,
     selectedStoredTimeline,
     useTimelineSelectionStore,
@@ -54,14 +56,16 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         expect(store().playheadBeat).toBe(0);
     });
 
-    it("seeking moves the playhead and the window's end, and bumps the revision even in place", () => {
+    it("seeking inside the flags moves the playhead and the window's end, and bumps the revision even in place", () => {
         store().setPageBoxes(BOXES);
         store().selectRange(1, 9);
         const revision = store().playheadRevision;
         store().seek(4);
-        // UI-10: the window ends at the playhead, and the unpinned start flag follows it
+        // UI-10: the window ends at the playhead; the flags stay (UI-22)
         expect(store().selection).toEqual({ kind: "range", start: 1, end: 4 });
         expect(store().playheadBeat).toBe(4);
+        expect(store().startBeat).toBe(1);
+        expect(store().endBeat).toBe(9);
         store().seek(4);
         expect(store().playheadRevision).toBe(revision + 2);
     });
@@ -71,7 +75,6 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         store().selectRange(1, 9);
         const range = store().selection;
         store().seek(9);
-        store().seekKeepingStart(9);
         store().beginScrub();
         store().endScrub();
         expect(store().selection).toBe(range);
@@ -144,72 +147,60 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         expect(isMarcherDimmed(store(), 1)).toBe(false);
     });
 
-    it("the unpinned start flag follows navigation to the page box holding the playhead", () => {
+    it("a seek outside the flags brings both flags to the page box holding it (UI-22)", () => {
         store().setPageBoxes(BOXES);
-        store().seek(13);
+        store().setShowEndBeat(30);
+        store().selectRange(1, 9);
+        store().seek(12);
         expect(store().startBeat).toBe(9);
-        expect(store().startPinned).toBe(false);
-        expect(store().selection).toEqual({ kind: "range", start: 9, end: 13 });
-        store().seek(17); // on a flag: the box ending there
-        expect(store().selection).toEqual({ kind: "range", start: 9, end: 17 });
-        store().seek(30); // past the last flag: the last flag
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 25,
-            end: 30,
-        });
-        store().seek(0);
-        expect(store().selection).toEqual({ kind: "home" });
-    });
-
-    it("a dragged range pins the start flag until something unpins it explicitly (UI-12)", () => {
-        store().setPageBoxes(BOXES);
-        store().selectRange(12, 17);
-        expect(store().startPinned).toBe(true);
-        store().seek(22); // navigation keeps a pinned flag behind the playhead
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 12,
-            end: 22,
-        });
-        store().seek(12); // reaching it keeps it: the window falls back to the box, as after Stop
-        expect(store().startPinned).toBe(true);
-        expect(store().startBeat).toBe(12);
-        expect(store().selection).toEqual({ kind: "range", start: 9, end: 12 });
-        store().seek(5); // scrubbing back past it keeps it too
-        store().seek(16);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 12,
-            end: 16,
-        });
-        store().selectRange(9, 17); // a page box is unpinned
-        expect(store().startPinned).toBe(false);
-    });
-
-    it("an unpinned end flag sits on the playhead and follows every seek (UI-22)", () => {
-        store().setPageBoxes(BOXES);
-        store().selectRange(9, 17);
         expect(store().endBeat).toBe(17);
-        expect(store().endPinned).toBe(false);
-        store().seek(14);
-        expect(store().endBeat).toBe(14);
-        store().beginScrub();
-        store().seek(20);
-        store().endScrub();
-        expect(store().endBeat).toBe(20);
-        store().selectHome();
+        expect(store().playheadBeat).toBe(12);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 12 });
+        // On the start flag is outside: the page box ending there
+        store().seek(9);
+        expect(store().startBeat).toBe(1);
+        expect(store().endBeat).toBe(9);
+        // Past the last flag: from there to the end of the show
+        store().seek(27);
+        expect(store().startBeat).toBe(25);
+        expect(store().endBeat).toBe(30);
+        // Show time 0 is home
+        store().seek(1);
+        expect(store().selection).toEqual({ kind: "home" });
         expect(store().endBeat).toBe(0);
     });
 
-    it("a pause moves the playhead and leaves both flags; Stop goes back to the end flag (UI-22)", () => {
+    it("a dragged range puts the flags on it, and they stay through seeks inside them (UI-22)", () => {
+        store().setPageBoxes(BOXES);
+        store().selectRange(12, 15);
+        expect(store().startBeat).toBe(12);
+        expect(store().endBeat).toBe(15);
+        store().seek(14);
+        expect(store().startBeat).toBe(12);
+        expect(store().endBeat).toBe(15);
+        expect(insideFlags(store(), 14)).toBe(true);
+        expect(insideFlags(store(), 12)).toBe(false);
+        expect(insideFlags(store(), 15)).toBe(true);
+    });
+
+    it("a page box, page navigation or home puts the end flag and the playhead on its end (UI-22)", () => {
+        store().setPageBoxes(BOXES);
+        store().selectRange(9, 17);
+        expect(store().endBeat).toBe(17);
+        expect(store().playheadBeat).toBe(17);
+        store().selectHome();
+        expect(store().startBeat).toBe(0);
+        expect(store().endBeat).toBe(0);
+        expect(store().playheadBeat).toBe(0);
+    });
+
+    it("a pause moves the playhead inside the flags; Stop goes back to the end flag (UI-22)", () => {
         store().setPageBoxes(BOXES);
         store().selectRange(9, 17);
         store().pauseAt(12, 9);
         expect(store().playheadBeat).toBe(12);
         expect(store().startBeat).toBe(9);
         expect(store().endBeat).toBe(17);
-        expect(store().endPinned).toBe(false);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 12 });
         store().stopAtEnd();
         expect(store().playheadBeat).toBe(17);
@@ -219,47 +210,23 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         store().pauseAt(9, 9);
         expect(store().playheadBeat).toBe(10);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 10 });
-        // A seek after a pause takes an unpinned end flag along again
-        store().seek(15);
-        expect(store().endBeat).toBe(15);
-    });
-
-    it("setEnd pins the end flag where it's dragged, after the start flag; a page box or unpinEnd puts it back on the playhead (UI-22)", () => {
-        store().setPageBoxes(BOXES);
-        store().setShowEndBeat(30);
-        store().selectRange(9, 17);
-        store().setEnd(22);
-        expect(store().endBeat).toBe(22);
-        expect(store().endPinned).toBe(true);
-        // A pinned end flag stays when the playhead moves, even outside the flags
-        store().seek(5);
-        expect(store().endBeat).toBe(22);
-        expect(store().playheadBeat).toBe(5);
-        // Kept after the start flag and inside the show
-        store().selectRange(9, 17);
-        store().setEnd(3);
-        expect(store().endBeat).toBe(10);
-        store().setEnd(99);
-        expect(store().endBeat).toBe(30);
-        store().unpinEnd();
-        expect(store().endBeat).toBe(17);
-        expect(store().endPinned).toBe(false);
-        // Dropped on the playhead, it isn't pinned
-        store().setEnd(17);
-        expect(store().endPinned).toBe(false);
-        store().setEnd(20);
-        store().selectRange(17, 25);
+        // Paused past the end flag (playing on), the flags come to it
+        store().pauseAt(20);
+        expect(store().startBeat).toBe(17);
         expect(store().endBeat).toBe(25);
-        expect(store().endPinned).toBe(false);
+        expect(store().playheadBeat).toBe(20);
     });
 
-    it("an end flag on a moved page flag goes with it (UI-22)", () => {
+    it("flags on a moved page flag go with it (UI-22)", () => {
         store().setPageBoxes(BOXES);
-        store().selectRange(1, 9);
-        store().setEnd(17);
+        store().selectRange(9, 17);
+        store().seek(12);
         store().followPageFlagMove(17, 19);
         expect(store().endBeat).toBe(19);
-        expect(store().endPinned).toBe(true);
+        expect(store().startBeat).toBe(9);
+        expect(store().playheadBeat).toBe(12);
+        store().followPageFlagMove(9, 8);
+        expect(store().startBeat).toBe(8);
     });
 
     it("setLooping turns looping on and off, and a run playing now follows it (UI-22)", () => {
@@ -287,12 +254,15 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         expect(followingStart(1, BOXES)).toBe(0);
     });
 
-    it("a start flag placed before the page boxes load is unpinned when they arrive", () => {
+    it("keeps the flags when the page boxes arrive (UI-22)", () => {
         store().selectRange(9, 17);
-        expect(store().startPinned).toBe(true); // no boxes yet
         store().setPageBoxes(BOXES);
-        expect(store().startPinned).toBe(false);
+        expect(store().startBeat).toBe(9);
+        expect(store().endBeat).toBe(17);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 17 });
+        expect(pageAround(12, BOXES, 30)).toEqual(BOXES[1]);
+        expect(pageAround(27, BOXES, 30)).toEqual({ start: 25, end: 30 });
+        expect(pageAround(1, BOXES, 30)).toBeNull();
     });
 
     it("computes the window and the following start as pure functions", () => {
@@ -378,11 +348,10 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
                 start: 12,
                 end: 15,
             });
-            store().seekKeepingStart(40);
-            expect(store().playheadBeat).toBe(20);
+            expect(store().endBeat).toBe(20);
         });
 
-        it("Esc (exit) restores the start flag and playhead it saved", () => {
+        it("Esc (exit) restores the flags and playhead it saved", () => {
             store().selectRange(3, 9);
             store().isolate(2);
             store().isolate(3);
@@ -390,7 +359,7 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
             store().exitIsolation();
             expect(store().isolation).toBeNull();
             expect(store().startBeat).toBe(3);
-            expect(store().startPinned).toBe(true);
+            expect(store().endBeat).toBe(9);
             expect(store().playheadBeat).toBe(9);
         });
 
@@ -474,7 +443,7 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
             store().selectRange(3, 9);
             const before = {
                 startBeat: store().startBeat,
-                startPinned: store().startPinned,
+                endBeat: store().endBeat,
                 playheadBeat: store().playheadBeat,
             };
             // The double-click's single clicks select the page box first
@@ -497,91 +466,70 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
     });
 });
 
-describe("unpinning the start flag (UI-12)", () => {
+describe("a drag of the playhead (UI-22)", () => {
     beforeEach(() => {
         store().reset();
         store().setPageBoxes(BOXES);
-    });
-
-    it("sends a pinned S back to the page box holding P, which it then follows", () => {
-        store().selectRange(5, 17);
-        expect(store().startPinned).toBe(true);
-        store().unpinStart();
-        expect(store().startPinned).toBe(false);
-        expect(store().startBeat).toBe(9);
-        expect(store().playheadBeat).toBe(17);
-        expect(store().selection).toEqual({ kind: "range", start: 9, end: 17 });
-        store().seek(21);
-        expect(store().startBeat).toBe(17);
-    });
-
-    it("leaves an unpinned S, and isolation's S, alone", () => {
         store().selectRange(9, 17);
-        const before = store().selection;
-        store().unpinStart();
-        expect(store().selection).toBe(before);
-        store().setStoredTimelines([timeline(1, 5, 17, [1])]);
-        store().isolate(1);
-        const isolated = store().startBeat;
-        store().unpinStart();
-        expect(store().startBeat).toBe(isolated);
-    });
-});
-
-describe("the start flag during a gesture (UI-12 review)", () => {
-    beforeEach(() => {
-        store().reset();
-        store().setPageBoxes(BOXES);
     });
 
-    it("stays put while a scrub moves the playhead, without pinning", () => {
-        store().selectRange(9, 17);
+    it("goes anywhere while it lasts, and the flags stay", () => {
         store().beginScrub();
-        store().seek(21);
+        store().seek(20);
+        expect(store().playheadBeat).toBe(20);
         expect(store().startBeat).toBe(9);
-        expect(store().startPinned).toBe(false);
-        expect(store().selection).toEqual({ kind: "range", start: 9, end: 21 });
-        // Back on or before S: the window falls back to the page box holding P, as after Stop
-        store().seek(5);
-        expect(store().startBeat).toBe(9);
-        expect(store().selection).toEqual({ kind: "range", start: 1, end: 5 });
-        store().seek(23);
-        expect(store().startBeat).toBe(9);
+        expect(store().endBeat).toBe(17);
+        store().seek(4);
+        expect(store().playheadBeat).toBe(4);
+        expect(store().endBeat).toBe(17);
     });
 
-    it("follows the playhead once when the scrub ends", () => {
-        store().selectRange(9, 17);
+    it("released outside the flags goes back to the end flag", () => {
         store().beginScrub();
-        store().seek(23);
+        store().seek(22);
         const revision = store().playheadRevision;
-        store().endScrub();
+        store().endScrub("drag");
         expect(store().scrubbing).toBe(false);
-        expect(store().startBeat).toBe(17);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 17,
-            end: 23,
-        });
-        // The playhead didn't move, so nothing restarts
-        expect(store().playheadRevision).toBe(revision);
-        // Not scrubbing: seeking follows at once again
-        store().seek(5);
-        expect(store().startBeat).toBe(1);
+        expect(store().playheadBeat).toBe(17);
+        expect(store().startBeat).toBe(9);
+        expect(store().playheadRevision).toBe(revision + 1);
     });
 
-    it("leaves a pinned S, and isolation's S, where they are", () => {
-        store().selectRange(5, 17);
+    it("released inside the flags stays there", () => {
         store().beginScrub();
-        store().seek(21);
-        store().endScrub();
-        expect(store().startBeat).toBe(5);
-        expect(store().startPinned).toBe(true);
-        store().setStoredTimelines([timeline(1, 5, 17, [1])]);
+        store().seek(22);
+        store().seek(12);
+        store().endScrub("drag");
+        expect(store().playheadBeat).toBe(12);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 12 });
+    });
+
+    it("a click (or arrow-key steps) outside the flags brings them to it", () => {
+        store().beginScrub();
+        store().seek(22);
+        store().endScrub("click");
+        expect(store().startBeat).toBe(17);
+        expect(store().endBeat).toBe(25);
+        expect(store().playheadBeat).toBe(22);
+    });
+
+    it("Play during the drag keeps the playhead where it is", () => {
+        store().beginScrub();
+        store().seek(22);
+        store().endScrub("keep");
+        expect(store().playheadBeat).toBe(22);
+        expect(store().endBeat).toBe(17);
+        expect(store().scrubbing).toBe(false);
+    });
+
+    it("isolated, stays inside the isolated range", () => {
+        store().setStoredTimelines([timeline(1, 9, 17, [1])]);
         store().isolate(1);
         store().beginScrub();
-        store().seek(9);
-        store().endScrub();
-        expect(store().startBeat).toBe(5);
+        store().seek(22);
+        store().endScrub("drag");
+        expect(store().playheadBeat).toBe(17);
+        expect(store().isolation).not.toBeNull();
     });
 
     it("a page box, home or opening a show ends the gesture", () => {
@@ -597,107 +545,87 @@ describe("the start flag during a gesture (UI-12 review)", () => {
     });
 });
 
-describe("dragging the start flag or the playhead by its line (UI-21)", () => {
+describe("dragging a flag by its line (UI-21, UI-22)", () => {
     beforeEach(() => {
         store().reset();
         store().setPageBoxes(BOXES);
     });
 
-    it("keeps the left line the start flag and the right one the playhead", () => {
+    it("keeps the left flag the start flag and the right one the end flag", () => {
         const drag = {
             line: "start" as const,
             startBeat: 5,
-            startPinned: true,
+            endBeat: 12,
             playheadBeat: 12,
         };
         expect(lineDragPositions(drag, 8)).toEqual({
             startBeat: 8,
+            endBeat: 12,
             playheadBeat: 12,
             swapped: false,
         });
         expect(lineDragPositions(drag, 20)).toEqual({
             startBeat: 12,
+            endBeat: 20,
             playheadBeat: 20,
             swapped: true,
         });
-        const playhead = { ...drag, line: "playhead" as const };
-        expect(lineDragPositions(playhead, 9)).toEqual({
+        // A playhead off the end flag stays inside the flags
+        const end = { ...drag, line: "end" as const, playheadBeat: 9 };
+        expect(lineDragPositions(end, 15)).toEqual({
             startBeat: 5,
+            endBeat: 15,
             playheadBeat: 9,
             swapped: false,
         });
-        expect(lineDragPositions(playhead, 2)).toEqual({
+        expect(lineDragPositions(end, 7)).toEqual({
+            startBeat: 5,
+            endBeat: 7,
+            playheadBeat: 7,
+            swapped: false,
+        });
+        expect(lineDragPositions(end, 2)).toEqual({
             startBeat: 2,
+            endBeat: 5,
             playheadBeat: 5,
             swapped: true,
         });
     });
 
-    it("a start flag dragged past the playhead becomes the playhead, and the playhead the start flag", () => {
-        store().selectRange(5, 12);
-        store().beginLineDrag("start");
-        store().dragLine(8);
-        expect(store().selection).toEqual({ kind: "range", start: 8, end: 12 });
-        const revision = store().playheadRevision;
+    it("an end flag dragged on takes a playhead on it along", () => {
+        store().selectRange(9, 17);
+        store().beginLineDrag("end");
         store().dragLine(20);
-        expect(store().startBeat).toBe(12);
-        expect(store().startPinned).toBe(true);
+        expect(store().endBeat).toBe(20);
         expect(store().playheadBeat).toBe(20);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 12,
-            end: 20,
-        });
-        expect(store().playheadRevision).toBe(revision + 1);
-        // Back across, live: they trade back
-        store().dragLine(7);
-        expect(store().selection).toEqual({ kind: "range", start: 7, end: 12 });
-        store().dragLine(20);
+        store().endLineDrag();
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 20 });
+    });
+
+    it("a start flag dragged past the end flag swaps with it", () => {
+        store().selectRange(9, 13);
+        store().beginLineDrag("start");
+        store().dragLine(16);
+        expect(store().startBeat).toBe(13);
+        expect(store().endBeat).toBe(16);
+        expect(store().playheadBeat).toBe(16);
         store().endLineDrag();
         expect(store().lineDrag).toBeNull();
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 12,
-            end: 20,
-        });
     });
 
-    it("a playhead dragged behind the start flag becomes the start flag, and the start flag the playhead", () => {
-        store().selectRange(5, 12);
-        store().beginLineDrag("playhead");
-        store().dragLine(3);
-        expect(store().startBeat).toBe(3);
-        expect(store().startPinned).toBe(true);
-        expect(store().playheadBeat).toBe(5);
-        store().endLineDrag();
-        expect(store().selection).toEqual({ kind: "range", start: 3, end: 5 });
+    it("an end flag dragged behind the start flag swaps with it", () => {
+        store().selectRange(9, 13);
+        store().beginLineDrag("end");
+        store().dragLine(5);
+        expect(store().startBeat).toBe(5);
+        expect(store().endBeat).toBe(9);
+        expect(store().playheadBeat).toBe(9);
     });
 
-    it("a playhead that never crosses ends as a scrub: an unpinned start flag follows it", () => {
-        store().selectRange(9, 17);
-        store().beginLineDrag("playhead");
-        store().dragLine(23);
-        expect(store().startBeat).toBe(9);
-        store().endLineDrag();
-        expect(store().startBeat).toBe(17);
-        expect(store().startPinned).toBe(false);
-    });
-
-    it("a playhead swapped with an unpinned start flag stays swapped", () => {
-        store().selectRange(9, 17);
-        store().beginLineDrag("playhead");
-        store().dragLine(4);
-        store().endLineDrag();
-        expect(store().selection).toEqual({ kind: "range", start: 4, end: 9 });
-        expect(store().startPinned).toBe(true);
-    });
-
-    it("on one page flag, neither page shows selected until release (owner 2026-10-14)", () => {
+    it("on one beat, nothing shows selected until release", () => {
         store().selectRange(9, 17);
         store().beginLineDrag("start");
         store().dragLine(17);
-        expect(store().startBeat).toBe(17);
-        expect(store().playheadBeat).toBe(17);
         expect(store().selection).toEqual({
             kind: "range",
             start: 17,
@@ -705,37 +633,21 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         });
     });
 
-    it("in the middle of a page, neither part shows selected", () => {
-        store().selectRange(9, 13);
-        store().beginLineDrag("playhead");
-        store().dragLine(9);
-        expect(store().selection).toEqual({ kind: "range", start: 9, end: 9 });
-        // Moving off again shows the window
-        store().dragLine(11);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 9,
-            end: 11,
-        });
-    });
-
-    it("a start flag released on the playhead pushes the playhead a beat later", () => {
+    it("a start flag released on the end flag pushes it a beat later", () => {
         store().selectRange(9, 13);
         store().beginLineDrag("start");
         store().dragLine(13);
-        const revision = store().playheadRevision;
         store().endLineDrag();
-        expect(store().lineDrag).toBeNull();
+        expect(store().startBeat).toBe(13);
+        expect(store().endBeat).toBe(14);
         expect(store().selection).toEqual({
             kind: "range",
             start: 13,
             end: 14,
         });
-        expect(store().startPinned).toBe(true);
-        expect(store().playheadRevision).toBe(revision + 1);
     });
 
-    it("a start flag released on the playhead at the show's end pushes nothing past it", () => {
+    it("a start flag released on the end flag at the show's end pushes nothing past it", () => {
         store().setShowEndBeat(25);
         store().selectRange(17, 25);
         store().beginLineDrag("start");
@@ -748,44 +660,30 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         });
     });
 
-    it("a playhead released on the start flag pushes the start flag a beat earlier", () => {
+    it("an end flag released on the start flag pushes it a beat earlier", () => {
         store().selectRange(9, 17);
-        store().beginLineDrag("playhead");
+        store().beginLineDrag("end");
         store().dragLine(9);
-        const revision = store().playheadRevision;
         store().endLineDrag();
         expect(store().selection).toEqual({ kind: "range", start: 8, end: 9 });
-        expect(store().startPinned).toBe(true);
-        expect(store().playheadRevision).toBe(revision);
     });
 
-    it("a start flag pinned mid-page and a playhead released on it", () => {
-        store().selectRange(12, 17);
-        store().beginLineDrag("playhead");
-        store().dragLine(12);
-        store().endLineDrag();
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 11,
-            end: 12,
-        });
-    });
-
-    it("both lines released home stay home", () => {
+    it("both flags released home stay home", () => {
         store().selectRange(1, 9);
-        store().beginLineDrag("playhead");
+        store().beginLineDrag("end");
         store().dragLine(0);
         expect(store().selection).toEqual({ kind: "home" });
         store().endLineDrag();
         expect(store().selection).toEqual({ kind: "home" });
     });
 
-    it("cancelling puts both lines back", () => {
+    it("cancelling puts the flags and the playhead back", () => {
         store().selectRange(5, 12);
         store().beginLineDrag("start");
         store().dragLine(20);
         store().cancelLineDrag();
         expect(store().startBeat).toBe(5);
+        expect(store().endBeat).toBe(12);
         expect(store().playheadBeat).toBe(12);
         expect(store().lineDrag).toBeNull();
     });
@@ -799,7 +697,7 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         expect(store().playheadBeat).toBe(17);
     });
 
-    it("playing or isolating ends a line drag where it is", () => {
+    it("playing or isolating ends a flag drag where it is", () => {
         store().selectRange(5, 12);
         store().beginLineDrag("start");
         store().dragLine(20);
@@ -812,7 +710,7 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         });
         store().setPlayback(null);
         store().setStoredTimelines([timeline(1, 5, 17, [1])]);
-        store().beginLineDrag("playhead");
+        store().beginLineDrag("end");
         store().isolate(1);
         expect(store().lineDrag).toBeNull();
     });
@@ -890,14 +788,10 @@ describe("the playback cursor (UI-11)", () => {
     it("reset turns looping off and puts the end flag back home (UI-22)", () => {
         store().setPageBoxes(BOXES);
         store().selectRange(12, 17);
-        store().setEnd(20);
         store().setLooping(true);
-        expect(store().startPinned).toBe(true);
         store().reset();
         expect(store().looping).toBe(false);
         expect(store().endBeat).toBe(0);
-        expect(store().endPinned).toBe(false);
-        expect(store().startPinned).toBe(false);
         expect(store().startBeat).toBe(0);
         expect(store().playheadBeat).toBe(0);
         expect(store().playback).toBeNull();

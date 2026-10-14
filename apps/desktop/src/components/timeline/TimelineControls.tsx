@@ -94,26 +94,21 @@ export function TimelineMetronomeButton() {
 }
 
 /**
- * Loop (UI-22, C): Play loops between the start and end flags, or stops at the end flag. Lit while
- * on, as the bar between the flags is drawn solid.
+ * Loop (UI-22, C): Play loops between the start and end flags, or stops at the end flag; an
+ * isolated move too. Lit while on, as the bar between the flags is drawn solid.
  */
 export function TimelineLoopButton() {
-    const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
-    // An isolated move always loops (UI-17): lit, and it can't be turned off
-    const looping = useTimelineSelectionStore(
-        (s) => s.looping || s.isolation !== null,
-    );
+    // An isolated move follows Loop too (owner 2026-10-14)
+    const looping = useTimelineSelectionStore((s) => s.looping);
     const shortcut = TRANSPORT_SHORTCUTS.loop;
     return (
         <ShortcutTooltip
             label={looping ? "Loop: on" : "Loop: off"}
-            shortcut={isolated ? undefined : shortcut}
+            shortcut={shortcut}
             hint={
-                isolated
-                    ? "Loop is always on for an isolated move"
-                    : looping
-                      ? "Play loops from the start flag at the end flag"
-                      : "Play stops at the end flag; turn on to loop"
+                looping
+                    ? "Play loops from the start flag at the end flag"
+                    : "Play stops at the end flag; turn on to loop"
             }
         >
             <button
@@ -121,19 +116,12 @@ export function TimelineLoopButton() {
                 data-testid="timeline-loop"
                 aria-label="Loop"
                 aria-pressed={looping}
-                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
-                // Not `disabled` in isolation, so the tooltip still says why it can't turn off
-                aria-disabled={isolated || undefined}
+                aria-keyshortcuts={shortcut.replace(/\s*\+\s*/g, "+")}
                 // Keeps keyboard focus off, so Space after a click is still Play
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                    if (!isolated) toggleTimelineLoop();
-                }}
+                onClick={toggleTimelineLoop}
                 className={clsx(
-                    "rounded-4 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden duration-150 focus-visible:ring-2",
-                    // In isolation: on (lit) but disabled (dimmed), and still takes the pointer for the
-                    // tooltip that says why
-                    isolated ? "cursor-default opacity-50" : "hover:bg-fg-2",
+                    "rounded-4 focus-visible:ring-accent hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden duration-150 focus-visible:ring-2",
                     // Lit in the flags' color, so the button reads as the bar's (UI-22)
                     looping ? START_INK.text : "text-text hover:text-accent",
                 )}

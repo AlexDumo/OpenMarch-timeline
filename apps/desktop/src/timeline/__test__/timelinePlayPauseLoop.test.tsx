@@ -133,7 +133,6 @@ describeDbTests("timeline play, pause, play", (it) => {
             ]);
             store().selectRange(5, 9);
         });
-        expect(store().startPinned).toBe(false);
         writes = 0;
         playPause(3.1); // beat 7.2: the pause freezes on 7
         expect(store().cursorBeat).toBeNull();

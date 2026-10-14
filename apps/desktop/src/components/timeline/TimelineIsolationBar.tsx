@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@openmarch/ui";
-import { FlagIcon, PlayIcon, PushPinSlashIcon } from "@phosphor-icons/react";
-import { useShallow } from "zustand/react/shallow";
+import { FlagIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
 import { isTyping, overlayOpen, spaceStaysPlay } from "./timelineHotkeys";
@@ -14,7 +13,6 @@ import {
     type TimelineEditSelection,
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
-import { playRange } from "@/timeline/timelineTransport";
 
 /**
  * How the isolation bar names a timeline, in pages and counts as designers count them:
@@ -127,41 +125,17 @@ export const passedSets = (names: readonly string[]) =>
  * The line over the field (UI-12, replacing UI-11's From start badge): what a drag edits now, so
  * the window is never only a tint on the timeline. Quiet (no border, subtitle text) for an
  * ordinary page: a whole page box, start flag not pinned. Prominent, and flashed
- * once, when anything is unusual: a partial window, a pinned start flag (with **Unpin**), a window
- * passing page flags (that part never truncates), or past the last flag. When Play plays
- * somewhere else than the window (the end flag was pinned, or a pause left it), it names what Play
- * plays ("Play loops Page 3's move" or "Play runs through Pages 2–3", UI-22). Only the buttons take the pointer, so the field under it stays
+ * once, when anything is unusual: a partial window, a window passing page flags (that part never
+ * truncates), or past the last flag. Only the buttons take the pointer, so the field under it stays
  * usable. Screen readers hear the sentence once it settles, not on every scrubbed beat. Hidden
  * while isolated: the isolation bar says it instead.
  */
 export function TimelineFromStartBadge() {
     const selection = useTimelineSelectionStore((s) => s.selection);
-    const startBeat = useTimelineSelectionStore((s) => s.startBeat);
-    const pinned = useTimelineSelectionStore((s) => s.startPinned);
     const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
     const playing = useTimelineSelectionStore((s) => s.playback !== null);
     const { pages } = useTimingObjects()!;
     const range = selection.kind === "range" ? selection : null;
-    // The pin only matters while it bounds the window (not when P is on or before it)
-    const pinShown = pinned && range !== null && range.start === startBeat;
-    // UI-22: what Play plays, named when it isn't the window being edited
-    const played = useTimelineSelectionStore(
-        useShallow((s) => {
-            const r = playRange(s);
-            return r ? [r.from, r.to] : null;
-        }),
-    );
-    const looping = useTimelineSelectionStore((s) => s.looping);
-    const loopName =
-        played &&
-        !(range && range.start === played[0] && range.end === played[1])
-            ? isolatedTimelineName(
-                  { start: played[0]!, end: played[1]! },
-                  pages,
-              )
-            : null;
-    // Only when it is elsewhere: on the window being edited, the bar between the flags says it
-    const loopShown = !isolated && loopName !== null;
     const through = range ? flagsInside(range, pages) : [];
     const name =
         selection.kind === "home"
@@ -188,17 +162,16 @@ export function TimelineFromStartBadge() {
         return () => clearTimeout(timeout);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [playing]);
-    const unusual =
-        loopShown || pinShown || through.length > 0 || !wholePage || movedOn;
+    const unusual = through.length > 0 || !wholePage || movedOn;
     const sentence =
         selection.kind === "none"
             ? ""
-            : `${movedOn ? "Stopped on a new page. " : ""}Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${loopShown ? `. ${looping ? "Play loops" : "Play runs through"} ${loopName}` : ""}`;
-    // Flash when it turns prominent for a new reason: a pin, or crossing flags
-    const flashKey = `${loopShown}|${pinShown}|${through.join(",")}`;
+            : `${movedOn ? "Stopped on a new page. " : ""}Editing ${name}${through.length ? `, through ${passedSets(through)}` : ""}`;
+    // Flash when it turns prominent for a new reason: crossing flags
+    const flashKey = through.join(",");
     const [fresh, setFresh] = useState(false);
     useEffect(() => {
-        if (!loopShown && !pinShown && through.length === 0) return;
+        if (through.length === 0) return;
         setFresh(true);
         const timeout = setTimeout(() => setFresh(false), 900);
         return () => clearTimeout(timeout);
@@ -230,9 +203,7 @@ export function TimelineFromStartBadge() {
                 unusual
                     ? clsx(
                           "bg-bg-1 text-text border shadow-md",
-                          loopShown || pinShown || through.length
-                              ? START_INK.border
-                              : "border-stroke",
+                          through.length ? START_INK.border : "border-stroke",
                       )
                     : "bg-bg-1/70 text-text-subtitle",
                 (fresh || movedOn) && `ring-4 ${START_INK.ring}`,
@@ -245,7 +216,7 @@ export function TimelineFromStartBadge() {
             <FlagIcon
                 size={14}
                 aria-hidden="true"
-                weight={loopShown ? "fill" : "regular"}
+                weight="regular"
                 className={clsx("shrink-0", START_INK.text)}
             />
             <span className="truncate" aria-hidden="true">
@@ -266,38 +237,6 @@ export function TimelineFromStartBadge() {
                     )}
                 >
                     · through {passedSets(through)}
-                </span>
-            )}
-            {pinShown && (
-                <button
-                    type="button"
-                    data-testid="timeline-window-unpin"
-                    title="The start flag is pinned: it stays here when you move to other pages. Unpin it to follow the page again."
-                    className={clsx(
-                        "rounded-4 hover:bg-fg-2 pointer-events-auto flex shrink-0 items-center gap-4 border px-6 py-1 text-[11px]",
-                        START_INK.border,
-                        START_INK.strongText,
-                    )}
-                    onClick={() =>
-                        useTimelineSelectionStore.getState().unpinStart()
-                    }
-                >
-                    <PushPinSlashIcon size={11} weight="fill" />
-                    Unpin
-                </button>
-            )}
-            {loopShown && (
-                <span
-                    data-testid="timeline-loop-badge"
-                    className="border-stroke flex shrink-0 items-center gap-6 border-l pl-8"
-                >
-                    <span
-                        aria-hidden="true"
-                        className="flex items-center gap-4"
-                    >
-                        <PlayIcon size={11} weight="fill" />
-                        {looping ? "loops" : "runs through"} {loopName}
-                    </span>
                 </span>
             )}
         </div>

@@ -1,17 +1,16 @@
 import {
     memo,
-    useEffect,
     useRef,
-    useState,
     type KeyboardEvent as ReactKeyboardEvent,
-    type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
 } from "react";
 import clsx from "clsx";
-import { PushPinIcon } from "@phosphor-icons/react";
 import { START_INK } from "./startFlagInk";
 import { beatToX, TIMELINE_HEADROOM_HEIGHT } from "./TimelineGeometry";
-import type { TimelinePlayRange as PlayRange } from "./TimelineViewModel";
+import type {
+    TimelinePlayRange as PlayRange,
+    TimelineSeek,
+} from "./TimelineViewModel";
 
 /** Snaps a dragged end flag to the nearest snap beat within this many pixels */
 const SNAP_PX = 8;
@@ -26,10 +25,11 @@ const PENNANT_GRAB_ON_PLAYHEAD = 8;
 /**
  * What Play plays (UI-22): a bar along the ruler's top edge from the start flag to the **end
  * flag**, in the start flag's color, solid while looping and faint while not. The end flag is a
- * pennant pointing back at the start flag, with its own stem once it isn't on the playhead. Drag
- * the pennant (or focus it and use the arrow keys) to place the end flag, snapping to page lines
- * and downbeats (Alt turns snapping off); that pins it, and its pin unpins it, as double-clicking
- * the pennant does. The start flag is dragged by its own line (`TimelineSelectionRange`).
+ * pennant pointing back at the start flag, with its own stem once the playhead isn't on it. Drag
+ * it by the pennant or the stem (or focus the pennant and use the arrow keys), snapping to page
+ * lines and downbeats (Alt turns snapping off); dragged past the start flag, the two swap
+ * (`onLineDrag` with `line: "end"`, the store's flag drag). The start flag is dragged by its own
+ * line (`TimelineSelectionRange`).
  */
 export const TimelinePlayRange = memo(function TimelinePlayRange({
     range,
@@ -37,10 +37,7 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
     pixelsPerBeat,
     height,
     snapBeats = [],
-    pinTop,
-    pinSize,
-    onEndChange,
-    onUnpinEnd,
+    onLineDrag,
 }: {
     /** In view beats */
     range: PlayRange;
@@ -50,25 +47,20 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
     height: number;
     /** Page lines and downbeats the end flag snaps to */
     snapBeats?: readonly number[];
-    /** Where the pin sits, as the start flag's does */
-    pinTop: number;
-    pinSize: number;
-    /** The end flag dragged or stepped to a view beat; without it the flag is drawn only */
-    onEndChange?: (beat: number) => void;
-    onUnpinEnd?: () => void;
+    /** The end flag's drag, as seeks with `line: "end"`; without it the flag is drawn only */
+    onLineDrag?: TimelineSeek;
 }) {
-    const movable = !range.fixed && onEndChange !== undefined;
-    // The end flag while it is dragged, drawn before it's committed
-    const [preview, setPreview] = useState<number | null>(null);
-    const drag = useRef<{ pointerId: number; surface: Element } | null>(null);
-    useEffect(() => setPreview(null), [range.endBeatIndex]);
-    const end = preview ?? range.endBeatIndex;
+    const movable = !range.fixed && onLineDrag !== undefined;
+    const drag = useRef<{
+        pointerId: number;
+        surface: Element;
+        lastBeat: number | null;
+    } | null>(null);
     const startX = Math.round(beatToX(range.startBeatIndex, pixelsPerBeat));
-    const endX = Math.round(beatToX(end, pixelsPerBeat));
-    const onPlayhead = range.endOnPlayhead && preview === null;
+    const endX = Math.round(beatToX(range.endBeatIndex, pixelsPerBeat));
+    const onPlayhead = range.endOnPlayhead;
 
-    const bounded = (beat: number) =>
-        Math.min(beatCount, Math.max(beat, range.startBeatIndex + 1));
+    const bounded = (beat: number) => Math.min(beatCount, Math.max(beat, 0));
     const beatAt = (clientX: number, surface: Element, altKey: boolean) => {
         const raw =
             (clientX - surface.getBoundingClientRect().left) / pixelsPerBeat;
@@ -89,45 +81,55 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
     const handlers = movable
         ? {
               onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
-                  if (event.button !== 0 || event.detail > 1) return;
+                  if (event.button !== 0) return;
                   event.stopPropagation();
                   const surface = event.currentTarget.closest(
                       "[data-testid=timeline-play-range]",
                   );
                   if (!surface) return;
-                  drag.current = { pointerId: event.pointerId, surface };
+                  drag.current = {
+                      pointerId: event.pointerId,
+                      surface,
+                      lastBeat: null,
+                  };
                   event.currentTarget.setPointerCapture?.(event.pointerId);
               },
               onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
                   const current = drag.current;
                   if (!current || current.pointerId !== event.pointerId) return;
-                  setPreview(
-                      beatAt(event.clientX, current.surface, event.altKey),
+                  const beat = beatAt(
+                      event.clientX,
+                      current.surface,
+                      event.altKey,
                   );
+                  if (beat === current.lastBeat) return;
+                  // A press that hasn't left the flag's beat isn't a drag yet
+                  if (current.lastBeat === null && beat === range.endBeatIndex)
+                      return;
+                  current.lastBeat = beat;
+                  onLineDrag?.(beat, { gesture: "drag", line: "end" });
               },
               onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
                   const current = drag.current;
                   if (!current || current.pointerId !== event.pointerId) return;
                   drag.current = null;
                   event.currentTarget.releasePointerCapture?.(event.pointerId);
-                  const beat = beatAt(
-                      event.clientX,
-                      current.surface,
-                      event.altKey,
+                  // A click leaves the end flag where it is
+                  if (current.lastBeat === null) return;
+                  onLineDrag?.(
+                      beatAt(event.clientX, current.surface, event.altKey),
+                      { gesture: "end", line: "end" },
                   );
-                  // A press that didn't move leaves the end flag where it is
-                  if (preview !== null && beat !== range.endBeatIndex)
-                      onEndChange?.(beat);
-                  else setPreview(null);
               },
               onLostPointerCapture: () => {
-                  if (!drag.current) return;
+                  const current = drag.current;
+                  if (!current) return;
                   drag.current = null;
-                  setPreview(null);
-              },
-              onDoubleClick: (event: ReactMouseEvent) => {
-                  event.stopPropagation();
-                  if (range.endPinned) onUnpinEnd?.();
+                  if (current.lastBeat !== null)
+                      onLineDrag?.(range.endBeatIndex, {
+                          gesture: "cancel",
+                          line: "end",
+                      });
               },
               onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
                   const delta =
@@ -140,15 +142,15 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
                   event.preventDefault();
                   // The arrow moves the end flag, not the selected marchers
                   event.stopPropagation();
-                  onEndChange?.(bounded(range.endBeatIndex + delta));
+                  const target = bounded(range.endBeatIndex + delta);
+                  if (target !== range.endBeatIndex)
+                      onLineDrag?.(target, { gesture: "end", line: "end" });
               },
           }
         : {};
     const title = range.fixed
-        ? "The isolated move's end: Play loops it"
-        : range.endPinned
-          ? "End flag: Play stops here, and Stop comes back here. Drag to move it; double-click to put it back on the playhead"
-          : "End flag: Play stops here, and Stop comes back here. Drag it off the playhead to pin it";
+        ? "The isolated move's end"
+        : "End flag: Play stops here, and Stop comes back here. Drag to move it";
 
     return (
         <div
@@ -219,28 +221,6 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
                     height: TIMELINE_HEADROOM_HEIGHT,
                 }}
             />
-            {range.endPinned && !range.fixed && (
-                <button
-                    type="button"
-                    data-testid="timeline-end-pin"
-                    data-timeline-interactive="true"
-                    aria-label="End flag pinned. Click to unpin"
-                    title="Pinned: the end flag stays here when the playhead moves. Click to unpin, so it follows the playhead again."
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={onUnpinEnd}
-                    disabled={!onUnpinEnd}
-                    className={clsx(
-                        "bg-bg-1 rounded-4 pointer-events-auto absolute z-[45] flex items-center justify-center border p-0 shadow-sm enabled:cursor-pointer",
-                        pinSize >= 18 ? "size-18" : "size-14",
-                        START_INK.text,
-                        START_INK.border,
-                    )}
-                    // Left of the stem, mirroring the start flag's pin
-                    style={{ left: endX - 10 - pinSize, top: pinTop }}
-                >
-                    <PushPinIcon size={pinSize >= 18 ? 12 : 10} weight="fill" />
-                </button>
-            )}
         </div>
     );
 });

@@ -4,7 +4,6 @@ import type {
 } from "@/components/timeline/TimelineViewModel";
 import {
     displayedBeat,
-    followingStart,
     useTimelineSelectionStore,
     type TimelineLine,
     type TimelinePlaybackRun,
@@ -27,15 +26,15 @@ import {
 let suspendRequested = false;
 
 /**
- * How the stop in progress ends (UI-22), set by `stopTimelinePlayback` and
- * `pauseTimelinePlayback` for the playback driver: a stop puts the playhead on the end flag, a
- * pause freezes it on the nearest beat. `null` for a stop from anywhere else (the audio editor, a
- * run's end), which ends as the run does.
+ * How the stop in progress ends (UI-22), set by `stopTimelinePlayback`, `pauseTimelinePlayback` and
+ * `haltTimelinePlayback` for the playback driver: a stop puts the playhead on the end flag, a
+ * pause freezes it on the nearest beat, and a halt leaves it to whatever stopped it (navigation).
+ * `null` for a stop from anywhere else (the audio editor, a run's end), which ends as the run does.
  */
 let stopRequest: TimelineStopRequest = null;
 
 /** How the transport asked playback to end (UI-22) */
-export type TimelineStopRequest = "stop" | "pause" | null;
+export type TimelineStopRequest = "stop" | "pause" | "halt" | null;
 
 /**
  * The scrub in progress (UI-12 review): the last whole beat it sent, so a move within the same
@@ -45,6 +44,11 @@ let scrub: {
     beat: number | null;
     playing: boolean;
     suspended: TimelinePlaybackRun | null;
+    /** The beat it was pressed on; moving off it while paused makes it a drag, not a click */
+    pressed: number | null;
+    dragged: boolean;
+    /** Play was pressed during the drag (UI-22): the rest of the gesture does nothing */
+    detached: boolean;
 } | null = null;
 
 /**
@@ -56,10 +60,10 @@ let scrub: {
 export function navigateTimelinePages(
     pages: readonly FlagPage[],
     direction: TimelineNavigation,
+    /** Where to go from; by default the beat the timeline shows (a held frame, or the playhead) */
+    from = displayedBeat(useTimelineSelectionStore.getState()),
 ): boolean {
     const state = useTimelineSelectionStore.getState();
-    // From the beat the timeline shows: a held preview frame, or the playhead (UI-11)
-    const from = displayedBeat(state);
     if (direction === "previous-beat" || direction === "next-beat") {
         state.seek(beatStep(Math.round(from), direction));
         return displayedBeat(useTimelineSelectionStore.getState()) !== from;
@@ -80,20 +84,35 @@ const beatStep = (beat: number, direction: "previous-beat" | "next-beat") =>
 
 /**
  * Previous and Next, from the transport buttons and the shortcuts alike (Q and E; Shift for a
- * beat, Alt for the start and end). Paused, it moves the playhead (`navigateTimelinePages`); playing,
- * playback jumps there from the beat playing now and goes on (`jumpTimelinePages`).
+ * beat, Alt for the start and end). Paused, it moves the flags and the playhead
+ * (`navigateTimelinePages`). Playing, it stops and goes there from the beat playing now, paused
+ * (UI-22, owner 2026-10-14).
  */
 export function navigateTimeline(
     beats: readonly BeatTiming[],
     pages: readonly FlagPage[],
     isPlaying: boolean,
     direction: TimelineNavigation,
+    setIsPlaying: (isPlaying: boolean) => void,
 ): boolean {
     if (!isPlaying) return navigateTimelinePages(pages, direction);
     const live = playbackStartInfoRef.current
         ? beatAtTime(beats, getLivePlaybackPosition())
         : displayedBeat(useTimelineSelectionStore.getState());
-    return jumpTimelinePages(beats, pages, Math.floor(live), direction);
+    haltTimelinePlayback(setIsPlaying);
+    return navigateTimelinePages(pages, direction, Math.floor(live));
+}
+
+/**
+ * Stops playback and leaves the flags and the playhead to the caller (UI-22): navigation while
+ * playing goes to its page, paused.
+ */
+export function haltTimelinePlayback(
+    setIsPlaying: (isPlaying: boolean) => void,
+): void {
+    // Started outside the transport there may be no run yet; it stops all the same
+    if (useTimelineSelectionStore.getState().playback) stopRequest = "halt";
+    setIsPlaying(false);
 }
 
 /**
@@ -124,8 +143,9 @@ const playbackTarget = (beats: readonly BeatTiming[], beat: number) => {
 };
 
 /**
- * Play's run jumped outside its flags plays on from there (UI-11), so it doesn't loop or stop at
- * an end flag it has passed; inside them it goes on as it was. Isolation keeps its run.
+ * Play's run jumped past its end flag plays on from there to the end of the show (UI-22, owner
+ * 2026-10-14), so it doesn't loop or stop at an end flag it has passed; anywhere before it, it goes
+ * on as it was, to the end flag. Isolation keeps its run.
  */
 const runAfterJump = (
     run: TimelinePlaybackRun,
@@ -133,7 +153,7 @@ const runAfterJump = (
 ): TimelinePlaybackRun =>
     run.kind === "preview" &&
     !useTimelineSelectionStore.getState().isolation &&
-    (target < run.from || target >= run.to)
+    target >= run.to
         ? { kind: "on" }
         : run;
 
@@ -186,29 +206,26 @@ export function consumeStopRequest(): TimelineStopRequest {
 }
 
 /**
- * A paused drag of the start flag or the playhead by its line (UI-21): the store's line drag, in
- * which a line dragged past the other swaps with it. Returns the beat the playhead shows, or
- * `undefined` when this isn't a line drag after all, so the seek goes on as a plain one: a press
- * on the playhead that ends without a drag is a click, and moves only the playhead.
+ * A paused drag of a flag by its line (UI-21, UI-22): the store's flag drag, in which a flag
+ * dragged past the other swaps with it. Returns the beat the playhead shows, or `undefined` when
+ * this isn't a flag drag after all (the playhead's line), so the seek goes on as a plain one.
  */
 function dragTimelineLine(
     line: TimelineLine,
     beat: number,
     gesture: TimelineSeekGesture | undefined,
 ): number | null | undefined {
+    // UI-22: the playhead never moves a flag; its drag is a scrub
+    if (line === "playhead") return undefined;
     const state = useTimelineSelectionStore.getState();
     const dragging = state.lineDrag !== null;
-    if (!dragging && line === "playhead" && gesture !== "drag")
-        return undefined;
     if (gesture === "cancel") {
-        if (line === "start") state.cancelLineDrag();
-        else state.endLineDrag();
+        state.cancelLineDrag();
         return null;
     }
     if (!dragging) state.beginLineDrag(line);
-    // Isolated, there is no line drag: the playhead scrubs and the start flag stays
-    if (useTimelineSelectionStore.getState().lineDrag === null)
-        return line === "playhead" ? undefined : null;
+    // Isolated, there is no flag drag: the flags stay
+    if (useTimelineSelectionStore.getState().lineDrag === null) return null;
     state.dragLine(beat);
     if (gesture === undefined || gesture === "end") {
         state.endLineDrag();
@@ -222,9 +239,12 @@ function dragTimelineLine(
  * (`TimelineSeekGesture`); without one it is a single action.
  *
  * - Paused, it moves the playhead (`seek`). A scrub sends one seek per whole beat it passes, and
- *   an unpinned start flag stays put until it ends, then follows once (`beginScrub`, `endScrub`).
+ *   may leave the flags; when it ends outside them, a drag goes back to the end flag and a click
+ *   (or arrow-key steps) brings the flags to it (UI-22, `endScrub`). Play pressed during a drag
+ *   plays from there (`playTimeline`), and the rest of the gesture does nothing.
  * - Playing, a click (a press that ends without moving off its beat), or a seek without a gesture,
- *   jumps playback there and plays on (`jumpTimelinePlayback`). A drag suspends playback
+ *   jumps playback there and plays on (`jumpTimelinePlayback`): to the end flag, or past it to the
+ *   end of the show. A drag suspends playback
  *   (`suspendTimelinePlayback`) and the canvas follows the pointer; when it ends, playback resumes
  *   once, from there (`resumeTimelinePlayback`). The playhead stays put throughout.
  *
@@ -241,11 +261,14 @@ export function seekTimeline(
         isPlaying,
         setIsPlaying,
         line,
+        keys = false,
     }: {
         isPlaying: boolean;
         setIsPlaying: (isPlaying: boolean) => void;
         /** The line the gesture drags by itself (`TimelineSeekOptions.line`) */
         line?: TimelineLine;
+        /** Arrow-key steps (`TimelineSeekOptions.keys`), which never count as a drag */
+        keys?: boolean;
     },
 ): number | null {
     if (!Number.isFinite(beat)) return null;
@@ -253,21 +276,34 @@ export function seekTimeline(
     if (line !== undefined && !isPlaying) {
         const shown = dragTimelineLine(line, beat, gesture);
         if (shown !== undefined) return shown;
-    } else if (line === "start") return null;
+    } else if (line === "start" || line === "end") return null;
     if (gesture === undefined || gesture === "end" || gesture === "cancel") {
         const ended = scrub;
         scrub = null;
+        if (ended?.detached) return null;
         if (ended?.suspended)
             resumeTimelinePlayback(beats, beat, ended.suspended, setIsPlaying);
         else if (ended?.playing ?? isPlaying) jumpTimelinePlayback(beats, beat);
         else {
+            // UI-22: released outside the flags, a drag goes back to the end flag and a click
+            // brings the flags to it
             state.seek(beat);
-            state.endScrub();
+            state.endScrub(ended?.dragged ? "drag" : "click");
         }
         return null;
     }
     const whole = Math.round(beat);
-    scrub ??= { beat: null, playing: isPlaying, suspended: null };
+    scrub ??= {
+        beat: null,
+        playing: isPlaying,
+        suspended: null,
+        pressed: whole,
+        dragged: false,
+        detached: false,
+    };
+    if (scrub.detached) return null;
+    if (gesture === "drag" && !keys && whole !== scrub.pressed)
+        scrub.dragged = true;
     if (scrub.beat !== whole) {
         scrub.beat = whole;
         if (!scrub.playing) {
@@ -285,55 +321,36 @@ export function seekTimeline(
         : null;
 }
 
-/**
- * Navigation while playing (UI-12): playback jumps to the target flag, or a beat on, from the
- * beat playing now. Returns false when there is nowhere to go.
- */
-export function jumpTimelinePages(
-    beats: readonly BeatTiming[],
-    pages: readonly FlagPage[],
-    liveBeat: number,
-    direction: TimelineNavigation,
-): boolean {
-    if (direction === "previous-beat" || direction === "next-beat")
-        return jumpTimelinePlayback(beats, beatStep(liveBeat, direction));
-    const target = navigationTarget(pages, liveBeat, direction);
-    return target ? jumpTimelinePlayback(beats, target.flag) : false;
-}
-
 type PlayState = Pick<
     TimelineSelectionState,
-    "isolation" | "startBeat" | "endBeat" | "pageBoxes"
+    "isolation" | "startBeat" | "endBeat"
 >;
 
 /**
- * What **Play** plays (UI-22): an isolated move's range, else the start flag to the end flag. With
- * the end flag on or before the start flag (a pinned start flag the playhead went back past), from
- * the start of the page box the end flag is in, as the edit window falls back to. `null` at home,
- * where there is nothing between the flags.
+ * What **Play** plays (UI-22): the start flag to the end flag (an isolated move's range, while
+ * isolated). `null` at home, where both flags are on beat 0.
  */
 export const playRange = (
     state: PlayState,
 ): { readonly from: number; readonly to: number } | null => {
     if (state.isolation)
         return { from: state.isolation.start, to: state.isolation.end };
-    const to = state.endBeat;
-    const from =
-        state.startBeat < to
-            ? state.startBeat
-            : followingStart(to, state.pageBoxes);
-    return from < to ? { from, to } : null;
+    return state.startBeat < state.endBeat
+        ? { from: state.startBeat, to: state.endBeat }
+        : null;
 };
 
-/** Whether Play loops (UI-22): looping is on, or a move is isolated, which always loops */
+/** Whether Play loops (UI-22): looping is on; an isolated move follows it too (owner 2026-10-14) */
 export const playLoops = (
-    state: Pick<TimelineSelectionState, "isolation" | "looping">,
-): boolean => state.looping || state.isolation !== null;
+    state: Pick<TimelineSelectionState, "looping">,
+): boolean => state.looping;
 
 /**
  * **Play** (UI-22): the playhead goes to the start flag and plays to the end flag, looping there
  * while looping is on, stopping there (on the end flag) when it is off. At home, where both flags
- * are on beat 0, it goes to the first page and plays that. Does nothing while playing. Returns
+ * are on beat 0, it goes to the first page and plays that. Pressed while the playhead is being
+ * dragged, it plays from the dragged beat instead, and the drag is over: before the end flag to
+ * it, past it on to the end of the show (owner 2026-10-14). Does nothing while playing. Returns
  * false when there is nothing to play.
  */
 export function playTimeline(
@@ -341,6 +358,8 @@ export function playTimeline(
 ): boolean {
     let state = useTimelineSelectionStore.getState();
     if (state.playback) return false;
+    if (scrub && !scrub.playing && !scrub.detached && state.scrubbing)
+        return playFromDrag(setIsPlaying);
     const first = state.pageBoxes[0];
     if (!playRange(state) && first && state.selection.kind === "home") {
         state.selectRange(first.start, first.end);
@@ -354,6 +373,23 @@ export function playTimeline(
         ...range,
         once: !playLoops(state),
     });
+    setIsPlaying(true);
+    return true;
+}
+
+/** Play pressed during a paused drag of the playhead (`playTimeline`) */
+function playFromDrag(setIsPlaying: (isPlaying: boolean) => void): boolean {
+    const state = useTimelineSelectionStore.getState();
+    const from = state.playheadBeat;
+    scrub!.detached = true;
+    state.endScrub("keep");
+    const range = playRange(state);
+    state.cue(from);
+    state.setPlayback(
+        range && from < range.to
+            ? { kind: "preview", ...range, once: !playLoops(state) }
+            : { kind: "on" },
+    );
     setIsPlaying(true);
     return true;
 }
@@ -405,11 +441,10 @@ export function pressTimelinePlayKey(
 }
 
 /**
- * **C** and the Loop button (UI-22): turns looping on or off. A run playing now loops or stops at
- * the end flag from then on. Does nothing in isolation, which always loops its move.
+ * **C** and the Loop button (UI-22): turns looping on or off, isolated or not. A run playing now
+ * loops or stops at the end flag from then on.
  */
 export function toggleTimelineLoop(): void {
     const state = useTimelineSelectionStore.getState();
-    if (state.isolation) return;
     state.setLooping(!state.looping);
 }

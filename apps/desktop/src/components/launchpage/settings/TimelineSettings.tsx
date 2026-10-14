@@ -1,5 +1,13 @@
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { T } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTriggerButton,
+} from "@openmarch/ui";
+import { spacePlayKey } from "@/shortcuts/playKeys";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     WAVEFORM_STYLES,
@@ -11,6 +19,10 @@ import WaveformStylePreview from "./WaveformStylePreview";
 
 export default function TimelineSettings() {
     const { uiSettings, setUiSettings } = useUiSettingsStore();
+    const { t } = useTranslate();
+    // UI-22: what Space does while playing, kept as the play keys' bindings
+    const space = useShortcutOverridesStore((s) => spacePlayKey(s.overrides));
+    const setSpacePlayKey = useShortcutOverridesStore((s) => s.setSpacePlayKey);
 
     return (
         <SettingsPanel>
@@ -52,6 +64,35 @@ export default function TimelineSettings() {
                         </ToggleGroup.Item>
                     ))}
                 </ToggleGroup.Root>
+            </SettingRow>
+            <SettingRow
+                label={<T keyName="settings.timeline.spacePlayKey" />}
+                description={
+                    <T keyName="settings.timeline.spacePlayKey.description" />
+                }
+                htmlFor="space-play-key"
+            >
+                <Select
+                    value={space}
+                    onValueChange={(value) =>
+                        setSpacePlayKey(value === "pause" ? "pause" : "stop")
+                    }
+                >
+                    <SelectTriggerButton
+                        id="space-play-key"
+                        data-testid="settings-space-play-key"
+                        label={t(`settings.timeline.spacePlayKey.${space}`)}
+                        className="min-w-[120px]"
+                    />
+                    <SelectContent>
+                        <SelectItem value="stop">
+                            <T keyName="settings.timeline.spacePlayKey.stop" />
+                        </SelectItem>
+                        <SelectItem value="pause">
+                            <T keyName="settings.timeline.spacePlayKey.pause" />
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
             </SettingRow>
         </SettingsPanel>
     );

@@ -139,8 +139,13 @@ describe("play", () => {
     it("playRange is the isolated range, else the start flag to the end flag (UI-22)", () => {
         store().selectRange(1, 9);
         expect(playRange(store())).toEqual({ from: 1, to: 9 });
-        store().setEnd(6);
+        store().beginLineDrag("end");
+        store().dragLine(6);
+        store().endLineDrag();
         expect(playRange(store())).toEqual({ from: 1, to: 6 });
+        // Home has nothing between the flags
+        store().selectHome();
+        expect(playRange(store())).toBeNull();
         // Isolation wins
         store().setStoredTimelines([
             {
@@ -238,7 +243,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(result.current.playback.positionBeat).toBe(17);
     });
 
-    it("navigates to flags, selecting each page's range or home, only while paused", async ({
+    it("navigates to flags, selecting each page's range or home; playing, it stops and goes there (UI-22)", async ({
         db,
         wrapper,
     }) => {
@@ -280,11 +285,22 @@ describeDbTests("useTimelinePlayback", (it) => {
         act(() => {
             result.current.playback.onNavigate!("last-page");
         });
+        expect(result.current.playback.isPlaying).toBe(false);
+        expect(result.current.selection).toEqual({
+            kind: "range",
+            start: 9,
+            end: 17,
+        });
+        // Paused again, a seek outside the flags brings them to it
         act(() => {
             result.current.playback.onSeek!(4);
         });
-        expect(result.current.selection).toEqual({ kind: "home" });
-        expect(store().playheadBeat).toBe(0);
+        expect(result.current.selection).toEqual({
+            kind: "range",
+            start: 1,
+            end: 4,
+        });
+        expect(store().endBeat).toBe(9);
     });
 
     it("Shift+click on Previous and Next steps the playhead a beat, inside the show", async ({
@@ -348,14 +364,12 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(store().startBeat).toBe(1);
         expect(store().endBeat).toBe(9);
         expect(result.current.playback.playLoops).toBe(true);
-        // A pinned end flag goes back on the page's end with E
+        // E puts both flags on the next page, and looping stays on
         act(() => {
-            store().setEnd(12);
             result.current.playback.onNavigate!("next-page");
         });
         expect(store().startBeat).toBe(9);
         expect(store().endBeat).toBe(17);
-        expect(store().endPinned).toBe(false);
         expect(store().looping).toBe(true);
         act(() => {
             toggleTimelineLoop();
@@ -364,7 +378,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(result.current.playback.playLoops).toBe(false);
     });
 
-    it("a seek or a click takes an unpinned end flag along, and leaves a pinned one (UI-22)", async ({
+    it("a seek or a click inside the flags leaves them; outside, they come to it (UI-22)", async ({
         db,
         wrapper,
     }) => {
@@ -378,22 +392,18 @@ describeDbTests("useTimelinePlayback", (it) => {
         act(() => {
             result.current.playback.onSeek!(5);
         });
-        expect(store().endBeat).toBe(5);
+        expect(store().endBeat).toBe(9);
+        expect(store().playheadBeat).toBe(5);
         act(() => {
-            result.current.playback.onSeek!(4, { gesture: "press" });
-            result.current.playback.onSeek!(4, { gesture: "end" });
+            result.current.playback.onSeek!(12, { gesture: "press" });
+            result.current.playback.onSeek!(12, { gesture: "end" });
         });
-        expect(store().endBeat).toBe(4);
-        act(() => {
-            store().setEnd(8);
-            result.current.playback.onSeek!(12);
-        });
+        expect(store().startBeat).toBe(9);
+        expect(store().endBeat).toBe(17);
         expect(store().playheadBeat).toBe(12);
-        expect(store().endBeat).toBe(8);
-        expect(store().endPinned).toBe(true);
     });
 
-    it("leaves a hand-drawn start flag through a seek, and page navigation selects the page (UI-12)", async ({
+    it("leaves a dragged range's flags through a seek inside them, and page navigation selects the page", async ({
         db,
         wrapper,
     }) => {
@@ -404,13 +414,12 @@ describeDbTests("useTimelinePlayback", (it) => {
             store().setPageBoxes(PAGE_BOXES);
             store().selectRange(12, 15);
         });
-        expect(store().startPinned).toBe(true);
         act(() => {
-            result.current.playback.onSeek!(16);
+            result.current.playback.onSeek!(14);
         });
         expect(store().startBeat).toBe(12);
-        expect(store().startPinned).toBe(true);
-        // E selects the target page. It does not keep the drawn flag or turn looping on
+        expect(store().endBeat).toBe(15);
+        // E selects the target page. It does not keep the drawn flags or turn looping on
         act(() => {
             result.current.playback.onNavigate!("next-page");
         });
@@ -419,11 +428,10 @@ describeDbTests("useTimelinePlayback", (it) => {
             start: 9,
             end: 17,
         });
-        expect(store().startPinned).toBe(false);
         expect(store().looping).toBe(false);
     });
 
-    it("C in isolation does nothing; an isolated move always loops (UI-22)", async ({
+    it("an isolated move follows Loop too: C turns it on and off (UI-22)", async ({
         db,
         wrapper,
     }) => {
@@ -443,12 +451,12 @@ describeDbTests("useTimelinePlayback", (it) => {
             ]);
             store().isolate(1);
         });
-        expect(store().looping).toBe(false);
-        expect(result.current.playback.playLoops).toBe(true);
+        expect(result.current.playback.playLoops).toBe(false);
         act(() => {
             toggleTimelineLoop();
         });
-        expect(store().looping).toBe(false);
+        expect(store().looping).toBe(true);
+        expect(result.current.playback.playLoops).toBe(true);
         expect(store().isolation).not.toBeNull();
     });
 
@@ -575,8 +583,9 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(store().playheadBeat).toBe(3);
         expect(result.current.selected.selectedPage?.id).toBe(2);
 
+        // Ended as a click there (UI-22), the flags come to page 1
         act(() => {
-            store().endScrub();
+            store().endScrub("click");
         });
         await waitFor(() =>
             expect(result.current.selected.selectedPage?.id).toBe(1),

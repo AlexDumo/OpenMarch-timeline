@@ -38,17 +38,17 @@ describe("the Loop button (UI-22)", () => {
         expect(store().looping).toBe(false);
     });
 
-    it("is lit and can't turn off while a move is isolated, which always loops", () => {
+    it("turns looping on and off for an isolated move too (owner 2026-10-14)", () => {
         store().setStoredTimelines([
             { id: 1, start: 9, end: 17, marcherIds: new Set([1]) },
         ]);
         store().isolate(1);
         renderButton();
         const button = screen.getByTestId("timeline-loop");
-        expect(button).toHaveAttribute("aria-pressed", "true");
-        expect(button).toHaveAttribute("aria-disabled", "true");
+        expect(button).toHaveAttribute("aria-pressed", "false");
+        expect(button).not.toHaveAttribute("aria-disabled");
         fireEvent.click(button);
-        expect(store().looping).toBe(false);
+        expect(store().looping).toBe(true);
         expect(button).toHaveAttribute("aria-pressed", "true");
     });
 });

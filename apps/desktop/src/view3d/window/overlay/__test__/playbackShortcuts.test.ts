@@ -6,7 +6,7 @@ import { playbackActionForKey } from "../playback";
 
 /** The `code` the window's key handler sees for a binding's key. */
 const codeForKey = (key: string) =>
-    key === "Space" ? "Space" : `Key${key.toUpperCase()}`;
+    key === "Space" || key === "Period" ? key : `Key${key.toUpperCase()}`;
 
 describe("3D View playback shortcuts", () => {
     it.each(VIEW3D_PLAYBACK_ACTIONS)(

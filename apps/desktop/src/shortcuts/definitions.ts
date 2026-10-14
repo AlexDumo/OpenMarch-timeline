@@ -299,12 +299,13 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Shift+Space"],
     },
-    // The Stop button: the playhead goes to the end flag, playing or paused
+    // The Stop button's key (owner 2026-10-14): the playhead goes to the end flag, playing or
+    // paused
     stopPlayback: {
         labelKey: "actions.playback.stopPlayback",
         category: "playback",
         scope: "canvas",
-        defaultBindings: [],
+        defaultBindings: ["Period"],
     },
     // UI-22: C turns looping between the start and end flags on or off (timeline mode)
     toggleLoop: {

@@ -8,7 +8,6 @@ import {
     CaretRightIcon,
     DotsThreeIcon,
     HouseIcon,
-    PushPinIcon,
     StopIcon,
     PauseIcon,
     PlayIcon,
@@ -2235,10 +2234,6 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
 export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     range,
     startFlagBeatIndex,
-    startPinned = false,
-    onUnpin,
-    pinTop = TIMELINE_PAGE_ROW_BOTTOM + 2,
-    pinSize = 18,
     beatCount,
     pixelsPerBeat,
     height,
@@ -2252,15 +2247,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     range: TimelineBeatRange;
     /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
     startFlagBeatIndex?: number;
-    /**
-     * The start flag is pinned (UI-10): it stays through navigation. UI-12 draws a pin beside its
-     * stem, under the ruler, so a forgotten pin can be seen; clicking the pin unpins (`onUnpin`).
-     */
-    startPinned?: boolean;
-    onUnpin?: () => void;
-    /** Where the pin sits, below the ruler, and its size (compact's row is smaller) */
-    pinTop?: number;
-    pinSize?: number;
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
@@ -2613,8 +2599,8 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     <span className="bg-accent absolute top-0 right-1/2 h-10 w-8 rounded-l-sm" />
                 </button>
             );
-        // UI-10, UI-11: the start flag, where movers leave from. No words: a line and a pennant,
-        // hollow (UI-17: the loop is its own bar, `TimelineLoopBar`)
+        // UI-10, UI-11: the start flag, where movers leave from. No words: a line and a pennant
+        // (UI-22: the bar to the end flag is `TimelinePlayRange`)
         return (
             <>
                 <button
@@ -2635,32 +2621,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                         style={{ height }}
                     />
                 </button>
-                {startPinned && (
-                    <button
-                        type="button"
-                        data-testid="timeline-start-pin"
-                        data-timeline-interactive="true"
-                        aria-label="Start flag pinned. Click to unpin"
-                        title="Pinned: the start flag stays here when you move to other pages. Click to unpin, so it follows the page again."
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={onUnpin}
-                        disabled={!onUnpin}
-                        className={clsx(
-                            "bg-bg-1 rounded-4 pointer-events-auto absolute z-[45] flex items-center justify-center border p-0 shadow-sm enabled:cursor-pointer",
-                            pinSize >= 18 ? "size-18" : "size-14",
-                            START_INK.text,
-                            START_INK.border,
-                        )}
-                        // Clear of the flag's own 12px handle and of a rehearsal tab centered on
-                        // the flag's beat (UI-12 review)
-                        style={{ left: x + 10, top: pinTop }}
-                    >
-                        <PushPinIcon
-                            size={pinSize >= 18 ? 12 : 10}
-                            weight="fill"
-                        />
-                    </button>
-                )}
                 {/* The pennant is its own handle in the headroom strip (UI-20), above the
                     playhead's (z-50) and the loop's ends (z-58): after Stop the flag is drawn on
                     the playhead, so this is the part of it that can always be grabbed. Its left edge is drawn on the stem's
@@ -2796,8 +2756,8 @@ const ARROW_STEPS_SETTLE_MS = 300;
 
 /**
  * Arrow-key steps on the playhead as one gesture (UI-12 review): the first step is a `press`, the
- * rest `drag`s, and the run ends 300ms after the last key, or when a held key is released, so an
- * unpinned start flag follows once rather than page by page.
+ * rest `drag`s, and the run ends 300ms after the last key, or when a held key is released. Sent
+ * with `keys`, so steps past the flags bring the flags to the playhead once the run ends (UI-22).
  */
 const useArrowKeySteps = (
     onSeek:
@@ -2816,7 +2776,7 @@ const useArrowKeySteps = (
         if (!current) return;
         run.current = null;
         clearTimeout(current.timer);
-        onSeekRef.current?.(current.beat, { gesture: "end" });
+        onSeekRef.current?.(current.beat, { gesture: "end", keys: true });
     }, []);
     useEffect(() => end, [end]);
     return {
@@ -2833,6 +2793,7 @@ const useArrowKeySteps = (
             };
             onSeekRef.current?.(beat, {
                 gesture: current ? "drag" : "press",
+                keys: true,
             });
         },
         /** A key came up: a held key's run ends now; a tapped one waits for the next tap */
@@ -2917,6 +2878,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     onSeek,
     isPlaying = false,
     scrubLine,
+    outsideFlags = false,
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
@@ -2937,6 +2899,8 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
      * follows the pointer by a transform, without re-rendering (`useScrubFollow`)
      */
     scrubLine?: TimelineLiveValue<number | null>;
+    /** A drag holds it outside the flags (UI-22): drawn faded, as it goes back on release */
+    outsideFlags?: boolean;
 }) {
     const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
@@ -2994,6 +2958,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
             type="button"
             data-testid="timeline-playhead"
             data-timeline-scrub="true"
+            data-outside-flags={outsideFlags || undefined}
             aria-label={`Playback position: ${getPlayheadReadout(model, positionBeat).spoken}`}
             onPointerDown={(event) => event.preventDefault()}
             onKeyDown={(event) => {
@@ -3026,9 +2991,12 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
             style={{ left, height }}
         >
             {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
-                the line, so its tip runs into the line */}
+                the line, so its tip runs into the line. Faded outside the flags (UI-22) */}
             <span
-                className="bg-accent pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2"
+                className={clsx(
+                    "bg-accent pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2",
+                    outsideFlags && "opacity-40",
+                )}
                 style={{ height }}
             />
             <svg
@@ -3036,7 +3004,10 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 height="11"
                 viewBox="0 0 12 11"
                 aria-hidden="true"
-                className="text-accent pointer-events-none absolute top-0 left-[calc(50%-6px)]"
+                className={clsx(
+                    "text-accent pointer-events-none absolute top-0 left-[calc(50%-6px)]",
+                    outsideFlags && "opacity-40",
+                )}
             >
                 <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
             </svg>

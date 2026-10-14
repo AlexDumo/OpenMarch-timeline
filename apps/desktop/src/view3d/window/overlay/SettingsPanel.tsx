@@ -454,6 +454,7 @@ function StepOffFootRow() {
  */
 const SHORTCUTS = [
     "playPause",
+    "stop",
     "previousNext",
     "firstLast",
     "cameras",

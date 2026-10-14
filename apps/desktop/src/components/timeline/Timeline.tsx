@@ -118,6 +118,8 @@ export interface TimelinePlayback {
     readonly onStop?: () => void;
     /** The keys that stop and pause while playing, as keycaps (UI-22) */
     readonly playKeys?: TimelinePlayKeys;
+    /** A drag holds the playhead outside the flags (UI-22): it is drawn faded */
+    readonly outsideFlags?: boolean;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -162,14 +164,8 @@ export interface TimelineProps {
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
     /** Resizing a clip by its edges (resize-move), in spec beats */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Unpins the start flag (UI-12), from its pin */
-    readonly onUnpinStart?: () => void;
     /** What Play plays (UI-22), spec beats: the start flag to the end flag */
     readonly playRange?: TimelinePlayRange | null;
-    /** The end flag dragged or stepped to a beat (UI-22), spec beats */
-    readonly onEndFlagChange?: (beat: number) => void;
-    /** Unpins the end flag (UI-22), from its pin */
-    readonly onUnpinEnd?: () => void;
     /**
      * The right-click menu's **Add selected marchers** (UI-9, P8.14), for a page box, a clip's
      * timeline or a dragged range. It gets spec beats; the menu doesn't change the selection.
@@ -328,7 +324,6 @@ export const selectionToView = (
                         ),
                     }
                   : {}),
-              ...(selection.startPinned ? { startPinned: true } : {}),
           }
         : selection;
 
@@ -429,7 +424,7 @@ export function Timeline(props: TimelineProps) {
                   onSelectionChange(selectionToSpec(next, axis))
             : undefined,
     );
-    // UI-22: what Play plays, mapped onto the view axis, and the end flag back
+    // UI-22: what Play plays, mapped onto the view axis
     const { playRange } = props;
     const viewPlayRange = useMemo(
         () =>
@@ -442,11 +437,7 @@ export function Timeline(props: TimelineProps) {
                 : null,
         [playRange, axis],
     );
-    const changeEndFlag = useLatestCallback(
-        props.onEndFlagChange
-            ? (beat: number) => props.onEndFlagChange?.(axis.toSpec(beat))
-            : undefined,
-    );
+
     const { onTimelineRangeCommit, onCreateTrack, timelines } = props;
     // A clip move keeps its length: send the spec range shifted by the move, so a clip whose start
     // was hidden with beat 0 moves by exactly the beats it was dragged
@@ -726,6 +717,7 @@ export function Timeline(props: TimelineProps) {
         playLoops: playback.playLoops,
         onStop: useLatestCallback(playback.onStop),
         playKeys: playback.playKeys,
+        playheadOutsideFlags: playback.outsideFlags,
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,
@@ -741,10 +733,7 @@ export function Timeline(props: TimelineProps) {
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
-        onUnpinStart: useLatestCallback(props.onUnpinStart),
         playRange: viewPlayRange,
-        onEndFlagChange: changeEndFlag,
-        onUnpinEnd: useLatestCallback(props.onUnpinEnd),
         transportSecondary: props.transportSecondary,
         transportViewControls: props.transportViewControls,
         showTransport: props.showTransport ?? true,

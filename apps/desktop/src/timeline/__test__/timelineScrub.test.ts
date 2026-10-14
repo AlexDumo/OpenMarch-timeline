@@ -27,6 +27,8 @@ beforeEach(() => {
 
 describe("scrubbing while paused", () => {
     it("seeks once per whole beat, skipping moves within the beat it is on", () => {
+        // Flags over the whole show, so the scrub stays inside them
+        store().selectRange(1, 17);
         const revision = store().playheadRevision;
         seekTimeline(BEATS, 5, "press", paused);
         seekTimeline(BEATS, 5.2, "drag", paused);
@@ -44,22 +46,49 @@ describe("scrubbing while paused", () => {
         seekTimeline(BEATS, 6, "end", paused);
     });
 
-    it("keeps an unpinned start flag until the scrub ends, then moves it once", () => {
+    it("a drag released outside the flags goes back to the end flag; a click brings the flags (UI-22)", () => {
         store().selectRange(1, 9);
         seekTimeline(BEATS, 9, "press", paused);
         seekTimeline(BEATS, 12, "drag", paused);
         seekTimeline(BEATS, 15, "drag", paused);
+        expect(store().playheadBeat).toBe(15);
         expect(store().startBeat).toBe(1);
-        expect(store().startPinned).toBe(false);
+        expect(store().endBeat).toBe(9);
         seekTimeline(BEATS, 15, "end", paused);
-        expect(store().startBeat).toBe(9);
+        expect(store().playheadBeat).toBe(9);
+        expect(store().startBeat).toBe(1);
         expect(store().scrubbing).toBe(false);
-        // A click without a gesture moves it at once
+        // A click (press and release on one beat) outside the flags brings them to it
+        seekTimeline(BEATS, 12, "press", paused);
+        seekTimeline(BEATS, 12, "end", paused);
+        expect(store().startBeat).toBe(9);
+        expect(store().endBeat).toBe(17);
+        expect(store().playheadBeat).toBe(12);
+        // So does a seek without a gesture (the go-to box)
         seekTimeline(BEATS, 4, undefined, paused);
         expect(store().startBeat).toBe(1);
+        expect(store().endBeat).toBe(9);
+        // Arrow-key steps past the flags count as a click, not a drag
+        const keys = { ...paused, keys: true };
+        seekTimeline(BEATS, 9, "press", keys);
+        seekTimeline(BEATS, 10, "drag", keys);
+        seekTimeline(BEATS, 10, "end", keys);
+        expect(store().startBeat).toBe(9);
+        expect(store().playheadBeat).toBe(10);
+    });
+
+    it("a drag released inside the flags stays there (UI-22)", () => {
+        store().selectRange(1, 9);
+        seekTimeline(BEATS, 9, "press", paused);
+        seekTimeline(BEATS, 14, "drag", paused);
+        seekTimeline(BEATS, 5, "drag", paused);
+        seekTimeline(BEATS, 5, "end", paused);
+        expect(store().playheadBeat).toBe(5);
+        expect(store().endBeat).toBe(9);
     });
 
     it("seeks without a gesture every time", () => {
+        store().selectRange(1, 9);
         const revision = store().playheadRevision;
         seekTimeline(BEATS, 5, undefined, paused);
         seekTimeline(BEATS, 5, undefined, paused);
@@ -67,6 +96,7 @@ describe("scrubbing while paused", () => {
     });
 
     it("says where each scrub seek landed: the beat sent, or the held playhead", () => {
+        store().selectRange(1, 9);
         // Inside a seeked beat too, so a move that doesn't seek still knows
         expect(seekTimeline(BEATS, 5, "press", paused)).toBe(5);
         expect(seekTimeline(BEATS, 5, "drag", paused)).toBe(5);
@@ -99,64 +129,51 @@ describe("scrubbing while paused", () => {
     });
 });
 
-describe("dragging a line by itself while paused (UI-21)", () => {
+describe("dragging a line by itself while paused (UI-21, UI-22)", () => {
     const playhead = { ...paused, line: "playhead" as const };
     const startFlag = { ...paused, line: "start" as const };
+    const endFlag = { ...paused, line: "end" as const };
 
-    it("a playhead dragged by its line behind the start flag swaps with it", () => {
+    it("a playhead dragged by its line is a scrub: it never moves or swaps a flag", () => {
         store().selectRange(5, 12);
-        // The line holds on the old start flag, not under the pointer
-        expect(seekTimeline(BEATS, 8, "drag", playhead)).toBe(8);
-        expect(seekTimeline(BEATS, 3, "drag", playhead)).toBe(5);
+        expect(seekTimeline(BEATS, 8, "press", playhead)).toBe(8);
+        expect(seekTimeline(BEATS, 3, "drag", playhead)).toBe(3);
+        expect(store().startBeat).toBe(5);
         seekTimeline(BEATS, 3, "end", playhead);
-        expect(store().selection).toEqual({ kind: "range", start: 3, end: 5 });
+        // Released outside the flags: back to the end flag
+        expect(store().playheadBeat).toBe(12);
+        expect(store().selection).toEqual({ kind: "range", start: 5, end: 12 });
         expect(store().lineDrag).toBeNull();
     });
 
-    it("a click on the playhead only moves it", () => {
-        store().selectRange(5, 12);
-        seekTimeline(BEATS, 3, "end", playhead);
-        expect(store().startBeat).toBe(5);
-        expect(store().playheadBeat).toBe(3);
-    });
-
-    it("a scrub started away from the playhead passes the start flag", () => {
-        store().selectRange(5, 12);
-        seekTimeline(BEATS, 14, "press", paused);
-        seekTimeline(BEATS, 3, "drag", paused);
-        seekTimeline(BEATS, 3, "end", paused);
-        expect(store().playheadBeat).toBe(3);
-        expect(store().startBeat).toBe(5);
-    });
-
-    it("a start flag dragged past the playhead swaps with it; a cancel puts both back", () => {
+    it("a start flag dragged past the end flag swaps with it; a cancel puts both back", () => {
         store().selectRange(5, 12);
         seekTimeline(BEATS, 15, "drag", startFlag);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 12,
-            end: 15,
-        });
+        expect(store().startBeat).toBe(12);
+        expect(store().endBeat).toBe(15);
+        expect(store().playheadBeat).toBe(15);
         seekTimeline(BEATS, 5, "cancel", startFlag);
         expect(store().selection).toEqual({ kind: "range", start: 5, end: 12 });
-        // An arrow step is a whole drag: one end. Onto the playhead, it pushes the playhead on
+        // An arrow step is a whole drag: one end. Onto the end flag, it pushes it on
         seekTimeline(BEATS, 12, "end", startFlag);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 12,
-            end: 13,
-        });
-        seekTimeline(BEATS, 13, "end", startFlag);
-        expect(store().selection).toEqual({
-            kind: "range",
-            start: 13,
-            end: 14,
-        });
+        expect(store().startBeat).toBe(12);
+        expect(store().endBeat).toBe(13);
     });
 
-    it("while playing, a start flag drag does nothing", () => {
+    it("an end flag dragged and released moves it, with the playhead on it", () => {
+        store().selectRange(5, 12);
+        seekTimeline(BEATS, 14, "drag", endFlag);
+        seekTimeline(BEATS, 15, "end", endFlag);
+        expect(store().endBeat).toBe(15);
+        expect(store().playheadBeat).toBe(15);
+        expect(store().lineDrag).toBeNull();
+    });
+
+    it("while playing, a flag drag does nothing", () => {
         store().selectRange(5, 12);
         seekTimeline(BEATS, 15, "drag", { ...startFlag, isPlaying: true });
+        seekTimeline(BEATS, 15, "drag", { ...endFlag, isPlaying: true });
         expect(store().selection).toEqual({ kind: "range", start: 5, end: 12 });
+        expect(store().endBeat).toBe(12);
     });
 });

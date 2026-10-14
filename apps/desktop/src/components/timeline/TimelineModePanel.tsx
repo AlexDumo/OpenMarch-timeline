@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     pageFlagMoveLimits,
@@ -23,7 +23,7 @@ import {
     selectionIsRange,
     useTimelineSelectionStore,
     type TimelineEditSelection,
-    type TimelineIsolation,
+    type TimelineFlagsAndPlayhead,
 } from "@/stores/TimelineSelectionStore";
 import {
     pageFlags,
@@ -58,7 +58,7 @@ import {
 } from "./useTimelineCommands";
 import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
-import { jumpTimelinePlayback, playRange } from "@/timeline/timelineTransport";
+import { haltTimelinePlayback, playRange } from "@/timeline/timelineTransport";
 import { useLabeledHoldMarks } from "./PageHoldMark";
 import { useTimelineHoldMarks } from "@/timeline/usePageHoldMarks";
 import {
@@ -84,7 +84,6 @@ const COMPACT_BUTTON = <TimelineCompactButton />;
 export const toTimelineSelection = (
     selection: TimelineEditSelection,
     startBeat?: number,
-    startPinned = false,
 ): TimelineSelection =>
     selection.kind === "range"
         ? {
@@ -97,7 +96,6 @@ export const toTimelineSelection = (
               ...(startBeat !== undefined && startBeat !== selection.start
                   ? { startFlagBeatIndex: startBeat }
                   : {}),
-              ...(startPinned ? { startPinned: true } : {}),
           }
         : selection.kind === "home"
           ? { kind: "home" }
@@ -150,7 +148,7 @@ export default function TimelineModePanel() {
         (s) => s.uiSettings.timelineZoomFitted,
     );
     const setZoomFitted = useUiSettingsStore((s) => s.setTimelineZoomFitted);
-    const { isPlaying } = useIsPlaying()!;
+    const { isPlaying, setIsPlaying } = useIsPlaying()!;
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
     const selectedIdsKey = (selectedMarchers ?? []).map((m) => m.id).join(",");
     const selectedMarcherIds = useMemo(
@@ -288,7 +286,7 @@ export default function TimelineModePanel() {
                   },
         [isPlaying, isolated, movePageFlag],
     );
-    const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
+    const windowBeforeClick = useRef<TimelineFlagsAndPlayhead | null>(null);
     // Change to subset / normal page: one `updatePages` edit, one undo step
     const { mutate: updatePages } = useMutation(
         updatePagesMutationOptions(queryClient),
@@ -312,10 +310,11 @@ export default function TimelineModePanel() {
     };
     // UI-9: selecting home seeks to beat 0 and a range to its end; not while playing
     const changeSelection = (next: TimelineSelection) => {
-        // UI-17 follow-up: home while playing jumps playback to the start (a page box jumps by
-        // its own scrub; home has nowhere else to go)
+        // UI-22: home while playing stops and goes home, as Q/E stop and go to their page (a
+        // page box jumps by its own scrub)
         if (isPlaying && next?.kind === "home") {
-            jumpTimelinePlayback(beats, 0);
+            haltTimelinePlayback(setIsPlaying);
+            useTimelineSelectionStore.getState().selectHome();
             return;
         }
         if (isPlaying) return;
@@ -341,7 +340,7 @@ export default function TimelineModePanel() {
                 const s = useTimelineSelectionStore.getState();
                 windowBeforeClick.current = s.isolation?.restore ?? {
                     startBeat: s.startBeat,
-                    startPinned: s.startPinned,
+                    endBeat: s.endBeat,
                     playheadBeat: s.playheadBeat,
                 };
             }}
@@ -365,9 +364,6 @@ export default function TimelineModePanel() {
                     onSelectionChange={changeSelection}
                     onTimelineRangeCommit={commands.commitTimelineRange}
                     clipResize={clipResize}
-                    onUnpinStart={() =>
-                        useTimelineSelectionStore.getState().unpinStart()
-                    }
                     onOpenRange={(range) => {
                         if (isPlaying) return;
                         const store = useTimelineSelectionStore.getState();
@@ -439,8 +435,6 @@ function PlayingTimeline(
         | "onAddSubsetPage"
         | "addPageNames"
         | "playRange"
-        | "onEndFlagChange"
-        | "onUnpinEnd"
     >,
 ) {
     const { beats, pages } = props;
@@ -448,48 +442,25 @@ function PlayingTimeline(
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
     // UI-22: what Play plays, the start flag to the end flag, drawn as a bar with the end flag's
-    // pennant; an isolated move always loops, and its ends don't move
+    // pennant; an isolated move's ends don't move
     const isolation = useTimelineSelectionStore((s) => s.isolation);
-    const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
     const endBeat = useTimelineSelectionStore((s) => s.endBeat);
-    const endPinned = useTimelineSelectionStore((s) => s.endPinned);
     const looping = useTimelineSelectionStore((s) => s.looping);
     const playheadAt = useTimelineSelectionStore((s) => s.playheadBeat);
     const playRangeShown = useMemo(() => {
-        const range = playRange({ isolation, startBeat, endBeat, pageBoxes });
+        const range = playRange({ isolation, startBeat, endBeat });
         if (!range) return null;
         return {
             startBeatIndex: range.from,
             endBeatIndex: range.to,
             endOnPlayhead: range.to === playheadAt,
-            endPinned: endPinned && isolation === null,
-            looping: looping || isolation !== null,
+            looping,
             fixed: isolation !== null,
         };
-    }, [
-        isolation,
-        startBeat,
-        endBeat,
-        pageBoxes,
-        playheadAt,
-        endPinned,
-        looping,
-    ]);
-    const changeEndFlag = useCallback(
-        (beat: number) => useTimelineSelectionStore.getState().setEnd(beat),
-        [],
-    );
-    const unpinEnd = useCallback(
-        () => useTimelineSelectionStore.getState().unpinEnd(),
-        [],
-    );
-    // UI-12: the pin shows outside isolation, whose start flag is the isolated move's own
-    const startPinned = useTimelineSelectionStore(
-        (s) => s.startPinned && s.isolation === null,
-    );
+    }, [isolation, startBeat, endBeat, playheadAt, looping]);
     const selection = useMemo(
-        () => toTimelineSelection(editSelection, startBeat, startPinned),
-        [editSelection, startBeat, startPinned],
+        () => toTimelineSelection(editSelection, startBeat),
+        [editSelection, startBeat],
     );
     // UI-12: the paused clock reads the beat the timeline shows, not the selected page's end
     const shownBeat = useTimelineSelectionStore(displayedBeat);
@@ -540,8 +511,6 @@ function PlayingTimeline(
             pixelsPerBeat={pixelsPerBeat}
             onPixelsPerBeatChange={setPixelsPerBeat}
             playRange={playRangeShown}
-            onEndFlagChange={isolation ? undefined : changeEndFlag}
-            onUnpinEnd={unpinEnd}
         />
     );
 }

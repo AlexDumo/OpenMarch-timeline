@@ -21,6 +21,7 @@ describe("transportState", () => {
         expect(transportState(pages, 10, false)).toEqual({
             playPause: true,
             playStop: true,
+            stopPlayback: true,
             previousPage: true,
             firstPage: true,
             nextPage: true,
@@ -44,6 +45,7 @@ describe("transportState", () => {
         expect(transportState(pages, 3, true)).toEqual({
             playPause: true,
             playStop: true,
+            stopPlayback: true,
             previousPage: false,
             firstPage: false,
             nextPage: false,
@@ -55,7 +57,7 @@ describe("transportState", () => {
 
     it("allows nothing without a selected page", () => {
         expect(Object.values(transportState(pages, null, false))).toEqual(
-            Array(8).fill(false),
+            Array(9).fill(false),
         );
         expect(Object.values(transportState([], 1, false))).not.toContain(true);
     });
@@ -69,6 +71,8 @@ describe("playbackActionForKey", () => {
             "playPause",
         );
         expect(playbackActionForKey(key("Space"), "pause")).toBe("playPause");
+        // . always stops
+        expect(playbackActionForKey(key("Period"))).toBe("stopPlayback");
         expect(
             playbackActionForKey(key("Space", { shiftKey: true }), "pause"),
         ).toBe("playStop");

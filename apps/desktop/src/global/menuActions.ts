@@ -23,7 +23,7 @@ export const PLAYBACK_MENU_ACTIONS: readonly MenuAction[] = [
     // the menu, built once by the main process, doesn't show
     { action: "playStop", label: "Play / Stop", accelerator: "Space" },
     { action: "playPause", label: "Play / Pause", accelerator: "Shift+Space" },
-    { action: "stopPlayback", label: "Stop at End Flag", accelerator: "" },
+    { action: "stopPlayback", label: "Stop at End Flag", accelerator: "." },
     { action: "toggleLoop", label: "Loop On / Off", accelerator: "C" },
 ];
 

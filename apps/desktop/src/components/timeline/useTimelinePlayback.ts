@@ -4,6 +4,7 @@ import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
 import {
     displayedBeat,
+    insideFlags,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
@@ -45,11 +46,12 @@ const playbackCommands = (latest: {
             isPlaying,
             setIsPlaying,
             line: options?.line,
+            keys: options?.keys,
         });
     },
     onNavigate: (direction) => {
-        const { beats, pages, isPlaying } = latest.current;
-        navigateTimeline(beats, pages, isPlaying, direction);
+        const { beats, pages, isPlaying, setIsPlaying } = latest.current;
+        navigateTimeline(beats, pages, isPlaying, direction, setIsPlaying);
     },
     // UI-22: the Play button plays from the start flag; playing, it is Pause
     onPlayingChange: (next) => {
@@ -105,6 +107,14 @@ export function useTimelinePlayback({
                 : { stop: SHIFT_SPACE, pause: SPACE },
         [space],
     );
+    // UI-22: a drag holds the playhead outside the flags; released there, it goes back
+    const outsideFlags = useTimelineSelectionStore(
+        (s) =>
+            s.scrubbing &&
+            s.isolation === null &&
+            !(s.endBeat === 0 && s.playheadBeat === 0) &&
+            !insideFlags(s, s.playheadBeat),
+    );
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -149,6 +159,7 @@ export function useTimelinePlayback({
             isPlaying,
             playLoops,
             playKeys,
+            outsideFlags,
             ...commands,
         }),
         [
@@ -159,6 +170,7 @@ export function useTimelinePlayback({
             playheadBeat,
             playLoops,
             playKeys,
+            outsideFlags,
         ],
     );
 }

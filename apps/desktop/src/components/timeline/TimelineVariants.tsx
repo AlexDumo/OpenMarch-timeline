@@ -955,6 +955,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             onSeek={props.onSeek}
                             isPlaying={props.isPlaying}
                             scrubLine={pointer.scrubLine}
+                            outsideFlags={props.playheadOutsideFlags}
                         />
                         {props.onAddPageFlag && !props.isPlaying && (
                             <AddPageFlagMenu
@@ -999,17 +1000,9 @@ const TimelineSurface = memo(function TimelineSurface({
                                 pixelsPerBeat={pixelsPerBeat}
                                 height={pinnedHeight}
                                 snapBeats={snapBeats}
-                                pinTop={
-                                    TIMELINE_PAGE_ROW_BOTTOM +
-                                    (expanded ? 1 : 0)
+                                onLineDrag={
+                                    props.isPlaying ? undefined : props.onSeek
                                 }
-                                pinSize={expanded ? 18 : 14}
-                                onEndChange={
-                                    props.isPlaying
-                                        ? undefined
-                                        : props.onEndFlagChange
-                                }
-                                onUnpinEnd={props.onUnpinEnd}
                             />
                         )}
                         {selectionRange && (
@@ -1020,16 +1013,6 @@ const TimelineSurface = memo(function TimelineSurface({
                                         ? selection.startFlagBeatIndex
                                         : undefined
                                 }
-                                startPinned={
-                                    selection?.kind === "range" &&
-                                    selection.startPinned === true
-                                }
-                                onUnpin={props.onUnpinStart}
-                                pinTop={
-                                    TIMELINE_PAGE_ROW_BOTTOM +
-                                    (expanded ? 1 : 0)
-                                }
-                                pinSize={expanded ? 18 : 14}
                                 beatCount={model.beatCount}
                                 pixelsPerBeat={pixelsPerBeat}
                                 height={pinnedHeight}

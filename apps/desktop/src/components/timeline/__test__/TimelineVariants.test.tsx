@@ -117,20 +117,18 @@ describe("timeline views", () => {
     });
 
     it("draws what Play plays, and steps the end flag with the arrow keys (UI-22)", () => {
-        const onEndFlagChange = vi.fn();
-        const onUnpinEnd = vi.fn();
+        const onSeek = vi.fn();
         const range = {
             startBeatIndex: 8,
             endBeatIndex: 16,
             endOnPlayhead: false,
-            endPinned: true,
             looping: false,
         };
         const { rerender } = render(
             <ExpandedTimeline
                 {...commonProps}
                 showTransport={false}
-                onEndFlagChange={onEndFlagChange}
+                onSeek={onSeek}
             />,
         );
         expect(screen.queryByTestId("timeline-play-range")).toBeNull();
@@ -139,8 +137,7 @@ describe("timeline views", () => {
                 {...commonProps}
                 showTransport={false}
                 playRange={range}
-                onEndFlagChange={onEndFlagChange}
-                onUnpinEnd={onUnpinEnd}
+                onSeek={onSeek}
             />,
         );
         // Faint while looping is off, solid while on
@@ -148,39 +145,34 @@ describe("timeline views", () => {
         expect(bar).not.toHaveAttribute("data-looping");
         const end = screen.getByTestId("timeline-end-flag");
         expect(end).toHaveAttribute("aria-label", "End flag, beat 16");
-        // Off the playhead, it has its own stem; pinned, its own pin
+        // Off the playhead, it has its own stem; there is no pin (UI-22)
         expect(screen.getByTestId("timeline-end-stem")).toBeInTheDocument();
-        fireEvent.click(screen.getByTestId("timeline-end-pin"));
-        expect(onUnpinEnd).toHaveBeenCalledTimes(1);
-        // jsdom has no layout, so the end flag moves by key, not by drag; never onto the start
+        expect(screen.queryByTestId("timeline-end-pin")).toBeNull();
+        // jsdom has no layout, so the end flag moves by key, not by drag: each step is a whole
+        // flag drag, sent as a seek of the end flag's line
         fireEvent.keyDown(end, { key: "ArrowRight" });
-        expect(onEndFlagChange).toHaveBeenLastCalledWith(17);
+        expect(onSeek).toHaveBeenLastCalledWith(17, {
+            gesture: "end",
+            line: "end",
+        });
         fireEvent.keyDown(end, { key: "ArrowLeft" });
-        expect(onEndFlagChange).toHaveBeenLastCalledWith(15);
+        expect(onSeek).toHaveBeenLastCalledWith(15, {
+            gesture: "end",
+            line: "end",
+        });
         rerender(
             <ExpandedTimeline
                 {...commonProps}
                 showTransport={false}
-                playRange={{
-                    ...range,
-                    startBeatIndex: 15,
-                    endOnPlayhead: true,
-                    endPinned: false,
-                    looping: true,
-                }}
-                onEndFlagChange={onEndFlagChange}
+                playRange={{ ...range, endOnPlayhead: true, looping: true }}
+                onSeek={onSeek}
             />,
         );
         expect(screen.getByTestId("timeline-play-range-bar")).toHaveAttribute(
             "data-looping",
         );
-        // On the playhead: no stem of its own, and no pin
+        // On the playhead: no stem of its own
         expect(screen.queryByTestId("timeline-end-stem")).toBeNull();
-        expect(screen.queryByTestId("timeline-end-pin")).toBeNull();
-        fireEvent.keyDown(screen.getByTestId("timeline-end-flag"), {
-            key: "ArrowLeft",
-        });
-        expect(onEndFlagChange).toHaveBeenLastCalledWith(16);
     });
 
     it("presses the initial box for home", () => {
@@ -1069,10 +1061,8 @@ describe("page snapping in drags (UI-2)", () => {
                     startBeatIndex: 8,
                     endBeatIndex: 16,
                     endOnPlayhead: false,
-                    endPinned: true,
                     looping: true,
                 }}
-                onEndFlagChange={vi.fn()}
                 pageFlagMove={{ limits: async () => null, commit: vi.fn() }}
             />,
         );
@@ -1474,13 +1464,16 @@ describe("a calmer timeline (UI-12)", () => {
             fireEvent.keyUp(playhead, { key: "ArrowRight" });
             fireEvent.keyDown(playhead, { key: "ArrowRight" });
             expect(onSeek.mock.calls).toEqual([
-                [12, { gesture: "press" }],
-                [13, { gesture: "drag" }],
+                [12, { gesture: "press", keys: true }],
+                [13, { gesture: "drag", keys: true }],
             ]);
             act(() => {
                 vi.advanceTimersByTime(300);
             });
-            expect(onSeek).toHaveBeenLastCalledWith(13, { gesture: "end" });
+            expect(onSeek).toHaveBeenLastCalledWith(13, {
+                gesture: "end",
+                keys: true,
+            });
 
             // A held key ends when it comes up
             onSeek.mockClear();
@@ -1488,9 +1481,9 @@ describe("a calmer timeline (UI-12)", () => {
             fireEvent.keyDown(playhead, { key: "ArrowLeft", repeat: true });
             fireEvent.keyUp(playhead, { key: "ArrowLeft" });
             expect(onSeek.mock.calls).toEqual([
-                [10, { gesture: "press" }],
-                [9, { gesture: "drag" }],
-                [9, { gesture: "end" }],
+                [10, { gesture: "press", keys: true }],
+                [9, { gesture: "drag", keys: true }],
+                [9, { gesture: "end", keys: true }],
             ]);
 
             // While playing, each key jumps on its own
@@ -1603,36 +1596,6 @@ describe("a calmer timeline (UI-12)", () => {
         expect(onSelectionChange).toHaveBeenCalledWith(
             expect.objectContaining({ kind: "range" }),
         );
-    });
-
-    it("draws a pin on a pinned start flag, which unpins it", () => {
-        const onUnpinStart = vi.fn();
-        const { rerender } = render(
-            <ExpandedTimeline
-                {...commonProps}
-                showTransport={false}
-                selection={{
-                    kind: "range",
-                    range: { startBeatIndex: 5, endBeatIndex: 11 },
-                }}
-                onUnpinStart={onUnpinStart}
-            />,
-        );
-        expect(screen.queryByTestId("timeline-start-pin")).toBeNull();
-        rerender(
-            <ExpandedTimeline
-                {...commonProps}
-                showTransport={false}
-                selection={{
-                    kind: "range",
-                    range: { startBeatIndex: 5, endBeatIndex: 11 },
-                    startPinned: true,
-                }}
-                onUnpinStart={onUnpinStart}
-            />,
-        );
-        fireEvent.click(screen.getByTestId("timeline-start-pin"));
-        expect(onUnpinStart).toHaveBeenCalledTimes(1);
     });
 
     it("keeps a steady height: one clip row kept without clips, no waveform without peaks", () => {

@@ -19,10 +19,8 @@ export type BeatPosition = number;
 /** All timeline ranges use an inclusive start and an exclusive end. */
 /** What Play plays (UI-22): the start flag to the end flag */
 export interface TimelinePlayRange extends TimelineBeatRange {
-    /** The end flag sits on the playhead (it isn't pinned, and no pause has left it behind) */
+    /** The playhead is on the end flag */
     readonly endOnPlayhead: boolean;
-    /** The end flag was placed by hand, so it stays when the playhead moves */
-    readonly endPinned: boolean;
     /** Play loops at the end flag instead of stopping there */
     readonly looping: boolean;
     /** An isolated move's range: drawn, but its ends don't move */
@@ -178,11 +176,6 @@ export type TimelineSelection =
           readonly via?: "pages";
           /** The range was drawn by dragging on empty timeline space (Ctrl+drag) */
           readonly drawn?: boolean;
-          /**
-           * The start flag was placed by hand and stays through navigation (UI-10 pinning); UI-12
-           * draws it with a pin that unpins it
-           */
-          readonly startPinned?: boolean;
       }
     | null;
 
@@ -198,11 +191,16 @@ export type TimelineSeekGesture = "press" | "drag" | "end" | "cancel";
 export interface TimelineSeekOptions {
     readonly gesture?: TimelineSeekGesture;
     /**
-     * The gesture drags this line by itself (UI-21): the start flag, or the playhead by its line or
-     * head. Paused, a line dragged past the other swaps with it. `cancel` ends a start flag drag
-     * where it began.
+     * The gesture drags this line by itself (UI-21, UI-22): the start or end flag, or the playhead
+     * by its line or head (a scrub). Paused, a flag dragged past the other swaps with it. `cancel`
+     * ends a flag drag where it began.
      */
-    readonly line?: "start" | "playhead";
+    readonly line?: "start" | "end" | "playhead";
+    /**
+     * The gesture is arrow-key steps, not a pointer: stepped outside the flags, they come to the
+     * playhead, as a click's do (UI-22), where a pointer drag would go back to the end flag
+     */
+    readonly keys?: boolean;
 }
 
 /**
@@ -248,6 +246,8 @@ export interface TimelineInteractionProps {
     readonly onStop?: () => void;
     /** The keys that stop and pause while playing, as keycaps (UI-22, Settings swaps them) */
     readonly playKeys?: TimelinePlayKeys;
+    /** A drag holds the playhead outside the flags (UI-22): it is drawn faded */
+    readonly playheadOutsideFlags?: boolean;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
@@ -293,14 +293,8 @@ export interface TimelineCommonProps
     readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
     /** Resizing a clip by its edges (resize-move), in view beats; without it clips have no handles */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Unpins the start flag (UI-12), from its pin */
-    readonly onUnpinStart?: () => void;
     /** What Play plays (UI-22), view beats: the start flag to the end flag */
     readonly playRange?: TimelinePlayRange | null;
-    /** The end flag dragged or stepped to a beat (UI-22), view beats */
-    readonly onEndFlagChange?: (beat: number) => void;
-    /** Unpins the end flag (UI-22), from its pin */
-    readonly onUnpinEnd?: () => void;
     /** Transport controls that fold into "⋯" on a narrow panel, such as Sound (UI-12) */
     readonly transportSecondary?: ReactNode;
     /** View controls at the transport's end, such as Compact (UI-12); they fold too */

@@ -1,4 +1,4 @@
-import { useTolgee, useTranslate, T } from "@tolgee/react";
+import { useTolgee, T } from "@tolgee/react";
 import { useState, useEffect } from "react";
 import {
     Select,
@@ -8,8 +8,6 @@ import {
     Switch,
 } from "@openmarch/ui";
 import { VIEW3D_AUTO_OPEN_SETTING } from "@/view3d/sync/protocol";
-import { spacePlayKey } from "@/shortcuts/playKeys";
-import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { isWebBuild } from "@/utilities/webBuild";
 import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
@@ -24,14 +22,10 @@ const languages = [
 
 export default function GeneralSettings() {
     const tolgee = useTolgee();
-    const { t } = useTranslate();
     const [currentLanguage, setCurrentLanguage] = useState("en");
     const [automaticUpdatesEnabled, setAutomaticUpdatesEnabled] =
         useState(true);
     const [view3dAutoOpen, setView3dAutoOpen] = useState(false);
-    // UI-22: what Space does while playing, kept as the play keys' bindings
-    const space = useShortcutOverridesStore((s) => spacePlayKey(s.overrides));
-    const setSpacePlayKey = useShortcutOverridesStore((s) => s.setSpacePlayKey);
 
     useEffect(() => {
         // Load saved language from electron store
@@ -125,36 +119,6 @@ export default function GeneralSettings() {
                         });
                     }}
                 />
-            </SettingRow>
-
-            <SettingRow
-                label={<T keyName="settings.general.spacePlayKey" />}
-                description={
-                    <T keyName="settings.general.spacePlayKey.description" />
-                }
-                htmlFor="space-play-key"
-            >
-                <Select
-                    value={space}
-                    onValueChange={(value) =>
-                        setSpacePlayKey(value === "pause" ? "pause" : "stop")
-                    }
-                >
-                    <SelectTriggerButton
-                        id="space-play-key"
-                        data-testid="settings-space-play-key"
-                        label={t(`settings.general.spacePlayKey.${space}`)}
-                        className="min-w-[120px]"
-                    />
-                    <SelectContent>
-                        <SelectItem value="stop">
-                            <T keyName="settings.general.spacePlayKey.stop" />
-                        </SelectItem>
-                        <SelectItem value="pause">
-                            <T keyName="settings.general.spacePlayKey.pause" />
-                        </SelectItem>
-                    </SelectContent>
-                </Select>
             </SettingRow>
 
             {/* A browser blocks a window opened without a click. */}

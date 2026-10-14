@@ -1080,60 +1080,64 @@ from it. The spec still wins on the model; this file decides presentation.
 
 - **UI-22: start and end flags; Play always plays between them (project owner, 2026-10-14).**
   Supersedes UI-17's playback rules (Play from the start flag or the playhead, the separate loop
-  region, one button that reads Stop). The owner's feedback: Play from the start flag was right,
-  but Space pressed again while playing should go back to where they started. They found the old
-  model was trying to be an editor and a cinematic previewer at once; UI-22 makes the transport
-  an editing tool, and leaves watching long stretches to **Watch** mode (below).
-  - **Two flags.** The start flag S (UI-10) and a new **end flag** E. The edit window is still
-    S → playhead (owner chose this over "the flags are the window"), so the canvas edits at the
-    playhead as before.
-  - **The end flag follows the playhead unless placed by hand.** An unpinned E sits on the
-    playhead, and goes wherever a seek, scrub, line drag or page navigation puts it. A pause is
-    the exception: it moves the playhead and leaves E where it was, so Stop can go back. Dragging
-    E's pennant (or arrow keys on it) pins it there, as a dragged start flag is pinned; its pin
-    (left of its stem) or a double-click on the pennant unpins it. A page box, Q/E, home or
-    Shift+click on pages puts it back on the playhead, unpinned. E is kept after S and inside the
-    show. A pinned E on a page flag that moves goes with it.
-  - **Play** always cues the start flag and plays to the end flag, wherever the playhead is. With
-    looping off it stops there and the playhead lands on the end flag; with looping on it goes back
-    to the start flag. An isolated move always loops its range. At home (both flags on beat 0) Play
-    goes to the first page and plays it. If the end flag is on or before a pinned start flag, Play
-    plays the end flag's page box, as the edit window falls back to.
-  - **Pause** freezes on the nearest beat (rounded, not floored), and the playhead moves there. The
-    flags stay, so Play replays the same run from the start flag. A pause within half a beat of the
-    start flag lands a beat after it, so the window stays on the move instead of falling back to
-    the page before.
+  region, one button that reads Stop) and UI-10/UI-12's start flag that follows the playhead and
+  its pin. The owner's feedback: Play from the start flag was right, but Space pressed again while
+  playing should go back to where they started. They found the old model was trying to be an
+  editor and a cinematic previewer at once; UI-22 makes the transport an editing tool, and leaves
+  watching long stretches to **Watch** mode (below). Settled in a grilling session (five rounds).
+  - **Two flags, a pair.** The start flag S (UI-10) and a new **end flag** E mark the move being
+    worked on. Only page navigation (a page box, Q/E, Alt+Q/E, Home/End, Shift+click on pages,
+    Ctrl+drag) and the flags' own drags move them; the playhead never does. Dragging one flag past
+    the other swaps them (UI-21's swap, now between the flags), and released on the other, the
+    dragged flag pushes it a beat on. A playhead on the end flag rides along with it; any other
+    stays inside the flags. Neither flag has a pin any more.
+  - **Editing happens only inside the flags.** The edit window is still S → playhead (the owner
+    chose this over "the flags are the window"), and the playhead rests inside the flags,
+    `S < P <= E`:
+    - **A drag of the playhead** may go anywhere, drawn faded while it is outside the flags.
+      Released inside, it stays; released outside, it goes back to the end flag.
+    - **A click, the go-to box (G), a beat step (Shift+Q/E or arrow keys) or a pause** that lands
+      outside the flags brings both flags to the page box holding that beat, with the playhead on
+      it (past the last flag: from there to the end of the show).
+  - **Play** always cues the start flag and plays to the end flag. With Loop (C) on it repeats;
+    with Loop off it stops there, with the playhead on the end flag. An isolated move follows Loop
+    too (it used to always loop). At home (both flags on beat 0) Play goes to page 1 and plays it.
+  - **Play pressed during a drag** plays from the dragged beat: before the end flag, to the end
+    flag; past it, on to the end of the show. The rest of the drag does nothing.
+  - **Pause** freezes on the nearest beat (rounded). A pause within half a beat of the start flag
+    lands a beat after it, so the window stays on the move.
   - **Stop** puts the playhead on the end flag, playing or paused.
-  - **The buttons.** Play turns into Pause while playing. A Stop button sits next to it and is
-    always shown. The Loop button (C) turns looping on and off; it no longer makes a region.
-  - **The keys.** Paused, Space and Shift+Space both play. Playing, Space stops and Shift+Space
-    pauses by default; Settings → General → **Space while playing** swaps them. The setting is
-    stored as the two actions' bindings (`playStop`, `playPause`; `shortcuts/playKeys.ts`), so the
-    shortcut list always agrees with it. **Stop at End Flag** (`stopPlayback`) has no key by
-    default; it is in the Playback menu and the command palette. The 3D window's Space and
-    Shift+Space follow the same setting. The app menu shows the default keys even after a swap
-    (it is built once by the main process; a rebound shortcut isn't shown either).
-  - **What's drawn.** A bar along the ruler's top edge from S to E in the start flag's color: solid
-    while looping, faint while not. E is a pennant pointing back at S, on the playhead when E sits
-    there (its left part grabs E; the middle is the playhead's), with its own stem once it's off
-    the playhead. The field line names what Play plays when it isn't the window being edited
-    ("Play loops Page 3's move").
-  - **Removed:** Play from the playhead (Shift+Space, Shift+click on Play, the "Play from Playhead"
-    menu item), the loop region with its two draggable ends, Ctrl+drag drawing a loop (it now just
-    sets the window and the flags), and #160's first-beat stop rule (Stop now goes to the end flag).
-  - **A click or scrub while playing** works as before (UI-12): inside the flags playback jumps and
-    goes on; outside them it plays on from there to the end of the show, and Stop or Pause end it
-    as they end Play.
-  - **Watch mode (out of scope, noted 2026-10-14).** In this editing flow there is no way to play a
-    long stretch of drill: Play never goes past the end flag. A separate **Watch** mode, for
+  - **While playing:** a click inside the flags or before the start flag jumps there and plays on
+    to the end flag; a click past the end flag plays on from there to the end of the show, Loop
+    ignored. Q/E (and their beat and end steps, and home) stop playback and go there, paused.
+  - **Keys.** Paused, Space and Shift+Space both play. Playing, Space stops and Shift+Space
+    pauses by default; Settings → Timeline → **Space while playing** swaps them. It is stored as
+    the two actions' bindings (`playStop`, `playPause`; `shortcuts/playKeys.ts`), so the shortcut
+    list always agrees with it. **`.`** (`stopPlayback`) always stops, playing or paused. The 3D
+    window's keys follow the same setting and `.`. The app menu shows the default keys even after
+    a swap (it is built once by the main process; a rebound shortcut isn't shown either).
+  - **Buttons.** Play turns into Pause while playing; a Stop button sits next to it and is always
+    shown. The Loop button turns looping on and off, isolated or not.
+  - **What's drawn.** A bar along the ruler's top edge from S to E in the start flag's color:
+    solid while looping, faint while not. E is a pennant pointing back at S, with its own stem
+    when the playhead isn't on it; on the playhead, only the pennant's left part grabs it.
+  - **Removed:** Play from the playhead (Shift+Space, Shift+click on Play, the "Play from
+    Playhead" menu item), the loop region with its two draggable ends, the start flag's pin and
+    the field line's **Unpin**, the field line's loop badge, and #160's first-beat stop rule.
+  - **Watch mode (out of scope, noted 2026-10-14).** In this editing flow there is no way to play
+    a long stretch of drill: Play never goes past the end flag. A separate **Watch** mode, for
     watching the show (or a long part of it) play through, is the owner's planned answer. Not
     designed yet.
-  - **How.** `TimelineSelectionStore` holds `endBeat`, `endPinned` and `looping`, with `pauseAt`,
-    `stopAtEnd`, `setEnd`, `unpinEnd` and `setLooping`. `timelineTransport.ts` has `playRange`,
-    `playTimeline`, `pauseTimelinePlayback`, `stopTimelinePlayback`, `pressTimelinePlayKey` and
-    `toggleTimelineLoop`; the playback driver ends a run by the stop request the transport left
-    (`consumeStopRequest`). The bar and the end flag are `TimelinePlayRange.tsx`. V-193 to V-197
-    log the feel checks.
+  - **How.** `TimelineSelectionStore` holds `startBeat`, `endBeat`, `playheadBeat` and `looping`;
+    `seek` and `pauseAt` place the playhead (`place`: inside stays, outside brings the flags,
+    `pageAround`), `endScrub("click" | "drag" | "keep")` ends a drag, and the flag drag is
+    `beginLineDrag("start" | "end")`, `dragLine`, `endLineDrag`. `timelineTransport.ts` has
+    `playRange`, `playTimeline` (with Play during a drag), `pauseTimelinePlayback`,
+    `stopTimelinePlayback`, `haltTimelinePlayback` (navigation while playing),
+    `pressTimelinePlayKey` and `toggleTimelineLoop`; `seekTimeline` tells a click from a drag
+    (`keys` marks arrow-key steps as clicks). The playback driver ends a run by the stop request
+    the transport left (`consumeStopRequest`). The bar and the end flag are
+    `TimelinePlayRange.tsx`. V-193 to V-200 log the feel checks.
 
 ## Mapping the spec onto the view model
 
