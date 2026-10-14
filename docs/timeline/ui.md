@@ -559,6 +559,9 @@ from it. The spec still wins on the model; this file decides presentation.
   - **The window badge** shows only while a handle is dragged or when the window starts off a page
     line; from a page line its length is the playhead's count, which the readout shows. It uses the
     field line's words: "counts 3–6" inside one page box, or "12 counts" when it passes a flag.
+    Past the last page flag it always shows (#163), counting from that flag to the window's end
+    ("5 counts"), so a new page's length can be read off; with a flag after the window's end the
+    rule above holds.
   - Deferred (UX review): counts along the selected page box in shows with measures, a count
     under the pointer while hovering, and thinning to downbeats in odd meters.
 
@@ -985,6 +988,26 @@ from it. The spec still wins on the model; this file decides presentation.
     ripple delete, live return links, hold marks and chains without a selection, and
     "Hold" on coordinate sheets. Marchers are never "pinned": the start flag owns that word.
 
+- **UI-19: a resizable split between the canvas and the timeline (hands-on feedback, 2026-10-13).**
+  A divider sits between the canvas and the timeline. Drag it, or focus it and press Arrow Up
+  or Down (Shift for bigger steps), to resize both panes. The field keeps its zoom and its place
+  on screen, during the drag and after it: the pane shows more or less of it, and the zoom
+  readout doesn't change (100% is the zoom the field was last centered at).
+  - **Default: fitted.** With no chosen height the timeline is as small as it can be and still
+    show every track, so it grows and shrinks as tracks come and go. Double-click the divider,
+    or press Home, to go back to fitted.
+  - **Taller than the tracks:** the track area expands (grid, page lines, playhead and
+    selection fill the extra room). Track heights stay the same.
+  - **Shorter than the tracks:** the track area scrolls vertically; the transport, the page ruler
+    and the measure row stay put (only the waveform and the clip rows scroll, under the ruler), and
+    the horizontal scrollbar stays at the bottom of the pane. A resize tag with no room between its
+    clip and the ruler shows beside the dragged edge. The mouse wheel scrolls the tracks
+    here; when the tracks fit, a vertical wheel still scrolls the timeline sideways (Shift+wheel
+    or a horizontal swipe does that when they overflow).
+  - **Remembered** per user in the UI settings (`timelineHeight`, `null` is fitted). Minimums:
+    timeline 120 px, canvas 200 px; in a window too short for both, the timeline's minimum
+    wins. The saved height is clamped to the window when drawn, not rewritten.
+  - The focused beat editor (the audio timeline) keeps its own sizing.
 - **UI-20: a headroom strip for the flags' tops (hands-on feedback, 2026-10-13).** The owner found
   the yellow start flag hard to click: it was only grabbed above the audio row, and on a page flag
   the flag's grip took the whole page row, so a thin band was left. As Logic gives its playhead and
