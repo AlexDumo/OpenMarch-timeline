@@ -139,13 +139,18 @@ describe("dragging a line by itself while paused (UI-21)", () => {
         });
         seekTimeline(BEATS, 5, "cancel", startFlag);
         expect(store().selection).toEqual({ kind: "range", start: 5, end: 12 });
-        // An arrow step is a whole drag: one end
+        // An arrow step is a whole drag: one end. Onto the playhead, it pushes the playhead on
         seekTimeline(BEATS, 12, "end", startFlag);
-        seekTimeline(BEATS, 13, "end", startFlag);
         expect(store().selection).toEqual({
             kind: "range",
             start: 12,
             end: 13,
+        });
+        seekTimeline(BEATS, 13, "end", startFlag);
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 13,
+            end: 14,
         });
     });
 

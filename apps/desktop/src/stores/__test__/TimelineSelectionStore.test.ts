@@ -654,6 +654,94 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         expect(store().startPinned).toBe(true);
     });
 
+    it("on one page flag, neither page shows selected until release (owner 2026-10-14)", () => {
+        store().selectRange(9, 17);
+        store().beginLineDrag("start");
+        store().dragLine(17);
+        expect(store().startBeat).toBe(17);
+        expect(store().playheadBeat).toBe(17);
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 17,
+            end: 17,
+        });
+    });
+
+    it("in the middle of a page, neither part shows selected", () => {
+        store().selectRange(9, 13);
+        store().beginLineDrag("playhead");
+        store().dragLine(9);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 9 });
+        // Moving off again shows the window
+        store().dragLine(11);
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 9,
+            end: 11,
+        });
+    });
+
+    it("a start flag released on the playhead pushes the playhead a beat later", () => {
+        store().selectRange(9, 13);
+        store().beginLineDrag("start");
+        store().dragLine(13);
+        const revision = store().playheadRevision;
+        store().endLineDrag();
+        expect(store().lineDrag).toBeNull();
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 13,
+            end: 14,
+        });
+        expect(store().startPinned).toBe(true);
+        expect(store().playheadRevision).toBe(revision + 1);
+    });
+
+    it("a start flag released on the playhead at the show's end pushes nothing past it", () => {
+        store().setShowEndBeat(25);
+        store().selectRange(17, 25);
+        store().beginLineDrag("start");
+        store().dragLine(25);
+        store().endLineDrag();
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 24,
+            end: 25,
+        });
+    });
+
+    it("a playhead released on the start flag pushes the start flag a beat earlier", () => {
+        store().selectRange(9, 17);
+        store().beginLineDrag("playhead");
+        store().dragLine(9);
+        const revision = store().playheadRevision;
+        store().endLineDrag();
+        expect(store().selection).toEqual({ kind: "range", start: 8, end: 9 });
+        expect(store().startPinned).toBe(true);
+        expect(store().playheadRevision).toBe(revision);
+    });
+
+    it("a start flag pinned mid-page and a playhead released on it", () => {
+        store().selectRange(12, 17);
+        store().beginLineDrag("playhead");
+        store().dragLine(12);
+        store().endLineDrag();
+        expect(store().selection).toEqual({
+            kind: "range",
+            start: 11,
+            end: 12,
+        });
+    });
+
+    it("both lines released home stay home", () => {
+        store().selectRange(1, 9);
+        store().beginLineDrag("playhead");
+        store().dragLine(0);
+        expect(store().selection).toEqual({ kind: "home" });
+        store().endLineDrag();
+        expect(store().selection).toEqual({ kind: "home" });
+    });
+
     it("cancelling puts both lines back", () => {
         store().selectRange(5, 12);
         store().beginLineDrag("start");

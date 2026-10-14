@@ -1020,8 +1020,14 @@ from it. The spec still wins on the model; this file decides presentation.
   - **The swap.** Drag the start flag past the playhead and the line being dragged becomes the
     playhead, while the old playhead becomes the start flag. Drag the playhead behind the start
     flag and the line being dragged becomes the start flag, while the old start flag becomes the
-    playhead. Afterwards the window `[S, P)` is valid again. On the same beat both are there, as
-    after **Stop**.
+    playhead. Afterwards the window `[S, P)` is valid again.
+  - **On the same beat** (owner, 2026-10-14). Either line can be dragged onto the other. While they
+    are held on one beat, nothing shows selected, whether that beat is a page flag (not the page
+    before it) or the middle of a page (not the part back to the page's start). On release, the
+    dragged line stays and pushes the other a beat on: a start flag pushes the playhead a beat
+    later, and a playhead pushes the start flag a beat earlier. At the show's end the start flag
+    goes back a beat instead. An arrow key that steps the start flag onto the playhead pushes it
+    the same way. Both at home stay home.
   - **Live** (owner). The two trade the moment the dragged line crosses the other, and trade back
     if it crosses back. The canvas follows the playhead. Escape on a start flag drag puts both back
     where they were.
