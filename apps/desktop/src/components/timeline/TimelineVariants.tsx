@@ -14,7 +14,8 @@ import { TimelineLoopBar } from "./TimelineLoopBar";
 import { AddPageFlagMenu } from "./AddPageFlagMenu";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
-import { PlusIcon } from "@phosphor-icons/react";
+import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react";
+import { useTimelineFollow } from "./useTimelineFollow";
 import clsx from "clsx";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
 import {
@@ -112,6 +113,7 @@ const useTimelineZoom = ({
     onPixelsPerBeatChange,
     fitted: rememberedFitted,
     onFittedChange,
+    followAnchor,
 }: {
     viewportRef: React.RefObject<HTMLDivElement | null>;
     pixelsPerBeat: number;
@@ -121,6 +123,8 @@ const useTimelineZoom = ({
     onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
     fitted?: boolean;
     onFittedChange?: (fitted: boolean) => void;
+    /** While the view follows the playhead, the playhead to zoom about instead of the pointer */
+    followAnchor?: () => { anchorPx: number; anchorBeat: number } | null;
 }) => {
     const viewportWidth = useElementWidth(viewportRef);
     const fitValue =
@@ -218,9 +222,12 @@ const useTimelineZoom = ({
                     const wheel = pendingWheel.current;
                     pendingWheel.current = null;
                     if (!wheel) return;
+                    // Following, the playhead stays put on screen (UI-23)
+                    const follow = followAnchor?.();
                     zoomTo(
                         latest.current.pixelsPerBeat * wheel.factor,
-                        wheel.anchorPx,
+                        follow?.anchorPx ?? wheel.anchorPx,
+                        follow?.anchorBeat,
                     );
                 });
                 return;
@@ -239,7 +246,7 @@ const useTimelineZoom = ({
             cancelAnimationFrame(frame.current);
             frame.current = 0;
         };
-    }, [viewportRef, zoomTo]);
+    }, [followAnchor, viewportRef, zoomTo]);
 
     // Never smaller than the show: a remembered zoom from a longer show, a wider window, or a
     // remembered Fit fits this one
@@ -308,7 +315,7 @@ const useTimelineZoom = ({
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [fit, onPixelsPerBeatChange]);
 
-    return { fit, fitted: isFitted };
+    return { fit, fitted: isFitted, viewportWidth };
 };
 
 const navigateToPage = ({
@@ -547,6 +554,42 @@ const TimelineSelectionActions = memo(function TimelineSelectionActions({
     );
 });
 
+/**
+ * Shown at the edge the playhead is off (UI-23), playing or stopped: a click brings the view back
+ * to it, and following resumes.
+ */
+const TimelinePlayheadChip = memo(function TimelinePlayheadChip({
+    side,
+    top,
+    onClick,
+}: {
+    side: "left" | "right";
+    top: number;
+    onClick: () => void;
+}) {
+    const Caret = side === "left" ? CaretLeftIcon : CaretRightIcon;
+    return (
+        <button
+            type="button"
+            data-testid="timeline-playhead-chip"
+            data-side={side}
+            aria-label="Show the playhead"
+            title="Show the playhead"
+            onClick={onClick}
+            className={clsx(
+                "bg-bg-1 border-stroke text-text hover:text-accent focus-visible:ring-accent absolute z-[70] flex items-center gap-2 rounded-full border px-8 py-2 text-[11px] leading-none whitespace-nowrap shadow-sm outline-hidden focus-visible:ring-2",
+                side === "left"
+                    ? "left-12 flex-row"
+                    : "right-12 flex-row-reverse",
+            )}
+            style={{ top }}
+        >
+            <Caret size={10} weight="bold" />
+            Playhead
+        </button>
+    );
+});
+
 const TimelineSurface = memo(function TimelineSurface({
     density,
     ...props
@@ -624,6 +667,8 @@ const TimelineSurface = memo(function TimelineSurface({
         selectionRange?.endBeatIndex,
         selectionRange?.startBeatIndex,
     ]);
+    // Read when a zoom lands, so the follow below can come after the zoom it reads the width of
+    const followAnchor = useLatestCallback(() => follow.zoomAnchor())!;
     const zoom = useTimelineZoom({
         viewportRef,
         pixelsPerBeat,
@@ -633,6 +678,22 @@ const TimelineSurface = memo(function TimelineSurface({
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
         fitted: props.zoomFitted,
         onFittedChange: props.onZoomFittedChange,
+        followAnchor,
+    });
+    // UI-23: the view follows the playhead
+    const follow = useTimelineFollow({
+        viewportRef,
+        viewportWidth: zoom.viewportWidth,
+        contentWidth: surfaceWidth,
+        pixelsPerBeat,
+        inset: initialPageWidth,
+        pages: model.pages,
+        beatCount: model.beatCount,
+        isPlaying: props.isPlaying,
+        positionBeat,
+        livePositionBeat: props.livePositionBeat,
+        loop: props.playLoops ? (props.loop ?? null) : null,
+        selectionRange,
     });
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
@@ -736,6 +797,15 @@ const TimelineSurface = memo(function TimelineSurface({
             viewportRef={viewportRef}
             className={className}
             pinnedHeight={audioTop}
+            overlay={
+                follow.offscreen && (
+                    <TimelinePlayheadChip
+                        side={follow.offscreen}
+                        top={TIMELINE_PAGE_ROW_TOP + 4}
+                        onClick={follow.revealPlayhead}
+                    />
+                )
+            }
             transport={
                 showTransport ? (
                     <TimelineTransport

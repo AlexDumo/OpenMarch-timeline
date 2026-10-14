@@ -815,6 +815,7 @@ export const TimelineShell = ({
     viewportRef,
     className,
     pinnedHeight = 0,
+    overlay,
 }: {
     transport?: ReactNode;
     children: ReactNode;
@@ -822,6 +823,8 @@ export const TimelineShell = ({
     className?: string;
     /** How tall the rows pinned at the viewport's top are, so a focused clip scrolls out from under them */
     pinnedHeight?: number;
+    /** Drawn over the viewport, where it doesn't scroll (the playhead chip) */
+    overlay?: ReactNode;
 }) => (
     <div
         className={clsx(
@@ -831,7 +834,7 @@ export const TimelineShell = ({
     >
         {transport}
         {/* Its own stacking context: nothing on the timeline (+, the playhead) paints over a menu */}
-        <section className="isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4">
+        <section className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4">
             <div
                 ref={viewportRef}
                 data-testid="timeline-viewport"
@@ -848,6 +851,7 @@ export const TimelineShell = ({
             >
                 {children}
             </div>
+            {overlay}
         </section>
     </div>
 );
