@@ -74,8 +74,8 @@ const beatStep = (beat: number, direction: "previous-beat" | "next-beat") =>
     direction === "next-beat" ? Math.max(beat, 1) + 1 : beat - 1;
 
 /**
- * Previous and Next, from the transport buttons and the shortcuts alike (Q and E; Shift for the
- * start and end, Alt for a beat). Paused, it moves the playhead (`navigateTimelinePages`); playing,
+ * Previous and Next, from the transport buttons and the shortcuts alike (Q and E; Shift for a
+ * beat, Alt for the start and end). Paused, it moves the playhead (`navigateTimelinePages`); playing,
  * playback jumps there from the beat playing now and goes on (`jumpTimelinePages`).
  */
 export function navigateTimeline(

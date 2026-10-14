@@ -114,7 +114,7 @@ describeDbTests("page navigation and the selection", (it) => {
             expect(probed().selectedPage?.id).toBe(pages[0]!.id),
         );
 
-        // Alt+E and Alt+Q step the playhead a beat (beats 0 and 1 are both the start of the
+        // Shift+E and Shift+Q step the playhead a beat (beats 0 and 1 are both the start of the
         // show), and stop at the start
         await trigger("nextBeat");
         await waitFor(() => expect(timelineSelection().playheadBeat).toBe(2));

@@ -1615,7 +1615,7 @@ describe("a calmer timeline (UI-12)", () => {
         );
     });
 
-    it("Shift+click on Previous and Next goes to the first and last page", () => {
+    it("Alt+click on Previous and Next goes to the first and last page", () => {
         const onNavigate = vi.fn();
         render(
             <ExpandedTimeline
@@ -1626,11 +1626,11 @@ describe("a calmer timeline (UI-12)", () => {
         );
         fireEvent.click(screen.getByRole("button", { name: /^Next page/ }));
         fireEvent.click(screen.getByRole("button", { name: /^Next page/ }), {
-            shiftKey: true,
+            altKey: true,
         });
         fireEvent.click(
             screen.getByRole("button", { name: /^Previous page/ }),
-            { shiftKey: true },
+            { altKey: true, shiftKey: true },
         );
         expect(onNavigate.mock.calls).toEqual([
             ["next-page"],
@@ -1639,7 +1639,7 @@ describe("a calmer timeline (UI-12)", () => {
         ]);
     });
 
-    it("Alt+click on Previous and Next steps a beat", () => {
+    it("Shift+click on Previous and Next steps a beat", () => {
         const onNavigate = vi.fn();
         render(
             <ExpandedTimeline
@@ -1649,11 +1649,11 @@ describe("a calmer timeline (UI-12)", () => {
             />,
         );
         fireEvent.click(screen.getByRole("button", { name: /^Next page/ }), {
-            altKey: true,
+            shiftKey: true,
         });
         fireEvent.click(
             screen.getByRole("button", { name: /^Previous page/ }),
-            { altKey: true, shiftKey: true },
+            { shiftKey: true },
         );
         expect(onNavigate.mock.calls).toEqual([
             ["next-beat"],
@@ -1672,13 +1672,14 @@ describe("a calmer timeline (UI-12)", () => {
         const previous = screen.getByTestId("timeline-previous");
         const next = screen.getByTestId("timeline-next");
         fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
-        expect(previous).toHaveAccessibleName("Start of the show");
-        expect(next).toHaveAccessibleName("End of the show");
-        fireEvent.keyDown(window, { key: "Alt", altKey: true, shiftKey: true });
         expect(previous).toHaveAccessibleName("Previous beat");
         expect(next).toHaveAccessibleName("Next beat");
-        fireEvent.keyUp(window, { key: "Alt", shiftKey: true });
+        // Alt wins over Shift, as it does for a click
+        fireEvent.keyDown(window, { key: "Alt", altKey: true, shiftKey: true });
+        expect(previous).toHaveAccessibleName("Start of the show");
         expect(next).toHaveAccessibleName("End of the show");
+        fireEvent.keyUp(window, { key: "Alt", shiftKey: true });
+        expect(next).toHaveAccessibleName("Next beat");
         fireEvent.keyUp(window, { key: "Shift" });
         expect(next).toHaveAccessibleName("Next page");
         // Losing focus lets go of a held modifier
@@ -1709,8 +1710,8 @@ describe("a calmer timeline (UI-12)", () => {
             }));
         expect(rows()).toEqual([
             { text: "Next pageEClick", active: true },
-            { text: "End of the showShiftEShift+click", active: false },
-            { text: "Next beatAltEAlt+click", active: false },
+            { text: "Next beatShiftEShift+click", active: false },
+            { text: "End of the showAltEAlt+click", active: false },
         ]);
         fireEvent.keyDown(window, { key: "Alt", altKey: true });
         expect(rows().map((row) => row.active)).toEqual([false, false, true]);

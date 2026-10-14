@@ -22,7 +22,7 @@ export function useNavigationActionHandlers() {
     const canNavigate = ready && !!pages && pages.length > 0;
 
     /**
-     * UI-9: navigation moves the playhead to a flag and selects that page, or a beat on with Alt.
+     * UI-9: navigation moves the playhead to a flag and selects that page, or a beat on with Shift.
      * Playing, it jumps playback there, as the transport's Previous and Next do.
      */
     const navigate = (target: TimelineNavigation) =>

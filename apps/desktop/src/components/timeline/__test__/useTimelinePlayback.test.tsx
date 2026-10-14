@@ -294,7 +294,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(store().playheadBeat).toBe(0);
     });
 
-    it("Alt+click on Previous and Next steps the playhead a beat, inside the show", async ({
+    it("Shift+click on Previous and Next steps the playhead a beat, inside the show", async ({
         db,
         wrapper,
     }) => {

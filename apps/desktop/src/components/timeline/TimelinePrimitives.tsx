@@ -165,10 +165,10 @@ const PLAY_FROM_FLAG_ICON = (
 export const TRANSPORT_SHORTCUTS = {
     previousPage: "Q",
     nextPage: "E",
-    firstPage: "Shift + Q",
-    lastPage: "Shift + E",
-    previousBeat: "Alt + Q",
-    nextBeat: "Alt + E",
+    firstPage: "Alt + Q",
+    lastPage: "Alt + E",
+    previousBeat: "Shift + Q",
+    nextBeat: "Shift + E",
     play: "Space",
     playPage: "Shift + Space",
     loop: "C",
@@ -223,14 +223,14 @@ const TransportButton = memo(function TransportButton({
     );
 });
 
-/** What Previous and Next do: step a page, or with Shift go to the start or end, with Alt a beat */
+/** What Previous and Next do: step a page, or with Shift a beat, with Alt go to the start or end */
 type TransportNavigationMode = "page" | "edge" | "beat";
 
 const navigationMode = (event: {
     readonly shiftKey: boolean;
     readonly altKey: boolean;
 }): TransportNavigationMode =>
-    event.altKey ? "beat" : event.shiftKey ? "edge" : "page";
+    event.altKey ? "edge" : event.shiftKey ? "beat" : "page";
 
 /**
  * The modifier held now, as Previous and Next would read it. Only a change re-renders, so key
@@ -291,21 +291,21 @@ const navigationGuide = (back: boolean): readonly NavigationGuideRow[] => {
             click: "Click",
         },
         {
-            mode: "edge",
-            icon: back ? START_ICON : END_ICON,
-            label: back ? "Start of the show" : "End of the show",
-            shortcut: back
-                ? TRANSPORT_SHORTCUTS.firstPage
-                : TRANSPORT_SHORTCUTS.lastPage,
-            click: "Shift+click",
-        },
-        {
             mode: "beat",
             icon: back ? BEAT_BACK_ICON : BEAT_FORWARD_ICON,
             label: back ? "Previous beat" : "Next beat",
-            shortcut: (back
+            shortcut: back
                 ? TRANSPORT_SHORTCUTS.previousBeat
-                : TRANSPORT_SHORTCUTS.nextBeat
+                : TRANSPORT_SHORTCUTS.nextBeat,
+            click: "Shift+click",
+        },
+        {
+            mode: "edge",
+            icon: back ? START_ICON : END_ICON,
+            label: back ? "Start of the show" : "End of the show",
+            shortcut: (back
+                ? TRANSPORT_SHORTCUTS.firstPage
+                : TRANSPORT_SHORTCUTS.lastPage
             ).replace("Alt", alt),
             click: `${alt}+click`,
         },
@@ -352,15 +352,16 @@ function NavigationGuide({
             {/* Wraps to the table's width rather than widening the tooltip */}
             <span className="text-text-subtitle w-0 min-w-full text-[11px]">
                 Hold Shift or {isMac() ? "Option" : "Alt"} to switch the
-                buttons. While playing, playback jumps there and keeps going.
+                buttons. Home and End also go to the start and end. While
+                playing, playback jumps there and keeps going.
             </span>
         </span>
     );
 }
 
 /**
- * Previous and Next. Q and E step a page; Shift (Shift+click, Shift+Q/E) goes to the start or end
- * of the show and Alt (Alt+click, Alt+Q/E) steps a beat. Holding either modifier swaps the icon
+ * Previous and Next. Q and E step a page; Shift (Shift+click, Shift+Q/E) steps a beat and Alt
+ * (Alt+click, Alt+Q/E, also Home and End) goes to the start or end of the show. Holding either modifier swaps the icon
  * and label to say so, and the tooltip is a guide to all three (`NavigationGuide`). Kept apart
  * from the transport so only these two re-render for it.
  */
@@ -407,7 +408,7 @@ const TRANSPORT_TIGHT_PX = 500;
  * which is also the go-to box (click it or press G, then type a page, "m23" or a rehearsal mark);
  * then Fit and the caller's view controls (Compact). The play and page buttons, the accessories
  * and the readout never leave: on a narrow panel the rest folds into "⋯". Shift+click on Previous
- * or Next goes to the start or end of the show and Alt+click steps a beat, as Shift+Q/E and
+ * or Next steps a beat and Alt+click goes to the start or end of the show, as Shift+Q/E and
  * Alt+Q/E do (`TransportNavigationButton`). While playing, navigation jumps playback there.
  *
  * With looping on, Play loops the loop and shows its bar in its icon (UI-17).
