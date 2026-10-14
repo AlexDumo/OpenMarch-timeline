@@ -33,7 +33,7 @@ switch.
 
 Append notes the next tickets need: file locations, seams, surprises.
 
-- **#206:** `exporting/utils/drillChartSvg.ts` draws the field, dots, labels
+- **#206** (fork PR #213, into `field-renderer`): `exporting/utils/drillChartSvg.ts` draws the field, dots, labels
   and individual-chart paths as plain SVG from `FieldProperties`, positions
   and appearance stacks; `svg-generator.ts` keeps `generateDrillChartExportSVGs`
   and adds `getFieldImageForExport`. It mirrors `createFieldGrid` element for

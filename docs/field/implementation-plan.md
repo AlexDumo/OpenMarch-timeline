@@ -130,7 +130,7 @@ Export improvements are written into the same spec.
 ### Export improvements
 
 Drill charts (and the launch page preview, which uses the same SVG) are drawn
-from show data since #206, in
+from show data since #206 (on the `field-renderer` branch), in
 `apps/desktop/src/components/exporting/utils/drillChartSvg.ts`. Content and
 layout are today's, except:
 
