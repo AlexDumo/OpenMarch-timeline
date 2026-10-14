@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { setLayoutResizing } from "@/global/layoutResize";
+import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import {
     MIN_TIMELINE_HEIGHT,
     TIMELINE_SPLIT_KEY_STEP,
@@ -25,6 +26,8 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
     const paneRef = useRef<HTMLDivElement>(null);
     const [available, setAvailable] = useState(Infinity);
     const [measured, setMeasured] = useState(MIN_TIMELINE_HEIGHT);
+    // Set on grab and release only, so the surface may fill the pane while it's dragged
+    const [dragging, setDragging] = useState(false);
     /** The drag in progress: the pane's fixed bottom edge, where on the divider it was grabbed */
     const drag = useRef<{
         bottom: number;
@@ -90,6 +93,7 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
             frame: null,
         };
         setLayoutResizing(true);
+        setDragging(true);
         applyHeight(shown);
     };
     const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
@@ -114,6 +118,7 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
         drag.current = null;
         setAvailable(current.available);
         setTimelineHeight(current.height);
+        setDragging(false);
         setLayoutResizing(false);
     };
     const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -165,7 +170,13 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
             >
                 <div className="bg-stroke group-hover:bg-accent group-focus-visible:bg-accent h-2 w-48 rounded-full transition-colors" />
             </div>
-            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+            <div className="flex min-h-0 flex-1 flex-col">
+                <TimelinePaneStretchContext.Provider
+                    value={dragging || height !== null}
+                >
+                    {children}
+                </TimelinePaneStretchContext.Provider>
+            </div>
         </div>
     );
 }
