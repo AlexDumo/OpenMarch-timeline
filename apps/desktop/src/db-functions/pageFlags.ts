@@ -106,11 +106,13 @@ export function planPageFlagInsertion(
 /**
  * The names the page added by **+** would have, as a plain page and as a subset page ("3" and
  * "2A"), for the right-click menu. `pages` are the show's pages in order (home first); the new page
- * goes where `insertion` puts it (before the split page, or last).
+ * goes where `insertion` puts it (before the split page, or last). `pageNumberOffset` is the file's
+ * first page number (workspace settings), as the pages' own names use.
  */
 export function newPageNames(
     pages: readonly { readonly id: number; readonly isSubset: boolean }[],
     insertion: PageFlagInsertion,
+    pageNumberOffset = 0,
 ): { page: string; subset: string } {
     const index =
         insertion.kind === "split"
@@ -122,7 +124,7 @@ export function newPageNames(
     const nameWith = (isSubset: boolean) => {
         const flags = pages.map((p) => p.isSubset);
         flags.splice(index, 0, isSubset);
-        return generatePageNames(flags, 0)[index]!;
+        return generatePageNames(flags, pageNumberOffset)[index]!;
     };
     return { page: nameWith(false), subset: nameWith(true) };
 }

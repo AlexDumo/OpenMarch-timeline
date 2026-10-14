@@ -207,4 +207,15 @@ describe("newPageNames", () => {
             }),
         ).toEqual({ page: "4", subset: "3A" });
     });
+
+    test("names start at the file's first page number", () => {
+        // A show whose home page is "1": the same split as above is one higher
+        expect(
+            newPageNames(
+                pages,
+                { kind: "split", beat: 5, page: grid(2), last: false },
+                1,
+            ),
+        ).toEqual({ page: "3", subset: "2A" });
+    });
 });

@@ -4,6 +4,7 @@ import {
     mutationOptions,
     QueryClient,
     useMutation,
+    useQuery,
     useQueryClient,
 } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
@@ -28,6 +29,7 @@ import {
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "./usePages";
+import { workspaceSettingsQueryOptions } from "./useWorkspaceSettings";
 import { invalidateTagQueries } from "./tags/queries";
 
 /**
@@ -204,6 +206,11 @@ export function useAddPageFlag({
     const addSubset = useCallback(() => {
         if (insertion) mutate({ beat: insertion.beat, subset: true });
     }, [insertion, mutate]);
+    // The pages' names start at the file's first page number, so the new page's must too
+    const { data: workspaceSettings } = useQuery(
+        workspaceSettingsQueryOptions(),
+    );
+    const pageNumberOffset = workspaceSettings?.pageNumberOffset ?? 0;
     const names = useMemo(
         () =>
             insertion
@@ -214,9 +221,10 @@ export function useAddPageFlag({
                               (b.beats[0]?.index ?? 0),
                       ),
                       insertion,
+                      pageNumberOffset,
                   )
                 : null,
-        [insertion, pages],
+        [insertion, pages, pageNumberOffset],
     );
     return { insertion, add, addSubset, names };
 }
