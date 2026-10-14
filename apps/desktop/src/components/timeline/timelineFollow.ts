@@ -16,11 +16,11 @@ import type {
  */
 
 /** Where a landed page's flag sits, as a share of the view from its left */
-export const FOLLOW_FLAG_LANDING = 0.08;
+const FOLLOW_FLAG_LANDING = 0.08;
 /** How far across the view the playhead goes in a page wider than the view */
-export const FOLLOW_BACKSTOP = 0.85;
+const FOLLOW_BACKSTOP = 0.85;
 /** Where the backstop puts the playhead */
-export const FOLLOW_BACKSTOP_LANDING = 0.25;
+const FOLLOW_BACKSTOP_LANDING = 0.25;
 /** How stiff the glide's spring is (1/s): settles in about a quarter second */
 const FOLLOW_SPRING_OMEGA = 24;
 /** A glide this close to its target, and this slow, has landed */
@@ -42,7 +42,10 @@ export interface FollowScale {
     readonly inset: number;
 }
 
-const beatX = (scale: FollowScale, beat: BeatPosition) =>
+/** Which side of the view the playhead is off */
+export type PlayheadSide = "left" | "right";
+
+export const beatX = (scale: FollowScale, beat: BeatPosition) =>
     scale.inset + beat * scale.pixelsPerBeat;
 
 const clampScroll = (view: FollowView, left: number) =>
@@ -177,6 +180,34 @@ export const revealRangeScroll = ({
     return clampScroll(view, target);
 };
 
+/**
+ * Stopped, where to put the view to show the playhead at `beat` after a jump (navigation, Play
+ * Page Once going back to its set): the least move that shows its page when the page fits, else
+ * the playhead at 25%. `null` when the playhead is in view.
+ */
+export const revealPlayheadScroll = ({
+    view,
+    scale,
+    pages,
+    beat,
+}: {
+    view: FollowView;
+    scale: FollowScale;
+    pages: readonly TimelineBeatRange[];
+    beat: BeatPosition;
+}): number | null => {
+    if (playheadOffscreen({ view, x: beatX(scale, beat) }) === null)
+        return null;
+    const page = pageAt(pages, beat);
+    return page && pageFits(view, scale, page)
+        ? revealRangeScroll({
+              view,
+              startX: beatX(scale, page.startBeatIndex),
+              endX: beatX(scale, page.endBeatIndex),
+          })
+        : backstopLanding(view, scale, beat);
+};
+
 /** Which side of the view the playhead at `x` is off, if it is */
 export const playheadOffscreen = ({
     view,
@@ -184,7 +215,7 @@ export const playheadOffscreen = ({
 }: {
     view: FollowView;
     x: number;
-}): "left" | "right" | null =>
+}): PlayheadSide | null =>
     x < view.left ? "left" : x > view.left + view.width ? "right" : null;
 
 /** A move within a view's width glides; further, or with reduced motion, it cuts */

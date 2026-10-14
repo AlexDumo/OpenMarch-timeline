@@ -15,7 +15,7 @@ import { AddPageFlagMenu } from "./AddPageFlagMenu";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
 import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react";
-import { useTimelineFollow } from "./useTimelineFollow";
+import { useTimelineFollow, type FollowZoomAnchor } from "./useTimelineFollow";
 import clsx from "clsx";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
 import {
@@ -124,7 +124,7 @@ const useTimelineZoom = ({
     fitted?: boolean;
     onFittedChange?: (fitted: boolean) => void;
     /** While the view follows the playhead, the playhead to zoom about instead of the pointer */
-    followAnchor?: () => { anchorPx: number; anchorBeat: number } | null;
+    followAnchor?: () => FollowZoomAnchor | null;
 }) => {
     const viewportWidth = useElementWidth(viewportRef);
     const fitValue =
@@ -575,6 +575,9 @@ const TimelinePlayheadChip = memo(function TimelinePlayheadChip({
             data-side={side}
             aria-label="Show the playhead"
             title="Show the playhead"
+            // As the transport's buttons: a click doesn't take keyboard focus, so Space after it
+            // is still the app's Play, not a second press of the chip
+            onMouseDown={(event) => event.preventDefault()}
             onClick={onClick}
             className={clsx(
                 "bg-bg-1 border-stroke text-text hover:text-accent focus-visible:ring-accent absolute z-[70] flex items-center gap-2 rounded-full border px-8 py-2 text-[11px] leading-none whitespace-nowrap shadow-sm outline-hidden focus-visible:ring-2",
@@ -667,7 +670,8 @@ const TimelineSurface = memo(function TimelineSurface({
         selectionRange?.endBeatIndex,
         selectionRange?.startBeatIndex,
     ]);
-    // Read when a zoom lands, so the follow below can come after the zoom it reads the width of
+    // The follow below needs the zoom's viewport width, and the zoom asks the follow where to
+    // anchor; this stable callback breaks the cycle, and is only called once both exist
     const followAnchor = useLatestCallback(() => follow.zoomAnchor())!;
     const zoom = useTimelineZoom({
         viewportRef,

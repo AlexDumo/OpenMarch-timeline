@@ -213,6 +213,50 @@ describe("useTimelineFollow while playing", () => {
         expect(viewport.scrollLeft).toBe(framed);
     });
 
+    it("frames a loop that fits and holds still even where a page runs past the view", () => {
+        // 400-580px; framed at 120 (580 + 40 - 500), the view is 120-620 and page 3 (480-640)
+        // runs past it, which would otherwise land the page and trip the 85% backstop
+        const loop = { startBeatIndex: 40, endBeatIndex: 58 };
+        const harness = setup({ loop });
+        harness.set({ isPlaying: true, live: 40 });
+        frames(30);
+        expect(viewport.scrollLeft).toBe(120);
+        playTo(harness, 40, 57.75);
+        harness.props.live = 40;
+        frames(30);
+        expect(viewport.scrollLeft).toBe(120);
+    });
+
+    it("resumes and brings the playhead in on navigation after a pause", () => {
+        const harness = setup();
+        harness.set({ isPlaying: true, live: 10 });
+        frames(1);
+        viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: 1500 }));
+        viewport.scrollLeft = 1500;
+        frames(12);
+        expect(harness.result.current.offscreen).toBe("left");
+        // E while playing: playback jumps to page 4's start (480px, out of view)
+        harness.props.live = 48;
+        frames(30);
+        expect(viewport.scrollLeft).toBe(480 - 40);
+        expect(harness.result.current.offscreen).toBeNull();
+    });
+
+    it("glides back on a short backward jump; only a loop's wrap always cuts", () => {
+        const harness = setup();
+        harness.set({ isPlaying: true, live: 64 });
+        frames(1);
+        expect(viewport.scrollLeft).toBe(640 - 40);
+        playTo(harness, 64, 66);
+        // Q while playing: back to page 4 (480px), 160px behind the view
+        harness.props.live = 48;
+        frames(2);
+        expect(viewport.scrollLeft).toBeGreaterThan(440);
+        expect(viewport.scrollLeft).toBeLessThan(600);
+        frames(30);
+        expect(viewport.scrollLeft).toBe(440);
+    });
+
     it("zooms about the playhead while following", () => {
         const harness = setup();
         harness.set({ isPlaying: true, live: 20 });
@@ -227,10 +271,35 @@ describe("useTimelineFollow while playing", () => {
 });
 
 describe("useTimelineFollow while stopped", () => {
-    it("brings the playhead into view on navigation", () => {
+    it("brings the playhead's page into view on navigation, moving the least", () => {
         const harness = setup();
         harness.set({ positionBeat: 64 });
         frames(30);
+        expect(viewport.scrollLeft).toBe(800 + 40 - 500);
+    });
+
+    it("puts the playhead at 25% when navigating into a page wider than the view", () => {
+        const harness = setup();
+        // Page 5 runs from beat 80 to the end (1200px)
+        harness.set({ positionBeat: 120 });
+        frames(30);
+        expect(viewport.scrollLeft).toBe(1200 - 125);
+    });
+
+    it("brings the page's set into view when Play Page Once ends", () => {
+        const harness = setup();
+        harness.set({ isPlaying: true, live: 75 });
+        frames(1);
+        // Looking a little ahead, the playhead still in view (750px in 700-1200)
+        viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: 100 }));
+        viewport.scrollLeft = 700;
+        frames(12);
+        // It ends and goes back to page 5's set at 640px, out of view
+        harness.set({ isPlaying: false, live: null, positionBeat: 64 });
+        // It looks once the stop has settled (300ms), then glides
+        frames(12);
+        expect(viewport.scrollLeft).toBe(700);
+        frames(40);
         expect(viewport.scrollLeft).toBe(640 - 40);
     });
 
@@ -242,9 +311,26 @@ describe("useTimelineFollow while stopped", () => {
         viewport.scrollLeft = 900;
         frames(12);
         harness.set({ isPlaying: false, live: null, positionBeat: 12 });
-        frames(30);
+        frames(60);
         expect(viewport.scrollLeft).toBe(900);
         expect(harness.result.current.offscreen).toBe("left");
+    });
+
+    it("ignores the selection update that lands a few frames after a stop", () => {
+        const harness = setup();
+        harness.set({ isPlaying: true, live: 30 });
+        frames(1);
+        viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: 200 }));
+        viewport.scrollLeft = 200;
+        frames(12);
+        harness.set({ isPlaying: false, live: null, positionBeat: 30 });
+        frames(5);
+        // The store seeks where playing stopped and the window follows: [start flag, playhead]
+        harness.set({
+            selectionRange: { startBeatIndex: 0, endBeatIndex: 30 },
+        });
+        frames(30);
+        expect(viewport.scrollLeft).toBe(200);
     });
 
     it("moves the least to show a page selected from outside the timeline", () => {

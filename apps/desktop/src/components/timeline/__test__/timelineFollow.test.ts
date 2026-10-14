@@ -6,6 +6,7 @@ import {
     landingScroll,
     playbackScroll,
     playheadOffscreen,
+    revealPlayheadScroll,
     revealRangeScroll,
     stepGlide,
     type FollowView,
@@ -206,6 +207,35 @@ describe("revealRangeScroll", () => {
         expect(
             revealRangeScroll({ view: view(0), startX: 1000, endX: 1800 }),
         ).toBe(1000 - 40);
+    });
+});
+
+describe("revealPlayheadScroll", () => {
+    it("doesn't move when the playhead is in view", () => {
+        expect(
+            revealPlayheadScroll({ view: view(0), scale, pages, beat: 40 }),
+        ).toBeNull();
+    });
+
+    it("moves the least to show the playhead's page when it fits", () => {
+        expect(
+            revealPlayheadScroll({ view: view(0), scale, pages, beat: 70 }),
+        ).toBe(800 + 40 - 500);
+        expect(
+            revealPlayheadScroll({ view: view(900), scale, pages, beat: 20 }),
+        ).toBe(160 - 40);
+    });
+
+    it("puts the playhead at 25% in a page wider than the view", () => {
+        const wide = { pixelsPerBeat: 40, inset: 0 };
+        expect(
+            revealPlayheadScroll({
+                view: view(0),
+                scale: wide,
+                pages,
+                beat: 40,
+            }),
+        ).toBe(1600 - 125);
     });
 });
 

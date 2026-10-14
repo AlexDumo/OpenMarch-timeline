@@ -1093,21 +1093,23 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Pausing.** Scrolling by hand (a wheel, a swipe, the scrollbar) or dragging (a scrub, a clip, a
     flag) pauses following when it leaves the playhead out of view; a scroll that leaves the
     playhead in view keeps following. It resumes when the playhead comes back into view, on Play,
-    on navigation, or from the chip. A click doesn't pause it. Zooming while following keeps the
-    playhead in place on screen and doesn't pause it (Logic's and Cubase's suspend-on-edit, and
-    REAPER's "don't autoscroll while viewing other parts", are the models).
+    on navigation while playing (Q, E, Home, End, a page selected: the jump lands the playhead), or
+    from the chip. A click doesn't pause it. Zooming while following keeps the playhead in place on
+    screen and doesn't pause it (Cubase's suspend-on-edit, Logic's Catch and REAPER's "don't
+    autoscroll while viewing other parts" are the models).
   - **Under the pointer.** While the pointer is down nothing moves: a glide that is due waits for
     the release, so a click lands on what was under it. Hovering never holds the view.
   - **The playhead chip.** Whenever the playhead is out of view, playing or stopped, a "Playhead"
     chip with a caret sits at that edge of the timeline; clicking it brings the view back and
     resumes following.
-  - **Stopped.** Navigating (Q, E, the go-to box, ⏮ ⏭) to a playhead out of view brings it in, as a
-    jump lands it while playing. A page selected from outside the timeline (the page list, the
-    field) moves the view the least to show it with an 8% margin, its start when it is wider. A
-    selection made with the pointer on the timeline never moves the view. Stopping leaves the view
-    where it is.
-  - **Loops.** A loop that fits the view is framed once when Play starts and the view holds still
-    through its wraps; a wider loop cuts back to its start on each wrap.
+  - **Stopped.** Navigating (Q, E, the go-to box, ⏮ ⏭) to a playhead out of view moves the view the
+    least to show its page with an 8% margin, or puts the playhead at 25% when its page is wider
+    than the view; so does Play Page Once going back to its set. A page selected from outside the
+    timeline (the page list, the field) moves the view the least to show it, its start when it is
+    wider. A selection made with the pointer on the timeline never moves the view. Stopping leaves
+    the view where it is; a glide already under way finishes.
+  - **Loops.** A loop that fits the view is framed once when Play starts, and while it is in view
+    the view holds still, through its wraps too; a wider loop cuts back to its start on each wrap.
   - **How.** The rules are pure functions in `timelineFollow.ts`; `useTimelineFollow` reads the
     scroll from scroll events and the sizes from props, so a frame reads no layout, and writes the
     scroll only while a glide runs. All the numbers are lead defaults to tune by feel (V-230 to
