@@ -129,18 +129,23 @@ export interface AddedPageFlag {
  *
  * - **Split:** the split page's `start_beat` moves to `beat`, and a new page row takes its old
  *   start, so the split page keeps its flag, id and data (notes, appearance) and the new page comes
- *   before it. Later pages renumber; no `is_subset` page is made. Splitting the last page also
+ *   before it. Later pages renumber, unless `subset` (**Add subset page**) makes the new page a
+ *   subset, which takes a letter and leaves every later page's number. Splitting the last page also
  *   rewrites `last_page_counts` so its flag stays where it was.
- * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`).
+ * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`); a
+ *   `subset` one takes the last page's number and the next letter.
  *
  * Returns the new page and its range, which is the page timeline the UI selects.
  */
 export async function addPageFlagInTransaction({
     tx,
     beat,
+    subset = false,
 }: {
     tx: DbTransaction;
     beat: number;
+    /** Make the new page a subset page (**Add subset page**) */
+    subset?: boolean;
 }): Promise<AddedPageFlag> {
     const grid = await readPageGrid(tx);
     const plan = planPageFlagInsertion(gridOf(grid), beat);
@@ -160,7 +165,10 @@ export async function addPageFlagInTransaction({
         const [created] = await createPagesInTransaction({
             tx,
             newPages: [
-                { start_beat: grid.beatIds[page.start]!, is_subset: false },
+                {
+                    start_beat: grid.beatIds[page.start]!,
+                    is_subset: subset,
+                },
             ],
         });
         // Keep the last flag where it was, even where the show's beats end before it
@@ -175,7 +183,7 @@ export async function addPageFlagInTransaction({
     const start = plan.lastPage.end;
     const [created] = await createPagesInTransaction({
         tx,
-        newPages: [{ start_beat: grid.beatIds[start]!, is_subset: false }],
+        newPages: [{ start_beat: grid.beatIds[start]!, is_subset: subset }],
     });
     await updateLastPageCounts({ tx, lastPageCounts: beat - start });
     return { page: created!, startBeat: start, endBeat: beat };
@@ -185,14 +193,16 @@ export async function addPageFlagInTransaction({
 export async function addPageFlag({
     db,
     beat,
+    subset = false,
 }: {
     db: DbConnection;
     beat: number;
+    subset?: boolean;
 }): Promise<AddedPageFlag> {
     return await transactionWithHistory(
         db,
         "addPageFlag",
-        async (tx) => await addPageFlagInTransaction({ tx, beat }),
+        async (tx) => await addPageFlagInTransaction({ tx, beat, subset }),
     );
 }
 

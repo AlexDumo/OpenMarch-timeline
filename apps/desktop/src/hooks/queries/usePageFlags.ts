@@ -44,7 +44,8 @@ export const addPageFlagMutationOptions = (
     onAdded?: (added: AddedPageFlag) => void,
 ) =>
     mutationOptions({
-        mutationFn: (beat: number) => addPageFlag({ db, beat }),
+        mutationFn: ({ beat, subset }: { beat: number; subset?: boolean }) =>
+            addPageFlag({ db, beat, subset }),
         onSuccess: (added) => {
             void invalidatePageQueries(qc);
             onAdded?.(added);
@@ -172,7 +173,12 @@ export function useAddPageFlag({
     playheadBeat: number;
     isPlaying: boolean;
     onAdded?: (added: AddedPageFlag) => void;
-}): { insertion: PageFlagInsertion | null; add: () => void } {
+}): {
+    insertion: PageFlagInsertion | null;
+    add: () => void;
+    /** **Add subset page**: the same page, as a subset */
+    addSubset: () => void;
+} {
     const queryClient = useQueryClient();
     const { mutate } = useMutation(
         addPageFlagMutationOptions(queryClient, onAdded),
@@ -188,7 +194,10 @@ export function useAddPageFlag({
         [pages, beatCount, playheadBeat, isPlaying],
     );
     const add = useCallback(() => {
-        if (insertion) mutate(insertion.beat);
+        if (insertion) mutate({ beat: insertion.beat });
     }, [insertion, mutate]);
-    return { insertion, add };
+    const addSubset = useCallback(() => {
+        if (insertion) mutate({ beat: insertion.beat, subset: true });
+    }, [insertion, mutate]);
+    return { insertion, add, addSubset };
 }
