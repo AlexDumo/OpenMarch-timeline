@@ -287,6 +287,16 @@ export class FieldScene {
         }
     }
 
+    get pixelRatio() {
+        return this.renderer.getPixelRatio();
+    }
+
+    rendererName(): string {
+        const gl = this.renderer.getContext();
+        const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+        return `WebGL: ${dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)}`;
+    }
+
     get drawCalls() {
         return this.renderer.info.render.calls;
     }

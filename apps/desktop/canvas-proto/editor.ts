@@ -10,6 +10,22 @@
  */
 import type { ShowSource } from "./source";
 import { FieldScene } from "./render/scene";
+import { Canvas2DScene } from "./render/canvas2dScene";
+
+export type RendererChoice = "webgl" | "2d" | "auto";
+
+/**
+ * Whether WebGL here is real GPU rendering. Software WebGL (SwiftShader,
+ * llvmpipe, Microsoft Basic Render) is slower than Canvas2D on the CPU.
+ */
+export function hasHardwareWebGL(): boolean {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    if (!gl) return false;
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return !/swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
+}
 
 export type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rot";
 
@@ -71,7 +87,7 @@ const pct = (sorted: number[], p: number) =>
     sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : 0;
 
 export class Editor {
-    readonly scene: FieldScene;
+    readonly scene: FieldScene | Canvas2DScene;
     source: ShowSource | null = null;
     time = 0;
     playing = false;
@@ -105,8 +121,13 @@ export class Editor {
     fpsDisplay = 0;
     private fpsWindow: number[] = [];
 
-    constructor(readonly container: HTMLElement, canvas: HTMLCanvasElement, opts: { antialias: boolean; dprCap: number }) {
-        this.scene = new FieldScene(canvas, opts);
+    constructor(
+        readonly container: HTMLElement,
+        canvas: HTMLCanvasElement,
+        opts: { antialias: boolean; dprCap: number; renderer: RendererChoice },
+    ) {
+        const use2d = opts.renderer === "2d" || (opts.renderer === "auto" && !hasHardwareWebGL());
+        this.scene = use2d ? new Canvas2DScene(canvas, opts) : new FieldScene(canvas, opts);
         this.attachInput();
         const ro = new ResizeObserver(() => {
             const r = container.getBoundingClientRect();

@@ -4,7 +4,7 @@
  * editor's own frame loop.
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Editor, type FrameStats, type Handle } from "./editor";
+import { Editor, type FrameStats, type Handle, type RendererChoice } from "./editor";
 import { fetchDemo, loadDotsShow } from "./realShow";
 import { makeStressShow, type ShowSource } from "./source";
 
@@ -21,6 +21,7 @@ const params = new URLSearchParams(location.search);
 export const renderOpts = {
     antialias: params.get("aa") !== "0",
     dprCap: Number(params.get("dpr") ?? 2),
+    renderer: (params.get("renderer") ?? "auto") as RendererChoice,
 };
 
 function setParam(key: string, value: string) {
@@ -65,11 +66,7 @@ export function App() {
             editor: ed,
             ready: null as Promise<void> | null,
             bench: (kind: Parameters<Editor["bench"]>[0], ms?: number) => ed.bench(kind, ms),
-            gl: () => {
-                const gl = ed.scene.renderer.getContext();
-                const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-                return dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-            },
+            gl: () => ed.scene.rendererName(),
         };
         return () => ed.scene.dispose();
     }, []);
@@ -133,6 +130,14 @@ export function App() {
                     ))}
                 </select>
                 <span className="sep" />
+                <label title="auto = Canvas2D when WebGL would run in software (no usable GPU)">
+                    Renderer
+                    <select value={renderOpts.renderer} onChange={(e) => setParam("renderer", e.target.value)}>
+                        <option value="auto">auto</option>
+                        <option value="webgl">WebGL</option>
+                        <option value="2d">Canvas2D</option>
+                    </select>
+                </label>
                 <label title="MSAA. Off = potato mode; dots and text stay smooth anyway">
                     <input type="checkbox" checked={renderOpts.antialias} onChange={(e) => setParam("aa", e.target.checked ? "1" : "0")} /> MSAA
                 </label>
@@ -186,7 +191,7 @@ export function App() {
                         {editor?.scene.drawCalls} draw calls · zoom {editor?.scene.view.zoom.toFixed(2)}×
                     </div>
                     <div>
-                        MSAA {renderOpts.antialias ? "on" : "off"} · DPR {editor?.scene.renderer.getPixelRatio()}
+                        {editor?.scene.rendererName()} · MSAA {renderOpts.antialias ? "on" : "off"} · DPR {editor?.scene.pixelRatio}
                         {loadMs != null ? ` · loaded in ${(loadMs / 1000).toFixed(2)} s` : ""}
                     </div>
                     {editor && editor.selectedCount > 0 && <div>{editor.selectedCount} selected</div>}
