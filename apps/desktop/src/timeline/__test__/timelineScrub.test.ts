@@ -151,7 +151,7 @@ describe("dragging a line by itself while paused (UI-21, UI-22)", () => {
         seekTimeline(BEATS, 15, "drag", startFlag);
         expect(store().startBeat).toBe(12);
         expect(store().endBeat).toBe(15);
-        expect(store().playheadBeat).toBe(15);
+        expect(store().playheadBeat).toBe(12);
         seekTimeline(BEATS, 5, "cancel", startFlag);
         expect(store().selection).toEqual({ kind: "range", start: 5, end: 12 });
         // An arrow step is a whole drag: one end. Onto the end flag, it pushes it on
@@ -160,12 +160,13 @@ describe("dragging a line by itself while paused (UI-21, UI-22)", () => {
         expect(store().endBeat).toBe(13);
     });
 
-    it("an end flag dragged and released moves it, with the playhead on it", () => {
+    it("an end flag dragged and released moves it; the playhead stays inside the flags", () => {
         store().selectRange(5, 12);
         seekTimeline(BEATS, 14, "drag", endFlag);
+        expect(store().playheadBeat).toBe(12);
         seekTimeline(BEATS, 15, "end", endFlag);
         expect(store().endBeat).toBe(15);
-        expect(store().playheadBeat).toBe(15);
+        expect(store().playheadBeat).toBe(12);
         expect(store().lineDrag).toBeNull();
     });
 

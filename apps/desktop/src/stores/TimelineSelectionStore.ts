@@ -290,23 +290,18 @@ export type TimelineLineDrag = TimelineFlagsAndPlayhead & {
 /**
  * Where the flags and P are with `drag`'s flag at `beat` (UI-21, UI-22, project owner 2026-10-14):
  * the flag not dragged stays, the left one is the start flag and the right one the end flag, as
- * Logic's locators. `swapped` when the dragged flag has passed the other and become it. A playhead
- * on the end flag stays on it; any other stays inside the flags. On the same beat both are there.
+ * Logic's locators. `swapped` when the dragged flag has passed the other and become it. P never
+ * moves during the drag; `endLineDrag` puts it on the end flag if the flags left it outside.
  */
 export function lineDragPositions(
     drag: TimelineLineDrag,
     beat: number,
 ): TimelineFlagsAndPlayhead & { swapped: boolean } {
     const other = drag.line === "start" ? drag.endBeat : drag.startBeat;
-    const startBeat = Math.min(beat, other);
-    const endBeat = Math.max(beat, other);
     return {
-        startBeat,
-        endBeat,
-        playheadBeat:
-            drag.playheadBeat === drag.endBeat
-                ? endBeat
-                : Math.min(Math.max(drag.playheadBeat, startBeat + 1), endBeat),
+        startBeat: Math.min(beat, other),
+        endBeat: Math.max(beat, other),
+        playheadBeat: drag.playheadBeat,
         swapped: drag.line === "start" ? beat > other : beat < other,
     };
 }
@@ -808,16 +803,23 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     if (!drag) return {};
                     const landed = landLineDrag(s, drag);
                     // The window of two flags on one beat was an empty range: derive it again
-                    return landed
-                        ? { lineDrag: null, ...landed }
-                        : {
-                              lineDrag: null,
-                              selection: editWindow(
-                                  s.startBeat,
-                                  s.playheadBeat,
-                                  s.pageBoxes,
-                              ),
-                          };
+                    if (landed) return { lineDrag: null, ...landed };
+                    // P stayed put during the drag; the flags may have left it outside, and then
+                    // it goes to the end flag
+                    if (!insideFlags(s, s.playheadBeat))
+                        return {
+                            lineDrag: null,
+                            ...fields(s, s.startBeat, s.endBeat, s.endBeat),
+                            playheadRevision: s.playheadRevision + 1,
+                        };
+                    return {
+                        lineDrag: null,
+                        selection: editWindow(
+                            s.startBeat,
+                            s.playheadBeat,
+                            s.pageBoxes,
+                        ),
+                    };
                 }),
             cancelLineDrag: () =>
                 set((s) => {
@@ -1051,12 +1053,17 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         : {
                               playback,
                               lineDrag: null,
-                              // Two flags on one beat get UI-10's window back
-                              selection: editWindow(
-                                  s.startBeat,
-                                  s.playheadBeat,
-                                  s.pageBoxes,
-                              ),
+                              // As at the release, a playhead the flags left outside goes to the
+                              // end flag. Two flags on one beat get UI-10's window back
+                              ...(s.lineDrag && !insideFlags(s, s.playheadBeat)
+                                  ? fields(s, s.startBeat, s.endBeat, s.endBeat)
+                                  : {
+                                        selection: editWindow(
+                                            s.startBeat,
+                                            s.playheadBeat,
+                                            s.pageBoxes,
+                                        ),
+                                    }),
                           },
                 ),
             setLooping: (looping) =>

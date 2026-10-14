@@ -567,39 +567,45 @@ describe("dragging a flag by its line (UI-21, UI-22)", () => {
         expect(lineDragPositions(drag, 20)).toEqual({
             startBeat: 12,
             endBeat: 20,
-            playheadBeat: 20,
+            playheadBeat: 12,
             swapped: true,
         });
-        // A playhead off the end flag stays inside the flags
+        // The playhead never moves during the drag, whichever way it is
         const end = { ...drag, line: "end" as const, playheadBeat: 9 };
-        expect(lineDragPositions(end, 15)).toEqual({
-            startBeat: 5,
-            endBeat: 15,
-            playheadBeat: 9,
-            swapped: false,
-        });
         expect(lineDragPositions(end, 7)).toEqual({
             startBeat: 5,
             endBeat: 7,
-            playheadBeat: 7,
+            playheadBeat: 9,
             swapped: false,
         });
         expect(lineDragPositions(end, 2)).toEqual({
             startBeat: 2,
             endBeat: 5,
-            playheadBeat: 5,
+            playheadBeat: 9,
             swapped: true,
         });
     });
 
-    it("an end flag dragged on takes a playhead on it along", () => {
+    it("an end flag dragged on leaves the playhead where it was", () => {
         store().selectRange(9, 17);
         store().beginLineDrag("end");
         store().dragLine(20);
         expect(store().endBeat).toBe(20);
-        expect(store().playheadBeat).toBe(20);
+        expect(store().playheadBeat).toBe(17);
         store().endLineDrag();
-        expect(store().selection).toEqual({ kind: "range", start: 9, end: 20 });
+        // Still inside the flags, so it stays
+        expect(store().playheadBeat).toBe(17);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 17 });
+    });
+
+    it("a playhead the flags left outside goes to the end flag on release", () => {
+        store().selectRange(9, 17);
+        store().beginLineDrag("end");
+        store().dragLine(12);
+        expect(store().playheadBeat).toBe(17);
+        store().endLineDrag();
+        expect(store().playheadBeat).toBe(12);
+        expect(store().selection).toEqual({ kind: "range", start: 9, end: 12 });
     });
 
     it("a start flag dragged past the end flag swaps with it", () => {
@@ -608,8 +614,10 @@ describe("dragging a flag by its line (UI-21, UI-22)", () => {
         store().dragLine(16);
         expect(store().startBeat).toBe(13);
         expect(store().endBeat).toBe(16);
-        expect(store().playheadBeat).toBe(16);
+        expect(store().playheadBeat).toBe(13);
         store().endLineDrag();
+        // 13 is on the start flag now, outside the flags
+        expect(store().playheadBeat).toBe(16);
         expect(store().lineDrag).toBeNull();
     });
 
@@ -619,6 +627,8 @@ describe("dragging a flag by its line (UI-21, UI-22)", () => {
         store().dragLine(5);
         expect(store().startBeat).toBe(5);
         expect(store().endBeat).toBe(9);
+        expect(store().playheadBeat).toBe(13);
+        store().endLineDrag();
         expect(store().playheadBeat).toBe(9);
     });
 
@@ -672,7 +682,6 @@ describe("dragging a flag by its line (UI-21, UI-22)", () => {
         store().selectRange(1, 9);
         store().beginLineDrag("end");
         store().dragLine(0);
-        expect(store().selection).toEqual({ kind: "home" });
         store().endLineDrag();
         expect(store().selection).toEqual({ kind: "home" });
     });

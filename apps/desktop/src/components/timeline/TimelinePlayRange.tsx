@@ -16,11 +16,6 @@ import type {
 const SNAP_PX = 8;
 /** The end flag's pennant: a 12px triangle, its right side on the 2px stem */
 const PENNANT = 12;
-/**
- * On the playhead, the playhead's own 12px handle takes the middle (UI-21: it is drawn on top), so
- * only the pennant's left part, this wide, grabs the end flag
- */
-const PENNANT_GRAB_ON_PLAYHEAD = 8;
 
 /**
  * What Play plays (UI-22): a bar along the ruler's top edge from the start flag to the **end
@@ -173,18 +168,21 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
                     width: Math.max(endX - startX, 2) + 2,
                 }}
             />
-            {!onPlayhead && (
-                <span
-                    data-testid="timeline-end-stem"
-                    aria-hidden="true"
-                    {...handlers}
-                    onKeyDown={undefined}
-                    className={clsx(
-                        "absolute top-0 z-40 w-12 -translate-x-1/2 touch-none",
-                        movable && "pointer-events-auto cursor-ew-resize",
-                    )}
-                    style={{ left: endX, height }}
-                >
+            {/* Always mounted, so a drag that carries the flag onto or off the playhead keeps its
+                pointer capture. Above the playhead (z-50): where the two meet, the end flag wins
+                and the playhead is reached by clicking the timeline */}
+            <span
+                data-testid="timeline-end-stem"
+                aria-hidden="true"
+                {...handlers}
+                onKeyDown={undefined}
+                className={clsx(
+                    "absolute top-0 z-[59] w-[16px] -translate-x-1/2 touch-none",
+                    movable && "pointer-events-auto cursor-ew-resize",
+                )}
+                style={{ left: endX, height }}
+            >
+                {!onPlayhead && (
                     <span
                         className={clsx(
                             "pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2",
@@ -192,8 +190,8 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
                         )}
                         style={{ height }}
                     />
-                </span>
-            )}
+                )}
+            </span>
             <svg
                 width={PENNANT}
                 height={PENNANT}
@@ -216,8 +214,8 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
                 {...handlers}
                 className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-[59] touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:pointer-events-none"
                 style={{
-                    left: endX + 1 - PENNANT - (onPlayhead ? 2 : 0),
-                    width: onPlayhead ? PENNANT_GRAB_ON_PLAYHEAD : PENNANT + 1,
+                    left: endX + 1 - PENNANT,
+                    width: PENNANT + 1,
                     height: TIMELINE_HEADROOM_HEIGHT,
                 }}
             />

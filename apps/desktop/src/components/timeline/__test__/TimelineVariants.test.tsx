@@ -171,8 +171,10 @@ describe("timeline views", () => {
         expect(screen.getByTestId("timeline-play-range-bar")).toHaveAttribute(
             "data-looping",
         );
-        // On the playhead: no stem of its own
-        expect(screen.queryByTestId("timeline-end-stem")).toBeNull();
+        // On the playhead: the stem stays as the grab area above the playhead, drawing no line
+        expect(screen.getByTestId("timeline-end-stem").children).toHaveLength(
+            0,
+        );
     });
 
     it("presses the initial box for home", () => {
