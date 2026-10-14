@@ -972,6 +972,16 @@ from it. The spec still wins on the model; this file decides presentation.
     ripple delete, live return links, hold marks and chains without a selection, and
     "Hold" on coordinate sheets. Marchers are never "pinned": the start flag owns that word.
 
+- **UI-19: a resizable split between the canvas and the timeline (hands-on feedback, 2026-10-13).**
+  A divider sits between the canvas and the timeline. Drag it, or focus it and press Arrow Up
+  or Down (Shift for bigger steps), to resize both panes; the canvas refits. Double-click it,
+  or press Home, to reset. The height is remembered per user in the UI settings
+  (`timelineHeight`), and it defaults to 260 px, a bit taller than the old content-sized
+  timeline. The timeline keeps at least 120 px and the canvas at least 200 px; in a window too
+  short for both, the timeline's minimum wins. The saved height is kept as set and clamped to
+  the window when drawn, so a small window doesn't overwrite it. A timeline taller than its
+  pane scrolls. The focused beat editor (the audio timeline) keeps its own sizing.
+
 ## Mapping the spec onto the view model
 
 The reference `TimelineViewModel` becomes a derived view: an adapter builds it

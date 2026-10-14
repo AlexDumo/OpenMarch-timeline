@@ -1,4 +1,8 @@
 import { create } from "zustand";
+import {
+    DEFAULT_TIMELINE_HEIGHT,
+    parseTimelineHeight,
+} from "@/components/timeline/timelineSplit";
 import { syncFromStorage } from "@/stores/syncFromStorage";
 
 export type FocusableComponents = "canvas" | "timeline";
@@ -26,6 +30,8 @@ export interface UiSettings {
     timelinePixelsPerBeat: number;
     /** Whether the timeline-mode timeline is drawn as its compact strip (UI-12) */
     timelineCompact: boolean;
+    /** The timeline pane's height in pixels, set by the splitter against the canvas */
+    timelineHeight: number;
     /** Whether the timeline was fitted to the show, so the next show opens fitted (UI-12) */
     timelineZoomFitted: boolean;
     /** The current audio volume percentage for timeline playback */
@@ -74,6 +80,7 @@ export const defaultSettings: UiSettings = {
     timelinePixelsPerSecond: 40,
     timelinePixelsPerBeat: 16,
     timelineCompact: false,
+    timelineHeight: DEFAULT_TIMELINE_HEIGHT,
     timelineZoomFitted: false,
     audioVolume: 100,
     audioMuted: false,
@@ -115,6 +122,7 @@ const parseSettings = (raw: string): UiSettings => {
     return {
         ...defaultSettings,
         ...parsed,
+        timelineHeight: parseTimelineHeight(parsed.timelineHeight),
         mouseSettings: mergedMouseSettings,
         coordinateRounding: parsed.coordinateRounding
             ? {
@@ -156,6 +164,7 @@ interface UiSettingsStoreActions {
     setTimelineZoomFitted: (fitted: boolean) => void;
     /** Turns the compact timeline on or off (`!timelineCompact` without an argument) */
     setTimelineCompact: (compact?: boolean) => void;
+    setTimelineHeight: (height: number) => void;
     toggleAudioMute: () => void;
     setAudioVolume: (volume: number) => void;
 }
@@ -205,6 +214,8 @@ export const useUiSettingsStore = create<UiSettingsStoreInterface>(
             setSetting("timelinePixelsPerBeat", pixelsPerBeat),
         setTimelineZoomFitted: (fitted: boolean) =>
             setSetting("timelineZoomFitted", fitted),
+        setTimelineHeight: (height: number) =>
+            setSetting("timelineHeight", parseTimelineHeight(height)),
         setTimelineCompact: (compact?: boolean) =>
             setSetting(
                 "timelineCompact",
