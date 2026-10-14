@@ -47,12 +47,17 @@ gh api repos/AlexDumo/OpenMarch-timeline/issues/<n>/dependencies/blocked_by --jq
 
 ## Picking up a ticket
 
-1. Check every blocker is closed (merged).
+All conversion work lands on the fork's `field-renderer` branch, not `main`.
+`field-renderer` reaches `main` through one PR when the migration is done.
+
+1. Check every blocker is closed (merged into `field-renderer`).
 2. Read the ticket, #189 (body and comments), ADR 0005 and
    [implementation-plan.md](implementation-plan.md).
-3. Work in your own worktree off fork `main`, with a branch named
+3. Work in your own worktree off fork `field-renderer`, with a branch named
    `field/<n>-<short-name>`.
-4. Open a PR into fork `main` with `Closes #<n>`. Add any notes the next
+4. Open a PR into fork `field-renderer` with `Closes #<n>`. GitHub only
+   auto-closes issues on merges into `main`, so the ticket is closed by hand
+   after the merge. Add any notes the next
    ticket needs to its phase file's handoff notes.
 
 ## Performance numbers
