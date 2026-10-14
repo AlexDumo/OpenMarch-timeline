@@ -78,8 +78,16 @@ describeDbTests("timeline page bridge", (it) => {
 
         const options = addPageFlagMutationOptions(result.current.queryClient);
         await act(async () => {
-            const added = await options.mutationFn!(20, undefined as never);
-            options.onSuccess?.(added, 20, undefined, undefined as never);
+            const added = await options.mutationFn!(
+                { beat: 20 },
+                undefined as never,
+            );
+            options.onSuccess?.(
+                added,
+                { beat: 20 },
+                undefined,
+                undefined as never,
+            );
         });
         await waitFor(() => expect(result.current.timing.pages.length).toBe(6));
         const added = result.current.timing.pages[5]!;
@@ -103,8 +111,16 @@ describeDbTests("timeline page bridge", (it) => {
 
         const options = addPageFlagMutationOptions(result.current.queryClient);
         await act(async () => {
-            const added = await options.mutationFn!(7, undefined as never);
-            options.onSuccess?.(added, 7, undefined, undefined as never);
+            const added = await options.mutationFn!(
+                { beat: 7 },
+                undefined as never,
+            );
+            options.onSuccess?.(
+                added,
+                { beat: 7 },
+                undefined,
+                undefined as never,
+            );
         });
         await waitFor(() => expect(result.current.timing.pages.length).toBe(6));
         // The new page comes before the split one and ends on the playhead

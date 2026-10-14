@@ -189,7 +189,7 @@ from it. The spec still wins on the model; this file decides presentation.
     there), a **+** shows just after it. It adds a page whose flag is at the
     playhead in one edit. The page that was split keeps its flag, id and
     per-page data (notes, appearance); the new page comes before it, and
-    later pages renumber (no subset letter). Only page rows change, plus
+    later pages renumber, unless it is a subset page (below). Only page rows change, plus
     `last_page_counts` when the last page is split; no timeline is written,
     so motion is unchanged. The new page is selected. Pages store their
     start beat, so this inserts a row at the split page's old start and moves
@@ -198,6 +198,15 @@ from it. The spec still wins on the model; this file decides presentation.
     (_owner, 2026-10-12_); it never adds beats, so where the music ends on
     the last flag there is no **+** past it. The timeline keeps 32px after
     the last beat so **+** stays on screen at the show's end.
+  - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
+    **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
+    subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
+    a page box offers **Change to subset**, or **Change to normal page** on a
+    subset page, matching the Subset switch in page mode's menu and the
+    inspector. It flips the page
+    and its name, and a later page's number may change as a subset page joins
+    or leaves the numbering. Home can't be a subset (it has no box). Each action
+    is one undo step.
   - **Selection.** With a stored timeline selected, marchers without a
     transition in it are dimmed, and a dimmed marcher can't be selected or
     interacted with at all: clicks and box selection pass over it, and
@@ -1002,6 +1011,26 @@ from it. The spec still wins on the model; this file decides presentation.
   asked in a first-launch welcome flow. Design and work packages: `research/basic-mode/README.md`;
   feel defaults are V-200 to V-206.
 
+- **UI-19: a resizable split between the canvas and the timeline (hands-on feedback, 2026-10-13).**
+  A divider sits between the canvas and the timeline. Drag it, or focus it and press Arrow Up
+  or Down (Shift for bigger steps), to resize both panes. The field keeps its zoom and its place
+  on screen, during the drag and after it: the pane shows more or less of it, and the zoom
+  readout doesn't change (100% is the zoom the field was last centered at).
+  - **Default: fitted.** With no chosen height the timeline is as small as it can be and still
+    show every track, so it grows and shrinks as tracks come and go. Double-click the divider,
+    or press Home, to go back to fitted.
+  - **Taller than the tracks:** the track area expands (grid, page lines, playhead and
+    selection fill the extra room). Track heights stay the same.
+  - **Shorter than the tracks:** the track area scrolls vertically; the transport, the page ruler
+    and the measure row stay put (only the waveform and the clip rows scroll, under the ruler), and
+    the horizontal scrollbar stays at the bottom of the pane. A resize tag with no room between its
+    clip and the ruler shows beside the dragged edge. The mouse wheel scrolls the tracks
+    here; when the tracks fit, a vertical wheel still scrolls the timeline sideways (Shift+wheel
+    or a horizontal swipe does that when they overflow).
+  - **Remembered** per user in the UI settings (`timelineHeight`, `null` is fitted). Minimums:
+    timeline 120 px, canvas 200 px; in a window too short for both, the timeline's minimum
+    wins. The saved height is clamped to the window when drawn, not rewritten.
+  - The focused beat editor (the audio timeline) keeps its own sizing.
 - **UI-20: a headroom strip for the flags' tops (hands-on feedback, 2026-10-13).** The owner found
   the yellow start flag hard to click: it was only grabbed above the audio row, and on a page flag
   the flag's grip took the whole page row, so a thin band was left. As Logic gives its playhead and

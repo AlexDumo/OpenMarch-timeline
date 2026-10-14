@@ -160,7 +160,7 @@ function TimelineModeContainer() {
     return (
         <div
             ref={ref}
-            className="flex gap-8"
+            className="flex min-h-0 flex-1 gap-8"
             data-testid="timeline-mode-container"
         >
             <TimelineModePanel />

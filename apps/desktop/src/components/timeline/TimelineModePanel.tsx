@@ -12,6 +12,7 @@ import {
     movePageFlagMutationOptions,
     useAddPageFlag,
 } from "@/hooks/queries/usePageFlags";
+import { updatePagesMutationOptions } from "@/hooks/queries/usePages";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import { useTimingObjects } from "@/hooks";
 import { useIsPlaying } from "@/context/IsPlayingContext";
@@ -319,6 +320,10 @@ export default function TimelineModePanel() {
         [isPlaying, isolated, movePageFlag],
     );
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
+    // Change to subset / normal page: one `updatePages` edit, one undo step
+    const { mutate: updatePages } = useMutation(
+        updatePagesMutationOptions(queryClient),
+    );
     const { mutate: deletePageFlags } = useMutation(
         deletePageFlagsMutationOptions(queryClient),
     );
@@ -433,6 +438,13 @@ export default function TimelineModePanel() {
                     }
                     moveCommands={basic ? undefined : moveCommands}
                     pageFlagMove={pageFlagMove}
+                    onSetPageSubset={(pageId, subset) =>
+                        updatePages({
+                            modifiedPagesArgs: [
+                                { id: pageId, is_subset: subset },
+                            ],
+                        })
+                    }
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
                             pages,
@@ -476,6 +488,8 @@ function PlayingTimeline({
     | "selection"
     | "transportClock"
     | "onAddPageFlag"
+    | "onAddSubsetPage"
+    | "addPageNames"
     | "loop"
     | "onLoopChange"
 >) {
@@ -551,6 +565,10 @@ function PlayingTimeline({
             selection={selection}
             transportClock={clock}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
+            addPageNames={addPageFlag.names ?? undefined}
+            onAddSubsetPage={
+                addPageFlag.insertion ? addPageFlag.addSubset : undefined
+            }
             playback={playback}
             pixelsPerBeat={pixelsPerBeat}
             onPixelsPerBeatChange={setPixelsPerBeat}
