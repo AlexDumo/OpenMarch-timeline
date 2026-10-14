@@ -853,6 +853,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             // floor of the box bodies (UI-19), below the header
                             topTickY={timelineHeight - 7}
                             showBeatTicks={basic}
+                            bottomTickY={null}
                         />
                         <TimelinePageLines
                             pages={model.pages}
