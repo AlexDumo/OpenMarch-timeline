@@ -65,7 +65,6 @@ describe("ShortcutDispatcher on a timeline move control", () => {
     });
 
     it("leaves Enter and the plain nudge keys to the control", () => {
-        const create = handle("createMarcherShape");
         const up = handle("moveSelectedMarchersUp");
         const clip = renderOnMoveControl();
         expect(fireEvent.keyDown(clip, { key: "Enter", code: "Enter" })).toBe(
@@ -75,7 +74,6 @@ describe("ShortcutDispatcher on a timeline move control", () => {
             fireEvent.keyDown(clip, { key: "ArrowUp", code: "ArrowUp" }),
         ).toBe(true);
         expect(fireEvent.keyDown(clip, { key: "w", code: "KeyW" })).toBe(true);
-        expect(create).not.toHaveBeenCalled();
         expect(up).not.toHaveBeenCalled();
     });
 
@@ -135,6 +133,43 @@ describe("UI-18 keep", () => {
         fireEvent.keyDown(window, { key: "k", code: "KeyK", repeat: true });
         fireEvent.keyDown(window, { key: "k", code: "KeyK", repeat: true });
         expect(keep).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("navigation held while playing", () => {
+    function Navigation({ playing }: { playing: boolean }) {
+        useActionHandler("nextPage", next, { ignoreRepeat: playing });
+        return null;
+    }
+    const next = vi.fn();
+    const holdE = () => {
+        fireEvent.keyDown(window, { key: "e", code: "KeyE" });
+        fireEvent.keyDown(window, { key: "e", code: "KeyE", repeat: true });
+        fireEvent.keyDown(window, { key: "e", code: "KeyE", repeat: true });
+    };
+
+    it("a held key jumps playback once, as each jump restarts the audio", () => {
+        next.mockClear();
+        render(
+            <>
+                <ShortcutDispatcher />
+                <Navigation playing />
+            </>,
+        );
+        holdE();
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it("paused, a held key keeps stepping", () => {
+        next.mockClear();
+        render(
+            <>
+                <ShortcutDispatcher />
+                <Navigation playing={false} />
+            </>,
+        );
+        holdE();
+        expect(next).toHaveBeenCalledTimes(3);
     });
 });
 

@@ -17,14 +17,14 @@ import type TimelineShapeOverlay from "./TimelineShapeOverlay";
 import { FieldProperties } from "@openmarch/core";
 import CanvasListeners from "../../../components/canvas/listeners/CanvasListeners";
 import Marcher from "@/global/classes/Marcher";
-import MarcherPage from "@/global/classes/MarcherPage";
-import { MarcherPagesByMarcher } from "@/global/classes/MarcherPageIndex";
+import MarcherPage, {
+    type ModifiedMarcherPageArgs,
+} from "@/global/classes/MarcherPage";
 import { ActiveObjectArgs } from "@/components/canvas/CanvasConstants";
 import * as CoordinateActions from "@/utilities/CoordinateActions";
 import Page from "@/global/classes/Page";
 import MarcherLine from "@/global/classes/canvasObjects/MarcherLine";
 import * as Selectable from "./interfaces/Selectable";
-import { MarcherShape } from "./MarcherShape";
 import { rgbaToString } from "@openmarch/core";
 import { UiSettings } from "@/stores/UiSettingsStore";
 import {
@@ -34,11 +34,14 @@ import {
 } from "./GroupUtils";
 import { CoordinateLike } from "@/utilities/CoordinateActions";
 import { getFieldPropertiesImage } from "@/global/classes/FieldProperties";
-import { ModifiedMarcherPageArgs, ShapePage } from "@/db-functions";
 import { MarcherVisualMap } from "@/hooks/queries";
 import type { TimelinePositionBuffer } from "@/timeline/timelineCanvas";
 import type { TimelinePath } from "@/timeline/timelinePaths";
 import { RgbaColor } from "@uiw/react-color";
+import {
+    isLayoutResizing,
+    subscribeLayoutResizing,
+} from "@/global/layoutResize";
 import {
     evaluatePathWarning,
     STEP_SIZE_WARNING_COLOR,
@@ -49,11 +52,13 @@ import {
 const NORMAL_PATHWAY_DASH: number[] = [];
 // Precomputed so the per-frame comparison below does not rebuild the warning stroke string
 const STEP_SIZE_WARNING_STROKE = rgbaToString(STEP_SIZE_WARNING_COLOR);
+/** How much taller than its viewport the canvas grows while a splitter drag holds its size */
+const LAYOUT_RESIZE_HEADROOM = 160;
 
 // Apply or clear the step-size warning style, skipping fabric mutations when the pathway already matches
 // Compares against the live fabric state so it stays correct even after the theme effect recolors paths
 function applyPathwayWarningStyle(
-    // A straight Pathway in page mode, a TimelinePathway in timeline mode (P7.10)
+    // A straight Pathway (the line tool) or a TimelinePathway (P7.10)
     pathway: fabric.Object,
     midpoint: Midpoint,
     isWarning: boolean,
@@ -88,7 +93,7 @@ interface TimelinePathSide {
     /** Which end of the path the endpoint marks */
     endpointAt: "start" | "end";
     pathway: TimelinePathway;
-    /** The page-mode line this side replaces: hidden, and the curve is stacked at its place */
+    /** The straight line this side replaces: hidden, and the curve is stacked at its place */
     straightPathway: Pathway;
     midpoint: Midpoint;
     endpoint: Endpoint;
@@ -138,10 +143,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     /** Variables for tracking pan position */
     lastPosX = 0;
     lastPosY = 0;
-    marcherShapes: MarcherShape[] = [];
-    /** Timeline mode's picked spec shape, while one is drawn (P7.11, `useTimelineShapeCanvas`) */
+    /** The picked spec shape, while one is drawn (P7.11, `useTimelineShapeCanvas`) */
     timelineShapeOverlay: TimelineShapeOverlay | null = null;
-    /** The kept marks beside the dots in timeline mode (`renderTimelineKeptMarks`), if drawn */
+    /** The kept marks beside the dots (`renderTimelineKeptMarks`), if drawn */
     timelineKeptLayer: TimelineKeptLayer | null = null;
     /**
      * The reference to the grid (the lines on the field) object to use for caching
@@ -229,6 +233,9 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     private _viewportResizeObserver: ResizeObserver | null = null;
     private _wrapperResizeObserver: ResizeObserver | null = null;
     private _viewportEl: HTMLElement | null = null;
+    private _unsubscribeLayoutResizing: (() => void) | null = null;
+    /** See `getBaseZoom` */
+    private _baseZoom: number | null = null;
 
     /**
      * Constants for zoom limits
@@ -309,8 +316,14 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         // Set canvas size
         this.refreshCanvasSize();
         // Update canvas size on window resize (store handler for cleanup)
-        this._onWindowResize = this.refreshCanvasSize.bind(this);
+        this._onWindowResize = () => this.refreshCanvasSize();
         window.addEventListener("resize", this._onWindowResize);
+        // A splitter drag holds the size (see refreshCanvasSize); fit it once the drag ends
+        this._unsubscribeLayoutResizing = subscribeLayoutResizing(
+            (resizing) => {
+                if (!resizing) this.refreshCanvasSize({ drawNow: true });
+            },
+        );
 
         // Set the UI settings
         this._uiSettings = uiSettings;
@@ -834,12 +847,16 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                     this._viewportEl = viewportEl || null;
                     if (typeof ResizeObserver !== "undefined") {
                         if (viewportEl) {
-                            const ro = new ResizeObserver(() => refresh());
+                            const ro = new ResizeObserver(() =>
+                                this.refreshCanvasSize({ drawNow: true }),
+                            );
                             ro.observe(viewportEl);
                             this._viewportResizeObserver = ro;
                         } else {
                             // Fallback to observing the wrapper if viewportEl is not available
-                            const ro = new ResizeObserver(() => refresh());
+                            const ro = new ResizeObserver(() =>
+                                this.refreshCanvasSize({ drawNow: true }),
+                            );
                             ro.observe(this.cssZoomWrapper);
                             this._wrapperResizeObserver = ro;
                         }
@@ -883,6 +900,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
             window.removeEventListener("resize", this._onWindowResize);
             this._onWindowResize = null;
         }
+        this._unsubscribeLayoutResizing?.();
+        this._unsubscribeLayoutResizing = null;
         if (this._viewportResizeObserver) {
             this._viewportResizeObserver.disconnect();
             this._viewportResizeObserver = null;
@@ -1029,7 +1048,12 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     }
 
     /******************* INSTANCE METHODS ******************/
-    refreshCanvasSize() {
+    /**
+     * Fits the canvas to its viewport. `drawNow` redraws in this call instead of the next
+     * animation frame: from a ResizeObserver, which runs before the frame paints, that keeps
+     * the cleared canvas from showing for a frame.
+     */
+    refreshCanvasSize({ drawNow = false }: { drawNow?: boolean } = {}) {
         // Prefer the viewport element if available, fallback to wrapper, then window
         const viewportEl = this._viewportEl;
         const targetRect = viewportEl
@@ -1038,12 +1062,33 @@ export default class OpenMarchCanvas extends fabric.Canvas {
               ? this.cssZoomWrapper.getBoundingClientRect()
               : { width: window.innerWidth, height: window.innerHeight };
 
-        const width = Math.max(0, Math.floor(targetRect.width));
-        const height = Math.max(0, Math.floor(targetRect.height));
+        let width = Math.max(0, Math.floor(targetRect.width));
+        let height = Math.max(0, Math.floor(targetRect.height));
 
-        this.setWidth(width);
-        this.setHeight(height);
-        this.requestRenderAll();
+        if (isLayoutResizing()) {
+            // A splitter drag changes the viewport every frame. The wrapper clips the canvas and
+            // the field is drawn from its top-left corner, so a canvas larger than the viewport
+            // looks the same as a fitted one: keep the size, and when the viewport outgrows it,
+            // grow with headroom. The drag's end fits it exactly
+            if (width <= this.getWidth() && height <= this.getHeight()) return;
+            width = Math.max(width, this.getWidth());
+            height = Math.max(
+                height + LAYOUT_RESIZE_HEADROOM,
+                this.getHeight(),
+            );
+        }
+        // Setting a canvas's size clears it, even to the same size
+        if (width === this.getWidth() && height === this.getHeight()) return;
+
+        this.setDimensions({ width, height });
+        if (!drawNow) return;
+        const pending = (this as unknown as { isRendering?: number })
+            .isRendering;
+        if (pending) {
+            fabric.util.cancelAnimFrame(pending);
+            (this as unknown as { isRendering: number }).isRendering = 0;
+        }
+        this.renderAll();
     }
 
     /**
@@ -1057,10 +1102,20 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     }
 
     /**
-     * Compute the "base zoom" so that the field fits vertically in the current viewport.
-     * If the field already fits at 1.0, base zoom is 1.0.
+     * The "base zoom" (100% in the zoom controls): the zoom the field was last centered at
+     * (`centerAtBaseZoom`). Kept, not recomputed from the canvas's height, so resizing the panes
+     * (the timeline splitter, the window) doesn't change the zoom shown when the field's zoom
+     * hasn't changed.
      */
     public getBaseZoom(): number {
+        return this._baseZoom ?? this.fitBaseZoom();
+    }
+
+    /**
+     * The zoom at which the field fits vertically in the current viewport.
+     * If the field already fits at 1.0, it is 1.0.
+     */
+    private fitBaseZoom(): number {
         const viewportHeight = this.getHeight();
         const fieldHeight = this.fieldProperties?.height ?? viewportHeight;
         if (fieldHeight <= 0 || viewportHeight <= 0) return 1.0;
@@ -1075,7 +1130,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         const fieldWidth = this.fieldProperties?.width ?? viewportWidth;
         const fieldHeight = this.fieldProperties?.height ?? viewportHeight;
 
-        const baseZoom = this.getBaseZoom();
+        const baseZoom = this.fitBaseZoom();
+        this._baseZoom = baseZoom;
         const panX = (viewportWidth - fieldWidth * baseZoom) / 2;
         const panY = (viewportHeight - fieldHeight * baseZoom) / 2;
         this.setViewportTransform([baseZoom, 0, 0, baseZoom, panX, panY]);
@@ -1120,109 +1176,13 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     };
 
     bringAllControlPointsTooFront() {
-        for (const marcherShape of this.marcherShapes) {
-            marcherShape.controlPoints.forEach((controlPoint) => {
-                controlPoint.bringToFront();
-            });
-        }
         this.timelineKeptLayer?.bringToFront();
         this.timelineShapeOverlay?.bringToFront();
     }
 
     /**
-     * Draws `shapePages` as `MarcherShape`s, replacing the ones drawn before.
-     *
-     * @param isCurrent checked after each await: once it returns false (a newer render started,
-     * or timeline mode turned on, P7.11), this render stops adding shapes
-     */
-    renderMarcherShapes = async ({
-        shapePages,
-        isCurrent = () => true,
-    }: {
-        shapePages: ShapePage[];
-        isCurrent?: () => boolean;
-    }) => {
-        const existingMarcherShapeMap = new Map(
-            this.marcherShapes.map((mp) => [mp.shapePage.shape_id, mp]),
-        );
-        const newShapeIds = new Set(shapePages.map((sp) => sp.shape_id));
-        const removedShapeIds = new Set();
-        for (const existingMarcherShape of existingMarcherShapeMap) {
-            if (!newShapeIds.has(existingMarcherShape[0])) {
-                removedShapeIds.add(existingMarcherShape[0]);
-                existingMarcherShape[1].destroy();
-            }
-        }
-        if (removedShapeIds.size !== 0) {
-            this.marcherShapes = this.marcherShapes.filter(
-                (ms) => !removedShapeIds.has(ms.shapePage.shape_id),
-            );
-        }
-        for (const shapePage of shapePages) {
-            const existingMarcherShape = existingMarcherShapeMap.get(
-                shapePage.shape_id,
-            );
-            if (!isCurrent()) return;
-            if (existingMarcherShape) {
-                existingMarcherShape.setShapePage(shapePage);
-                await existingMarcherShape.refreshMarchers();
-                if (!isCurrent()) return;
-                const index = this.marcherShapes.findIndex(
-                    (ms) => ms.shapePage.shape_id === shapePage.shape_id,
-                );
-                if (index !== -1) {
-                    this.marcherShapes[index] = existingMarcherShape;
-                }
-            } else {
-                this.marcherShapes.push(
-                    new MarcherShape({
-                        canvas: this,
-                        shapePage,
-                    }),
-                );
-            }
-        }
-    };
-
-    /**
-     * Render the given marcherPages on the canvas
-     *
-     * @param marcherVisuals The map of marcher visuals
-     * @param marcherPages All of the marcher pages
-     */
-    renderMarchers = async ({
-        marcherVisuals,
-        marcherPages,
-    }: {
-        marcherVisuals: MarcherVisualMap;
-        marcherPages: MarcherPagesByMarcher;
-    }) => {
-        CanvasMarcher.theme = this.fieldProperties.theme;
-
-        // update coordinate for every canvas marcher
-        const moved: CanvasMarcher[] = [];
-        Object.values(marcherPages).forEach((marcherPage) => {
-            const visual = marcherVisuals[marcherPage.marcher_id];
-            if (!visual) return;
-
-            const canvasMarcher = visual.getCanvasMarcher();
-            canvasMarcher.setMarcherCoords(marcherPage, true, undefined, {
-                bringToFront: false,
-            });
-            moved.push(canvasMarcher);
-        });
-        this.bringObjectsToFront(moved);
-        this.fitActiveSelectionToMarchers();
-
-        if (this._listeners && this._listeners.refreshMarchers)
-            this._listeners?.refreshMarchers();
-        this.bringAllControlPointsTooFront();
-        this.requestRenderAll();
-    };
-
-    /**
-     * Timeline mode's static render (P5.5): like `renderMarchers`, but each marcher's position
-     * comes from a filled resolver buffer instead of marcher_pages. The position also becomes the
+     * The static render (P5.5): each marcher's position comes from a filled resolver buffer. The
+     * position also becomes the
      * marcher's `coordinate`, so `refreshMarchers` returns marchers to it. Marchers missing from
      * the buffer stay where they are.
      *
@@ -1250,10 +1210,6 @@ export default class OpenMarchCanvas extends fabric.Canvas {
                     ...(pageId !== undefined ? { page_id: pageId } : {}),
                     x,
                     y,
-                    // Timeline mode has no shape locks (P7.11): a page-era lock from an
-                    // earlier marcher_pages render must not stop a drag that P7.2 can write
-                    isLocked: false,
-                    lockedReason: "",
                 };
                 if (held?.has(canvasMarcher)) {
                     canvasMarcher.coordinate = coordinate;
@@ -1500,156 +1456,6 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         return [pathway, midpoint, endpoint];
     };
 
-    /**
-     * Renders pathways, midpoints, and endpoints for the given pages,
-     * at the coordinates in the MarcherPages of the provided pages.
-     * If any page is null, the pathway/midpoint/endpoint will be hidden.
-     *
-     * @param marcherVisuals The marcher visual map
-     * @param marcherPages The marcher pages map
-     * @param prevPageId The id of the previous page
-     * @param currPageId The id of the current page
-     * @param nextPageId The id of the next page
-     * @param marcherIds The ids of the marchers to render pathways for
-     * @param fromCanvasMarchers Gets target positions from canvas marchers instead of marcher pages.
-     */
-    renderPathVisuals = ({
-        marcherVisuals,
-        previousMarcherPages,
-        currentMarcherPages,
-        nextMarcherPages,
-        marcherIds,
-        currentPageCounts,
-        nextPageCounts,
-        previousPathsEnabled,
-        nextPathsEnabled,
-        stepSizeWarningsEnabled,
-        fieldProperties,
-    }: {
-        marcherVisuals: MarcherVisualMap;
-        previousMarcherPages: MarcherPagesByMarcher;
-        currentMarcherPages: MarcherPagesByMarcher;
-        nextMarcherPages: MarcherPagesByMarcher;
-        marcherIds: number[];
-        currentPageCounts: number | undefined;
-        nextPageCounts: number | undefined;
-        previousPathsEnabled: boolean;
-        nextPathsEnabled: boolean;
-        stepSizeWarningsEnabled: boolean;
-        fieldProperties: FieldProperties;
-    }) => {
-        if (!fieldProperties) return;
-
-        // iterate through each marcher visual and update the pathways, midpoints, and endpoints
-        marcherIds.forEach((marcherId: number) => {
-            const visual = marcherVisuals[marcherId];
-            if (!visual) return;
-
-            const prev = previousMarcherPages[marcherId];
-            const curr = currentMarcherPages[marcherId];
-            const next = nextMarcherPages[marcherId];
-
-            // previous pathway, midpoint, endpoint
-            const prevPathway = visual.getPreviousPathway();
-            const prevMidpoint = visual.getPreviousMidpoint();
-            if (prev && curr) {
-                const { show, isWarning } = evaluatePathWarning({
-                    start: curr,
-                    end: prev,
-                    counts: currentPageCounts,
-                    fieldProperties,
-                    pathEnabled: previousPathsEnabled,
-                    // previous paths stay hidden when toggled off, even over threshold
-                    allowForceShow: false,
-                    warningsEnabled: stepSizeWarningsEnabled,
-                });
-                if (show) {
-                    prevPathway.show();
-                    prevPathway.updateStartCoords(curr);
-                    prevPathway.updateEndCoords(prev);
-                    prevMidpoint.show();
-                    prevMidpoint.updateCoords({
-                        x: (curr.x + prev.x) / 2,
-                        y: (curr.y + prev.y) / 2,
-                    });
-                    visual.getPreviousEndpoint().show();
-                    visual.getPreviousEndpoint().updateCoords(prev);
-                    applyPathwayWarningStyle(
-                        prevPathway,
-                        prevMidpoint,
-                        isWarning,
-                        fieldProperties.theme.previousPath,
-                    );
-                } else {
-                    prevPathway.hide();
-                    prevMidpoint.hide();
-                    visual.getPreviousEndpoint().hide();
-                }
-            } else {
-                prevPathway.hide();
-                prevMidpoint.hide();
-                visual.getPreviousEndpoint().hide();
-            }
-
-            // next pathway, midpoint, endpoint
-            const nextPathway = visual.getNextPathway();
-            const nextMidpoint = visual.getNextMidpoint();
-            if (next && curr) {
-                const { show, isWarning } = evaluatePathWarning({
-                    start: curr,
-                    end: next,
-                    counts: nextPageCounts,
-                    fieldProperties,
-                    pathEnabled: nextPathsEnabled,
-                    // next path is the current move, force-show it over threshold
-                    allowForceShow: true,
-                    warningsEnabled: stepSizeWarningsEnabled,
-                });
-                if (show) {
-                    // TODO: Uncomment when EditablePath is fully implemented
-                    // // delete all of the existing fabric objects
-                    // for (const fabricObject of nextPathway.getFabricObjects()) {
-                    //     this.remove(fabricObject);
-                    // }
-                    // nextPathway.updatePathwayWithMarcherPages(curr, next);
-                    // for (const fabricObject of nextPathway.getFabricObjects()) {
-                    //     this.add(fabricObject);
-                    // }
-
-                    // Using simple pathway method (like previous paths) for now
-                    nextPathway.show();
-                    nextPathway.updateStartCoords(curr);
-                    nextPathway.updateEndCoords(next);
-                    nextMidpoint.show();
-                    nextMidpoint.updateCoords({
-                        x: (curr.x + next.x) / 2,
-                        y: (curr.y + next.y) / 2,
-                    });
-                    visual.getNextEndpoint().show();
-                    visual.getNextEndpoint().updateCoords(next);
-                    applyPathwayWarningStyle(
-                        nextPathway,
-                        nextMidpoint,
-                        isWarning,
-                        fieldProperties.theme.nextPath,
-                    );
-                } else {
-                    nextPathway.hide();
-                    nextMidpoint.hide();
-                    visual.getNextEndpoint().hide();
-                }
-            } else {
-                // TODO: Uncomment when EditablePath is fully implemented
-                // for (const fabricObject of nextPathway.getFabricObjects()) {
-                //     this.remove(fabricObject);
-                // }
-                nextPathway.hide();
-                nextMidpoint.hide();
-                visual.getNextEndpoint().hide();
-            }
-        });
-    };
-
     /** One side (previous or next) of a marcher's timeline path visuals; see below. */
     private drawTimelinePathSide(
         {
@@ -1703,11 +1509,10 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     }
 
     /**
-     * Timeline mode's path visuals (P7.10): like `renderPathVisuals`, but each path is sampled from
-     * the resolver (`pathsIntoPage`), so it is drawn as a polyline that follows arcs and
-     * follow-the-leader moves, and the midpoint is the midset on that path. The step-size warning
-     * uses the path's stride (its fastest stretch per count). The straight page-mode lines are
-     * hidden. A marcher with no path on one side (the first or last page, a side that can't show,
+     * The path visuals (P7.10): each path is sampled from the resolver (`pathsIntoPage`), so it is
+     * drawn as a polyline that follows arcs and follow-the-leader moves, and the midpoint is the
+     * midset on that path. The step-size warning uses the path's stride (its fastest stretch per
+     * count). The straight lines are hidden. A marcher with no path on one side (the first or last page, a side that can't show,
      * or a marcher unknown to the resolver) has that side hidden.
      *
      * @param previousPaths each marcher's move into the selected page (endpoint: where it starts)
@@ -1819,23 +1624,10 @@ export default class OpenMarchCanvas extends fabric.Canvas {
         denominatorX?: number;
         denominatorY?: number;
     }) => {
-        const fakeMarcherPage: Partial<MarcherPage> = {
-            marcher_id: -1,
-            x,
-            y,
-            id: -1,
-            page_id: -1,
-            path_data_id: null,
-            path_start_position: null,
-            path_end_position: null,
-            notes: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            rotation_degrees: 0,
-        };
+        const point: MarcherPage = { marcher_id: -1, page_id: -1, x, y };
 
         const response = CoordinateActions.getRoundCoordinates({
-            marcherPages: [fakeMarcherPage as MarcherPage],
+            marcherPages: [point],
             denominatorX,
             denominatorY,
             fieldProperties: this.fieldProperties,
@@ -2592,8 +2384,8 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     }
 
     /**
-     * Removes timeline mode's curved paths (P7.10) from the canvas. `renderTimelinePathVisuals`
-     * adds them back as it needs them. Does nothing in page mode, which never adds any.
+     * Removes the curved paths (P7.10) from the canvas. `renderTimelinePathVisuals` adds them back
+     * as it needs them.
      */
     removeTimelinePathways(): void {
         const pathways = this.getObjectsByType(TimelinePathway);
