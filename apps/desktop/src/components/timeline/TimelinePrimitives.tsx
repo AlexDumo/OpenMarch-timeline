@@ -1747,8 +1747,10 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 }}
                 className={clsx(
                     // Focus is an offset outline, so it reads apart from the selected clip's
-                    // flush ring (UI-14 review)
-                    "focus-visible:outline-accent absolute overflow-visible outline-hidden transition-[filter,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 enabled:hover:brightness-110",
+                    // flush ring (UI-14 review). Hover brightens the fill, not the clip: a filter
+                    // on the clip would hold its resize handles under the start flag and the
+                    // playhead (UI-21)
+                    "focus-visible:outline-accent absolute overflow-visible outline-hidden transition-[box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 enabled:hover:[&>[data-activity]]:brightness-110",
                     canMove &&
                         "cursor-grab! touch-none active:cursor-grabbing!",
                     micro ? "rounded-full" : "rounded-4",
@@ -1765,7 +1767,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                           : undefined,
                 }}
             >
-                {edgeResize.handles}
+                {/* Over the rename field (z-46) the handles would take its ends */}
+                {!renaming && edgeResize.handles}
                 {edgeResize.tag}
                 {edgeResize.preview && (
                     <span
@@ -1800,7 +1803,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                                     span.active ? "active" : "inactive"
                                 }
                                 className={clsx(
-                                    "absolute overflow-hidden",
+                                    "absolute overflow-hidden transition-[filter] duration-150",
                                     barHeight === undefined && "inset-y-0",
                                     isFirst &&
                                         (micro
@@ -1972,7 +1975,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     beatCount,
     pixelsPerBeat,
     height,
-    hitHeight = height,
     snapBeats = [],
     onCommit,
     onLineDrag,
@@ -1995,11 +1997,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
-    /**
-     * How far down the flags take the pointer (UI-14): over the clip rows they are only drawn, so
-     * a short clip under them can still be clicked. Defaults to the whole height.
-     */
-    hitHeight?: number;
     /** Page lines the dragged flag snaps to (ui.md UI-2); Alt turns snapping off */
     snapBeats?: readonly number[];
     onCommit?: (range: TimelineBeatRange) => void;
@@ -2340,7 +2337,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
-                    style={{ left: x, height: hitHeight }}
+                    style={{ left: x, height }}
                 >
                     <span
                         className="bg-accent pointer-events-none absolute top-0 left-1/2 w-px"
@@ -2360,7 +2357,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
-                    style={{ left: x, height: hitHeight }}
+                    style={{ left: x, height }}
                 >
                     {/* UI-20: 2px, from the headroom strip down */}
                     <span
@@ -2654,7 +2651,6 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     onSeek,
     isPlaying = false,
     scrubLine,
-    hitHeight = height,
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
@@ -2675,11 +2671,6 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
      * follows the pointer by a transform, without re-rendering (`useScrubFollow`)
      */
     scrubLine?: TimelineLiveValue<number | null>;
-    /**
-     * How far down it takes the pointer (UI-14): over the clip rows the line is only drawn, so a
-     * short clip under it can still be clicked. Defaults to the whole height.
-     */
-    hitHeight?: number;
 }) {
     const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
@@ -2766,10 +2757,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
             }}
             onBlur={keySteps.end}
             className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize! touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
-            style={{
-                left,
-                height: Math.min(hitHeight, height),
-            }}
+            style={{ left, height }}
         >
             {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
                 the line, so its tip runs into the line */}
