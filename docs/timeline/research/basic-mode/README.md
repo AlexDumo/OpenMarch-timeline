@@ -38,7 +38,7 @@ file.
 ## The mode
 
 - An **app setting**, not a file setting: electron-store key `editorMode`, `"basic" | "expert"`.
-  Unset means the welcome flow hasn't run. It's in Settings → General as two cards with screenshots.
+  Unset means the welcome flow hasn't run. It's in Settings → Timeline as two cards with screenshots.
 - It can change while a show is open, with no reload and no file write. The file doesn't record
   it.
 - Playwright/CI, and the web build without a choice, default to **Expert** so existing tests and

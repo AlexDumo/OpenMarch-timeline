@@ -11,8 +11,6 @@ import { VIEW3D_AUTO_OPEN_SETTING } from "@/view3d/sync/protocol";
 import { isWebBuild } from "@/utilities/webBuild";
 import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
-import EditorModeCards from "@/components/editorMode/EditorModeCards";
-import { useEditorModeStore } from "@/stores/EditorModeStore";
 
 const languages = [
     { code: "en", name: "English" },
@@ -21,29 +19,6 @@ const languages = [
     { code: "pt-BR", name: "Português (Brasil)" },
     { code: "ja", name: "日本語" },
 ];
-
-/** Basic or Expert (UI-19): full width, since the cards need room. */
-function EditorModeSetting() {
-    const mode = useEditorModeStore((state) => state.mode);
-    const setMode = useEditorModeStore((state) => state.setMode);
-    return (
-        <div className="flex flex-col gap-8 py-12">
-            <span id="editor-mode-label" className="text-body text-text">
-                <T keyName="settings.general.editorMode" />
-            </span>
-            <EditorModeCards
-                value={mode}
-                onChange={setMode}
-                size="compact"
-                id="settings"
-                aria-labelledby="editor-mode-label"
-            />
-            <p className="text-sub text-text-subtitle">
-                <T keyName="settings.general.editorMode.note" />
-            </p>
-        </div>
-    );
-}
 
 export default function GeneralSettings() {
     const tolgee = useTolgee();
@@ -104,8 +79,6 @@ export default function GeneralSettings() {
 
     return (
         <SettingsPanel>
-            <EditorModeSetting />
-
             <SettingRow
                 label={<T keyName="settings.general.language" />}
                 htmlFor="language"
