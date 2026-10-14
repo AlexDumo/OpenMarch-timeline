@@ -1,10 +1,9 @@
-import { inArray } from "drizzle-orm";
-import { schema } from "@/global/database/db";
 import {
     readShapeRecipesOf,
     saveShapeRecipeInTransaction,
     type ShapeRecipeMember,
 } from "@/db-functions/shapeRecipes";
+import { readTimelineEndBeats } from "@/db-functions/timelines";
 import type { DbTransaction } from "@/db-functions/types";
 import type { XY } from "../types";
 import {
@@ -70,9 +69,11 @@ export function boxMembershipEdit({
                 marcherIds: [...moved.keys()],
             });
             if (recipes.length === 0) return false;
-            const ends = await endBeats(
+            const ends = await readTimelineEndBeats(
                 tx,
-                recipes.map((r) => r.timelineId),
+                recipes.flatMap((r) =>
+                    r.timelineId === null ? [] : [r.timelineId],
+                ),
             );
             const boxes = boxesAt({
                 recipes,
@@ -119,22 +120,4 @@ export function boxMembershipEdit({
             return wrote;
         },
     };
-}
-
-/** The end beats of moves, by id */
-async function endBeats(
-    tx: DbTransaction,
-    ids: readonly (number | null)[],
-): Promise<Map<number, number>> {
-    const wanted = [...new Set(ids.filter((id): id is number => id !== null))];
-    if (wanted.length === 0) return new Map();
-    const rows = await tx
-        .select({
-            id: schema.timelines.id,
-            end: schema.timelines.end_beat,
-        })
-        .from(schema.timelines)
-        .where(inArray(schema.timelines.id, wanted))
-        .all();
-    return new Map(rows.map((r) => [r.id, r.end]));
 }

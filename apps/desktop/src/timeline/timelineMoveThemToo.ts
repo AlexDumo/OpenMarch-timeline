@@ -409,8 +409,13 @@ function membershipFor(
         positionOf: (id) => {
             const resolver = useTimelineResolverStore.getState().resolver;
             if (!resolver) return undefined;
-            const [x, y] = editingPositionAt(resolver, id, beat);
-            return { x, y };
+            // A marcher the resolver doesn't know isn't on a spot: never fail the edit over it
+            try {
+                const [x, y] = editingPositionAt(resolver, id, beat);
+                return { x, y };
+            } catch {
+                return undefined;
+            }
         },
     });
 }

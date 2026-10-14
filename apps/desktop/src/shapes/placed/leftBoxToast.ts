@@ -11,7 +11,8 @@ import { toolEnvFor } from "../tool/toolEnv";
 import type { BoxLeave } from "./boxMembership";
 import { closeUp, resplit, type BoxRecipe } from "./placedBox";
 
-const LEFT_BOX_TOAST_ID = "shape-left-box";
+/** One toast per box, so marchers leaving two boxes in one edit can fill either */
+const leftBoxToastId = (recipeId: number) => `shape-left-box-${recipeId}`;
 const LEFT_BOX_TOAST_MS = 8000;
 
 /** Writes `moves` at the edit's moment, saving a recipe beside them in the same undo step */
@@ -80,9 +81,12 @@ export function showLeftBoxToast(
     leaves: readonly BoxLeave[],
     rewrite: BoxRewrite,
 ): void {
-    const leave = leaves[0];
+    for (const leave of leaves) showOne(leave, rewrite);
+}
+
+function showOne(leave: BoxLeave, rewrite: BoxRewrite): void {
     const canvas = currentCanvas();
-    if (!leave || !canvas) return;
+    if (!canvas) return;
     const ctx = shapeContextFor(canvas);
     const names = leave.left.map(nameOf);
     const message =
@@ -94,7 +98,7 @@ export function showLeftBoxToast(
                   count: names.length,
               });
     toast.info(message, {
-        id: LEFT_BOX_TOAST_ID,
+        id: leftBoxToastId(leave.recipeId),
         duration: LEFT_BOX_TOAST_MS,
         action: {
             label: tolgee.t("shapes.box.left.closeUp", "Close up"),
