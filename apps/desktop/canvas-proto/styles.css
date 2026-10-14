@@ -1,0 +1,39 @@
+/* PROTOTYPE styles. */
+:root {
+    color-scheme: dark;
+    --bg: #18181b;
+    --panel: #232327;
+    --border: #3a3a40;
+    --text: #e8e8ea;
+    --muted: #9a9aa2;
+    --accent: #7c5cff;
+}
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans-serif; }
+.app { display: flex; flex-direction: column; height: 100%; }
+.toolbar, .transport { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.transport { border-top: 1px solid var(--border); border-bottom: none; flex-wrap: nowrap; }
+.toolbar label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
+.sep { width: 1px; height: 18px; background: var(--border); }
+button, select { background: #2f2f35; color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 3px 9px; font: inherit; }
+button:disabled { opacity: 0.45; }
+button.play { min-width: 64px; background: var(--accent); border-color: var(--accent); }
+.stage { position: relative; flex: 1; overflow: hidden; touch-action: none; user-select: none; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.marquee { fill: rgba(124, 92, 255, 0.12); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; }
+.selbox { fill: none; stroke: var(--accent); stroke-width: 1; }
+.handle { fill: #fff; stroke: var(--accent); stroke-width: 1.5; }
+.hud { position: absolute; top: 8px; right: 8px; background: rgba(20, 20, 24, 0.85); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font: 12px/1.5 ui-monospace, monospace; pointer-events: none; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); font-size: 16px; }
+.readout { font-family: ui-monospace, monospace; white-space: nowrap; min-width: 190px; }
+.scrub { position: relative; flex: 1; min-width: 200px; }
+.scrub input { width: 100%; }
+.ticks { position: absolute; left: 8px; right: 8px; top: -4px; height: 6px; }
+.ticks span { position: absolute; width: 2px; height: 6px; background: var(--muted); cursor: pointer; }
+.hint { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.bench { position: absolute; left: 8px; bottom: 8px; background: rgba(20, 20, 24, 0.94); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font: 12px ui-monospace, monospace; }
+.bench table { border-collapse: collapse; }
+.bench th, .bench td { padding: 2px 8px; text-align: right; }
+.bench th:first-child, .bench td:first-child { text-align: left; }
+.bench .close { position: absolute; right: 4px; top: 2px; padding: 0 6px; }

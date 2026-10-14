@@ -44,6 +44,8 @@
         "view3d-web:dev": "vite --config view3d-web/vite.config.mts",
         "view3d-web:build": "vite build --config view3d-web/vite.config.mts",
         "view3d-web:deploy": "pnpm run view3d-web:build && pnpm dlx wrangler@4.40.0 pages deploy view3d-web/dist --project-name openmarch-3d-preview --branch main",
+        "canvas-proto:dev": "vite --config canvas-proto/vite.config.mts",
+        "canvas-proto:build": "vite build --config canvas-proto/vite.config.mts",
         "web:dev": "pnpm run apply-styles && vite -c vite.web.config.mts",
         "web:build": "pnpm run apply-styles && rimraf dist-web && vite build -c vite.web.config.mts",
         "web:preview": "vite preview -c vite.web.config.mts",
