@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { defaultSettings } from "@/stores/UiSettingsStore";
 import {
     forEachWaveformBar,
     WAVEFORM_PEAKS_PER_BEAT,
@@ -7,8 +8,9 @@ import {
     type WaveformStyle,
 } from "@/timeline/timelineWaveform";
 
-const BEATS = 6;
-const PIXELS_PER_BEAT = 28;
+const BEATS = 10;
+/** The timeline's default zoom, so each style looks as it will when a show opens */
+const PIXELS_PER_BEAT = defaultSettings.timelinePixelsPerBeat;
 const WIDTH = BEATS * PIXELS_PER_BEAT;
 const HEIGHT = 32;
 
@@ -19,7 +21,9 @@ const HEIGHT = 32;
 const SAMPLE_PEAKS: readonly (readonly number[])[] = Array.from(
     { length: BEATS },
     (_, beat) => {
-        const loudness = [0.05, 0.07, 0.1, 0.6, 0.85, 1][beat]!;
+        const loudness = [
+            0.04, 0.05, 0.07, 0.06, 0.1, 0.55, 0.7, 0.85, 0.75, 1,
+        ][beat]!;
         return Array.from({ length: WAVEFORM_PEAKS_PER_BEAT }, (_, slice) => {
             const ring = 0.25 + 0.75 * Math.exp(-slice / 5);
             const texture = 0.85 + 0.15 * Math.sin(slice * 2.3 + beat);
