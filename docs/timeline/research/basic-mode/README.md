@@ -144,8 +144,8 @@ shapeless moves on one layer, ordered, not overlapping; see "Simple"):
 - On a converted page, Basic's writes compact the page's shared transition when a marcher leaves
   it and delete it (and its timeline, when empty) when the last one does, so they make no vacant
   slot (D-VACANT). A last slot that was already vacant, or a transition sharing a marcher with an
-  inheriting follow-the-leader one, keeps its vacancies. The simple-defaults study's point half
-  and Basic's **Split page** write the same way. _Known nit:_ undo or redo after a compaction
+  inheriting follow-the-leader one, keeps its vacancies. Basic's **Split page** writes the same
+  way. _Known nit:_ undo or redo after a compaction
   selects the marcher that was moved into the vacated slot as well (left as is).
 - Timelines stay one per range (C-12). Marchers split at different counts get different timelines.
   The page timeline `[a, b)` stays for marchers that don't split.
@@ -196,8 +196,9 @@ in `apps/desktop/src/assets/editor-mode/`, and used by both the welcome flow and
 
 _Owner, 2026-10-12:_ "Should we have two different views, or make the advanced bar simple to
 reason about? Implement both, test and simulate them with users." The two-view design is the rest
-of this file. The alternative is built behind a temporary study flag (localStorage
-`openmarch.simpleDefaults` = `on`, `src/timeline/simpleDefaults.ts`), on the full timeline:
+of this file. The alternative was built behind a temporary study flag (localStorage
+`openmarch.simpleDefaults`), on the full timeline; the owner chose Basic and Expert, and the flag
+was removed before merging (2026-10-14). What it did:
 
 - **Mid-page edits split** while the start flag follows (unpinned): the point writer, as Basic.
   Marchers whose moves there already cross a flag or overlap get today's window edit over

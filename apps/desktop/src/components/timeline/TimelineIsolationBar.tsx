@@ -16,7 +16,6 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
-import { useSimpleDefaults } from "@/timeline/simpleDefaults";
 import {
     basicPageBox,
     planCanvasEdit,
@@ -245,23 +244,12 @@ export function TimelineFromStartBadge() {
     // Only when the loop is elsewhere: on the page being edited, the lit Loop button, the bar and
     // Play's icon say it (owner, 2026-10-09)
     const loopShown = !basic && !isolated && loopName !== null;
-    // UI-19: Basic has no start flag or loop; it edits a page, or a count inside one. So does the
-    // simple-defaults timeline (study flag) when a drop there is a point edit. The line asks the
-    // writer's own plan, so it names what a drop writes
-    const simpleDefaults = useSimpleDefaults();
+    // UI-19: Basic has no start flag or loop; it edits a page, or a count inside one. The line
+    // asks the writer's own plan, so it names what a drop writes
     const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
     const plan =
-        (basic || simpleDefaults) && range
-            ? planCanvasEdit(
-                  {
-                      selection,
-                      isolation: null,
-                      pageBoxes,
-                      startPinned: pinned,
-                  },
-                  basic,
-                  simpleDefaults,
-              )
+        basic && range
+            ? planCanvasEdit({ selection, isolation: null, pageBoxes }, basic)
             : null;
     const basicSpot =
         plan?.ok && plan.target.kind === "point"

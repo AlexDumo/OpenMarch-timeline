@@ -1140,24 +1140,6 @@ describeDbTests("Basic point writes on a converted show", (it) => {
         await oneUndoStep(db, before, await snapshot(db));
     });
 
-    it("the simple-defaults timeline's point half (others: window) leaves no vacant slot either", async ({
-        db,
-        marchersAndPages: _,
-    }) => {
-        const { box, marcher, others } = await converted(db);
-        const mid = box.start + Math.floor((box.end - box.start) / 2);
-        const othersBefore = await positionsOf(db, others);
-        await moveMarchersInTarget({
-            db,
-            target: { kind: "point", beat: mid, box, others: "window" },
-            moves: [{ marcherId: marcher, x: C[0], y: C[1] }],
-        });
-        expect((await resolverOf(db)).positionAt(marcher, mid)).toEqual(C);
-        expect(await vacant(db)).toEqual([]);
-        expect(await positionsOf(db, others)).toEqual(othersBefore);
-        expect(await violations(db)).toEqual([]);
-    });
-
     it("splitting every move at a new flag (Split page) leaves no vacant slot", async ({
         db,
         marchersAndPages: _,
@@ -1183,59 +1165,18 @@ describeDbTests("Basic point writes on a converted show", (it) => {
     });
 });
 
-describeDbTests(
-    "simple-defaults timeline: others edited over the window",
-    (it) => {
-        it("splits simple marchers and window-edits one with a cross-flag move, in one undo step", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, b } = await madeInTimelineMode(db);
-            await range(db, a, 9, 17, A);
-            // b's move crosses page 2's flag: not simple on page 2
-            await range(db, b, 13, 21, B);
-            const before = await snapshot(db);
-            const r0 = await resolverOf(db);
-            const aEnd = r0.positionAt(a, 17);
-            await moveMarchersInTarget({
-                db,
-                target: {
-                    kind: "point",
-                    beat: 15,
-                    box: PAGE2,
-                    others: "window",
-                },
-                moves: [
-                    { marcherId: a, x: C[0], y: C[1] },
-                    { marcherId: b, x: C[0], y: C[1] },
-                ],
-            });
-            const r = await resolverOf(db);
-            // a: split at 15, its page end kept
-            expect(await rowsOf(db, a)).toEqual([
-                [9, 15, 0],
-                [15, 17, 0],
-            ]);
-            expect(r.positionAt(a, 15)).toEqual(C);
-            expect(r.positionAt(a, 17)).toEqual(aEnd);
-            // b: arrives at C at 15 over the window [9, 15)
-            expect(r.positionAt(b, 15)).toEqual(C);
-            expect(await violations(db)).toEqual([]);
-            await oneUndoStep(db, before, await snapshot(db));
-        });
-
-        it("Basic (no others option) still refuses the cross-flag marcher", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, b } = await madeInTimelineMode(db);
-            await range(db, b, 13, 21, B);
-            await expect(
-                point(db, 15, [
-                    [a, C],
-                    [b, C],
-                ]),
-            ).rejects.toBeInstanceOf(TimelineEditRefusedError);
-        });
-    },
-);
+describeDbTests("Basic point writes: Expert moves", (it) => {
+    it("refuses a marcher with a cross-flag move on the page", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await madeInTimelineMode(db);
+        await range(db, b, 13, 21, B);
+        await expect(
+            point(db, 15, [
+                [a, C],
+                [b, C],
+            ]),
+        ).rejects.toBeInstanceOf(TimelineEditRefusedError);
+    });
+});

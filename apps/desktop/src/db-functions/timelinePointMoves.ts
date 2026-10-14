@@ -478,26 +478,15 @@ export async function setPositionsAtBeatInTransaction({
     box,
     moves,
     clearOwn = false,
-    leaveOthers = false,
 }: {
     tx: DbTransaction;
     beat: number;
     box: { start: number; end: number };
     moves: readonly TimelineMarcherMove[];
     clearOwn?: boolean;
-    /**
-     * Leave marchers that aren't simple on the box alone, listed in `leftAlone`, instead of
-     * refusing the edit (the simple-defaults timeline writes them another way)
-     */
-    leaveOthers?: boolean;
-}): Promise<TimelineMoveResult & { leftAlone: number[] }> {
+}): Promise<TimelineMoveResult> {
     if (moves.length === 0)
-        return {
-            homes: [],
-            slots: [],
-            convertedTransitionIds: [],
-            leftAlone: [],
-        };
+        return { homes: [], slots: [], convertedTransitionIds: [] };
     refuseBeat(beat, box, false);
     refuseDuplicateMarchers(moves);
     for (const m of moves)
@@ -506,16 +495,11 @@ export async function setPositionsAtBeatInTransaction({
         tx,
         box,
         moves.map((m) => m.marcherId),
-        { refuseLocked: !leaveOthers },
     );
     const plan = emptyPlan();
     for (const move of moves)
-        if (!state.locked.has(move.marcherId))
-            await planPoint(plan, state, box, beat, move, clearOwn);
-    return {
-        ...(await writePlan(tx, plan)),
-        leftAlone: [...state.locked].sort((x, y) => x - y),
-    };
+        await planPoint(plan, state, box, beat, move, clearOwn);
+    return await writePlan(tx, plan);
 }
 
 /**

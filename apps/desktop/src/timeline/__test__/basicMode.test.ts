@@ -136,25 +136,24 @@ describe("the field line in Basic", () => {
         ).toBeNull();
     });
 
-    it("names what the writer plans: a count only for a point edit", () => {
-        // Simple defaults, unpinned: a window starting mid-page is a range edit, not a count
-        const spot = (start: number, end: number) => {
+    it("names what the writer plans in Basic", () => {
+        const spot = (end: number) => {
             const plan = planCanvasEdit(
                 {
-                    selection: { kind: "range", start, end },
+                    selection: { kind: "range", start: 9, end },
                     isolation: null,
                     pageBoxes: BOXES,
-                    startPinned: false,
                 },
-                false,
                 true,
             );
             return plan.ok && plan.target.kind === "point"
                 ? basicEditSpot(plan.target, PAGES)
                 : null;
         };
-        expect(spot(9, 13)).toEqual({ pageName: "2", count: 4 });
-        expect(spot(10, 14)).toBeNull();
+        expect(spot(13)).toEqual({ pageName: "2", count: 4 });
+        expect(spot(17)).toEqual({ pageName: "2", count: null });
+        // Past the last flag Basic refuses, so the line names no page
+        expect(spot(20)).toBeNull();
     });
 });
 
@@ -195,39 +194,5 @@ describe("withoutLockedMarchers", () => {
     it("describes pages", () => {
         expect(describePages(["4"])).toBe("Page 4");
         expect(describePages(["4", "5", "9"])).toBe("Pages 4, 5 and 9");
-    });
-});
-
-describe("planCanvasEdit with simple defaults (study flag)", () => {
-    const state = (start: number, end: number, startPinned = false) => ({
-        selection: { kind: "range" as const, start, end },
-        isolation: null,
-        pageBoxes: BOXES,
-        startPinned,
-    });
-
-    it("an unpinned edit mid-page is a point edit that windows the others", () => {
-        expect(planCanvasEdit(state(9, 13), false, true)).toEqual({
-            ok: true,
-            target: {
-                kind: "point",
-                beat: 13,
-                box: { start: 9, end: 17 },
-                others: "window",
-            },
-            beat: 13,
-        });
-    });
-
-    it("a pinned start flag keeps the window", () => {
-        expect(planCanvasEdit(state(5, 13, true), false, true)).toMatchObject({
-            target: { kind: "range", start: 5, end: 13 },
-        });
-    });
-
-    it("flag off: the window as before", () => {
-        expect(planCanvasEdit(state(9, 13), false, false)).toMatchObject({
-            target: { kind: "range", start: 9, end: 13 },
-        });
     });
 });
