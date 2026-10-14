@@ -146,6 +146,11 @@ layout are today's, except:
 | Field image      | The export waits for the image to load before reading its size, and keeps JPEG, GIF and WebP types instead of labeling every image PNG. An image the browser can't decode is still embedded, stretched over the field.                                     |
 | Hidden helpers   | No invisible hit-box rectangle per marcher; the SVGs are about a third the size. The PDFs are about 30% larger (svg-to-pdfkit writes coordinates in full).                                                                                                 |
 
+Unchanged on purpose: every drill number is drawn under every dot, as today
+(each page's `setMarcherCoords` brought all of Fabric's dots to the front), so a
+neighboring dot can cover a label in both. An individual chart draws its
+marcher's dot again on top of the paths.
+
 The before/after export diffs for the demo shows are on the #206 PR.
 
 ## Parity gate

@@ -207,6 +207,32 @@ describe("fieldSvg", () => {
         expect(lines).toContain(xPixels - fieldProperties.pixelsPerStep);
     });
 
+    it("never draws a grid line outside the field", () => {
+        const offField = new FieldProperties({
+            ...fieldProperties,
+            centerFrontPoint: {
+                ...fieldProperties.centerFrontPoint,
+                xPixels: -5,
+            },
+        });
+        const lines = xs(
+            fieldSvg(offField, { gridLines: true, halfLines: true }),
+        );
+        const yardLines = new Set(
+            offField.xCheckpoints
+                .filter((c) => c.visible)
+                .map(
+                    (c) =>
+                        offField.centerFrontPoint.xPixels +
+                        c.stepsFromCenterFront * offField.pixelsPerStep,
+                ),
+        );
+        for (const x of lines.filter((x) => !yardLines.has(x))) {
+            expect(x).toBeGreaterThanOrEqual(0);
+            expect(x).toBeLessThan(offField.width);
+        }
+    });
+
     it("leaves out grid and half lines when they're off", () => {
         const all = fieldSvg(fieldProperties, {
             gridLines: true,

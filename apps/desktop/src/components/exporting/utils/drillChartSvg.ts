@@ -149,10 +149,10 @@ const checkpointX = (fp: FieldProperties, c: Checkpoint) =>
 const checkpointY = (fp: FieldProperties, c: Checkpoint) =>
     fp.centerFrontPoint.yPixels + c.stepsFromCenterFront * fp.pixelsPerStep;
 
-/** Lines every `interval` px from `from` (always drawn), both ways, inside (0, `end`) */
+/** Lines every `interval` px from `from`, both ways, on the field: `from` itself in [0, `end`) */
 const linesFrom = (from: number, interval: number, end: number): number[] => {
     const out: number[] = [];
-    for (let i = from; i < end; i += interval) out.push(i);
+    for (let i = from; i < end; i += interval) if (i >= 0) out.push(i);
     for (let i = from - interval; i > 0; i -= interval) out.push(i);
     return out;
 };
