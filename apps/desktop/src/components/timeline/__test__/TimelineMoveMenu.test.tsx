@@ -488,7 +488,7 @@ describe("the flags and the playhead over the clip rows (UI-21)", () => {
                 moveCommands={commands()}
             />,
         );
-        // A move's end handles are stacked above them (`useClipEdgeResize`), so they still win
+        // They are stacked above a move's end handles too (`useClipEdgeResize`), so they win there
         const shown = clipButton();
         const clipBottom =
             parseFloat(shown.style.top) + parseFloat(shown.style.height);

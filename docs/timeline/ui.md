@@ -735,8 +735,8 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Where they're grabbed.** A flag by its page line through the page-box row (owner,
     2026-10-08; UI-16). A move by the handles inside its clip's two ends: up to 6px, at most a quarter of the clip, none on a clip
     under 8px (V-120). The ⋯ button keeps clear of the end handle. The start flag and the playhead
-    run down over the clip rows (UI-21), and where they cross a move's end handle the handle wins,
-    so a selected clip's edges can still be reached.
+    run down over the clip rows and the page-box row (UI-21), and where they cross a move's end
+    handle or a page flag's grip the line wins: move the line off to drag the edge.
   - **Afterwards.** A selected move's start flag and playhead follow its new start and end; an
     isolated move keeps the playhead unless it was on the end. A playhead or start flag on a moved
     flag goes with it.
@@ -1010,9 +1010,11 @@ from it. The spec still wins on the model; this file decides presentation.
     pennant), or on the playhead's line or head.
   - **Grabbed anywhere down the line** (owner, 2026-10-14). Each line takes the pointer its whole
     height, over the waveform and the clip rows too, as at its top; this replaces UI-14's rule that
-    they were only drawn there. Where a line crosses a move's end handle the handle wins (owner),
-    so a selected move, whose ends the lines sit on, can still be resized. Elsewhere a press on a
-    clip under a line takes the line. A click on the timeline, a click on the playhead,
+    they were only drawn there. The lines are drawn on top, so they act on top (owner, 2026-10-14,
+    reversing a first "handles win" build): where a line crosses a move's end handle or a page
+    flag's grip, a press takes the line. A move or a page whose edge a line sits on (a selected
+    move, a page whose box was clicked) is resized after moving the line off it. A press on a clip
+    under a line takes the line too. A click on the timeline, a click on the playhead,
     and a scrub started anywhere else move only the playhead, and pass the start flag as before
     (owner).
   - **The swap.** Drag the start flag past the playhead and the line being dragged becomes the

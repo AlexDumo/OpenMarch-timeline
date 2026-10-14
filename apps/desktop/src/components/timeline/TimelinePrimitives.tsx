@@ -1747,10 +1747,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 }}
                 className={clsx(
                     // Focus is an offset outline, so it reads apart from the selected clip's
-                    // flush ring (UI-14 review). Hover brightens the fill, not the clip: a filter
-                    // on the clip would hold its resize handles under the start flag and the
-                    // playhead (UI-21)
-                    "focus-visible:outline-accent absolute overflow-visible outline-hidden transition-[box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 enabled:hover:[&>[data-activity]]:brightness-110",
+                    // flush ring (UI-14 review)
+                    "focus-visible:outline-accent absolute overflow-visible outline-hidden transition-[filter,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 enabled:hover:brightness-110",
                     canMove &&
                         "cursor-grab! touch-none active:cursor-grabbing!",
                     micro ? "rounded-full" : "rounded-4",
@@ -1767,8 +1765,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                           : undefined,
                 }}
             >
-                {/* Over the rename field (z-46) the handles would take its ends */}
-                {!renaming && edgeResize.handles}
+                {edgeResize.handles}
                 {edgeResize.tag}
                 {edgeResize.preview && (
                     <span
@@ -1803,7 +1800,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                                     span.active ? "active" : "inactive"
                                 }
                                 className={clsx(
-                                    "absolute overflow-hidden transition-[filter] duration-150",
+                                    "absolute overflow-hidden",
                                     barHeight === undefined && "inset-y-0",
                                     isFirst &&
                                         (micro
@@ -2396,8 +2393,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 )}
                 {/* The pennant is its own handle in the headroom strip (UI-20), above the
                     playhead's (z-50) and the loop's ends (z-58): after Stop the flag is drawn on
-                    the playhead, and on a page flag the grip takes the page row, so this is the
-                    part of it that can always be grabbed. Its left edge is drawn on the stem's
+                    the playhead, so this is the part of it that can always be grabbed. Its left edge is drawn on the stem's
                     pixels, so the two read as one shape */}
                 <button
                     type="button"

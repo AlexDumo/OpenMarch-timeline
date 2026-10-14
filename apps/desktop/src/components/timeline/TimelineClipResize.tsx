@@ -440,11 +440,11 @@ export function useClipEdgeResize({
             if (drag.moved) swallowRef.current = true;
             setPreview(null);
         },
-        // The click ending a press on a handle still reaches the clip, which selects on it. Above
+        // The click ending a press on a handle still reaches the clip, which selects on it. Under
         // the start flag (z-40) and the playhead (z-50), which run down over the clip rows: where
-        // they cross a move's end, the move's handle wins (UI-21, project owner 2026-10-14)
+        // they cross a move's end, the line wins (UI-21, project owner 2026-10-14)
         className:
-            "group/resize absolute top-0 z-[55] cursor-ew-resize touch-none",
+            "group/resize absolute top-0 z-[1] cursor-ew-resize touch-none",
         style: {
             width: handleWidth,
             height,
