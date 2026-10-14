@@ -2370,8 +2370,11 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         gesture: "drag" | "end",
     ) => {
         if (gesture === "drag" && beat === drag.lastBeat) return;
+        // The first beat starts the store's flag drag afresh ("press")
+        const sent =
+            gesture === "drag" && drag.lastBeat === null ? "press" : gesture;
         drag.lastBeat = beat;
-        onLineDrag?.(beat, { gesture, line: "start" });
+        onLineDrag?.(beat, { gesture: sent, line: "start" });
         // The left line is the start flag, the right one the playhead (`lineDragPositions`)
         onInteractionChange?.(
             gesture === "end"

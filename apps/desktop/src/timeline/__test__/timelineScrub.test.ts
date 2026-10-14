@@ -170,6 +170,46 @@ describe("dragging a line by itself while paused (UI-21, UI-22)", () => {
         expect(store().lineDrag).toBeNull();
     });
 
+    it("a press starts a flag drag afresh, even over one whose release never came", () => {
+        store().selectRange(5, 12);
+        // An end flag drag that dies with the flags on one beat: no end, no cancel
+        seekTimeline(BEATS, 5, "press", endFlag);
+        expect(store().startBeat).toBe(5);
+        expect(store().endBeat).toBe(5);
+        // The next drag, of the start flag, moves the start flag
+        seekTimeline(BEATS, 3, "press", startFlag);
+        seekTimeline(BEATS, 2, "drag", startFlag);
+        expect(store().lineDrag?.line).toBe("start");
+        expect(store().startBeat).toBe(2);
+        expect(store().endBeat).toBe(5);
+    });
+
+    it("an end flag dragged through the start flag swaps on the way, beat by beat", () => {
+        store().selectRange(9, 17);
+        for (const [beat, start, end] of [
+            [12, 9, 12],
+            [9, 9, 9],
+            [7, 7, 9],
+            [4, 4, 9],
+        ] as const) {
+            seekTimeline(BEATS, beat, beat === 12 ? "press" : "drag", endFlag);
+            expect([store().startBeat, store().endBeat]).toEqual([start, end]);
+        }
+        seekTimeline(BEATS, 4, "end", endFlag);
+        expect([store().startBeat, store().endBeat]).toEqual([4, 9]);
+        expect(store().lineDrag).toBeNull();
+    });
+
+    it("page navigation ends a flag drag", () => {
+        store().selectRange(5, 12);
+        seekTimeline(BEATS, 14, "press", endFlag);
+        store().selectRange(9, 17);
+        expect(store().lineDrag).toBeNull();
+        seekTimeline(BEATS, 3, "press", { ...paused, line: "start" });
+        store().selectHome();
+        expect(store().lineDrag).toBeNull();
+    });
+
     it("while playing, a flag drag does nothing", () => {
         store().selectRange(5, 12);
         seekTimeline(BEATS, 15, "drag", { ...startFlag, isPlaying: true });

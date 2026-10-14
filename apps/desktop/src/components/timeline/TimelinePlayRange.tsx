@@ -1,5 +1,6 @@
 import {
     memo,
+    useEffect,
     useRef,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
@@ -51,6 +52,22 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
         surface: Element;
         lastBeat: number | null;
     } | null>(null);
+    // A drag still down when the flag goes (isolation, a variant switch) is cancelled, so the
+    // store's flag drag doesn't outlive it and take over the next one
+    const latestOnLineDrag = useRef(onLineDrag);
+    latestOnLineDrag.current = onLineDrag;
+    useEffect(
+        () => () => {
+            const current = drag.current;
+            drag.current = null;
+            if (current?.lastBeat != null)
+                latestOnLineDrag.current?.(current.lastBeat, {
+                    gesture: "cancel",
+                    line: "end",
+                });
+        },
+        [],
+    );
     const startX = Math.round(beatToX(range.startBeatIndex, pixelsPerBeat));
     const endX = Math.round(beatToX(range.endBeatIndex, pixelsPerBeat));
     const onPlayhead = range.endOnPlayhead;
@@ -101,8 +118,10 @@ export const TimelinePlayRange = memo(function TimelinePlayRange({
                   // A press that hasn't left the flag's beat isn't a drag yet
                   if (current.lastBeat === null && beat === range.endBeatIndex)
                       return;
+                  // The first beat starts the store's flag drag afresh ("press")
+                  const gesture = current.lastBeat === null ? "press" : "drag";
                   current.lastBeat = beat;
-                  onLineDrag?.(beat, { gesture: "drag", line: "end" });
+                  onLineDrag?.(beat, { gesture, line: "end" });
               },
               onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
                   const current = drag.current;

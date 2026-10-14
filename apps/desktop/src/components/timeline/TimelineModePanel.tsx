@@ -447,8 +447,15 @@ function PlayingTimeline(
     const endBeat = useTimelineSelectionStore((s) => s.endBeat);
     const looping = useTimelineSelectionStore((s) => s.looping);
     const playheadAt = useTimelineSelectionStore((s) => s.playheadBeat);
+    const lineDragging = useTimelineSelectionStore((s) => s.lineDrag !== null);
     const playRangeShown = useMemo(() => {
-        const range = playRange({ isolation, startBeat, endBeat });
+        // A flag drag that brings the flags onto one beat keeps the end flag drawn: it holds the
+        // drag's pointer capture, and the flags swap as it goes on past the start flag
+        const range =
+            playRange({ isolation, startBeat, endBeat }) ??
+            (lineDragging && startBeat === endBeat
+                ? { from: startBeat, to: endBeat }
+                : null);
         if (!range) return null;
         return {
             startBeatIndex: range.from,
@@ -457,7 +464,7 @@ function PlayingTimeline(
             looping,
             fixed: isolation !== null,
         };
-    }, [isolation, startBeat, endBeat, playheadAt, looping]);
+    }, [isolation, startBeat, endBeat, playheadAt, looping, lineDragging]);
     const selection = useMemo(
         () => toTimelineSelection(editSelection, startBeat),
         [editSelection, startBeat],

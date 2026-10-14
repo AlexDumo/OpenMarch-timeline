@@ -695,12 +695,15 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     ...fields(s, 0, 0, 0),
                     isolation: null,
                     scrubbing: false,
+                    // Page navigation ends a flag drag where it is
+                    lineDrag: null,
                     playheadRevision: s.playheadRevision + 1,
                 })),
             selectRange: (start, end) =>
                 set((s) => ({
                     isolation: null,
                     scrubbing: false,
+                    lineDrag: null,
                     ...fields(s, start, end, end),
                     playheadRevision: s.playheadRevision + 1,
                 })),

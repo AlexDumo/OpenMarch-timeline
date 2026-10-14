@@ -223,7 +223,9 @@ function dragTimelineLine(
         state.cancelLineDrag();
         return null;
     }
-    if (!dragging) state.beginLineDrag(line);
+    // A press starts afresh: a drag whose release never came (its flag went away mid-drag)
+    // mustn't hand its flag and starting places to this one
+    if (!dragging || gesture === "press") state.beginLineDrag(line);
     // Isolated, there is no flag drag: the flags stay
     if (useTimelineSelectionStore.getState().lineDrag === null) return null;
     state.dragLine(beat);
