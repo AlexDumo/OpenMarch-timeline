@@ -28,12 +28,13 @@ deciding them. This focus was set by the project owner on 2026-10-01.
 
 Set by the project owner on 2026-09-30, until they lift it here:
 
-- **Don't run the full `test:history` suite or the Playwright e2e suite.** They
-  take the longest. Run focused tests instead, including focused history tests
-  (`pnpm --dir apps/desktop run test:history <file>`) for the files you change.
-  Say in the PR and log which suites you skipped.
-- **CI doesn't run on PRs into `timeline-try-2`**, so a reviewer re-runs your
-  checks by hand. List every command you ran, with its result.
+- **Don't run the full test suite yourself** (`pnpm test`, `pnpm check:full`,
+  the whole `test:history` suite or the Playwright e2e suite). The PR checks
+  run them on PRs into `main`. Run the type check and focused tests for the
+  files you change, including focused history tests
+  (`pnpm --dir apps/desktop run test:history <file>`), then push and read the
+  PR checks' results. Set by the project owner on 2026-10-13.
+- **List every command you ran, with its result**, in the PR and the log.
 
 - **Reviews and merges:** workers never merge their own PRs. The lead session
   has a reviewer sub-agent review each PR against the spec, ADR 0001, `ui.md`

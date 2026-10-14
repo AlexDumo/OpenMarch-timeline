@@ -19,13 +19,14 @@ Set by the project owner on 2026-10-04, until they lift it here:
 - **Scope is the MVP** in [README.md](README.md). Don't build post-MVP ideas
   (in-editor preview, imports, video export, analysis), even if they look
   small.
-- **Don't run the full `test:history` suite or the whole Playwright e2e
-  suite.** Run focused tests for the files you change, for example
+- **Don't run the full test suite yourself** (`pnpm test`, `pnpm check:full`,
+  the whole `test:history` suite or the whole Playwright e2e suite). The PR
+  checks run them on PRs into `main`. Run the type check and focused tests for
+  the files you change, for example
   `pnpm --dir apps/desktop exec vitest run src/view3d` or
-  `pnpm --dir apps/desktop run test:history <file>`. Say in the PR which suites
-  you skipped.
-- **CI doesn't run on PRs into `3d-async`**, so the lead re-runs your checks by
-  hand. List every command you ran, with its result.
+  `pnpm --dir apps/desktop run test:history <file>`, then push and read the PR
+  checks' results. Set by the project owner on 2026-10-13.
+- **List every command you ran, with its result**, in the PR.
 - **Workers never merge their own PRs.** The lead reviews each PR against ADR
   0002, [design.md](design.md), [ui.md](ui.md) and the phase file, re-runs its
   checks, and merges. The lead escalates to the project owner only when the
