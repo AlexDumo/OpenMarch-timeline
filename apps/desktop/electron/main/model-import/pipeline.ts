@@ -200,7 +200,6 @@ interface OpenedFile {
 }
 
 interface Context {
-    input: ModelFileInput;
     report: ModelImportReport;
     io: NodeIO;
     doc: Document;
@@ -263,8 +262,9 @@ async function openFile(
     let resources = input.resources ?? {};
     try {
         ({ format, json } = parseContainer(input.bytes));
+        // A GLB is read on its own, so any URI it names is refused or missing.
+        checkResources(json, resources, input.refusedResources);
         if (format === "gltf") {
-            checkResources(json, resources, input.refusedResources);
             resources = resourcesByPath(
                 json,
                 resources,
@@ -357,7 +357,7 @@ async function decode(
     await stripExtensions(doc, json, report);
 
     report.source = measureDocument(doc, scene);
-    const ctx = { input, report, io, doc, scene, json, meta, raw };
+    const ctx = { report, io, doc, scene, json, meta, raw };
     report.materials = materialRows(ctx);
     if (report.source.triangles === 0) {
         report.cantImport.push({ code: "noGeometry" });
@@ -582,15 +582,13 @@ async function clean(ctx: Context, kind: ModelKind): Promise<void> {
     if (meta.hasForeignExtras)
         report.fixedForYou.push({ code: "extrasStripped" });
     await downsizeTextures(doc, TEXTURE_CAPS[kind], report);
-    // Materials stay apart: two slots may look alike. UVs and `_PART` stay
-    // even with no texture: slots and paint need them.
+    // Materials and meshes stay apart: two slots may look alike, and a slot
+    // may sit on one of two identical meshes (their accessors are still
+    // shared). UVs and `_PART` stay even with no texture: slots and paint
+    // need them.
     await doc.transform(
         dedup({
-            propertyTypes: [
-                PropertyType.ACCESSOR,
-                PropertyType.MESH,
-                PropertyType.TEXTURE,
-            ],
+            propertyTypes: [PropertyType.ACCESSOR, PropertyType.TEXTURE],
         }),
         prune({ keepAttributes: true, keepLeaves: false }),
     );
@@ -602,7 +600,7 @@ async function write(
     plan: Plan,
     described: Described,
 ): Promise<ModelImportResult> {
-    const { doc, io, meta, raw, report, input } = ctx;
+    const { doc, io, meta, raw, report } = ctx;
     const slots = collectSlots(
         meta,
         raw.materials,
@@ -659,7 +657,6 @@ async function write(
         stamp: meta.stamp,
         garment,
         metadata: {
-            sourceFilename: input.filename,
             generator: report.metadata.generator,
             copyright: report.metadata.copyright,
         },
