@@ -111,6 +111,8 @@ export function waveformBarLevel(
     to: number,
 ): number {
     let level = 0;
+    // Bar edges are float math on beats; nudge `to` back so an edge on a slice line stays exclusive
+    to -= 1e-9;
     const last = Math.min(peaks.length, Math.ceil(to));
     for (let beat = Math.max(0, Math.floor(from)); beat < last; beat++) {
         const slices = peaks[beat]!;

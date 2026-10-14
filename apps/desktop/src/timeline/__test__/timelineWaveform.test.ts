@@ -137,6 +137,13 @@ describe("the waveform's bars", () => {
         expect(waveformBarLevel(peaks, 0.26, 0.27)).toBeCloseTo(0.2);
     });
 
+    it("stops at a bar edge that float math puts just past a beat line", () => {
+        // 0.7 + 0.3 is 0.9999999999999999 and 0.1 * 3 is 0.30000000000000004
+        expect(waveformBarLevel(peaks, 0.75, 0.1 * 3 + 0.7)).toBeCloseTo(0.4);
+        expect(waveformBarLevel(peaks, 0, 0.1 * 3 + 0.7)).toBeCloseTo(0.4);
+        expect(waveformBarLevel(peaks, 0.5, 1 + 1e-12)).toBeCloseTo(0.4);
+    });
+
     it("is silent past the audio and past the show", () => {
         expect(waveformBarLevel(peaks, 2, 2.5)).toBe(0);
         expect(waveformBarLevel(peaks, 5, 6)).toBe(0);

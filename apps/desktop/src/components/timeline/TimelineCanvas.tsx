@@ -391,8 +391,9 @@ interface TimelineWaveformCanvasProps extends TimelineCanvasLayerProps {
 
 /**
  * The waveform as rounded bars at a fixed pixel pitch (the old WaveSurfer look), each the loudest
- * audio it covers, centered on a baseline that runs only as far as the audio does. Drawn in one tone; the timeline lays the played tone over the rest and
- * clips it at the playhead, so playing never redraws the canvas.
+ * audio it covers, centered on a baseline that runs only as far as the audio does. Drawn in one
+ * tone; the timeline lays the played tone over the rest and clips it at the playhead, so playing
+ * never redraws the canvas.
  */
 export const TimelineWaveformCanvas = memo(function TimelineWaveformCanvas({
     waveform,
@@ -442,18 +443,19 @@ export const TimelineWaveformCanvas = memo(function TimelineWaveformCanvas({
                     x / pixelsPerBeat,
                     (x + pitch) / pixelsPerBeat,
                 );
-                const magnitude = clamp(level, 0, 1) * (height / 2 - 1);
-                if (magnitude < 0.5) continue;
-                const top = centerY - magnitude;
-                if (context.roundRect)
-                    context.roundRect(
-                        x,
-                        top,
-                        WAVEFORM_BAR_WIDTH,
-                        magnitude * 2,
-                        radius,
-                    );
-                else context.rect(x, top, WAVEFORM_BAR_WIDTH, magnitude * 2);
+                if (level <= 0) continue;
+                // Any sound at all keeps a sliver, so a quiet entrance never reads as silence
+                const magnitude = Math.max(
+                    0.5,
+                    clamp(level, 0, 1) * (height / 2 - 1),
+                );
+                context.roundRect(
+                    x,
+                    centerY - magnitude,
+                    WAVEFORM_BAR_WIDTH,
+                    magnitude * 2,
+                    radius,
+                );
             }
             context.fill();
         },
