@@ -6,7 +6,7 @@ import {
     useActionHandlerGroup,
 } from "@/shortcuts/useActionHandler";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { moveBox } from "../box/boxGeometry";
+import { filesOf, moveBox } from "../box/boxGeometry";
 import { currentCanvas } from "../canvas/shapeCanvasContext";
 import { toolEnvFor } from "../tool/toolEnv";
 import { useBoxSelectionStore } from "./boxSelectionStore";
@@ -34,7 +34,7 @@ export function stepPlacedBoxFiles(
         delta,
         toolEnvFor(canvas, { shift: false, alt: false }),
     );
-    if (params.files !== box.params.files)
+    if (filesOf(params) !== filesOf(box.params))
         void commitBox(box, params, queryClient);
 }
 

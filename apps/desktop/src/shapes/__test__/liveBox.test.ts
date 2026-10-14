@@ -3,7 +3,6 @@ import { blockKind } from "../kinds/block";
 import { drawBox, filesOf } from "../box/boxGeometry";
 import {
     liveFiles,
-    liveNudge,
     liveTargets,
     moveLive,
     openLive,
@@ -70,7 +69,7 @@ describe("a selected placed box", () => {
         live = moveLive(live, { x: 40, y: 30 }, env);
         const out = releaseLive(live);
         expect(out.changed).toBe(true);
-        const to = liveTargets(out.live.box, out.live.params, ctx);
+        const to = liveTargets(out.live.box, out.live.params, ctx).members;
         expect(to.map((t) => [t.marcherId, t.x, t.y])).toEqual([
             [1, 0, 0],
             [2, 40, 0],
@@ -100,7 +99,11 @@ describe("a selected placed box", () => {
         };
         let live = pressLive(openLive(holed), { x: 20, y: 20 }, env)!;
         live = moveLive(live, { x: 40, y: 20 }, env);
-        const to = liveTargets(holed, releaseLive(live).live.params, ctx);
+        const to = liveTargets(
+            holed,
+            releaseLive(live).live.params,
+            ctx,
+        ).members;
         expect(to.map((t) => t.marcherId)).toEqual([1, 3, 4]);
         // Nobody stands on slot 1, the hole (40, 0)
         expect(to.some((t) => t.x === 40 && t.y === 0)).toBe(false);
@@ -112,8 +115,19 @@ describe("a selected placed box", () => {
         expect(params.across).toBe(20);
     });
 
-    it("a nudge moves the whole box, not snapped, so it stays a box", () => {
-        const params = liveNudge(placed().params, { x: 0, y: -2.5 });
-        expect(params.center.y).toBe(placed().params.center.y - 2.5);
+    it("a file change with holes closes them up, Nearest, instead of scattering the members", () => {
+        const box = placed();
+        const holed: PlacedBox = {
+            ...box,
+            recipe: withoutMembers(box.recipe, [2]),
+        };
+        const params = liveFiles(holed, 1, env);
+        const out = liveTargets(holed, params, ctx);
+        expect(out.spots).toBe(3);
+        expect(out.members).toHaveLength(3);
+        // 3 files of 3 marchers: one rank, every spot taken
+        expect(new Set(out.members.map((m) => m.slot))).toEqual(
+            new Set([0, 1, 2]),
+        );
     });
 });

@@ -98,49 +98,52 @@ export const liveFiles = (
     env: ToolEnv,
 ): BoxParams => changeFiles(box.params, box.spots, delta, env);
 
-/** The box moved by `delta`, field units, as a nudge: unsnapped, so every member moves the same */
-export const liveNudge = (params: BoxParams, delta: XY): BoxParams => ({
-    ...params,
-    center: { x: params.center.x + delta.x, y: params.center.y + delta.y },
-});
-
 /**
- * Where each member stands in the box drawn with `params`. A member keeps its spot in the box
- * (its slot), so a stretch or move keeps everyone's place and holes stay holes. When the file
- * count changes in a box with no holes, who goes where is worked out again (Nearest), so the
- * fewest marchers move.
+ * Where each member stands in the box drawn with `params`, and how many spots it has. A member
+ * keeps its spot in the box (its slot), so a stretch or move keeps everyone's place and holes stay
+ * holes. A change of file count lays the box out again for its members, Nearest, so the fewest
+ * marchers move: any holes close up (a slot number means another place in a different grid).
  */
 export function liveTargets(
     box: PlacedBox,
     params: BoxParams,
     ctx: ShapeContext,
-): { marcherId: number; slot: number; x: number; y: number }[] {
-    const slots = blockKind.generate(params, box.spots, ctx);
+): {
+    members: { marcherId: number; slot: number; x: number; y: number }[];
+    spots: number;
+} {
     const members = box.recipe.members;
-    const full = members.length === box.spots;
-    if (full && filesOf(params) !== filesOf(box.params)) {
-        const assignment = assignSlots({
-            kind: blockKind,
-            params,
-            slots,
-            marchers: members.map((m, i) => ({
-                id: m.marcherId,
-                at: { x: m.x, y: m.y },
-                drillRank: i,
+    if (filesOf(params) === filesOf(box.params)) {
+        const slots = blockKind.generate(params, box.spots, ctx);
+        return {
+            members: members.map((m) => ({
+                marcherId: m.marcherId,
+                slot: m.slot,
+                ...xyOf(slots[m.slot]!),
             })),
-            mode: "nearest",
-            ctx,
-        });
-        return members.map((m, i) => {
+            spots: box.spots,
+        };
+    }
+    const slots = blockKind.generate(params, members.length, ctx);
+    const assignment = assignSlots({
+        kind: blockKind,
+        params,
+        slots,
+        marchers: members.map((m, i) => ({
+            id: m.marcherId,
+            at: { x: m.x, y: m.y },
+            drillRank: i,
+        })),
+        mode: "nearest",
+        ctx,
+    });
+    return {
+        members: members.map((m, i) => {
             const slot = assignment[i]!;
             return { marcherId: m.marcherId, slot, ...xyOf(slots[slot]!) };
-        });
-    }
-    return members.map((m) => ({
-        marcherId: m.marcherId,
-        slot: m.slot,
-        ...xyOf(slots[m.slot]!),
-    }));
+        }),
+        spots: members.length,
+    };
 }
 
 const xyOf = (p: XY): XY => ({ x: p.x, y: p.y });

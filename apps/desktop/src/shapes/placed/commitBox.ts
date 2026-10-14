@@ -21,7 +21,11 @@ export async function commitBox(
 ): Promise<void> {
     const canvas = currentCanvas();
     if (!canvas) return;
-    const targets = liveTargets(box, params, shapeContextFor(canvas));
+    const { members: targets, spots } = liveTargets(
+        box,
+        params,
+        shapeContextFor(canvas),
+    );
     const to = new Map(targets.map((t) => [t.marcherId, t]));
     try {
         await transformMarchersInSelection({
@@ -41,7 +45,7 @@ export async function commitBox(
                     timelineId,
                     recipe: {
                         ...box.recipe,
-                        params: { ...params, spots: box.spots },
+                        params: { ...params, spots },
                     },
                     members: targets,
                     replaces:
