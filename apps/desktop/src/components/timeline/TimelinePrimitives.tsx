@@ -12,6 +12,11 @@ import {
     WarningIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { flushSync } from "react-dom";
+import {
+    isLayoutResizing,
+    subscribeLayoutResizing,
+} from "@/global/layoutResize";
 import { START_INK } from "./startFlagInk";
 import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
 import {
@@ -3033,18 +3038,57 @@ export const useElementWidth = (ref: RefObject<HTMLElement | null>) => {
     return width;
 };
 
-/** The element's inner height, kept current (0 where nothing measures, as in jsdom) */
+/** How much taller than its viewport the surface grows while a splitter drag holds its height */
+const LAYOUT_RESIZE_HEADROOM = 160;
+
+/**
+ * The element's inner height, kept current (0 where nothing measures, as in jsdom).
+ *
+ * While a splitter drag resizes the pane (`isLayoutResizing`) the height doesn't follow every
+ * frame: it holds when the element shrinks and grows with headroom when the element outgrows it,
+ * so whatever sizes itself from it renders a few times per drag instead of once a frame. The
+ * extra is clipped (no vertical scrollbar appears for it), and the drag's end measures exactly.
+ */
 export const useElementHeight = (ref: RefObject<HTMLElement | null>) => {
     const [height, setHeight] = useState(0);
     useEffect(() => {
         const element = ref.current;
         if (!element) return;
-        const update = () => setHeight(element.clientHeight);
-        update();
-        if (typeof ResizeObserver === "undefined") return;
-        const observer = new ResizeObserver(update);
+        let current = element.clientHeight;
+        let clipped = false;
+        const set = (next: number) => {
+            if (next === current) return;
+            current = next;
+            setHeight(next);
+        };
+        const update = () => {
+            const measured = element.clientHeight;
+            if (!isLayoutResizing()) set(measured);
+            else if (measured > current) set(measured + LAYOUT_RESIZE_HEADROOM);
+        };
+        setHeight(current);
+        const unsubscribe = subscribeLayoutResizing((resizing) => {
+            if (resizing) {
+                // Only where it doesn't scroll already: a scrollbar that's there stays
+                clipped = element.scrollHeight <= element.clientHeight;
+                if (clipped) element.style.overflowY = "hidden";
+                return;
+            }
+            if (clipped) element.style.overflowY = "";
+            clipped = false;
+            update();
+        });
+        if (typeof ResizeObserver === "undefined") return unsubscribe;
+        // Committed before the frame paints: a render left for later shows a frame of the old
+        // height, and when the pane shrinks the stale, taller content flashes a scrollbar that
+        // narrows the viewport and redraws every canvas twice
+        const observer = new ResizeObserver(() => flushSync(update));
         observer.observe(element);
-        return () => observer.disconnect();
+        return () => {
+            observer.disconnect();
+            unsubscribe();
+            if (clipped) element.style.overflowY = "";
+        };
     }, [ref]);
     return height;
 };

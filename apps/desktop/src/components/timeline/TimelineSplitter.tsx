@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { setLayoutResizing } from "@/global/layoutResize";
 import {
     MIN_TIMELINE_HEIGHT,
     TIMELINE_SPLIT_KEY_STEP,
@@ -13,6 +14,10 @@ import {
  * it can be and still show every track. Once the divider moves, the pane keeps that height,
  * clamped to the workspace it sits in (its parent): taller than the tracks, the grid fills the
  * extra room; shorter, the tracks scroll. Drag, arrow keys, or double-click (back to fitted).
+ *
+ * A drag writes the pane's height straight to the DOM, once a frame, and commits it to the store
+ * on release: React doesn't render on every pointer move, and the field canvas holds its size
+ * until the drag ends (`setLayoutResizing`).
  */
 export function TimelineSplitter({ children }: { children: ReactNode }) {
     const saved = useUiSettingsStore((s) => s.uiSettings.timelineHeight);
@@ -20,13 +25,22 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
     const paneRef = useRef<HTMLDivElement>(null);
     const [available, setAvailable] = useState(Infinity);
     const [measured, setMeasured] = useState(MIN_TIMELINE_HEIGHT);
-    const [dragHeight, setDragHeight] = useState<number | null>(null);
+    /** The drag in progress: the pane's fixed bottom edge, where on the divider it was grabbed */
+    const drag = useRef<{
+        bottom: number;
+        grab: number;
+        available: number;
+        height: number;
+        frame: number | null;
+    } | null>(null);
 
     useEffect(() => {
         const pane = paneRef.current;
         const parent = pane?.parentElement;
         if (!pane || !parent) return;
         const measure = () => {
+            // The drag owns the pane's height until it ends
+            if (drag.current) return;
             setAvailable(parent.clientHeight);
             setMeasured(pane.offsetHeight);
         };
@@ -34,33 +48,73 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
         const observer = new ResizeObserver(measure);
         observer.observe(parent);
         observer.observe(pane);
-        return () => observer.disconnect();
+        return () => {
+            observer.disconnect();
+            const current = drag.current;
+            if (current?.frame != null) cancelAnimationFrame(current.frame);
+            if (current) setLayoutResizing(false);
+            drag.current = null;
+        };
     }, []);
 
-    const chosen = dragHeight ?? saved;
     const height =
-        chosen === null ? null : clampTimelineHeight(chosen, available);
+        saved === null ? null : clampTimelineHeight(saved, available);
     const shown = height ?? measured;
+
+    /** Shows `next` as the pane's height without rendering */
+    const applyHeight = (next: number) => {
+        const pane = paneRef.current;
+        if (!pane) return;
+        pane.style.maxHeight = "";
+        pane.style.height = `${next}px`;
+        pane.querySelector('[role="separator"]')?.setAttribute(
+            "aria-valuenow",
+            String(next),
+        );
+    };
 
     const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
         event.preventDefault();
+        const pane = paneRef.current;
+        if (!pane) return;
         event.currentTarget.setPointerCapture(event.pointerId);
-        setDragHeight(shown);
+        // Read once: the pane's bottom edge stays put, so the divider follows the pointer
+        const bottom = pane.getBoundingClientRect().bottom;
+        const parentHeight = pane.parentElement?.clientHeight ?? available;
+        drag.current = {
+            bottom,
+            // Where on the divider it was grabbed, so the pane doesn't jump on the first move
+            grab: bottom - event.clientY - shown,
+            available: parentHeight,
+            height: shown,
+            frame: null,
+        };
+        setLayoutResizing(true);
+        applyHeight(shown);
     };
-    const onPointerMove = useCallback(
-        (event: PointerEvent<HTMLDivElement>) => {
-            if (dragHeight === null || !paneRef.current) return;
-            // The pane's bottom edge stays put, so the divider follows the pointer
-            const bottom = paneRef.current.getBoundingClientRect().bottom;
-            setDragHeight(
-                clampTimelineHeight(bottom - event.clientY, available),
-            );
-        },
-        [available, dragHeight],
-    );
+    const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+        const current = drag.current;
+        if (!current) return;
+        current.height = clampTimelineHeight(
+            current.bottom - event.clientY - current.grab,
+            current.available,
+        );
+        // One write a frame, however often the pointer reports
+        if (current.frame !== null) return;
+        current.frame = requestAnimationFrame(() => {
+            current.frame = null;
+            applyHeight(current.height);
+        });
+    };
     const onPointerUp = () => {
-        if (dragHeight !== null) setTimelineHeight(dragHeight);
-        setDragHeight(null);
+        const current = drag.current;
+        if (!current) return;
+        if (current.frame !== null) cancelAnimationFrame(current.frame);
+        applyHeight(current.height);
+        drag.current = null;
+        setAvailable(current.available);
+        setTimelineHeight(current.height);
+        setLayoutResizing(false);
     };
     const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         const step = event.shiftKey
