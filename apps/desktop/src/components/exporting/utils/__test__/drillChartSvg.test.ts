@@ -74,6 +74,15 @@ describe("drillChartSvg", () => {
         expect(Number(label.getAttribute("y"))).toBeLessThan(300.5);
     });
 
+    it("escapes drill numbers and drops characters XML forbids", () => {
+        const label = 'A<1> & "B"\u0001\u001f';
+        const doc = chart([dot({ label })]);
+        const text = [...doc.querySelectorAll("text")].find((t) =>
+            t.textContent?.startsWith("A<"),
+        )!;
+        expect(text.textContent).toBe('A<1> & "B"');
+    });
+
     it("leaves out a hidden marcher and a hidden label", () => {
         const hidden = chart([
             dot({ appearances: [{ visible: false, label_visible: false }] }),
@@ -227,6 +236,27 @@ describe("fieldSvg", () => {
             { gridLines: false, halfLines: false, image },
         );
         expect(hidden).not.toContain("<image");
+    });
+
+    it("stretches an image of unknown size over the field", () => {
+        const svg = fieldSvg(fieldProperties, {
+            gridLines: false,
+            halfLines: false,
+            image: { href: "data:x", width: 0, height: 0 },
+        });
+        const image = parse(
+            `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">${svg}</svg>`,
+        ).querySelector("image")!;
+        expect(
+            ["x", "y", "width", "height"].map((a) =>
+                Number(image.getAttribute(a)),
+            ),
+        ).toEqual([
+            0,
+            0,
+            expect.closeTo(fieldProperties.width, 2),
+            expect.closeTo(fieldProperties.height, 2),
+        ]);
     });
 });
 

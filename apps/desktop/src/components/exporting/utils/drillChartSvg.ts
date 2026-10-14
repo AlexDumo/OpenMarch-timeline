@@ -23,7 +23,7 @@ import {
  * The output is plain SVG 1.1 that `svg-to-pdfkit` (the PDF export) and browsers both draw.
  */
 
-/** A field image to draw under the grid: its natural size and where to load it from. */
+/** A field image to draw under the grid: its natural size (0 if unknown) and where to load it from. */
 export interface DrillChartFieldImage {
     href: string;
     width: number;
@@ -71,6 +71,9 @@ const num = (n: number) => String(Math.round(n * 1000) / 1000);
 
 const escapeXml = (text: string) =>
     text
+        // Control characters XML forbids would make the SVG invalid
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -146,10 +149,10 @@ const checkpointX = (fp: FieldProperties, c: Checkpoint) =>
 const checkpointY = (fp: FieldProperties, c: Checkpoint) =>
     fp.centerFrontPoint.yPixels + c.stepsFromCenterFront * fp.pixelsPerStep;
 
-/** Lines every `interval` px from `from`, both ways, strictly inside (0, `end`) */
+/** Lines every `interval` px from `from` (always drawn), both ways, inside (0, `end`) */
 const linesFrom = (from: number, interval: number, end: number): number[] => {
     const out: number[] = [];
-    for (let i = from; i < end; i += interval) if (i > 0) out.push(i);
+    for (let i = from; i < end; i += interval) out.push(i);
     for (let i = from - interval; i > 0; i -= interval) out.push(i);
     return out;
 };
@@ -189,8 +192,12 @@ export function fieldSvg(
         `<rect x="0" y="0" width="${num(width)}" height="${num(height)}" ${paint("fill", theme.background)} />`,
     );
 
-    if (fp.showFieldImage && image && image.width > 0 && image.height > 0) {
-        const at = fieldImagePlacement(fp, image);
+    if (fp.showFieldImage && image) {
+        // An image whose size is unknown (it didn't decode) is stretched over the field
+        const at =
+            image.width > 0 && image.height > 0
+                ? fieldImagePlacement(fp, image)
+                : { x: 0, y: 0, width, height };
         out.push(
             `<image x="${num(at.x)}" y="${num(at.y)}" width="${num(at.width)}" height="${num(at.height)}" preserveAspectRatio="none" opacity="${num(fp.backgroundImageOpacity)}" xlink:href="${escapeXml(image.href)}" />`,
         );

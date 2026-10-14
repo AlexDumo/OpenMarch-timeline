@@ -143,7 +143,7 @@ layout are today's, except:
 | Border           | One closed 3 px outline just outside the field, instead of four lines with uneven ends.                                                                                                                                                                    |
 | Hashes           | Centered on their checkpoint and yard line, without the 1 px nudges Fabric needed for its own offset.                                                                                                                                                      |
 | Missing position | A marcher with no position on a page isn't drawn on that page. Fabric left it where it last stood (or at the field's corner).                                                                                                                              |
-| Field image      | The export waits for the image to load before reading its size, and keeps JPEG, GIF and WebP types instead of labeling every image PNG.                                                                                                                    |
+| Field image      | The export waits for the image to load before reading its size, and keeps JPEG, GIF and WebP types instead of labeling every image PNG. An image the browser can't decode is still embedded, stretched over the field.                                     |
 | Hidden helpers   | No invisible hit-box rectangle per marcher; the SVGs are about a third the size. The PDFs are about 30% larger (svg-to-pdfkit writes coordinates in full).                                                                                                 |
 
 The before/after export diffs for the demo shows are on the #206 PR.

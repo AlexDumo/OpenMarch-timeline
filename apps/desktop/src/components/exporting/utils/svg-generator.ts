@@ -208,7 +208,7 @@ const imageMimeType = (bytes: Uint8Array): string => {
 
 /**
  * The show's field image for a drill chart: a data URL and its natural size, once it has
- * loaded. Undefined when the show has no image or it can't be decoded.
+ * loaded. Undefined when the show has no image; size 0 when the browser can't decode it.
  */
 export const getFieldImageForExport = async (): Promise<
     DrillChartFieldImage | undefined
@@ -226,8 +226,9 @@ export const getFieldImageForExport = async (): Promise<
     try {
         await img.decode();
     } catch (error) {
+        // Still embed it, as before: the PDF export may be able to draw what the browser can't
         console.error("Couldn't decode the field image for export", error);
-        return;
+        return { href, width: 0, height: 0 };
     }
     return { href, width: img.naturalWidth, height: img.naturalHeight };
 };
