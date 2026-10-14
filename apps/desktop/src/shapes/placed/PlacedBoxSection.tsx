@@ -19,7 +19,7 @@ import { setInsideBox } from "./boxSelectionStore";
 
 /**
  * The inspector's view of placed boxes (07-placed-boxes.md): the selected box's numbers with one
- * file fewer or more, or
+ * fewer or more across, or
  * **Select box** when some of a box's marchers are selected but not all of it.
  */
 export function PlacedBoxSection() {
@@ -47,8 +47,8 @@ export function PlacedBoxSection() {
             >
                 <button
                     type="button"
-                    aria-label="One file fewer"
-                    title="One file fewer ( [ )"
+                    aria-label="One fewer across"
+                    title="One fewer across ( [ )"
                     className={button}
                     disabled={files <= 1}
                     onClick={() => stepPlacedBoxFiles(-1, queryClient)}
@@ -67,8 +67,8 @@ export function PlacedBoxSection() {
                 </p>
                 <button
                     type="button"
-                    aria-label="One file more"
-                    title="One file more ( ] )"
+                    aria-label="One more across"
+                    title="One more across ( ] )"
                     className={button}
                     disabled={files >= box.spots}
                     onClick={() => stepPlacedBoxFiles(1, queryClient)}

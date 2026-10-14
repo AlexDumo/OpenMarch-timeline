@@ -21,7 +21,7 @@ const DIRECTIONS = {
     right: { x: 1, y: 0 },
 } as const;
 
-/** One file fewer or more in the selected placed box, saved at once */
+/** One fewer or more across in the selected placed box, saved at once */
 export function stepPlacedBoxFiles(
     delta: number,
     queryClient: ReturnType<typeof useQueryClient>,
@@ -44,7 +44,7 @@ export function stepPlacedBoxFiles(
  *
  * - The nudge keys move the whole box, every member the same distance, so it stays a box (the
  *   plain nudge rounds each marcher on its own, which bends a box on half steps).
- * - `[` and `]`: one file fewer or more.
+ * - `[` and `]`: one fewer or more across.
  * - Escape inside a box selects the whole box again.
  */
 export function PlacedBoxKeys(): null {

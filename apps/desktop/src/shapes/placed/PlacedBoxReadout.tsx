@@ -12,9 +12,6 @@ import { useBoxSelectionStore } from "./boxSelectionStore";
 import type { PlacedBox } from "./placedBox";
 import { stepPlacedBoxFiles } from "./PlacedBoxKeys";
 
-const plural = (n: number, one: string, many: string) =>
-    `${n} ${n === 1 ? one : many}`;
-
 /** "Page 3" for the page a box was placed at the end of, when that is before `beat` */
 export function useDrawnOnPage(box: PlacedBox | null): string | null {
     const beat = useTimelineSelectionStore(displayedBeat);
@@ -25,7 +22,7 @@ export function useDrawnOnPage(box: PlacedBox | null): string | null {
 }
 
 /**
- * The numbers of a placed box: "5 files × 4 ranks · 2 steps · 1 short · 1 empty" (short: spots
+ * The numbers of a placed box: "5 × 4 · 2 steps · 1 short · 1 empty", across × deep (short: spots
  * the back rank never had; empty: holes members left)
  */
 export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
@@ -34,7 +31,7 @@ export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
     const empty = box.spots - box.recipe.members.length;
     const short = shortBy(box.params, box.spots);
     return [
-        `${plural(filesOf(box.params), "file", "files")} × ${plural(ranksOf(box.params, box.spots), "rank", "ranks")}`,
+        `${filesOf(box.params)} × ${ranksOf(box.params, box.spots)}`,
         `${across === deep ? across : `${across} × ${deep}`} steps`,
         ...(short > 0 ? [`${short} short`] : []),
         ...(empty > 0 ? [`${empty} empty`] : []),
@@ -42,7 +39,7 @@ export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
 }
 
 /**
- * The selected placed box's numbers, just under it, with one file fewer or more (also `[` and
+ * The selected placed box's numbers, just under it, with one fewer or more across (also `[` and
  * `]`), saved at once. Says which page the box was drawn on when that's an earlier one.
  */
 export function PlacedBoxReadout({
@@ -96,8 +93,8 @@ export function PlacedBoxReadout({
         >
             <button
                 type="button"
-                aria-label="One file fewer"
-                title="One file fewer ( [ )"
+                aria-label="One fewer across"
+                title="One fewer across ( [ )"
                 className="hover:text-accent disabled:opacity-40"
                 disabled={files <= 1}
                 onClick={() => stepPlacedBoxFiles(-1, queryClient)}
@@ -113,8 +110,8 @@ export function PlacedBoxReadout({
             </span>
             <button
                 type="button"
-                aria-label="One file more"
-                title="One file more ( ] )"
+                aria-label="One more across"
+                title="One more across ( ] )"
                 className="hover:text-accent disabled:opacity-40"
                 disabled={files >= box.spots}
                 onClick={() => stepPlacedBoxFiles(1, queryClient)}
