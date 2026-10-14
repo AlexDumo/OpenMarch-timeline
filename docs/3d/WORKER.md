@@ -41,12 +41,12 @@ Set by the project owner on 2026-10-04, until they lift it here:
 1. Fetch: `git fetch <remote>`. `<remote>` is the git remote that points at
    `AlexDumo/OpenMarch-timeline`. If it's missing, add it:
    `git remote add timeline https://github.com/AlexDumo/OpenMarch-timeline.git`.
-   The coordination branch is `3d-async`.
+   The coordination branch is the fork's `main`.
 2. Read [README.md](README.md), then, if you haven't in this session,
    [plan.md](plan.md), [design.md](design.md) and ADR 0002. Read [ui.md](ui.md)
    for any package that touches the window's UI or cameras.
 3. Read the **coordination branch's** copy of the phase file, not a possibly
-   stale local one: `git show <remote>/3d-async:docs/3d/phases/<file>.md`.
+   stale local one: `git show <remote>/main:docs/3d/phases/<file>.md`.
 4. Read that phase's **Handoff notes** and its last three **Progress log**
    entries. If the last entry for your package has a `Resume from:` line, you
    are resuming, and that line is where you start.
@@ -80,7 +80,7 @@ they got it first, go back to step 2.
 ## 4. Set up the code branch
 
 - Branch name: `3d/p<phase>-<short-name>`, such as `3d/p2-pro-dome`, based on
-  `<remote>/3d-async`. If it already exists on the remote, check it out.
+  `<remote>/main`. If it already exists on the remote, check it out.
 - Work in a separate git work tree unless your session already runs in one.
 - In a fresh work tree, run `pnpm install`, then build the workspace packages
   the desktop app consumes (`pnpm --filter "@openmarch/desktop^..." build`)
@@ -122,17 +122,17 @@ Throughout:
    desktop-scoped equivalents). If `tsc` or a test fails in a file you didn't
    touch, run `pnpm install` and rebuild the workspace packages before calling
    it unrelated.
-2. Squash or tidy `wip:` commits. Confirm `git log <remote>/3d-async..HEAD --format=%B`
+2. Squash or tidy `wip:` commits. Confirm `git log <remote>/main..HEAD --format=%B`
    has no AI attribution or co-author lines (root `AGENTS.md`).
 3. Push, and open the PR on the fork:
-   `gh pr create --repo AlexDumo/OpenMarch-timeline --base 3d-async`.
+   `gh pr create --repo AlexDumo/OpenMarch-timeline --base main`.
    The body names the package IDs and every check you ran, with results, and
    links or attaches the visual evidence. Workers share a scratchpad, so name
    temporary files after your package (`pr-P2.3.md`, not `pr.md`).
 4. Through `coord.sh`: set `- Status: in-review` and `- PR: <url>`. Edit only
    your package's section. Before `coord.sh commit`, run `git diff` in the
    coordination checkout and confirm only your lines and your log entry changed.
-   Tick only gate items you ran whose outcome is already true on `3d-async`.
+   Tick only gate items you ran whose outcome is already true on `main`.
 5. If you're blocked instead: set `- Status: blocked`, and log exactly what is
    needed and from whom.
 
