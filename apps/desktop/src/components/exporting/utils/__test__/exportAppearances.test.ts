@@ -8,8 +8,8 @@ import Page from "@/global/classes/Page";
 import CanvasMarcher from "@/global/classes/canvasObjects/CanvasMarcher";
 import { fabric } from "fabric";
 import { rgbaToString } from "@openmarch/core";
+import { applyMarcherAppearancesForPage } from "../../video/videoCanvas";
 import {
-    applyMarcherAppearancesForPage,
     buildMarcherAppearancesByPageId,
     getPlaybackPageForTimeMs,
     type MarcherAppearancesByPageId,

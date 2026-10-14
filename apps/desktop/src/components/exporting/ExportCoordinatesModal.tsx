@@ -51,8 +51,9 @@ import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { assert } from "@/utilities/utils";
 import {
     generateDrillChartExportSVGs,
-    getFieldPropertiesImageElement,
+    getFieldImageForExport,
 } from "./utils/svg-generator";
+import { getFieldPropertiesImageElement } from "./video/videoCanvas";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useShallow } from "zustand/react/shallow";
 import { notesHtmlToPlainText, truncateHtmlNotes } from "@/utilities/notesText";
@@ -836,7 +837,7 @@ function DrillChartExport() {
             t("exportCoordinates.sectionAppearancesNotLoaded"),
         );
 
-        // Generate SVGs from the canvas
+        // Generate the drill chart SVGs from the show data
         let SVGs: string[][] = [];
         let coords: string[][] | null = null;
         try {
@@ -847,7 +848,7 @@ function DrillChartExport() {
                 rendered: { pages, marchers },
                 showChangedMessage: showChangedMessage(),
             });
-            const backgroundImage = await getFieldPropertiesImageElement();
+            const backgroundImage = await getFieldImageForExport();
             ({ SVGs, coords } = await generateDrillChartExportSVGs({
                 fieldProperties,
                 marchers,
