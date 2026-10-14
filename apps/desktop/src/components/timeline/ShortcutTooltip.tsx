@@ -63,7 +63,8 @@ export function ShortcutTooltip({
 }: {
     label: string | undefined;
     shortcut?: string;
-    hint?: string;
+    /** A second line, or a richer guide (the transport's Previous and Next) */
+    hint?: ReactNode;
     side?: "top" | "bottom" | "left" | "right";
     closeOnPress?: boolean;
     children: ReactElement;
@@ -109,10 +110,12 @@ export function ShortcutTooltip({
                             {label}
                             {shortcut && <Keycaps shortcut={shortcut} />}
                         </span>
-                        {hint && (
+                        {typeof hint === "string" ? (
                             <span className="text-text-subtitle block text-[11px]">
                                 {hint}
                             </span>
+                        ) : (
+                            hint
                         )}
                     </Tooltip.Content>
                 </Tooltip.Portal>

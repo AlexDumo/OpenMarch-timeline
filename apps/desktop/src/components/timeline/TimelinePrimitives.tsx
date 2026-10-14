@@ -17,7 +17,11 @@ import {
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
-import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
+import {
+    Keycaps,
+    ShortcutTooltip,
+    TransportTooltipProvider,
+} from "./ShortcutTooltip";
 import {
     isPlainNudgeKey,
     isTyping,
@@ -174,6 +178,7 @@ const TransportButton = memo(function TransportButton({
     label,
     shortcut,
     hint,
+    keyShortcut,
     children,
     onClick,
     pressed,
@@ -182,8 +187,10 @@ const TransportButton = memo(function TransportButton({
     label: string;
     /** The shortcut the tooltip shows as keycaps */
     shortcut?: string;
-    /** A second tooltip line */
-    hint?: string;
+    /** A second tooltip line, or a guide */
+    hint?: ReactNode;
+    /** The shortcut for assistive tech when the tooltip shows it elsewhere (in a guide) */
+    keyShortcut?: string;
     children: ReactNode;
     onClick?: (event: ReactMouseEvent) => void;
     pressed?: boolean;
@@ -194,7 +201,10 @@ const TransportButton = memo(function TransportButton({
             <button
                 type="button"
                 aria-label={label}
-                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
+                aria-keyshortcuts={(shortcut ?? keyShortcut)?.replace(
+                    /\s*\+\s*/g,
+                    "+",
+                )}
                 aria-pressed={pressed}
                 data-testid={testId}
                 // UI-17 follow-up: a click doesn't take keyboard focus, so Space after clicking
@@ -257,10 +267,102 @@ const NAVIGATION_TARGETS = {
     readonly [TimelineNavigation, TimelineNavigation]
 >;
 
+interface NavigationGuideRow {
+    readonly mode: TransportNavigationMode;
+    readonly icon: ReactNode;
+    readonly label: string;
+    /** The shortcut as keycaps */
+    readonly shortcut: string;
+    /** The click that does the same */
+    readonly click: string;
+}
+
+/** What Previous (or Next) does with each modifier, in the order the tooltip lists them */
+const navigationGuide = (back: boolean): readonly NavigationGuideRow[] => {
+    const alt = isMac() ? "Option" : "Alt";
+    return [
+        {
+            mode: "page",
+            icon: back ? SKIP_BACK_ICON : SKIP_FORWARD_ICON,
+            label: back ? "Previous page" : "Next page",
+            shortcut: back
+                ? TRANSPORT_SHORTCUTS.previousPage
+                : TRANSPORT_SHORTCUTS.nextPage,
+            click: "Click",
+        },
+        {
+            mode: "edge",
+            icon: back ? START_ICON : END_ICON,
+            label: back ? "Start of the show" : "End of the show",
+            shortcut: back
+                ? TRANSPORT_SHORTCUTS.firstPage
+                : TRANSPORT_SHORTCUTS.lastPage,
+            click: "Shift+click",
+        },
+        {
+            mode: "beat",
+            icon: back ? BEAT_BACK_ICON : BEAT_FORWARD_ICON,
+            label: back ? "Previous beat" : "Next beat",
+            shortcut: (back
+                ? TRANSPORT_SHORTCUTS.previousBeat
+                : TRANSPORT_SHORTCUTS.nextBeat
+            ).replace("Alt", alt),
+            click: `${alt}+click`,
+        },
+    ];
+};
+
+/**
+ * The tooltip's guide to Previous and Next: each icon, what it does, its shortcut and its click,
+ * with the row the held modifier picks in the accent color.
+ */
+function NavigationGuide({
+    rows,
+    mode,
+}: {
+    rows: readonly NavigationGuideRow[];
+    mode: TransportNavigationMode;
+}) {
+    return (
+        <span className="mt-4 flex w-max flex-col gap-4">
+            <span
+                data-testid="timeline-navigation-guide"
+                className="grid grid-cols-[auto_auto_auto_auto] items-center gap-x-8 gap-y-4"
+            >
+                {rows.map((row) => (
+                    <span
+                        key={row.mode}
+                        data-active={row.mode === mode || undefined}
+                        className={clsx(
+                            "col-span-4 grid grid-cols-subgrid items-center",
+                            row.mode === mode ? "text-accent" : "text-text",
+                        )}
+                    >
+                        <span aria-hidden="true" className="flex">
+                            {row.icon}
+                        </span>
+                        <span className="text-[12px]">{row.label}</span>
+                        <Keycaps shortcut={row.shortcut} />
+                        <span className="text-text-subtitle text-[11px]">
+                            {row.click}
+                        </span>
+                    </span>
+                ))}
+            </span>
+            {/* Wraps to the table's width rather than widening the tooltip */}
+            <span className="text-text-subtitle w-0 min-w-full text-[11px]">
+                Hold Shift or {isMac() ? "Option" : "Alt"} to switch the
+                buttons. While playing, playback jumps there and keeps going.
+            </span>
+        </span>
+    );
+}
+
 /**
  * Previous and Next. Q and E step a page; Shift (Shift+click, Shift+Q/E) goes to the start or end
- * of the show and Alt (Alt+click, Alt+Q/E) steps a beat. Holding either modifier swaps the icons
- * and tooltips to say so. Kept apart from the transport so only these two re-render for it.
+ * of the show and Alt (Alt+click, Alt+Q/E) steps a beat. Holding either modifier swaps the icon
+ * and label to say so, and the tooltip is a guide to all three (`NavigationGuide`). Kept apart
+ * from the transport so only these two re-render for it.
  */
 const TransportNavigationButton = memo(function TransportNavigationButton({
     direction,
@@ -278,45 +380,17 @@ const TransportNavigationButton = memo(function TransportNavigationButton({
             ),
         [back, onNavigate],
     );
-    const alt = isMac() ? "Option" : "Alt";
-    const key = back ? "Q" : "E";
-    const label = {
-        page: back ? "Previous page" : "Next page",
-        edge: back ? "Start of the show" : "End of the show",
-        beat: back ? "Previous beat" : "Next beat",
-    }[mode];
-    const shortcut = {
-        page: back
-            ? TRANSPORT_SHORTCUTS.previousPage
-            : TRANSPORT_SHORTCUTS.nextPage,
-        edge: back
-            ? TRANSPORT_SHORTCUTS.firstPage
-            : TRANSPORT_SHORTCUTS.lastPage,
-        beat: (back
-            ? TRANSPORT_SHORTCUTS.previousBeat
-            : TRANSPORT_SHORTCUTS.nextBeat
-        ).replace("Alt", alt),
-    }[mode];
-    const hint =
-        mode === "page"
-            ? `Shift+click or Shift+${key}: the ${back ? "start" : "end"} of the show. ${alt}+click or ${alt}+${key}: one beat`
-            : mode === "edge"
-              ? "Let go of Shift to step a page"
-              : `Let go of ${alt} to step a page`;
-    const icon = {
-        page: back ? SKIP_BACK_ICON : SKIP_FORWARD_ICON,
-        edge: back ? START_ICON : END_ICON,
-        beat: back ? BEAT_BACK_ICON : BEAT_FORWARD_ICON,
-    }[mode];
+    const guide = navigationGuide(back);
+    const row = guide.find((r) => r.mode === mode)!;
     return (
         <TransportButton
-            label={label}
-            shortcut={shortcut}
-            hint={hint}
+            label={row.label}
+            keyShortcut={row.shortcut}
+            hint={<NavigationGuide rows={guide} mode={mode} />}
             testId={`timeline-${direction}`}
             onClick={onNavigate ? onClick : undefined}
         >
-            {icon}
+            {row.icon}
         </TransportButton>
     );
 });

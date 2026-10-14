@@ -1687,6 +1687,36 @@ describe("a calmer timeline (UI-12)", () => {
         expect(previous).toHaveAccessibleName("Previous page");
     });
 
+    it("guides every option in the tooltip, marking the one the held modifier picks", async () => {
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onNavigate={vi.fn()}
+            />,
+        );
+        const next = screen.getByTestId("timeline-next");
+        act(() => next.focus());
+        await screen.findByRole("tooltip");
+        const guide = () =>
+            document.querySelector(
+                '[data-testid="timeline-navigation-guide"]',
+            )!;
+        const rows = () =>
+            [...guide().children].map((row) => ({
+                text: row.textContent,
+                active: row.hasAttribute("data-active"),
+            }));
+        expect(rows()).toEqual([
+            { text: "Next pageEClick", active: true },
+            { text: "End of the showShiftEShift+click", active: false },
+            { text: "Next beatAltEAlt+click", active: false },
+        ]);
+        fireEvent.keyDown(window, { key: "Alt", altKey: true });
+        expect(rows().map((row) => row.active)).toEqual([false, false, true]);
+        expect(next).toHaveAttribute("aria-keyshortcuts", "Alt+E");
+    });
+
     it("keeps page navigation live while playing, where it jumps playback", () => {
         const onNavigate = vi.fn();
         render(
