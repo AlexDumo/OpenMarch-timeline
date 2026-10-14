@@ -10,18 +10,15 @@ import {
 import {
     beatToX,
     canvasWindowCovers,
-    clamp,
     getBeatsInSpan,
     getCanvasWindow,
     type TimelineSpan,
 } from "./TimelineGeometry";
 import type { TimelineMarker, TimelineWaveform } from "./TimelineViewModel";
 import {
-    WAVEFORM_BAR_GAP,
-    WAVEFORM_BAR_WIDTH,
-    WAVEFORM_PRECISE_BARS_PER_BEAT,
-    waveformBarLevel,
-    waveformLevelDb,
+    forEachWaveformBar,
+    waveformBarHalfHeight,
+    waveformBarRadius,
     type WaveformStyle,
 } from "@/timeline/timelineWaveform";
 
@@ -439,62 +436,25 @@ export const TimelineWaveformCanvas = memo(function TimelineWaveformCanvas({
             context.globalAlpha = 0.25;
             context.fillRect(0, Math.round(centerY), audioEndX, 1);
             context.globalAlpha = 1;
-            /** A bar's half height for a level, with a sliver for any sound at all */
-            const halfHeight = (level: number) =>
-                Math.max(0.5, clamp(level, 0, 1) * (height / 2 - 1));
-            const drawEnd = Math.min(spanEnd, audioEndX);
+            const radius = waveformBarRadius(waveformStyle);
             context.beginPath();
-            if (waveformStyle === "precise") {
-                const sliceWidth =
-                    pixelsPerBeat / WAVEFORM_PRECISE_BARS_PER_BEAT;
-                // A gap between bars only once they're wide enough; narrower, they read as one shape
-                const barWidth =
-                    sliceWidth >= 3 ? sliceWidth - 1 : Math.max(1, sliceWidth);
-                const firstSlice = Math.max(
-                    0,
-                    Math.floor((span.left - barWidth) / sliceWidth),
-                );
-                const lastSlice = Math.ceil(drawEnd / sliceWidth);
-                for (let slice = firstSlice; slice < lastSlice; slice++) {
-                    const level = waveformLevelDb(
-                        waveformBarLevel(
-                            waveform.peaksByBeat,
-                            slice / WAVEFORM_PRECISE_BARS_PER_BEAT,
-                            (slice + 1) / WAVEFORM_PRECISE_BARS_PER_BEAT,
-                        ),
-                    );
-                    if (level <= 0) continue;
-                    const magnitude = halfHeight(level);
-                    context.rect(
-                        slice * sliceWidth,
-                        centerY - magnitude,
-                        barWidth,
-                        magnitude * 2,
-                    );
-                }
-            } else {
-                const pitch = WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP;
-                const firstBar = Math.max(0, Math.floor(span.left / pitch));
-                const lastBar = Math.ceil(drawEnd / pitch);
-                const radius = WAVEFORM_BAR_WIDTH / 2;
-                for (let bar = firstBar; bar < lastBar; bar++) {
-                    const x = bar * pitch;
-                    const level = waveformBarLevel(
-                        waveform.peaksByBeat,
-                        x / pixelsPerBeat,
-                        (x + pitch) / pixelsPerBeat,
-                    );
-                    if (level <= 0) continue;
-                    const magnitude = halfHeight(level);
+            forEachWaveformBar(
+                waveform.peaksByBeat,
+                waveformStyle,
+                pixelsPerBeat,
+                span.left,
+                Math.min(spanEnd, audioEndX),
+                (x, barWidth, level) => {
+                    const magnitude = waveformBarHalfHeight(level, height);
                     context.roundRect(
                         x,
                         centerY - magnitude,
-                        WAVEFORM_BAR_WIDTH,
+                        barWidth,
                         magnitude * 2,
                         radius,
                     );
-                }
-            }
+                },
+            );
             context.fill();
         },
         [audioEnd, height, pixelsPerBeat, tone, waveform, waveformStyle, width],

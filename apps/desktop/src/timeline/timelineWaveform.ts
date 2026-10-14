@@ -159,3 +159,62 @@ export function waveformBarLevel(
     }
     return level;
 }
+
+/** The corner radius of a style's bars: pills when simplified, square when precise */
+export function waveformBarRadius(style: WaveformStyle): number {
+    return style === "precise" ? 0 : WAVEFORM_BAR_WIDTH / 2;
+}
+
+/** Half a bar's height for a level in a lane `height` tall: any sound at all keeps a sliver */
+export function waveformBarHalfHeight(level: number, height: number): number {
+    return Math.max(0.5, Math.min(1, Math.max(0, level)) * (height / 2 - 1));
+}
+
+/**
+ * Lays out the waveform's bars from `from` to `to` pixels in a style, calling `draw` with each
+ * bar's left edge, width and level (0 .. 1, on the style's scale), skipping silent bars.
+ * Simplified bars sit at a fixed pixel pitch on a linear scale; precise bars are a slice of a beat
+ * each, on the decibel scale. The timeline and the setting's preview both draw through this.
+ */
+export function forEachWaveformBar(
+    peaks: readonly (readonly number[])[],
+    style: WaveformStyle,
+    pixelsPerBeat: number,
+    from: number,
+    to: number,
+    draw: (x: number, width: number, level: number) => void,
+): void {
+    if (style === "precise") {
+        const sliceWidth = pixelsPerBeat / WAVEFORM_PRECISE_BARS_PER_BEAT;
+        // A gap between bars only once they're wide enough; narrower, they read as one shape
+        const barWidth =
+            sliceWidth >= 3 ? sliceWidth - 1 : Math.max(1, sliceWidth);
+        const last = Math.ceil(to / sliceWidth);
+        for (
+            let slice = Math.max(0, Math.floor(from / sliceWidth));
+            slice < last;
+            slice++
+        ) {
+            const level = waveformLevelDb(
+                waveformBarLevel(
+                    peaks,
+                    slice / WAVEFORM_PRECISE_BARS_PER_BEAT,
+                    (slice + 1) / WAVEFORM_PRECISE_BARS_PER_BEAT,
+                ),
+            );
+            if (level > 0) draw(slice * sliceWidth, barWidth, level);
+        }
+        return;
+    }
+    const pitch = WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP;
+    const last = Math.ceil(to / pitch);
+    for (let bar = Math.max(0, Math.floor(from / pitch)); bar < last; bar++) {
+        const x = bar * pitch;
+        const level = waveformBarLevel(
+            peaks,
+            x / pixelsPerBeat,
+            (x + pitch) / pixelsPerBeat,
+        );
+        if (level > 0) draw(x, WAVEFORM_BAR_WIDTH, level);
+    }
+}

@@ -7,6 +7,7 @@ import {
 } from "@/timeline/timelineWaveform";
 import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
+import WaveformStylePreview from "./WaveformStylePreview";
 
 export default function TimelineSettings() {
     const { uiSettings, setUiSettings } = useUiSettingsStore();
@@ -33,14 +34,17 @@ export default function TimelineSettings() {
                             timelineWaveformStyle: style as WaveformStyle,
                         });
                     }}
-                    className="flex h-fit w-fit gap-8"
+                    className="flex h-fit w-fit flex-wrap gap-8"
                 >
                     {WAVEFORM_STYLES.map((style) => (
                         <ToggleGroup.Item
                             key={style}
                             value={style}
-                            className="text-text bg-fg-2 text-body border-stroke data-[state=on]:border-accent flex items-center gap-6 rounded-full border px-12 py-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4"
+                            className="group text-text bg-fg-2 text-body border-stroke data-[state=on]:border-accent rounded-6 flex flex-col items-start gap-8 border p-12 outline-hidden duration-150 ease-out focus-visible:-translate-y-4"
                         >
+                            <span className="text-text-subtitle group-data-[state=on]:text-accent">
+                                <WaveformStylePreview style={style} />
+                            </span>
                             <T
                                 keyName={`settings.timeline.waveformStyle.${style}`}
                             />
