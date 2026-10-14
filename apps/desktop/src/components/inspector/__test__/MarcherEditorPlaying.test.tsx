@@ -1,7 +1,6 @@
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, expect, vi } from "vitest";
-import { describeDbTests, type DbConnection, schema } from "@/test/base";
-import { keepFixturesInPageMode } from "@/test/timelineMode";
+import { describeDbTests, type DbConnection } from "@/test/base";
 import {
     harnessQueryClient,
     mountFeature,
@@ -10,20 +9,13 @@ import {
 } from "@/test/featureHarness";
 import tolgee from "@/global/singletons/Tolgee";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { marcherPageKeys } from "@/hooks/queries/useMarcherPages";
-import { convertPagesToTimeline } from "@/timeline/convert/writePageConversion";
 import { stopTimelineResolver } from "@/timeline/timelineStore";
 import MarcherEditor from "../MarcherEditor";
 
-// These tests convert the show and set the flag themselves
-keepFixturesInPageMode(
-    "its tests convert the show and set the flag themselves",
-);
-
 /**
  * The marcher section while timeline playback runs (UI-19 review): it keeps its place and its
- * collapsed state, and shows a note instead of the selected marchers' values and controls, reading
- * no marcher pages meanwhile. The selected page stays where playback started, so its values would
+ * collapsed state, and shows a note instead of the selected marchers' values and controls. The
+ * selected page stays where playback started, so its values would
  * be stale and its edits would land there.
  */
 
@@ -46,15 +38,6 @@ afterEach(() => {
     stopTimelineResolver();
 });
 
-const toTimelineMode = async (db: DbConnection) => {
-    await db.delete(schema.workspace_settings);
-    await db.insert(schema.workspace_settings).values({
-        id: 1,
-        json_data: JSON.stringify({ timelineMode: true }),
-    });
-    await convertPagesToTimeline(db);
-};
-
 const playing: { set: ((on: boolean) => void) | null } = { set: null };
 function PlayingProbe() {
     playing.set = useIsPlaying()!.setIsPlaying;
@@ -66,8 +49,7 @@ const setPlaying = (on: boolean) =>
     });
 
 describeDbTests("the marcher section while timeline playback runs", (it) => {
-    const mount = async (db: DbConnection, marcherIds: number[]) => {
-        await toTimelineMode(db);
+    const mount = async (_db: DbConnection, marcherIds: number[]) => {
         const { qc, result } = mountFeature(
             <>
                 <MarcherEditor />
@@ -75,7 +57,6 @@ describeDbTests("the marcher section while timeline playback runs", (it) => {
             </>,
         );
         await waitFor(() => {
-            expect(probed().timelineMode).toBe(true);
             expect(probed().pages.length).toBeGreaterThan(5);
             expect(probed().marchers?.length).toBeGreaterThan(0);
         });
@@ -87,14 +68,14 @@ describeDbTests("the marcher section while timeline playback runs", (it) => {
             "[data-state] > button, button[aria-expanded]",
         )!;
 
-    it("shows a note in place of the values and controls, and reads no marcher pages", async ({
+    it("shows a note in place of the values and controls", async ({
         db,
         marchersAndPages,
     }) => {
         const ids = marchersAndPages.expectedMarchers
             .slice(0, 2)
             .map((m) => m.id);
-        const { qc, result } = await mount(db, ids);
+        const { result } = await mount(db, ids);
         await waitFor(() => expect(result.getByText(/^Swap/)).toBeTruthy());
 
         setPlaying(true);
@@ -104,20 +85,6 @@ describeDbTests("the marcher section while timeline playback runs", (it) => {
         expect(result.queryByText(/^Swap/)).toBeNull();
         expect(result.container.querySelectorAll("input")).toHaveLength(0);
         expect(result.container.querySelectorAll("button")).toHaveLength(1);
-
-        // A page selected meanwhile (as undo's page jump can) loads nothing for this section:
-        // its previous page is read only by the marcher section
-        const later = probed().pages[5]!;
-        const previousKey = marcherPageKeys.byPage(later.previousPageId!);
-        act(() => {
-            probed().setSelectedPage(later);
-        });
-        await waitFor(() => expect(probed().selectedPage?.id).toBe(later.id));
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        expect(qc.getQueryState(previousKey)?.dataUpdateCount ?? 0).toBe(0);
-        expect(qc.getQueryState(previousKey)?.fetchStatus ?? "idle").toBe(
-            "idle",
-        );
 
         setPlaying(false);
         await waitFor(() =>
@@ -155,8 +122,7 @@ describeDbTests("the marcher section while timeline playback runs", (it) => {
         );
         expect(trigger(result).getAttribute("aria-expanded")).toBe("false");
 
-        // A page whose rows aren't loaded yet keeps the last page's content meanwhile, so the
-        // section doesn't unmount to "Loading marcher" and reopen
+        // A page change keeps the section collapsed too
         act(() => {
             probed().setSelectedPage(probed().pages[6]!);
         });

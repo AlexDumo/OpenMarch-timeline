@@ -18,10 +18,14 @@ import {
     clamp,
     getPageSnapBeats,
     getWindowCountLabel,
+    isPastLastFlag,
     getSelectionRange,
+    getTimelineRows,
     getTrackRange,
     sameRange,
     packTimelineTracks,
+    TIMELINE_PAGE_ROW_BOTTOM,
+    TIMELINE_PAGE_ROW_TOP,
 } from "./TimelineGeometry";
 import {
     TIMELINE_MAX_PX_PER_BEAT,
@@ -326,11 +330,15 @@ const navigateToPage = ({
     direction,
     currentBeat,
     pages,
+    beatCount,
 }: {
     direction: TimelineNavigation;
     currentBeat: number;
     pages: TimelineCommonProps["model"]["pages"];
+    beatCount: number;
 }) => {
+    if (direction === "previous-beat") return Math.max(currentBeat - 1, 0);
+    if (direction === "next-beat") return Math.min(currentBeat + 1, beatCount);
     if (pages.length === 0) return 0;
     const timedPages = pages.filter((page) => !page.isInitial);
     const ordered = [...(timedPages.length > 0 ? timedPages : pages)].sort(
@@ -359,6 +367,7 @@ const transportNavigation = (props: TimelineCommonProps) =>
                       direction,
                       currentBeat: props.positionBeat,
                       pages: props.model.pages,
+                      beatCount: props.model.beatCount,
                   }),
               )
         : undefined);
@@ -498,9 +507,12 @@ const TimelineSelectionActions = memo(function TimelineSelectionActions({
         ? displayedRange.startBeatIndex > 0
         : displayedRange.endBeatIndex >= model.beatCount;
     // UI-13: the window's count shows while a handle is dragged, or when the window starts off a
-    // page line; from a page line, it is the playhead's count, which the transport already shows
+    // page line; from a page line, it is the playhead's count, which the transport already shows.
+    // Past the last flag it shows anyway: the designer reads off how long the next page would be
     const showWindowCount =
-        dragging || !snapBeats.includes(displayedRange.startBeatIndex);
+        dragging ||
+        !snapBeats.includes(displayedRange.startBeatIndex) ||
+        isPastLastFlag(model, displayedRange.endBeatIndex);
     const showCreateTrack = createTrackTarget != null && !dragging;
     return (
         <div
@@ -513,7 +525,7 @@ const TimelineSelectionActions = memo(function TimelineSelectionActions({
                         : displayedRange.endBeatIndex) *
                         pixelsPerBeat +
                     (countRendersToLeft ? -6 : 6),
-                top: expanded ? 31 : 29,
+                top: TIMELINE_PAGE_ROW_BOTTOM + (expanded ? 3 : 1),
                 alignItems: countRendersToLeft ? "flex-end" : "flex-start",
                 transform: countRendersToLeft ? "translateX(-100%)" : undefined,
             }}
@@ -586,32 +598,36 @@ const TimelineSurface = memo(function TimelineSurface({
         ? TIMELINE_INITIAL_PAGE_WIDTH
         : 0;
     const surfaceWidth = width + initialPageWidth + TIMELINE_END_INSET;
-    // UI-12: the ruler (28px) and the measure row; then the waveform, when audio is loaded, so it
-    // stays put as clips come and go; then the clip rows, one always kept (with no chrome), so the
-    // first off-page clip doesn't move the ruler right after the drag that made it
-    const railHeight = expanded ? 20 : 17;
     const showWaveform = model.waveform.peaksByBeat.some(
         (peaks) => peaks.length > 0,
     );
-    // Basic (UI-19): under each box's header (the ruler) its body, the same height with or
+    const rowsLayout = getTimelineRows({
+        expanded,
+        showWaveform,
+        rowCount: rows.length,
+    });
+    // Basic (UI-19): under each box's header (the page row) its body, the same height with or
     // without audio: the measure numbers, the waveform, then the count ticks along the bottom
     const basicBodyHeight = 60;
     const basicMeasureRow = 18;
+    const basicAudioTop = TIMELINE_PAGE_ROW_BOTTOM + basicMeasureRow;
+    const basicWaveformHeight = basicBodyHeight - basicMeasureRow - 12;
+    const { rowPitch, trackHeight, clipHitHeight } = rowsLayout;
+    // The measure row under the page boxes (as `getTimelineRows`), where the simple-defaults
+    // study's mid-page ticks sit
+    const railHeight = expanded ? 20 : 17;
+    const audioTop = basic ? basicAudioTop : rowsLayout.audioTop;
     const waveformHeight = basic
-        ? basicBodyHeight - basicMeasureRow - 12
-        : expanded
-          ? 32
-          : 12;
-    const audioTop = basic ? 28 + basicMeasureRow : 28 + railHeight + 2;
-    const trackTop = showWaveform ? audioTop + waveformHeight + 4 : audioTop;
-    const rowPitch = expanded ? 22 : 12;
-    const trackHeight = expanded ? 14 : 6;
-    // Compact bars sit in a hit area as tall as their row, so rows never share a click
-    const clipHitHeight = expanded ? trackHeight : rowPitch;
-    const trackBandHeight = Math.max(rows.length, 1) * rowPitch;
+        ? basicWaveformHeight
+        : rowsLayout.waveformHeight;
+    const trackTop = basic
+        ? showWaveform
+            ? basicAudioTop + basicWaveformHeight + 4
+            : basicAudioTop
+        : rowsLayout.trackTop;
     const timelineHeight = basic
-        ? 28 + basicBodyHeight
-        : trackTop + trackBandHeight + (expanded ? 2 : 0);
+        ? TIMELINE_PAGE_ROW_BOTTOM + basicBodyHeight
+        : rowsLayout.timelineHeight;
     const selectionRange = getSelectionRange(selection);
     // A dragged start flag's range: only the window's count reads it (`TimelineSelectionActions`)
     const [selectionInteraction] = useState(() =>
@@ -795,8 +811,8 @@ const TimelineSurface = memo(function TimelineSurface({
                 >
                     {basic && (
                         <TimelineBasicBodies
-                            top={28}
-                            height={timelineHeight - 28}
+                            top={TIMELINE_PAGE_ROW_BOTTOM}
+                            height={timelineHeight - TIMELINE_PAGE_ROW_BOTTOM}
                             width={width}
                         />
                     )}
@@ -807,10 +823,14 @@ const TimelineSurface = memo(function TimelineSurface({
                         viewportRef={viewportRef}
                         layerLeft={initialPageWidth}
                         measures={model.measures}
-                        lineTop={28}
+                        lineTop={TIMELINE_PAGE_ROW_BOTTOM}
                         // UI-12: one row of beat ticks, in the measure row; Basic's along the
                         // floor of the box bodies (UI-19)
-                        topTickY={basic ? timelineHeight - 7 : 34}
+                        topTickY={
+                            basic
+                                ? timelineHeight - 7
+                                : TIMELINE_PAGE_ROW_BOTTOM + 6
+                        }
                         bottomTickY={null}
                     />
                     <TimelinePageLines
@@ -900,7 +920,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         model={model}
                         pixelsPerBeat={pixelsPerBeat}
                         // Basic's measure row is at the top of the box bodies, as expanded's
-                        top={expanded ? 30 : 29}
+                        top={TIMELINE_PAGE_ROW_BOTTOM + (expanded ? 2 : 1)}
                         compact={!expanded}
                         onSeek={props.onSeek}
                     />
@@ -915,8 +935,12 @@ const TimelineSurface = memo(function TimelineSurface({
                         <TimelineBasicPoints
                             points={props.basicPoints}
                             // In the box bodies (Basic), else across the measure row
-                            top={28}
-                            height={basic ? timelineHeight - 28 : railHeight}
+                            top={TIMELINE_PAGE_ROW_BOTTOM}
+                            height={
+                                basic
+                                    ? timelineHeight - TIMELINE_PAGE_ROW_BOTTOM
+                                    : railHeight
+                            }
                             pixelsPerBeat={pixelsPerBeat}
                             onSeek={props.onSeek}
                             onRemove={props.onRemoveBasicPoint}
@@ -938,7 +962,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         // UI-14: below the ruler and measure rows (over the waveform and the clip
                         // rows) the playhead is drawn, not grabbed. Basic's bodies scrub anyway,
                         // and a mid-page tick under the playhead must still take its right-click
-                        hitHeight={basic ? 28 : audioTop}
+                        hitHeight={basic ? TIMELINE_PAGE_ROW_BOTTOM : audioTop}
                     />
                     {props.onAddPageFlag && !props.isPlaying && (
                         <button
@@ -950,7 +974,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             title="Add a page flag here"
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={props.onAddPageFlag}
-                            className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
+                            className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
                             // Past the playhead's box's keep chain, if it would cover it
                             style={{
                                 left: addPageFlagLeft({
@@ -960,6 +984,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                     pixelsPerBeat,
                                     keepChains: props.keepChains,
                                 }),
+                                top: TIMELINE_PAGE_ROW_TOP + 6,
                             }}
                         >
                             <PlusIcon size={10} weight="bold" />
@@ -992,7 +1017,9 @@ const TimelineSurface = memo(function TimelineSurface({
                                 selection.startPinned === true
                             }
                             onUnpin={props.onUnpinStart}
-                            pinTop={expanded ? 29 : 28}
+                            pinTop={
+                                TIMELINE_PAGE_ROW_BOTTOM + (expanded ? 1 : 0)
+                            }
                             pinSize={expanded ? 18 : 14}
                             beatCount={model.beatCount}
                             pixelsPerBeat={pixelsPerBeat}

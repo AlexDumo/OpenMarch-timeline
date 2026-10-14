@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
-    marcherPagesByPageQueryOptions,
     fieldPropertiesQueryOptions,
-    shapePageMarchersQueryByPageIdOptions,
     useUpdateSelectedMarchersOnSelectedPage,
     type MarcherCoordinate,
 } from "@/hooks/queries";
@@ -19,7 +17,6 @@ import {
     SelectItem,
     SelectTriggerCompact,
 } from "@openmarch/ui";
-import { StepSize } from "@/global/classes/StepSize";
 import MarcherRotationInput from "./marcher/MarcherRotationInput";
 import StepSizeWarningBadge from "./StepSizeWarningBadge";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -27,9 +24,8 @@ import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { clsx } from "clsx";
 import { T } from "@tolgee/react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { FieldProperties } from "@openmarch/core";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { usePositionAt } from "@/timeline/timelineStore";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { useTimelineStepSizes } from "@/timeline/useTimelineStepSizes";
@@ -169,17 +165,13 @@ const evenlyDistributeVertically = ({
  * Component that renders all alignment, distribution, and transformation buttons
  * for multiple selected marchers
  */
-interface AlignmentButtonsProps {
-    editingDisabled: boolean;
-}
-
-function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
+function AlignmentButtons() {
     const [horizontalStepInterval, setHorizontalStepInterval] = useState("");
     const [verticalStepInterval, setVerticalStepInterval] = useState("");
     const { mutate: updateSelectedMarchers } =
         useUpdateSelectedMarchersOnSelectedPage();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
-    const distributionDisabled = editingDisabled || !fieldProperties;
+    const distributionDisabled = !fieldProperties;
 
     const parseStepInterval = useCallback((value: string) => {
         const trimmed = value.trim();
@@ -262,7 +254,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
             <div className="flex gap-8">
                 <ActionButton
                     action="alignVertically"
-                    disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -275,7 +266,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                 </ActionButton>
                 <ActionButton
                     action="alignHorizontally"
-                    disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -289,7 +279,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
 
                 <ActionButton
                     action="flipHorizontal"
-                    disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -302,7 +291,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                 </ActionButton>
                 <ActionButton
                     action="flipVertical"
-                    disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -349,7 +337,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                         }
                         compact
                         className="w-8 flex-1 rounded border text-center text-xs"
-                        disabled={editingDisabled}
                     />
                 </div>
                 <div className="flex flex-1 items-center justify-center gap-4">
@@ -381,7 +368,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                             setVerticalStepInterval(e.target.value)
                         }
                         className="w-8 flex-1 rounded border text-center text-xs"
-                        disabled={editingDisabled}
                     />
                 </div>
             </div>
@@ -430,61 +416,20 @@ const NO_MARCHERS: readonly number[] = [];
 // eslint-disable-next-line max-lines-per-function
 function MarcherEditor() {
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
-    const selectedMarcherIds = useMemo(
-        () => new Set(selectedMarchers.map((marcher) => marcher.id)),
-        [selectedMarchers],
-    );
     const { selectedPage } = useSelectedPage()!;
-    const timelineMode = useTimelineMode();
     /**
-     * Timeline playback (UI-19 review): the section keeps its place and shows a note instead of
-     * the selected marchers' values and controls. The selected page stays where playback started,
-     * so its values would be stale and its edits would land there. Nothing is read meanwhile.
+     * Playback (UI-19 review): the section keeps its place and shows a note instead of the
+     * selected marchers' values and controls. The selected page stays where playback started, so
+     * its values would be stale and its edits would land there. Nothing is read meanwhile.
      */
-    const isPlaying = useIsPlaying()?.isPlaying ?? false;
-    const timelinePlaying = timelineMode && isPlaying;
-    // Timeline mode keeps the last page's rows while the next page's load, so the section
-    // doesn't unmount to "Loading" (and lose its collapsed state) on a page change
-    const placeholderData = timelineMode ? keepPreviousData : undefined;
-    const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery({
-        ...marcherPagesByPageQueryOptions(selectedPage?.id),
-        enabled: !timelinePlaying && selectedPage != null,
-        placeholderData,
-    });
-    const { data: previousMarcherPages } = useQuery({
-        ...marcherPagesByPageQueryOptions(selectedPage?.previousPageId),
-        enabled: !timelinePlaying && selectedPage?.previousPageId != null,
-        placeholderData,
-    });
+    const playing = useIsPlaying()?.isPlaying ?? false;
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     // Isolation: the isolated move's plan at its end, where the canvas draws and edits it
     const isolationEnd = useTimelineSelectionStore((s) => s.isolation?.end);
     const timelinePosition = usePositionAt(
-        !timelinePlaying && selectedMarchers.length === 1
-            ? selectedMarchers[0].id
-            : -1,
+        !playing && selectedMarchers.length === 1 ? selectedMarchers[0].id : -1,
         isolationEnd ?? (selectedPage ? pageEndBeat(selectedPage) : 0),
     );
-    // Timeline mode has no shape locks (P7.11): moving a marcher whose slot is in a shape-backed
-    // transition switches that transition to individual points (P7.2), and shape pages are
-    // frozen page-era rows. So the shape page marchers aren't read there.
-    const { data: spmsForThisPage } = useQuery(
-        shapePageMarchersQueryByPageIdOptions(
-            timelineMode ? null : (selectedPage?.id ?? null),
-        ),
-    );
-    const editingDisabled = useMemo(() => {
-        if (timelineMode) return false;
-        return (
-            !marcherPagesLoaded ||
-            Object.values(marcherPages).some(
-                (marcherPage) =>
-                    marcherPage.isLocked &&
-                    selectedMarcherIds.has(marcherPage.marcher_id),
-            )
-        );
-    }, [timelineMode, marcherPagesLoaded, marcherPages, selectedMarcherIds]);
-
     const coordsFormRef = useRef<HTMLFormElement>(null);
     const xInputRef = useRef<HTMLInputElement>(null);
     const xDescriptionRef = useRef<HTMLSelectElement>(null);
@@ -504,54 +449,17 @@ function MarcherEditor() {
         // const fieldSide = form[fieldSideId].value;
     };
 
-    const createLineIsVisible = useCallback(() => {
-        // No shape locks in timeline mode (P7.11); the line tool applies positions (P7.2)
-        if (timelineMode) return true;
-        if (!spmsForThisPage) return false;
-        const marcherIdsWithShapes = new Set<number>(
-            spmsForThisPage.map((spm) => spm.marcher_id),
-        );
-        const selectedMarcherIds = selectedMarchers.map(
-            (marcher) => marcher.id,
-        );
-
-        return !selectedMarcherIds.some((marcherId) =>
-            marcherIdsWithShapes.has(marcherId),
-        );
-    }, [timelineMode, selectedMarchers, spmsForThisPage]);
-
+    // P7.2: show where the canvas draws the marcher
     const rCoords = useMemo(() => {
-        if (selectedMarchers.length !== 1) return undefined;
-        // Timeline mode (P7.2): show where the canvas draws the marcher. Checked before the
-        // marcher page lookup: marchers and pages made after the conversion have no marcher
-        // pages, which are frozen (P9.5)
-        if (timelineMode)
-            return timelinePosition
-                ? ReadableCoords.fromMarcherPage({
-                      x: timelinePosition[0],
-                      y: timelinePosition[1],
-                  })
-                : undefined;
-        if (!marcherPagesLoaded) return undefined;
-
-        const selectedMarcherPage = marcherPages[selectedMarchers[0].id];
-        if (!selectedMarcherPage) {
-            console.error(
-                `Selected marcher page not found for marcher ${selectedMarchers[0].id}`,
-            );
+        if (selectedMarchers.length !== 1 || !timelinePosition)
             return undefined;
-        }
-        const newRcoords = ReadableCoords.fromMarcherPage(selectedMarcherPage);
-        return newRcoords;
-    }, [
-        selectedMarchers,
-        marcherPagesLoaded,
-        marcherPages,
-        timelineMode,
-        timelinePosition,
-    ]);
+        return ReadableCoords.fromMarcherPage({
+            x: timelinePosition[0],
+            y: timelinePosition[1],
+        });
+    }, [selectedMarchers, timelinePosition]);
 
-    // Timeline mode (P7.10): step sizes from the resolver between page end beats, along the path
+    // P7.10: step sizes from the resolver between page end beats, along the path
     const { pages } = useTimingObjects()!;
     const selectedMarcherIdList = useMemo(
         () => selectedMarchers.map((marcher) => marcher.id),
@@ -563,86 +471,12 @@ function MarcherEditor() {
         () => pages.find((p) => p.id === selectedPage?.previousPageId) ?? null,
         [pages, selectedPage?.previousPageId],
     );
-    const timelineStepSizes = useTimelineStepSizes({
-        timelineMode,
-        marcherIds: !timelinePlaying ? selectedMarcherIdList : NO_MARCHERS,
+    const { stepSize, minMax: minMaxStepSize } = useTimelineStepSizes({
+        marcherIds: !playing ? selectedMarcherIdList : NO_MARCHERS,
         page: selectedPage,
         previousPage,
         fieldProperties,
     });
-
-    const stepSize = useMemo(() => {
-        if (timelineStepSizes.active) return timelineStepSizes.stepSize;
-        if (
-            selectedMarchers.length !== 1 ||
-            !marcherPagesLoaded ||
-            !previousMarcherPages ||
-            !selectedPage ||
-            !fieldProperties
-        )
-            return undefined;
-
-        const previousMarcherPage =
-            selectedPage?.previousPageId !== null
-                ? previousMarcherPages[selectedMarchers[0]?.id]
-                : undefined;
-
-        const selectedMarcherPage = marcherPages[selectedMarchers[0].id];
-        if (!selectedMarcherPage) {
-            // Timeline mode before the resolver is ready: marchers and pages made after the
-            // conversion have no marcher pages (P9.5), so there is no page-mode fallback
-            if (!timelineMode)
-                console.error(
-                    `Selected marcher page not found for marcher ${selectedMarchers[0].id}`,
-                );
-            return undefined;
-        }
-        return StepSize.createStepSizeForMarcher({
-            startingPage: previousMarcherPage,
-            endingPage: selectedMarcherPage,
-            page: selectedPage,
-            fieldProperties,
-        });
-    }, [
-        timelineStepSizes.active,
-        timelineStepSizes.stepSize,
-        selectedMarchers,
-        marcherPagesLoaded,
-        previousMarcherPages,
-        selectedPage,
-        fieldProperties,
-        marcherPages,
-        timelineMode,
-    ]);
-
-    const minMaxStepSize = useMemo(() => {
-        if (timelineStepSizes.active) return timelineStepSizes.minMax;
-        if (
-            selectedMarchers.length <= 1 ||
-            !marcherPagesLoaded ||
-            !previousMarcherPages ||
-            !selectedPage ||
-            !fieldProperties
-        )
-            return undefined;
-
-        return StepSize.getMinAndMaxStepSizesForMarchers({
-            marchers: selectedMarchers,
-            startingMarcherPages: previousMarcherPages,
-            endingMarcherPages: marcherPages,
-            page: selectedPage,
-            fieldProperties,
-        });
-    }, [
-        timelineStepSizes.active,
-        timelineStepSizes.minMax,
-        selectedMarchers,
-        marcherPagesLoaded,
-        previousMarcherPages,
-        selectedPage,
-        fieldProperties,
-        marcherPages,
-    ]);
 
     const selectMaxStepMarcher = useCallback(() => {
         if (!minMaxStepSize?.max) return;
@@ -700,14 +534,6 @@ function MarcherEditor() {
             </>
         );
 
-    if (!timelinePlaying && !marcherPagesLoaded) {
-        return (
-            <>
-                <T keyName="inspector.marcher.loading" />
-            </>
-        );
-    }
-
     const playingNote = (
         <p
             className="text-sub text-text/60 px-6"
@@ -740,7 +566,7 @@ function MarcherEditor() {
                             }}
                             className="mt-12 flex flex-col gap-16"
                         >
-                            {timelinePlaying ? (
+                            {playing ? (
                                 playingNote
                             ) : (
                                 <>
@@ -837,32 +663,27 @@ function MarcherEditor() {
                                             <T keyName="inspector.marcher.swapMarchers" />
                                         </ActionButton>
                                     )}
-                                    {selectedMarchers.length >= 3 &&
-                                        createLineIsVisible() && (
-                                            <ActionButton
-                                                className={clsx(
-                                                    getButtonClassName({
-                                                        variant: "primary",
-                                                        size: "compact",
-                                                    }),
-                                                    "enabled:hover:text-text-invert",
-                                                )}
-                                                action="alignmentEventLine"
-                                            >
-                                                <T keyName="inspector.marcher.createLine" />
-                                            </ActionButton>
-                                        )}
+                                    {selectedMarchers.length >= 3 && (
+                                        <ActionButton
+                                            className={clsx(
+                                                getButtonClassName({
+                                                    variant: "primary",
+                                                    size: "compact",
+                                                }),
+                                                "enabled:hover:text-text-invert",
+                                            )}
+                                            action="alignmentEventLine"
+                                        >
+                                            <T keyName="inspector.marcher.createLine" />
+                                        </ActionButton>
+                                    )}
 
                                     {/* Alignment, distribution, and transformation buttons */}
-                                    <AlignmentButtons
-                                        editingDisabled={editingDisabled}
-                                    />
+                                    <AlignmentButtons />
 
                                     {/* Add rotation controls */}
                                     <div className="w-full">
-                                        <MarcherRotationInput
-                                            disabled={editingDisabled}
-                                        />
+                                        <MarcherRotationInput />
                                     </div>
 
                                     <TagButtons
@@ -890,7 +711,7 @@ function MarcherEditor() {
                             }}
                             className="mt-12 flex flex-col gap-24"
                         >
-                            {timelinePlaying ? (
+                            {playing ? (
                                 playingNote
                             ) : (
                                 <>

@@ -4,7 +4,6 @@ import { describeDbTests, type DbConnection, schema } from "@/test/base";
 import { transactionWithHistory } from "@/db-functions/history";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useTimingObjects } from "@/hooks";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import {
     InspectorPageProvider,
@@ -33,13 +32,8 @@ vi.mock("@/components/timeline/audio/AudioPlayer", () => ({
  * Beats 1..16 of 0.5 s; after the blank file's page at beat 0, pages start on beats 1, 5, 9 and
  * 13, so the flags are 0, 5, 9, 13 and 17 (beat b starts at (b - 1) * 0.5 s).
  */
-const seedShow = (db: DbConnection, timelineMode: boolean) =>
+const seedShow = (db: DbConnection) =>
     transactionWithHistory(db, "seedShow", async (tx) => {
-        await tx.delete(schema.workspace_settings);
-        await tx.insert(schema.workspace_settings).values({
-            id: 1,
-            json_data: JSON.stringify({ timelineMode }),
-        });
         await tx.insert(schema.beats).values(
             Array.from({ length: 16 }, (_, i) => ({
                 id: i + 1,
@@ -70,20 +64,17 @@ const frame = () =>
     });
 
 describeDbTests("usePlayingPage", (it) => {
-    const render = async (db: DbConnection, wrapper: never, on = true) => {
-        await seedShow(db, on);
+    const render = async (db: DbConnection, wrapper: never) => {
+        await seedShow(db);
         const { result } = renderHook(
             () => ({
                 playingPage: usePlayingPage(),
                 timing: useTimingObjects()!,
                 playing: useIsPlaying()!,
-                timelineMode: useTimelineMode(),
             }),
             { wrapper },
         );
         await waitFor(() => expect(result.current.timing.pages.length).toBe(5));
-        if (on)
-            await waitFor(() => expect(result.current.timelineMode).toBe(true));
         return result;
     };
 
@@ -118,25 +109,11 @@ describeDbTests("usePlayingPage", (it) => {
         expect(result.current.playingPage).toBeNull();
     });
 
-    it("is null in page mode, where useAnimation selects pages as it plays", async ({
-        db,
-        wrapper,
-    }) => {
-        const result = await render(db, wrapper as never, false);
-        act(() => {
-            result.current.playing.setIsPlaying(true);
-        });
-        audio.startInfo.current = {};
-        audio.seconds = 3.1;
-        frame();
-        expect(result.current.playingPage).toBeNull();
-    });
-
     it("is the inspector's page while playing, with its edits paused, and the selected page after", async ({
         db,
         wrapper,
     }) => {
-        await seedShow(db, true);
+        await seedShow(db);
         const Base = wrapper as unknown as React.FC<{
             children: React.ReactNode;
         }>;
@@ -146,7 +123,6 @@ describeDbTests("usePlayingPage", (it) => {
                 selected: useSelectedPage()!,
                 timing: useTimingObjects()!,
                 playing: useIsPlaying()!,
-                timelineMode: useTimelineMode(),
             }),
             {
                 wrapper: ({ children }) => (
@@ -159,7 +135,6 @@ describeDbTests("usePlayingPage", (it) => {
             },
         );
         await waitFor(() => expect(result.current.timing.pages.length).toBe(5));
-        await waitFor(() => expect(result.current.timelineMode).toBe(true));
         act(() => {
             result.current.selected.setSelectedPage({ id: 3 });
         });

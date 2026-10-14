@@ -29,7 +29,6 @@ import {
     selectionOfPage,
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import {
@@ -71,7 +70,6 @@ import { keepHereMenu, usePageKeepChains } from "./PageKeepChain";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
-import TimelineControls from "./TimelineControls";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useBasicLocksStore } from "@/timeline/basicLocks";
 import { useBasicPoints } from "./useBasicPoints";
@@ -80,21 +78,6 @@ import type Page from "@/global/classes/Page";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 const NO_CLIPS: TimelineInput[] = [];
-
-/**
- * TEMPORARY, the Basic transport study (V-207, ~/ux-sim/basic-transport): `"side"` puts the
- * original bar's controls on the left instead of the timeline's transport. Read from
- * localStorage once; remove with the study.
- */
-function basicTransportStudy(): "top" | "side" {
-    try {
-        return localStorage.getItem("openmarch.basicTransport") === "side"
-            ? "side"
-            : "top";
-    } catch {
-        return "top";
-    }
-}
 
 /**
  * Basic's marks on the page boxes (UI-19): the selected marchers' mid-page positions, with
@@ -162,8 +145,7 @@ export const toTimelineSelection = (
           : null;
 
 /**
- * The timeline (ui.md, from the 0.2 branch) for a file whose timeline dev flag is on. It takes the
- * file's real beats, pages and measures, and plays through the app's existing audio clock. Its
+ * The timeline (ui.md, from the 0.2 branch). It takes the file's real beats, pages and measures, and plays through the app's existing audio clock. Its
  * selection is `useTimelineSelectionStore`'s (UI-9): the initial page box selects home, a page box
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
  * **+** after the free paused playhead adds a page flag there and selects the new page; a page
@@ -179,7 +161,6 @@ export default function TimelineModePanel() {
     // Expert parts (clips, the loop, isolation, moves): docs/timeline/research/basic-mode
     const basic = useIsBasicMode();
     const basicExtras = useBasicTimelineExtras(pages);
-    const sideTransport = basic && basicTransportStudy() === "side";
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
     // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
@@ -236,7 +217,7 @@ export default function TimelineModePanel() {
     );
     const timelines = useTimelineTracks({
         database: db,
-        enabled: useTimelineMode(),
+        enabled: true,
     });
     // UI-10: a page box already stands for its page timeline, so only the others get a clip.
     // UI-14: each is a move, labelled by its name ("Move 2" since it was made), named for
@@ -422,12 +403,10 @@ export default function TimelineModePanel() {
                 };
             }}
         >
-            {/* Basic transport study (V-207): the original's controls on the left */}
-            {sideTransport && <TimelineControls />}
             <TimelineWaveformProvider waveform={waveform ?? NO_WAVEFORM}>
                 <PlayingTimeline
                     mode={basic ? "basic" : compact ? "collapsed" : "expanded"}
-                    showTransport={!sideTransport}
+                    showTransport
                     basic={basic}
                     {...(basic
                         ? basicExtras

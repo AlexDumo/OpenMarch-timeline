@@ -1,3 +1,4 @@
+import { TIMELINE_HEADROOM_HEIGHT } from "../TimelineGeometry";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { keepOnPage } from "@/timeline/timelineKeepCommands";
@@ -353,20 +354,18 @@ describe("the chains on the page boxes", () => {
         const [button] = chains();
         const ruler = screen.getByTestId("timeline-page-ruler");
         const pennant = screen.getByTestId("timeline-start-pennant");
-        // The flag's x in the layer the pennant and the playhead are drawn in
-        const flagX = parseFloat(pennant.style.left);
         const box = screen.getByRole("button", { name: "Page 3" });
-        // The box starts on that flag
-        expect(parseFloat(ruler.style.left) + parseFloat(box.style.left)).toBe(
-            flagX,
-        );
+        // The flag's x in the layer the pennant and the playhead are drawn in: the box starts on
+        // it, and the pennant's handle starts 1px left of it
+        const flagX = parseFloat(ruler.style.left) + parseFloat(box.style.left);
+        expect(parseFloat(pennant.style.left)).toBe(flagX - 1);
+        // UI-20: the pennant sits in the headroom strip above the page row, so the chain (in the
+        // page row) never meets it
+        expect(pennant.style.height).toBe(`${TIMELINE_HEADROOM_HEIGHT}px`);
         // The chain's x in that layer: the ruler starts `initialPageWidth` left, inside its 1px border
         const chainX =
             parseFloat(ruler.style.left) + 1 + parseFloat(button!.style.left);
-        // The pennant's handle is 14px wide from the flag, and the 16px chain reaches up into its
-        // 14px height, so the chain must start past it
-        expect(pennant.className).toMatch(/\bw-14\b/);
-        expect(pennant.className).toMatch(/\bh-14\b/);
+        // Still past where the pennant's 14px handle would reach
         expect(chainX).toBeGreaterThan(flagX + 14);
         // The playhead's handle (and the start flag's, and the grip at most) is 12px centered on
         // its beat: 6px into the box

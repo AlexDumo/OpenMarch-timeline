@@ -9,7 +9,7 @@ import {
     probed,
     timelineSelection,
 } from "@/test/featureHarness";
-import { convertPagesToTimeline } from "@/timeline/convert/writePageConversion";
+import { convertPagesToTimeline } from "@/test/convertPages";
 import tolgee from "@/global/singletons/Tolgee";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useAddPageFlag } from "@/hooks/queries/usePageFlags";
@@ -85,20 +85,14 @@ function PanelCommands() {
     return null;
 }
 
-/** Turns the timeline flag on, converts the show, and mounts the panel's **+** in `mode` */
+/** Converts the show and mounts the panel's **+** in `mode` */
 const setUp = async (db: DbConnection, mode: "basic" | "expert") => {
-    await db.delete(schema.workspace_settings);
-    await db.insert(schema.workspace_settings).values({
-        id: 1,
-        json_data: JSON.stringify({ timelineMode: true }),
-    });
     await convertPagesToTimeline(db);
     act(() => {
         useEditorModeStore.setState({ mode, loaded: true });
     });
     mountFeature(<PanelCommands />);
     await waitFor(() => {
-        expect(probed().timelineMode).toBe(true);
         expect(probed().pages.length).toBeGreaterThan(2);
         expect(useTimelineResolverStore.getState().status).toBe("ready");
     });

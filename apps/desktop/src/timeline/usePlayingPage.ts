@@ -6,22 +6,20 @@ import {
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import type Page from "@/global/classes/Page";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { beatAtTime } from "./timeMap";
 import { pageAtBeatOfFlags, pageFlags } from "./timelinePlayhead";
 
 /**
  * While timeline-mode playback runs, the page being played: the page box holding the live beat
- * (`pageAtPlayhead`, the rule the readout and Basic's edits use). `null` while paused, in page
- * mode, and before the audio starts.
+ * (`pageAtPlayhead`, the rule the readout and Basic's edits use). `null` while paused and before
+ * the audio starts.
  *
- * The selected page doesn't follow playback in timeline mode (`useTimelinePageBridge` waits until
+ * The selected page doesn't follow playback (`useTimelinePageBridge` waits until
  * it stops, as selecting a page re-renders everything that reads it), so the inspector reads this
  * instead while playing, through `InspectorPageProvider` (one loop for the whole inspector). It
  * polls the audio position once per frame and re-renders its caller only when the page changes.
  */
 export function usePlayingPage(): Page | null {
-    const timelineMode = useTimelineMode();
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
     const { pages, beats } = useTimingObjects();
     const flags = useMemo(() => pageFlags(pages), [pages]);
@@ -34,7 +32,7 @@ export function usePlayingPage(): Page | null {
             lastPageId.current = id;
             setPageId(id);
         };
-        if (!timelineMode || !isPlaying) {
+        if (!isPlaying) {
             set(null);
             return;
         }
@@ -52,7 +50,7 @@ export function usePlayingPage(): Page | null {
         };
         update();
         return () => cancelAnimationFrame(frame);
-    }, [timelineMode, isPlaying, flags, beats]);
+    }, [isPlaying, flags, beats]);
 
     if (pageId === null) return null;
     return pages.find((p) => p.id === pageId) ?? null;

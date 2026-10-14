@@ -1,7 +1,11 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Popover from "@radix-ui/react-popover";
 import {
+    ArrowLineLeftIcon,
+    ArrowLineRightIcon,
     ArrowsOutLineHorizontalIcon,
+    CaretLeftIcon,
+    CaretRightIcon,
     DotsThreeIcon,
     HouseIcon,
     PushPinIcon,
@@ -13,7 +17,11 @@ import {
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
-import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
+import {
+    Keycaps,
+    ShortcutTooltip,
+    TransportTooltipProvider,
+} from "./ShortcutTooltip";
 import {
     isPlainNudgeKey,
     isTyping,
@@ -53,6 +61,10 @@ import {
     isPageSnapDisabled,
     snapBoundary,
     snapRangeOffset,
+    TIMELINE_HEADROOM_HEIGHT,
+    TIMELINE_PAGE_ROW_BOTTOM,
+    TIMELINE_PAGE_ROW_HEIGHT,
+    TIMELINE_PAGE_ROW_TOP,
 } from "./TimelineGeometry";
 import {
     KEEP_MENU_EVENTS,
@@ -131,6 +143,11 @@ const SKIP_BACK_ICON = <SkipBackIcon size={16} />;
 const PLAY_ICON = <PlayIcon size={18} weight="fill" />;
 const STOP_ICON = <StopIcon size={16} weight="fill" />;
 const SKIP_FORWARD_ICON = <SkipForwardIcon size={16} />;
+// Previous and Next while Shift (the start or end of the show) or Alt (a beat) is held
+const START_ICON = <ArrowLineLeftIcon size={16} />;
+const END_ICON = <ArrowLineRightIcon size={16} />;
+const BEAT_BACK_ICON = <CaretLeftIcon size={16} weight="bold" />;
+const BEAT_FORWARD_ICON = <CaretRightIcon size={16} weight="bold" />;
 const FIT_ICON = <ArrowsOutLineHorizontalIcon size={16} />;
 const HOUSE_ICON = <HouseIcon size={14} aria-hidden="true" />;
 /**
@@ -155,6 +172,10 @@ const PLAY_FROM_FLAG_ICON = (
 export const TRANSPORT_SHORTCUTS = {
     previousPage: "Q",
     nextPage: "E",
+    firstPage: "Alt + Q",
+    lastPage: "Alt + E",
+    previousBeat: "Shift + Q",
+    nextBeat: "Shift + E",
     play: "Space",
     playPage: "Shift + Space",
     loop: "C",
@@ -164,29 +185,47 @@ const TransportButton = memo(function TransportButton({
     label,
     shortcut,
     hint,
+    hideLabel,
+    keyShortcut,
     children,
     onClick,
     pressed,
     testId,
+    navigation,
 }: {
     label: string;
     /** The shortcut the tooltip shows as keycaps */
     shortcut?: string;
-    /** A second tooltip line */
-    hint?: string;
+    /** A second tooltip line, or a guide */
+    hint?: ReactNode;
+    /** The shortcut for assistive tech when the tooltip shows it elsewhere (in a guide) */
+    keyShortcut?: string;
+    /** The tooltip is just `hint`, without the label above it */
+    hideLabel?: boolean;
     children: ReactNode;
     onClick?: (event: ReactMouseEvent) => void;
     pressed?: boolean;
     testId?: string;
+    /** Previous or Next (`useHeldNavigationMode`) */
+    navigation?: boolean;
 }) {
     return (
-        <ShortcutTooltip label={label} shortcut={shortcut} hint={hint}>
+        <ShortcutTooltip
+            label={label}
+            shortcut={shortcut}
+            hint={hint}
+            hideLabel={hideLabel}
+        >
             <button
                 type="button"
                 aria-label={label}
-                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
+                aria-keyshortcuts={(shortcut ?? keyShortcut)?.replace(
+                    /\s*\+\s*/g,
+                    "+",
+                )}
                 aria-pressed={pressed}
                 data-testid={testId}
+                {...(navigation ? { [NAVIGATION_BUTTON_ATTRIBUTE]: "" } : {})}
                 // UI-17 follow-up: a click doesn't take keyboard focus, so Space after clicking
                 // a transport button is still the app's Play, not a second press of the button
                 onMouseDown={(event) => event.preventDefault()}
@@ -203,6 +242,187 @@ const TransportButton = memo(function TransportButton({
     );
 });
 
+/** What Previous and Next do: step a page, or with Shift a beat, with Alt go to the start or end */
+type TransportNavigationMode = "page" | "edge" | "beat";
+
+const navigationMode = (event: {
+    readonly shiftKey: boolean;
+    readonly altKey: boolean;
+}): TransportNavigationMode =>
+    event.altKey ? "edge" : event.shiftKey ? "beat" : "page";
+
+/** Marks Previous and Next, so a held Alt over them can be kept from the menu bar */
+const NAVIGATION_BUTTON_ATTRIBUTE = "data-transport-navigation";
+
+/**
+ * The modifier held now, as Previous and Next would read it. Only a change re-renders, so key
+ * repeats and other keys cost nothing; losing focus lets go of it. A pointer event re-reads it
+ * too, in case the window missed a key going up.
+ *
+ * On Windows and Linux the window's menu bar hides until Alt is pressed and let go on its own, so
+ * holding Alt over Previous or Next to see the start and end would open the menu and take the
+ * keyboard. Over those two buttons the app keeps Alt to itself: Electron only lets the menu see
+ * keys the page didn't handle.
+ */
+function useHeldNavigationMode(enabled: boolean): TransportNavigationMode {
+    const [mode, setMode] = useState<TransportNavigationMode>("page");
+    useEffect(() => {
+        if (!enabled) return;
+        const read = (event: KeyboardEvent | PointerEvent) =>
+            setMode(
+                event.ctrlKey || event.metaKey ? "page" : navigationMode(event),
+            );
+        const onKey = (event: KeyboardEvent) => {
+            if (
+                event.key === "Alt" &&
+                !isMac() &&
+                document.querySelector(`[${NAVIGATION_BUTTON_ATTRIBUTE}]:hover`)
+            )
+                event.preventDefault();
+            read(event);
+        };
+        const onBlur = () => setMode("page");
+        window.addEventListener("keydown", onKey, true);
+        window.addEventListener("keyup", onKey, true);
+        window.addEventListener("pointermove", read, true);
+        window.addEventListener("pointerdown", read, true);
+        window.addEventListener("blur", onBlur);
+        return () => {
+            window.removeEventListener("keydown", onKey, true);
+            window.removeEventListener("keyup", onKey, true);
+            window.removeEventListener("pointermove", read, true);
+            window.removeEventListener("pointerdown", read, true);
+            window.removeEventListener("blur", onBlur);
+            setMode("page");
+        };
+    }, [enabled]);
+    return mode;
+}
+
+const NAVIGATION_TARGETS = {
+    page: ["previous-page", "next-page"],
+    edge: ["first-page", "last-page"],
+    beat: ["previous-beat", "next-beat"],
+} as const satisfies Record<
+    TransportNavigationMode,
+    readonly [TimelineNavigation, TimelineNavigation]
+>;
+
+interface NavigationGuideRow {
+    readonly mode: TransportNavigationMode;
+    readonly icon: ReactNode;
+    readonly label: string;
+    /** The shortcut as keycaps */
+    readonly shortcut: string;
+}
+
+/** What Previous (or Next) does with each modifier, in the order the tooltip lists them */
+const navigationGuide = (back: boolean): readonly NavigationGuideRow[] => {
+    const alt = isMac() ? "Option" : "Alt";
+    return [
+        {
+            mode: "page",
+            icon: back ? SKIP_BACK_ICON : SKIP_FORWARD_ICON,
+            label: back ? "Previous page" : "Next page",
+            shortcut: back
+                ? TRANSPORT_SHORTCUTS.previousPage
+                : TRANSPORT_SHORTCUTS.nextPage,
+        },
+        {
+            mode: "beat",
+            icon: back ? BEAT_BACK_ICON : BEAT_FORWARD_ICON,
+            label: back ? "Previous beat" : "Next beat",
+            shortcut: back
+                ? TRANSPORT_SHORTCUTS.previousBeat
+                : TRANSPORT_SHORTCUTS.nextBeat,
+        },
+        {
+            mode: "edge",
+            icon: back ? START_ICON : END_ICON,
+            label: back ? "Start of the show" : "End of the show",
+            shortcut: (back
+                ? TRANSPORT_SHORTCUTS.firstPage
+                : TRANSPORT_SHORTCUTS.lastPage
+            ).replace("Alt", alt),
+        },
+    ];
+};
+
+/**
+ * The tooltip's guide to Previous and Next: each icon, what it does, its shortcut and its click,
+ * with the row the held modifier picks in the accent color.
+ */
+function NavigationGuide({
+    rows,
+    mode,
+}: {
+    rows: readonly NavigationGuideRow[];
+    mode: TransportNavigationMode;
+}) {
+    return (
+        <span
+            data-testid="timeline-navigation-guide"
+            className="grid w-max grid-cols-[auto_auto_auto] items-center gap-x-8 gap-y-4"
+        >
+            {rows.map((row) => (
+                <span
+                    key={row.mode}
+                    data-active={row.mode === mode || undefined}
+                    className={clsx(
+                        "col-span-3 grid grid-cols-subgrid items-center",
+                        row.mode === mode ? "text-accent" : "text-text",
+                    )}
+                >
+                    <span aria-hidden="true" className="flex">
+                        {row.icon}
+                    </span>
+                    <span className="text-[12px]">{row.label}</span>
+                    <Keycaps shortcut={row.shortcut} plus />
+                </span>
+            ))}
+        </span>
+    );
+}
+
+/**
+ * Previous and Next. Q and E step a page; Shift (Shift+click, Shift+Q/E) steps a beat and Alt
+ * (Alt+click, Alt+Q/E, also Home and End) goes to the start or end of the show. Holding either modifier swaps the icon
+ * and label to say so, and the tooltip is a guide to all three (`NavigationGuide`). Kept apart
+ * from the transport so only these two re-render for it.
+ */
+const TransportNavigationButton = memo(function TransportNavigationButton({
+    direction,
+    onNavigate,
+}: {
+    direction: "previous" | "next";
+    onNavigate?: (direction: TimelineNavigation) => void;
+}) {
+    const mode = useHeldNavigationMode(onNavigate != null);
+    const back = direction === "previous";
+    const onClick = useCallback(
+        (event: ReactMouseEvent) =>
+            onNavigate?.(
+                NAVIGATION_TARGETS[navigationMode(event)][back ? 0 : 1],
+            ),
+        [back, onNavigate],
+    );
+    const guide = navigationGuide(back);
+    const row = guide.find((r) => r.mode === mode)!;
+    return (
+        <TransportButton
+            label={row.label}
+            keyShortcut={row.shortcut}
+            hideLabel
+            hint={<NavigationGuide rows={guide} mode={mode} />}
+            testId={`timeline-${direction}`}
+            navigation
+            onClick={onNavigate ? onClick : undefined}
+        >
+            {row.icon}
+        </TransportButton>
+    );
+});
+
 /** Below this width the transport folds its secondary controls into "⋯" (Bitwig's rule) */
 const TRANSPORT_FOLD_PX = 640;
 /** Below this width the readout drops the measure */
@@ -215,8 +435,8 @@ const TRANSPORT_TIGHT_PX = 500;
  * which is also the go-to box (click it or press G, then type a page, "m23" or a rehearsal mark);
  * then Fit and the caller's view controls (Compact). The play and page buttons, the accessories
  * and the readout never leave: on a narrow panel the rest folds into "⋯". Shift+click on Previous
- * or Next goes to the first or last page (as Shift+Q/E do). While playing, page navigation jumps
- * playback to the flag.
+ * or Next steps a beat and Alt+click goes to the start or end of the show, as Shift+Q/E and
+ * Alt+Q/E do (`TransportNavigationButton`). While playing, navigation jumps playback there.
  *
  * With looping on, Play loops the loop and shows its bar in its icon (UI-17).
  */
@@ -334,16 +554,6 @@ export const TimelineTransport = memo(function TimelineTransport({
         }
         setGoTo(null);
     };
-    const previousPage = useCallback(
-        (event: ReactMouseEvent) =>
-            onNavigate?.(event.shiftKey ? "first-page" : "previous-page"),
-        [onNavigate],
-    );
-    const nextPage = useCallback(
-        (event: ReactMouseEvent) =>
-            onNavigate?.(event.shiftKey ? "last-page" : "next-page"),
-        [onNavigate],
-    );
     const togglePlaying = useCallback(
         () => onPlayingChange?.(!isPlaying),
         [isPlaying, onPlayingChange],
@@ -417,17 +627,10 @@ export const TimelineTransport = memo(function TimelineTransport({
                 className="border-stroke flex h-32 min-w-0 shrink-0 items-center gap-6 border-b px-6"
             >
                 <div className="flex shrink-0 items-center gap-2">
-                    <TransportButton
-                        label="Previous page"
-                        shortcut={TRANSPORT_SHORTCUTS.previousPage}
-                        // The plain click is the common step (owner, UI-17, ui.md); ⏮ reads as
-                        // "the start" to some, so the hint names the start's ways (basic-mode
-                        // README, V-210)
-                        hint="One page back. For the start of the show: Shift+click, Shift+Q or the house"
-                        onClick={onNavigate ? previousPage : undefined}
-                    >
-                        {SKIP_BACK_ICON}
-                    </TransportButton>
+                    <TransportNavigationButton
+                        direction="previous"
+                        onNavigate={onNavigate}
+                    />
                     <TransportButton
                         label={
                             isPlaying
@@ -462,14 +665,10 @@ export const TimelineTransport = memo(function TimelineTransport({
                               ? PLAY_FROM_FLAG_ICON
                               : PLAY_ICON}
                     </TransportButton>
-                    <TransportButton
-                        label="Next page"
-                        shortcut={TRANSPORT_SHORTCUTS.nextPage}
-                        hint="One page forward. For the last page: Shift+click or Shift+E"
-                        onClick={onNavigate ? nextPage : undefined}
-                    >
-                        {SKIP_FORWARD_ICON}
-                    </TransportButton>
+                    <TransportNavigationButton
+                        direction="next"
+                        onNavigate={onNavigate}
+                    />
                 </div>
                 {(accessories != null || (secondary != null && !folded)) && (
                     <>
@@ -862,7 +1061,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     keepChains,
     scrubLine,
     pageFlagMove,
-    height = 28,
+    height = TIMELINE_PAGE_ROW_BOTTOM,
     flagSnapPlayhead,
 }: {
     pages: readonly TimelinePageMarker[];
@@ -1077,8 +1276,10 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
             <div
                 data-testid="timeline-page-ruler"
                 // Clipped without being a scroll container, so labels can stick to the viewport
-                className="border-stroke bg-fg-2 rounded-6 absolute top-0 h-28 overflow-clip border font-mono"
+                className="border-stroke bg-fg-2 rounded-6 absolute overflow-clip border font-mono"
                 style={{
+                    top: TIMELINE_PAGE_ROW_TOP,
+                    height: TIMELINE_PAGE_ROW_HEIGHT,
                     left: -initialPageWidth,
                     width: beatCount * pixelsPerBeat + initialPageWidth,
                 }}
@@ -1262,7 +1463,8 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
         // Each number starts just right of its bar line, so the line doesn't cross it
         <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-[31px] h-16 font-mono"
+            className="pointer-events-none absolute inset-x-0 h-16 font-mono"
+            style={{ top: TIMELINE_PAGE_ROW_BOTTOM + 3 }}
         >
             {visibleMeasures.map((measure) => (
                 <span
@@ -1310,12 +1512,16 @@ export const TimelinePageLines = memo(function TimelinePageLines({
                 .map((page) => (
                     <span
                         key={page.id}
-                        className="bg-text absolute top-28 w-px opacity-[0.24]"
+                        className="bg-text absolute w-px opacity-[0.24]"
                         style={{
+                            top: TIMELINE_PAGE_ROW_BOTTOM,
                             left: Math.round(
                                 beatToX(page.atBeat, pixelsPerBeat),
                             ),
-                            height: Math.max(0, height - 28),
+                            height: Math.max(
+                                0,
+                                height - TIMELINE_PAGE_ROW_BOTTOM,
+                            ),
                         }}
                     />
                 ))}
@@ -2004,7 +2210,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     startFlagBeatIndex,
     startPinned = false,
     onUnpin,
-    pinTop = 30,
+    pinTop = TIMELINE_PAGE_ROW_BOTTOM + 2,
     pinSize = 18,
     beatCount,
     pixelsPerBeat,
@@ -2307,13 +2513,13 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
                     style={{ left: x, height: hitHeight }}
                 >
+                    {/* UI-20: 2px, from the headroom strip down */}
                     <span
                         className={clsx(
-                            "pointer-events-none absolute top-px left-1/2",
+                            "pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2",
                             START_INK.bg,
-                            "w-px",
                         )}
-                        style={{ height: Math.max(0, height - 1) }}
+                        style={{ height }}
                     />
                 </button>
                 {startPinned && (
@@ -2342,9 +2548,11 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                         />
                     </button>
                 )}
-                {/* The pennant is its own handle above the playhead's (z-50): after Stop the flag
-                    is drawn on the playhead, and this is the part of it that can be grabbed. Its
-                    left edge is drawn on the stem's pixels, so the two read as one shape */}
+                {/* The pennant is its own handle in the headroom strip (UI-20), above the
+                    playhead's (z-50) and the loop's ends (z-58): after Stop the flag is drawn on
+                    the playhead, and on a page flag the grip takes the page row, so this is the
+                    part of it that can always be grabbed. Its left edge is drawn on the stem's
+                    pixels, so the two read as one shape */}
                 <button
                     type="button"
                     tabIndex={-1}
@@ -2354,27 +2562,22 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     onKeyDown={undefined}
-                    className="pointer-events-auto absolute top-0 z-[55] h-14 w-14 touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize! disabled:cursor-default!"
-                    style={{ left: x }}
+                    className="pointer-events-auto absolute top-0 z-[59] w-14 touch-none border-0 bg-transparent p-0 outline-hidden enabled:cursor-ew-resize! disabled:cursor-default!"
+                    style={{ left: x - 1, height: TIMELINE_HEADROOM_HEIGHT }}
                 >
                     <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 10 10"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
                         aria-hidden="true"
                         className={clsx(
-                            "absolute top-px left-0",
+                            "absolute top-0 left-0",
                             START_INK.text,
                         )}
                     >
-                        {/* A hollow right triangle whose top lines up with the page boxes' (1px down,
-                            inside the ruler's border): a 1px outline whose left side is the 1px stem,
-                            a fill, not a stroke, so no edge spills past it */}
-                        <path
-                            d="M0 0 L10 0 L0 10 Z M1 1 L1 7.59 L7.59 1 Z"
-                            fill="currentColor"
-                            fillRule="evenodd"
-                        />
+                        {/* A filled right triangle on the strip's top edge, flush with the loop
+                            bar's top; its left side is the 2px stem */}
+                        <path d="M0 0 L12 0 L0 12 Z" fill="currentColor" />
                     </svg>
                 </button>
             </>
@@ -2403,15 +2606,14 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             <span
                 ref={tintRef}
                 aria-hidden="true"
-                className={clsx(
-                    // 1px down, inside the ruler's border, like the flag and the page boxes
-                    "absolute top-px z-30 origin-left",
-                    "bg-accent/8",
-                )}
+                // From the page boxes' top (1px down, inside the ruler's border): the headroom
+                // strip above stays clear for the flags' tops (UI-20)
+                className="bg-accent/8 absolute z-30 origin-left"
                 style={{
                     left: startX,
                     width: endX - startX,
-                    height: height - 1,
+                    top: TIMELINE_PAGE_ROW_TOP + 1,
+                    height: Math.max(0, height - TIMELINE_PAGE_ROW_TOP - 1),
                 }}
             />
             <div className="pointer-events-none absolute inset-0">
@@ -2719,20 +2921,20 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 height: Math.min(hitHeight, height),
             }}
         >
-            {/* The line runs from the page boxes' top (1px down, inside the ruler's border), and
-                the head is a fill centered on the line's pixel, so its tip runs into the line */}
+            {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
+                the line, so its tip runs into the line */}
             <span
-                className="bg-accent pointer-events-none absolute top-px left-1/2 w-px"
-                style={{ height: Math.max(0, height - 1) }}
+                className="bg-accent pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2"
+                style={{ height }}
             />
             <svg
-                width="9"
-                height="6"
-                viewBox="0 0 9 6"
+                width="12"
+                height="11"
+                viewBox="0 0 12 11"
                 aria-hidden="true"
-                className="text-accent absolute top-px left-[calc(50%-4px)]"
+                className="text-accent pointer-events-none absolute top-0 left-[calc(50%-6px)]"
             >
-                <path d="M0 0 L9 0 L4.5 6 Z" fill="currentColor" />
+                <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
             </svg>
         </button>
     );
@@ -3054,12 +3256,13 @@ export const TimelineRangePreview = memo(function TimelineRangePreview({
         <div
             data-testid="timeline-range-preview"
             aria-hidden="true"
-            className="bg-accent/15 border-accent pointer-events-none absolute top-28 z-30 border-x"
+            className="bg-accent/15 border-accent pointer-events-none absolute z-30 border-x"
             style={{
                 left: range.startBeatIndex * pixelsPerBeat,
                 width:
                     (range.endBeatIndex - range.startBeatIndex) * pixelsPerBeat,
-                height: Math.max(0, height - 28),
+                top: TIMELINE_PAGE_ROW_BOTTOM,
+                height: Math.max(0, height - TIMELINE_PAGE_ROW_BOTTOM),
             }}
         />
     );

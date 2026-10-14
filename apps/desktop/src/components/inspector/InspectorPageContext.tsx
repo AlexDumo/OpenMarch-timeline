@@ -3,7 +3,7 @@ import { useSelectedPage } from "@/context/SelectedPageContext";
 import type Page from "@/global/classes/Page";
 import { usePlayingPage } from "@/timeline/usePlayingPage";
 
-/** The page being played in timeline mode, or `null` (see `usePlayingPage`) */
+/** The page being played, or `null` (see `usePlayingPage`) */
 const PlayingPageContext = createContext<Page | null>(null);
 
 /**

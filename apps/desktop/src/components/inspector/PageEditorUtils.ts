@@ -1,6 +1,5 @@
 import {
     readPageGrid,
-    timelineModeInTransaction,
     withTimelinePageRipple,
 } from "@/db-functions/timelineRipple";
 import {
@@ -41,7 +40,6 @@ export type SplitPageArgs = {
  * beat) on the page box holding it, before the page rows change.
  */
 const splitMovesAtNewPage = async (tx: DbTransaction, startBeatId: number) => {
-    if (!(await timelineModeInTransaction(tx))) return;
     const grid = await readPageGrid(tx);
     const beat = grid.beatIds.indexOf(startBeatId);
     const box = grid.pages.find((p) => p.start < beat && beat < p.end);

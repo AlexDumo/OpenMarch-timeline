@@ -23,21 +23,17 @@ mode, next to the full timeline (**Expert**), with:
 5. **A setting, Basic or Expert, with screenshots,** asked on first launch in a welcome flow
    before any show is created.
 
-## What "the old timeline" is today, and why Basic isn't it
+## Why Basic isn't the old timeline
 
-Today the page-box bar is **page mode**: files whose `workspace_settings.timelineMode` flag is off.
-It has its own data (`marcher_pages`, `pathways`, `midsets`), its own write paths and its own
-drawing (`renderMarchers`, keyframes for the selected page ±2). None of the timeline work reaches
-it: not the resolver and its cache, idle warming, scrubbing, or holding. Old files only become
-timeline files when the `OPENMARCH_CONVERT_ON_OPEN` gate is on.
+The old page-box bar was **page mode**: its own data (`marcher_pages`, `pathways`, `midsets`),
+write paths and drawing, untouched by the timeline work. Since #136 (timelines only) page mode is
+gone: every show is a timeline file, and an old show is converted when it opens, after the person
+confirms (with an untouched `.pre-conversion.dots` copy beside it).
 
-So **Basic is not page mode.** Basic is a UI over timeline data. A Basic show is a timeline file
-(`timelineMode` on), drawn and played by the resolver like Expert. What changes is the bottom panel
-and which edits it can make. That gives Basic all the rendering and holding work for free, and it
-makes switching modes free: no conversion, the same file.
-
-- _Owner:_ when Basic ships, **convert on open is on for everyone** (existing backup and loss
-  report). Page mode stays in the code as a fallback only and is removed later.
+So **Basic is not page mode.** Basic is a UI over timeline data, drawn and played by the resolver
+like Expert. What changes is the bottom panel and which edits it can make. That gives Basic all the
+rendering and holding work for free, and it makes switching modes free: no conversion, the same
+file.
 
 ## The mode
 
@@ -61,20 +57,19 @@ of page boxes sized by duration, with the music inside them.
   row.
 - _Owner:_ **dragging on the body (the audio or the counts) scrubs**, and a click there seeks.
   **Clicking the header selects the page**: the playhead goes to its flag, so edits land on the
-  page, as in page mode.
+  page, as the old page bar did.
 - _Owner:_ **scrubs snap to every count** (Expert snaps to downbeats and page lines), since a
   mid-page edit happens at a count.
 - _Owner:_ **without audio the boxes keep their height** and show only the count ticks, so nothing
   jumps when audio loads.
-- **Transport:** _owner leaning to Expert's transport bar_ ("no real reason to keep the
-  original"), open to either. A simulated-user A/B compares it with the original's control block
-  on the left (study: `~/ux-sim/basic-transport/`).
+- **Transport:** Expert's transport bar. A simulated-user A/B preferred it 4 of 4 over the
+  original's control block on the left (`~/ux-sim/basic-transport/`); that block went with page
+  mode (#136), and its study switch with it.
 - _Owner, 2026-10-12:_ **⏮ stays the previous page and ⏭ the next page** in Basic, as in Expert
-  (UI-17); **Shift+click goes to the start** (⏮) **or the last page's flag** (⏭) (V-210). Basic
-  testers had read ⏮ as "the start": one pressed ⏮ then Play to watch the whole show and saw one
-  page (`~/ux-sim/basic-past-flag/rosa-after/r7/14-click.png`, LOG.md lines 50 to 52). The
-  tooltips say "One page back" and name the ways to the start, and the house's tooltip says it's
-  the start of the show.
+  (UI-17, V-210). Since #178 the same buttons step a beat with Shift and go to the start or end
+  of the show with Alt (as Q/E), and the tooltip lists all three. Basic testers had read ⏮ as "the
+  start": one pressed ⏮ then Play to watch the whole show and saw one page
+  (`~/ux-sim/basic-past-flag/rosa-after/r7/14-click.png`, LOG.md lines 50 to 52).
 - On or in the boxes: the status chip, the Expert mark, mid-page ticks (right-click
   **Remove this count's position**), the page menu (delete, subset), and dragging a flag to
   change a page's length (UI-16).
@@ -221,11 +216,11 @@ card. Shared gaps in both: a move across a page line (0 of 4 found a way), the u
 
 ## Work packages
 
-| ID  | What                                                                                                                                                                                                                        | Depends on         |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| B1  | `editorMode` setting: store, hook, Settings row (no screenshots yet)                                                                                                                                                        | none               |
-| B2  | Simple predicate + the point writer + Remove position, with tests                                                                                                                                                           | none               |
-| B3  | Basic panel in timeline mode; `planCanvasEdit` returns the point target in Basic                                                                                                                                            | B1, B2             |
-| B4  | Locks: canvas lock, toast, page-box Expert mark, open banner                                                                                                                                                                | B2, B3             |
-| B5  | Welcome flow (mode + analytics), screenshots in welcome and Settings                                                                                                                                                        | B1, B3             |
-| B6  | Convert on open on by default; page mode as fallback. This is P9.4 (phases/09-flip.md): its prerequisites (packaged smoke run, the owner's manual pass on a real show) still stand, so it ships as P9.4, not in this branch | P9.4 prerequisites |
+| ID  | What                                                                                                      | Depends on |
+| --- | --------------------------------------------------------------------------------------------------------- | ---------- |
+| B1  | `editorMode` setting: store, hook, Settings row (no screenshots yet)                                      | none       |
+| B2  | Simple predicate + the point writer + Remove position, with tests                                         | none       |
+| B3  | Basic panel in timeline mode; `planCanvasEdit` returns the point target in Basic                          | B1, B2     |
+| B4  | Locks: canvas lock, toast, page-box Expert mark, open banner                                              | B2, B3     |
+| B5  | Welcome flow (mode + analytics), screenshots in welcome and Settings                                      | B1, B3     |
+| B6  | Convert on open for everyone: done by #136 (timelines only; convert after confirming), not in this branch | —          |
