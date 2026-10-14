@@ -1,8 +1,4 @@
-import { getTableName, sql } from "drizzle-orm";
-import {
-    createUndoTriggers,
-    tablesWithHistory,
-} from "@/db-functions/historyTriggers";
+import { createExistingUndoTriggers } from "@/db-functions/historyTriggers";
 import type { DbConnection } from "@/db-functions/types";
 
 /**
@@ -11,12 +7,5 @@ import type { DbConnection } from "@/db-functions/types";
  * the conversion adds them and their triggers.
  */
 export async function createPageEraUndoTriggers(db: DbConnection) {
-    const rows = await db.values<[string]>(
-        sql`SELECT name FROM sqlite_schema WHERE type = 'table'`,
-    );
-    const tables = new Set(rows.map(([name]) => name));
-    for (const table of tablesWithHistory) {
-        const name = getTableName(table);
-        if (tables.has(name)) await createUndoTriggers(db, name);
-    }
+    await createExistingUndoTriggers(db);
 }

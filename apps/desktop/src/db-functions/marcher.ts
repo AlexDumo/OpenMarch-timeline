@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { DbConnection, DbTransaction } from "./types";
 import { schema } from "@/global/database/db";
-import { transactionWithHistory, createAllUndoTriggers } from "./history";
+import { transactionWithHistory } from "./history";
+import { createExistingUndoTriggers } from "./historyTriggers";
 import {
     giveNewMarchersHomesInTransaction,
     removeDeletedMarchersFromTimelinesInTransaction,
@@ -42,7 +43,8 @@ const undoTriggersReadyMap = new WeakMap<DbConnection, Promise<void>>();
 const ensureUndoTriggers = async (db: DbConnection) => {
     let undoTriggersReady = undoTriggersReadyMap.get(db);
     if (!undoTriggersReady) {
-        undoTriggersReady = createAllUndoTriggers(db).catch((error) => {
+        // Only the tables the file has: a page-era file lacks the newer ones until converted
+        undoTriggersReady = createExistingUndoTriggers(db).catch((error) => {
             undoTriggersReadyMap.delete(db);
             throw error;
         });

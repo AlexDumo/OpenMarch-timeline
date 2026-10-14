@@ -69,6 +69,24 @@ export async function createAllUndoTriggers(db: DbConnection | DB) {
 }
 
 /**
+ * Creates the undo triggers of the history tables the database has. A file from before the
+ * timeline-only migrations (a page-era show, or a test fixture kept in page mode) lacks the tables
+ * added after them, such as the shape recipes: the conversion adds those and their triggers.
+ *
+ * @param db The database connection
+ */
+export async function createExistingUndoTriggers(db: DbConnection) {
+    const rows = await db.values<[string]>(
+        sql`SELECT name FROM sqlite_schema WHERE type = 'table'`,
+    );
+    const tables = new Set(rows.map(([name]) => name));
+    for (const table of tablesWithHistory) {
+        const name = getTableName(table);
+        if (tables.has(name)) await createUndoTriggers(db, name);
+    }
+}
+
+/**
  * Drops the triggers for a table if they exist. I.e. disables undo tracking for the given table.
  *
  * @param db database connection
