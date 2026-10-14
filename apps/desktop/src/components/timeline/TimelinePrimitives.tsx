@@ -2328,18 +2328,13 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                         viewBox="0 0 12 12"
                         aria-hidden="true"
                         className={clsx(
-                            "absolute top-px left-0",
+                            "absolute top-0 left-0",
                             START_INK.text,
                         )}
                     >
-                        {/* A hollow right triangle whose top lines up with the loop bar's: a 2px
-                            outline whose left side is the 2px stem, a fill, not a stroke, so no
-                            edge spills past it */}
-                        <path
-                            d="M0 0 L12 0 L0 12 Z M2 2 L2 7.17 L7.17 2 Z"
-                            fill="currentColor"
-                            fillRule="evenodd"
-                        />
+                        {/* A filled right triangle on the strip's top edge, flush with the loop
+                            bar's top; its left side is the 2px stem */}
+                        <path d="M0 0 L12 0 L0 12 Z" fill="currentColor" />
                     </svg>
                 </button>
             </>
@@ -2694,7 +2689,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 height="11"
                 viewBox="0 0 12 11"
                 aria-hidden="true"
-                className="text-accent pointer-events-none absolute top-px left-[calc(50%-6px)]"
+                className="text-accent pointer-events-none absolute top-0 left-[calc(50%-6px)]"
             >
                 <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
             </svg>

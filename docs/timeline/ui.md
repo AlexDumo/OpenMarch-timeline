@@ -985,8 +985,10 @@ from it. The spec still wins on the model; this file decides presentation.
     reaches outward, away from the loop, so a pennant on the loop's start leaves it room on the left
     (_lead default_). The playhead is still grabbed anywhere down to the waveform, outside the grips.
   - **Thicker lines.** The start flag's stem and the playhead's line are 2px (1px before), and run
-    from the strip's top; the pennant's outline is 2px to match, and the playhead's head is larger.
-    Their 12px hit areas are unchanged. Page lines stay 1px (_lead default_): they are the grid,
+    from the strip's top; the playhead's head is larger. Their 12px hit areas are unchanged.
+  - **One top edge** (owner, 2026-10-13, after the first pass). The pennant (now filled), the loop
+    bar and the playhead's head all start on the strip's top edge, flush with the lines' tops. The
+    bar has square ends as wide as the 2px lines at each end, so bar, stem and playhead meet. Page lines stay 1px (_lead default_): they are the grid,
     not something to grab.
   - **The window's tint** starts at the page boxes' top, so the strip stays clear.
   - **Layout.** The page row's top and height are named in `TimelineGeometry.ts`

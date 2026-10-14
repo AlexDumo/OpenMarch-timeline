@@ -204,14 +204,16 @@ export const TimelineLoopBar = memo(function TimelineLoopBar({
             data-testid="timeline-loop-region"
             className="pointer-events-none absolute inset-0"
         >
+            {/* Square ends on the strip's top edge, as wide as the 2px lines at each end, so the
+                bar, the start flag's stem and the playhead's line meet flush (UI-20) */}
             <span
                 data-testid="timeline-loop-bar"
                 aria-hidden="true"
-                className={clsx(
-                    "absolute top-px z-40 h-4 rounded-full",
-                    START_INK.bg,
-                )}
-                style={{ left: startX, width: Math.max(endX - startX, 4) }}
+                className={clsx("absolute top-0 z-40 h-4", START_INK.bg)}
+                style={{
+                    left: startX - 1,
+                    width: Math.max(endX - startX, 2) + 2,
+                }}
             />
             {handle("start")}
             {handle("end")}
