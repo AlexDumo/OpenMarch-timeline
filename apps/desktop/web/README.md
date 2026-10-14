@@ -32,7 +32,7 @@ runs the main process's database code in a Web Worker:
 | Saving            | Every write is on disk     | A copy in browser storage (`worker/storage.ts`); **Download** to keep  |
 | Settings          | electron-store             | `localStorage` (`renderer/handlers.ts`)                                |
 | File dialogs      | Native                     | File pickers and downloads (`renderer/handlers.ts`)                    |
-| Settings window   | A second `BrowserWindow`   | A second tab at `#settings`                                            |
+| Settings window   | A second `BrowserWindow`   | A pop-up window at `#settings`                                         |
 | 3D View window    | A second `BrowserWindow`   | A pop-up window at `?view=3d` that reads through the editor tab        |
 | Node modules      | `fs`, `path`, `crypto`     | Stand-ins in `worker/`                                                 |
 

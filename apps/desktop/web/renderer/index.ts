@@ -4,7 +4,7 @@
  * before a reload, then load the app's own preload and renderer, in that
  * order, as Electron loads them.
  *
- * The settings tab (`#settings`, Electron's settings window) needs no show,
+ * The settings window (`#settings`, as in Electron) needs no show,
  * so it runs without a worker. Nor does the 3D View window (`?view=3d`),
  * which reads the show through the editor tab that opened it (./view3d.ts).
  */
