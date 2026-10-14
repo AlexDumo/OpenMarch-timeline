@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { TIMELINE_PAGE_ROW_BOTTOM } from "../TimelineGeometry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExpandedTimeline } from "../TimelineVariants";
 import type { TimelineMeasureRowCommands } from "../TimelineMeasureRow";
@@ -76,7 +77,7 @@ const input = () =>
 const rightClickRow = (beat: number) =>
     fireEvent.contextMenu(screen.getByTestId("timeline-pointer-surface"), {
         clientX: beat * 16,
-        clientY: 36,
+        clientY: TIMELINE_PAGE_ROW_BOTTOM + 8,
     });
 
 describe("rehearsal tabs", () => {
@@ -486,7 +487,7 @@ describe("the measure row's menu", () => {
         // Below the measure row, on the waveform
         fireEvent.contextMenu(screen.getByTestId("timeline-pointer-surface"), {
             clientX: 10 * 16,
-            clientY: 70,
+            clientY: TIMELINE_PAGE_ROW_BOTTOM + 42,
         });
         const menu = screen.getByTestId("timeline-range-menu");
         expect(menu).toHaveTextContent("Add counts at the playhead…");
@@ -517,7 +518,7 @@ describe("the measure row's menu", () => {
         // On the measure row, on m3's tab
         fireEvent.contextMenu(screen.getByTestId("timeline-rehearsal-tab"), {
             clientX: 8 * 16,
-            clientY: 36,
+            clientY: TIMELINE_PAGE_ROW_BOTTOM + 8,
         });
         const item = screen.getByTestId("timeline-range-menu-remove-counts");
         expect(item).toHaveTextContent("Remove counts…");

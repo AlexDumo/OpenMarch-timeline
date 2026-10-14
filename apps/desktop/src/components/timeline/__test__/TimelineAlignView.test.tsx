@@ -347,12 +347,12 @@ describe("typed sections in Align (FX-5)", () => {
         await nextFrame();
     };
 
-    it("says a drag overrides a typed tempo, and writes only after Override", async () => {
+    it("stops a drag at a typed tempo, and writes it only after Override (DE-1)", async () => {
         const { align } = renderAlign({ tempoMap: typed });
         const handle = flag(9);
         await drag(handle);
         expect(screen.getByTestId("timeline-align-chip")).toHaveTextContent(
-            "Overrides typed ♩=120 (m1–2)",
+            "Stops at typed ♩=120 (m1–2)",
         );
         fireEvent.pointerUp(handle, { clientX: 110, pointerId: 1 });
         expect(align.onRetime).not.toHaveBeenCalled();
@@ -374,6 +374,39 @@ describe("typed sections in Align (FX-5)", () => {
         await drag(handle);
         fireEvent.pointerUp(handle, { clientX: 110, pointerId: 1 });
         fireEvent.click(screen.getByTestId("timeline-align-keep-typed"));
+        expect(align.onRetime).not.toHaveBeenCalled();
+    });
+
+    it("Keep typed writes the drag stopped at the typed section's edge (DE-1)", async () => {
+        const { align } = renderAlign({
+            tempoMap: {
+                units: [],
+                sections: [{ from: 1, to: 5, tempo: "♩=120", measures: "m1" }],
+            },
+        });
+        const handle = flag(9);
+        await drag(handle);
+        fireEvent.pointerUp(handle, { clientX: 110, pointerId: 1 });
+        fireEvent.click(screen.getByTestId("timeline-align-keep-typed"));
+        expect(align.onRetime).toHaveBeenCalledTimes(1);
+        const { durations } = vi.mocked(align.onRetime).mock.calls[0]![0];
+        // m1's counts keep their length; only the page's other counts stretch
+        expect(durations.slice(1, 5)).toEqual(align.durations.slice(1, 5));
+        expect(durations[5]).not.toBe(align.durations[5]);
+    });
+
+    it("a press on the prompt's buttons doesn't scrub the timeline under it", async () => {
+        const { align, onSeek } = renderAlign({ tempoMap: typed });
+        const handle = flag(9);
+        await drag(handle);
+        fireEvent.pointerUp(handle, { clientX: 110, pointerId: 1 });
+        onSeek.mockClear();
+        const keep = screen.getByTestId("timeline-align-keep-typed");
+        fireEvent.pointerDown(keep, { button: 0, clientX: 300, pointerId: 2 });
+        fireEvent.pointerUp(keep, { button: 0, clientX: 300, pointerId: 2 });
+        fireEvent.click(keep);
+        expect(onSeek).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("timeline-align-confirm")).toBeNull();
         expect(align.onRetime).not.toHaveBeenCalled();
     });
 
