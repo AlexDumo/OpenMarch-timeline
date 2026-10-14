@@ -337,7 +337,8 @@ from it. The spec still wins on the model; this file decides presentation.
     unpinned S follows it (UI-12 review), so the window doesn't silently span
     pages.
   - **Pinning** (_lead default_). Dragging the start handle, or dragging a
-    range on empty timeline space, pins S where it is dropped (before P). A
+    range on empty timeline space, pins S where it is dropped (before P;
+    past P it swaps with P, UI-21). A
     pinned S stays through navigation until P moves to or before it, which
     unpins it. Clicking a page box unpins it.
   - **Play, Pause, Stop.** Play plays on from P to the end of the show, with no
@@ -745,8 +746,9 @@ from it. The spec still wins on the model; this file decides presentation.
     isolation.
   - **Where they're grabbed.** A flag by its page line through the page-box row (owner,
     2026-10-08; UI-16). A move by the handles inside its clip's two ends: up to 6px, at most a quarter of the clip, none on a clip
-    under 8px (V-120). The ⋯ button keeps clear of the end handle. Over the clip rows the start flag
-    and the playhead are drawn but not grabbed (UI-14), so a selected clip's edges can be reached.
+    under 8px (V-120). The ⋯ button keeps clear of the end handle. The start flag and the playhead
+    run down over the clip rows and the page-box row (UI-21), and where they cross a move's end
+    handle or a page flag's grip the line wins: move the line off to drag the edge.
   - **Afterwards.** A selected move's start flag and playhead follow its new start and end; an
     isolated move keeps the playhead unless it was on the end. A playhead or start flag on a moved
     flag goes with it.
@@ -804,9 +806,12 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Play (Space), looping on**, loops exactly the loop's region (no roll, V-24) until stopped,
     wherever the playhead is. Stopping puts the canvas back on the playhead, which looping never
     moved (project owner). An isolated move loops its range the same way.
-  - **One Play button**, which reads Stop while playing. While looping its icon is a short bar in the
-    start flag's color, then Play (the owner picked it from mockups), and its name is "Play the
-    loop". There is no Pause and no separate Stop or second play button; Loop is its own button.
+  - **One Play button**, which reads Stop while playing. Its icon is a plain Play; while Shift is
+    held it becomes a short bar in the text color, then Play, and its name says Shift+click plays
+    from the playhead (or the loop once), as Previous and Next swap theirs (owner, 2026-10-14). Its
+    tooltip is a guide like theirs: Play with Space, then the barred Play with Shift + Space, the
+    held one lit. While looping its name is "Play the loop". There is no Pause and no separate Stop
+    or second play button; Loop is its own button.
   - **A click, scrub or page jump while looping**: inside the loop it jumps and keeps looping;
     outside it, playback plays on from there and the stop stays (UI-11, UI-12).
   - **The loop is its own region** (project owner, 2026-10-09, after trying the follow model by
@@ -820,7 +825,7 @@ from it. The spec still wins on the model; this file decides presentation.
     Q, a page box) moves it to that page, as the round 2 test chose ("the loop follows your page").
     Shift+click on page boxes, with looping on, sets it to those pages. The field line names the loop
     only while it is elsewhere than the window being edited ("Space loops Page 3's move"); on its
-    own page the lit Loop button, the bar and Play's icon say it (owner, 2026-10-09).
+    own page the lit Loop button and the bar say it (owner, 2026-10-09).
   - **Turning looping on and off**: C, or the **Loop** button on the transport (lit while on), loops
     the window being edited (the page, or the pages Shift+click selected); again turns it off.
     **Ctrl+drag** (Cmd on macOS) on the timeline draws the loop and turns looping on, as dragging
@@ -837,14 +842,15 @@ from it. The spec still wins on the model; this file decides presentation.
     locator's loop end was the playhead, so navigating stretched it). The separate loop region keeps
     both lessons: it covers whole pages and follows page navigation, and the playhead never resizes
     it.
-  - **Space plays on from the playhead; Shift+Space plays the page's move once** and goes back to
-    its set when it ends or is stopped (project owner, 2026-10-09, after trying round 3's choice by
-    hand). Looping a page is loop mode's job (C); Shift+Space is the one-shot check. With a page
-    selected and nothing pinned, Play's tooltip names both. Round 3 of the simulated-user tests
-    had picked a hybrid (Space on a selected page plays its move once, Space straight after plays
-    on); the owner found it asked two presses to play on from the playhead, and that page-from-start
-    playing belongs to loop mode. Testers had expected Space to play a page they'd just selected;
-    the tooltip and the menu's "Play Page Once" are the answer to that, to watch (V-176).
+  - **Space plays on from the start flag; Shift+Space plays on from the playhead** (project owner,
+    2026-10-13, after the lab test playback-start at lab.openmarch.com: version B, with one Play
+    button: Shift+click on it is Shift+Space; the lab's second button was dropped). With looping
+    on, Space loops and Shift+Space plays the loop once and goes back. A stop within the first beat from the start flag changes nothing: the flag is the page
+    before's end flag, and stopping on it would move the window back a page (V-192).
+  - **Before that, Space played on from the playhead and Shift+Space played the page's move once**
+    (project owner, 2026-10-09, after trying round 3's choice by hand, V-176). Round 3 of the
+    simulated-user tests had picked a hybrid (Space on a selected page plays its move once, Space
+    straight after plays on); the owner found it asked two presses to play on from the playhead.
   - **Playing on stops where it is**, and when that is another page the field line says so with a
     ring ("Stopped on page 4 · Editing Page 4…") for a few seconds (owner; the quiet line was missed
     by every tester who then edited the wrong set). Pages are compared, not the line's words, so
@@ -876,7 +882,7 @@ from it. The spec still wins on the model; this file decides presentation.
     Timeline and the rest, read from the action registry so it can't go stale, plus the timeline's
     own keys and gestures (G, Shift+Z, Esc, Ctrl+drag, Ctrl+scroll, Alt+drag) and the WASD nudge. It
     is also Help → Keyboard Shortcuts (_lead default_).
-  - **App menu items**: a **Playback** menu (Play / Stop, Play Page Once, Loop On / Off) and Help →
+  - **App menu items**: a **Playback** menu (Play / Stop, Play from Playhead, Loop On / Off) and Help →
     Keyboard Shortcuts. They show their keys without registering them, so text fields keep Space
     and letters; macOS puts the key in the label (docs/adr/0003-menu-actions-ipc.md).
   - Deferred: a one-time hint the first time someone pins (dropped with the second play button,
@@ -1053,6 +1059,46 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Layout.** The page row's top and height are named in `TimelineGeometry.ts`
     (`TIMELINE_HEADROOM_HEIGHT`, `TIMELINE_PAGE_ROW_*`), and `getTimelineRows` lays out the rows
     under it, so the strip's height is one number.
+- **UI-21: the start flag and the playhead swap when one is dragged past the other (project owner,
+  2026-10-14; issue #162).** Supersedes UI-10's rule that the start flag stops a beat before the
+  playhead. As Logic's locators, the left line is the start flag and the right one the playhead.
+  - **Which drags.** Paused and not isolated, a drag that starts on the start flag (its stem or
+    pennant), or on the playhead's line or head.
+  - **Grabbed anywhere down the line** (owner, 2026-10-14). Each line takes the pointer its whole
+    height, over the waveform and the clip rows too, as at its top; this replaces UI-14's rule that
+    they were only drawn there. The lines are drawn on top, so they act on top (owner, 2026-10-14,
+    reversing a first "handles win" build): where a line crosses a move's end handle or a page
+    flag's grip, a press takes the line. A move or a page whose edge a line sits on (a selected
+    move, a page whose box was clicked) is resized after moving the line off it. A press on a clip
+    under a line takes the line too. A click on the timeline, a click on the playhead,
+    and a scrub started anywhere else move only the playhead, and pass the start flag as before
+    (owner).
+  - **The swap.** Drag the start flag past the playhead and the line being dragged becomes the
+    playhead, while the old playhead becomes the start flag. Drag the playhead behind the start
+    flag and the line being dragged becomes the start flag, while the old start flag becomes the
+    playhead. Afterwards the window `[S, P)` is valid again.
+  - **On the same beat** (owner, 2026-10-14). Either line can be dragged onto the other. While they
+    are held on one beat, nothing shows selected, whether that beat is a page flag (not the page
+    before it) or the middle of a page (not the part back to the page's start). On release, the
+    dragged line stays and pushes the other a beat on: a start flag pushes the playhead a beat
+    later, and a playhead pushes the start flag a beat earlier. At the show's end the start flag
+    goes back a beat instead. An arrow key that steps the start flag onto the playhead pushes it
+    the same way. Both at home stay home.
+  - **Live** (owner). The two trade the moment the dragged line crosses the other, and trade back
+    if it crosses back. The canvas follows the playhead. Escape on a start flag drag puts both back
+    where they were.
+  - **Pinning.** A start flag that a drag sets (the dragged flag, or the old playhead after a swap)
+    is pinned, unless it lands where it would follow to, as with UI-10's start handle. A playhead
+    drag that never crosses ends as a scrub does: an unpinned start flag follows it once (UI-12
+    review).
+  - **Arrow keys on the start flag** follow the same rule (owner). A step onto or past the playhead
+    swaps them, so stepping right walks a one-beat window right.
+  - **Undo.** Moving the start flag and the playhead isn't an undoable edit today, and a swap
+    isn't either.
+  - **How.** The store's line drag (`beginLineDrag`, `dragLine`, `endLineDrag`, `cancelLineDrag`,
+    `lineDragPositions` in `TimelineSelectionStore.ts`) owns the rule. The timeline sends each beat
+    a dragged line reaches as a seek with `line: "start"` or `line: "playhead"`
+    (`TimelineSeekOptions`), and `seekTimeline` passes a paused one to the store.
 
 ## Mapping the spec onto the view model
 

@@ -145,7 +145,6 @@ export interface TimelineSelectionInteraction {
 
 // The same elements every render, so the memoized transport buttons don't re-render for them
 const SKIP_BACK_ICON = <SkipBackIcon size={16} />;
-const PLAY_ICON = <PlayIcon size={18} weight="fill" />;
 const STOP_ICON = <StopIcon size={16} weight="fill" />;
 const SKIP_FORWARD_ICON = <SkipForwardIcon size={16} />;
 // Previous and Next while Shift (the start or end of the show) or Alt (a beat) is held
@@ -155,16 +154,11 @@ const BEAT_BACK_ICON = <CaretLeftIcon size={16} weight="bold" />;
 const BEAT_FORWARD_ICON = <CaretRightIcon size={16} weight="bold" />;
 const FIT_ICON = <ArrowsOutLineHorizontalIcon size={16} />;
 const HOUSE_ICON = <HouseIcon size={14} aria-hidden="true" />;
-/**
- * Play's icon while the start flag is pinned (UI-17, project owner's pick): a bar in the start
- * flag's color, echoing the flag's line on the ruler, then Play ("loop from the mark")
- */
-const PLAY_FROM_FLAG_ICON = (
+const PLAY_ICON = <PlayIcon size={16} weight="fill" />;
+/** Play while Shift is held: a bar, the playhead's line, then Play ("play from the playhead") */
+const PLAY_FROM_PLAYHEAD_ICON = (
     <span className="flex items-center gap-2">
-        <span
-            aria-hidden
-            className={clsx("rounded-2 h-14 w-[2.5px]", START_INK.bg)}
-        />
+        <span aria-hidden className="rounded-2 bg-text h-14 w-[2.5px]" />
         <PlayIcon size={14} weight="fill" />
     </span>
 );
@@ -304,6 +298,34 @@ function useHeldNavigationMode(enabled: boolean): TransportNavigationMode {
     return mode;
 }
 
+/**
+ * Whether Shift is held now, as Play would read it (`useHeldNavigationMode`'s rules: only a change
+ * re-renders, losing focus lets go, a pointer event re-reads it)
+ */
+function useHeldShift(enabled: boolean): boolean {
+    const [held, setHeld] = useState(false);
+    useEffect(() => {
+        if (!enabled) return;
+        const read = (event: KeyboardEvent | PointerEvent) =>
+            setHeld(event.shiftKey && !event.ctrlKey && !event.metaKey);
+        const onBlur = () => setHeld(false);
+        window.addEventListener("keydown", read, true);
+        window.addEventListener("keyup", read, true);
+        window.addEventListener("pointermove", read, true);
+        window.addEventListener("pointerdown", read, true);
+        window.addEventListener("blur", onBlur);
+        return () => {
+            window.removeEventListener("keydown", read, true);
+            window.removeEventListener("keyup", read, true);
+            window.removeEventListener("pointermove", read, true);
+            window.removeEventListener("pointerdown", read, true);
+            window.removeEventListener("blur", onBlur);
+            setHeld(false);
+        };
+    }, [enabled]);
+    return held;
+}
+
 const NAVIGATION_TARGETS = {
     page: ["previous-page", "next-page"],
     edge: ["first-page", "last-page"],
@@ -313,8 +335,8 @@ const NAVIGATION_TARGETS = {
     readonly [TimelineNavigation, TimelineNavigation]
 >;
 
-interface NavigationGuideRow {
-    readonly mode: TransportNavigationMode;
+interface TransportGuideRow<Mode extends string = string> {
+    readonly mode: Mode;
     readonly icon: ReactNode;
     readonly label: string;
     /** The shortcut as keycaps */
@@ -322,7 +344,9 @@ interface NavigationGuideRow {
 }
 
 /** What Previous (or Next) does with each modifier, in the order the tooltip lists them */
-const navigationGuide = (back: boolean): readonly NavigationGuideRow[] => {
+const navigationGuide = (
+    back: boolean,
+): readonly TransportGuideRow<TransportNavigationMode>[] => {
     const alt = isMac() ? "Option" : "Alt";
     return [
         {
@@ -354,19 +378,21 @@ const navigationGuide = (back: boolean): readonly NavigationGuideRow[] => {
 };
 
 /**
- * The tooltip's guide to Previous and Next: each icon, what it does, its shortcut and its click,
- * with the row the held modifier picks in the accent color.
+ * The tooltip's guide to Previous, Play or Next: each icon, what it does, its shortcut and its
+ * click, with the row the held modifier picks in the accent color.
  */
-function NavigationGuide({
+function TransportGuide({
     rows,
     mode,
+    testId,
 }: {
-    rows: readonly NavigationGuideRow[];
-    mode: TransportNavigationMode;
+    rows: readonly TransportGuideRow[];
+    mode: string;
+    testId: string;
 }) {
     return (
         <span
-            data-testid="timeline-navigation-guide"
+            data-testid={testId}
             className="grid w-max grid-cols-[auto_auto_auto] items-center gap-x-8 gap-y-4"
         >
             {rows.map((row) => (
@@ -392,7 +418,7 @@ function NavigationGuide({
 /**
  * Previous and Next. Q and E step a page; Shift (Shift+click, Shift+Q/E) steps a beat and Alt
  * (Alt+click, Alt+Q/E, also Home and End) goes to the start or end of the show. Holding either modifier swaps the icon
- * and label to say so, and the tooltip is a guide to all three (`NavigationGuide`). Kept apart
+ * and label to say so, and the tooltip is a guide to all three (`TransportGuide`). Kept apart
  * from the transport so only these two re-render for it.
  */
 const TransportNavigationButton = memo(function TransportNavigationButton({
@@ -418,10 +444,102 @@ const TransportNavigationButton = memo(function TransportNavigationButton({
             label={row.label}
             keyShortcut={row.shortcut}
             hideLabel
-            hint={<NavigationGuide rows={guide} mode={mode} />}
+            hint={
+                <TransportGuide
+                    rows={guide}
+                    mode={mode}
+                    testId="timeline-navigation-guide"
+                />
+            }
             testId={`timeline-${direction}`}
             navigation
             onClick={onNavigate ? onClick : undefined}
+        >
+            {row.icon}
+        </TransportButton>
+    );
+});
+
+/** What Play (Space) and Shift+Play (Shift+Space) do, in the order the tooltip lists them */
+const playGuide = (
+    loops: boolean,
+): readonly TransportGuideRow<"play" | "shift">[] => [
+    {
+        mode: "play",
+        icon: PLAY_ICON,
+        label: loops ? "Play the loop" : "Play from the start flag",
+        shortcut: TRANSPORT_SHORTCUTS.play,
+    },
+    {
+        mode: "shift",
+        icon: PLAY_FROM_PLAYHEAD_ICON,
+        label: loops ? "Play the loop once" : "Play from the playhead",
+        shortcut: TRANSPORT_SHORTCUTS.playPage,
+    },
+];
+
+/**
+ * Play, or Stop while playing. Shift+click is Shift+Space: plays from the playhead, or the loop
+ * once. Holding Shift swaps the icon and label to say so, and the tooltip is a guide to both, as
+ * Previous and Next do. Kept apart from the transport so only this re-renders for Shift.
+ */
+const TransportPlayButton = memo(function TransportPlayButton({
+    isPlaying,
+    onPlayingChange,
+    playLoops,
+    playingOnce,
+    onPlayFromPlayhead,
+}: {
+    isPlaying: boolean;
+    onPlayingChange?: (isPlaying: boolean) => void;
+    playLoops: boolean;
+    playingOnce: boolean;
+    onPlayFromPlayhead?: () => void;
+}) {
+    const shift = useHeldShift(onPlayingChange != null && !isPlaying);
+    const togglePlaying = useCallback(
+        (event: ReactMouseEvent) =>
+            event.shiftKey && onPlayFromPlayhead
+                ? onPlayFromPlayhead()
+                : onPlayingChange?.(!isPlaying),
+        [isPlaying, onPlayingChange, onPlayFromPlayhead],
+    );
+    const onClick = onPlayingChange ? togglePlaying : undefined;
+    if (isPlaying)
+        return (
+            <TransportButton
+                label="Stop"
+                shortcut={TRANSPORT_SHORTCUTS.play}
+                hint={
+                    playLoops || playingOnce
+                        ? "Goes back to where you were editing"
+                        : "Stops where it is"
+                }
+                testId="timeline-play"
+                pressed
+                onClick={onClick}
+            >
+                {STOP_ICON}
+            </TransportButton>
+        );
+    const guide = playGuide(playLoops);
+    const mode = shift && onPlayFromPlayhead ? "shift" : "play";
+    const row = guide.find((r) => r.mode === mode)!;
+    return (
+        <TransportButton
+            label={row.label}
+            keyShortcut={row.shortcut}
+            hideLabel
+            hint={
+                <TransportGuide
+                    rows={onPlayFromPlayhead ? guide : guide.slice(0, 1)}
+                    mode={mode}
+                    testId="timeline-play-guide"
+                />
+            }
+            testId="timeline-play"
+            pressed={false}
+            onClick={onClick}
         >
             {row.icon}
         </TransportButton>
@@ -443,7 +561,7 @@ const TRANSPORT_TIGHT_PX = 500;
  * or Next steps a beat and Alt+click goes to the start or end of the show, as Shift+Q/E and
  * Alt+Q/E do (`TransportNavigationButton`). While playing, navigation jumps playback there.
  *
- * With looping on, Play loops the loop and shows its bar in its icon (UI-17).
+ * With looping on, Play loops the loop (UI-17).
  */
 export const TimelineTransport = memo(function TimelineTransport({
     model,
@@ -452,9 +570,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     isPlaying,
     onPlayingChange,
     playLoops = false,
-    noLoop = false,
-    playNext,
     playingOnce = false,
+    onPlayFromPlayhead,
     onNavigate,
     onFit,
     fitted = false,
@@ -472,12 +589,10 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops and shows the loop's bar (UI-17) */
     playLoops?: boolean;
-    /** No loop here (UI-19 Basic): the hints don't offer C */
-    noLoop?: boolean;
-    /** With no pin, a page is selected (UI-17): Play's tooltip names Shift+Space and C */
-    playNext?: "page";
     /** Shift+Space's once-through is playing (UI-17) */
     playingOnce?: boolean;
+    /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
+    onPlayFromPlayhead?: () => void;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -559,10 +674,6 @@ export const TimelineTransport = memo(function TimelineTransport({
         }
         setGoTo(null);
     };
-    const togglePlaying = useCallback(
-        () => onPlayingChange?.(!isPlaying),
-        [isPlaying, onPlayingChange],
-    );
     const readout =
         goTo !== null ? (
             <input
@@ -636,40 +747,13 @@ export const TimelineTransport = memo(function TimelineTransport({
                         direction="previous"
                         onNavigate={onNavigate}
                     />
-                    <TransportButton
-                        label={
-                            isPlaying
-                                ? "Stop"
-                                : playLoops
-                                  ? "Play the loop"
-                                  : "Play"
-                        }
-                        shortcut={TRANSPORT_SHORTCUTS.play}
-                        hint={
-                            isPlaying
-                                ? playLoops || playingOnce
-                                    ? "Goes back to where you were editing"
-                                    : "Stops where it is"
-                                : playLoops
-                                  ? "Loops the yellow bar, wherever the playhead is. C or Loop turns looping off"
-                                  : playNext === "page"
-                                    ? noLoop
-                                        ? "Plays on from here. Shift+Space plays this page's move once"
-                                        : "Plays on from here. Shift+Space plays this page's move once; C loops it"
-                                    : noLoop
-                                      ? "Plays on from here"
-                                      : "Plays on from here. C loops the page you're on"
-                        }
-                        testId="timeline-play"
-                        pressed={isPlaying}
-                        onClick={onPlayingChange ? togglePlaying : undefined}
-                    >
-                        {isPlaying
-                            ? STOP_ICON
-                            : playLoops
-                              ? PLAY_FROM_FLAG_ICON
-                              : PLAY_ICON}
-                    </TransportButton>
+                    <TransportPlayButton
+                        isPlaying={isPlaying}
+                        onPlayingChange={onPlayingChange}
+                        playLoops={playLoops}
+                        playingOnce={playingOnce}
+                        onPlayFromPlayhead={onPlayFromPlayhead}
+                    />
                     <TransportNavigationButton
                         direction="next"
                         onNavigate={onNavigate}
@@ -2228,9 +2312,9 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     beatCount,
     pixelsPerBeat,
     height,
-    hitHeight = height,
     snapBeats = [],
     onCommit,
+    onLineDrag,
     onInteractionChange,
     positionBeat,
     scrubLine,
@@ -2250,14 +2334,16 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
-    /**
-     * How far down the flags take the pointer (UI-14): over the clip rows they are only drawn, so
-     * a short clip under them can still be clicked. Defaults to the whole height.
-     */
-    hitHeight?: number;
     /** Page lines the dragged flag snaps to (ui.md UI-2); Alt turns snapping off */
     snapBeats?: readonly number[];
     onCommit?: (range: TimelineBeatRange) => void;
+    /**
+     * With it, the start flag is dragged live (UI-21): each beat it reaches is sent as a seek with
+     * `line: "start"`, and the owner moves S, or swaps S and P once it passes the playhead. The
+     * flag is drawn where the owner puts it. Without it, a drag previews and `onCommit` sends the
+     * window on release, with the flag stopping a beat short of the playhead.
+     */
+    onLineDrag?: TimelineSeek;
     onInteractionChange?: (
         interaction: TimelineSelectionInteraction | null,
     ) => void;
@@ -2274,6 +2360,12 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         pointerId: number;
         surface: HTMLElement;
         startClientX: number;
+        /** Where the flag was when the drag began */
+        flagBeat: number;
+        /** The playhead when the drag began */
+        playheadBeat: number;
+        /** The last beat a live drag sent (`onLineDrag`) */
+        lastBeat: number | null;
         /** The pointer has moved past the drag threshold: a drag, not a click */
         moved: boolean;
     } | null>(null);
@@ -2290,10 +2382,27 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             endBeatIndex: range.endBeatIndex,
         };
         setShownRange(range);
-        dragRef.current = null;
+        // A live drag moves the range itself
+        if (!onLineDrag) dragRef.current = null;
         previewRef.current = next;
         setPreview(next);
     }
+
+    /** The beat a flag dragged to `clientX` lands on: snapped to a page line unless disabled */
+    const flagBeatAt = useCallback(
+        (clientX: number, surface: HTMLElement, snapDisabled: boolean) =>
+            snapBoundary({
+                beat: clamp(
+                    (clientX - surface.getBoundingClientRect().left) /
+                        pixelsPerBeat,
+                    0,
+                    beatCount,
+                ),
+                snapBeats: snapDisabled ? [] : snapBeats,
+                pixelsPerBeat,
+            }),
+        [beatCount, pixelsPerBeat, snapBeats],
+    );
 
     const updatePreview = useCallback(
         (
@@ -2303,16 +2412,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             snapDisabled: boolean,
             dragging = true,
         ) => {
-            const bounds = surface.getBoundingClientRect();
-            const requested = snapBoundary({
-                beat: clamp(
-                    (clientX - bounds.left) / pixelsPerBeat,
-                    0,
-                    beatCount,
-                ),
-                snapBeats: snapDisabled ? [] : snapBeats,
-                pixelsPerBeat,
-            });
+            const requested = flagBeatAt(clientX, surface, snapDisabled);
             const current = previewRef.current;
             const next =
                 kind === "start"
@@ -2344,8 +2444,32 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             });
             return next;
         },
-        [beatCount, onInteractionChange, pixelsPerBeat, snapBeats],
+        [beatCount, flagBeatAt, onInteractionChange],
     );
+
+    /** A live drag of the start flag reached `beat` (UI-21) */
+    const dragLive = (
+        drag: NonNullable<typeof dragRef.current>,
+        beat: number,
+        gesture: "drag" | "end",
+    ) => {
+        if (gesture === "drag" && beat === drag.lastBeat) return;
+        drag.lastBeat = beat;
+        onLineDrag?.(beat, { gesture, line: "start" });
+        // The left line is the start flag, the right one the playhead (`lineDragPositions`)
+        onInteractionChange?.(
+            gesture === "end"
+                ? null
+                : {
+                      range: {
+                          startBeatIndex: Math.min(beat, drag.playheadBeat),
+                          endBeatIndex: Math.max(beat, drag.playheadBeat),
+                      },
+                      activeHandle: "start",
+                      dragging: true,
+                  },
+        );
+    };
 
     const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
         const drag = dragRef.current;
@@ -2355,6 +2479,20 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             dragRef.current = null;
             event.currentTarget.releasePointerCapture?.(event.pointerId);
             onInteractionChange?.(null);
+            return;
+        }
+        if (onLineDrag && drag.kind === "start") {
+            dragRef.current = null;
+            event.currentTarget.releasePointerCapture?.(event.pointerId);
+            dragLive(
+                drag,
+                flagBeatAt(
+                    event.clientX,
+                    drag.surface,
+                    isPageSnapDisabled(event),
+                ),
+                "end",
+            );
             return;
         }
         const next = updatePreview(
@@ -2391,18 +2529,28 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         dragRef.current = null;
         if (flag?.hasPointerCapture?.(drag.pointerId))
             flag.releasePointerCapture(drag.pointerId);
+        // A live drag puts S and P back where it began
+        if (onLineDrag && drag.lastBeat !== null)
+            onLineDrag(drag.flagBeat, { gesture: "cancel", line: "start" });
         resetPreview();
         return true;
     };
+    // A flag drag still down when the timeline goes (a variant switch) is cancelled, so a live
+    // drag's owner doesn't wait for a release that never comes
+    const latestCancelDrag = useRef(cancelDrag);
+    latestCancelDrag.current = cancelDrag;
+    useEffect(() => () => void latestCancelDrag.current(), []);
 
     const flagTitle = (kind: "start" | "end", beatIndex: number) =>
         kind === "start"
             ? "Start flag: dragged marchers leave from here. Drag to move it."
             : `Selection ${kind}: beat boundary ${beatIndex}`;
+    const live = (kind: "start" | "end") =>
+        kind === "start" && onLineDrag !== undefined;
     const flagHandlers = (kind: "start" | "end", beatIndex: number) => ({
-        disabled: !onCommit,
+        disabled: !onCommit && !live(kind),
         onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
-            if (!onCommit || event.button !== 0) return;
+            if ((!onCommit && !live(kind)) || event.button !== 0) return;
             event.stopPropagation();
             const surface = event.currentTarget.parentElement?.parentElement;
             if (!surface) return;
@@ -2413,6 +2561,9 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 pointerId: event.pointerId,
                 surface,
                 startClientX: event.clientX,
+                flagBeat: beatIndex,
+                playheadBeat: range.endBeatIndex,
+                lastBeat: null,
                 moved: false,
             };
             event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -2427,6 +2578,18 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             )
                 return;
             drag.moved = true;
+            if (live(kind)) {
+                dragLive(
+                    drag,
+                    flagBeatAt(
+                        event.clientX,
+                        drag.surface,
+                        isPageSnapDisabled(event),
+                    ),
+                    "drag",
+                );
+                return;
+            }
             updatePreview(
                 kind,
                 event.clientX,
@@ -2436,8 +2599,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         },
         onPointerUp: finishDrag,
         onPointerCancel: () => {
-            dragRef.current = null;
-            resetPreview();
+            cancelDrag();
         },
         // The capture can go without a pointerup or pointercancel (the window loses focus
         // mid-drag): the drag is cancelled. After a release the drag has already ended.
@@ -2451,7 +2613,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 event.stopPropagation();
                 return;
             }
-            if (!onCommit) return;
+            if (!onCommit && !live(kind)) return;
             const delta =
                 event.key === "ArrowLeft"
                     ? -1
@@ -2462,8 +2624,16 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             event.preventDefault();
             // The arrow moves the flag, not the selected marchers (the window's nudge keys)
             event.stopPropagation();
-            // The start flag stays before the playhead (UI-10): after Stop it is drawn on the
-            // playhead, so a step right has nowhere to go
+            // UI-21: a step onto or past the playhead swaps them, as a drag does
+            if (live(kind)) {
+                const target = clamp(beatIndex + delta, 0, beatCount);
+                if (target !== beatIndex)
+                    onLineDrag?.(target, { gesture: "end", line: "start" });
+                return;
+            }
+            if (!onCommit) return;
+            // Without a live owner the start flag stays before the playhead (UI-10): after Stop
+            // it is drawn on the playhead, so a step right has nowhere to go
             if (
                 kind === "start" &&
                 (beatIndex + delta >= range.endBeatIndex ||
@@ -2504,7 +2674,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
-                    style={{ left: x, height: hitHeight }}
+                    style={{ left: x, height }}
                 >
                     <span
                         className="bg-accent pointer-events-none absolute top-0 left-1/2 w-px"
@@ -2524,7 +2694,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
-                    style={{ left: x, height: hitHeight }}
+                    style={{ left: x, height }}
                 >
                     {/* UI-20: 2px, from the headroom strip down */}
                     <span
@@ -2563,8 +2733,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 )}
                 {/* The pennant is its own handle in the headroom strip (UI-20), above the
                     playhead's (z-50) and the loop's ends (z-58): after Stop the flag is drawn on
-                    the playhead, and on a page flag the grip takes the page row, so this is the
-                    part of it that can always be grabbed. Its left edge is drawn on the stem's
+                    the playhead, so this is the part of it that can always be grabbed. Its left edge is drawn on the stem's
                     pixels, so the two read as one shape */}
                 <button
                     type="button"
@@ -2632,7 +2801,8 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             <div className="pointer-events-none absolute inset-0">
                 {flag(
                     "start",
-                    startFlagBeatIndex !== undefined && !dragRef.current
+                    startFlagBeatIndex !== undefined &&
+                        (onLineDrag !== undefined || !dragRef.current)
                         ? startFlagBeatIndex
                         : preview.startBeatIndex,
                 )}
@@ -2817,7 +2987,6 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     onSeek,
     isPlaying = false,
     scrubLine,
-    hitHeight = height,
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
@@ -2838,11 +3007,6 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
      * follows the pointer by a transform, without re-rendering (`useScrubFollow`)
      */
     scrubLine?: TimelineLiveValue<number | null>;
-    /**
-     * How far down it takes the pointer (UI-14): over the clip rows the line is only drawn, so a
-     * short clip under it can still be clicked. Defaults to the whole height.
-     */
-    hitHeight?: number;
 }) {
     const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
@@ -2929,10 +3093,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
             }}
             onBlur={keySteps.end}
             className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize! touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
-            style={{
-                left,
-                height: Math.min(hitHeight, height),
-            }}
+            style={{ left, height }}
         >
             {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
                 the line, so its tip runs into the line */}
@@ -3081,6 +3242,8 @@ export const useTimelinePointer = ({
         startBeat: number;
         /** The last beat a scrub sent, which a cancel ends on */
         lastBeat: number | null;
+        /** The press was on the playhead's line or head: a paused drag can swap it (UI-21) */
+        onPlayhead: boolean;
     } | null>(null);
     const edgeScroll = useScrubEdgeScroll();
     const draggedRange = (
@@ -3115,6 +3278,7 @@ export const useTimelinePointer = ({
             beat: number,
             event: { readonly altKey: boolean },
             seekGesture?: TimelineSeekGesture,
+            onPlayhead = gesture.current?.onPlayhead ?? false,
         ) => {
             const snapped = snapSeekBeat(
                 beat,
@@ -3129,7 +3293,10 @@ export const useTimelinePointer = ({
                 snapped,
                 seekGesture === undefined
                     ? undefined
-                    : { gesture: seekGesture },
+                    : {
+                          gesture: seekGesture,
+                          ...(onPlayhead ? { line: "playhead" as const } : {}),
+                      },
             );
             // During a scrub the line steps to the beat the playhead is on (`scrubLineBeat`) in this
             // move, without waiting for a render. A timeline that can't seek (read-only) keeps its
@@ -3155,7 +3322,10 @@ export const useTimelinePointer = ({
         end();
         // The scrub ends where it was, so a suspended playback resumes and S settles
         if (current.mode === "scrub" && current.lastBeat !== null)
-            onSeek?.(current.lastBeat, { gesture: "end" });
+            onSeek?.(current.lastBeat, {
+                gesture: "end",
+                ...(current.onPlayhead ? { line: "playhead" as const } : {}),
+            });
         release();
     };
     // A gesture still down when the timeline goes (a variant switch, focusing the page timeline)
@@ -3221,6 +3391,7 @@ export const useTimelinePointer = ({
                     startClientX: event.clientX,
                     startBeat,
                     lastBeat: null,
+                    onPlayhead,
                 };
                 event.currentTarget.setPointerCapture?.(event.pointerId);
                 if (gesture.current.mode === "scrub" && !onPlayhead)
@@ -3242,7 +3413,7 @@ export const useTimelinePointer = ({
                 currentTarget.releasePointerCapture?.(pointerId);
                 // A range-modifier press that didn't move is a click: one seek
                 if (current.mode === "press") seek(current.startBeat, event);
-                else seek(pointerBeat(event), event, "end");
+                else seek(pointerBeat(event), event, "end", current.onPlayhead);
                 release();
             },
             onPointerCancel: cancel,

@@ -175,10 +175,16 @@ export type TimelineSelection =
  * a drag suspends playback, which resumes once from where the gesture ends; a press that ends
  * without a drag jumps playback there. The start flag moves once, when the gesture ends.
  */
-export type TimelineSeekGesture = "press" | "drag" | "end";
+export type TimelineSeekGesture = "press" | "drag" | "end" | "cancel";
 
 export interface TimelineSeekOptions {
     readonly gesture?: TimelineSeekGesture;
+    /**
+     * The gesture drags this line by itself (UI-21): the start flag, or the playhead by its line or
+     * head. Paused, a line dragged past the other swaps with it. `cancel` ends a start flag drag
+     * where it began.
+     */
+    readonly line?: "start" | "playhead";
 }
 
 /**
@@ -220,10 +226,10 @@ export interface TimelineInteractionProps {
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops (UI-17) */
     readonly playLoops?: boolean;
-    /** With no pin, a page is selected (UI-17) */
-    readonly playNext?: "page";
     /** Shift+Space's once-through is playing (UI-17) */
     readonly playingOnce?: boolean;
+    /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
+    readonly onPlayFromPlayhead?: () => void;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;

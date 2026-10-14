@@ -5,6 +5,7 @@ import type {
 import {
     displayedBeat,
     useTimelineSelectionStore,
+    type TimelineLine,
     type TimelinePlaybackRun,
 } from "@/stores/TimelineSelectionStore";
 import {
@@ -174,6 +175,38 @@ export function consumeSuspendRequest(): boolean {
 }
 
 /**
+ * A paused drag of the start flag or the playhead by its line (UI-21): the store's line drag, in
+ * which a line dragged past the other swaps with it. Returns the beat the playhead shows, or
+ * `undefined` when this isn't a line drag after all, so the seek goes on as a plain one: a press
+ * on the playhead that ends without a drag is a click, and moves only the playhead.
+ */
+function dragTimelineLine(
+    line: TimelineLine,
+    beat: number,
+    gesture: TimelineSeekGesture | undefined,
+): number | null | undefined {
+    const state = useTimelineSelectionStore.getState();
+    const dragging = state.lineDrag !== null;
+    if (!dragging && line === "playhead" && gesture !== "drag")
+        return undefined;
+    if (gesture === "cancel") {
+        if (line === "start") state.cancelLineDrag();
+        else state.endLineDrag();
+        return null;
+    }
+    if (!dragging) state.beginLineDrag(line);
+    // Isolated, there is no line drag: the playhead scrubs and the start flag stays
+    if (useTimelineSelectionStore.getState().lineDrag === null)
+        return line === "playhead" ? undefined : null;
+    state.dragLine(beat);
+    if (gesture === undefined || gesture === "end") {
+        state.endLineDrag();
+        return null;
+    }
+    return displayedBeat(useTimelineSelectionStore.getState());
+}
+
+/**
  * A seek from the timeline (UI-12 and its review). `gesture` is where it sits in a scrub
  * (`TimelineSeekGesture`); without one it is a single action.
  *
@@ -196,14 +229,21 @@ export function seekTimeline(
     {
         isPlaying,
         setIsPlaying,
+        line,
     }: {
         isPlaying: boolean;
         setIsPlaying: (isPlaying: boolean) => void;
+        /** The line the gesture drags by itself (`TimelineSeekOptions.line`) */
+        line?: TimelineLine;
     },
 ): number | null {
     if (!Number.isFinite(beat)) return null;
     const state = useTimelineSelectionStore.getState();
-    if (gesture === undefined || gesture === "end") {
+    if (line !== undefined && !isPlaying) {
+        const shown = dragTimelineLine(line, beat, gesture);
+        if (shown !== undefined) return shown;
+    } else if (line === "start") return null;
+    if (gesture === undefined || gesture === "end" || gesture === "cancel") {
         const ended = scrub;
         scrub = null;
         if (ended?.suspended)
@@ -265,15 +305,16 @@ export const loopBounds = (
 };
 
 /**
- * Playing on (UI-17, Play with no pin): plays from the playhead to the end of the show, as UI-10's
- * Play did. Returns false when there's nothing after it.
+ * Playing on (UI-17, Play with no loop): plays from `from` (Play: the start flag; Shift+Space: the
+ * playhead) to the end of the show. Returns false when there's nothing after it.
  */
 export function startTimelinePlayOn(
     showEndBeat: number,
     setIsPlaying: (isPlaying: boolean) => void,
+    from?: number,
 ): boolean {
     const state = useTimelineSelectionStore.getState();
-    const start = state.cursorBeat ?? state.playheadBeat;
+    const start = from ?? state.cursorBeat ?? state.playheadBeat;
     if (!canPlayOn(start, showEndBeat)) return false;
     state.cue(start);
     state.setPlayback({ kind: "on" });
@@ -282,43 +323,12 @@ export function startTimelinePlayOn(
 }
 
 /**
- * The page box a selected page fills (UI-17): the playhead on its end flag, the window exactly
- * its box, nothing pinned and no held frame. `null` for home, a partial window or a pin. Play's
- * tooltip then names Shift+Space and C, the ways to watch that page's move.
- */
-export const selectedPageBox = (
-    state: Pick<
-        ReturnType<typeof useTimelineSelectionStore.getState>,
-        | "selection"
-        | "playheadBeat"
-        | "cursorBeat"
-        | "pageBoxes"
-        | "startPinned"
-        | "isolation"
-    >,
-): { readonly from: number; readonly to: number } | null => {
-    const { selection } = state;
-    if (
-        state.startPinned ||
-        state.isolation ||
-        state.cursorBeat !== null ||
-        selection.kind !== "range" ||
-        selection.end !== state.playheadBeat
-    )
-        return null;
-    const box = state.pageBoxes.find(
-        (b) => b.end === selection.end && b.start === selection.start,
-    );
-    return box ? { from: box.start, to: box.end } : null;
-};
-
-/**
  * **Play / Stop** (UI-17, Space), the one play action. With looping on (or a move isolated) it
  * loops the loop's region wherever the playhead is, as Logic's cycle does, and stopping puts the
- * canvas back on the playhead, which looping never moved. Otherwise it plays on from the playhead,
- * and stopping stays where it stopped, moving the playhead there (project owner, 2026-10-09:
- * playing a page from its start is loop mode's job, C, or Shift+Space's once, `playTimelinePage`).
- * The playback driver does both once the pause lands.
+ * canvas back on the playhead, which looping never moved. Otherwise it plays on from the yellow
+ * start flag, and stopping stays where it stopped, moving the playhead there (project owner,
+ * 2026-10-13, lab test playback-start: version B won; Shift+Space plays on from the playhead,
+ * `playTimelinePage`). The playback driver does both once the pause lands.
  */
 export function toggleTimelinePlayback({
     isPlaying,
@@ -336,7 +346,7 @@ export function toggleTimelinePlayback({
     const state = useTimelineSelectionStore.getState();
     const bounds = loopBounds(state);
     if (!bounds) {
-        startTimelinePlayOn(showEndBeat, setIsPlaying);
+        startTimelinePlayOn(showEndBeat, setIsPlaying, state.startBeat);
         return;
     }
     state.cue(bounds.from);
@@ -345,9 +355,9 @@ export function toggleTimelinePlayback({
 }
 
 /**
- * **Play the page once** (UI-17, Shift+Space): plays the window from the start flag to the playhead
- * (the selected page's move), or the loop's region with looping on, once, and goes back to the playhead,
- * the page's set, when it ends or is stopped. Playing, it stops. With no window (home) it plays on.
+ * **Play from the playhead** (Shift+Space, or Shift+click on Play): plays on from the
+ * playhead, or, with looping on, plays the loop's region once and goes back to the playhead when it
+ * ends or is stopped. Playing, it stops.
  */
 export function playTimelinePage({
     isPlaying,
@@ -363,7 +373,7 @@ export function playTimelinePage({
         return;
     }
     const state = useTimelineSelectionStore.getState();
-    const bounds = loopBounds(state) ?? previewBounds(state);
+    const bounds = loopBounds(state);
     if (!bounds) {
         startTimelinePlayOn(showEndBeat, setIsPlaying);
         return;

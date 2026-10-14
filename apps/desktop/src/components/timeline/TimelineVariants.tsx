@@ -796,9 +796,8 @@ const TimelineSurface = memo(function TimelineSurface({
                         isPlaying={props.isPlaying}
                         onPlayingChange={props.onPlayingChange}
                         playLoops={props.playLoops}
-                        noLoop={basic}
-                        playNext={props.playNext}
                         playingOnce={props.playingOnce}
+                        onPlayFromPlayhead={props.onPlayFromPlayhead}
                         onNavigate={onNavigate}
                         onFit={
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
@@ -1037,12 +1036,6 @@ const TimelineSurface = memo(function TimelineSurface({
                             onSeek={props.onSeek}
                             isPlaying={props.isPlaying}
                             scrubLine={pointer.scrubLine}
-                            // UI-14: below the ruler and measure rows (over the waveform and the clip
-                            // rows) the playhead is drawn, not grabbed. Basic's bodies scrub anyway,
-                            // and a mid-page tick under the playhead must still take its right-click
-                            hitHeight={
-                                basic ? TIMELINE_PAGE_ROW_BOTTOM : audioTop
-                            }
                         />
                         {props.onAddPageFlag && !props.isPlaying && (
                             <AddPageFlagMenu
@@ -1113,12 +1106,9 @@ const TimelineSurface = memo(function TimelineSurface({
                                 beatCount={model.beatCount}
                                 pixelsPerBeat={pixelsPerBeat}
                                 height={pinnedHeight}
-                                // UI-14: below the ruler and measure rows the flags are drawn, not
-                                // grabbed, so a Ctrl+drag or a short clip there isn't taken by a flag
-                                // (round-2 review: the waveform row took it)
-                                hitHeight={audioTop}
                                 snapBeats={snapBeats}
                                 onCommit={commitSelection}
+                                onLineDrag={props.onSeek}
                                 onInteractionChange={selectionInteraction.set}
                                 positionBeat={positionBeat}
                                 scrubLine={pointer.scrubLine}
