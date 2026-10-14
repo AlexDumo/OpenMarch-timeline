@@ -105,6 +105,7 @@ const show = ({
             onDeletePageFlag={onDeletePageFlag}
             onDeletePageWithMoves={onDeletePageWithMoves}
             onAddSubsetPage={onAddSubsetPage}
+            addPageNames={{ page: "3", subset: "2A" }}
             onSetPageSubset={onSetPageSubset}
         />,
     );
@@ -304,10 +305,22 @@ describe("Add subset page on **+** (UI-9)", () => {
         show({ onAddPageFlag, onAddSubsetPage });
         fireEvent.contextMenu(plus()!);
         const item = screen.getByTestId("timeline-add-subset-page");
-        expect(item.textContent).toBe("Add subset page");
+        expect(item.textContent).toBe("Add subset page2A");
         fireEvent.click(item);
         expect(onAddSubsetPage).toHaveBeenCalledTimes(1);
         expect(onAddPageFlag).not.toHaveBeenCalled();
+    });
+
+    it("Add page does what a click on **+** does, and each entry shows its name", () => {
+        const onAddPageFlag = vi.fn();
+        show({ onAddPageFlag, onAddSubsetPage: vi.fn() });
+        fireEvent.contextMenu(plus()!);
+        const names = screen.getAllByTestId("timeline-add-page-name");
+        expect(names.map((n) => n.textContent)).toEqual(["3", "2A"]);
+        const item = screen.getByTestId("timeline-add-page");
+        expect(item.textContent).toBe("Add page3");
+        fireEvent.click(item);
+        expect(onAddPageFlag).toHaveBeenCalledTimes(1);
     });
 
     it("leaves a plain click as a plain add, and the range menu closed", () => {

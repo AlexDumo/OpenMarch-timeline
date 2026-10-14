@@ -177,6 +177,8 @@ export interface TimelineProps {
     readonly onAddPageFlag?: () => void;
     /** **Add subset page** in **+**'s right-click menu: the same page, as a subset (UI-9) */
     readonly onAddSubsetPage?: () => void;
+    /** The names **+**'s menu shows, muted, after **Add page** and **Add subset page** */
+    readonly addPageNames?: { readonly page: string; readonly subset: string };
     /**
      * The page box menu's **Subset** toggle (UI-9): sets page `pageId` to a subset page, or back
      * to a numbered one. Without it, the menu has no such entry.
@@ -732,6 +734,7 @@ export function Timeline(props: TimelineProps) {
         moveCommands: trackMoveCommands,
         onAddPageFlag: useLatestCallback(props.onAddPageFlag),
         onAddSubsetPage: useLatestCallback(props.onAddSubsetPage),
+        addPageNames: props.addPageNames,
         pageFlagMove,
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,

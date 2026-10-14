@@ -1,4 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
+import { generatePageNames } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
@@ -100,6 +101,30 @@ export function planPageFlagInsertion(
                 : { kind: "split", beat, page, last: i === pages.length - 1 };
     }
     return null;
+}
+
+/**
+ * The names the page added by **+** would have, as a plain page and as a subset page ("3" and
+ * "2A"), for the right-click menu. `pages` are the show's pages in order (home first); the new page
+ * goes where `insertion` puts it (before the split page, or last).
+ */
+export function newPageNames(
+    pages: readonly { readonly id: number; readonly isSubset: boolean }[],
+    insertion: PageFlagInsertion,
+): { page: string; subset: string } {
+    const index =
+        insertion.kind === "split"
+            ? Math.max(
+                  pages.findIndex((p) => p.id === insertion.page.id),
+                  0,
+              )
+            : pages.length;
+    const nameWith = (isSubset: boolean) => {
+        const flags = pages.map((p) => p.isSubset);
+        flags.splice(index, 0, isSubset);
+        return generatePageNames(flags, 0)[index]!;
+    };
+    return { page: nameWith(false), subset: nameWith(true) };
 }
 
 const gridOf = (grid: PageGrid): PageFlagGrid => ({

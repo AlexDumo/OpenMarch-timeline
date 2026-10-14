@@ -1,34 +1,27 @@
-import { afterEach, expect } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { asc } from "drizzle-orm";
 import { generatePageNames } from "@openmarch/core";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { getTestWithHistory } from "@/test/history";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
-import { convertPagesToTimeline } from "@/timeline/convert/writePageConversion";
+import { convertPagesToTimeline } from "@/test/convertPages";
 import {
     startTimelineResolver,
     stopTimelineResolver,
 } from "@/timeline/timelineStore";
 import { updatePages } from "../page";
-import { addPageFlag } from "../pageFlags";
+import { addPageFlag, newPageNames } from "../pageFlags";
 
 /**
  * Subset pages from timeline mode (ui.md UI-9 **+**, Add subset page, and the page box's Subset
  * toggle), on a converted `marchersAndPages` show: pages 0 to 6, flags at 9, 17, …, 49.
  */
 
-keepFixturesInPageMode(
-    "its tests convert the show and set the flag themselves",
-);
+keepFixturesInPageMode("its tests convert the show themselves");
 
 afterEach(() => stopTimelineResolver());
 
 const setUp = async (db: DbConnection) => {
-    await db.delete(schema.workspace_settings);
-    await db.insert(schema.workspace_settings).values({
-        id: 1,
-        json_data: JSON.stringify({ timelineMode: true }),
-    });
     await convertPagesToTimeline(db);
     await startTimelineResolver(db);
 };
@@ -172,4 +165,46 @@ describeDbTests("subset pages undo", (it) => {
             await expectNumberOfChanges.test(db, 2, state);
         },
     );
+});
+
+describe("newPageNames", () => {
+    const pages = [
+        { id: 0, isSubset: false },
+        { id: 1, isSubset: false },
+        { id: 2, isSubset: false },
+        { id: 3, isSubset: true },
+        { id: 4, isSubset: false },
+    ];
+    const grid = (id: number) => ({ id, start: 0, end: 1 });
+
+    test("a split names the new page before the split page", () => {
+        // Before page 2 ("2"): a plain page takes "2" and pushes the rest on; a subset is "1A"
+        expect(
+            newPageNames(pages, {
+                kind: "split",
+                beat: 5,
+                page: grid(2),
+                last: false,
+            }),
+        ).toEqual({ page: "2", subset: "1A" });
+        // Before the subset "2A": a plain page is "3", and a subset one is "2A" (the old one is "2B")
+        expect(
+            newPageNames(pages, {
+                kind: "split",
+                beat: 5,
+                page: grid(3),
+                last: false,
+            }),
+        ).toEqual({ page: "3", subset: "2A" });
+    });
+
+    test("an append names the new last page", () => {
+        expect(
+            newPageNames(pages, {
+                kind: "append",
+                beat: 99,
+                lastPage: grid(4),
+            }),
+        ).toEqual({ page: "4", subset: "3A" });
+    });
 });

@@ -876,7 +876,9 @@ const TimelineSurface = memo(function TimelineSurface({
                     />
                     {props.onAddPageFlag && !props.isPlaying && (
                         <AddPageFlagMenu
+                            onAddPage={props.onAddPageFlag}
                             onAddSubsetPage={props.onAddSubsetPage}
+                            names={props.addPageNames}
                         >
                             <button
                                 ref={addPageFlagRef}

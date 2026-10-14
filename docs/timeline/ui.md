@@ -196,7 +196,7 @@ from it. The spec still wins on the model; this file decides presentation.
     that page's `start_beat` to the playhead. Past the last flag, nothing is
     split: **+** appends a page ending at the playhead (_lead default_).
   - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
-    **Add subset page**. It adds the same page as a click on **+**, as a
+    **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
     subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
     a page box offers a **Subset** toggle, checked for a subset page, matching
     the Subset switch in page mode's menu and the inspector. It flips the page

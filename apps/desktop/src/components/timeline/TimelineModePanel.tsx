@@ -441,6 +441,7 @@ function PlayingTimeline(
         | "transportClock"
         | "onAddPageFlag"
         | "onAddSubsetPage"
+        | "addPageNames"
         | "loop"
         | "onLoopChange"
     >,
@@ -516,6 +517,7 @@ function PlayingTimeline(
             selection={selection}
             transportClock={clock}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
+            addPageNames={addPageFlag.names ?? undefined}
             onAddSubsetPage={
                 addPageFlag.insertion ? addPageFlag.addSubset : undefined
             }

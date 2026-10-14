@@ -14,6 +14,7 @@ import {
     movePageFlag,
     type MovedPageFlag,
     pageFlagGrid,
+    newPageNames,
     planPageFlagInsertion,
     type AddedPageFlag,
     type PageFlagInsertion,
@@ -168,7 +169,9 @@ export function useAddPageFlag({
     isPlaying,
     onAdded,
 }: {
-    pages: Parameters<typeof pageFlagGrid>[0];
+    pages: readonly (Parameters<typeof pageFlagGrid>[0][number] & {
+        readonly isSubset: boolean;
+    })[];
     beatCount: number;
     playheadBeat: number;
     isPlaying: boolean;
@@ -178,6 +181,8 @@ export function useAddPageFlag({
     add: () => void;
     /** **Add subset page**: the same page, as a subset */
     addSubset: () => void;
+    /** What the new page would be named as a plain page and as a subset; null with no insertion */
+    names: { page: string; subset: string } | null;
 } {
     const queryClient = useQueryClient();
     const { mutate } = useMutation(
@@ -199,5 +204,19 @@ export function useAddPageFlag({
     const addSubset = useCallback(() => {
         if (insertion) mutate({ beat: insertion.beat, subset: true });
     }, [insertion, mutate]);
-    return { insertion, add, addSubset };
+    const names = useMemo(
+        () =>
+            insertion
+                ? newPageNames(
+                      [...pages].sort(
+                          (a, b) =>
+                              (a.beats[0]?.index ?? 0) -
+                              (b.beats[0]?.index ?? 0),
+                      ),
+                      insertion,
+                  )
+                : null,
+        [insertion, pages],
+    );
+    return { insertion, add, addSubset, names };
 }
