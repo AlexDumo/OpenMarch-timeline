@@ -12,6 +12,7 @@ import {
     movePageFlagMutationOptions,
     useAddPageFlag,
 } from "@/hooks/queries/usePageFlags";
+import { updatePagesMutationOptions } from "@/hooks/queries/usePages";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import { useTimingObjects } from "@/hooks";
 import { useIsPlaying } from "@/context/IsPlayingContext";
@@ -29,7 +30,6 @@ import {
     selectionOfPage,
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { useTimelineTracks } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import {
@@ -104,8 +104,7 @@ export const toTimelineSelection = (
           : null;
 
 /**
- * The timeline (ui.md, from the 0.2 branch) for a file whose timeline dev flag is on. It takes the
- * file's real beats, pages and measures, and plays through the app's existing audio clock. Its
+ * The timeline (ui.md, from the 0.2 branch). It takes the file's real beats, pages and measures, and plays through the app's existing audio clock. Its
  * selection is `useTimelineSelectionStore`'s (UI-9): the initial page box selects home, a page box
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
  * **+** after the free paused playhead adds a page flag there and selects the new page; a page
@@ -183,7 +182,7 @@ export default function TimelineModePanel() {
     );
     const timelines = useTimelineTracks({
         database: db,
-        enabled: useTimelineMode(),
+        enabled: true,
     });
     // UI-10: a page box already stands for its page timeline, so only the others get a clip.
     // UI-14: each is a move, labelled by its name ("Move 2" since it was made), named for
@@ -286,6 +285,10 @@ export default function TimelineModePanel() {
         [isPlaying, isolated, movePageFlag],
     );
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
+    // Change to subset / normal page: one `updatePages` edit, one undo step
+    const { mutate: updatePages } = useMutation(
+        updatePagesMutationOptions(queryClient),
+    );
     const { mutate: deletePageFlags } = useMutation(
         deletePageFlagsMutationOptions(queryClient),
     );
@@ -389,6 +392,13 @@ export default function TimelineModePanel() {
                     }}
                     moveCommands={moveCommands}
                     pageFlagMove={pageFlagMove}
+                    onSetPageSubset={(pageId, subset) =>
+                        updatePages({
+                            modifiedPagesArgs: [
+                                { id: pageId, is_subset: subset },
+                            ],
+                        })
+                    }
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
                             pages,
@@ -430,6 +440,8 @@ function PlayingTimeline(
         | "selection"
         | "transportClock"
         | "onAddPageFlag"
+        | "onAddSubsetPage"
+        | "addPageNames"
         | "loop"
         | "onLoopChange"
     >,
@@ -505,6 +517,10 @@ function PlayingTimeline(
             selection={selection}
             transportClock={clock}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
+            addPageNames={addPageFlag.names ?? undefined}
+            onAddSubsetPage={
+                addPageFlag.insertion ? addPageFlag.addSubset : undefined
+            }
             playback={playback}
             pixelsPerBeat={pixelsPerBeat}
             onPixelsPerBeatChange={setPixelsPerBeat}
